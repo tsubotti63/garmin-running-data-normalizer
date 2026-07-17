@@ -1,0 +1,26 @@
+# Private/local inputs and outputs
+data/
+raw/
+workspace/
+cache/
+artifacts/
+outputs/
+releases/
+portable/
+*.fit
+*.zip
+*.parquet
+
+# Review evidence is intentionally outside the public commit
+.bootstrap_review/
+
+# Python/editor/OS
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+.DS_Store
+.idea/
+.vscode/
+

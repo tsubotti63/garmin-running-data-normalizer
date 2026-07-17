@@ -1,0 +1,16 @@
+registry_version: 0.1-draft
+status: bootstrap_example_not_runtime
+datasets:
+  - name: activities
+    source_family: garmin_account_export
+    record_grain: one_activity
+    stable_key: activity_id_or_documented_hash_fallback
+    merge_policy: entity_upsert_no_implicit_delete
+    provenance_required: true
+  - name: fit_sessions
+    source_family: garmin_fit
+    record_grain: one_fit_session
+    stable_key: source_blob_hash_and_session_index
+    merge_policy: immutable_blob_derived_union
+    provenance_required: true
+

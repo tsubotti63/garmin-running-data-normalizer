@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Dataset Registry Bootstrap Schema",
+  "type": "object",
+  "required": ["registry_version", "status", "datasets"],
+  "properties": {
+    "registry_version": {"type": "string"},
+    "status": {"const": "bootstrap_example_not_runtime"},
+    "datasets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "source_family", "record_grain", "stable_key", "merge_policy", "provenance_required"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
+
