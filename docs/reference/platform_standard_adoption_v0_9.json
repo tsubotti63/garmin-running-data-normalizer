@@ -1,0 +1,284 @@
+{
+  "excluded_platform_identity_files": [
+    "platform_manifest_v0_9.json",
+    "platform_inventory_v0_9.csv",
+    "platform_qa_v0_9.json"
+  ],
+  "platform_version": "0.9",
+  "record_type": "target_platform_standard_adoption",
+  "source_artifact": "ai-collaboration-platform.zip",
+  "source_sha256": "13e6d74fe100deb6cb74f39aa048f3b939206633f8ec925cdc098d71d99bb4a8",
+  "standard_file_count": 54,
+  "standard_files": [
+    {
+      "bytes": 922,
+      "path": "CHANGELOG.md",
+      "sha256": "3db995110d118374be0dbbc7c963b41bac37f74c04b5021c7a23ac13e786e850"
+    },
+    {
+      "bytes": 2161,
+      "path": "PLATFORM_EVOLUTION.md",
+      "sha256": "cdaadd1e6ba602bd08a33c2f52ff3b0ca75c8a2e7daade4599773c5278452a8b"
+    },
+    {
+      "bytes": 2524,
+      "path": "QUICK_START.md",
+      "sha256": "6b22d2d28eacf0bea1f02dfd7a108b959cb128871c212173c5c1ad23724085de"
+    },
+    {
+      "bytes": 716,
+      "path": "docs/README.md",
+      "sha256": "08aba3c885c2f40360e3951b7409612c0e005d7fda9babd0df6acaefc4e7ff9b"
+    },
+    {
+      "bytes": 694,
+      "path": "docs/project_os/README.md",
+      "sha256": "cc645267d34b1a31226ba3768ce79afe7291c4426f54b67d65041a108ba07457"
+    },
+    {
+      "bytes": 1667,
+      "path": "docs/project_os/architecture/ai_collaboration_architecture_v0_9.md",
+      "sha256": "37a581a219d21b2c66b5854247ab740b66ee5bc178cc04f1a185c3ad83faaa9a"
+    },
+    {
+      "bytes": 866,
+      "path": "docs/project_os/architecture/project_os_roadmap_v0_9.md",
+      "sha256": "75d58ed2bbad310a95adb570a50491d9fc186dacf90edc7d9f334896323361e1"
+    },
+    {
+      "bytes": 938,
+      "path": "docs/project_os/architecture/storage_architecture_v0_9.md",
+      "sha256": "94395c1e05c2de605da49e9c440d7d4e366614cb542a232f7baba74b6c9fb350"
+    },
+    {
+      "bytes": 1595,
+      "path": "docs/project_os/architecture/task_collaboration_architecture_v0_9.md",
+      "sha256": "9a3efde63fc2fc8fa8c08782e85d8baab71b93d18edb0040685f8e195d5f51f3"
+    },
+    {
+      "bytes": 820,
+      "path": "docs/project_os/conventions/artifact_delivery_standard_v0_9.md",
+      "sha256": "d7f62612ab749b290d83646a49b9f8e878d7c25b320abf0d3fb51cfaa8563d1b"
+    },
+    {
+      "bytes": 650,
+      "path": "docs/project_os/conventions/documentation_language_convention_v0_9.md",
+      "sha256": "bb8ce11ead3e9b4d2fbfd5d6c96f006ab4fd400ea917e41d57ea1d69c93ca3b3"
+    },
+    {
+      "bytes": 805,
+      "path": "docs/project_os/conventions/documentation_standard_v0_9.md",
+      "sha256": "89dbd213b18e100a42e8cd7b8693456013baa854cdc6d1acdeca447384e04db4"
+    },
+    {
+      "bytes": 573,
+      "path": "docs/project_os/conventions/task_naming_convention_v0_9.md",
+      "sha256": "e91d012a3135390be5303741e2655d23156ed61619d1c68f5bedcee5c9487e4c"
+    },
+    {
+      "bytes": 1540,
+      "path": "docs/project_os/governance/boundary_and_escalation_standard_v0_9.md",
+      "sha256": "142db05391bf554897259fba48c47985ce240c57fbbdc9e236a7456b7e1b4db4"
+    },
+    {
+      "bytes": 1193,
+      "path": "docs/project_os/governance/definition_of_done_standard_v0_9.md",
+      "sha256": "fac9acc552134d949f126ef4a6a771aae2c41fe5b869f745edd325f584dc68cd"
+    },
+    {
+      "bytes": 1565,
+      "path": "docs/project_os/governance/platform_charter_v0_9.md",
+      "sha256": "f8786b615ee499bbb30cf496459a141b942a8fd1e6c33a78164fa49d273d23fb"
+    },
+    {
+      "bytes": 644,
+      "path": "docs/project_os/governance/project_governance_template_v0_9.md",
+      "sha256": "339c0c01de2e62eb3ae2c9961b98512ffe7e11a8856156f03ba19525c9c1a921"
+    },
+    {
+      "bytes": 581,
+      "path": "docs/project_os/operation/improvement_policy_v0_9.md",
+      "sha256": "e3d43e64adf0c573bc72f45e797a080dbf33f1886bbee54398a0f55f7e13f0d9"
+    },
+    {
+      "bytes": 981,
+      "path": "docs/project_os/operation/long_running_runtime_v0_9.md",
+      "sha256": "10b1e526d3a86f7e16fd2332fb349de83697ae78dafa484498a2f33cc089ad07"
+    },
+    {
+      "bytes": 893,
+      "path": "docs/project_os/operation/project_core_gate_protocol_v0_9.md",
+      "sha256": "215a930f08ee81800a5e17c2c3be70f3285fefa7a0e38359ee09d6c904476129"
+    },
+    {
+      "bytes": 130,
+      "path": "docs/project_os/operation/templates/architecture_change_log_template.md",
+      "sha256": "81ae67f0bf21fa44d94ee7ba4252291bc0200074461fd9e0a0302995a51ef7ac"
+    },
+    {
+      "bytes": 109,
+      "path": "docs/project_os/operation/templates/decision_log_template.md",
+      "sha256": "7f35adbb4e8e03fdc01cba30bd91232206cabd1b3f234ab960565b7587c438e3"
+    },
+    {
+      "bytes": 115,
+      "path": "docs/project_os/operation/templates/improvement_log_template.md",
+      "sha256": "c3be67a14850f28509c07110b91dc94071149fab57c9a98534b0e2b232bc868c"
+    },
+    {
+      "bytes": 208,
+      "path": "docs/project_os/operation/templates/runtime_checkpoint_template.md",
+      "sha256": "17d846087d208d9b4778ffea10a8c5ef43d43b61c14c1bec58432bc7a1b0935b"
+    },
+    {
+      "bytes": 588,
+      "path": "docs/project_os/operation/work_runtime_notes_v0_9.md",
+      "sha256": "3e96f9862781bcd07f6c586dfea6bf4a29019a44c8286fc9fc06c858594852c0"
+    },
+    {
+      "bytes": 581,
+      "path": "docs/proofs/long_running_runtime_poc_v0_9.md",
+      "sha256": "84c590509999bfcb7ac690be13d41b16881f61fe9720dfbbd1b4d2c28ead0449"
+    },
+    {
+      "bytes": 915,
+      "path": "docs/proofs/task_collaboration_poc_v0_9.md",
+      "sha256": "190c5e287a0a0039c6293b4d701baba9c189114edce8902051baf1712e950891"
+    },
+    {
+      "bytes": 746,
+      "path": "examples/generic_reference_project/README.md",
+      "sha256": "d8bf2fddc85f73b42abe775f7f5baf71e473d53d9892953e95d8457d78866f6b"
+    },
+    {
+      "bytes": 214,
+      "path": "packages/README.md",
+      "sha256": "c9aaf685fbc9e6307fdbe121b0f421447067479e0205bca2f3c06a3fd9beece4"
+    },
+    {
+      "bytes": 449,
+      "path": "runtime/README.md",
+      "sha256": "ac94b28ee57b894a69375202931f9500429ca08db53d067984c653541a71dcea"
+    },
+    {
+      "bytes": 133,
+      "path": "runtime/agents/README.md",
+      "sha256": "74553d3b702b3b2d29ff7e7f8bafd8dccf4b34cec70f487944e0f3861fc4f46a"
+    },
+    {
+      "bytes": 508,
+      "path": "runtime/agents/unit_review_agent_prompt_v0_9.md",
+      "sha256": "b0c17cb6e6d54d98b12bde600151c3bc85349f95616b6cca7f6d0e0a6de5ea69"
+    },
+    {
+      "bytes": 273,
+      "path": "runtime/packages/README.md",
+      "sha256": "eb2d125849138f2ef069b20decf63359717ea5f647036ef93fa6f31eec41378a"
+    },
+    {
+      "bytes": 362,
+      "path": "runtime/work/README.md",
+      "sha256": "c6b71a71c7febacaf5c569567543136b5f23cf982a0404e1daadcecea631e33a"
+    },
+    {
+      "bytes": 264,
+      "path": "runtime/work/implementation/README.md",
+      "sha256": "253532f3de37f80a736216e5438ddde559e78d1f8c742e66d67b945fa9a91c8f"
+    },
+    {
+      "bytes": 1079,
+      "path": "runtime/work/implementation/implementation_runtime_prompt_v0_9.md",
+      "sha256": "c3e74ddeda09f9da109d6d1ae1ca50db572de7d391d30fd3ec7fc39110c1c550"
+    },
+    {
+      "bytes": 212,
+      "path": "runtime/work/review/README.md",
+      "sha256": "d378a0c858db474f100bbdb299079fcc2b1fe07bffcfadd88912b2bf0b33f40f"
+    },
+    {
+      "bytes": 797,
+      "path": "runtime/work/review/project_core_review_runtime_prompt_v0_9.md",
+      "sha256": "2c1869e752fe3f43792ffba5e053cb484f62d8b1b33d6b1ff8d91d41fa9e93c6"
+    },
+    {
+      "bytes": 176,
+      "path": "runtime/work/task_creation/README.md",
+      "sha256": "c49ac98ad7df1e3dbe125509962b0ed7b952843ee5556a253405f3b43d49dd5d"
+    },
+    {
+      "bytes": 912,
+      "path": "runtime/work/task_creation/implementation_task_creation_prompt_v0_9.md",
+      "sha256": "d82741076bf384cee1c2732179d86371a017e019720d671de4d0e19d31900ff5"
+    },
+    {
+      "bytes": 818,
+      "path": "runtime/work/task_creation/project_core_review_task_creation_prompt_v0_9.md",
+      "sha256": "05da60b622ff52061e2957dbc246ff69c901c9691fd664438a16ebb3f3240337"
+    },
+    {
+      "bytes": 216,
+      "path": "templates/README.md",
+      "sha256": "367da9c39e00feaccfc05b032fb91157ea124ec1ff786c2e0026563a3f3851af"
+    },
+    {
+      "bytes": 180,
+      "path": "templates/operation/IMPROVEMENT_REPORT_TEMPLATE.md",
+      "sha256": "9cf8b40f753dc4a9186f6fa07038e2b0263dfc06374eacc09bba3209abef91df"
+    },
+    {
+      "bytes": 141,
+      "path": "templates/operation/REVIEW_REQUEST_TEMPLATE.md",
+      "sha256": "dac1b71519058e2d4acbcdf59dbc740a143f8c9d1ab11b1fab0235ab81e188cd"
+    },
+    {
+      "bytes": 146,
+      "path": "templates/operation/REVIEW_RESULT_TEMPLATE.md",
+      "sha256": "91cd326b46ee41a79ce92fc3bf0fb59388af0a58ac3e6106ec4484197c5b0b7a"
+    },
+    {
+      "bytes": 373,
+      "path": "templates/project/INTAKE_GATE_TEMPLATE.md",
+      "sha256": "ab0504d151d01b7df1d6cd76f573fc318f03242e7a8beea87760395627b7d1ec"
+    },
+    {
+      "bytes": 465,
+      "path": "templates/project/PHASE_KICKOFF_TEMPLATE.md",
+      "sha256": "337a1f6a06113156576d76f1995c1f9d72b38644d59397a793e84fa703fa1242"
+    },
+    {
+      "bytes": 219,
+      "path": "templates/project/PROJECT_BOUNDARY_TEMPLATE.md",
+      "sha256": "c8088168b00dc4f24182a387fda70c2570dc1733268064a12fa3c0ca0fca5007"
+    },
+    {
+      "bytes": 212,
+      "path": "templates/project/PROJECT_CHARTER_TEMPLATE.md",
+      "sha256": "7c988043b81c50e90fbffe0f083a08d0c1499ffe168004146f4bb5b7a03a5403"
+    },
+    {
+      "bytes": 724,
+      "path": "templates/project/PROJECT_CONTEXT_TEMPLATE.md",
+      "sha256": "61c36030524e81ae30805dffd6faae47dc60f2ccf1d823a438cf349df77b60f0"
+    },
+    {
+      "bytes": 211,
+      "path": "templates/project/PROJECT_DEFINITION_OF_DONE_TEMPLATE.md",
+      "sha256": "4f3df276d13df6c68da7498de6d9e2003b0f8a68ee01cb75b1ef87844208ec21"
+    },
+    {
+      "bytes": 248,
+      "path": "templates/project/PROJECT_REQUIREMENTS_TEMPLATE.md",
+      "sha256": "2d20defd926728ea3e3d1bd08ddbeb0a64c405f7eadc4ca095fdf292a573be1a"
+    },
+    {
+      "bytes": 257,
+      "path": "templates/project/PROJECT_RUNTIME_ADDENDUM_TEMPLATE.md",
+      "sha256": "a9a7abe5eb644cbe772bd0f89392e776dd6135bb990aefc13f28480e2b25d7ce"
+    },
+    {
+      "bytes": 218,
+      "path": "templates/project/READING_ORDER_TEMPLATE.md",
+      "sha256": "6d0b43d24da236864efbfbe62a54dd220d12f5f59475d421e44e2b137b6943fb"
+    }
+  ]
+}

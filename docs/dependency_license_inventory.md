@@ -45,4 +45,3 @@ Official references (checked 2026-07-17):
 - https://open-meteo.com/en/terms
 - https://open-meteo.com/en/license
 - https://open-meteo.com/en/pricing
-

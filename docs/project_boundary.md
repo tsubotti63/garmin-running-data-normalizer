@@ -33,4 +33,3 @@ reversible private-history artifacts.
 Changes to scope, data semantics, source-of-truth policy, privacy boundary, or
 license require Human approval. Boundary-local implementation and review fixes
 may proceed autonomously.
-

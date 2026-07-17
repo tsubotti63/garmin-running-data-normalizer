@@ -30,4 +30,3 @@ blocked.
 Return exactly one verdict: `PASS`, `REWORK`, or
 `HUMAN_DECISION_REQUIRED`, with evidence and bounded fixes. Do not substitute
 for Human license or release authority.
-

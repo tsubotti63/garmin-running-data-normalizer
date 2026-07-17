@@ -1,20 +1,27 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Dataset Registry Bootstrap Schema",
+  "title": "Garmin Running Data Normalizer Dataset Registry",
   "type": "object",
   "required": ["registry_version", "status", "datasets"],
   "properties": {
     "registry_version": {"type": "string"},
-    "status": {"const": "bootstrap_example_not_runtime"},
+    "status": {"const": "local_implementation_not_publication_ready"},
     "datasets": {
       "type": "array",
       "items": {
         "type": "object",
         "required": ["name", "source_family", "record_grain", "stable_key", "merge_policy", "provenance_required"],
+        "properties": {
+          "name": {"type": "string"},
+          "source_family": {"const": "garmin_account_export"},
+          "record_grain": {"type": "string"},
+          "stable_key": {"type": "array", "items": {"type": "string"}},
+          "merge_policy": {"enum": ["entity_upsert", "temporal_event_union", "immutable_blob_union", "preserve_only"]},
+          "provenance_required": {"const": true}
+        },
         "additionalProperties": false
       }
     }
   },
   "additionalProperties": false
 }
-

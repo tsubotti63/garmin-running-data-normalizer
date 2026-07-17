@@ -22,4 +22,3 @@ JMA, personal analysis, coaching logic, and Open-Meteo response data.
 Historical Source reproduction remains a Source Project responsibility. The
 Target must reproduce only its own public contracts from synthetic or
 user-supplied local inputs.
-

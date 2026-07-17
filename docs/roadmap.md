@@ -30,4 +30,3 @@
 - Human-selected OSS license and notices.
 - Dependency/license lock review, security checks, documentation, CI.
 - GitHub creation and publication only under separate Human authorization.
-

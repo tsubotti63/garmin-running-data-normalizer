@@ -26,4 +26,3 @@ Before public release, scan tracked content for secrets, credentials, tokens,
 cookies, emails, absolute host paths, coordinates, IDs, raw blobs, generated
 datasets, and private Source references. A clean scan is necessary but not a
 substitute for Human review.
-

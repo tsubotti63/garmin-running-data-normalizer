@@ -8,3 +8,11 @@
 *.zip binary
 *.parquet binary
 
+# The adopted Platform Standard uses Markdown two-space hard breaks. Preserve
+# those files byte-for-byte while keeping normal whitespace checks elsewhere.
+PLATFORM_EVOLUTION.md whitespace=-blank-at-eol
+QUICK_START.md whitespace=-blank-at-eol
+docs/project_os/** whitespace=-blank-at-eol
+docs/proofs/** whitespace=-blank-at-eol
+runtime/work/** whitespace=-blank-at-eol
+docs/README.md whitespace=-blank-at-eof

@@ -1,5 +1,6 @@
-"""Garmin Running Data Normalizer bootstrap package."""
+"""Local-first Garmin Account Export normalization primitives."""
 
-__version__ = "0.0.0"
-IMPLEMENTATION_STATUS = "BOOTSTRAP_ONLY"
+__version__ = "0.1.0"
+IMPLEMENTATION_STATUS = "LOCAL_IMPLEMENTATION_NOT_PUBLICATION_READY"
 
+__all__ = ["IMPLEMENTATION_STATUS", "__version__"]

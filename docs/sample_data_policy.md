@@ -13,4 +13,3 @@ Synthetic fixtures must:
 - carry `synthetic: true` where the format permits;
 - document generation logic and expected results;
 - pass privacy and secret scans before commit.
-

@@ -1,12 +1,12 @@
 # Release Readiness
 
-Current state: `BOOTSTRAP_REVIEW_PENDING`.
+Current state: `LOCAL_IMPLEMENTATION_NOT_PUBLICATION_READY`.
 
-Local implementation may begin only after Source and Target Core Reviews pass
-and the one Bootstrap commit is created. This does not authorize publication.
+The Target repository contains a reviewed local implementation and fresh public
+candidate history. Local commits and technical sanitization do not authorize
+publication.
 
-Public release additionally requires Human license selection, ownership
-confirmation, final dependency and third-party notices, complete product
-implementation, synthetic tests, security/privacy scans, documentation review,
-GitHub authorization, and Human release approval.
-
+Public release additionally requires Human license selection, public
+redistribution-rights confirmation, final dependency and third-party notices,
+complete product validation, security/privacy review, GitHub authorization, and
+Human release approval.

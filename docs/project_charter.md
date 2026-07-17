@@ -32,4 +32,3 @@ does not deliver the product implementation.
 The Human owner retains authority over OSS license selection, publication,
 GitHub repository creation, remote/push, release, and any expansion beyond the
 Garmin-focused boundary.
-

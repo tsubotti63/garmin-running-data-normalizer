@@ -13,4 +13,3 @@ status.
 
 Notices for adopted runtime/build/test dependencies will be generated from a
 reviewed lock file before public release.
-

@@ -1,15 +1,27 @@
 name: bootstrap-ci
 on:
-  pull_request:
+  workflow_dispatch:
   push:
+    branches: [main]
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Normalize initial-registration refs
+        run: |
+          git update-ref refs/heads/main HEAD
+          git update-ref refs/remotes/origin/main HEAD
+          git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: python -m pip install -e '.[test]'
       - run: python scripts/validate_bootstrap.py
+      - run: python scripts/validate_platform_alignment.py
+      - run: python scripts/static_policy_scan.py
+      - run: python scripts/validate_public_history.py --ci
       - run: python -m pytest

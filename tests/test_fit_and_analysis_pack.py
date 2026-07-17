@@ -1,0 +1,90 @@
+from __future__ import annotations
+
+import json
+import struct
+import tempfile
+import unittest
+import zipfile
+from pathlib import Path
+from unittest.mock import patch
+
+from garmin_running_data_normalizer.export.analysis_pack import build_analysis_pack
+from garmin_running_data_normalizer.fit.parser import parse_fit_bytes, parse_fit_export
+
+
+def synthetic_fit_session() -> bytes:
+    session_definition = bytes([0x40, 0x00, 0x00]) + struct.pack("<H", 18) + bytes([
+        3,
+        2, 4, 0x86,
+        5, 1, 0x00,
+        9, 4, 0x86,
+    ])
+    session_record = bytes([0x00]) + struct.pack("<I", 1_000_000) + bytes([1]) + struct.pack("<I", 100_000)
+    lap_definition = bytes([0x41, 0x00, 0x00]) + struct.pack("<H", 19) + bytes([
+        2,
+        2, 4, 0x86,
+        9, 4, 0x86,
+    ])
+    lap_record = bytes([0x01]) + struct.pack("<I", 1_000_000) + struct.pack("<I", 50_000)
+    body = session_definition + session_record + lap_definition + lap_record
+    return bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", len(body)) + b".FIT" + body
+
+
+class FitAndPackTest(unittest.TestCase):
+    def test_fit_session_parses_without_record_coordinates(self) -> None:
+        parsed = parse_fit_bytes(synthetic_fit_session(), file_id="fit_file:000000", source_path="synthetic.fit")
+        self.assertEqual(parsed["status"], "parsed_activity")
+        self.assertEqual(parsed["session"]["total_distance"], 1000.0)
+        self.assertEqual(parsed["session"]["sport"], 1)
+        self.assertEqual(parsed["laps"][0]["total_distance"], 500.0)
+
+    def test_fit_negative_statuses_are_auditable(self) -> None:
+        bad_header = b"\x0c\x10\x00\x00\x00\x00\x00\x00NOPE"
+        truncated = bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", 10) + b".FIT"
+        unknown_body = b"\x00"
+        unknown = bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", 1) + b".FIT" + unknown_body
+        self.assertEqual(parse_fit_bytes(bad_header, file_id="x", source_path="x.fit")["status"], "bad_header")
+        self.assertEqual(parse_fit_bytes(truncated, file_id="x", source_path="x.fit")["status"], "truncated")
+        unknown_result = parse_fit_bytes(unknown, file_id="x", source_path="x.fit")
+        self.assertEqual(unknown_result["unknown_records"], 1)
+        with patch("garmin_running_data_normalizer.fit.parser.MAX_FIT_BYTES", 1):
+            self.assertEqual(parse_fit_bytes(b"12", file_id="x", source_path="x.fit")["status"], "too_large")
+
+    def test_fit_file_id_is_stable_when_an_earlier_file_is_added(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "b.fit").write_bytes(synthetic_fit_session())
+            first_id = parse_fit_export(root)[0][0]["fit_file_id"]
+            (root / "a.fit").write_bytes(b"not-fit")
+            activities, laps, _ = parse_fit_export(root)
+            self.assertEqual(activities[0]["fit_file_id"], first_id)
+            self.assertEqual(laps[0]["fit_file_id"], first_id)
+            self.assertIn("source_sha256", laps[0])
+
+    def test_fit_export_reports_bad_input_in_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "bad.fit").write_bytes(b"not-fit")
+            activities, laps, audit = parse_fit_export(root)
+            self.assertEqual((activities, laps), ([], []))
+            self.assertEqual(audit[0]["parse_status"], "too_small")
+            self.assertNotIn(str(root), audit[0]["source_path"])
+
+    def test_analysis_pack_is_allowlist_only_and_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "normalized").mkdir()
+            (root / "normalized/data.json").write_text(json.dumps({"synthetic": True}), encoding="utf-8")
+            first = root / "first.zip"
+            second = root / "second.zip"
+            result_one = build_analysis_pack(root, ["normalized/data.json"], first)
+            result_two = build_analysis_pack(root, ["normalized/data.json"], second)
+            self.assertEqual(result_one["pack_sha256"], result_two["pack_sha256"])
+            with zipfile.ZipFile(first) as archive:
+                self.assertEqual(sorted(archive.namelist()), ["manifest.json", "normalized/data.json"])
+            with self.assertRaises(ValueError):
+                build_analysis_pack(root, ["../outside.json"], root / "unsafe.zip")
+
+
+if __name__ == "__main__":
+    unittest.main()

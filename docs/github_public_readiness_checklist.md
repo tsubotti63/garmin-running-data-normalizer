@@ -22,4 +22,3 @@
 `NOT_PUBLICATION_READY`. The repository may proceed with local implementation
 inside the approved boundary after Bootstrap reviews and commit. GitHub creation,
 remote configuration, push, and publication remain prohibited.
-

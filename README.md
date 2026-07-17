@@ -1,47 +1,46 @@
 # Garmin Running Data Normalizer
 
-Bootstrap repository for a future public OSS tool that will normalize Garmin
-Account Export data into documented, deterministic datasets.
+Garmin Running Data Normalizer is a local-first Python library for discovering
+an unmodified Garmin Account Export and producing deterministic, provenance-rich
+records from Garmin JSON and FIT files.
 
 ## Current status
 
-This repository is **bootstrap-only**. It contains project governance,
-architecture, public/private boundaries, a synthetic example, and validation
-scaffolding. Garmin parsing, normalization, Open-Meteo integration, Analysis
-Pack export, and the final Run-All command are not implemented here yet.
+The repository is in local implementation. The currently implemented bounded
+core includes safe export discovery, archive filtering, activity/gear/personal
+record normalization, a dependency-free FIT session/lap parser, stable identity,
+dataset-policy inspection, deterministic QA, and an allowlist-only Analysis Pack
+builder. Open-Meteo, a final end-user Run-All command, and public release remain
+future gated work.
 
-## Intended user flow
+No OSS license has been selected. Local implementation and review are permitted;
+public redistribution, GitHub creation, remote configuration, push, tag, release,
+and publication are not authorized.
 
-1. Place an unmodified Garmin Account Export in a local input directory.
-2. Run one documented command.
-3. Inspect normalized data, provenance, deterministic QA, and an optional
-   portable Analysis Pack.
-
-Real exports and generated personal data must never be committed. See
-[`docs/project_boundary.md`](docs/project_boundary.md) and
-[`docs/security_and_privacy_boundary.md`](docs/security_and_privacy_boundary.md).
-
-## Bootstrap validation
+## Local verification
 
 ```bash
+PYTHONPATH=src python3 -m unittest discover -s tests -v
 python3 scripts/validate_bootstrap.py
-python3 -m pytest
+python3 scripts/static_policy_scan.py
+python3 scripts/validate_platform_alignment.py
+python3 scripts/validate_public_history.py
 ```
 
-## Documentation
+Only synthetic fixtures may be committed. Real Garmin exports and generated
+personal output belong in ignored local directories.
 
-- [Project Charter](docs/project_charter.md)
-- [Project Boundary](docs/project_boundary.md)
-- [Architecture Overview](docs/architecture_overview.md)
-- [Roadmap](docs/roadmap.md)
-- [Existing Asset Reuse Matrix](docs/existing_asset_reuse_matrix.md)
-- [Migration Notes](docs/migration_notes.md)
-- [Public Readiness Checklist](docs/github_public_readiness_checklist.md)
+## Project map
 
-## License
+- `docs/project_os/`: unmodified AI Collaboration Platform v0.9 Standard
+- `docs/project/`: Project Customization and current phase controls
+- `docs/proofs/`: Platform capability evidence
+- `docs/reference/`: reuse, privacy, licensing, release, and handoff references
+- `templates/`: unmodified Platform project/operation templates
+- `runtime/`: unmodified Platform runtime plus Target Runtime Addendum
+- `src/garmin_running_data_normalizer/`: public product implementation
+- `tests/`: synthetic, dependency-free unit tests
+- `packages/`: tracked package policy; review packs are generated under ignored
+  `.review/`
 
-No OSS license has been selected. No `LICENSE` file is included. Public release
-and reuse of Source Project code remain blocked until the Human owner selects a
-license and confirms the rights position. See
-[`docs/dependency_license_inventory.md`](docs/dependency_license_inventory.md).
-
+Start with [`docs/README.md`](docs/README.md).

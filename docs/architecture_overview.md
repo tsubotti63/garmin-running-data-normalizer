@@ -14,30 +14,33 @@ Human Garmin Export (local, ignored)
   -> Optional Analysis Pack
 ```
 
-Open-Meteo, if enabled later, is an optional adapter. It must not introduce JMA
-or private Source Project dependencies. Requests may contain coordinates and
-therefore require explicit privacy documentation, minimum retention, and local
-evidence controls.
+Open-Meteo remains a deferred optional adapter. It must not introduce JMA or
+private predecessor dependencies. Coordinate handling, attribution, retention,
+and production use tier require separate privacy and Human decisions.
 
 ## Repository responsibilities
 
-- `src/`: future canonical product code only.
-- `scripts/`: thin Human entry points and repository validation.
+- `src/`: canonical local product implementation.
+- `scripts/`: repository validation and public-history safety checks.
 - `config/`: non-secret examples and defaults.
 - `schemas/`: machine-readable public contracts.
 - `tests/`: synthetic deterministic tests.
 - `examples/`: visibly synthetic inputs and expected outputs.
 - `docs/`: public product, governance, and operational documentation.
-- `runtime/`: task bootstrap prompts; not product runtime state.
+- `runtime/`: public task bootstrap prompts; not runtime state or review evidence.
 
 ## Current implementation status
 
-Only package identity and bootstrap validation exist. Parsers, normalizers,
-Run-All, Open-Meteo, and Analysis Pack behavior are planned and unavailable.
+Implemented locally: safe export discovery and archive filtering, activity,
+gear, personal-record and FIT session/lap normalization, stable identity,
+dataset policy, deterministic QA, and an allowlist-only Analysis Pack builder.
 
-## Source separation
+Deferred: a final Run-All command, FIT CRC/invalid-sentinel completeness,
+Open-Meteo, real-data validation, packaging completion, license selection, and
+public release.
 
-The private Source Project is evidence and design input only. Current runtime
-must not import it, shell out to it, reference its absolute path, or require its
-generated artifacts.
+## Predecessor separation
 
+A private predecessor was used only for responsibility-level design evidence.
+The Target has fresh sanitized Git history and must not import the predecessor,
+reference its private paths or task identifiers, or require its generated data.
