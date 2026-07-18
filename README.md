@@ -1,21 +1,21 @@
 # Garmin Running Data Normalizer
 
-Garmin Running Data Normalizer is a local-first Python library for discovering
-an unmodified Garmin Account Export and producing deterministic, provenance-rich
-records from Garmin JSON and FIT files.
+Garmin Running Data Normalizer is an early-stage, local-first Python project for
+discovering an unmodified Garmin Account Export and producing deterministic,
+provenance-rich records from Garmin JSON and FIT files.
 
 ## Current status
 
-The repository is in local implementation. The currently implemented bounded
-core includes safe export discovery, archive filtering, activity/gear/personal
-record normalization, a dependency-free FIT session/lap parser, stable identity,
-dataset-policy inspection, deterministic QA, and an allowlist-only Analysis Pack
-builder. Open-Meteo, a final end-user Run-All command, and public release remain
-future gated work.
+The currently implemented bounded core includes safe export discovery, archive
+filtering, activity/gear/personal record normalization, a dependency-free FIT
+session/lap parser, stable identity, dataset-policy inspection, deterministic QA,
+and an allowlist-only Analysis Pack builder. Open-Meteo, a final end-user Run-All
+command, complete FIT CRC and invalid-sentinel handling, real-data validation,
+and packaging remain future work.
 
-No OSS license has been selected. Local implementation and review are permitted;
-public redistribution, GitHub creation, remote configuration, push, tag, release,
-and publication are not authorized.
+This repository does not currently have a `LICENSE` file. Its source is publicly
+visible, but no OSS license has been granted; do not assume permission to use,
+modify, or redistribute it.
 
 ## Local verification
 
