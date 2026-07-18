@@ -38,6 +38,10 @@ INTERNAL = {
     "private_gate_id": re.compile(rb"PLATFORM-ALIGNMENT-AND-REUSE-[0-9-]+|GITHUB-INITIAL-REGISTRATION-READINESS-C[0-9]+", re.IGNORECASE),
 }
 APPROVED_IDENTITY = re.compile(r"^[0-9]+\+[A-Za-z0-9-]+@users\.noreply\.github\.com$")
+SANITIZED_BASE_COMMITS = (
+    "de53b0999b32064168bb69ed5afe3695be5a9564",
+    "8404a6900402a88e07e3cc66a534a285f45cd7d5",
+)
 
 
 def git(*args: str, binary: bool = False):
@@ -100,8 +104,17 @@ def main() -> None:
         if remotes:
             findings.append(f"remote: configured {remotes}")
         commits = [line for line in git("rev-list", "--all").splitlines() if line]
-    if len(commits) != 2:
-        findings.append(f"history: expected 2 reachable commits, found {len(commits)}")
+    if git("rev-parse", "--is-shallow-repository").strip() != "false":
+        findings.append("history: shallow repository")
+    for base_commit in SANITIZED_BASE_COMMITS:
+        ancestor = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", base_commit, "HEAD"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+        )
+        if ancestor.returncode != 0:
+            findings.append(f"history: sanitized base {base_commit} is not an ancestor of HEAD")
 
     identities = []
     for commit in commits:
