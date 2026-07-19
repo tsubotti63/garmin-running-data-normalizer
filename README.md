@@ -13,9 +13,7 @@ and an allowlist-only Analysis Pack builder. Open-Meteo, a final end-user Run-Al
 command, complete FIT CRC and invalid-sentinel handling, real-data validation,
 and packaging remain future work.
 
-This repository does not currently have a `LICENSE` file. Its source is publicly
-visible, but no OSS license has been granted; do not assume permission to use,
-modify, or redistribute it.
+This project is licensed under the [Apache License 2.0](LICENSE).
 
 ## Local verification
 
