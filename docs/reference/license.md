@@ -1,11 +1,27 @@
 # License and Rights Reference
 
-Status: `HUMAN_DECISION_PENDING_NO_LICENSE_FILE`.
+## Current project license
 
-Local Source reuse for this Work Package is explicitly authorized. This does not
-establish public redistribution rights, select an OSS license, or authorize a
-release. No `LICENSE` file may be added until the Human owner decides.
+Status: `APACHE_2_0`.
 
-The current product core uses only Python's standard library. Source-derived
-implementation must remain local until the rights position and Target license
-are confirmed.
+Garmin Running Data Normalizer is published under the Apache License 2.0. The
+repository-root [`LICENSE`](../../LICENSE) file is the canonical license text;
+the SPDX identifier is `Apache-2.0`. This reference does not duplicate or alter
+the license terms.
+
+## Rights and dependency boundary
+
+The current product core declares no third-party runtime package dependency.
+Build and test tools retain their own licenses; see the
+[dependency and license inventory](../dependency_license_inventory.md).
+
+The project's license does not establish redistribution rights for current or
+future third-party or predecessor material whose rights have not otherwise been
+confirmed. Such material must be reviewed before inclusion or continued
+redistribution. Each public-repository maintenance push requires its applicable
+Human authorization and the normal project review and CI process. Tags,
+releases, and other Human-reserved actions also require their applicable
+authorization.
+
+This document records repository facts and project boundaries. It is not legal
+advice.

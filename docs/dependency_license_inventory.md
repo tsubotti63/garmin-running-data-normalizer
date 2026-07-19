@@ -2,28 +2,27 @@
 
 ## Target project license
 
-Status: `HUMAN_DECISION_PENDING`. No license file is present.
+Status: `APACHE_2_0`. The project is published under the Apache License 2.0.
 
-Candidates:
+The repository-root [`LICENSE`](../LICENSE) file is the canonical license text.
+Its SPDX identifier is `Apache-2.0`.
 
-| Candidate | Strength | Trade-off | Status |
-|---|---|---|---|
-| Apache-2.0 | Explicit patent grant and contribution clarity | Longer notice obligations | Recommended for Human consideration |
-| MIT | Short and permissive | No explicit patent grant | Alternative |
+This project-license status is separate from dependency-license review. Adding
+or changing a dependency still requires its own version, transitive-license,
+attribution, and compatibility review as appropriate.
 
-The recommendation is not a license decision. The Human owner must confirm code
-ownership and select the license before public release or Source code reuse.
-
-## Bootstrap dependencies
+## Current dependencies
 
 | Dependency | Use | Known license | Gate |
 |---|---|---|---|
-| Python >=3.11 | runtime | PSF License | Verify supported versions before release |
-| setuptools | build | MIT | Pin/verify at release |
-| wheel | build | MIT | Pin/verify at release |
-| pytest | test-only | MIT | Pin/verify at release |
+| Python >=3.11 | runtime platform | PSF License | Verify supported versions for a release |
+| setuptools >=69 | build | MIT | Verify the resolved build environment for a release |
+| wheel | build | MIT | Verify the resolved build environment for a release |
+| pytest >=8.4,<9 | test-only | MIT | Verify the resolved test environment for a release |
 
-The bootstrap has no third-party runtime dependency.
+The project declares no third-party runtime package dependency. Build and test
+tools are not covered merely by the project's Apache-2.0 license and remain
+independently licensed.
 
 ## Candidate future dependencies
 
