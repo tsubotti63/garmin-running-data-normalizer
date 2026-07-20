@@ -6,19 +6,21 @@
 - Default branch: `main`
 - License: `Apache-2.0`
 - CI: Operational
-- Git tags: None
-- GitHub Releases: None
-- Versioned releases: None
+- Initial release candidate: `v0.1.0-rc.1`
+- Python package version: `0.1.0rc1`
+- Release classification: Prerelease
+- Stable releases: None
+- PyPI distributions: None
 
 Repository publication makes the source available for public maintenance. A Git
 tag identifies a Git object, a GitHub Release is a separately created GitHub
-artifact, and a versioned product release is a distinct project event. None of
-those release events is implied by the repository being public.
+artifact, and a versioned product release is a distinct project event. The
+initial Release Candidate remains a prerelease and is not a stable release.
 
 ## Release readiness
 
-No versioned release has been issued. A future release must be assessed against
-the implementation, dependency and notice inventory, rights position,
-security/privacy checks, review evidence, and Human authorization applicable at
-that time. This status reference records the current distinction; it does not
-create a new release policy.
+Each future release must still be assessed against the implementation,
+dependency and notice inventory, rights position, security/privacy checks,
+review evidence, and Human authorization applicable at that time. This status
+reference records the current distinction; it does not create standing release
+authority.

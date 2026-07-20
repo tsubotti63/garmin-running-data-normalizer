@@ -6,8 +6,9 @@ provenance-rich Garmin records without sending the export to a hosted service.
 
 ## Current status
 
-The source repository is public and maintained on `main`. No Git tag, GitHub
-Release, PyPI distribution, or versioned product release has been issued.
+The source repository is public and maintained on `main`. The initial release
+candidate is `v0.1.0-rc.1` (Python package version `0.1.0rc1`). It is a
+prerelease, not a stable release. No PyPI distribution has been published.
 
 The formal end-user command currently supports one activities-only Golden Path.
 Additional Garmin normalizers and exporters are available as library
@@ -78,7 +79,7 @@ personal output belong in ignored local directories.
   Garmin Account Export data.
 - FIT support is limited to selected session and lap fields. Complete FIT CRC
   and invalid-sentinel handling are not implemented.
-- Open-Meteo, Parquet output, PyPI publication, and a versioned product release
+- Open-Meteo, Parquet output, PyPI publication, and a stable product release
   are not implemented.
 - The package does not guarantee a stable third-party Python API at this stage.
 
