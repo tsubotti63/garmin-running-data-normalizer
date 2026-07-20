@@ -36,7 +36,14 @@ def production_imports() -> list[str]:
 
 def content_violations() -> list[str]:
     violations: list[str] = []
-    excluded = {".git", ".review", ".bootstrap_review", "__pycache__", ".pytest_cache"}
+    excluded = {
+        ".git",
+        ".review",
+        ".bootstrap_review",
+        ".venv",
+        "__pycache__",
+        ".pytest_cache",
+    }
     for path in sorted(ROOT.rglob("*")):
         if not path.is_file() or any(part in excluded for part in path.parts):
             continue

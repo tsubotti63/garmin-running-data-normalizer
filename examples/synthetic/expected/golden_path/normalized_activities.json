@@ -1,0 +1,32 @@
+[
+  {
+    "activity_date_local": "2030-01-01",
+    "activity_datetime_local": "2030-01-01T09:00:00+09:00",
+    "activity_id": "SYNTHETIC-RUN-0001",
+    "activity_training_load": null,
+    "activity_type": "running",
+    "avg_hr": null,
+    "avg_power": null,
+    "avg_run_cadence": null,
+    "distance_m": 5000.0,
+    "distance_raw_centimeters": 500000,
+    "duration_ms": 1800000,
+    "duration_sec": 1800.0,
+    "elapsed_duration_ms": 1860000,
+    "garmin_activity_key": "garmin_activity:SYNTHETIC-RUN-0001",
+    "lap_count": 1,
+    "max_hr": null,
+    "max_power": null,
+    "memo_present": true,
+    "memo_text_raw": "Completely fabricated local example.",
+    "moving_duration_ms": 1790000,
+    "name": "Synthetic Five Kilometre Run",
+    "source_confidence": "high",
+    "source_path": "DI-Connect-Fitness/synthetic_summarizedActivities.json",
+    "source_sha256": "b29c797c929489642b907800cb4142d4f9d9289ed776346beae2c1d33a85e21b",
+    "sport_type": "running",
+    "start_time_gmt_ms": 1893456000000,
+    "start_time_local_raw": "2030-01-01T09:00:00",
+    "training_effect_label": null
+  }
+]

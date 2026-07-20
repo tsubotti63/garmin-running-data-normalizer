@@ -1,0 +1,21 @@
+[
+  {
+    "summarizedActivitiesExport": [
+      {
+        "activityId": "SYNTHETIC-RUN-0001",
+        "activityType": "running",
+        "description": "Completely fabricated local example.",
+        "distance": 500000,
+        "duration": 1800000,
+        "elapsedDuration": 1860000,
+        "lapCount": 1,
+        "movingDuration": 1790000,
+        "name": "Synthetic Five Kilometre Run",
+        "sportType": "running",
+        "startTimeGmt": 1893456000000,
+        "startTimeLocal": "2030-01-01T09:00:00",
+        "synthetic": true
+      }
+    ]
+  }
+]

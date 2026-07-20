@@ -1,8 +1,0 @@
-{
-  "activityId": "synthetic-activity-0001",
-  "activityType": "running",
-  "startTimeLocal": "2030-01-01T09:00:00",
-  "distanceMeters": 5000.0,
-  "durationSeconds": 1800.0,
-  "synthetic": true
-}

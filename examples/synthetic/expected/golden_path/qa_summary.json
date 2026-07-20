@@ -1,0 +1,14 @@
+{
+  "dataset": "activities",
+  "duplicate_key_count": 0,
+  "json_serializable": true,
+  "missing_key_count": 0,
+  "record_count": 1,
+  "record_grain": "activity",
+  "records_sha256": "30718efb955f05568178b6d9f2395a10a3dd44508d3658e3090ee6975d4cbaf6",
+  "source_asset_count": 1,
+  "stable_key": [
+    "garmin_activity_key"
+  ],
+  "status": "PASS"
+}

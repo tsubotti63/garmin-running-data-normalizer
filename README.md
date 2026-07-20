@@ -15,6 +15,20 @@ and packaging remain future work.
 
 This project is licensed under the [Apache License 2.0](LICENSE).
 
+## Try the synthetic Golden Path
+
+No Garmin account or real export is required. After local installation, run the
+bounded activities workflow with the visibly synthetic fixture:
+
+```bash
+python -m garmin_running_data_normalizer normalize-activities --input examples/synthetic/garmin_export --output workspace/golden-path
+```
+
+It creates deterministic normalized activities, a QA summary, and a provenance
+manifest without modifying the input. Follow the complete copy-and-paste setup,
+Golden Result comparison, repeat-run check, privacy guidance, and current
+limitations in the [Product Quick Start](docs/product_quick_start.md).
+
 ## Local verification
 
 ```bash
