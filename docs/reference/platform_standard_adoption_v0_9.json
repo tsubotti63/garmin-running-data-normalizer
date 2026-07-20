@@ -7,18 +7,18 @@
   "platform_version": "0.9",
   "record_type": "target_platform_standard_adoption",
   "source_artifact": "ai-collaboration-platform.zip",
-  "source_sha256": "13e6d74fe100deb6cb74f39aa048f3b939206633f8ec925cdc098d71d99bb4a8",
-  "standard_file_count": 54,
+  "source_sha256": "d824ed255b5a258eae6db13a8c605762d451194f94c4ace801ae0d7cccac66ce",
+  "standard_file_count": 62,
   "standard_files": [
     {
-      "bytes": 922,
+      "bytes": 1228,
       "path": "CHANGELOG.md",
-      "sha256": "3db995110d118374be0dbbc7c963b41bac37f74c04b5021c7a23ac13e786e850"
+      "sha256": "52dddb9109bae7605b35dc8e1495383e61d8be3072957a8d5519e37a992dc046"
     },
     {
-      "bytes": 2161,
+      "bytes": 2730,
       "path": "PLATFORM_EVOLUTION.md",
-      "sha256": "cdaadd1e6ba602bd08a33c2f52ff3b0ca75c8a2e7daade4599773c5278452a8b"
+      "sha256": "dd165402ad6077bed4adbc5d2cf2a8a1fdf1e5c90cbf5bde3ce9155e25d2225b"
     },
     {
       "bytes": 2524,
@@ -26,24 +26,24 @@
       "sha256": "6b22d2d28eacf0bea1f02dfd7a108b959cb128871c212173c5c1ad23724085de"
     },
     {
-      "bytes": 716,
+      "bytes": 907,
       "path": "docs/README.md",
-      "sha256": "08aba3c885c2f40360e3951b7409612c0e005d7fda9babd0df6acaefc4e7ff9b"
+      "sha256": "0bc9f3e0875b45e0d3b27b99311a2ff6a36526a3a084ec1c52ac0aa74208d0c6"
     },
     {
-      "bytes": 694,
+      "bytes": 1032,
       "path": "docs/project_os/README.md",
-      "sha256": "cc645267d34b1a31226ba3768ce79afe7291c4426f54b67d65041a108ba07457"
+      "sha256": "ee7f50c6bfe8a89e275ac59ebaabe4f24ce4f50fc666173555da533675c32b74"
     },
     {
-      "bytes": 1667,
+      "bytes": 2255,
       "path": "docs/project_os/architecture/ai_collaboration_architecture_v0_9.md",
-      "sha256": "37a581a219d21b2c66b5854247ab740b66ee5bc178cc04f1a185c3ad83faaa9a"
+      "sha256": "3a75d8818e761d354fb2cb6c2ab55e7ea0e2a57828185eeceb8a4b8579432073"
     },
     {
-      "bytes": 866,
+      "bytes": 1004,
       "path": "docs/project_os/architecture/project_os_roadmap_v0_9.md",
-      "sha256": "75d58ed2bbad310a95adb570a50491d9fc186dacf90edc7d9f334896323361e1"
+      "sha256": "996b8dbfd8e823138d87454d29e17082aa72f3725f3d2c7196597e300b115e34"
     },
     {
       "bytes": 938,
@@ -89,6 +89,46 @@
       "bytes": 1565,
       "path": "docs/project_os/governance/platform_charter_v0_9.md",
       "sha256": "f8786b615ee499bbb30cf496459a141b942a8fd1e6c33a78164fa49d273d23fb"
+    },
+    {
+      "bytes": 2081,
+      "path": "docs/project_os/governance/project_governance_extension/README.md",
+      "sha256": "10364b472797be0a77a038d58f41ed40dbb71568b9e69361e43f5a1c09b5fa64"
+    },
+    {
+      "bytes": 3132,
+      "path": "docs/project_os/governance/project_governance_extension/adrs/adr_0003_project_governance_extension_adoption_v0.2.md",
+      "sha256": "c2d9174969c9261fcd129c4434ca1d03fa6f6326304a4ef4d5de6f3ca9093e05"
+    },
+    {
+      "bytes": 2587,
+      "path": "docs/project_os/governance/project_governance_extension/governance_lifecycle_guide_v0.2.md",
+      "sha256": "52a0267404745ac728bccc0e5302477e26fcaf7a877bf736d3e81a877498b680"
+    },
+    {
+      "bytes": 2783,
+      "path": "docs/project_os/governance/project_governance_extension/operations_framework_specification_v0.2.md",
+      "sha256": "f7100c088de7a85949c9646a465380c8c9651a58107d0bc776fe32bb0b386ed2"
+    },
+    {
+      "bytes": 8540,
+      "path": "docs/project_os/governance/project_governance_extension/project_governance_extension_proposal_v0.2.md",
+      "sha256": "5eea589903a2c8bd79f351c44825e79464d8d43607802657651c26a0c2f21579"
+    },
+    {
+      "bytes": 2581,
+      "path": "docs/project_os/governance/project_governance_extension/project_governance_extension_v0.2_integration_record.md",
+      "sha256": "9db4a331c6cfa45da5d567134f3e3bf4b526d899cfad8afcb4bf3ea9edb66df8"
+    },
+    {
+      "bytes": 3020,
+      "path": "docs/project_os/governance/project_governance_extension/project_governance_standard_v0.2.md",
+      "sha256": "1eeb45509a861a02d2f3ea3ea0dcfb92cbedc7a726fbd10c5443a52f16e042c5"
+    },
+    {
+      "bytes": 2149,
+      "path": "docs/project_os/governance/project_governance_extension/reviews/governance_v0.2_release_candidate_review_checklist.md",
+      "sha256": "cfc01ed433ca5f4f12bb8005186676c5975d66d3a9628e4d2c7626b6ec1064c6"
     },
     {
       "bytes": 644,

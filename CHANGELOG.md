@@ -20,6 +20,16 @@ Production Candidate initial release.
 - Optional Platform Adoption Status and Project Maturity metadata in the Project Context template
 - Optional Current Phase and Phase Roadmap metadata in the Phase Kickoff template
 
+
+### Integrated Extensions
+
+- Project Governance Extension v0.2
+- Canonical Governance Lifecycle Guide
+- Operations Framework Specification
+- ADR-0003 governance adoption decision
+- Garmin Running Data Normalizer Reference Governance Profile
+- Platform Improvement Intake boundary with Platform Evolution
+
 ### Known Limitations
 
 - Platform-specific Task APIs may change

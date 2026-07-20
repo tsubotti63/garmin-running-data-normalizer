@@ -62,6 +62,8 @@ Boundary Check
 
 ## 4. Promotion Rule
 
+Project Governance Extensionで記録された改善候補は、Platform Improvement Intakeを経てPlatform Evolutionへ渡します。GovernanceはPlatform Standardを直接変更しません。
+
 Project固有の改善をPlatform Standardへ昇格する条件:
 
 - 複数Projectで再利用可能
@@ -97,3 +99,12 @@ Project固有内容は次へ記載します。
 - v1.0: General Availability
 
 v0.9は実運用可能ですが、Platform横断での安定性・長時間運用・複数Project適用を引き続き検証します。
+
+
+## 7. Governance Extension Interface
+
+- Governance Extension: operational observations and improvement candidatesを構造化する
+- Platform Improvement Intake: 再利用可能性を確認する
+- Platform Evolution: Adopt / Hold / Rejectを判断し、必要な標準更新を行う
+
+関連文書: `docs/project_os/governance/project_governance_extension/README.md`
