@@ -24,6 +24,9 @@ python -m pip install -e .
 
 ## Run the synthetic Golden Path
 
+This command supports the `activities` dataset only. Its output grain is one
+record per activity and its stable key remains `garmin_activity_key`.
+
 ```bash
 python -m garmin_running_data_normalizer normalize-activities \
   --input examples/synthetic/garmin_export \
@@ -82,7 +85,7 @@ The static policy scan intentionally excludes the local `.venv/` created by
 the setup instructions. It continues to scan the project source, configuration,
 tests, documentation, examples, and other repository-owned content.
 
-## Moving to a Garmin Account Export
+## Known limitations and real exports
 
 The current runner is an activities-only bounded workflow. Point `--input` at a
 local export directory containing a JSON file whose name ends in

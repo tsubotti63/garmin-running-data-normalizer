@@ -19,7 +19,10 @@ manifest, and reproducibility checks.
 
 Review Open-Meteo privacy/use-tier controls and finalize Analysis Pack contracts.
 
-## Milestone 4 — public readiness
+## Milestone 4 — versioned release readiness
 
-Human-selected license, Source rights resolution, dependency/license lock,
-security review, CI, GitHub creation, and release only under separate authority.
+Confirm rights for material whose redistribution position is not already
+established, complete dependency/license and security/privacy review, and
+prepare release-specific evidence. The repository is already public under
+Apache-2.0; any future tag, GitHub Release, or versioned product release still
+requires separate Human authorization.

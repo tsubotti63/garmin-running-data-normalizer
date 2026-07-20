@@ -36,8 +36,9 @@ gear, personal-record and FIT session/lap normalization, stable identity,
 dataset policy, deterministic QA, and an allowlist-only Analysis Pack builder.
 
 Deferred: a final Run-All command, FIT CRC/invalid-sentinel completeness,
-Open-Meteo, real-data validation, packaging completion, license selection, and
-public release.
+Open-Meteo, real-data validation, distribution packaging, and a versioned
+product release. The source repository is already public and licensed under
+Apache-2.0; those facts do not imply that a versioned release exists.
 
 ## Predecessor separation
 
