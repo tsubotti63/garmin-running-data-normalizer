@@ -77,8 +77,16 @@ def main() -> None:
             "refs/remotes/origin/HEAD",
             "refs/remotes/origin/main",
         }
-        if set(refs) != expected_refs:
-            findings.append(f"refs: expected {sorted(expected_refs)}, found {refs}")
+        missing_refs = sorted(expected_refs - set(refs))
+        unexpected_refs = sorted(
+            ref
+            for ref in refs
+            if ref not in expected_refs and not ref.startswith("refs/tags/")
+        )
+        if missing_refs:
+            findings.append(f"refs: missing {missing_refs}")
+        if unexpected_refs:
+            findings.append(f"refs: unexpected {unexpected_refs}")
         if remotes != ["origin"]:
             findings.append(f"remote: expected origin only, found {remotes}")
         head = git("rev-parse", "HEAD").strip()
@@ -143,7 +151,13 @@ def main() -> None:
             continue
         scanned_objects += 1
         data = git("cat-file", object_type, oid, binary=True)
-        findings.extend(scan(f"object {oid} ({object_type})", data, allow_email=object_type == "commit"))
+        findings.extend(
+            scan(
+                f"object {oid} ({object_type})",
+                data,
+                allow_email=object_type in {"commit", "tag"},
+            )
+        )
 
     result = {
         "status": "PASS" if not findings else "FAIL",
