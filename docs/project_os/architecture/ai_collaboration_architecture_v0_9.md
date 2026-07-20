@@ -72,3 +72,24 @@ Project Root
 
 自由度を無制限に与えません。  
 **自由度をあらかじめ定義**し、その範囲内で自律実行します。
+
+
+## 6. Continuous Governance Extension
+
+Project initialization後の継続運営は、[`../governance/project_governance_extension/README.md`](../governance/project_governance_extension/README.md) に接続します。
+
+```text
+AI Collaboration Architecture
+        ↓
+Project OS / Project Factory
+        ↓
+Project Governance Extension
+        ↓
+Operational Evidence
+        ↓
+Platform Improvement Intake
+        ↓
+Platform Evolution
+```
+
+Governance Extensionは本Architectureを再定義せず、運用・保守・レビュー・改善候補の記録を標準化します。

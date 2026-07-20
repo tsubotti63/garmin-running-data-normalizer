@@ -30,6 +30,11 @@ Architecture
   - Charter
   - Boundary and Escalation
   - Definition of Done
+  - Project Governance Extension
+    - Governance Standard
+    - Operations Framework
+    - Canonical Lifecycle
+    - Governance Profiles
 - Conventions
   - Documentation
   - Language
