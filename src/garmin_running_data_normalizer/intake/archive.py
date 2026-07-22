@@ -7,13 +7,16 @@ import stat
 from zipfile import BadZipFile, ZipFile, ZipInfo
 
 
+MAX_ARCHIVE_MEMBERS = 100_000
+
+
 class UnsafeArchiveError(ValueError):
     """Raised when an archive violates the fail-closed intake contract."""
 
 
 @dataclass(frozen=True)
 class ArchiveLimits:
-    max_members: int = 10_000
+    max_members: int = MAX_ARCHIVE_MEMBERS
     max_member_bytes: int = 128 * 1024 * 1024
     max_total_bytes: int = 2 * 1024 * 1024 * 1024
     max_compression_ratio: float = 200.0
@@ -85,4 +88,12 @@ def read_member(archive: ZipFile, info: ZipInfo, limits: ArchiveLimits = Archive
     return data
 
 
-__all__ = ["ArchiveLimits", "BadZipFile", "UnsafeArchiveError", "is_real_export_file", "read_member", "validated_members"]
+__all__ = [
+    "ArchiveLimits",
+    "BadZipFile",
+    "MAX_ARCHIVE_MEMBERS",
+    "UnsafeArchiveError",
+    "is_real_export_file",
+    "read_member",
+    "validated_members",
+]

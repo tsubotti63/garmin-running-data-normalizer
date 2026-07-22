@@ -7,7 +7,12 @@ import zipfile
 import stat
 from pathlib import Path
 
-from garmin_running_data_normalizer.intake.archive import ArchiveLimits, UnsafeArchiveError, validated_members
+from garmin_running_data_normalizer.intake.archive import (
+    MAX_ARCHIVE_MEMBERS,
+    ArchiveLimits,
+    UnsafeArchiveError,
+    validated_members,
+)
 from garmin_running_data_normalizer.intake.discovery import discover_export
 from garmin_running_data_normalizer.normalizers import (
     normalize_activities,
@@ -109,6 +114,24 @@ class IntakeAndNormalizersTest(unittest.TestCase):
             validated_members(self._fake_archive(self._info("a.json"), self._info("b.json")), ArchiveLimits(max_total_bytes=1))  # type: ignore[arg-type]
         with self.assertRaises(UnsafeArchiveError):
             validated_members(self._fake_archive(self._info("a.json", size=201, compressed=1)), ArchiveLimits(max_compression_ratio=200))  # type: ignore[arg-type]
+
+    def test_t7_t8_large_archive_member_boundaries(self) -> None:
+        self.assertEqual(MAX_ARCHIVE_MEMBERS, 100_000)
+        safe_member = self._info("safe/member.json", size=0, compressed=0)
+        for count in (10_000, 10_001, 46_432, 100_000):
+            with self.subTest(count=count):
+                archive = self._fake_archive(*([safe_member] * count))
+                self.assertEqual(len(validated_members(archive)), count)  # type: ignore[arg-type]
+        excessive = self._fake_archive(*([safe_member] * 100_001))
+        with self.assertRaisesRegex(UnsafeArchiveError, "member count"):
+            validated_members(excessive)  # type: ignore[arg-type]
+
+    def test_t9_malformed_archive_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "malformed.zip").write_bytes(b"not-a-zip")
+            with self.assertRaises(zipfile.BadZipFile):
+                discover_export(root)
 
     def test_gear_and_personal_records(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

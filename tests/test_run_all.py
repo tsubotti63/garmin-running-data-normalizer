@@ -12,9 +12,13 @@ import tempfile
 import unittest
 import zipfile
 from collections import Counter
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest import mock
 
+from garmin_running_data_normalizer import runner
+from garmin_running_data_normalizer.intake.archive import UnsafeArchiveError
 from garmin_running_data_normalizer.normalizers.activities import normalize_activities
 from garmin_running_data_normalizer.run_all import OUTPUT_PATHS, RunAllError, run_all
 
@@ -263,6 +267,46 @@ class RunAllTest(unittest.TestCase):
 
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertNotIn("upload-artifact", workflow)
+
+    def test_t7_large_valid_archive_runs_without_member_count_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            input_root = temporary / "input"
+            input_root.mkdir()
+            activity_payload = next(ACTIVITIES_FIXTURE.rglob("*summarizedActivities.json")).read_bytes()
+            archive_path = input_root / "large-synthetic-export.zip"
+            with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_STORED) as archive:
+                archive.writestr("DI-Connect-Fitness/synthetic_summarizedActivities.json", activity_payload)
+                for index in range(46_431):
+                    archive.writestr(f"safe/ignored-{index:05d}.txt", b"")
+            before = tree_hashes(input_root)
+            output = temporary / "output"
+            result = self.run_command(input_root, output)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("STATUS: PASS_WITH_WARNINGS", result.stdout)
+            self.assertTrue((output / "run_summary.json").is_file())
+            self.assertEqual(before, tree_hashes(input_root))
+
+    def test_t8_excessive_archive_rejection_is_privacy_safe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            input_root = temporary / "input"
+            input_root.mkdir()
+            output = temporary / "output"
+            before = tree_hashes(input_root)
+            stdout = StringIO()
+            stderr = StringIO()
+            with mock.patch(
+                "garmin_running_data_normalizer.run_all.discover_export",
+                side_effect=UnsafeArchiveError("archive member count exceeds configured limit"),
+            ):
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    exit_code = runner.main(["run-all", "--input", str(input_root), "--output", str(output)])
+            self.assertEqual(exit_code, 2)
+            self.assertIn("INPUT_DISCOVERY_FAILED", stderr.getvalue())
+            self.assertNotIn(str(temporary), stdout.getvalue() + stderr.getvalue())
+            self.assertFalse(output.exists())
+            self.assertEqual(before, tree_hashes(input_root))
 
 
 if __name__ == "__main__":
