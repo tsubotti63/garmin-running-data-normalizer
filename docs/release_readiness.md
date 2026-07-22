@@ -6,8 +6,9 @@
 - Default branch: `main`
 - License: `Apache-2.0`
 - GitHub Actions: Operational
-- Initial release candidate: `v0.1.0-rc.1` prerelease
-- Python package version: `0.1.0rc1`
+- Historical release candidate: `v0.1.0-rc.1` prerelease
+- Current candidate identity: `v0.1.0-rc.2`
+- Python package version: `0.1.0rc2`
 - Stable release: None issued
 - PyPI distribution: None issued
 
@@ -17,9 +18,10 @@ stable release has been issued.
 
 ## Current release assessment
 
-`v0.1.0-rc.1` is the bounded initial Release Candidate. It covers the
-activities-only synthetic Golden Path and reviewed library components described
-in the README; it does not expand the supported datasets or runtime contract.
+`v0.1.0-rc.1` remains the bounded historical activities-only candidate.
+`v0.1.0-rc.2` is the current candidate identity for the multi-family Run-All,
+M2.1 archive compatibility, private public-safe real-export evidence, Analysis
+Handoff, and synthetic Case Study scope. It remains a prerelease.
 
 Future stable-release readiness includes confirming rights for material whose
 redistribution rights are not already established, reviewing resolved
