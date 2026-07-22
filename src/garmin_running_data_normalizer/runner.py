@@ -10,6 +10,7 @@ from typing import Any
 from .intake.discovery import discover_export
 from .normalizers.activities import normalize_activities
 from .qa import summarize_records
+from .run_all import RunAllError, run_all
 
 
 OUTPUT_FILES = (
@@ -157,21 +158,51 @@ def build_parser() -> argparse.ArgumentParser:
     )
     activities.add_argument("--input", required=True, help="Garmin export directory")
     activities.add_argument("--output", required=True, help="Absent or empty output directory")
+    combined = commands.add_parser(
+        "run-all",
+        help="Run the minimum deterministic multi-family Garmin workflow.",
+    )
+    combined.add_argument("--input", required=True, help="Garmin export directory")
+    combined.add_argument("--output", required=True, help="New output directory")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        if args.command != "normalize-activities":
+        if args.command == "normalize-activities":
+            result = run_activities(args.input, args.output)
+        elif args.command == "run-all":
+            result = run_all(args.input, args.output)
+        else:
             raise GoldenPathError("unsupported command")
-        result = run_activities(args.input, args.output)
     except GoldenPathError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
-    except Exception:
-        print("ERROR: Golden Path failed; verify the input and output contract", file=sys.stderr)
+    except RunAllError as exc:
+        print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)
         return 2
+    except Exception:
+        if args.command == "run-all":
+            print("ERROR [RUN_ALL_FAILED]: Run-All failed; verify the input and output contract", file=sys.stderr)
+        else:
+            print("ERROR: Golden Path failed; verify the input and output contract", file=sys.stderr)
+        return 2
+
+    if args.command == "run-all":
+        print(f"STATUS: {result['status']}")
+        print(f"exit: {result['exit_code']}")
+        for family, details in result["family_results"].items():
+            print(
+                f"{family}: detected={details['detected_asset_count']} "
+                f"processed={details['processed_asset_count']} "
+                f"skipped={details['skipped_asset_count']} "
+                f"records={details['record_count']} "
+                f"warnings={details['warning_count']} errors={details['error_count']}"
+            )
+        print(f"generated: {', '.join(result['generated_files'])}")
+        print(f"digest: {result['deterministic_digest']}")
+        return int(result["exit_code"])
 
     print("PASS")
     print(f"records: {result['record_count']}")

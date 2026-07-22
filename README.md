@@ -10,9 +10,10 @@ The source repository is public and maintained on `main`. The initial release
 candidate is `v0.1.0-rc.1` (Python package version `0.1.0rc1`). It is a
 prerelease, not a stable release. No PyPI distribution has been published.
 
-The formal end-user command currently supports one activities-only Golden Path.
-Additional Garmin normalizers and exporters are available as library
-components, but they are not exposed through a combined end-user workflow.
+The formal CLI supports the existing activities-only Golden Path and a minimum
+multi-family Run-All workflow. Run-All requires Activities and processes Gear,
+Personal Records, and bounded FIT sessions/laps when those families are
+present. It has been validated with synthetic fixtures, not a real export.
 
 This project is licensed under the [Apache License 2.0](LICENSE).
 
@@ -21,9 +22,9 @@ This project is licensed under the [Apache License 2.0](LICENSE).
 | Dataset or output | Implemented scope | Formal CLI support |
 |---|---|---|
 | Activities | `summarizedActivities.json` normalization with activity grain, `garmin_activity_key`, provenance, QA, and manifest | Yes |
-| Gear and activity-gear links | `gear.json` library normalizer | No |
-| Personal records | `personalRecord.json` library normalizer | No |
-| FIT sessions and laps | Bounded, dependency-free library parser; record coordinates and raw telemetry are not emitted | No |
+| Gear and activity-gear links | `gear.json` normalizer | Run-All |
+| Personal records | `personalRecord.json` normalizer | Run-All |
+| FIT sessions and laps | Bounded, dependency-free parser; record coordinates and raw telemetry are not emitted | Run-All |
 | Analysis Pack | Deterministic ZIP builder from an explicit `.csv`/`.json`/`.md` allowlist | No |
 
 The dataset registry documents stable keys, record grain, merge policy, and
@@ -42,6 +43,24 @@ It creates deterministic normalized activities, a QA summary, and a provenance
 manifest without modifying the input. Follow the complete copy-and-paste setup,
 Golden Result comparison, repeat-run check, privacy guidance, and current
 limitations in the [Product Quick Start](docs/product_quick_start.md).
+
+## Run the minimum multi-family workflow
+
+Use a new output directory for every run:
+
+```bash
+python -m garmin_running_data_normalizer run-all \
+  --input examples/synthetic/garmin_export \
+  --output workspace/run-all
+```
+
+The tracked fixture contains Activities only, so this tested example returns
+`PASS_WITH_WARNINGS` with exit code 0 and records the absent optional families.
+Run-All writes normalized JSON, FIT audit, deterministic Activities CSV,
+dataset QA, a run manifest, and `run_summary.json` as its completion marker.
+Exit code 2 is fatal; exit code 3 is an explicit `PARTIAL_SUCCESS` for auditable
+incomplete FIT parsing. See the [Product Quick Start](docs/product_quick_start.md)
+for the fixed output layout and privacy boundary.
 
 ## Local verification
 
@@ -74,9 +93,10 @@ personal output belong in ignored local directories.
 
 ## Known limitations
 
-- The formal CLI processes activities only; it is not a full Run-All workflow.
 - The implementation has been validated with synthetic fixtures, not real
   Garmin Account Export data.
+- Run-All v1 requires `summarizedActivities.json`; Gear, Personal Records, and
+  FIT are optional and detected using the existing exact filename rules.
 - FIT support is limited to selected session and lap fields. Complete FIT CRC
   and invalid-sentinel handling are not implemented.
 - Open-Meteo, Parquet output, PyPI publication, and a stable product release

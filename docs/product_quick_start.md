@@ -69,6 +69,53 @@ diff -ru workspace/golden-path workspace/golden-path-repeat
 
 No output from the second `diff` confirms byte-identical repeated execution.
 
+## Run the minimum Run-All workflow
+
+Run-All composes the existing Activities, Gear, Personal Records, and bounded
+FIT components. Activities are required; the other three input families are
+optional. The destination must be new and outside the input directory.
+
+```bash
+python -m garmin_running_data_normalizer run-all \
+  --input examples/synthetic/garmin_export \
+  --output workspace/run-all
+```
+
+The tracked synthetic export contains Activities only. The command therefore
+returns `PASS_WITH_WARNINGS` with exit code 0 and writes empty arrays plus
+`SKIPPED_NOT_PRESENT` evidence for the optional families.
+
+The fixed output layout is:
+
+```text
+workspace/run-all/
+  normalized/
+    activities.json
+    gear.json
+    activity_gear.json
+    personal_records.json
+    fit_sessions.json
+    fit_laps.json
+  audit/fit_audit.json
+  analysis/activities.csv
+  qa/dataset_summary.json
+  run_manifest.json
+  run_summary.json
+```
+
+`run_summary.json` is written last and is the only completion marker. Exit code
+0 means `PASS` or `PASS_WITH_WARNINGS`; exit code 2 is a fatal contract, input,
+QA, or publication error; exit code 3 means `PARTIAL_SUCCESS` because detected
+FIT input has an auditable incomplete parse. Existing output is never
+overwritten—use a new destination to rerun, and identical input produces
+byte-identical output.
+
+The Activities CSV excludes raw memo text, Garmin activity IDs, source paths,
+hashes, and coordinates. Detailed normalized outputs and source-relative
+provenance still contain personal running information and must remain local.
+Never commit a real export or generated Run-All output, and do not upload it as
+a CI artifact.
+
 ## Run local validation
 
 With the editable package installed and the virtual environment still active,
@@ -95,7 +142,7 @@ limits.
 
 Real Garmin exports and generated personal outputs are sensitive. Keep them in
 ignored local locations such as `data/` and `workspace/`; never commit them.
-This workflow has not been validated against real Garmin data. Gear, personal
-records, complete FIT processing, Open-Meteo, packaging, and a full Run-All
-workflow are outside this Golden Path. See the [README](../README.md) for the
-current implementation scope and limitations.
+These workflows have not been validated against real Garmin data. Run-All uses
+the existing exact filename rules and does not implement complete FIT parsing,
+Open-Meteo, Parquet, or automatic Analysis Pack generation. See the
+[README](../README.md) for the current implementation scope and limitations.
