@@ -1,0 +1,7 @@
+activity_date_local,activity_type,distance_m,duration_sec,avg_hr
+2030-03-01,running,5000,1800,140
+2030-03-05,running,5000,1650,148
+2030-03-10,running,10000,3600,150
+2030-03-15,trail_running,8000,3360,152
+2030-03-20,running,6000,1980,
+2030-03-25,running,12000,4500,155

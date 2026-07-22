@@ -1,0 +1,7 @@
+activity_date_local,activity_type,distance_m,duration_sec,activity_training_load
+2030-04-01,running,8000,3000,80
+2030-04-05,running,10000,3900,95
+2030-04-09,running,7000,2600,70
+2030-05-03,running,3000,1200,30
+2030-05-07,running,4000,1500,38
+2030-05-12,running,5000,1850,45

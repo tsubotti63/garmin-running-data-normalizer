@@ -1,0 +1,9 @@
+activity_date_local,activity_type,sport_type,distance_m,duration_sec,avg_hr,activity_training_load
+2030-01-03,running,running,5000,1800,142,55
+2030-01-05,running,running,8000,3000,148,78
+2030-01-10,cycling,cycling,18000,3300,130,65
+2030-01-12,running,running,6000,2250,,60
+2030-02-07,running,running,7000,2600,145,65
+2030-02-09,running,running,10000,3900,152,90
+2030-02-14,cycling,cycling,25000,4200,134,
+2030-02-16,running,running,5000,1750,140,50
