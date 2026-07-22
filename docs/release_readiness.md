@@ -10,7 +10,7 @@
 - Latest published prerelease: `v0.1.0-rc.2`
 - Prepared Python package version: `1.0.0`
 - GitHub Release: Published 2026-07-22
-- Stable release candidate: Prepared on `main`; validation pending
+- Stable release candidate: Validated on `main`; awaiting Human approval
 - Stable release: None issued; no `v1.0.0` tag or GitHub Release
 - PyPI distribution: None issued
 
@@ -28,6 +28,6 @@ commit and its GitHub Release contains no attached assets.
 
 The Human owner confirmed the right to continue distributing the predecessor-
 derived responsibilities included in this Target under Apache-2.0 and to
-include them in `v1.0.0`. The candidate still requires completion of M8.2/M8.3,
-applicable reviews, passing CI, and a separate Human approval before the tag or
+include them in `v1.0.0`. M8.2 asset preparation and M8.3 candidate validation
+are complete. A separate Human approval is still required before the tag or
 GitHub Release is created. No PyPI publication is planned by this workflow.
