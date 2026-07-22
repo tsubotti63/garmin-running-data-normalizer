@@ -45,7 +45,9 @@ def content_violations() -> list[str]:
         ".pytest_cache",
     }
     for path in sorted(ROOT.rglob("*")):
-        if not path.is_file() or any(part in excluded for part in path.parts):
+        if not path.is_file() or any(
+            part in excluded or part.endswith(".egg-info") for part in path.parts
+        ):
             continue
         if path.suffix.lower() in {".pyc", ".fit", ".zip", ".parquet"}:
             continue
