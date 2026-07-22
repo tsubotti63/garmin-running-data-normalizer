@@ -6,14 +6,17 @@ provenance-rich Garmin records without sending the export to a hosted service.
 
 ## Current status
 
-The source repository is public and maintained on `main`. The initial release
-candidate is `v0.1.0-rc.1` (Python package version `0.1.0rc1`). It is a
+The source repository is public and maintained on `main`. The current release
+candidate is `v0.1.0-rc.2` (Python package version `0.1.0rc2`). It is a
 prerelease, not a stable release. No PyPI distribution has been published.
 
 The formal CLI supports the existing activities-only Golden Path and a minimum
 multi-family Run-All workflow. Run-All requires Activities and processes Gear,
 Personal Records, and bounded FIT sessions/laps when those families are
-present. It has been validated with synthetic fixtures, not a real export.
+present. Public reproduction uses synthetic fixtures. A private real-export
+validation completed with status `PASS`, exit code 0, unchanged input, two
+independent byte-identical outputs, and a public-safe privacy check; no private
+rows, paths, identifiers, counts, or fingerprints are published.
 
 This project is licensed under the [Apache License 2.0](LICENSE).
 
@@ -62,6 +65,34 @@ Exit code 2 is fatal; exit code 3 is an explicit `PARTIAL_SUCCESS` for auditable
 incomplete FIT parsing. See the [Product Quick Start](docs/product_quick_start.md)
 for the fixed output layout and privacy boundary.
 
+## Why this project matters
+
+Run-All creates a reviewable boundary between a complex local Garmin export and
+downstream analysis: deterministic normalization, fixed output, QA and
+provenance, explicit warnings, and a separate human-owned interpretation step.
+See the [Primary Case Study](docs/case_studies/from_garmin_export_to_reproducible_analysis_handoff_v0_1.md).
+
+## Analyze Run-All output
+
+Review `run_summary.json` first. In a trusted local environment, start with
+`analysis/activities.csv` and the
+[Analysis Handoff Specification](docs/project/analysis_handoff_spec_v0_1.md).
+The [prompt template](docs/project/analysis_prompt_template_v0_1.md),
+[public usage example](docs/project/run_all_public_usage_example_v0_1.md), and
+[use-case catalog](docs/project/run_all_use_case_catalog_v0_1.md) separate facts,
+calculations, interpretation, and unknowns.
+
+Three key-free synthetic examples are available:
+
+- [Monthly and Weekly Training Trends](examples/analysis/monthly_weekly_training_trends/README.md)
+- [Pace and Heart Rate Relationship](examples/analysis/pace_heart_rate_relationship/README.md)
+- [Training Consistency and Return Pattern](examples/analysis/training_consistency_return_pattern/README.md)
+
+Calculated facts are reproducible; generative wording is not claimed to be
+byte-identical. The current `garmin_activity_key` may incorporate a source
+activity ID. Keep real CSV local, remove that key from any externally shared
+derivative, and review exact date/time granularity before transfer.
+
 ## Local verification
 
 ```bash
@@ -93,8 +124,6 @@ personal output belong in ignored local directories.
 
 ## Known limitations
 
-- The implementation has been validated with synthetic fixtures, not real
-  Garmin Account Export data.
 - Run-All v1 requires `summarizedActivities.json`; Gear, Personal Records, and
   FIT are optional and detected using the existing exact filename rules.
 - FIT support is limited to selected session and lap fields. Complete FIT CRC

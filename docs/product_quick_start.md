@@ -110,8 +110,10 @@ FIT input has an auditable incomplete parse. Existing output is never
 overwritten—use a new destination to rerun, and identical input produces
 byte-identical output.
 
-The Activities CSV excludes raw memo text, Garmin activity IDs, source paths,
-hashes, and coordinates. Detailed normalized outputs and source-relative
+The Activities CSV has no separate `activity_id` column and excludes raw memo
+text, source paths, hashes, and coordinates. Its `garmin_activity_key` may
+incorporate the source activity ID, so real CSV remains local and that key must
+be removed from any externally shared derivative. Detailed normalized outputs and source-relative
 provenance still contain personal running information and must remain local.
 Never commit a real export or generated Run-All output, and do not upload it as
 a CI artifact.
@@ -132,9 +134,23 @@ The static policy scan intentionally excludes the local `.venv/` created by
 the setup instructions. It continues to scan the project source, configuration,
 tests, documentation, examples, and other repository-owned content.
 
+## Analysis and real-export evidence
+
+Use the [Public Usage Example](project/run_all_public_usage_example_v0_1.md),
+[Analysis Handoff Specification](project/analysis_handoff_spec_v0_1.md), and
+[Primary Case Study](case_studies/from_garmin_export_to_reproducible_analysis_handoff_v0_1.md)
+to continue from Run-All output to synthetic analysis examples.
+
+Public reproduction remains synthetic. A private real-export validation
+completed with status `PASS`, exit code 0, unchanged input, two independent
+byte-identical outputs, and a public-safe privacy check. No private rows, dates,
+filenames, paths, identifiers, counts, or fingerprints are published.
+
 ## Known limitations and real exports
 
-The current runner is an activities-only bounded workflow. Point `--input` at a
+The `normalize-activities` Golden Path is activities-only. The separate
+multi-family `run-all` command requires Activities and supports optional Gear,
+Personal Records, and bounded FIT sessions/laps. Point `--input` at a
 local export directory containing a JSON file whose name ends in
 `summarizedActivities.json`, or a safe ZIP containing that file. Archive intake
 retains the existing traversal, symbolic-link, encryption, size, and compression
@@ -142,7 +158,6 @@ limits.
 
 Real Garmin exports and generated personal outputs are sensitive. Keep them in
 ignored local locations such as `data/` and `workspace/`; never commit them.
-These workflows have not been validated against real Garmin data. Run-All uses
-the existing exact filename rules and does not implement complete FIT parsing,
+Run-All uses the existing exact filename rules and does not implement complete FIT parsing,
 Open-Meteo, Parquet, or automatic Analysis Pack generation. See the
 [README](../README.md) for the current implementation scope and limitations.
