@@ -4,6 +4,22 @@ This file records factual Garmin Running Data Normalizer product changes. The
 root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
 Standard adopted by this repository.
 
+## Unreleased — M7.2 Sleep migration
+
+- Adds dependency-free library-level normalization for Garmin
+  `sleepData.json`, including safe directory/ZIP discovery and provenance.
+- Attributes `sleep_day` to the local date on which the recorded sleep period
+  ends, while retaining the source calendar date separately.
+- Preserves duplicate, missing, invalid-interval, and empty retro-only records
+  with explicit review or exclusion states rather than silently filling,
+  shifting, or deduplicating them.
+- Adds wholly synthetic coverage for stage metrics, score variants, timezone
+  attribution, review states, safe ZIP input, and content-derived identity.
+
+This work does not add Sleep to Run-All or change the public dataset registry.
+FIT/JSON reconciliation, score recalculation, missing-day filling, nap
+inference, and activity joins remain out of scope.
+
 ## Unreleased — M7.1 FIT migration
 
 - Aligns selected FIT Activity and FIT Lap field mappings with the authorized

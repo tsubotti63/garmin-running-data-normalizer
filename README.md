@@ -21,9 +21,9 @@ rows, paths, identifiers, counts, or fingerprints are published.
 
 This project is licensed under the [Apache License 2.0](LICENSE).
 
-Unreleased M7.1 work on `main` aligns FIT Activity and FIT Lap metric field
-mappings and invalid-value handling with the authorized public migration
-source. It does not expand the supported dataset families.
+Unreleased migration work on `main` aligns FIT Activity/Lap metric mappings and
+adds dependency-free library-level Sleep normalization from `sleepData.json`.
+Sleep is not yet part of the formal CLI or Run-All public output contract.
 
 ## Supported datasets and interfaces
 
@@ -33,6 +33,7 @@ source. It does not expand the supported dataset families.
 | Gear and activity-gear links | `gear.json` normalizer | Run-All |
 | Personal records | `personalRecord.json` normalizer | Run-All |
 | FIT sessions and laps | Bounded, dependency-free parser; record coordinates and raw telemetry are not emitted | Run-All |
+| Sleep | `sleepData.json` daily normalization with review states and provenance; no filling or inference | No; library level only |
 | Analysis Pack | Deterministic ZIP builder from an explicit `.csv`/`.json`/`.md` allowlist | No |
 
 The dataset registry documents stable keys, record grain, merge policy, and
@@ -134,6 +135,9 @@ personal output belong in ignored local directories.
 - FIT support is limited to selected session and lap fields. Invalid sentinels
   for the migrated numeric metrics are converted to null before scaling;
   complete FIT CRC validation and multi-session identity are not implemented.
+- Sleep normalization is library-level only. It does not perform FIT/JSON
+  reconciliation, score recalculation, missing-day filling, day shifting, nap
+  inference, activity joins, or Run-All integration.
 - Open-Meteo, Parquet output, PyPI publication, and a stable product release
   are not implemented.
 - The package does not guarantee a stable third-party Python API at this stage.
