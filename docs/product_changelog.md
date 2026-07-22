@@ -4,6 +4,20 @@ This file records factual Garmin Running Data Normalizer product changes. The
 root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
 Standard adopted by this repository.
 
+## Unreleased — M7.3 HRV migration
+
+- Adds dependency-free extraction of the bounded FIT HRV candidate from
+  Message 370 / Field 1 using `raw / 128` milliseconds.
+- Excludes Garmin/FIT raw sentinel `65535`, preserves invalid counts, and does
+  not average conflicting same-date valid values.
+- Adds `healthStatusData` HRV reference extraction and same-date consistency
+  evidence without merging the sources or asserting measurement equivalence.
+- Adds wholly synthetic directory/ZIP, provenance, conflict, invalid-value,
+  unsafe-number, and negative FIT coverage.
+
+This work does not add HRV to Run-All, promote a source of truth, or rename
+health-status-scoped HRV as nightly HRV.
+
 ## Unreleased — M7.2 Sleep migration
 
 - Adds dependency-free library-level normalization for Garmin

@@ -163,6 +163,8 @@ Activity and FIT Lap metrics and converts their invalid sentinels to null before
 scaling, but it does not implement complete FIT CRC validation or multi-session
 identity. Library-level `sleepData.json` normalization is implemented separately
 and does not change the Run-All output contract. It performs no filling,
-day-shift inference, score recalculation, or activity join. Open-Meteo, Parquet,
-and automatic Analysis Pack generation are also not implemented. See the
+day-shift inference, score recalculation, or activity join. Library-level HRV
+normalization is also separate: conflicting FIT values are not averaged and
+health-status JSON is comparison evidence, not a promoted source. Open-Meteo,
+Parquet, and automatic Analysis Pack generation are also not implemented. See the
 [README](../README.md) for the current implementation scope and limitations.
