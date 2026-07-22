@@ -22,10 +22,11 @@ rows, paths, identifiers, counts, or fingerprints are published.
 This project is licensed under the [Apache License 2.0](LICENSE).
 
 Unreleased migration work on `main` aligns FIT Activity/Lap metric mappings and
-adds dependency-free library-level Sleep and HRV normalization. HRV uses the
-bounded FIT Message 370 candidate and keeps `healthStatusData` comparison as
-validation evidence only. These families are not yet part of the formal CLI or
-Run-All public output contract.
+adds dependency-free library-level Sleep, HRV, and Health Status normalization.
+HRV uses the bounded FIT Message 370 candidate and keeps `healthStatusData`
+comparison as validation evidence only. Health Status emits complete long and
+fixed daily schemas without dynamic columns. These families are not yet part of
+the formal CLI or Run-All public output contract.
 
 ## Supported datasets and interfaces
 
@@ -37,6 +38,7 @@ Run-All public output contract.
 | FIT sessions and laps | Bounded, dependency-free parser; record coordinates and raw telemetry are not emitted | Run-All |
 | Sleep | `sleepData.json` daily normalization with review states and provenance; no filling or inference | No; library level only |
 | HRV | FIT Message 370 / Field 1 daily candidate with invalid-sentinel handling and non-promotional JSON consistency evidence | No; library level only |
+| Health Status | Exact-suffix `healthStatusData.json` long metrics and fixed daily schema with explicit dedupe/review evidence | No; library level only |
 | Analysis Pack | Deterministic ZIP builder from an explicit `.csv`/`.json`/`.md` allowlist | No |
 
 The dataset registry documents stable keys, record grain, merge policy, and
@@ -144,6 +146,9 @@ personal output belong in ignored local directories.
 - HRV normalization is library-level only. Conflicting same-date FIT values are
   not averaged, raw sentinel `65535` is excluded, and `healthStatusData` values
   are not asserted to be measurement-equivalent or promoted as nightly HRV.
+- Health Status normalization is library-level only. Unknown metrics remain in
+  long-form evidence, duplicate metric types are not silently overwritten, and
+  HRV retains its health-status-scoped name and semantics caveat.
 - Open-Meteo, Parquet output, PyPI publication, and a stable product release
   are not implemented.
 - The package does not guarantee a stable third-party Python API at this stage.

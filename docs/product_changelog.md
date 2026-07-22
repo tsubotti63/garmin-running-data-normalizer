@@ -4,6 +4,21 @@ This file records factual Garmin Running Data Normalizer product changes. The
 root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
 Standard adopted by this repository.
 
+## Unreleased — M7.4 Health Status migration
+
+- Adds dependency-free normalization of exact-suffix `healthStatusData.json`
+  assets into complete long metric and fixed daily schemas.
+- Covers HRV, HR, SPO2, skin temperature, and respiration daily fields while
+  retaining unknown metrics in long-form evidence without dynamic columns.
+- Resolves duplicate calendar dates by explicit latest-timestamp selection,
+  retains superseded long-form evidence, and refuses silent duplicate-metric
+  overwrite.
+- Adds wholly synthetic directory/ZIP, schema, provenance, duplicate, missing,
+  unsafe-number, and unknown-metric coverage.
+
+This work does not add Health Status to Run-All or promote health-status HRV to
+nightly HRV, analytics, interpretation, or coaching.
+
 ## Unreleased — M7.3 HRV migration
 
 - Adds dependency-free extraction of the bounded FIT HRV candidate from
