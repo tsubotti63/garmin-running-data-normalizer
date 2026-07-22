@@ -20,7 +20,12 @@ cd garmin-running-data-normalizer
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e .
+python -m garmin_running_data_normalizer --version
 ```
+
+The version command prints `python -m garmin_running_data_normalizer 1.0.0`.
+An equivalent console entry point, `garmin-running-data-normalizer`, is also
+installed.
 
 ## Run the synthetic Golden Path
 

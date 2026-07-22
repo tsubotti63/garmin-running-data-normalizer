@@ -28,7 +28,13 @@ class CommonAndPolicyTest(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         registry, digest = load_registry(root / "config/dataset_registry.example.json")
         self.assertEqual(validate_registry(registry)["status"], "PASS")
+        self.assertEqual(registry["registry_version"], "1.0.0")
+        self.assertEqual(registry["status"], "stable_release_ready")
         self.assertEqual(len(digest), 64)
+        legacy_registry = {**registry, "status": "local_implementation_not_publication_ready"}
+        self.assertEqual(validate_registry(legacy_registry)["status"], "PASS")
+        unsupported_registry = {**registry, "status": "unknown"}
+        self.assertEqual(validate_registry(unsupported_registry)["status"], "FAIL")
         report = inspect_records(
             [{"id": 1, "sequence": 1, "value": 10}, {"id": 1, "sequence": 2, "value": 11}],
             stable_key=["id"],

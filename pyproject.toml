@@ -1,16 +1,33 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "garmin-running-data-normalizer"
-version = "0.1.0rc2"
+version = "1.0.0"
 description = "Deterministic local Garmin Account Export normalization primitives"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = []
+keywords = ["garmin", "running", "normalization", "fit"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+]
+
+[project.urls]
+Homepage = "https://github.com/tsubotti63/garmin-running-data-normalizer"
+Repository = "https://github.com/tsubotti63/garmin-running-data-normalizer"
+Issues = "https://github.com/tsubotti63/garmin-running-data-normalizer/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=8.4,<9"]
+
+[project.scripts]
+garmin-running-data-normalizer = "garmin_running_data_normalizer.runner:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

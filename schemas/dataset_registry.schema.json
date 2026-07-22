@@ -5,7 +5,12 @@
   "required": ["registry_version", "status", "datasets"],
   "properties": {
     "registry_version": {"type": "string"},
-    "status": {"const": "local_implementation_not_publication_ready"},
+    "status": {
+      "enum": [
+        "local_implementation_not_publication_ready",
+        "stable_release_ready"
+      ]
+    },
     "datasets": {
       "type": "array",
       "items": {

@@ -1,8 +1,10 @@
 # Responsibility-level Reuse Matrix — Phase 0.1
 
-Local reuse is Human-authorized. Public redistribution remains blocked pending
-rights and license decisions. Exact predecessor paths and file names are omitted
-from public provenance.
+Local reuse is Human-authorized. The Human owner confirmed that the
+predecessor-derived responsibilities currently included in this Target may
+continue to be distributed under Apache-2.0 and included in `v1.0.0`. Future
+material requires its own review. Exact predecessor paths and file names are
+omitted from public provenance.
 
 | Predecessor responsibility | Target area | Status | Public adaptation |
 |---|---|---|---|

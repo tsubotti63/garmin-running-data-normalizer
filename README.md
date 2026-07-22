@@ -6,10 +6,12 @@ provenance-rich Garmin records without sending the export to a hosted service.
 
 ## Current status
 
-The source repository is public and maintained on `main`. The latest published
-prerelease is [`v0.1.0-rc.2`](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v0.1.0-rc.2)
-(Python package version `0.1.0rc2`). It is not a stable release, and no PyPI
-distribution has been published.
+The source repository is public and maintained on `main`. Version `1.0.0` is
+prepared on `main` as a stable release candidate and is awaiting the separate
+Human approval required to create the `v1.0.0` tag and GitHub Release. The
+latest published release remains the
+[`v0.1.0-rc.2`](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v0.1.0-rc.2)
+prerelease, and no PyPI distribution has been published.
 
 The formal CLI supports the existing activities-only Golden Path and a minimum
 multi-family Run-All workflow. Run-All requires Activities and processes Gear,
@@ -21,8 +23,8 @@ rows, paths, identifiers, counts, or fingerprints are published.
 
 This project is licensed under the [Apache License 2.0](LICENSE).
 
-Unreleased migration work on `main` aligns FIT Activity/Lap metric mappings and
-adds dependency-free library-level Sleep, HRV, and Health Status normalization.
+The `1.0.0` scope aligns FIT Activity/Lap metric mappings and adds
+dependency-free library-level Sleep, HRV, and Health Status normalization.
 HRV uses the bounded FIT Message 370 candidate and keeps `healthStatusData`
 comparison as validation evidence only. Health Status emits complete long and
 fixed daily schemas without dynamic columns. These families are not yet part of
@@ -42,7 +44,22 @@ the formal CLI or Run-All public output contract.
 | Analysis Pack | Deterministic ZIP builder from an explicit `.csv`/`.json`/`.md` allowlist | No |
 
 The dataset registry documents stable keys, record grain, merge policy, and
-provenance requirements. Gate 2 does not change those contracts.
+provenance requirements. See the [Supported Datasets](docs/supported_datasets.md)
+for the stable CLI/output boundary and library-level scope.
+
+## Install
+
+Garmin Running Data Normalizer requires Python 3.11 or later:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+python -m garmin_running_data_normalizer --version
+```
+
+The equivalent installed console command is `garmin-running-data-normalizer`.
+The project has no third-party runtime package dependency.
 
 ## Try the synthetic Golden Path
 
@@ -135,23 +152,13 @@ personal output belong in ignored local directories.
 
 ## Known limitations
 
-- Run-All v1 requires `summarizedActivities.json`; Gear, Personal Records, and
-  FIT are optional and detected using the existing exact filename rules.
-- FIT support is limited to selected session and lap fields. Invalid sentinels
-  for the migrated numeric metrics are converted to null before scaling;
-  complete FIT CRC validation and multi-session identity are not implemented.
-- Sleep normalization is library-level only. It does not perform FIT/JSON
-  reconciliation, score recalculation, missing-day filling, day shifting, nap
-  inference, activity joins, or Run-All integration.
-- HRV normalization is library-level only. Conflicting same-date FIT values are
-  not averaged, raw sentinel `65535` is excluded, and `healthStatusData` values
-  are not asserted to be measurement-equivalent or promoted as nightly HRV.
-- Health Status normalization is library-level only. Unknown metrics remain in
-  long-form evidence, duplicate metric types are not silently overwritten, and
-  HRV retains its health-status-scoped name and semantics caveat.
-- Open-Meteo, Parquet output, PyPI publication, and a stable product release
-  are not implemented.
-- The package does not guarantee a stable third-party Python API at this stage.
+Run-All v1 requires Activities; Gear, Personal Records, and FIT are optional.
+Sleep, HRV, and Health Status are library-level interfaces and are not Run-All
+outputs. Complete FIT CRC validation, multi-session FIT identity, hosted
+processing, Open-Meteo, Parquet, and PyPI publication are not included. The
+documented CLI and versioned Run-All output contract are the stable `1.x`
+interface; other Python modules may evolve compatibly as their contracts mature.
+See [Known Limitations](docs/known_limitations.md) for the precise boundaries.
 
 ## Non-goals
 

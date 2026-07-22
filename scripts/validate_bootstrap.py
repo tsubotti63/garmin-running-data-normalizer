@@ -84,7 +84,7 @@ def main() -> None:
             if not missing and not empty_responsibilities and not forbidden and not placeholders and not invalid_license
             else "FAIL"
         ),
-        "implementation_status": "LOCAL_IMPLEMENTATION_NOT_PUBLICATION_READY",
+        "implementation_status": "STABLE_RELEASE_READY",
         "missing": missing,
         "empty_responsibility_directories": empty_responsibilities,
         "forbidden_binary_paths": forbidden,

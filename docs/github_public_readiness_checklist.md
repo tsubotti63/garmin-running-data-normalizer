@@ -32,6 +32,11 @@ particular production use.
       rights review for material whose redistribution rights are not already
       established.
 
+Current note: on 2026-07-22, outside this historical registration checklist,
+the Human owner confirmed the authority to continue distributing the
+predecessor-derived responsibilities included in the Target and `v1.0.0` under
+Apache-2.0. Future material still requires its own review.
+
 ## Current maintenance rules
 
 - The repository is already public. Each maintenance push requires the

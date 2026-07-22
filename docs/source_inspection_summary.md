@@ -13,8 +13,10 @@ part of this public repository.
   policy, deterministic QA, and portable export concepts were relevant.
 - Candidate behavior was interleaved with non-Garmin features, private workflow
   state, generated outputs, and personal-data assumptions.
-- The predecessor had no public license statement available to this project;
-  public redistribution rights and the Target OSS license remain unresolved.
+- The predecessor had no public license statement available to this project.
+  The Target uses Apache-2.0, and the Human owner subsequently confirmed the
+  authority to distribute the predecessor-derived responsibilities currently
+  included in this Target and in the `v1.0.0` candidate.
 - Real raw data, generated output, identifiers, coordinates, and private
   operational evidence were excluded.
 
@@ -23,5 +25,5 @@ part of this public repository.
 The Target has fresh Git history, Target-owned contracts, a Target namespace,
 and wholly synthetic tests. No predecessor Git history or runtime dependency is
 required. Responsibility-level provenance is recorded without private names or
-paths, and public redistribution remains blocked until Human rights and license
-decisions are complete.
+paths. Future predecessor or third-party material remains subject to its own
+rights and license review.

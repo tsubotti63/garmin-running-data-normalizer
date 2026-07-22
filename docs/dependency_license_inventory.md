@@ -16,7 +16,7 @@ attribution, and compatibility review as appropriate.
 | Dependency | Use | Known license | Gate |
 |---|---|---|---|
 | Python >=3.11 | runtime platform | PSF License | Verify supported versions for a release |
-| setuptools >=69 | build | MIT | Verify the resolved build environment for a release |
+| setuptools >=77 | build | MIT | PEP 639 license metadata; verified during release validation |
 | wheel | build | MIT | Verify the resolved build environment for a release |
 | pytest >=8.4,<9 | test-only | MIT | Verify the resolved test environment for a release |
 

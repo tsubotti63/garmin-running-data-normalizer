@@ -21,9 +21,9 @@ Review Open-Meteo privacy/use-tier controls and finalize Analysis Pack contracts
 
 ## Milestone 4 — versioned release readiness
 
-Confirm rights for material whose redistribution position is not already
-established, complete dependency/license and security/privacy review, and
+Rights for the predecessor-derived responsibilities included in `v1.0.0` were
+Human-confirmed. Complete dependency/license and security/privacy review and
 prepare release-specific evidence. The repository is already public under
-Apache-2.0, and `v0.1.0-rc.2` is a published prerelease. Any future tag, GitHub
-Release, stable release, or package publication still requires its own current
-review and Human authorization.
+Apache-2.0, `v0.1.0-rc.2` is a published prerelease, and `v1.0.0` preparation is
+in progress. Any future tag, GitHub Release, stable release, or package
+publication still requires its own current review and Human authorization.

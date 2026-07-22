@@ -17,11 +17,13 @@ Build and test tools retain their own licenses; see the
 
 The project's license does not establish redistribution rights for current or
 future third-party or predecessor material whose rights have not otherwise been
-confirmed. Such material must be reviewed before inclusion or continued
-redistribution. Each public-repository maintenance push requires its applicable
-Human authorization and the normal project review and CI process. Tags,
-releases, and other Human-reserved actions also require their applicable
-authorization.
+confirmed. On 2026-07-22, the Human owner confirmed the authority to continue
+publishing the predecessor-derived responsibilities currently included in this
+Target under Apache-2.0 and to include them in `v1.0.0`. This confirmation does
+not extend automatically to future material, dependencies, or integrations.
+Each public-repository maintenance push requires its applicable Human
+authorization and the normal project review and CI process. Tags, releases, and
+other Human-reserved actions also require their applicable authorization.
 
 This document records repository facts and project boundaries. It is not legal
 advice.

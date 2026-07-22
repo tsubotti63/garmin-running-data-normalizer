@@ -2,8 +2,10 @@
 
 The exact names and paths of the private predecessor are intentionally omitted.
 This public matrix records only responsibility-level provenance and safety
-decisions. Local reuse authorization does not establish public redistribution
-rights or select an OSS license.
+decisions. The Target is licensed under Apache-2.0, and the Human owner has
+confirmed the authority to continue distributing the predecessor-derived
+responsibilities included in the `v1.0.0` candidate. Future material still
+requires its own rights and license review.
 
 | Predecessor responsibility | Classification | Main risk | Required public adaptation | Target responsibility | Decision |
 |---|---|---|---|---|---|

@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .intake.discovery import discover_export
 from .normalizers.activities import normalize_activities
 from .qa import summarize_records
@@ -151,6 +152,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m garmin_running_data_normalizer",
         description="Run bounded local Garmin normalization workflows.",
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
     activities = commands.add_parser(
         "normalize-activities",

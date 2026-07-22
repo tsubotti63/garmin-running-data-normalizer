@@ -27,10 +27,11 @@
 
 ## Milestone 4 — versioned release readiness
 
-- Confirm rights for material whose redistribution position is not already
-  established and complete any required third-party notices.
+- Rights for predecessor-derived responsibilities included in `v1.0.0` were
+  Human-confirmed; future material still requires review. Complete any required
+  third-party notices.
 - Complete dependency lock review, security/privacy checks, documentation, and
   release-specific review evidence.
-- `v0.1.0-rc.2` is the latest published prerelease. Any future tag, GitHub
-  Release, stable release, or package publication requires its own current
-  review and separate Human authorization.
+- `v0.1.0-rc.2` is the latest published prerelease, and `v1.0.0` preparation is
+  in progress. Any future tag, GitHub Release, stable release, or package
+  publication requires its own current review and separate Human authorization.

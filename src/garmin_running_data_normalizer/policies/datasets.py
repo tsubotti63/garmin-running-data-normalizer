@@ -11,6 +11,10 @@ from typing import Any
 ALLOWED_MERGE_MODES = {
     "entity_upsert", "temporal_event_union", "immutable_blob_union", "preserve_only",
 }
+ALLOWED_REGISTRY_STATUSES = {
+    "local_implementation_not_publication_ready",
+    "stable_release_ready",
+}
 REQUIRED_FIELDS = {
     "name", "source_family", "record_grain", "stable_key", "merge_policy", "provenance_required",
 }
@@ -23,8 +27,8 @@ def load_registry(path: str | Path) -> tuple[dict[str, Any], str]:
 
 def validate_registry(registry: dict[str, Any]) -> dict[str, Any]:
     errors: list[str] = []
-    if registry.get("status") != "local_implementation_not_publication_ready":
-        errors.append("registry status is not the local implementation status")
+    if registry.get("status") not in ALLOWED_REGISTRY_STATUSES:
+        errors.append("registry status is not supported")
     datasets = registry.get("datasets")
     if not isinstance(datasets, list):
         return {"status": "FAIL", "dataset_count": 0, "errors": ["datasets must be a list"]}

@@ -8,8 +8,8 @@
 - CI: Operational
 - Initial release candidate: `v0.1.0-rc.1`
 - Latest published prerelease: `v0.1.0-rc.2`
-- Python package version: `0.1.0rc2`
-- Release classification: Prerelease
+- Prepared Python package version: `1.0.0`
+- Release classification: Stable candidate awaiting validation and Human approval
 - Stable releases: None
 - PyPI distributions: None
 
@@ -22,7 +22,9 @@ and clean-clone validation, with no attached Release assets.
 
 ## Release readiness
 
-Each future release must still be assessed against the implementation,
+The Human owner confirmed the redistribution rights applicable to predecessor-
+derived responsibilities included in the `v1.0.0` candidate. Each future release
+must still be assessed against the implementation,
 dependency and notice inventory, rights position, security/privacy checks,
 review evidence, and Human authorization applicable at that time. This status
 reference records the current distinction; it does not create standing release

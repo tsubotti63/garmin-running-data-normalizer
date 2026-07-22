@@ -4,7 +4,12 @@ This file records factual Garmin Running Data Normalizer product changes. The
 root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
 Standard adopted by this repository.
 
-## Unreleased — M7.4 Health Status migration
+## v1.0.0
+
+This section records the reviewed product changes prepared for the first stable
+release. Publication remains a separate Human-authorized action.
+
+### M7.4 Health Status migration
 
 - Adds dependency-free normalization of exact-suffix `healthStatusData.json`
   assets into complete long metric and fixed daily schemas.
@@ -19,7 +24,7 @@ Standard adopted by this repository.
 This work does not add Health Status to Run-All or promote health-status HRV to
 nightly HRV, analytics, interpretation, or coaching.
 
-## Unreleased — M7.3 HRV migration
+### M7.3 HRV migration
 
 - Adds dependency-free extraction of the bounded FIT HRV candidate from
   Message 370 / Field 1 using `raw / 128` milliseconds.
@@ -33,7 +38,7 @@ nightly HRV, analytics, interpretation, or coaching.
 This work does not add HRV to Run-All, promote a source of truth, or rename
 health-status-scoped HRV as nightly HRV.
 
-## Unreleased — M7.2 Sleep migration
+### M7.2 Sleep migration
 
 - Adds dependency-free library-level normalization for Garmin
   `sleepData.json`, including safe directory/ZIP discovery and provenance.
@@ -49,7 +54,7 @@ This work does not add Sleep to Run-All or change the public dataset registry.
 FIT/JSON reconciliation, score recalculation, missing-day filling, nap
 inference, and activity joins remain out of scope.
 
-## Unreleased — M7.1 FIT migration
+### M7.1 FIT migration
 
 - Aligns selected FIT Activity and FIT Lap field mappings with the authorized
   public migration source.
@@ -61,8 +66,18 @@ inference, and activity joins remain out of scope.
   source-relative provenance, and exclusion of record coordinates and raw
   telemetry.
 
-This work is unreleased. Complete FIT CRC validation and multi-session identity
-remain migration gaps.
+Complete FIT CRC validation and multi-session identity remain migration gaps.
+
+### Stable release preparation
+
+- Aligns package, CLI, bootstrap, and dataset-registry version declarations at
+  `1.0.0` without narrowing the previously accepted registry lifecycle status.
+- Adds supported-dataset and known-limitation references plus a release-ready
+  `v1.0.0` note.
+- Defines the documented CLI and versioned Run-All output contract as the
+  stable `1.x` interface while retaining explicit library-level boundaries.
+- Records the Human rights confirmation applicable to material included in the
+  `v1.0.0` candidate.
 
 ## v0.1.0-rc.2 — prerelease (2026-07-22)
 

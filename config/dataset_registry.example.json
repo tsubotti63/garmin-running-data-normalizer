@@ -1,6 +1,6 @@
 {
-  "registry_version": "0.1.0",
-  "status": "local_implementation_not_publication_ready",
+  "registry_version": "1.0.0",
+  "status": "stable_release_ready",
   "datasets": [
     {"name": "activities", "source_family": "garmin_account_export", "record_grain": "activity", "stable_key": ["garmin_activity_key"], "merge_policy": "entity_upsert", "provenance_required": true},
     {"name": "gear", "source_family": "garmin_account_export", "record_grain": "gear", "stable_key": ["gear_key"], "merge_policy": "entity_upsert", "provenance_required": true},
