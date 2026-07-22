@@ -8,15 +8,15 @@
 - GitHub Actions: Operational
 - Historical release candidate: `v0.1.0-rc.1` prerelease
 - Latest published prerelease: `v0.1.0-rc.2`
-- Prepared Python package version: `1.0.0`
-- GitHub Release: Published 2026-07-22
-- Stable release candidate: Validated on `main`; awaiting Human approval
-- Stable release: None issued; no `v1.0.0` tag or GitHub Release
+- Python package version: `1.0.0`
+- Latest stable release: `v1.0.0`, published 2026-07-22
+- GitHub Release: Public, stable, and marked latest
+- Stable tag commit: `605eaba4106c3dbc040bda1ff06ccbba6e6b69e1`
+- Attached Release assets: None; GitHub-generated source archives only
 - PyPI distribution: None issued
 
-The repository is already public and is under ongoing maintenance. The initial
-Release Candidate does not mean that the product is feature-complete or that a
-stable release has been issued.
+The repository is public and under ongoing maintenance. `v1.0.0` is the first
+stable release; its documented limitations remain active product boundaries.
 
 ## Current release assessment
 
@@ -27,7 +27,8 @@ Handoff, and synthetic Case Study scope. Its tag points to the exact reviewed
 commit and its GitHub Release contains no attached assets.
 
 The Human owner confirmed the right to continue distributing the predecessor-
-derived responsibilities included in this Target under Apache-2.0 and to
-include them in `v1.0.0`. M8.2 asset preparation and M8.3 candidate validation
-are complete. A separate Human approval is still required before the tag or
-GitHub Release is created. No PyPI publication is planned by this workflow.
+derived responsibilities included in this Target under Apache-2.0 and approved
+the reviewed `v1.0.0` candidate for release. M8.4 publication and M8.5
+post-release validation are complete. No PyPI publication was performed by this
+workflow. Future releases still require their own current review and Human
+authorization.

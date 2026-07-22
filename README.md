@@ -7,11 +7,10 @@ provenance-rich Garmin records without sending the export to a hosted service.
 ## Current status
 
 The source repository is public and maintained on `main`. Version `1.0.0` is
-prepared on `main` as a stable release candidate and is awaiting the separate
-Human approval required to create the `v1.0.0` tag and GitHub Release. The
-latest published release remains the
-[`v0.1.0-rc.2`](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v0.1.0-rc.2)
-prerelease, and no PyPI distribution has been published.
+the latest published stable release. Its annotated tag points to the reviewed
+release commit, and the
+[`v1.0.0` GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.0.0)
+is public and marked latest. No PyPI distribution has been published.
 
 The formal CLI supports the existing activities-only Golden Path and a minimum
 multi-family Run-All workflow. Run-All requires Activities and processes Gear,

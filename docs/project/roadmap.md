@@ -19,11 +19,23 @@ manifest, and reproducibility checks.
 
 Review Open-Meteo privacy/use-tier controls and finalize Analysis Pack contracts.
 
-## Milestone 4 — versioned release readiness
+## Milestone 4 — versioned stable release — complete
 
 Rights for the predecessor-derived responsibilities included in `v1.0.0` were
-Human-confirmed. Complete dependency/license and security/privacy review and
-prepare release-specific evidence. The repository is already public under
-Apache-2.0, `v0.1.0-rc.2` is a published prerelease, and `v1.0.0` preparation is
-in progress. Any future tag, GitHub Release, stable release, or package
-publication still requires its own current review and Human authorization.
+Human-confirmed. Dependency/license, security/privacy, clean-state package,
+review, and CI evidence passed. `v1.0.0` is published as the first stable and
+latest GitHub Release. Its annotated tag remains fixed on the reviewed release
+commit. Future releases and package-index publication still require their own
+current review and Human authorization.
+
+## Post-Stable / v1.1 entry points
+
+- Complete FIT CRC validation and multi-session FIT identity.
+- Evaluate Run-All integration for Sleep, HRV, and Health Status without
+  silently expanding the stable `1.x` output contract.
+- Review hosted processing, Open-Meteo, Parquet, and PyPI as separately gated
+  capabilities.
+- Update GitHub Actions dependencies before the Node.js 20 compatibility shim
+  is removed from hosted runners.
+
+The active product boundaries are listed in `docs/known_limitations.md`.
