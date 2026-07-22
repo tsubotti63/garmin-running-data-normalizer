@@ -4,7 +4,7 @@ This file records factual Garmin Running Data Normalizer product changes. The
 root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
 Standard adopted by this repository.
 
-## v0.1.0-rc.2 — candidate
+## v0.1.0-rc.2 — prerelease (2026-07-22)
 
 - Adds the formal multi-family Run-All command with Activities required and
   optional Gear, Personal Records, and bounded FIT session/lap output.
@@ -16,8 +16,9 @@ Standard adopted by this repository.
   a Primary Case Study, and release-readiness planning.
 - Corrects current Run-All, real-validation, and stable-key privacy wording.
 
-This identity is a candidate until the exact commit passes required review and
-CI. It is not a stable release or PyPI publication.
+The exact candidate passed required review, CI, clean-clone validation, and
+post-release validation before and after publication as a GitHub prerelease.
+It is not a stable release or PyPI publication.
 
 ## v0.1.0-rc.1 — prerelease
 

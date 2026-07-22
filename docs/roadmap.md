@@ -31,6 +31,6 @@
   established and complete any required third-party notices.
 - Complete dependency lock review, security/privacy checks, documentation, and
   release-specific review evidence.
-- Create a tag or GitHub Release only after separate Human authorization. The
-  existing public repository and Apache-2.0 license do not constitute a
-  versioned product release.
+- `v0.1.0-rc.2` is the latest published prerelease. Any future tag, GitHub
+  Release, stable release, or package publication requires its own current
+  review and separate Human authorization.
