@@ -37,18 +37,32 @@ def tree_hashes(root: Path) -> dict[str, str]:
 
 def synthetic_fit_session() -> bytes:
     session_definition = bytes([0x40, 0x00, 0x00]) + struct.pack("<H", 18) + bytes([
-        3,
+        8,
         2, 4, 0x86,
         5, 1, 0x00,
         9, 4, 0x86,
+        16, 1, 0x02,
+        18, 1, 0x02,
+        20, 2, 0x84,
+        22, 2, 0x84,
+        26, 2, 0x84,
     ])
-    session_record = bytes([0x00]) + struct.pack("<I", 1_000_000) + bytes([1]) + struct.pack("<I", 100_000)
+    session_record = bytes([0x00]) + b"".join([
+        struct.pack("<I", 1_000_000), bytes([1]), struct.pack("<I", 100_000),
+        bytes([150, 82]), struct.pack("<HHH", 250, 100, 1),
+    ])
     lap_definition = bytes([0x41, 0x00, 0x00]) + struct.pack("<H", 19) + bytes([
-        2,
+        6,
         2, 4, 0x86,
         9, 4, 0x86,
+        15, 1, 0x02,
+        17, 1, 0x02,
+        19, 2, 0x84,
+        21, 2, 0x84,
     ])
-    lap_record = bytes([0x01]) + struct.pack("<I", 1_000_000) + struct.pack("<I", 50_000)
+    lap_record = bytes([0x01]) + b"".join([
+        struct.pack("<II", 1_000_000, 50_000), bytes([150, 82]), struct.pack("<HH", 250, 100),
+    ])
     body = session_definition + session_record + lap_definition + lap_record
     return bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", len(body)) + b".FIT" + body
 
@@ -121,6 +135,17 @@ class RunAllTest(unittest.TestCase):
             self.assertEqual(qa["status"], "PASS")
             self.assertTrue(all(item["status"] == "PASS" for item in qa["datasets"]))
             self.assertEqual({summary["family_results"][name]["detected_asset_count"] for name in ("activities", "gear", "personal_records", "fit")}, {1})
+            fit_sessions = json.loads((output / "normalized/fit_sessions.json").read_text(encoding="utf-8"))
+            fit_laps = json.loads((output / "normalized/fit_laps.json").read_text(encoding="utf-8"))
+            self.assertEqual(fit_sessions[0]["avg_heart_rate"], 150)
+            self.assertEqual(fit_sessions[0]["avg_cadence"], 82)
+            self.assertEqual(fit_sessions[0]["avg_power"], 250)
+            self.assertEqual(fit_sessions[0]["total_ascent"], 100)
+            self.assertEqual(fit_laps[0]["avg_heart_rate"], 150)
+            self.assertEqual(fit_laps[0]["avg_cadence"], 82)
+            self.assertEqual(fit_laps[0]["avg_power"], 250)
+            self.assertEqual(fit_laps[0]["total_ascent"], 100)
+            self.assertIn("source_sha256", fit_laps[0])
 
     def test_t2_activities_only_passes_with_warnings_and_empty_optional_outputs(self) -> None:
         before = tree_hashes(ACTIVITIES_FIXTURE)

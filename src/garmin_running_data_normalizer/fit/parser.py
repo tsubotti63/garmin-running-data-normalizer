@@ -21,27 +21,39 @@ BASE_TYPES = {
     0x8F: ("uint64", 8, "Q"), 0x90: ("uint64z", 8, "Q"),
 }
 
+INVALID_VALUES = {
+    "enum": 0xFF, "sint8": 0x7F, "uint8": 0xFF, "sint16": 0x7FFF,
+    "uint16": 0xFFFF, "sint32": 0x7FFFFFFF, "uint32": 0xFFFFFFFF,
+    "uint8z": 0, "uint16z": 0, "uint32z": 0,
+    "sint64": 0x7FFFFFFFFFFFFFFF, "uint64": 0xFFFFFFFFFFFFFFFF, "uint64z": 0,
+}
+
+INVALID_BEFORE_SCALE_FIELDS = {
+    18: {11, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 26},
+    19: {13, 14, 15, 16, 17, 18, 19, 20, 21, 22},
+}
+
 FIELDS = {
     12: {0: ("sport", None), 1: ("sub_sport", None), 3: ("name", None)},
     18: {
         2: ("start_time", "date_time"), 5: ("sport", None), 6: ("sub_sport", None),
         7: ("total_elapsed_time", "sec1000"), 8: ("total_timer_time", "sec1000"),
-        9: ("total_distance", "m100"), 14: ("total_calories", None),
-        16: ("avg_speed", "speed"), 17: ("max_speed", "speed"),
-        20: ("avg_heart_rate", None), 21: ("max_heart_rate", None),
-        22: ("avg_cadence", None), 23: ("max_cadence", None),
-        24: ("avg_power", None), 25: ("max_power", None),
-        26: ("total_ascent", None), 27: ("total_descent", None),
-        34: ("num_laps", None), 253: ("timestamp", "date_time"),
+        9: ("total_distance", "m100"), 11: ("total_calories", None),
+        14: ("avg_speed", "speed"), 15: ("max_speed", "speed"),
+        16: ("avg_heart_rate", None), 17: ("max_heart_rate", None),
+        18: ("avg_cadence", None), 19: ("max_cadence", None),
+        20: ("avg_power", None), 21: ("max_power", None),
+        22: ("total_ascent", None), 23: ("total_descent", None),
+        26: ("num_laps", None), 253: ("timestamp", "date_time"),
     },
     19: {
         2: ("start_time", "date_time"), 7: ("total_elapsed_time", "sec1000"),
         8: ("total_timer_time", "sec1000"), 9: ("total_distance", "m100"),
-        16: ("avg_speed", "speed"), 17: ("max_speed", "speed"),
-        20: ("avg_heart_rate", None), 21: ("max_heart_rate", None),
-        22: ("avg_cadence", None), 23: ("max_cadence", None),
-        24: ("avg_power", None), 25: ("max_power", None),
-        26: ("total_ascent", None), 27: ("total_descent", None),
+        13: ("avg_speed", "speed"), 14: ("max_speed", "speed"),
+        15: ("avg_heart_rate", None), 16: ("max_heart_rate", None),
+        17: ("avg_cadence", None), 18: ("max_cadence", None),
+        19: ("avg_power", None), 20: ("max_power", None),
+        21: ("total_ascent", None), 22: ("total_descent", None),
         253: ("timestamp", "date_time"),
     },
     # Record message values are deliberately not emitted: precise coordinates
@@ -118,6 +130,19 @@ def _read_value(data: bytes, offset: int, field: FieldDef, endian: str) -> Any:
     except struct.error:
         return None
     return values[0] if count == 1 else list(values)
+
+
+def _null_invalid(value: Any, field: FieldDef) -> Any:
+    descriptor = BASE_TYPES.get(field.base_type)
+    if descriptor is None:
+        normalized_type = (field.base_type & 0x1F) | (0x80 if field.base_type & 0x80 else 0)
+        descriptor = BASE_TYPES.get(normalized_type)
+    invalid = INVALID_VALUES.get(descriptor[0]) if descriptor else None
+    if invalid is None:
+        return value
+    if isinstance(value, list):
+        return [None if item == invalid else item for item in value]
+    return None if value == invalid else value
 
 
 def parse_fit_bytes(
@@ -200,6 +225,8 @@ def parse_fit_bytes(
             position += field.size
             if selected_fields is not None and field.number in selected_fields:
                 name, scale = selected_fields[field.number]
+                if field.number in INVALID_BEFORE_SCALE_FIELDS.get(definition.global_message, set()):
+                    value = _null_invalid(value, field)
                 record[name] = _scale(value, scale, timezone_name)
         position += sum(definition.developer_field_sizes)
         if definition.global_message in messages:
@@ -260,8 +287,12 @@ def parse_fit_export(root: str | Path) -> tuple[list[dict[str, Any]], list[dict[
             "timer_time_sec": session.get("total_timer_time"),
             "avg_heart_rate": session.get("avg_heart_rate"),
             "max_heart_rate": session.get("max_heart_rate"),
+            "avg_cadence": session.get("avg_cadence"),
+            "max_cadence": session.get("max_cadence"),
             "avg_power": session.get("avg_power"),
             "max_power": session.get("max_power"),
+            "total_ascent": session.get("total_ascent"),
+            "total_descent": session.get("total_descent"),
             "record_count": parsed.get("record_count"),
             "lap_count": parsed.get("lap_count"),
         })

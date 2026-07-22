@@ -4,6 +4,21 @@ This file records factual Garmin Running Data Normalizer product changes. The
 root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
 Standard adopted by this repository.
 
+## Unreleased — M7.1 FIT migration
+
+- Aligns selected FIT Activity and FIT Lap field mappings with the authorized
+  public migration source.
+- Converts FIT invalid sentinels for migrated numeric metrics to null before
+  applying scale factors.
+- Extends synthetic unit and Run-All regression coverage for heart rate,
+  cadence, power, ascent, stable identity, and lap provenance.
+- Retains the existing safe discovery, content-derived FIT file identifiers,
+  source-relative provenance, and exclusion of record coordinates and raw
+  telemetry.
+
+This work is unreleased. Complete FIT CRC validation and multi-session identity
+remain migration gaps.
+
 ## v0.1.0-rc.2 — prerelease (2026-07-22)
 
 - Adds the formal multi-family Run-All command with Activities required and

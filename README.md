@@ -21,6 +21,10 @@ rows, paths, identifiers, counts, or fingerprints are published.
 
 This project is licensed under the [Apache License 2.0](LICENSE).
 
+Unreleased M7.1 work on `main` aligns FIT Activity and FIT Lap metric field
+mappings and invalid-value handling with the authorized public migration
+source. It does not expand the supported dataset families.
+
 ## Supported datasets and interfaces
 
 | Dataset or output | Implemented scope | Formal CLI support |
@@ -127,8 +131,9 @@ personal output belong in ignored local directories.
 
 - Run-All v1 requires `summarizedActivities.json`; Gear, Personal Records, and
   FIT are optional and detected using the existing exact filename rules.
-- FIT support is limited to selected session and lap fields. Complete FIT CRC
-  and invalid-sentinel handling are not implemented.
+- FIT support is limited to selected session and lap fields. Invalid sentinels
+  for the migrated numeric metrics are converted to null before scaling;
+  complete FIT CRC validation and multi-session identity are not implemented.
 - Open-Meteo, Parquet output, PyPI publication, and a stable product release
   are not implemented.
 - The package does not guarantee a stable third-party Python API at this stage.

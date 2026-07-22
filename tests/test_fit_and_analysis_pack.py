@@ -12,20 +12,65 @@ from garmin_running_data_normalizer.export.analysis_pack import build_analysis_p
 from garmin_running_data_normalizer.fit.parser import parse_fit_bytes, parse_fit_export
 
 
-def synthetic_fit_session() -> bytes:
+def synthetic_fit_session(*, invalid_metrics: bool = False) -> bytes:
     session_definition = bytes([0x40, 0x00, 0x00]) + struct.pack("<H", 18) + bytes([
-        3,
+        18,
         2, 4, 0x86,
         5, 1, 0x00,
+        6, 1, 0x00,
+        7, 4, 0x86,
+        8, 4, 0x86,
         9, 4, 0x86,
+        11, 2, 0x84,
+        14, 4, 0x86,
+        15, 4, 0x86,
+        16, 1, 0x02,
+        17, 1, 0x02,
+        18, 1, 0x02,
+        19, 1, 0x02,
+        20, 2, 0x84,
+        21, 2, 0x84,
+        22, 2, 0x84,
+        23, 2, 0x84,
+        26, 2, 0x84,
     ])
-    session_record = bytes([0x00]) + struct.pack("<I", 1_000_000) + bytes([1]) + struct.pack("<I", 100_000)
+    u32_metric = 0xFFFFFFFF if invalid_metrics else 3_000
+    u16_metric = 0xFFFF if invalid_metrics else 250
+    u8_metric = 0xFF if invalid_metrics else 150
+    session_record = bytes([0x00]) + b"".join([
+        struct.pack("<I", 1_000_000), bytes([1, 7]),
+        struct.pack("<II", 3_600_000, 3_500_000), struct.pack("<I", 1_000_000),
+        struct.pack("<H", 0xFFFF if invalid_metrics else 600),
+        struct.pack("<II", u32_metric, 5_000 if not invalid_metrics else 0xFFFFFFFF),
+        bytes([u8_metric, 180 if not invalid_metrics else 0xFF, 82 if not invalid_metrics else 0xFF, 95 if not invalid_metrics else 0xFF]),
+        struct.pack("<HHHHH", u16_metric, 400 if not invalid_metrics else 0xFFFF,
+                    100 if not invalid_metrics else 0xFFFF, 80 if not invalid_metrics else 0xFFFF,
+                    1),
+    ])
     lap_definition = bytes([0x41, 0x00, 0x00]) + struct.pack("<H", 19) + bytes([
-        2,
+        14,
         2, 4, 0x86,
+        7, 4, 0x86,
+        8, 4, 0x86,
         9, 4, 0x86,
+        13, 4, 0x86,
+        14, 4, 0x86,
+        15, 1, 0x02,
+        16, 1, 0x02,
+        17, 1, 0x02,
+        18, 1, 0x02,
+        19, 2, 0x84,
+        20, 2, 0x84,
+        21, 2, 0x84,
+        22, 2, 0x84,
     ])
-    lap_record = bytes([0x01]) + struct.pack("<I", 1_000_000) + struct.pack("<I", 50_000)
+    lap_record = bytes([0x01]) + b"".join([
+        struct.pack("<IIIIII", 1_000_000, 3_600_000, 3_500_000, 1_000_000,
+                    u32_metric, 5_000 if not invalid_metrics else 0xFFFFFFFF),
+        bytes([u8_metric, 180 if not invalid_metrics else 0xFF, 82 if not invalid_metrics else 0xFF, 95 if not invalid_metrics else 0xFF]),
+        struct.pack("<HHHH", u16_metric, 400 if not invalid_metrics else 0xFFFF,
+                    100 if not invalid_metrics else 0xFFFF, 80 if not invalid_metrics else 0xFFFF),
+    ])
     body = session_definition + session_record + lap_definition + lap_record
     return bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", len(body)) + b".FIT" + body
 
@@ -34,9 +79,28 @@ class FitAndPackTest(unittest.TestCase):
     def test_fit_session_parses_without_record_coordinates(self) -> None:
         parsed = parse_fit_bytes(synthetic_fit_session(), file_id="fit_file:000000", source_path="synthetic.fit")
         self.assertEqual(parsed["status"], "parsed_activity")
-        self.assertEqual(parsed["session"]["total_distance"], 1000.0)
+        self.assertEqual(parsed["session"]["total_distance"], 10_000.0)
         self.assertEqual(parsed["session"]["sport"], 1)
-        self.assertEqual(parsed["laps"][0]["total_distance"], 500.0)
+        self.assertEqual(parsed["session"]["avg_speed"], 3.0)
+        self.assertEqual(parsed["session"]["avg_heart_rate"], 150)
+        self.assertEqual(parsed["session"]["avg_cadence"], 82)
+        self.assertEqual(parsed["session"]["avg_power"], 250)
+        self.assertEqual(parsed["session"]["total_ascent"], 100)
+        self.assertEqual(parsed["laps"][0]["total_distance"], 10_000.0)
+        self.assertEqual(parsed["laps"][0]["avg_speed"], 3.0)
+        self.assertEqual(parsed["laps"][0]["avg_heart_rate"], 150)
+
+    def test_fit_invalid_sentinels_are_null_before_scaling(self) -> None:
+        parsed = parse_fit_bytes(
+            synthetic_fit_session(invalid_metrics=True),
+            file_id="fit_file:invalid-synthetic",
+            source_path="synthetic-invalid.fit",
+        )
+        for name in ("avg_speed", "max_speed", "avg_heart_rate", "max_heart_rate",
+                     "avg_cadence", "max_cadence", "avg_power", "max_power",
+                     "total_ascent", "total_descent"):
+            self.assertIsNone(parsed["session"][name], name)
+            self.assertIsNone(parsed["laps"][0][name], name)
 
     def test_fit_negative_statuses_are_auditable(self) -> None:
         bad_header = b"\x0c\x10\x00\x00\x00\x00\x00\x00NOPE"
@@ -60,6 +124,8 @@ class FitAndPackTest(unittest.TestCase):
             self.assertEqual(activities[0]["fit_file_id"], first_id)
             self.assertEqual(laps[0]["fit_file_id"], first_id)
             self.assertIn("source_sha256", laps[0])
+            self.assertEqual(activities[0]["avg_cadence"], 82)
+            self.assertEqual(activities[0]["total_ascent"], 100)
 
     def test_fit_export_reports_bad_input_in_audit(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

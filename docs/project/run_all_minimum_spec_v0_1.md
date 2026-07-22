@@ -334,7 +334,9 @@ release state, CI artifact publication, or unrelated governance documents.
 ## Risks and Deferred Items
 
 - Filename aliases require real-export evidence and are deferred to M3.
-- FIT CRC/invalid-sentinel completeness remains a documented limitation.
+- M7.1 implements invalid-sentinel handling for the selected migrated FIT
+  Activity and FIT Lap numeric metrics. Complete FIT CRC validation and
+  multi-session identity remain documented limitations.
 - Parquet, automatic Analysis Pack ZIP, performance metrics, and real-data
   evidence are deferred.
 - The example dataset registry lifecycle wording is not changed by M2.

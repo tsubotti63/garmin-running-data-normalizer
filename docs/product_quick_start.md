@@ -158,6 +158,9 @@ limits.
 
 Real Garmin exports and generated personal outputs are sensitive. Keep them in
 ignored local locations such as `data/` and `workspace/`; never commit them.
-Run-All uses the existing exact filename rules and does not implement complete FIT parsing,
-Open-Meteo, Parquet, or automatic Analysis Pack generation. See the
+Run-All uses the existing exact filename rules. It normalizes selected FIT
+Activity and FIT Lap metrics and converts their invalid sentinels to null before
+scaling, but it does not implement complete FIT CRC validation or multi-session
+identity. Open-Meteo, Parquet, and automatic Analysis Pack generation are also
+not implemented. See the
 [README](../README.md) for the current implementation scope and limitations.
