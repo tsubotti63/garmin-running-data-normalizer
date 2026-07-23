@@ -2,14 +2,15 @@
 
 ## Status and purpose
 
-- Status: M4 handoff contract
+- Status: v1.1 implemented handoff contract
 - Applies to: `garmin-running-data-normalizer-run-all-v1`
 - Boundary: local Run-All output produced from a user-controlled Garmin Account Export
 
-This specification defines how deterministic Run-All output may be handed to a
+This specification defines how deterministic Run-All v1.1 output may be handed to a
 human analyst, a local analysis tool, or an AI assistant without confusing
 normalization facts with later interpretation. It does not add an analysis
-feature to Run-All and does not change the Run-All public contract.
+separate analysis step. The v1.1 Product approval integrates deterministic
+human and machine handoff artifacts into Run-All.
 
 ## Intended users
 
@@ -38,6 +39,11 @@ The input is one complete Run-All output directory. Before analysis:
 
 | File | Responsibility |
 |---|---|
+| `START_HERE.md` | First-read status, warning, navigation, Relationship Coverage, and privacy guidance |
+| `DATASET_INVENTORY.md` | Dataset roles, states, counts, grains, keys, authority, and suitability |
+| `ANALYSIS_HANDOFF.md` | Standalone receiving rules, Relationship Coverage, and prompt preamble |
+| `ANALYSIS_CONTEXT.json` | Machine-readable datasets, relationships, Relationship Coverage, warnings, and prohibited operations |
+| `SCHEMA_CATALOG.json` | Runtime-defined fields, types, units/domains, origins, and privacy sensitivity |
 | `analysis/activities.csv` | Stable, reduced activity-level table for descriptive analysis |
 | `run_summary.json` | Completion state, family status, warnings, errors, and generated paths |
 | `run_manifest.json` | Reproducibility, dataset grain, stable keys, source counts, and output hashes |
@@ -56,11 +62,29 @@ separate privacy review.
 | `normalized/personal_records.json` | Personal-record entries and states |
 | `normalized/fit_sessions.json` | Bounded FIT session summaries |
 | `normalized/fit_laps.json` | Bounded FIT lap summaries |
+| `normalized/activity_fit_links.json` | Evidence-qualified one-to-one eligible Activity/FIT links |
 | `audit/fit_audit.json` | Per-FIT parse status and completeness evidence |
+| `audit/activity_fit_linkage.json` | Eligibility, exclusions, ambiguity, and coverage evidence |
 | `qa/dataset_summary.json` | Stable-key, duplicate, serialization, and deterministic-digest QA |
+| `qa/relationship_summary.json` | Declared relationship referential-integrity QA |
 
 Optional files remain personal local output. Use only the smallest set needed
 for the stated question.
+
+## Relationship Coverage
+
+Every explicit relationship has a deterministic coverage entry in
+`START_HERE.md`, `ANALYSIS_HANDOFF.md`, and `ANALYSIS_CONTEXT.json`. The entry
+reports its eligible population, explicit-link count, coverage percentage,
+unresolved, ambiguous, and duplicate counts, inference state, and primary
+unresolved reason. A zero eligible population uses null machine coverage and an
+`N/A` human-readable value rather than a manufactured percentage.
+
+Coverage is evidence about the deterministic contract boundary, not a success
+score. Unknown relationships remain unknown, and unresolved or ambiguous
+records are never converted into explicit links. The projections point to
+`qa/relationship_summary.json`; detailed Activity/FIT exclusions and evidence
+remain in `audit/activity_fit_linkage.json`.
 
 ## Handoff output
 
@@ -116,8 +140,9 @@ for an external service.
 | `gear` | Gear item | `gear_key` |
 | `activity_gear` | Activity-gear link | `gear_key`, `activity_id` |
 | `personal_records` | Personal record | `personal_record_id` |
-| `fit_sessions` | FIT file session | `fit_file_id` |
-| `fit_laps` | FIT file lap | `fit_file_id`, `lap_index` |
+| `fit_sessions` | FIT session | `fit_session_key` |
+| `fit_laps` | FIT session lap | `fit_lap_key` |
+| `activity_fit_links` | Activity/FIT session link | `garmin_activity_key`, `fit_session_key` |
 
 Stable keys support identity and reproducibility within their declared grain.
 Only the [Dataset Relationship Catalog](../dataset_relationships.md) authorizes
@@ -163,6 +188,12 @@ families. Do not silently drop incomplete FIT files.
   default for public material.
 - Never combine the handoff with unrelated personal datasets to re-identify a
   person.
+- The opt-in `--external-safe-pack` projection removes paths, filenames,
+  source hashes, raw IDs/stable keys, memo text, coordinates, and exact
+  dates/timestamps. It also removes heart rate, power, cadence, training
+  effect/load, and other health or performance detail not needed for its
+  month-level activity-volume profile. It remains subject to
+  receiving-environment review and is never uploaded automatically.
 
 ## Rules for an analysis AI
 
@@ -205,9 +236,6 @@ fields emitted by Run-All.
 Weather, Sleep, HRV, Parquet, notebooks, dashboards, coaching interpretation,
 and new dataset families are outside v0.1. Adding them requires separate
 contracts for schema, units, privacy, provenance, QA, and lifecycle behavior.
-This handoff may later gain a machine-readable profile, but M4 does not add one.
-
-No code or CLI change is required to use this local handoff. A future feature
-that directly creates an external-sharing-safe file would require a separate
-implementation task because the current Activities CSV retains a local stable
-key and exact local date/time fields.
+The v1.1 handoff includes a machine-readable profile and optional external-safe
+projection. Weather, hosted services, automatic upload, and medical/coaching
+interpretation remain separate Product decisions.

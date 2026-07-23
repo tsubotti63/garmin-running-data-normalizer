@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import zipfile
+from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -37,6 +39,43 @@ def _write_entry(archive: zipfile.ZipFile, name: str, data: bytes) -> None:
     archive.writestr(info, data)
 
 
+def build_analysis_pack_payloads(payloads: Mapping[str, bytes]) -> tuple[bytes, dict[str, Any]]:
+    """Build deterministic Analysis Pack bytes from an explicit in-memory allowlist."""
+    if not payloads:
+        raise ValueError("Analysis Pack payload allowlist must not be empty")
+    selected: list[tuple[str, bytes]] = []
+    for raw_path in sorted(payloads):
+        requested = PurePosixPath(str(raw_path).replace("\\", "/"))
+        if requested.is_absolute() or ".." in requested.parts or not requested.parts:
+            raise ValueError(f"unsafe Analysis Pack path: {raw_path}")
+        relative = requested.as_posix()
+        if requested.suffix.lower() not in ALLOWED_SUFFIXES:
+            raise ValueError(f"Analysis Pack file type is not allowlisted: {raw_path}")
+        data = payloads[raw_path]
+        if not isinstance(data, bytes):
+            raise TypeError("Analysis Pack payloads must be bytes")
+        selected.append((relative, data))
+    entries = [
+        {"path": path, "bytes": len(data), "sha256": _sha256(data)}
+        for path, data in selected
+    ]
+    manifest = {
+        "format": "garmin-running-data-normalizer-analysis-pack-v1",
+        "deterministic": True,
+        "entries": entries,
+    }
+    manifest_data = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode(
+        "utf-8"
+    )
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w") as archive:
+        _write_entry(archive, "manifest.json", manifest_data)
+        for relative, data in selected:
+            _write_entry(archive, relative, data)
+    pack = stream.getvalue()
+    return pack, {**manifest, "pack_sha256": _sha256(pack)}
+
+
 def build_analysis_pack(
     root: str | Path,
     include: list[str],
@@ -49,22 +88,15 @@ def build_analysis_pack(
     if not include:
         raise ValueError("Analysis Pack include allowlist must not be empty")
     selected = [_safe_relative(base, value) for value in sorted(set(include))]
-    entries = []
-    payloads: list[tuple[str, bytes]] = []
+    payloads: dict[str, bytes] = {}
     for absolute, relative in selected:
         data = absolute.read_bytes()
-        entries.append({"path": relative, "bytes": len(data), "sha256": _sha256(data)})
-        payloads.append((relative, data))
-    manifest = {
-        "format": "garmin-running-data-normalizer-analysis-pack-v1",
-        "deterministic": True,
-        "entries": entries,
-    }
-    manifest_data = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        payloads[relative] = data
+    pack, result = build_analysis_pack_payloads(payloads)
     destination = Path(output_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(destination, "w") as archive:
-        _write_entry(archive, "manifest.json", manifest_data)
-        for relative, data in payloads:
-            _write_entry(archive, relative, data)
-    return {**manifest, "pack_sha256": _sha256(destination.read_bytes())}
+    destination.write_bytes(pack)
+    return result
+
+
+__all__ = ["build_analysis_pack", "build_analysis_pack_payloads"]

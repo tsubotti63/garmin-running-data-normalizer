@@ -1,6 +1,6 @@
 # Known Limitations
 
-These limitations apply to the stable `1.0.x` scope. They are explicit product
+These limitations apply to the `1.1` release candidate. They are explicit product
 boundaries, not hidden fallback behavior.
 
 ## Input and orchestration
@@ -16,7 +16,9 @@ boundaries, not hidden fallback behavior.
 ## FIT
 
 - Only selected Activity session and lap fields are normalized.
-- Complete FIT CRC validation and multi-session identity are not implemented.
+- Chained FIT payloads are rejected rather than merged.
+- Activity/FIT linkage is limited to the documented evidence-qualified eligible
+  population; excluded and ambiguous candidates are not guessed.
 - Record coordinates, raw telemetry, and arbitrary FIT message preservation are
   intentionally excluded from public output.
 
@@ -29,16 +31,17 @@ boundaries, not hidden fallback behavior.
   nightly FIT HRV.
 - Health Status unknown metrics remain in long-form evidence; duplicate metric
   types are not silently overwritten.
-- Sleep, HRV, and Health Status are not Run-All output families in `1.0.x`.
+- Sleep, HRV, and Health Status are not Run-All output families in v1.1.
 
 ## Distribution and integrations
 
-- No PyPI distribution is published by this release workflow. Installation is
-  from a local checkout.
+- No v1.1 PyPI distribution is published before the separate approval boundary.
 - Hosted processing, Garmin authentication, Open-Meteo, JMA, Instagram,
   wellness/coaching interpretation, Parquet output, and automatic personal
   analysis are outside the stable scope.
 - No third-party runtime package dependency is declared.
+- External-safe output is opt-in, month-granularity, Activities-only, and does
+  not automatically upload or provide provider-specific privacy guarantees.
 
 The documented CLI and versioned Run-All output contract are stable for `1.x`.
 Other Python modules are usable but are not all promoted to an independently

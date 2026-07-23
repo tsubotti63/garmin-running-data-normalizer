@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "garmin-running-data-normalizer"
-version = "1.0.1"
+version = "1.1.0rc1"
 description = "Deterministic local Garmin Account Export normalization primitives"
 readme = "README.md"
 license = "Apache-2.0"
@@ -13,7 +13,7 @@ requires-python = ">=3.11"
 dependencies = []
 keywords = ["garmin", "running", "normalization", "fit"]
 classifiers = [
-  "Development Status :: 5 - Production/Stable",
+  "Development Status :: 4 - Beta",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
 ]

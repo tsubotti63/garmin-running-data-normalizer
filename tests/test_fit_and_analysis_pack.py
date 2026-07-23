@@ -9,7 +9,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from garmin_running_data_normalizer.export.analysis_pack import build_analysis_pack
-from garmin_running_data_normalizer.fit.parser import parse_fit_bytes, parse_fit_export
+from garmin_running_data_normalizer.fit.parser import fit_crc16, parse_fit_bytes, parse_fit_export
+
+from tests.fit_fixture_factory import synthetic_fit, truncated_fit, unsupported_chained_fit
 
 
 def synthetic_fit_session(*, invalid_metrics: bool = False) -> bytes:
@@ -72,7 +74,8 @@ def synthetic_fit_session(*, invalid_metrics: bool = False) -> bytes:
                     100 if not invalid_metrics else 0xFFFF, 80 if not invalid_metrics else 0xFFFF),
     ])
     body = session_definition + session_record + lap_definition + lap_record
-    return bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", len(body)) + b".FIT" + body
+    payload = bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", len(body)) + b".FIT" + body
+    return payload + struct.pack("<H", fit_crc16(payload))
 
 
 class FitAndPackTest(unittest.TestCase):
@@ -106,13 +109,122 @@ class FitAndPackTest(unittest.TestCase):
         bad_header = b"\x0c\x10\x00\x00\x00\x00\x00\x00NOPE"
         truncated = bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", 10) + b".FIT"
         unknown_body = b"\x00"
-        unknown = bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", 1) + b".FIT" + unknown_body
+        unknown_payload = (
+            bytes([12, 0x10])
+            + struct.pack("<H", 0)
+            + struct.pack("<I", 1)
+            + b".FIT"
+            + unknown_body
+        )
+        unknown = unknown_payload + struct.pack("<H", fit_crc16(unknown_payload))
         self.assertEqual(parse_fit_bytes(bad_header, file_id="x", source_path="x.fit")["status"], "bad_header")
         self.assertEqual(parse_fit_bytes(truncated, file_id="x", source_path="x.fit")["status"], "truncated")
         unknown_result = parse_fit_bytes(unknown, file_id="x", source_path="x.fit")
-        self.assertEqual(unknown_result["unknown_records"], 1)
+        self.assertEqual(unknown_result["status"], "undefined_local_message")
+        self.assertEqual(unknown_result["file_crc_status"], "valid")
         with patch("garmin_running_data_normalizer.fit.parser.MAX_FIT_BYTES", 1):
             self.assertEqual(parse_fit_bytes(b"12", file_id="x", source_path="x.fit")["status"], "too_large")
+
+    def test_fit_crc_statuses_are_explicit_and_fail_closed(self) -> None:
+        valid = parse_fit_bytes(
+            synthetic_fit(),
+            file_id="fit_file:synthetic",
+            source_path="synthetic.fit",
+        )
+        self.assertEqual(valid["status"], "parsed_activity")
+        self.assertEqual(valid["header_crc_status"], "valid")
+        self.assertEqual(valid["file_crc_status"], "valid")
+
+        header_crc_omitted = parse_fit_bytes(
+            synthetic_fit(header_crc_present=False),
+            file_id="fit_file:synthetic",
+            source_path="synthetic.fit",
+        )
+        self.assertEqual(header_crc_omitted["status"], "parsed_activity")
+        self.assertEqual(header_crc_omitted["header_crc_status"], "not_present")
+        self.assertEqual(header_crc_omitted["file_crc_status"], "valid")
+
+        short_header = parse_fit_bytes(
+            synthetic_fit(header_size=12),
+            file_id="fit_file:synthetic",
+            source_path="synthetic.fit",
+        )
+        self.assertEqual(short_header["status"], "parsed_activity")
+        self.assertEqual(short_header["header_crc_status"], "not_present")
+        self.assertEqual(short_header["file_crc_status"], "valid")
+
+        bad_header = parse_fit_bytes(
+            synthetic_fit(invalid_header_crc=True),
+            file_id="fit_file:synthetic",
+            source_path="synthetic.fit",
+        )
+        self.assertEqual(bad_header["status"], "bad_header_crc")
+        self.assertEqual(bad_header["header_crc_status"], "invalid")
+
+        bad_file = parse_fit_bytes(
+            synthetic_fit(invalid_file_crc=True),
+            file_id="fit_file:synthetic",
+            source_path="synthetic.fit",
+        )
+        self.assertEqual(bad_file["status"], "bad_file_crc")
+        self.assertEqual(bad_file["file_crc_status"], "invalid")
+        self.assertEqual(
+            parse_fit_bytes(
+                truncated_fit(),
+                file_id="fit_file:synthetic",
+                source_path="synthetic.fit",
+            )["status"],
+            "truncated",
+        )
+        self.assertEqual(
+            parse_fit_bytes(
+                unsupported_chained_fit(),
+                file_id="fit_file:synthetic",
+                source_path="synthetic.fit",
+            )["status"],
+            "unsupported_chained",
+        )
+
+    def test_multi_session_identity_and_lap_conservation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "synthetic-multi.fit").write_bytes(synthetic_fit(sessions=2))
+            sessions, laps, audit = parse_fit_export(root)
+            self.assertEqual(len(sessions), 2)
+            self.assertEqual(len(laps), 2)
+            self.assertEqual(audit[0]["session_count"], 2)
+            self.assertEqual(audit[0]["lap_count"], 2)
+            self.assertEqual(audit[0]["unallocated_lap_count"], 0)
+            self.assertEqual([item["session_ordinal"] for item in sessions], [0, 1])
+            self.assertEqual(
+                [item["lap_ordinal_within_session"] for item in laps],
+                [0, 0],
+            )
+            self.assertEqual(
+                {item["fit_session_key"] for item in sessions},
+                {item["fit_session_key"] for item in laps},
+            )
+            self.assertEqual(len({item["fit_lap_key"] for item in laps}), 2)
+
+    def test_multi_session_lap_allocation_conflict_is_not_normalized(self) -> None:
+        payload = synthetic_fit(sessions=2, declared_laps_per_session=2)
+        parsed = parse_fit_bytes(
+            payload,
+            file_id="fit_file:synthetic",
+            source_path="synthetic.fit",
+        )
+        self.assertEqual(parsed["status"], "session_lap_allocation_conflict")
+        self.assertEqual(parsed["session_count"], 2)
+        self.assertEqual(parsed["lap_count"], 2)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "synthetic-conflict.fit").write_bytes(payload)
+            sessions, laps, audit = parse_fit_export(root)
+            self.assertEqual((sessions, laps), ([], []))
+            self.assertEqual(
+                audit[0]["parse_status"],
+                "session_lap_allocation_conflict",
+            )
 
     def test_fit_file_id_is_stable_when_an_earlier_file_is_added(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -18,6 +18,7 @@ from pathlib import Path
 from unittest import mock
 
 from garmin_running_data_normalizer import runner
+from garmin_running_data_normalizer.fit.parser import fit_crc16
 from garmin_running_data_normalizer.intake.archive import UnsafeArchiveError
 from garmin_running_data_normalizer.normalizers.activities import normalize_activities
 from garmin_running_data_normalizer.run_all import OUTPUT_PATHS, RunAllError, run_all
@@ -48,7 +49,7 @@ def synthetic_fit_session() -> bytes:
         26, 2, 0x84,
     ])
     session_record = bytes([0x00]) + b"".join([
-        struct.pack("<I", 1_000_000), bytes([1]), struct.pack("<I", 100_000),
+        struct.pack("<I", 1_262_390_400), bytes([1]), struct.pack("<I", 500_000),
         bytes([150, 82]), struct.pack("<HHH", 250, 100, 1),
     ])
     lap_definition = bytes([0x41, 0x00, 0x00]) + struct.pack("<H", 19) + bytes([
@@ -61,28 +62,38 @@ def synthetic_fit_session() -> bytes:
         21, 2, 0x84,
     ])
     lap_record = bytes([0x01]) + b"".join([
-        struct.pack("<II", 1_000_000, 50_000), bytes([150, 82]), struct.pack("<HH", 250, 100),
+        struct.pack("<II", 1_262_390_400, 500_000), bytes([150, 82]), struct.pack("<HH", 250, 100),
     ])
     body = session_definition + session_record + lap_definition + lap_record
-    return bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", len(body)) + b".FIT" + body
+    payload = bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", len(body)) + b".FIT" + body
+    return payload + struct.pack("<H", fit_crc16(payload))
 
 
 class RunAllTest(unittest.TestCase):
-    def run_command(self, input_path: Path, output_path: Path) -> subprocess.CompletedProcess[str]:
+    def run_command(
+        self,
+        input_path: Path,
+        output_path: Path,
+        *,
+        external_safe_pack: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
         environment = os.environ.copy()
         environment["PYTHONPATH"] = str(ROOT / "src")
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        command = [
+            sys.executable,
+            "-m",
+            "garmin_running_data_normalizer",
+            "run-all",
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+        ]
+        if external_safe_pack:
+            command.append("--external-safe-pack")
         return subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "garmin_running_data_normalizer",
-                "run-all",
-                "--input",
-                str(input_path),
-                "--output",
-                str(output_path),
-            ],
+            command,
             cwd=ROOT,
             env=environment,
             capture_output=True,
@@ -137,6 +148,11 @@ class RunAllTest(unittest.TestCase):
             self.assertEqual({summary["family_results"][name]["detected_asset_count"] for name in ("activities", "gear", "personal_records", "fit")}, {1})
             fit_sessions = json.loads((output / "normalized/fit_sessions.json").read_text(encoding="utf-8"))
             fit_laps = json.loads((output / "normalized/fit_laps.json").read_text(encoding="utf-8"))
+            activity_fit_links = json.loads(
+                (output / "normalized/activity_fit_links.json").read_text(
+                    encoding="utf-8"
+                )
+            )
             self.assertEqual(fit_sessions[0]["avg_heart_rate"], 150)
             self.assertEqual(fit_sessions[0]["avg_cadence"], 82)
             self.assertEqual(fit_sessions[0]["avg_power"], 250)
@@ -146,6 +162,55 @@ class RunAllTest(unittest.TestCase):
             self.assertEqual(fit_laps[0]["avg_power"], 250)
             self.assertEqual(fit_laps[0]["total_ascent"], 100)
             self.assertIn("source_sha256", fit_laps[0])
+            self.assertEqual(len(activity_fit_links), 1)
+            self.assertEqual(activity_fit_links[0]["match_status"], "explicit")
+            self.assertIn("compatible_sport", activity_fit_links[0]["match_basis"])
+            context = json.loads(
+                (output / "ANALYSIS_CONTEXT.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(len(context["relationship_coverage"]), 6)
+            self.assertTrue(
+                all(
+                    item["inference_performed"] is False
+                    and item["qa_reference"] == "qa/relationship_summary.json"
+                    for item in context["relationship_coverage"]
+                )
+            )
+            activity_coverage = next(
+                item
+                for item in context["relationship_coverage"]
+                if item["relationship_id"]
+                == "activity_fit_links_to_activities"
+            )
+            relationship_qa = json.loads(
+                (output / "qa/relationship_summary.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            activity_fit_metrics = relationship_qa["relationships"][
+                "activities_to_fit_sessions"
+            ]
+            self.assertEqual(
+                activity_coverage["eligible_population"]["count"],
+                activity_fit_metrics["eligible_activity_count"],
+            )
+            self.assertEqual(
+                activity_coverage["explicit_links"],
+                activity_fit_metrics["link_count"],
+            )
+            self.assertEqual(
+                activity_coverage["unresolved_count"],
+                activity_fit_metrics["unresolved_eligible_activity_count"],
+            )
+            self.assertEqual(
+                activity_coverage["primary_unresolved_reason"],
+                activity_fit_metrics["primary_unresolved_activity_reason"],
+            )
+            for document in ("START_HERE.md", "ANALYSIS_HANDOFF.md"):
+                content = (output / document).read_text(encoding="utf-8")
+                self.assertIn("## Relationship Coverage", content)
+                self.assertIn("Coverage communicates the evidence boundary", content)
+                self.assertIn("Inference performed: No", content)
 
     def test_t2_activities_only_passes_with_warnings_and_empty_optional_outputs(self) -> None:
         before = tree_hashes(ACTIVITIES_FIXTURE)
@@ -164,9 +229,22 @@ class RunAllTest(unittest.TestCase):
                 "normalized/personal_records.json",
                 "normalized/fit_sessions.json",
                 "normalized/fit_laps.json",
+                "normalized/activity_fit_links.json",
                 "audit/fit_audit.json",
             ):
                 self.assertEqual(json.loads((output / relative).read_text(encoding="utf-8")), [])
+            context = json.loads(
+                (output / "ANALYSIS_CONTEXT.json").read_text(encoding="utf-8")
+            )
+            fit_coverage = next(
+                item
+                for item in context["relationship_coverage"]
+                if item["relationship_id"]
+                == "activity_fit_links_to_fit_sessions"
+            )
+            self.assertEqual(fit_coverage["eligible_population"]["count"], 0)
+            self.assertIsNone(fit_coverage["coverage_percentage"])
+            self.assertEqual(fit_coverage["unresolved_count"], 0)
         self.assertEqual(before, tree_hashes(ACTIVITIES_FIXTURE))
 
     def test_t3_fatal_inputs_do_not_publish_completion_marker(self) -> None:
@@ -331,6 +409,76 @@ class RunAllTest(unittest.TestCase):
             self.assertIn("INPUT_DISCOVERY_FAILED", stderr.getvalue())
             self.assertNotIn(str(temporary), stdout.getvalue() + stderr.getvalue())
             self.assertFalse(output.exists())
+            self.assertEqual(before, tree_hashes(input_root))
+
+    def test_t9_external_safe_pack_is_allowlisted_private_free_and_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            input_root = self.synthetic_input(temporary, optional=True)
+            before = tree_hashes(input_root)
+            first = temporary / "first"
+            second = temporary / "second"
+            first_result = self.run_command(
+                input_root,
+                first,
+                external_safe_pack=True,
+            )
+            second_result = self.run_command(
+                input_root,
+                second,
+                external_safe_pack=True,
+            )
+            self.assertEqual(first_result.returncode, 0, first_result.stderr)
+            self.assertEqual(second_result.returncode, 0, second_result.stderr)
+            relative = "analysis/external_safe_handoff.zip"
+            first_pack = first / relative
+            second_pack = second / relative
+            self.assertEqual(first_pack.read_bytes(), second_pack.read_bytes())
+            with zipfile.ZipFile(first_pack) as archive:
+                self.assertEqual(
+                    sorted(archive.namelist()),
+                    [
+                        "README.md",
+                        "manifest.json",
+                        "safe/ANALYSIS_CONTEXT.json",
+                        "safe/SCHEMA_CATALOG.json",
+                        "safe/activities_monthly.csv",
+                    ],
+                )
+                combined = b"\n".join(
+                    archive.read(name) for name in sorted(archive.namelist())
+                ).decode("utf-8")
+            for forbidden in (
+                "SYNTHETIC-RUN-0001",
+                "garmin_activity_key",
+                "source_path",
+                "source_sha256",
+                "memo_text_raw",
+                "avg_hr",
+                "max_hr",
+                "avg_power",
+                "max_power",
+                "avg_run_cadence",
+                "training_effect_label",
+                "activity_training_load",
+                str(temporary),
+                "2030-01-01",
+                "2030-01-01T",
+            ):
+                self.assertNotIn(forbidden, combined)
+            with zipfile.ZipFile(first_pack) as archive:
+                safe_header = archive.read(
+                    "safe/activities_monthly.csv"
+                ).decode("utf-8").splitlines()[0]
+            self.assertEqual(
+                safe_header,
+                "activity_month,activity_type,sport_type,distance_m,duration_sec,lap_count",
+            )
+            summary = json.loads(
+                (first / "run_summary.json").read_text(encoding="utf-8")
+            )
+            self.assertIn(relative, summary["generated_paths"])
+            self.assertNotIn(relative, OUTPUT_PATHS)
             self.assertEqual(before, tree_hashes(input_root))
 
 

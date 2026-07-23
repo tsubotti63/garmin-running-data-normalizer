@@ -11,6 +11,12 @@ from ..intake.discovery import discover_export
 
 FIT_EPOCH_OFFSET = 631065600
 MAX_FIT_BYTES = 128 * 1024 * 1024
+FIT_CRC_TABLE = (
+    0x0000, 0xCC01, 0xD801, 0x1400,
+    0xF001, 0x3C00, 0x2800, 0xE401,
+    0xA001, 0x6C00, 0x7800, 0xB401,
+    0x5000, 0x9C01, 0x8801, 0x4400,
+)
 
 BASE_TYPES = {
     0x00: ("enum", 1, None), 0x01: ("sint8", 1, "b"), 0x02: ("uint8", 1, "B"),
@@ -61,7 +67,14 @@ FIELDS = {
     20: {},
 }
 
-SPORT_ENUM = {1: "running", 2: "cycling", 17: "walking", 31: "hiking", 37: "swimming"}
+SPORT_ENUM = {
+    1: "running",
+    2: "cycling",
+    10: "strength_training",
+    11: "walking",
+    17: "hiking",
+    31: "swimming",
+}
 SUB_SPORT_ENUM = {6: "treadmill_running", 7: "street", 8: "trail"}
 
 
@@ -78,6 +91,38 @@ class Definition:
     global_message: int
     fields: tuple[FieldDef, ...]
     developer_field_sizes: tuple[int, ...] = ()
+
+
+def fit_crc16(data: bytes, initial: int = 0) -> int:
+    """Return the FIT protocol CRC-16 for *data*."""
+    crc = initial & 0xFFFF
+    for byte in data:
+        temporary = FIT_CRC_TABLE[crc & 0x0F]
+        crc = ((crc >> 4) & 0x0FFF) ^ temporary ^ FIT_CRC_TABLE[byte & 0x0F]
+        temporary = FIT_CRC_TABLE[crc & 0x0F]
+        crc = (
+            ((crc >> 4) & 0x0FFF)
+            ^ temporary
+            ^ FIT_CRC_TABLE[(byte >> 4) & 0x0F]
+        )
+    return crc & 0xFFFF
+
+
+def _base_result(
+    status: str,
+    *,
+    file_id: str,
+    source_path: str,
+    header_crc_status: str = "not_checked",
+    file_crc_status: str = "not_checked",
+) -> dict[str, Any]:
+    return {
+        "status": status,
+        "file_id": file_id,
+        "source_path": source_path,
+        "header_crc_status": header_crc_status,
+        "file_crc_status": file_crc_status,
+    }
 
 
 def _fit_datetime(value: Any, timezone_name: str) -> str | None:
@@ -154,15 +199,47 @@ def parse_fit_bytes(
 ) -> dict[str, Any]:
     """Parse bounded FIT session/lap fields without exposing record coordinates."""
     if len(data) > MAX_FIT_BYTES:
-        return {"status": "too_large", "file_id": file_id, "source_path": source_path}
+        return _base_result("too_large", file_id=file_id, source_path=source_path)
     if len(data) < 12:
-        return {"status": "too_small", "file_id": file_id, "source_path": source_path}
+        return _base_result("too_small", file_id=file_id, source_path=source_path)
     header_size = data[0]
     if header_size not in (12, 14) or len(data) < header_size or data[8:12] != b".FIT":
-        return {"status": "bad_header", "file_id": file_id, "source_path": source_path}
+        return _base_result("bad_header", file_id=file_id, source_path=source_path)
     data_size = struct.unpack_from("<I", data, 4)[0]
-    if header_size + data_size > len(data):
-        return {"status": "truncated", "file_id": file_id, "source_path": source_path}
+    expected_size = header_size + data_size + 2
+    if len(data) < expected_size:
+        return _base_result("truncated", file_id=file_id, source_path=source_path)
+    if len(data) > expected_size:
+        return _base_result(
+            "unsupported_chained",
+            file_id=file_id,
+            source_path=source_path,
+        )
+
+    header_crc_status = "not_present"
+    if header_size == 14:
+        expected_header_crc = struct.unpack_from("<H", data, 12)[0]
+        if expected_header_crc:
+            actual_header_crc = fit_crc16(data[:12])
+            if actual_header_crc != expected_header_crc:
+                return _base_result(
+                    "bad_header_crc",
+                    file_id=file_id,
+                    source_path=source_path,
+                    header_crc_status="invalid",
+                )
+            header_crc_status = "valid"
+
+    expected_file_crc = struct.unpack_from("<H", data, header_size + data_size)[0]
+    actual_file_crc = fit_crc16(data[: header_size + data_size])
+    if actual_file_crc != expected_file_crc:
+        return _base_result(
+            "bad_file_crc",
+            file_id=file_id,
+            source_path=source_path,
+            header_crc_status=header_crc_status,
+            file_crc_status="invalid",
+        )
 
     position = header_size
     data_end = header_size + data_size
@@ -182,7 +259,13 @@ def parse_fit_bytes(
 
         if is_definition:
             if position + 5 > data_end:
-                return {"status": "truncated", "file_id": file_id, "source_path": source_path}
+                return _base_result(
+                    "truncated",
+                    file_id=file_id,
+                    source_path=source_path,
+                    header_crc_status=header_crc_status,
+                    file_crc_status="valid",
+                )
             position += 1  # reserved byte
             architecture = data[position]
             position += 1
@@ -192,7 +275,13 @@ def parse_fit_bytes(
             field_count = data[position]
             position += 1
             if position + field_count * 3 > data_end:
-                return {"status": "truncated", "file_id": file_id, "source_path": source_path}
+                return _base_result(
+                    "truncated",
+                    file_id=file_id,
+                    source_path=source_path,
+                    header_crc_status=header_crc_status,
+                    file_crc_status="valid",
+                )
             fields = tuple(
                 FieldDef(data[position + index * 3], data[position + index * 3 + 1], data[position + index * 3 + 2])
                 for index in range(field_count)
@@ -201,11 +290,23 @@ def parse_fit_bytes(
             developer_sizes: tuple[int, ...] = ()
             if record_header & 0x20:
                 if position + 1 > data_end:
-                    return {"status": "truncated", "file_id": file_id, "source_path": source_path}
+                    return _base_result(
+                        "truncated",
+                        file_id=file_id,
+                        source_path=source_path,
+                        header_crc_status=header_crc_status,
+                        file_crc_status="valid",
+                    )
                 developer_count = data[position]
                 position += 1
                 if position + developer_count * 3 > data_end:
-                    return {"status": "truncated", "file_id": file_id, "source_path": source_path}
+                    return _base_result(
+                        "truncated",
+                        file_id=file_id,
+                        source_path=source_path,
+                        header_crc_status=header_crc_status,
+                        file_crc_status="valid",
+                    )
                 developer_sizes = tuple(data[position + index * 3 + 1] for index in range(developer_count))
                 position += developer_count * 3
             definitions[local_message] = Definition(endian, global_message, fields, developer_sizes)
@@ -213,11 +314,22 @@ def parse_fit_bytes(
 
         definition = definitions.get(local_message)
         if definition is None:
-            unknown_records += 1
-            break
+            return _base_result(
+                "undefined_local_message",
+                file_id=file_id,
+                source_path=source_path,
+                header_crc_status=header_crc_status,
+                file_crc_status="valid",
+            )
         total_field_size = sum(field.size for field in definition.fields) + sum(definition.developer_field_sizes)
         if position + total_field_size > data_end:
-            return {"status": "truncated", "file_id": file_id, "source_path": source_path}
+            return _base_result(
+                "truncated",
+                file_id=file_id,
+                source_path=source_path,
+                header_crc_status=header_crc_status,
+                file_crc_status="valid",
+            )
         selected_fields = FIELDS.get(definition.global_message)
         record: dict[str, Any] = {}
         for field in definition.fields:
@@ -232,18 +344,51 @@ def parse_fit_bytes(
         if definition.global_message in messages:
             messages[definition.global_message].append(record)
 
-    session = messages[18][0] if messages[18] else None
+    sessions = messages[18]
+    session = sessions[0] if sessions else None
     sport_message = messages[12][0] if messages[12] else {}
+    all_laps = messages[19]
+    laps_by_session: list[list[dict[str, Any]]] = []
+    lap_cursor = 0
+    allocation_conflict = False
+    for item in sessions:
+        raw_count = item.get("num_laps")
+        if len(sessions) == 1:
+            count = len(all_laps)
+        elif not isinstance(raw_count, int) or isinstance(raw_count, bool) or raw_count < 0:
+            allocation_conflict = True
+            count = 0
+        else:
+            count = raw_count
+        laps_by_session.append(all_laps[lap_cursor : lap_cursor + count])
+        lap_cursor += count
+    if sessions and lap_cursor != len(all_laps):
+        allocation_conflict = True
+    if not sessions and all_laps:
+        allocation_conflict = True
+    status = (
+        "session_lap_allocation_conflict"
+        if allocation_conflict
+        else "parsed_activity"
+        if session
+        else "parsed_non_activity"
+    )
     return {
-        "status": "parsed_activity" if session else "parsed_non_activity",
+        "status": status,
         "file_id": file_id,
         "source_path": source_path,
         "session": session,
+        "sessions": sessions,
         "sport": sport_message,
-        "laps": messages[19],
+        "laps": all_laps,
+        "laps_by_session": laps_by_session,
         "record_count": len(messages[20]),
-        "lap_count": len(messages[19]),
+        "lap_count": len(all_laps),
+        "session_count": len(sessions),
+        "unallocated_lap_count": max(len(all_laps) - lap_cursor, 0),
         "unknown_records": unknown_records,
+        "header_crc_status": header_crc_status,
+        "file_crc_status": "valid",
     }
 
 
@@ -262,46 +407,59 @@ def parse_fit_export(root: str | Path) -> tuple[list[dict[str, Any]], list[dict[
             "parse_status": parsed["status"],
             "record_count": parsed.get("record_count", 0),
             "lap_count": parsed.get("lap_count", 0),
+            "session_count": parsed.get("session_count", 0),
+            "header_crc_status": parsed.get("header_crc_status", "not_checked"),
+            "file_crc_status": parsed.get("file_crc_status", "not_checked"),
+            "unallocated_lap_count": parsed.get("unallocated_lap_count", 0),
         })
         if parsed["status"] != "parsed_activity":
             continue
-        session = parsed.get("session") or {}
         sport = parsed.get("sport") or {}
-        sport_code = session.get("sport", sport.get("sport"))
-        sub_code = session.get("sub_sport", sport.get("sub_sport"))
-        fit_sport = SPORT_ENUM.get(sport_code, str(sport_code or "unknown"))
-        fit_sub_sport = SUB_SPORT_ENUM.get(sub_code)
-        if fit_sub_sport == "trail":
-            fit_sport = "trail_running"
-        elif fit_sub_sport == "treadmill_running":
-            fit_sport = "treadmill_running"
-        activities.append({
-            "fit_file_id": file_id,
-            "source_path": asset.provenance_path,
-            "source_sha256": asset.sha256,
-            "start_datetime_local": session.get("start_time"),
-            "sport": fit_sport,
-            "sub_sport": fit_sub_sport,
-            "distance_m": session.get("total_distance"),
-            "elapsed_time_sec": session.get("total_elapsed_time"),
-            "timer_time_sec": session.get("total_timer_time"),
-            "avg_heart_rate": session.get("avg_heart_rate"),
-            "max_heart_rate": session.get("max_heart_rate"),
-            "avg_cadence": session.get("avg_cadence"),
-            "max_cadence": session.get("max_cadence"),
-            "avg_power": session.get("avg_power"),
-            "max_power": session.get("max_power"),
-            "total_ascent": session.get("total_ascent"),
-            "total_descent": session.get("total_descent"),
-            "record_count": parsed.get("record_count"),
-            "lap_count": parsed.get("lap_count"),
-        })
-        for lap_index, lap in enumerate(parsed.get("laps") or []):
-            laps.append({
+        for session_ordinal, session in enumerate(parsed.get("sessions") or []):
+            fit_session_key = f"fit_session:{asset.sha256}:{session_ordinal}"
+            sport_code = session.get("sport", sport.get("sport"))
+            sub_code = session.get("sub_sport", sport.get("sub_sport"))
+            fit_sport = SPORT_ENUM.get(sport_code, str(sport_code or "unknown"))
+            fit_sub_sport = SUB_SPORT_ENUM.get(sub_code)
+            if fit_sub_sport == "trail":
+                fit_sport = "trail_running"
+            elif fit_sub_sport == "treadmill_running":
+                fit_sport = "treadmill_running"
+            activities.append({
                 "fit_file_id": file_id,
-                "lap_index": lap_index,
+                "fit_session_key": fit_session_key,
+                "session_ordinal": session_ordinal,
                 "source_path": asset.provenance_path,
                 "source_sha256": asset.sha256,
-                **lap,
+                "start_datetime_local": session.get("start_time"),
+                "sport": fit_sport,
+                "sub_sport": fit_sub_sport,
+                "distance_m": session.get("total_distance"),
+                "elapsed_time_sec": session.get("total_elapsed_time"),
+                "timer_time_sec": session.get("total_timer_time"),
+                "avg_heart_rate": session.get("avg_heart_rate"),
+                "max_heart_rate": session.get("max_heart_rate"),
+                "avg_cadence": session.get("avg_cadence"),
+                "max_cadence": session.get("max_cadence"),
+                "avg_power": session.get("avg_power"),
+                "max_power": session.get("max_power"),
+                "total_ascent": session.get("total_ascent"),
+                "total_descent": session.get("total_descent"),
+                "record_count": parsed.get("record_count"),
+                "lap_count": len((parsed.get("laps_by_session") or [])[session_ordinal]),
             })
+            for lap_ordinal, lap in enumerate(
+                (parsed.get("laps_by_session") or [])[session_ordinal]
+            ):
+                laps.append({
+                    "fit_file_id": file_id,
+                    "fit_session_key": fit_session_key,
+                    "fit_lap_key": f"{fit_session_key}:lap:{lap_ordinal}",
+                    "session_ordinal": session_ordinal,
+                    "lap_ordinal_within_session": lap_ordinal,
+                    "lap_index": lap_ordinal,
+                    "source_path": asset.provenance_path,
+                    "source_sha256": asset.sha256,
+                    **lap,
+                })
     return activities, laps, audit

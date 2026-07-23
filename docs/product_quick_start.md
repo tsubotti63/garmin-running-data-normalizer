@@ -23,8 +23,8 @@ python -m pip install -e .
 python -m garmin_running_data_normalizer --version
 ```
 
-On the current `main` publication candidate, the version command prints
-`python -m garmin_running_data_normalizer 1.0.1`.
+On the v1.1 release candidate, the version command prints
+`python -m garmin_running_data_normalizer 1.1.0rc1`.
 An equivalent console entry point, `garmin-running-data-normalizer`, is also
 installed.
 
@@ -102,9 +102,20 @@ workspace/run-all/
     personal_records.json
     fit_sessions.json
     fit_laps.json
-  audit/fit_audit.json
+    activity_fit_links.json
+  audit/
+    fit_audit.json
+    activity_fit_linkage.json
   analysis/activities.csv
-  qa/dataset_summary.json
+  qa/
+    dataset_summary.json
+    relationship_summary.json
+  START_HERE.md
+  DATASET_INVENTORY.md
+  ANALYSIS_HANDOFF.md
+  ANALYSIS_CONTEXT.json
+  SCHEMA_CATALOG.json
+  artifact_inventory.json
   run_manifest.json
   run_summary.json
 ```
@@ -116,6 +127,13 @@ FIT input has an auditable incomplete parse. Existing output is never
 overwritten—use a new destination to rerun, and identical input produces
 byte-identical output.
 
+Read the Relationship Coverage sections in `START_HERE.md` and
+`ANALYSIS_HANDOFF.md`, or the `relationship_coverage` array in
+`ANALYSIS_CONTEXT.json`, before joining datasets. Coverage is not a success
+score: unresolved, ambiguous, and duplicate counts remain visible, inference
+is prohibited, and detailed evidence remains in
+`qa/relationship_summary.json` and `audit/activity_fit_linkage.json`.
+
 The Activities CSV has no separate `activity_id` column and excludes raw memo
 text, source paths, hashes, and coordinates. Its `garmin_activity_key` may
 incorporate the source activity ID, so real CSV remains local and that key must
@@ -123,6 +141,13 @@ be removed from any externally shared derivative. Detailed normalized outputs an
 provenance still contain personal running information and must remain local.
 Never commit a real export or generated Run-All output, and do not upload it as
 a CI artifact.
+
+For a separately reviewed external AI handoff, add `--external-safe-pack`.
+The optional ZIP contains only a month-level Activities projection plus its
+safe schema/context and manifest. It excludes paths, hashes, raw IDs/stable
+keys, memo text, coordinates, exact dates/times, heart rate, power, cadence,
+training effect/load, and other unneeded health or performance detail. The
+command never uploads the pack.
 
 ## Run local validation
 
@@ -150,7 +175,8 @@ to continue from Run-All output to synthetic analysis examples.
 Public reproduction remains synthetic. A private real-export validation
 completed with status `PASS`, exit code 0, unchanged input, two independent
 byte-identical outputs, and a public-safe privacy check. No private rows, dates,
-filenames, paths, identifiers, counts, or fingerprints are published.
+filenames, paths, identifiers, hashes, or fingerprints are published. Only
+public-safe aggregate relationship acceptance counts are reported.
 
 ## Known limitations and real exports
 
@@ -164,15 +190,17 @@ limits.
 
 Real Garmin exports and generated personal outputs are sensitive. Keep them in
 ignored local locations such as `data/` and `workspace/`; never commit them.
-Run-All uses the existing exact filename rules. It normalizes selected FIT
-Activity and FIT Lap metrics and converts their invalid sentinels to null before
-scaling, but it does not implement complete FIT CRC validation or multi-session
-identity. Library-level `sleepData.json` normalization is implemented separately
+Run-All uses the existing exact filename rules. It validates complete FIT file
+CRC and optional header CRC, supports multiple sessions per FIT file, preserves
+file/session/lap identity, and converts selected invalid metric sentinels to
+null before scaling. It emits Activity/FIT links only from evidence-qualified
+mutual unique matches; timestamp-only joins are rejected. Library-level
+`sleepData.json` normalization is implemented separately
 and does not change the Run-All output contract. It performs no filling,
 day-shift inference, score recalculation, or activity join. Library-level HRV
 normalization is also separate: conflicting FIT values are not averaged and
 health-status JSON is comparison evidence, not a promoted source. The separate
 Health Status library normalizer emits fixed daily and long metric
 schemas with explicit duplicate evidence; it is not a Run-All output. Open-Meteo,
-Parquet, and automatic Analysis Pack generation are also not implemented. See the
+Parquet and automatic external upload are not implemented. See the
 [README](../README.md) for the current implementation scope and limitations.

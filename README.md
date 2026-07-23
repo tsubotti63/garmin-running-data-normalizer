@@ -6,17 +6,17 @@ provenance-rich Garmin records without sending the export to a hosted service.
 
 ## Current status
 
-The source repository is public and maintained on `main`. Version `1.0.1` is
-the Human-approved package-index patch candidate on `main`. Its annotated tag
-and GitHub Release are authorized release operations, while package-index
-upload remains separately gated and has not been performed. Version `1.0.0`
-remains the latest published stable release until those authorized release
-operations complete. Its annotated tag points to the reviewed release commit,
-and the
+The source repository is public and maintained on `main`. Version `1.1.0rc1`
+is the current release candidate. It adds CRC-validated multi-session FIT
+identity, explicit relationship QA, and a standalone Output Experience while
+preserving existing `1.x` CLI and output paths. Tag creation, GitHub Release,
+TestPyPI, and Production PyPI publication remain separate Human Approval
+Boundaries. Version `1.0.0` remains the latest published stable release. Its
+annotated tag points to the reviewed release commit, and the
 [`v1.0.0` GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.0.0)
-is public and marked latest. The wheel and source distribution are validated on
-`main`, but PyPI publication remains a separate Human-authorized action and has
-not been performed.
+is public and marked latest. The v1.1 wheel and source distribution are
+validated from the reviewed candidate, but PyPI publication has not been
+performed.
 
 The formal CLI supports the existing activities-only Golden Path and a minimum
 multi-family Run-All workflow. Run-All requires Activities and processes Gear,
@@ -24,7 +24,9 @@ Personal Records, and bounded FIT sessions/laps when those families are
 present. Public reproduction uses synthetic fixtures. A private real-export
 validation completed with status `PASS`, exit code 0, unchanged input, two
 independent byte-identical outputs, and a public-safe privacy check; no private
-rows, paths, identifiers, counts, or fingerprints are published.
+rows, paths, identifiers, dates, filenames, hashes, or fingerprints are
+published. Only public-safe aggregate relationship acceptance counts are
+reported.
 
 This project is licensed under the
 [Apache License 2.0](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.0.0/LICENSE).
@@ -43,15 +45,16 @@ the formal CLI or Run-All public output contract.
 | Activities | `summarizedActivities.json` normalization with activity grain, `garmin_activity_key`, provenance, QA, and manifest | Yes |
 | Gear and activity-gear links | `gear.json` normalizer | Run-All |
 | Personal records | `personalRecord.json` normalizer | Run-All |
-| FIT sessions and laps | Bounded, dependency-free parser; record coordinates and raw telemetry are not emitted | Run-All |
+| FIT sessions and laps | CRC-validated multi-session parser with `fit_session_key` and `fit_lap_key`; record coordinates and raw telemetry are not emitted | Run-All |
+| Activity/FIT links | Auditable evidence-qualified links with exclusions and relationship QA | Run-All |
 | Sleep | `sleepData.json` daily normalization with review states and provenance; no filling or inference | No; library level only |
 | HRV | FIT Message 370 / Field 1 daily candidate with invalid-sentinel handling and non-promotional JSON consistency evidence | No; library level only |
 | Health Status | Exact-suffix `healthStatusData.json` long metrics and fixed daily schema with explicit dedupe/review evidence | No; library level only |
-| Analysis Pack | Deterministic ZIP builder from an explicit `.csv`/`.json`/`.md` allowlist | No |
+| Analysis Pack | Deterministic allowlist-only ZIP; optional external-safe profile is limited to month-level activity volume/count and removes identifiers, provenance, exact timestamps, and unneeded health/performance detail | Run-All opt-in |
 
 The dataset registry documents stable keys, record grain, merge policy, and
 provenance requirements. See the
-[Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.0.0/docs/supported_datasets.md)
+[Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 for the stable CLI/output boundary and library-level scope.
 
 ## Install
@@ -102,7 +105,7 @@ It creates deterministic normalized activities, a QA summary, and a provenance
 manifest without modifying the input. Follow the complete copy-and-paste setup,
 Golden Result comparison, repeat-run check, privacy guidance, and current
 limitations in the
-[Product Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.0.0/docs/product_quick_start.md).
+[Product Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md).
 
 ## Run the minimum multi-family workflow
 
@@ -116,12 +119,19 @@ python -m garmin_running_data_normalizer run-all \
 
 The tracked fixture contains Activities only, so this tested example returns
 `PASS_WITH_WARNINGS` with exit code 0 and records the absent optional families.
-Run-All writes normalized JSON, FIT audit, deterministic Activities CSV,
-dataset QA, a run manifest, and `run_summary.json` as its completion marker.
+Run-All writes normalized JSON, FIT and relationship audit, deterministic
+Activities CSV, dataset and relationship QA, three human-readable handoff
+documents, machine-readable analysis/schema context, a run manifest, and
+`run_summary.json` as its completion marker. `START_HERE.md`,
+`ANALYSIS_HANDOFF.md`, and `ANALYSIS_CONTEXT.json` report coverage for every
+explicit relationship without hiding unresolved, ambiguous, or duplicate
+records; detailed evidence remains in relationship QA and audit artifacts.
 Exit code 2 is fatal; exit code 3 is an explicit `PARTIAL_SUCCESS` for auditable
 incomplete FIT parsing. See the
-[Product Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.0.0/docs/product_quick_start.md)
-for the fixed output layout and privacy boundary.
+[Product Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md)
+for the additive v1.1 output layout and privacy boundary. Add
+`--external-safe-pack` to create a deterministic reviewable ZIP; Run-All never
+uploads it.
 
 ## Why this project matters
 
@@ -133,14 +143,14 @@ See the
 
 ## Analyze Run-All output
 
-Review `run_summary.json` first. In a trusted local environment, start with
+Review generated `START_HERE.md` first. In a trusted local environment, follow
+`DATASET_INVENTORY.md` and `ANALYSIS_HANDOFF.md`, then start with
 `analysis/activities.csv` and the
-[Analysis Handoff Specification](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.0.0/docs/project/analysis_handoff_spec_v0_1.md).
+[Analysis Handoff Specification](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/project/analysis_handoff_spec_v0_1.md).
 The [Run-All Output Contract](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/output_contract.md),
 [Dataset Catalog](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md),
 and [Dataset Relationship Catalog](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/dataset_relationships.md)
-explain artifact authority, dataset roles, and the joins that are explicit or
-`not_yet_defined`.
+explain artifact authority, dataset roles, and the explicit v1.1 joins.
 The [prompt template](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.0.0/docs/project/analysis_prompt_template_v0_1.md),
 [public usage example](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.0.0/docs/project/run_all_public_usage_example_v0_1.md), and
 [use-case catalog](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.0.0/docs/project/run_all_use_case_catalog_v0_1.md) separate facts,
@@ -190,12 +200,12 @@ personal output belong in ignored local directories.
 
 Run-All v1 requires Activities; Gear, Personal Records, and FIT are optional.
 Sleep, HRV, and Health Status are library-level interfaces and are not Run-All
-outputs. Complete FIT CRC validation, multi-session FIT identity, hosted
-processing, Open-Meteo, Parquet, and PyPI publication are not included. The
+outputs. Hosted processing, Open-Meteo, Parquet, automatic upload, and PyPI
+publication are not included. The
 documented CLI and versioned Run-All output contract are the stable `1.x`
 interface; other Python modules may evolve compatibly as their contracts mature.
 See
-[Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.0.0/docs/known_limitations.md)
+[Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
 for the precise boundaries.
 
 ## Non-goals
@@ -205,7 +215,7 @@ wellness/coaching interpretation, personal analysis, and non-Garmin data
 platform generalization are outside the project scope.
 
 See the
-[Product Change History](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.0.0/docs/product_changelog.md)
+[Product Change History](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_changelog.md)
 for factual product
 changes. The root `CHANGELOG.md` is the byte-locked change log of the adopted AI
 Collaboration Platform v0.9 Standard, not a Garmin product release history.

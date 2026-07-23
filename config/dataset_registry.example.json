@@ -1,12 +1,13 @@
 {
-  "registry_version": "1.0.0",
+  "registry_version": "1.1.0",
   "status": "stable_release_ready",
   "datasets": [
     {"name": "activities", "source_family": "garmin_account_export", "record_grain": "activity", "stable_key": ["garmin_activity_key"], "merge_policy": "entity_upsert", "provenance_required": true},
     {"name": "gear", "source_family": "garmin_account_export", "record_grain": "gear", "stable_key": ["gear_key"], "merge_policy": "entity_upsert", "provenance_required": true},
     {"name": "activity_gear", "source_family": "garmin_account_export", "record_grain": "activity_gear_link", "stable_key": ["gear_key", "activity_id"], "merge_policy": "temporal_event_union", "provenance_required": true},
     {"name": "personal_records", "source_family": "garmin_account_export", "record_grain": "personal_record", "stable_key": ["personal_record_id"], "merge_policy": "entity_upsert", "provenance_required": true},
-    {"name": "fit_sessions", "source_family": "garmin_account_export", "record_grain": "fit_file_session", "stable_key": ["fit_file_id"], "merge_policy": "immutable_blob_union", "provenance_required": true},
-    {"name": "fit_laps", "source_family": "garmin_account_export", "record_grain": "fit_file_lap", "stable_key": ["fit_file_id", "lap_index"], "merge_policy": "immutable_blob_union", "provenance_required": true}
+    {"name": "fit_sessions", "source_family": "garmin_account_export", "record_grain": "fit_session", "stable_key": ["fit_session_key"], "merge_policy": "immutable_blob_union", "provenance_required": true},
+    {"name": "fit_laps", "source_family": "garmin_account_export", "record_grain": "fit_session_lap", "stable_key": ["fit_lap_key"], "merge_policy": "immutable_blob_union", "provenance_required": true},
+    {"name": "activity_fit_links", "source_family": "garmin_account_export", "record_grain": "activity_fit_session_link", "stable_key": ["garmin_activity_key", "fit_session_key"], "merge_policy": "temporal_event_union", "provenance_required": true}
   ]
 }

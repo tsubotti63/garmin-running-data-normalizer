@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from pathlib import PurePosixPath
 from typing import Any
@@ -11,13 +12,258 @@ MANIFEST_FORMAT = "garmin-running-data-normalizer-run-manifest-v1"
 SUMMARY_FORMAT = "garmin-running-data-normalizer-run-summary-v1"
 SUMMARY_STATUSES = {"PASS", "PASS_WITH_WARNINGS", "PARTIAL_SUCCESS"}
 FAMILY_STATUSES = {"PROCESSED", "SKIPPED_NOT_PRESENT", "PROCESSED_EMPTY", "PARTIAL"}
-DOCUMENT_NAMES = ("START_HERE.md", "DATASET_INVENTORY.md")
+DOCUMENT_NAMES = ("START_HERE.md", "DATASET_INVENTORY.md", "ANALYSIS_HANDOFF.md")
+MACHINE_CONTEXT_NAMES = (
+    "ANALYSIS_CONTEXT.json",
+    "SCHEMA_CATALOG.json",
+    "artifact_inventory.json",
+)
 MANIFEST_OUTPUT_PATHS = (
     *DATASET_PATHS.values(),
     "audit/fit_audit.json",
+    "audit/activity_fit_linkage.json",
     "analysis/activities.csv",
     "qa/dataset_summary.json",
+    "qa/relationship_summary.json",
+    *DOCUMENT_NAMES,
+    *MACHINE_CONTEXT_NAMES,
 )
+OPTIONAL_MANIFEST_OUTPUT_PATHS = ("analysis/external_safe_handoff.zip",)
+
+DATASET_PRESENTATION = {
+    "activities": {
+        "role": "authoritative normalized activities",
+        "authority": "normalized source of truth",
+        "analysis_suitability": "detailed trusted-local activity analysis",
+        "relationship_status": "explicit",
+        "privacy_classification": "personal-local",
+    },
+    "gear": {
+        "role": "authoritative normalized gear",
+        "authority": "normalized source of truth",
+        "analysis_suitability": "trusted-local gear attributes",
+        "relationship_status": "explicit",
+        "privacy_classification": "personal-local",
+    },
+    "activity_gear": {
+        "role": "activity-to-gear links",
+        "authority": "normalized relationship source of truth",
+        "analysis_suitability": "explicit activity and gear joins",
+        "relationship_status": "explicit",
+        "privacy_classification": "identifier-bearing-local",
+    },
+    "personal_records": {
+        "role": "authoritative personal records",
+        "authority": "normalized source of truth",
+        "analysis_suitability": "explicit nonzero activity joins; zero is independent",
+        "relationship_status": "explicit-or-independent",
+        "privacy_classification": "personal-local",
+    },
+    "fit_sessions": {
+        "role": "bounded FIT session summaries",
+        "authority": "normalized source of truth",
+        "analysis_suitability": "trusted-local session analysis after audit review",
+        "relationship_status": "explicit",
+        "privacy_classification": "personal-local",
+    },
+    "fit_laps": {
+        "role": "bounded FIT lap summaries",
+        "authority": "normalized source of truth",
+        "analysis_suitability": "explicit child of FIT session",
+        "relationship_status": "explicit",
+        "privacy_classification": "personal-local",
+    },
+    "activity_fit_links": {
+        "role": "evidence-qualified Activity/FIT session links",
+        "authority": "normalized relationship source of truth",
+        "analysis_suitability": "explicit one-to-one eligible-population joins",
+        "relationship_status": "explicit",
+        "privacy_classification": "identifier-bearing-local",
+    },
+}
+
+DATASET_FIELDS = {
+    "activities": (
+        "garmin_activity_key", "activity_id", "name", "memo_text_raw",
+        "memo_present", "activity_type", "sport_type", "start_time_gmt_ms",
+        "start_time_local_raw", "activity_datetime_local", "activity_date_local",
+        "distance_raw_centimeters", "distance_m", "duration_ms", "duration_sec",
+        "elapsed_duration_ms", "moving_duration_ms", "avg_hr", "max_hr",
+        "avg_power", "max_power", "avg_run_cadence", "training_effect_label",
+        "activity_training_load", "lap_count", "source_path", "source_sha256",
+        "source_confidence",
+    ),
+    "gear": (
+        "gear_key", "uuid", "display_name", "custom_make_model", "gear_type",
+        "date_begin", "date_end", "maximum_meters", "source_path",
+        "source_sha256",
+    ),
+    "activity_gear": (
+        "gear_key", "activity_id", "garmin_activity_key",
+        "activity_relationship_status", "gear_relationship_status",
+        "source_path", "source_sha256",
+    ),
+    "personal_records": (
+        "personal_record_id", "activity_id", "personal_record_type", "value",
+        "start_time_gmt", "created_date", "current", "confirmed",
+        "source_record_index", "garmin_activity_key",
+        "activity_relationship_status", "activity_relationship_reason",
+        "source_path", "source_sha256", "source_confidence",
+    ),
+    "fit_sessions": (
+        "fit_file_id", "fit_session_key", "session_ordinal", "start_datetime_local",
+        "sport", "sub_sport", "distance_m", "elapsed_time_sec",
+        "timer_time_sec", "avg_heart_rate", "max_heart_rate", "avg_cadence",
+        "max_cadence", "avg_power", "max_power", "total_ascent",
+        "total_descent", "record_count", "lap_count", "source_path",
+        "source_sha256",
+    ),
+    "fit_laps": (
+        "fit_file_id", "fit_session_key", "fit_lap_key", "session_ordinal",
+        "lap_ordinal_within_session", "lap_index", "start_time",
+        "total_elapsed_time", "total_timer_time", "total_distance", "avg_speed",
+        "max_speed", "avg_heart_rate", "max_heart_rate", "avg_cadence",
+        "max_cadence", "avg_power", "max_power", "total_ascent",
+        "total_descent", "timestamp", "source_path", "source_sha256",
+    ),
+    "activity_fit_links": (
+        "garmin_activity_key", "fit_session_key", "match_rule", "match_basis",
+        "match_score", "match_status", "ambiguous", "eligibility_status",
+        "exclusion_reason", "time_delta_seconds", "distance_delta_m",
+        "duration_delta_seconds", "activity_source_path",
+        "activity_source_sha256", "fit_source_path", "fit_source_sha256",
+        "source_path", "source_sha256",
+    ),
+}
+
+RELATIONSHIP_CONTRACTS = (
+    {
+        "relationship_id": "activity_gear_to_activities",
+        "left_dataset": "activity_gear",
+        "right_dataset": "activities",
+        "status": "explicit",
+        "left_fields": ["garmin_activity_key"],
+        "right_fields": ["garmin_activity_key"],
+        "cardinality": "many_to_one",
+    },
+    {
+        "relationship_id": "activity_gear_to_gear",
+        "left_dataset": "activity_gear",
+        "right_dataset": "gear",
+        "status": "explicit",
+        "left_fields": ["gear_key"],
+        "right_fields": ["gear_key"],
+        "cardinality": "many_to_one",
+    },
+    {
+        "relationship_id": "personal_records_to_activities",
+        "left_dataset": "personal_records",
+        "right_dataset": "activities",
+        "status": "explicit",
+        "left_fields": ["garmin_activity_key"],
+        "right_fields": ["garmin_activity_key"],
+        "cardinality": "many_to_zero_or_one",
+        "exception": "activity_id_zero_is_independent",
+    },
+    {
+        "relationship_id": "fit_laps_to_fit_sessions",
+        "left_dataset": "fit_laps",
+        "right_dataset": "fit_sessions",
+        "status": "explicit",
+        "left_fields": ["fit_session_key"],
+        "right_fields": ["fit_session_key"],
+        "cardinality": "many_to_one",
+    },
+    {
+        "relationship_id": "activity_fit_links_to_activities",
+        "left_dataset": "activity_fit_links",
+        "right_dataset": "activities",
+        "status": "explicit",
+        "left_fields": ["garmin_activity_key"],
+        "right_fields": ["garmin_activity_key"],
+        "cardinality": "one_to_one_within_eligible_population",
+    },
+    {
+        "relationship_id": "activity_fit_links_to_fit_sessions",
+        "left_dataset": "activity_fit_links",
+        "right_dataset": "fit_sessions",
+        "status": "explicit",
+        "left_fields": ["fit_session_key"],
+        "right_fields": ["fit_session_key"],
+        "cardinality": "one_to_one_within_eligible_population",
+    },
+)
+
+RELATIONSHIP_COVERAGE_PRESENTATION = {
+    "activity_gear_to_activities": {
+        "title": "Activity/Gear Links → Activities",
+        "qa_relationship_id": "activity_gear_to_activities",
+        "eligible_population_label": "Activity/Gear link records",
+        "eligible_count_field": "eligible_count",
+        "coverage_field": "coverage",
+        "unresolved_count_field": "unresolved_count",
+        "ambiguous_count_field": "ambiguous_count",
+        "duplicate_count_field": "duplicate_count",
+        "primary_reason_field": "primary_unresolved_reason",
+    },
+    "activity_gear_to_gear": {
+        "title": "Activity/Gear Links → Gear",
+        "qa_relationship_id": "activity_gear_to_gear",
+        "eligible_population_label": "Activity/Gear link records",
+        "eligible_count_field": "eligible_count",
+        "coverage_field": "coverage",
+        "unresolved_count_field": "unresolved_count",
+        "ambiguous_count_field": "ambiguous_count",
+        "duplicate_count_field": "duplicate_count",
+        "primary_reason_field": "primary_unresolved_reason",
+    },
+    "personal_records_to_activities": {
+        "title": "Personal Records → Activities",
+        "qa_relationship_id": "personal_records_to_activities",
+        "eligible_population_label": "nonzero-activity Personal Records",
+        "eligible_count_field": "eligible_count",
+        "coverage_field": "coverage",
+        "unresolved_count_field": "unresolved_count",
+        "ambiguous_count_field": "ambiguous_count",
+        "duplicate_count_field": "duplicate_count",
+        "primary_reason_field": "primary_unresolved_reason",
+    },
+    "fit_laps_to_fit_sessions": {
+        "title": "FIT Laps → FIT Sessions",
+        "qa_relationship_id": "fit_laps_to_fit_sessions",
+        "eligible_population_label": "FIT Laps",
+        "eligible_count_field": "eligible_count",
+        "coverage_field": "coverage",
+        "unresolved_count_field": "unresolved_count",
+        "ambiguous_count_field": "ambiguous_count",
+        "duplicate_count_field": "duplicate_count",
+        "primary_reason_field": "primary_unresolved_reason",
+    },
+    "activity_fit_links_to_activities": {
+        "title": "Activity ↔ FIT — Activity coverage",
+        "qa_relationship_id": "activities_to_fit_sessions",
+        "eligible_population_label": "Activities",
+        "eligible_count_field": "eligible_activity_count",
+        "coverage_field": "eligible_activity_coverage",
+        "unresolved_count_field": "unresolved_eligible_activity_count",
+        "ambiguous_count_field": "ambiguous_activity_count",
+        "duplicate_count_field": "duplicate_mapping_count",
+        "primary_reason_field": "primary_unresolved_activity_reason",
+        "audit_reference": "audit/activity_fit_linkage.json",
+    },
+    "activity_fit_links_to_fit_sessions": {
+        "title": "Activity ↔ FIT — FIT Session coverage",
+        "qa_relationship_id": "activities_to_fit_sessions",
+        "eligible_population_label": "FIT Sessions",
+        "eligible_count_field": "eligible_fit_session_count",
+        "coverage_field": "eligible_fit_session_coverage",
+        "unresolved_count_field": "unresolved_eligible_fit_session_count",
+        "ambiguous_count_field": "ambiguous_fit_session_count",
+        "duplicate_count_field": "duplicate_mapping_count",
+        "primary_reason_field": "primary_unresolved_fit_session_reason",
+        "audit_reference": "audit/activity_fit_linkage.json",
+    },
+}
 
 
 class OutputExperienceError(ValueError):
@@ -95,6 +341,13 @@ def _validate_projection_inputs(
         raise OutputExperienceError("run manifest version is not supported")
     if summary_object.get("run_all_version") != RUN_ALL_VERSION:
         raise OutputExperienceError("run summary version is not supported")
+    product_version = manifest_object.get("product_version")
+    if (
+        not isinstance(product_version, str)
+        or not product_version
+        or summary_object.get("product_version") != product_version
+    ):
+        raise OutputExperienceError("manifest and summary product versions do not match")
     if summary_object.get("status") not in SUMMARY_STATUSES:
         raise OutputExperienceError("run summary status is not a completed handoff status")
     if manifest_object.get("deterministic_output_digest") != summary_object.get("deterministic_output_digest"):
@@ -109,7 +362,11 @@ def _validate_projection_inputs(
     ]
     if len(output_paths) != len(set(output_paths)):
         raise OutputExperienceError("run manifest output paths must be unique")
-    if set(output_paths) != set(MANIFEST_OUTPUT_PATHS):
+    allowed_output_sets = (
+        set(MANIFEST_OUTPUT_PATHS),
+        set((*MANIFEST_OUTPUT_PATHS, *OPTIONAL_MANIFEST_OUTPUT_PATHS)),
+    )
+    if set(output_paths) not in allowed_output_sets:
         raise OutputExperienceError("run manifest output paths do not match Run-All v1")
 
     generated_paths = summary_object.get("generated_paths")
@@ -118,7 +375,12 @@ def _validate_projection_inputs(
     safe_generated_paths = [
         _safe_relative_path(path, "generated path") for path in generated_paths
     ]
-    if safe_generated_paths != list(OUTPUT_PATHS):
+    optional_generated_paths = [
+        *OUTPUT_PATHS[:-2],
+        *OPTIONAL_MANIFEST_OUTPUT_PATHS,
+        *OUTPUT_PATHS[-2:],
+    ]
+    if safe_generated_paths not in (list(OUTPUT_PATHS), optional_generated_paths):
         raise OutputExperienceError("run summary generated paths do not match Run-All v1")
 
     raw_manifest_datasets = manifest_object.get("datasets")
@@ -301,6 +563,173 @@ def _non_negative_integer(value: Any, label: str) -> int:
     return value
 
 
+def _coverage_ratio(value: Any, label: str) -> float | None:
+    if value is None:
+        return None
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not 0.0 <= float(value) <= 1.0
+    ):
+        raise OutputExperienceError(f"{label} must be a ratio from zero to one")
+    return float(value)
+
+
+def _relationship_coverage(
+    relationship_summary: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    summary_object = _mapping(relationship_summary, "relationship summary")
+    if summary_object.get("status") != "PASS":
+        raise OutputExperienceError("relationship summary must have PASS status")
+    qa_relationships = _mapping(
+        summary_object.get("relationships"),
+        "relationship summary relationships",
+    )
+    coverage_entries: list[dict[str, Any]] = []
+    for contract in RELATIONSHIP_CONTRACTS:
+        relationship_id = str(contract["relationship_id"])
+        presentation = RELATIONSHIP_COVERAGE_PRESENTATION[relationship_id]
+        qa_relationship_id = str(presentation["qa_relationship_id"])
+        qa = _mapping(
+            qa_relationships.get(qa_relationship_id),
+            f"relationship summary {qa_relationship_id}",
+        )
+        if qa.get("relationship_status", qa.get("status")) != "explicit":
+            raise OutputExperienceError(
+                f"relationship summary {qa_relationship_id} must be explicit"
+            )
+        eligible_count = _non_negative_integer(
+            qa.get(presentation["eligible_count_field"]),
+            f"{relationship_id} eligible count",
+        )
+        explicit_links = _non_negative_integer(
+            qa.get("link_count"),
+            f"{relationship_id} explicit link count",
+        )
+        unresolved_count = _non_negative_integer(
+            qa.get(presentation["unresolved_count_field"]),
+            f"{relationship_id} unresolved count",
+        )
+        ambiguous_count = _non_negative_integer(
+            qa.get(presentation["ambiguous_count_field"]),
+            f"{relationship_id} ambiguous count",
+        )
+        duplicate_count = _non_negative_integer(
+            qa.get(presentation["duplicate_count_field"]),
+            f"{relationship_id} duplicate count",
+        )
+        coverage = _coverage_ratio(
+            qa.get(presentation["coverage_field"]),
+            f"{relationship_id} coverage",
+        )
+        inference_performed = qa.get("inference_performed")
+        if inference_performed is not False:
+            raise OutputExperienceError(
+                f"{relationship_id} must explicitly prohibit inference"
+            )
+        primary_reason = qa.get(presentation["primary_reason_field"])
+        if primary_reason is not None and (
+            not isinstance(primary_reason, str) or not primary_reason
+        ):
+            raise OutputExperienceError(
+                f"{relationship_id} primary unresolved reason is invalid"
+            )
+        if explicit_links > eligible_count:
+            raise OutputExperienceError(
+                f"{relationship_id} explicit links exceed eligible population"
+            )
+        if unresolved_count != eligible_count - explicit_links:
+            raise OutputExperienceError(
+                f"{relationship_id} unresolved count contradicts coverage"
+            )
+        if ambiguous_count > unresolved_count:
+            raise OutputExperienceError(
+                f"{relationship_id} ambiguity exceeds unresolved population"
+            )
+        if duplicate_count > unresolved_count:
+            raise OutputExperienceError(
+                f"{relationship_id} duplicate count exceeds unresolved population"
+            )
+        if eligible_count == 0:
+            if coverage is not None:
+                raise OutputExperienceError(
+                    f"{relationship_id} zero eligible population must use null coverage"
+                )
+        else:
+            expected_coverage = explicit_links / eligible_count
+            if coverage is None or abs(coverage - expected_coverage) > 1e-12:
+                raise OutputExperienceError(
+                    f"{relationship_id} coverage contradicts counts"
+                )
+        if (unresolved_count == 0) != (primary_reason is None):
+            raise OutputExperienceError(
+                f"{relationship_id} primary unresolved reason contradicts count"
+            )
+        entry = {
+            "relationship_id": relationship_id,
+            "title": presentation["title"],
+            "eligible_population": {
+                "label": presentation["eligible_population_label"],
+                "count": eligible_count,
+            },
+            "explicit_links": explicit_links,
+            "coverage_percentage": (
+                round(coverage * 100.0, 4) if coverage is not None else None
+            ),
+            "unresolved_count": unresolved_count,
+            "ambiguous_count": ambiguous_count,
+            "duplicate_count": duplicate_count,
+            "inference_performed": False,
+            "primary_unresolved_reason": primary_reason,
+            "qa_reference": "qa/relationship_summary.json",
+        }
+        if "audit_reference" in presentation:
+            entry["audit_reference"] = presentation["audit_reference"]
+        coverage_entries.append(entry)
+    return coverage_entries
+
+
+def _relationship_coverage_lines(
+    relationship_summary: Mapping[str, Any],
+) -> list[str]:
+    lines = [
+        "## Relationship Coverage",
+        "",
+        "Coverage communicates the evidence boundary; it is not a success score.",
+        "Detailed relationship QA remains authoritative in",
+        "`qa/relationship_summary.json`. Activity/FIT exclusions and match evidence",
+        "remain in `audit/activity_fit_linkage.json`.",
+        "",
+    ]
+    for entry in _relationship_coverage(relationship_summary):
+        coverage = entry["coverage_percentage"]
+        coverage_text = (
+            f"{coverage:.2f}%"
+            if coverage is not None
+            else "N/A (no eligible records)"
+        )
+        primary_reason = entry["primary_unresolved_reason"]
+        lines.extend(
+            [
+                f"### {entry['title']}",
+                "",
+                "- Eligible population: "
+                f"{entry['eligible_population']['count']} "
+                f"({entry['eligible_population']['label']})",
+                f"- Explicit links: {entry['explicit_links']}",
+                f"- Coverage: {coverage_text}",
+                f"- Unresolved: {entry['unresolved_count']}",
+                f"- Ambiguous: {entry['ambiguous_count']}",
+                f"- Duplicate: {entry['duplicate_count']}",
+                "- Inference performed: No",
+                "- Primary unresolved reason: "
+                f"{_code(primary_reason) if primary_reason is not None else 'None'}",
+                "",
+            ]
+        )
+    return lines
+
+
 def _path_list(title: str, paths: list[str]) -> list[str]:
     lines = [f"### {title}", ""]
     if paths:
@@ -329,19 +758,24 @@ def render_dataset_inventory(
         "",
         f"Run status: {_code(summary['status'])}",
         "",
-        "| Dataset | Family status | Required | Output path | Grain | Stable key | Records |",
-        "|---|---|---:|---|---|---|---:|",
+        "| Dataset | Role | Status | Records | Warnings | Path | Grain | Stable key | Authority | Analysis use | Relationships | Privacy |",
+        "|---|---|---|---:|---:|---|---|---|---|---|---|---|",
     ]
     for runtime in _runtime_datasets():
         dataset = manifest_by_name[runtime["name"]]
-        family_status = family_results[runtime["family"]]["status"]
+        family_result = family_results[runtime["family"]]
+        family_status = family_result["status"]
         stable_key = ", ".join(_code(field) for field in runtime["stable_key"])
+        presentation = DATASET_PRESENTATION[runtime["name"]]
         lines.append(
             "| "
-            f"{_code(runtime['name'])} | {_code(family_status)} | "
-            f"{'yes' if runtime['required'] else 'no'} | "
-            f"{_code(runtime['output_path'])} | {runtime['record_grain']} | "
-            f"{stable_key} | {dataset['record_count']} |"
+            f"{_code(runtime['name'])} | {presentation['role']} | "
+            f"{_code(family_status)} | {dataset['record_count']} | "
+            f"{family_result['warning_count']} | {_code(runtime['output_path'])} | "
+            f"{runtime['record_grain']} | {stable_key} | "
+            f"{presentation['authority']} | {presentation['analysis_suitability']} | "
+            f"{_code(presentation['relationship_status'])} | "
+            f"{_code(presentation['privacy_classification'])} |"
         )
     lines.extend(
         [
@@ -356,6 +790,8 @@ def render_dataset_inventory(
             "- Cross-dataset joins are authorized only by the repository Dataset",
             "  Relationship Catalog. Do not infer a relationship from similar fields or",
             "  timestamp proximity.",
+            "- Required/optional input behavior remains available in `run_manifest.json`",
+            "  and `run_summary.json`; an absent optional family is not a claim of no data.",
             "",
         ]
     )
@@ -366,6 +802,7 @@ def render_start_here(
     manifest: Mapping[str, Any],
     summary: Mapping[str, Any],
     registry: Mapping[str, Any],
+    relationship_summary: Mapping[str, Any],
 ) -> str:
     _, family_results, generated_paths = _validate_projection_inputs(
         manifest, summary, registry
@@ -413,55 +850,382 @@ def render_start_here(
             "",
             "## Recommended Reading Order",
             "",
-            "1. Confirm the status and warnings in `run_summary.json`.",
+            "1. Confirm this run status and any warnings below.",
             "2. Review `DATASET_INVENTORY.md` for dataset grain, keys, and availability.",
-            "3. Consult the repository Analysis Handoff Specification before analysis.",
-            "4. Consult the Dataset Relationship Catalog before any cross-dataset join.",
-            "5. Use QA or audit evidence when a warning, partial result, or validation",
+            "3. Read `ANALYSIS_HANDOFF.md` before supplying files to an analyst or AI.",
+            "4. Use `ANALYSIS_CONTEXT.json` and `SCHEMA_CATALOG.json` for machine context.",
+            "5. Use only relationships marked explicit in the handoff/context.",
+            "6. Use QA or audit evidence when a warning, partial result, or validation",
             "   question affects the analysis.",
+            "",
+            "Recommended trusted-local analysis entry point: `analysis/activities.csv`.",
             "",
         ]
     )
     lines.extend(_path_list("Available Analysis Files", analysis_paths))
     lines.extend(_path_list("QA Evidence", qa_paths))
     lines.extend(_path_list("Audit Evidence", audit_paths))
+    lines.extend(_relationship_coverage_lines(relationship_summary))
     lines.extend(
         [
             "## Relationship Safety",
             "",
-            "This generated projection does not promote a cross-dataset relationship.",
-            "Treat any relationship not declared `explicit` by the repository Dataset",
-            "Relationship Catalog as `not_yet_defined`. Do not create timestamp-proximity",
-            "joins or infer missing identifiers.",
+            "The generated relationship contract declares only reviewed v1.1 joins.",
+            "`activity_fit_links` is the sole Activity/FIT join authority. Do not create",
+            "a timestamp-only join or infer a relationship from similar fields.",
             "",
             "## Privacy",
             "",
+            "Privacy mode: `local_trusted_full`.",
+            "",
             "Run-All output can contain personal records, local stable keys, provenance,",
             "and exact timestamps. Keep real output local unless the data owner approves a",
-            "specific transfer and the receiving environment has been reviewed.",
+            "specific transfer and the receiving environment has been reviewed. Use the",
+            "optional external-safe handoff only after reviewing its aggregation level.",
+            "",
+            "## Next Action",
+            "",
+            "Review warnings and relationship QA, then formulate an analysis question",
+            "using only the declared entry point, fields, and explicit relationships.",
             "",
         ]
     )
     return "\n".join(lines)
 
 
+def render_analysis_handoff(
+    manifest: Mapping[str, Any],
+    summary: Mapping[str, Any],
+    registry: Mapping[str, Any],
+    relationship_summary: Mapping[str, Any],
+) -> str:
+    _validate_projection_inputs(manifest, summary, registry)
+    warning_lines = (
+        [
+            f"- `{item.get('code', 'UNSPECIFIED_WARNING')}`"
+            for item in summary.get("warnings", [])
+            if isinstance(item, Mapping)
+        ]
+        or ["- None"]
+    )
+    lines = [
+        "# Analysis Handoff",
+        "",
+        "This file is the deterministic receiving contract for this completed Run-All",
+        "output. It is sufficient to begin bounded analysis without repository or",
+        "Internet access. The normalized data and machine artifacts remain authoritative.",
+        "",
+        "## Authorized Default Files",
+        "",
+        "- `START_HERE.md`",
+        "- `DATASET_INVENTORY.md`",
+        "- `ANALYSIS_CONTEXT.json`",
+        "- `SCHEMA_CATALOG.json`",
+        "- `analysis/activities.csv`",
+        "- `run_summary.json`",
+        "",
+        "Use normalized JSON, relationship links, QA, or audit files only when the",
+        "question requires them and the local/trusted environment is authorized.",
+        "",
+        "## Receiving Rules",
+        "",
+        "1. Separate observed facts, calculations, interpretations, and unknowns.",
+        "2. Preserve null and missing values; never convert them to zero.",
+        "3. State filters, formulas, denominators, and missing-value counts.",
+        "4. Use only relationships marked `explicit` in `ANALYSIS_CONTEXT.json`.",
+        "5. Use `activity_fit_links` for Activity/FIT joins; timestamp-only joins are prohibited.",
+        "6. Treat Personal Records with `activity_relationship_status=independent`",
+        "   as non-activity records and do not force an activity identity.",
+        "7. Preserve and disclose warnings or partial FIT status.",
+        "8. Ask for an additional approved file when the supplied artifacts cannot",
+        "   answer the question; do not invent source fields or context.",
+        "",
+        *_relationship_coverage_lines(relationship_summary),
+        "## Current Warnings",
+        "",
+        *warning_lines,
+        "",
+        "## Privacy Modes",
+        "",
+        "- `local_trusted_full`: full Run-All output, provenance, stable keys, QA,",
+        "  and audit evidence remain in a user-controlled trusted environment.",
+        "- `external_safe`: only the explicit safe-pack allowlist may leave that",
+        "  environment after review. The pack excludes paths, hashes, raw IDs, stable",
+        "  keys, memo text, coordinates, exact timestamps, and unlisted files.",
+        "- Run-All never uploads output automatically.",
+        "",
+        "## Reproducibility",
+        "",
+        "Record the product version, run status, files used, filters, formulas, and",
+        "missing-value policy. Identical normalized input can reproduce deterministic",
+        "machine artifacts and guidance; generative prose is not claimed byte-identical.",
+        "",
+        "## Prompt Preamble",
+        "",
+        "> Use only the supplied files. Preserve missing values. Honor each dataset",
+        "> grain and stable key. Use only explicit relationships. Do not infer identity,",
+        "> location, intent, diagnosis, or causal explanation. Cite the dataset and",
+        "> fields supporting each factual statement, separate calculations from",
+        "> interpretation, and state what remains unknown.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _field_descriptor(field: str) -> dict[str, Any]:
+    boolean_fields = {"memo_present", "current", "confirmed", "ambiguous"}
+    integer_fields = {
+        "session_ordinal", "lap_ordinal_within_session", "lap_index",
+        "record_count", "lap_count", "source_record_index", "match_score",
+        "start_time_gmt_ms", "duration_ms", "elapsed_duration_ms",
+        "moving_duration_ms", "distance_raw_centimeters",
+    }
+    numeric_fields = {
+        "distance_m", "duration_sec", "avg_hr", "max_hr", "avg_power",
+        "max_power", "avg_run_cadence", "activity_training_load",
+        "maximum_meters", "value", "elapsed_time_sec", "timer_time_sec",
+        "avg_heart_rate", "max_heart_rate", "avg_cadence", "max_cadence",
+        "total_ascent", "total_descent", "total_elapsed_time",
+        "total_timer_time", "total_distance", "avg_speed", "max_speed",
+        "time_delta_seconds", "distance_delta_m", "duration_delta_seconds",
+    }
+    array_fields = {"match_basis"}
+    if field in boolean_fields:
+        logical_type = "boolean"
+    elif field in integer_fields:
+        logical_type = "integer"
+    elif field in numeric_fields:
+        logical_type = "number"
+    elif field in array_fields:
+        logical_type = "array[string]"
+    else:
+        logical_type = "string"
+
+    unit = None
+    if field.endswith("_m") or field in {"total_distance", "total_ascent", "total_descent"}:
+        unit = "metre"
+    elif field.endswith("_sec") or field.endswith("_seconds") or field in {
+        "elapsed_time_sec", "timer_time_sec", "total_elapsed_time",
+        "total_timer_time",
+    }:
+        unit = "second"
+    elif field.endswith("_ms"):
+        unit = "millisecond"
+    elif "heart_rate" in field or field in {"avg_hr", "max_hr"}:
+        unit = "beats_per_minute"
+    elif "power" in field:
+        unit = "source_power_value"
+
+    provenance = (
+        "provenance"
+        if field.startswith("source_")
+        or field.endswith("_source_path")
+        or field.endswith("_source_sha256")
+        else "derived"
+        if field
+        in {
+            "garmin_activity_key", "fit_session_key", "fit_lap_key",
+            "activity_relationship_status", "gear_relationship_status",
+            "activity_relationship_reason", "match_rule", "match_basis",
+            "match_score", "match_status", "ambiguous", "eligibility_status",
+            "exclusion_reason", "time_delta_seconds", "distance_delta_m",
+            "duration_delta_seconds",
+        }
+        else "source"
+    )
+    privacy = (
+        "restricted_identifier"
+        if field.endswith("_key")
+        or field.endswith("_id")
+        or field in {"uuid", "activity_id", "personal_record_id", "fit_file_id"}
+        else "restricted_provenance"
+        if "path" in field or "sha256" in field
+        else "restricted_text"
+        if field in {"memo_text_raw", "name", "display_name", "custom_make_model"}
+        else "personal"
+    )
+    return {
+        "logical_type": logical_type,
+        "nullable": field
+        not in {
+            "garmin_activity_key", "gear_key", "personal_record_id",
+            "fit_session_key", "fit_lap_key", "source_path", "source_sha256",
+        },
+        "unit_or_domain": unit,
+        "semantic_role": "stable_key"
+        if field.endswith("_key") or field in {"personal_record_id"}
+        else "provenance"
+        if provenance == "provenance"
+        else "attribute",
+        "origin": provenance,
+        "privacy_sensitivity": privacy,
+        "notes": "Defined by the v1.1 runtime schema; do not infer missing values.",
+    }
+
+
+def build_schema_catalog(
+    manifest: Mapping[str, Any],
+    summary: Mapping[str, Any],
+    registry: Mapping[str, Any],
+) -> dict[str, Any]:
+    _validate_projection_inputs(manifest, summary, registry)
+    return {
+        "format": "garmin-running-data-normalizer-schema-catalog-v1",
+        "run_all_version": RUN_ALL_VERSION,
+        "datasets": [
+            {
+                "dataset": dataset,
+                "fields": [
+                    {"field": field, **_field_descriptor(field)}
+                    for field in fields
+                ],
+            }
+            for dataset, fields in DATASET_FIELDS.items()
+        ],
+    }
+
+
+def build_analysis_context(
+    manifest: Mapping[str, Any],
+    summary: Mapping[str, Any],
+    registry: Mapping[str, Any],
+    relationship_summary: Mapping[str, Any],
+) -> dict[str, Any]:
+    manifest_by_name, family_results, _ = _validate_projection_inputs(
+        manifest,
+        summary,
+        registry,
+    )
+    return {
+        "format": "garmin-running-data-normalizer-analysis-context-v1",
+        "product_version": manifest["product_version"],
+        "run_all_version": RUN_ALL_VERSION,
+        "run_status": summary["status"],
+        "analysis_entry_point": "analysis/activities.csv",
+        "privacy_mode": "local_trusted_full",
+        "datasets": [
+            {
+                "name": runtime["name"],
+                "path": runtime["output_path"],
+                "status": family_results[runtime["family"]]["status"],
+                "record_count": manifest_by_name[runtime["name"]]["record_count"],
+                "record_grain": runtime["record_grain"],
+                "stable_key": list(runtime["stable_key"]),
+                **DATASET_PRESENTATION[runtime["name"]],
+            }
+            for runtime in _runtime_datasets()
+        ],
+        "relationships": list(RELATIONSHIP_CONTRACTS),
+        "relationship_coverage": _relationship_coverage(relationship_summary),
+        "prohibited_operations": [
+            "timestamp_only_join",
+            "join_not_declared_explicit",
+            "missing_value_inference",
+            "identity_or_location_inference",
+            "automatic_external_upload",
+            "medical_or_coaching_interpretation",
+        ],
+        "warnings": summary.get("warnings", []),
+    }
+
+
+def build_artifact_inventory(
+    manifest: Mapping[str, Any],
+    summary: Mapping[str, Any],
+    registry: Mapping[str, Any],
+) -> dict[str, Any]:
+    _validate_projection_inputs(manifest, summary, registry)
+    return {
+        "format": "garmin-running-data-normalizer-artifact-inventory-v1",
+        "completion_marker": "run_summary.json",
+        "artifacts": [
+            {
+                "path": path,
+                "category": path.split("/", 1)[0] if "/" in path else "guidance",
+                "listed": True,
+            }
+            for path in summary["generated_paths"]
+        ],
+    }
+
+
 def render_output_experience_documents(
     manifest: Mapping[str, Any],
     summary: Mapping[str, Any],
     registry: Mapping[str, Any],
+    relationship_summary: Mapping[str, Any],
 ) -> dict[str, str]:
     """Return deterministic Markdown without writing or changing Run-All output."""
     return {
-        "START_HERE.md": render_start_here(manifest, summary, registry),
+        "START_HERE.md": render_start_here(
+            manifest,
+            summary,
+            registry,
+            relationship_summary,
+        ),
         "DATASET_INVENTORY.md": render_dataset_inventory(manifest, summary, registry),
+        "ANALYSIS_HANDOFF.md": render_analysis_handoff(
+            manifest,
+            summary,
+            registry,
+            relationship_summary,
+        ),
+    }
+
+
+def render_output_experience_artifacts(
+    manifest: Mapping[str, Any],
+    summary: Mapping[str, Any],
+    registry: Mapping[str, Any],
+    relationship_summary: Mapping[str, Any],
+) -> dict[str, bytes]:
+    documents = render_output_experience_documents(
+        manifest,
+        summary,
+        registry,
+        relationship_summary,
+    )
+    machine = {
+        "ANALYSIS_CONTEXT.json": build_analysis_context(
+            manifest,
+            summary,
+            registry,
+            relationship_summary,
+        ),
+        "SCHEMA_CATALOG.json": build_schema_catalog(manifest, summary, registry),
+        "artifact_inventory.json": build_artifact_inventory(
+            manifest,
+            summary,
+            registry,
+        ),
+    }
+    return {
+        **{
+            path: (content + "\n").encode("utf-8")
+            for path, content in documents.items()
+        },
+        **{
+            path: (
+                json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
+                + "\n"
+            ).encode("utf-8")
+            for path, value in machine.items()
+        },
     }
 
 
 __all__ = [
     "DOCUMENT_NAMES",
+    "MACHINE_CONTEXT_NAMES",
     "MANIFEST_OUTPUT_PATHS",
+    "OPTIONAL_MANIFEST_OUTPUT_PATHS",
     "OutputExperienceError",
+    "build_analysis_context",
+    "build_artifact_inventory",
+    "build_schema_catalog",
     "render_dataset_inventory",
+    "render_analysis_handoff",
+    "render_output_experience_artifacts",
     "render_output_experience_documents",
     "render_start_here",
     "validate_registry_alignment",

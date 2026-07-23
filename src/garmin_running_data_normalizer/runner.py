@@ -12,6 +12,7 @@ from .intake.discovery import discover_export
 from .normalizers.activities import normalize_activities
 from .qa import summarize_records
 from .run_all import RunAllError, run_all
+from .standalone import StandaloneHandoffError, validate_standalone_handoff
 
 
 OUTPUT_FILES = (
@@ -166,6 +167,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     combined.add_argument("--input", required=True, help="Garmin export directory")
     combined.add_argument("--output", required=True, help="New output directory")
+    combined.add_argument(
+        "--external-safe-pack",
+        action="store_true",
+        help="Add a deterministic, reviewable external-safe Analysis Pack",
+    )
+    handoff = commands.add_parser(
+        "validate-handoff",
+        help="Validate a completed Run-All output without repository access.",
+    )
+    handoff.add_argument("--input", required=True, help="Completed Run-All output")
     return parser
 
 
@@ -175,7 +186,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "normalize-activities":
             result = run_activities(args.input, args.output)
         elif args.command == "run-all":
-            result = run_all(args.input, args.output)
+            result = run_all(
+                args.input,
+                args.output,
+                external_safe_pack=args.external_safe_pack,
+            )
+        elif args.command == "validate-handoff":
+            result = validate_standalone_handoff(args.input)
         else:
             raise GoldenPathError("unsupported command")
     except GoldenPathError as exc:
@@ -183,6 +200,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except RunAllError as exc:
         print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)
+        return 2
+    except StandaloneHandoffError as exc:
+        print(f"ERROR [HANDOFF_INVALID]: {exc}", file=sys.stderr)
         return 2
     except Exception:
         if args.command == "run-all":
@@ -205,6 +225,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"generated: {', '.join(result['generated_files'])}")
         print(f"digest: {result['deterministic_digest']}")
         return int(result["exit_code"])
+
+    if args.command == "validate-handoff":
+        print("PASS")
+        print(f"datasets: {result['dataset_count']}")
+        print(f"relationships: {result['explicit_relationship_count']}")
+        print(f"first-read: {result['first_read']}")
+        print(f"analysis-entry: {result['analysis_entry_point']}")
+        return 0
 
     print("PASS")
     print(f"records: {result['record_count']}")

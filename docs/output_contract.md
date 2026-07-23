@@ -2,22 +2,18 @@
 
 ## Status and authority
 
-This document consolidates the existing public Run-All v1 contract. It does not
-replace the executable authorities:
+This document defines the additive Run-All v1.1 contract. Executable authority
+remains in `run_all.py`, the versioned dataset registry, and each run's
+`run_manifest.json` and `run_summary.json`.
 
-1. `src/garmin_running_data_normalizer/run_all.py` defines the runtime dataset
-   table, stable output paths, completion behavior, and machine artifact formats.
-2. `config/dataset_registry.example.json` defines dataset grain, stable keys,
-   merge policy, and provenance requirements.
-3. `run_manifest.json` and `run_summary.json` are the per-run machine-readable
-   authorities.
+Both machine authorities record the exact installed `product_version`;
+`ANALYSIS_CONTEXT.json` preserves the same value for standalone handoff.
 
-The [Dataset Catalog](supported_datasets.md), [Dataset Relationship
-Catalog](dataset_relationships.md), and [Analysis Handoff
-Specification](project/analysis_handoff_spec_v0_1.md) are human-readable
-normative guidance projected from those authorities.
+The Dataset Catalog, Dataset Relationship Catalog, and Analysis Handoff
+Specification are normative human-readable guidance projected from those
+authorities.
 
-## Stable Run-All v1 layout
+## Run-All v1.1 layout
 
 ```text
 <output>/
@@ -28,30 +24,69 @@ normative guidance projected from those authorities.
     personal_records.json
     fit_sessions.json
     fit_laps.json
-  audit/fit_audit.json
+    activity_fit_links.json
+  audit/
+    fit_audit.json
+    activity_fit_linkage.json
   analysis/activities.csv
-  qa/dataset_summary.json
+  qa/
+    dataset_summary.json
+    relationship_summary.json
+  START_HERE.md
+  DATASET_INVENTORY.md
+  ANALYSIS_HANDOFF.md
+  ANALYSIS_CONTEXT.json
+  SCHEMA_CATALOG.json
+  artifact_inventory.json
   run_manifest.json
   run_summary.json
 ```
 
 `run_summary.json` is written last and is the completion marker. A directory
-without it is not a completed Run-All handoff.
+without it is not a completed handoff. Existing v1 paths are preserved; all
+v1.1 paths are additive. With `--external-safe-pack`,
+`analysis/external_safe_handoff.zip` is additionally emitted and listed.
 
-The Output Experience renderer can deterministically prepare `START_HERE.md`
-and `DATASET_INVENTORY.md` from existing machine artifacts. The renderer is not
-wired into Run-All v1, and those Markdown names are not part of the stable
-output layout above.
+## Dataset and FIT behavior
 
-## Dataset and family behavior
+Activities are required. Gear, Personal Records, and FIT are optional. Stable
+normalized files are always emitted, with empty arrays and
+`SKIPPED_NOT_PRESENT` evidence for an absent optional family.
 
-Activities are required. Gear, Personal Records, and FIT are optional input
-families. The six normalized dataset outputs are always present in a completed
-Run-All directory; an absent optional family produces an empty array and
-`SKIPPED_NOT_PRESENT` evidence instead of invented records.
+FIT input is accepted for normalization only after file CRC validation and,
+when present, header CRC validation. Unsupported chained files, malformed or
+truncated files, CRC failures, undefined local messages, and session/lap
+allocation conflicts remain auditable incomplete input. `fit_file_id` is retained for
+compatibility; `fit_session_key` and `fit_lap_key` are the v1.1 stable keys.
 
-Dataset grains, keys, roles, and analysis suitability are maintained in the
-[Dataset Catalog](supported_datasets.md).
+Cross-dataset joins are valid only through the Dataset Relationship Catalog.
+Activity/FIT identity is represented by the separate
+`activity_fit_links` dataset and never replaces physical FIT identity.
+
+## Output Experience
+
+`START_HERE.md`, `DATASET_INVENTORY.md`, and `ANALYSIS_HANDOFF.md` are
+deterministic projections of the machine authorities. They do not recompute
+normalization semantics. `ANALYSIS_CONTEXT.json` declares the analysis entry
+point, dataset states, explicit relationships, warnings, prohibited
+operations, and privacy mode. `SCHEMA_CATALOG.json` comes from the runtime
+schema definitions, not the first data row.
+
+`START_HERE.md`, `ANALYSIS_HANDOFF.md`, and `ANALYSIS_CONTEXT.json` include
+Relationship Coverage for every explicit relationship. Each entry reports the
+eligible population, explicit-link count, coverage percentage, unresolved,
+ambiguous, and duplicate counts, whether inference was performed, and the
+primary unresolved reason. Coverage communicates the evidence boundary and is
+not a success score. Detailed referential and Activity/FIT evidence remains
+authoritative in `qa/relationship_summary.json` and
+`audit/activity_fit_linkage.json`.
+
+The optional external-safe Analysis Pack is deterministic and allowlist-only.
+It excludes source paths, filenames, source hashes, raw identifiers/stable
+keys, memo text, coordinates, exact dates/timestamps, heart rate, power,
+cadence, training effect/load, other unneeded health or performance detail,
+and unlisted files. Its default profile is limited to month-level activity
+volume and count context. It is never uploaded automatically.
 
 ## Status and exit contract
 
@@ -67,29 +102,25 @@ Family states include `PROCESSED`, `SKIPPED_NOT_PRESENT`,
 
 ## Determinism and publication
 
-- Input is treated as read-only and is checked for change before publication.
-- Output must not already exist and is published atomically.
-- Dataset records, payloads, and output inventory use deterministic ordering.
-- The manifest records dataset digests and output hashes.
-- The summary and manifest share the deterministic output digest.
-- Human-readable Output Experience documents must be projections of these
-  authorities and must not independently recompute normalization semantics.
+- Input is read-only and re-snapshotted before atomic publication.
+- Output must not already exist.
+- Normalized records, relationship rows, guidance, machine context, and ZIP
+  entries use deterministic ordering.
+- The manifest lists every payload with size and SHA-256.
+- Manifest and summary share a deterministic output digest.
+- Run-All does not send or upload output.
 
 ## Compatibility boundary
 
-The documented CLI, output paths, dataset stable keys, manifest/summary formats,
-status meanings, completion marker, and exit behavior are stable `1.x`
-contracts. Changing any of them requires compatibility review and Human
-Approval.
-
-Documentation may clarify existing behavior. A renderer may be implemented and
-tested without changing Run-All. Adding generated documents to the fixed
-Run-All output layout remains a separate Product and compatibility decision.
+The CLI, existing paths, manifest/summary formats, status meanings, completion
+marker, exit behavior, and compatible legacy FIT fields remain stable `1.x`
+contracts. v1.1 adds relationship artifacts, FIT session/lap stable keys,
+generated analysis context, and an opt-in safe pack under explicit Product
+approval.
 
 ## Privacy boundary
 
-Normalized records, stable keys, source-relative paths, hashes, and exact
-timestamps may be private. Machine artifacts remain local by default. Public
-examples and golden outputs must use synthetic data. See the [Security and
-Privacy Boundary](security_and_privacy_boundary.md) and [Analysis Handoff
-Specification](project/analysis_handoff_spec_v0_1.md).
+Full normalized output contains personal metrics, local identifiers,
+provenance, hashes, and exact timestamps. It is a local/trusted handoff. Public
+fixtures are synthetic. External transfer requires review of the optional safe
+pack and the receiving environment.

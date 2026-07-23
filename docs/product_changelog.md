@@ -4,6 +4,34 @@ This file records factual Garmin Running Data Normalizer product changes. The
 root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
 Standard adopted by this repository.
 
+## v1.1.0rc1 — release candidate
+
+- Adds complete FIT file CRC validation, optional header CRC validation, and
+  explicit audit states for CRC, truncation, chained, undefined-message, and
+  session/lap-allocation failures.
+- Adds content-derived multi-session `fit_session_key` and child
+  `fit_lap_key` while retaining compatible `fit_file_id` and `lap_index`.
+- Adds an auditable `activity_fit_links` dataset with deterministic
+  evidence-qualified eligibility, exclusions, zero ambiguity, and no
+  timestamp-only join.
+- Promotes reviewed Activity/Gear, Personal Record/Activity, FIT Lap/Session,
+  and Activity/FIT relationships with fail-closed referential QA.
+- Integrates `START_HERE.md`, `DATASET_INVENTORY.md`, `ANALYSIS_HANDOFF.md`,
+  machine-readable analysis/schema context, and artifact inventory into
+  Run-All.
+- Adds evidence-boundary Relationship Coverage to `START_HERE.md`,
+  `ANALYSIS_HANDOFF.md`, and `ANALYSIS_CONTEXT.json` for every explicit
+  relationship without suppressing unresolved, ambiguous, or duplicate
+  records.
+- Adds an opt-in deterministic external-safe Analysis Pack that excludes
+  provenance, hashes, IDs/keys, memo text, coordinates, exact dates/times,
+  heart rate, power, cadence, training effect/load, and other health or
+  performance detail outside its month-level volume/count profile; it never
+  uploads automatically.
+- Preserves all existing `1.x` CLI and output paths; v1.1 artifacts are
+  additive. Tag, Release, and package-index publication remain separate Human
+  Approval Boundaries.
+
 ## v1.0.1 — approved initial PyPI publication candidate
 
 - Advances the package, import, CLI, and exact-version tests from `1.0.0` to
