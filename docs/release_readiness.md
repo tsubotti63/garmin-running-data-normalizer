@@ -14,6 +14,7 @@
 - Stable tag commit: `605eaba4106c3dbc040bda1ff06ccbba6e6b69e1`
 - Attached Release assets: None; GitHub-generated source archives only
 - PyPI packaging readiness: PASS on `main`; publication not authorized
+- PyPI publish execution readiness: `P1_READY_FOR_APPROVAL`
 - PyPI distribution: None issued
 
 The repository is public and under ongoing maintenance. `v1.0.0` is the first
@@ -39,3 +40,11 @@ rendering checks, isolated artifact installation, and PyPI-safe README links.
 These checks establish technical packaging readiness only. Selecting the first
 PyPI version and source commit, configuring publisher trust, and uploading to an
 index remain separate Human-authorized actions.
+
+P1 adds a manual-only, build-only-by-default Trusted Publishing workflow and a
+publication runbook. No GitHub Environment, approval variable, pending
+publisher, API token, TestPyPI/PyPI project, or distribution was created.
+Because the existing `v1.0.0` tag predates the P0 packaging changes, the
+recommended first index release is a separately reviewed `1.0.1` patch. That
+version/source choice, its tag and GitHub Release, external publisher
+configuration, and each initial upload require explicit Product approval.

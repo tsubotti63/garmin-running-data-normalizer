@@ -4,6 +4,21 @@ This file records factual Garmin Running Data Normalizer product changes. The
 root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
 Standard adopted by this repository.
 
+## Unreleased — P1 PyPI publish readiness
+
+- Adds a manual-only, build-only-by-default publication workflow for exact
+  reviewed source commits and versions.
+- Separates TestPyPI and PyPI with target-specific approval variables,
+  protected GitHub Environments, OIDC-only publish jobs, and automatic clean
+  install verification.
+- Pins all actions by commit and keeps credentials, API tokens, automatic
+  triggers, duplicate-version bypass, and index deletion outside the workflow.
+- Adds the publication runbook, current-state evidence, failure handling, and
+  explicit Product decision packet.
+
+P1 performs no upload, publisher/environment configuration, version change,
+tag, or GitHub Release operation. Its status is `P1_READY_FOR_APPROVAL`.
+
 ## Unreleased — P0 PyPI packaging readiness
 
 - Adds repeatable wheel and source-distribution builds with strict Twine

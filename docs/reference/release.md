@@ -14,6 +14,7 @@
 - Stable tag commit: `605eaba4106c3dbc040bda1ff06ccbba6e6b69e1`
 - Attached assets: None; GitHub-generated source archives only
 - PyPI packaging readiness: PASS on `main`; publication not authorized
+- PyPI publish execution readiness: `P1_READY_FOR_APPROVAL`
 - PyPI distributions: None
 
 Repository publication makes the source available for public maintenance. A Git
@@ -39,3 +40,9 @@ checks PyPI README rendering strictly, and installs each artifact in an isolated
 environment. Passing that gate does not reserve the distribution name, choose a
 publication version, configure credentials or Trusted Publishing, or authorize
 an upload.
+
+The P1 publication workflow is manual-only and defaults to build-only. Its
+upload jobs require an exact reviewed source, target-specific Product approval
+variable, protected GitHub Environment, and OIDC publisher match. These
+repository controls are prepared but no external publisher/environment state
+or package-index upload is authorized or completed.
