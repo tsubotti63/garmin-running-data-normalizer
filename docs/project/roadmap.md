@@ -33,8 +33,9 @@ current review and Human authorization.
 - Complete FIT CRC validation and multi-session FIT identity.
 - Evaluate Run-All integration for Sleep, HRV, and Health Status without
   silently expanding the stable `1.x` output contract.
-- Review hosted processing, Open-Meteo, Parquet, and PyPI as separately gated
-  capabilities.
+- Review hosted processing, Open-Meteo, and Parquet as separately gated
+  capabilities. PyPI packaging readiness is complete; initial publication and
+  publisher configuration remain separately Human-gated.
 - Update GitHub Actions dependencies before the Node.js 20 compatibility shim
   is removed from hosted runners.
 

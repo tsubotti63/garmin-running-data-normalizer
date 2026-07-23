@@ -13,6 +13,7 @@
 - Release classification: Public stable release, marked latest
 - Stable tag commit: `605eaba4106c3dbc040bda1ff06ccbba6e6b69e1`
 - Attached assets: None; GitHub-generated source archives only
+- PyPI packaging readiness: PASS on `main`; publication not authorized
 - PyPI distributions: None
 
 Repository publication makes the source available for public maintenance. A Git
@@ -32,3 +33,9 @@ future release must still be assessed against the implementation, dependency
 and notice inventory, rights position, security/privacy checks, review evidence,
 and Human authorization applicable at that time. This status reference records
 the current distinction; it does not create standing release authority.
+
+The P0 packaging gate builds and validates both wheel and source distribution,
+checks PyPI README rendering strictly, and installs each artifact in an isolated
+environment. Passing that gate does not reserve the distribution name, choose a
+publication version, configure credentials or Trusted Publishing, or authorize
+an upload.

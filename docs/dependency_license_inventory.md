@@ -19,10 +19,13 @@ attribution, and compatibility review as appropriate.
 | setuptools >=77 | build | MIT | PEP 639 license metadata; verified during release validation |
 | wheel | build | MIT | Verify the resolved build environment for a release |
 | pytest >=8.4,<9 | test-only | MIT | Verify the resolved test environment for a release |
+| build >=1.2,<2 | release-tooling only | MIT | Builds wheel and source distribution; not shipped as a runtime dependency |
+| twine >=6,<7 | release-tooling only | Apache-2.0 | Strict distribution metadata/README check; not shipped as a runtime dependency |
 
-The project declares no third-party runtime package dependency. Build and test
-tools are not covered merely by the project's Apache-2.0 license and remain
-independently licensed.
+The project declares no third-party runtime package dependency. Build, test, and
+release tools are not included in the default wheel dependency set, are not
+covered merely by the project's Apache-2.0 license, and remain independently
+licensed.
 
 ## Candidate future dependencies
 

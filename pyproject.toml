@@ -22,9 +22,12 @@ classifiers = [
 Homepage = "https://github.com/tsubotti63/garmin-running-data-normalizer"
 Repository = "https://github.com/tsubotti63/garmin-running-data-normalizer"
 Issues = "https://github.com/tsubotti63/garmin-running-data-normalizer/issues"
+Documentation = "https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md"
+Changelog = "https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_changelog.md"
 
 [project.optional-dependencies]
 test = ["pytest>=8.4,<9"]
+release = ["build>=1.2,<2", "twine>=6,<7"]
 
 [project.scripts]
 garmin-running-data-normalizer = "garmin_running_data_normalizer.runner:main"

@@ -13,6 +13,7 @@
 - GitHub Release: Public, stable, and marked latest
 - Stable tag commit: `605eaba4106c3dbc040bda1ff06ccbba6e6b69e1`
 - Attached Release assets: None; GitHub-generated source archives only
+- PyPI packaging readiness: PASS on `main`; publication not authorized
 - PyPI distribution: None issued
 
 The repository is public and under ongoing maintenance. `v1.0.0` is the first
@@ -32,3 +33,9 @@ the reviewed `v1.0.0` candidate for release. M8.4 publication and M8.5
 post-release validation are complete. No PyPI publication was performed by this
 workflow. Future releases still require their own current review and Human
 authorization.
+
+P0 adds repeatable wheel/source-distribution build, strict metadata and README
+rendering checks, isolated artifact installation, and PyPI-safe README links.
+These checks establish technical packaging readiness only. Selecting the first
+PyPI version and source commit, configuring publisher trust, and uploading to an
+index remain separate Human-authorized actions.
