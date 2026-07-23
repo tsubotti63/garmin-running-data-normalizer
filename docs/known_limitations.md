@@ -1,6 +1,6 @@
 # Known Limitations
 
-These limitations apply to the version `1.0.0` scope. They are explicit product
+These limitations apply to the stable `1.0.x` scope. They are explicit product
 boundaries, not hidden fallback behavior.
 
 ## Input and orchestration
@@ -29,7 +29,7 @@ boundaries, not hidden fallback behavior.
   nightly FIT HRV.
 - Health Status unknown metrics remain in long-form evidence; duplicate metric
   types are not silently overwritten.
-- Sleep, HRV, and Health Status are not Run-All output families in `1.0.0`.
+- Sleep, HRV, and Health Status are not Run-All output families in `1.0.x`.
 
 ## Distribution and integrations
 

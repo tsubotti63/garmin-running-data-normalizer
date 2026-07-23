@@ -8,13 +8,14 @@
 - CI: Operational
 - Initial release candidate: `v0.1.0-rc.1`
 - Latest published prerelease: `v0.1.0-rc.2`
-- Python package version: `1.0.0`
+- Python package candidate version on `main`: `1.0.1`
 - Latest stable release: `v1.0.0`
 - Release classification: Public stable release, marked latest
 - Stable tag commit: `605eaba4106c3dbc040bda1ff06ccbba6e6b69e1`
 - Attached assets: None; GitHub-generated source archives only
-- PyPI packaging readiness: PASS on `main`; publication not authorized
-- PyPI publish execution readiness: `P1_READY_FOR_APPROVAL`
+- PyPI packaging readiness: PASS on `main`
+- PyPI publish execution readiness: P2 candidate preparation in progress;
+  external operations not authorized
 - PyPI distributions: None
 
 Repository publication makes the source available for public maintenance. A Git
@@ -46,3 +47,8 @@ upload jobs require an exact reviewed source, target-specific Product approval
 variable, protected GitHub Environment, and OIDC publisher match. These
 repository controls are prepared but no external publisher/environment state
 or package-index upload is authorized or completed.
+
+P2 prepares `1.0.1` as the package-index patch candidate while keeping
+`v1.0.0` as the current latest GitHub Release. The candidate does not itself
+authorize its tag, GitHub Release, external publisher configuration, or either
+initial package-index upload.

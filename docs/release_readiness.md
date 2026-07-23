@@ -8,13 +8,14 @@
 - GitHub Actions: Operational
 - Historical release candidate: `v0.1.0-rc.1` prerelease
 - Latest published prerelease: `v0.1.0-rc.2`
-- Python package version: `1.0.0`
+- Python package candidate version on `main`: `1.0.1`
 - Latest stable release: `v1.0.0`, published 2026-07-22
 - GitHub Release: Public, stable, and marked latest
 - Stable tag commit: `605eaba4106c3dbc040bda1ff06ccbba6e6b69e1`
 - Attached Release assets: None; GitHub-generated source archives only
-- PyPI packaging readiness: PASS on `main`; publication not authorized
-- PyPI publish execution readiness: `P1_READY_FOR_APPROVAL`
+- PyPI packaging readiness: PASS on `main`
+- PyPI publish execution readiness: P2 candidate preparation in progress;
+  external operations not authorized
 - PyPI distribution: None issued
 
 The repository is public and under ongoing maintenance. `v1.0.0` is the first
@@ -48,3 +49,9 @@ Because the existing `v1.0.0` tag predates the P0 packaging changes, the
 recommended first index release is a separately reviewed `1.0.1` patch. That
 version/source choice, its tag and GitHub Release, external publisher
 configuration, and each initial upload require explicit Product approval.
+
+P2 prepares that `1.0.1` patch candidate without changing runtime behavior,
+the stable `1.x` interface, runtime dependencies, or supported dataset scope.
+Until the candidate passes review and receives explicit Human approval,
+`v1.0.0` remains the latest stable GitHub Release and no package-index
+distribution exists.

@@ -41,4 +41,12 @@ current review and Human authorization.
 - Update GitHub Actions dependencies before the Node.js 20 compatibility shim
   is removed from hosted runners.
 
+## P2 — initial package-index publication
+
+Prepare `1.0.1` as a packaging-only patch from post-P1 `main`, preserving the
+stable `1.x` interface and all current privacy and dependency boundaries. After
+the candidate passes Target review and CI, stop for explicit Human approval
+before tag/Release creation, external Trusted Publishing configuration,
+TestPyPI upload, and production PyPI upload.
+
 The active product boundaries are listed in `docs/known_limitations.md`.
