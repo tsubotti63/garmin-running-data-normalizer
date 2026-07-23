@@ -7,10 +7,12 @@ provenance-rich Garmin records without sending the export to a hosted service.
 ## Current status
 
 The source repository is public and maintained on `main`. Version `1.0.1` is
-the prepared package-index patch candidate on `main`; it is not yet tagged,
-released, or published to a package index. Version `1.0.0` remains the latest
-published stable release. Its annotated tag points to the reviewed release
-commit, and the
+the Human-approved package-index patch candidate on `main`. Its annotated tag
+and GitHub Release are authorized release operations, while package-index
+upload remains separately gated and has not been performed. Version `1.0.0`
+remains the latest published stable release until those authorized release
+operations complete. Its annotated tag points to the reviewed release commit,
+and the
 [`v1.0.0` GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.0.0)
 is public and marked latest. The wheel and source distribution are validated on
 `main`, but PyPI publication remains a separate Human-authorized action and has

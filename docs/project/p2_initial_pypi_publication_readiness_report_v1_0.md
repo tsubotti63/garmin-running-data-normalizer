@@ -4,12 +4,13 @@
 
 - Phase: P2 initial PyPI publication
 - Candidate version: `1.0.1`
-- Candidate source at report freeze: uncommitted frozen candidate over base
-  `ed9656c459de85dd278f7a5c046ba149c36bd028`; the final commit is assigned
-  only after Target Core Review `PASS`
+- Human-approved candidate source:
+  `89677a78cd0e75c1ad168aca89b27724feb31013`
+- Final tag source: pending the authorized docs-only release-state descendant,
+  Target Core Review, commit, push, and CI
 - Technical validation: `PASS`
 - Unit Review at report freeze: `PASS`
-- Target Core Review at report freeze: pending
+- Candidate Target Core Review: `PASS`
 - Tag/GitHub Release: not created
 - External publication configuration: not changed
 - TestPyPI/PyPI upload: not performed
@@ -67,24 +68,35 @@ Before any irreversible or external operation:
 
 ## Human Approval Boundaries
 
-P2 must stop before:
+The Human owner approved version `1.0.1` and candidate commit
+`89677a78cd0e75c1ad168aca89b27724feb31013`. The following operations are
+authorized:
 
-1. creating or pushing `v1.0.1`;
-2. publishing a `v1.0.1` GitHub Release;
-3. creating or changing GitHub Environments or approval variables;
-4. creating or changing a TestPyPI/PyPI Trusted Publisher;
-5. performing the initial TestPyPI upload; and
-6. performing the initial production PyPI upload.
+1. final release-state documentation update;
+2. creating and pushing the annotated `v1.0.1` tag;
+3. publishing the `v1.0.1` GitHub Release;
+4. creating protected `testpypi` and `pypi` GitHub Environments;
+5. initializing target-specific approval variables in the non-approved state;
+   and
+6. creating the matching TestPyPI and PyPI Trusted Publishers.
 
-The recommended sequence after the candidate is ready:
+P2 must stop again immediately before the initial TestPyPI upload with the
+exact source SHA, wheel SHA-256, source-distribution SHA-256, workflow, and
+target Environment. Production PyPI upload remains a later, separate Human
+Approval Boundary.
 
-1. approve the exact `1.0.1` source and tag/Release preparation;
-2. approve protected `testpypi` and `pypi` Environments plus Trusted
-   Publishers;
-3. stop again for approval of the exact TestPyPI upload;
-4. verify TestPyPI project metadata, artifact hashes, clean install, import,
+The authorized sequence:
+
+1. freeze and review the docs-only release-state descendant of the approved
+   candidate;
+2. commit, push, confirm CI, create the annotated tag, and publish the GitHub
+   Release;
+3. configure protected `testpypi` and `pypi` Environments, false approval
+   variables, and matching Trusted Publishers;
+4. stop again for approval of the exact TestPyPI upload;
+5. verify TestPyPI project metadata, artifact hashes, clean install, import,
    version, and CLI; and
-5. stop again for the separate production PyPI upload approval.
+6. stop again for the separate production PyPI upload approval.
 
 No API Token fallback is prepared. Any fallback from Trusted Publishing
 requires a separate credential-handling decision and review.

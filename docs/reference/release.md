@@ -14,8 +14,8 @@
 - Stable tag commit: `605eaba4106c3dbc040bda1ff06ccbba6e6b69e1`
 - Attached assets: None; GitHub-generated source archives only
 - PyPI packaging readiness: PASS on `main`
-- PyPI publish execution readiness: P2 candidate preparation in progress;
-  external operations not authorized
+- PyPI publish execution readiness: approved candidate; release and publisher
+  configuration authorized, uploads not authorized
 - PyPI distributions: None
 
 Repository publication makes the source available for public maintenance. A Git
@@ -46,9 +46,14 @@ The P1 publication workflow is manual-only and defaults to build-only. Its
 upload jobs require an exact reviewed source, target-specific Product approval
 variable, protected GitHub Environment, and OIDC publisher match. These
 repository controls are prepared but no external publisher/environment state
-or package-index upload is authorized or completed.
+was authorized or completed during P1. P2 now authorizes the protected
+Environments and matching Trusted Publishers, but they are not yet configured;
+neither package-index upload is authorized or completed.
 
-P2 prepares `1.0.1` as the package-index patch candidate while keeping
-`v1.0.0` as the current latest GitHub Release. The candidate does not itself
-authorize its tag, GitHub Release, external publisher configuration, or either
-initial package-index upload.
+P2 prepared `1.0.1` as the package-index patch candidate while keeping
+`v1.0.0` as the current latest GitHub Release until the authorized release
+operations complete. The Human owner approved version `1.0.1` and candidate
+commit `89677a78cd0e75c1ad168aca89b27724feb31013`, plus the final
+release-state documentation, annotated tag, GitHub Release, protected GitHub
+Environments, approval variables, and Trusted Publisher configuration. That
+approval does not authorize either initial package-index upload.

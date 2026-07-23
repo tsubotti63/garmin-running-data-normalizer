@@ -14,8 +14,8 @@
 - Stable tag commit: `605eaba4106c3dbc040bda1ff06ccbba6e6b69e1`
 - Attached Release assets: None; GitHub-generated source archives only
 - PyPI packaging readiness: PASS on `main`
-- PyPI publish execution readiness: P2 candidate preparation in progress;
-  external operations not authorized
+- PyPI publish execution readiness: approved candidate; release and publisher
+  configuration authorized, uploads not authorized
 - PyPI distribution: None issued
 
 The repository is public and under ongoing maintenance. `v1.0.0` is the first
@@ -50,8 +50,12 @@ recommended first index release is a separately reviewed `1.0.1` patch. That
 version/source choice, its tag and GitHub Release, external publisher
 configuration, and each initial upload require explicit Product approval.
 
-P2 prepares that `1.0.1` patch candidate without changing runtime behavior,
+P2 prepared that `1.0.1` patch candidate without changing runtime behavior,
 the stable `1.x` interface, runtime dependencies, or supported dataset scope.
-Until the candidate passes review and receives explicit Human approval,
-`v1.0.0` remains the latest stable GitHub Release and no package-index
-distribution exists.
+The Human owner approved version `1.0.1` and candidate commit
+`89677a78cd0e75c1ad168aca89b27724feb31013`, and authorized the final
+release-state documentation, annotated tag, GitHub Release, protected GitHub
+Environments, approval variables, and Trusted Publisher configuration.
+TestPyPI upload is not yet authorized. Until the authorized tag and Release
+operations complete, `v1.0.0` remains the latest stable GitHub Release; no
+package-index distribution exists.

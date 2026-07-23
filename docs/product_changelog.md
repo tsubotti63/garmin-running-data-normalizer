@@ -4,18 +4,21 @@ This file records factual Garmin Running Data Normalizer product changes. The
 root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
 Standard adopted by this repository.
 
-## Unreleased — v1.0.1 initial PyPI publication candidate
+## v1.0.1 — approved initial PyPI publication candidate
 
 - Advances the package, import, CLI, and exact-version tests from `1.0.0` to
   `1.0.1` without changing runtime behavior or the stable `1.x` interface.
 - Carries the P0 packaging checks and P1 guarded Trusted Publishing workflow
   into an exact patch candidate for initial package-index publication.
-- Adds a release-note draft and P2 approval-gate evidence while retaining the
+- Adds release notes and P2 approval-gate evidence while retaining the
   existing Apache-2.0, dependency, privacy, and supported-dataset boundaries.
 
-`v1.0.1` is not yet tagged, released, or uploaded. Tag/Release creation,
-external publisher configuration, and each initial TestPyPI/PyPI upload remain
-separate Human Approval Boundaries.
+The Human owner approved version `1.0.1` and candidate commit
+`89677a78cd0e75c1ad168aca89b27724feb31013`. The final release-state
+documentation update, annotated tag, GitHub Release, protected GitHub
+Environments, approval variables, and Trusted Publisher configuration are
+authorized. TestPyPI and PyPI uploads remain separate Human Approval
+Boundaries.
 
 ## Unreleased — P1 PyPI publish readiness
 

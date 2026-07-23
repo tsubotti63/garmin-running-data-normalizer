@@ -43,10 +43,12 @@ current review and Human authorization.
 
 ## P2 — initial package-index publication
 
-Prepare `1.0.1` as a packaging-only patch from post-P1 `main`, preserving the
-stable `1.x` interface and all current privacy and dependency boundaries. After
-the candidate passes Target review and CI, stop for explicit Human approval
-before tag/Release creation, external Trusted Publishing configuration,
-TestPyPI upload, and production PyPI upload.
+Version `1.0.1` is the approved packaging-only patch candidate from post-P1
+`main`, preserving the stable `1.x` interface and all current privacy and
+dependency boundaries. Final release-state documentation, tag/Release creation,
+protected GitHub Environments, approval variables, and Trusted Publisher
+configuration are authorized. Stop immediately before the initial TestPyPI
+upload with exact source and artifact hashes; production PyPI upload remains a
+later, separate Human Approval Boundary.
 
 The active product boundaries are listed in `docs/known_limitations.md`.
