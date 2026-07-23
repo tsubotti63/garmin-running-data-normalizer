@@ -136,6 +136,11 @@ See the
 Review `run_summary.json` first. In a trusted local environment, start with
 `analysis/activities.csv` and the
 [Analysis Handoff Specification](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.0.0/docs/project/analysis_handoff_spec_v0_1.md).
+The [Run-All Output Contract](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/output_contract.md),
+[Dataset Catalog](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md),
+and [Dataset Relationship Catalog](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/dataset_relationships.md)
+explain artifact authority, dataset roles, and the joins that are explicit or
+`not_yet_defined`.
 The [prompt template](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.0.0/docs/project/analysis_prompt_template_v0_1.md),
 [public usage example](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.0.0/docs/project/run_all_public_usage_example_v0_1.md), and
 [use-case catalog](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.0.0/docs/project/run_all_use_case_catalog_v0_1.md) separate facts,

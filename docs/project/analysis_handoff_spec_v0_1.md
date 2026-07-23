@@ -119,9 +119,10 @@ for an external service.
 | `fit_sessions` | FIT file session | `fit_file_id` |
 | `fit_laps` | FIT file lap | `fit_file_id`, `lap_index` |
 
-Stable keys support joining and reproducibility. They are local join
-identifiers, and some may incorporate source IDs. None are permission to
-publish or identify a person.
+Stable keys support identity and reproducibility within their declared grain.
+Only the [Dataset Relationship Catalog](../dataset_relationships.md) authorizes
+cross-dataset joins. Some keys may incorporate source IDs; none are permission
+to publish or identify a person.
 
 ## Missing values and aggregation
 
