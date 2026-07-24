@@ -1,5 +1,15 @@
 # From Garmin Export to a Reproducible Analysis Handoff
 
+> [!IMPORTANT]
+> **Superseded evidence notice:** This page documents an earlier validation stage.
+> The current `v1.1.1` real-user evidence uses 3,468 Activities, status
+> `PARTIAL_SUCCESS`, and three same-host reproducibility runs. See
+> [CS-001](cs-001-real-garmin-export-to-auditable-ai-ready-handoff.md) for the
+> current validation narrative and
+> [CS-002](cs-002-relationship-coverage-as-evidence-boundary.md) for the current
+> relationship-evidence model. Sections 9 and 16 below are retained as historical
+> v0.1 context and are not the current product baseline.
+
 ## 1. Summary
 
 Garmin Running Data Normalizer turns a user-controlled Garmin Account Export
@@ -50,8 +60,8 @@ and checked again before output publication. Paths, archive members, sizes,
 compression, encryption, and links are bounded by fail-closed safety rules.
 
 Public reproduction uses only the repository's visibly synthetic fixture. The
-private real-export validation is represented only by approved aggregate pass
-facts, never by rows, filenames, paths, dates, counts, or fingerprints.
+private real-export validation is represented only by approved aggregate facts,
+never by rows, filenames, paths, dates, or fingerprints.
 
 ## 6. Run-All Workflow
 
@@ -63,9 +73,9 @@ python -m garmin_running_data_normalizer run-all \
 
 Run-All discovers supported assets, normalizes detected families, validates
 stable keys and provenance, performs deterministic QA, creates the reduced
-Activities CSV, verifies the input snapshot, writes to a staging directory,
-and atomically publishes a new destination. `run_summary.json` is written last
-as the completion marker.
+Activities CSV, verifies the input snapshot, writes to a staging directory, and
+atomically publishes a new destination. `run_summary.json` is written last as
+the completion marker.
 
 ## 7. Normalized Outputs
 
@@ -98,9 +108,9 @@ See the
 [`Analysis Handoff Specification`](../project/analysis_handoff_spec_v0_1.md)
 and [`Analysis Prompt Template`](../project/analysis_prompt_template_v0_1.md).
 
-## 9. Reproducibility Evidence
+## 9. Historical Reproducibility Evidence (Superseded)
 
-The private M3 execution established only these public-safe facts:
+The earlier private M3 execution established these historical public-safe facts:
 
 - Run-All completed against a local real export with status `PASS` and exit
   code `0`.
@@ -111,8 +121,9 @@ The private M3 execution established only these public-safe facts:
   limit while preserving the remaining archive safety controls.
 - Synthetic tests and repository validations passed for the snapshot.
 
-No private counts, dates, filenames, paths, records, or hashes are needed to
-support those claims.
+These statements describe the earlier M3 snapshot, not the current `v1.1.1`
+validation. No private counts, dates, filenames, paths, records, or hashes are
+needed to preserve that historical record.
 
 ## 10. Privacy Boundary
 
@@ -184,20 +195,14 @@ verification.
 The complete synthetic workflow is described in the
 [`Public Usage Example`](../project/run_all_public_usage_example_v0_1.md).
 
-## 16. Known Limitations
+## 16. Historical Known Limitations (Superseded)
 
-Activities are required. Optional-family coverage depends on exact filename
-rules. FIT parsing is bounded to selected session and lap fields and does not
-implement complete FIT CRC or invalid-sentinel handling. Weather, Sleep, HRV,
+The following limits describe the earlier v0.1 case-study snapshot: Activities
+were required; optional-family coverage depended on exact filename rules; FIT
+parsing was bounded to selected session and lap fields and did not yet implement
+the current complete FIT CRC and invalid-sentinel handling. Weather, Sleep, HRV,
 Parquet, dashboards, notebooks, automatic Analysis Pack generation, and a
-stable third-party Python API are outside the current contract. The examples
-are descriptive and deliberately small.
+stable third-party Python API were outside that historical contract. The
+examples were descriptive and deliberately small.
 
-## 17. Next Milestones
-
-- M5.5: independently review public safety, link integrity, factual accuracy,
-  release-state wording, and readiness to apply README changes.
-- Apply README changes only through a separately reviewed documentation task.
-- Decide whether an external-sharing-safe derivative exporter is valuable; if
-  adopted, specify and implement it separately.
-- Keep M6 application wording distinct from product evidence and release state.
+For the current product boundary, see [Known Limitations](../known_limitations.md).

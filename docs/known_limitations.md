@@ -1,6 +1,6 @@
 # Known Limitations
 
-These limitations apply to the `1.1` release candidate. They are explicit product
+These limitations apply to the stable `1.1` release. They are explicit product
 boundaries, not hidden fallback behavior.
 
 ## Input and orchestration
@@ -39,7 +39,6 @@ boundaries, not hidden fallback behavior.
 
 ## Distribution and integrations
 
-- No v1.1 PyPI distribution is published before the separate approval boundary.
 - Hosted processing, Garmin authentication, Open-Meteo, JMA, Instagram,
   wellness/coaching interpretation, Parquet output, and automatic personal
   analysis are outside the stable scope.
