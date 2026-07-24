@@ -6,54 +6,38 @@
 - Default branch: `main`
 - License: `Apache-2.0`
 - CI: Operational
-- Initial release candidate: `v0.1.0-rc.1`
-- Latest published prerelease: `v0.1.0-rc.2`
-- Python package candidate version on `main`: `1.0.1`
-- Latest stable release: `v1.0.0`
-- Release classification: Public stable release, marked latest
-- Stable tag commit: `605eaba4106c3dbc040bda1ff06ccbba6e6b69e1`
+- Python package candidate version on `main`: `1.1.1`
+- Latest GitHub Release: `v1.1.0`
+- Release classification: Public, non-prerelease, and marked latest
+- Latest Release tag commit:
+  `821fbc9d41ea349aaf43613191555a14aed9735c`
 - Attached assets: None; GitHub-generated source archives only
 - PyPI packaging readiness: PASS on `main`
-- PyPI publish execution readiness: approved candidate; release and publisher
-  configuration authorized, uploads not authorized
-- PyPI distributions: None
+- TestPyPI: `1.1.0rc1` published and clean-install verified
+- Production PyPI distributions: None
+- `v1.1.1` tag, Release, TestPyPI upload, and Production PyPI upload:
+  Separately Human-gated and not performed
 
 Repository publication makes the source available for public maintenance. A Git
 tag identifies a Git object, a GitHub Release is a separately created GitHub
 artifact, and a versioned product release is a distinct project event. The
-initial and latest Release Candidates remain prereleases and are not stable
-releases. `v0.1.0-rc.2` was published from the exact reviewed commit after CI
-and clean-clone validation, with no attached Release assets. `v1.0.0` is the
-first stable release and is the current latest GitHub Release.
+published `v1.1.0` tag and Release remain immutable even though their exact
+source declares package version `1.1.0rc1`. Stable package publication therefore
+uses a separately reviewed `1.1.1` source rather than rewriting history or
+renaming rehearsal artifacts.
 
 ## Release readiness
 
-The Human owner confirmed the redistribution rights applicable to predecessor-
-derived responsibilities included in `v1.0.0` and approved the reviewed release
-commit. M8.4 publication and M8.5 post-release validation are complete. Each
-future release must still be assessed against the implementation, dependency
-and notice inventory, rights position, security/privacy checks, review evidence,
-and Human authorization applicable at that time. This status reference records
-the current distinction; it does not create standing release authority.
+The Human owner confirmed redistribution rights for the predecessor-derived
+responsibilities retained by the reviewed v1.1 implementation. TestPyPI
+`1.1.0rc1` passed exact-source build, strict metadata, isolated installation,
+Trusted Publishing, and post-upload verification. The stable `1.1.1` candidate
+changes release identity only and must pass the full current implementation,
+dependency, privacy, static-policy, packaging, installed-product, and CI gates.
 
-The P0 packaging gate builds and validates both wheel and source distribution,
-checks PyPI README rendering strictly, and installs each artifact in an isolated
-environment. Passing that gate does not reserve the distribution name, choose a
-publication version, configure credentials or Trusted Publishing, or authorize
-an upload.
-
-The P1 publication workflow is manual-only and defaults to build-only. Its
-upload jobs require an exact reviewed source, target-specific Product approval
-variable, protected GitHub Environment, and OIDC publisher match. These
-repository controls are prepared but no external publisher/environment state
-was authorized or completed during P1. P2 now authorizes the protected
-Environments and matching Trusted Publishers, but they are not yet configured;
-neither package-index upload is authorized or completed.
-
-P2 prepared `1.0.1` as the package-index patch candidate while keeping
-`v1.0.0` as the current latest GitHub Release until the authorized release
-operations complete. The Human owner approved version `1.0.1` and candidate
-commit `89677a78cd0e75c1ad168aca89b27724feb31013`, plus the final
-release-state documentation, annotated tag, GitHub Release, protected GitHub
-Environments, approval variables, and Trusted Publisher configuration. That
-approval does not authorize either initial package-index upload.
+The publication workflow remains manual-only and build-only by default. Upload
+jobs require an exact reviewed source, target-specific approval variable,
+protected GitHub Environment, and matching OIDC publisher. Successful candidate
+validation does not create a tag, publish a GitHub Release, or authorize an
+index upload. This reference records the current distinction; it does not
+create standing release authority.

@@ -42,7 +42,7 @@ def synthetic_projection_input() -> tuple[dict, dict, dict]:
     }
     manifest = {
         "format": "garmin-running-data-normalizer-run-manifest-v1",
-        "product_version": "1.1.0rc1",
+        "product_version": "1.1.1",
         "run_all_version": 1,
         "input_assets": [
             {
@@ -67,7 +67,7 @@ def synthetic_projection_input() -> tuple[dict, dict, dict]:
     }
     summary = {
         "format": "garmin-running-data-normalizer-run-summary-v1",
-        "product_version": "1.1.0rc1",
+        "product_version": "1.1.1",
         "run_all_version": 1,
         "status": "PASS",
         "family_results": {
@@ -485,7 +485,7 @@ class OutputExperienceTest(unittest.TestCase):
             activity_coverage["qa_reference"],
             "qa/relationship_summary.json",
         )
-        self.assertEqual(context["product_version"], "1.1.0rc1")
+        self.assertEqual(context["product_version"], "1.1.1")
         self.assertNotIn("not_yet_defined", json.dumps(context))
         rendered = render_output_experience_artifacts(
             manifest,

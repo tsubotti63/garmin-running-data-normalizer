@@ -23,8 +23,8 @@ python -m pip install -e .
 python -m garmin_running_data_normalizer --version
 ```
 
-On the v1.1 release candidate, the version command prints
-`python -m garmin_running_data_normalizer 1.1.0rc1`.
+On the v1.1.1 stable Production candidate, the version command prints
+`python -m garmin_running_data_normalizer 1.1.1`.
 An equivalent console entry point, `garmin-running-data-normalizer`, is also
 installed.
 

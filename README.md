@@ -6,17 +6,15 @@ provenance-rich Garmin records without sending the export to a hosted service.
 
 ## Current status
 
-The source repository is public and maintained on `main`. Version `1.1.0rc1`
-is the current release candidate. It adds CRC-validated multi-session FIT
-identity, explicit relationship QA, and a standalone Output Experience while
-preserving existing `1.x` CLI and output paths. Tag creation, GitHub Release,
-TestPyPI, and Production PyPI publication remain separate Human Approval
-Boundaries. Version `1.0.0` remains the latest published stable release. Its
-annotated tag points to the reviewed release commit, and the
-[`v1.0.0` GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.0.0)
-is public and marked latest. The v1.1 wheel and source distribution are
-validated from the reviewed candidate, but PyPI publication has not been
-performed.
+The source repository is public and maintained on `main`. Version `1.1.1` is
+the Human-approved stable Production package candidate. It carries the reviewed
+v1.1 FIT integrity, relationship QA, and standalone Output Experience while
+preserving existing `1.x` CLI and output paths. The existing `v1.1.0` tag and
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.1.0)
+remain immutable; their tagged source declares `1.1.0rc1`, and those TestPyPI
+artifacts are not reused as stable Production artifacts. The `v1.1.1` tag,
+GitHub Release, TestPyPI upload, and Production PyPI upload remain separate
+Human Approval Boundaries.
 
 The formal CLI supports the existing activities-only Golden Path and a minimum
 multi-family Run-All workflow. Run-All requires Activities and processes Gear,
@@ -61,8 +59,9 @@ for the stable CLI/output boundary and library-level scope.
 
 Garmin Running Data Normalizer requires Python 3.11 or later:
 
-PyPI publication has not yet been performed. Until it is separately authorized,
-install the reviewed stable tag from a checkout:
+Production PyPI publication has not yet been performed. Until the `v1.1.1` tag
+and package-index release are separately authorized, install the earlier
+reviewed stable tag from a checkout:
 
 ```bash
 git clone --branch v1.0.0 --depth 1 \
@@ -205,8 +204,8 @@ personal output belong in ignored local directories.
 
 Run-All v1 requires Activities; Gear, Personal Records, and FIT are optional.
 Sleep, HRV, and Health Status are library-level interfaces and are not Run-All
-outputs. Hosted processing, Open-Meteo, Parquet, automatic upload, and PyPI
-publication are not included. The
+outputs. Hosted processing, Open-Meteo, Parquet, automatic upload, and
+Production PyPI publication are not included. The
 documented CLI and versioned Run-All output contract are the stable `1.x`
 interface; other Python modules may evolve compatibly as their contracts mature.
 See
