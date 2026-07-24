@@ -14,7 +14,11 @@ from garmin_running_data_normalizer.fit.parser import fit_crc16, parse_fit_bytes
 from tests.fit_fixture_factory import synthetic_fit, truncated_fit, unsupported_chained_fit
 
 
-def synthetic_fit_session(*, invalid_metrics: bool = False) -> bytes:
+def synthetic_fit_session(
+    *,
+    invalid_metrics: bool = False,
+    invalid_sport: bool = False,
+) -> bytes:
     session_definition = bytes([0x40, 0x00, 0x00]) + struct.pack("<H", 18) + bytes([
         18,
         2, 4, 0x86,
@@ -40,7 +44,8 @@ def synthetic_fit_session(*, invalid_metrics: bool = False) -> bytes:
     u16_metric = 0xFFFF if invalid_metrics else 250
     u8_metric = 0xFF if invalid_metrics else 150
     session_record = bytes([0x00]) + b"".join([
-        struct.pack("<I", 1_000_000), bytes([1, 7]),
+        struct.pack("<I", 1_000_000),
+        bytes([0xFF if invalid_sport else 1, 7]),
         struct.pack("<II", 3_600_000, 3_500_000), struct.pack("<I", 1_000_000),
         struct.pack("<H", 0xFFFF if invalid_metrics else 600),
         struct.pack("<II", u32_metric, 5_000 if not invalid_metrics else 0xFFFFFFFF),
@@ -104,6 +109,32 @@ class FitAndPackTest(unittest.TestCase):
                      "total_ascent", "total_descent"):
             self.assertIsNone(parsed["session"][name], name)
             self.assertIsNone(parsed["laps"][0][name], name)
+
+    def test_fit_invalid_enum_sentinel_is_null_and_audited(self) -> None:
+        parsed = parse_fit_bytes(
+            synthetic_fit_session(invalid_sport=True),
+            file_id="fit_file:invalid-sport",
+            source_path="synthetic-invalid-sport.fit",
+        )
+        self.assertIsNone(parsed["session"]["sport"])
+        self.assertEqual(parsed["invalid_sentinel_count"], 1)
+        self.assertEqual(
+            parsed["invalid_sentinel_counts"],
+            {"session.sport": 1},
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "synthetic-invalid-sport.fit").write_bytes(
+                synthetic_fit(invalid_sport=True)
+            )
+            sessions, _, audit = parse_fit_export(root)
+            self.assertIsNone(sessions[0]["sport"])
+            self.assertEqual(audit[0]["invalid_sentinel_count"], 1)
+            self.assertEqual(
+                audit[0]["invalid_sentinel_counts"],
+                {"session.sport": 1},
+            )
 
     def test_fit_negative_statuses_are_auditable(self) -> None:
         bad_header = b"\x0c\x10\x00\x00\x00\x00\x00\x00NOPE"

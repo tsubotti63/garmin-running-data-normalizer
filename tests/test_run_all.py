@@ -36,7 +36,7 @@ def tree_hashes(root: Path) -> dict[str, str]:
     }
 
 
-def synthetic_fit_session() -> bytes:
+def synthetic_fit_session(*, invalid_sport: bool = False) -> bytes:
     session_definition = bytes([0x40, 0x00, 0x00]) + struct.pack("<H", 18) + bytes([
         8,
         2, 4, 0x86,
@@ -49,7 +49,9 @@ def synthetic_fit_session() -> bytes:
         26, 2, 0x84,
     ])
     session_record = bytes([0x00]) + b"".join([
-        struct.pack("<I", 1_262_390_400), bytes([1]), struct.pack("<I", 500_000),
+        struct.pack("<I", 1_262_390_400),
+        bytes([0xFF if invalid_sport else 1]),
+        struct.pack("<I", 500_000),
         bytes([150, 82]), struct.pack("<HHH", 250, 100, 1),
     ])
     lap_definition = bytes([0x41, 0x00, 0x00]) + struct.pack("<H", 19) + bytes([
@@ -247,6 +249,30 @@ class RunAllTest(unittest.TestCase):
             self.assertEqual(fit_coverage["unresolved_count"], 0)
         self.assertEqual(before, tree_hashes(ACTIVITIES_FIXTURE))
 
+    def test_personal_record_identifier_type_fails_closed_end_to_end(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            input_root = self.synthetic_input(temporary, optional=True)
+            (input_root / "synthetic_personalRecord.json").write_text(
+                json.dumps(
+                    {
+                        "personalRecords": [
+                            {
+                                "personalRecordId": ["unsupported"],
+                                "activityId": "SYNTHETIC-RUN-0001",
+                                "personalRecordType": "synthetic_best",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            output = temporary / "output"
+            result = self.run_command(input_root, output)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("PERSONAL_RECORDS_NORMALIZATION_FAILED", result.stderr)
+            self.assertFalse(output.exists())
+
     def test_t3_fatal_inputs_do_not_publish_completion_marker(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)
@@ -328,6 +354,47 @@ class RunAllTest(unittest.TestCase):
             self.assertEqual(summary["family_results"]["fit"]["skipped_asset_count"], 1)
             self.assertEqual(Counter(item["parse_status"] for item in audit), Counter({"parsed_activity": 1, "too_small": 1}))
             self.assertTrue((output / "run_summary.json").is_file())
+
+    def test_fit_invalid_enum_sentinel_is_null_with_qa_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            input_root = self.synthetic_input(temporary, optional=True)
+            (input_root / "synthetic-session.fit").write_bytes(
+                synthetic_fit_session(invalid_sport=True)
+            )
+            output = temporary / "output"
+            result = self.run_command(input_root, output)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            sessions = json.loads(
+                (output / "normalized/fit_sessions.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            audit = json.loads(
+                (output / "audit/fit_audit.json").read_text(encoding="utf-8")
+            )
+            qa = json.loads(
+                (output / "qa/dataset_summary.json").read_text(encoding="utf-8")
+            )
+            summary = json.loads(
+                (output / "run_summary.json").read_text(encoding="utf-8")
+            )
+
+            self.assertIsNone(sessions[0]["sport"])
+            self.assertEqual(audit[0]["invalid_sentinel_count"], 1)
+            self.assertEqual(
+                qa["fit_semantic_normalization"],
+                {
+                    "invalid_sentinel_count": 1,
+                    "invalid_sentinel_counts": {"session.sport": 1},
+                    "status": "PASS",
+                },
+            )
+            self.assertEqual(
+                summary["family_results"]["fit"]["invalid_sentinel_counts"],
+                {"session.sport": 1},
+            )
 
     def test_t5_rerun_refuses_existing_output_and_new_output_is_identical(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -137,8 +137,10 @@ is prohibited, and detailed evidence remains in
 The Activities CSV has no separate `activity_id` column and excludes raw memo
 text, source paths, hashes, and coordinates. Its `garmin_activity_key` may
 incorporate the source activity ID, so real CSV remains local and that key must
-be removed from any externally shared derivative. Detailed normalized outputs and source-relative
-provenance still contain personal running information and must remain local.
+be removed from any externally shared derivative. Detailed normalized output,
+memo text, and source-relative provenance still contain personal running
+information and must remain local. Garmin source filenames can contain
+email-shaped personal identifiers.
 Never commit a real export or generated Run-All output, and do not upload it as
 a CI artifact.
 

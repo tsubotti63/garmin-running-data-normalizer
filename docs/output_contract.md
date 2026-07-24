@@ -56,8 +56,20 @@ normalized files are always emitted, with empty arrays and
 FIT input is accepted for normalization only after file CRC validation and,
 when present, header CRC validation. Unsupported chained files, malformed or
 truncated files, CRC failures, undefined local messages, and session/lap
-allocation conflicts remain auditable incomplete input. `fit_file_id` is retained for
-compatibility; `fit_session_key` and `fit_lap_key` are the v1.1 stable keys.
+allocation conflicts remain auditable incomplete input. CRC-valid multi-session
+files are normalized when declared lap counts allocate every lap to exactly one
+session. When that allocation cannot be proven, the whole file is excluded from
+normalized FIT sessions/laps and recorded as
+`session_lap_allocation_conflict` in `audit/fit_audit.json`; no session or lap is
+guessed. Those excluded records never enter the eligible Activity/FIT
+Relationship Coverage population. `fit_file_id` is retained for compatibility;
+`fit_session_key` and `fit_lap_key` are the v1.1 stable keys.
+
+FIT protocol invalid sentinels are converted to JSON null before scaling or
+enum projection. The per-file audit, FIT family result, and dataset QA record
+deterministic counts by message and field so semantic cleanup remains
+traceable to source-relative provenance without exposing a raw sentinel as a
+valid domain value.
 
 Cross-dataset joins are valid only through the Dataset Relationship Catalog.
 Activity/FIT identity is represented by the separate
@@ -70,7 +82,10 @@ deterministic projections of the machine authorities. They do not recompute
 normalization semantics. `ANALYSIS_CONTEXT.json` declares the analysis entry
 point, dataset states, explicit relationships, warnings, prohibited
 operations, and privacy mode. `SCHEMA_CATALOG.json` comes from the runtime
-schema definitions, not the first data row.
+schema definitions, not the first data row. Source identifiers that Garmin may
+emit as either a JSON integer or string—`activity_id`, `gear_key`, and
+`personal_record_id`—use the explicit `integer|string` logical type; the
+normalizer does not silently coerce identity.
 
 `START_HERE.md`, `ANALYSIS_HANDOFF.md`, and `ANALYSIS_CONTEXT.json` include
 Relationship Coverage for every explicit relationship. Each entry reports the
@@ -121,6 +136,7 @@ approval.
 ## Privacy boundary
 
 Full normalized output contains personal metrics, local identifiers,
-provenance, hashes, and exact timestamps. It is a local/trusted handoff. Public
-fixtures are synthetic. External transfer requires review of the optional safe
-pack and the receiving environment.
+provenance, hashes, exact timestamps, memo text, and source-relative filenames.
+Garmin source filenames can contain email-shaped personal identifiers. It is a
+local/trusted handoff. Public fixtures are synthetic. External transfer requires
+review of the optional safe pack and the receiving environment.

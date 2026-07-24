@@ -130,9 +130,11 @@ a timestamp-only join or infer a relationship from similar fields.
 Privacy mode: `local_trusted_full`.
 
 Run-All output can contain personal records, local stable keys, provenance,
-and exact timestamps. Keep real output local unless the data owner approves a
-specific transfer and the receiving environment has been reviewed. Use the
-optional external-safe handoff only after reviewing its aggregation level.
+exact timestamps, memo text, and source-relative filenames. A Garmin export
+filename may itself contain an email-shaped personal identifier. Keep real
+output local unless the data owner approves a specific transfer and the
+receiving environment has been reviewed. Use the optional external-safe
+handoff only after reviewing its aggregation level.
 
 ## Next Action
 

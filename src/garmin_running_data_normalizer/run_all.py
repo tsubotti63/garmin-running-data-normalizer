@@ -210,13 +210,14 @@ def _normalize_datasets(
 ) -> tuple[
     dict[str, list[dict[str, Any]]],
     list[dict[str, Any]],
-    dict[str, int],
+    dict[str, Any],
     dict[str, Any],
     dict[str, Any],
 ]:
     records: dict[str, list[dict[str, Any]]] = {name: [] for name in DATASET_PATHS}
     fit_audit: list[dict[str, Any]] = []
     fit_status_counts: Counter[str] = Counter()
+    fit_invalid_sentinel_counts: Counter[str] = Counter()
     incomplete_fit_count = 0
 
     try:
@@ -259,6 +260,14 @@ def _normalize_datasets(
                 fit_audit.append(enriched)
                 status = str(item["parse_status"])
                 fit_status_counts[status] += 1
+                sentinel_counts = item.get("invalid_sentinel_counts", {})
+                if isinstance(sentinel_counts, dict):
+                    fit_invalid_sentinel_counts.update(
+                        {
+                            str(field): int(count)
+                            for field, count in sentinel_counts.items()
+                        }
+                    )
                 if status in INCOMPLETE_FIT_STATUSES or unknown_records > 0:
                     incomplete_fit_count += 1
         except Exception as exc:
@@ -288,6 +297,10 @@ def _normalize_datasets(
         fit_audit,
         {
             "incomplete_fit_count": incomplete_fit_count,
+            "invalid_sentinel_count": sum(fit_invalid_sentinel_counts.values()),
+            "invalid_sentinel_counts": dict(
+                sorted(fit_invalid_sentinel_counts.items())
+            ),
             **{
                 f"status_{key}": value
                 for key, value in sorted(fit_status_counts.items())
@@ -489,7 +502,7 @@ def _external_safe_pack(
 def _family_results(
     families: dict[str, list[DiscoveredAsset]],
     records: dict[str, list[dict[str, Any]]],
-    fit_status: dict[str, int],
+    fit_status: dict[str, Any],
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]], str]:
     warnings: list[dict[str, Any]] = []
     results: dict[str, dict[str, Any]] = {}
@@ -551,6 +564,12 @@ def _family_results(
                 if key.startswith("status_")
             }
             results[family]["incomplete_asset_count"] = incomplete_fit_count
+            results[family]["invalid_sentinel_count"] = int(
+                fit_status.get("invalid_sentinel_count", 0)
+            )
+            results[family]["invalid_sentinel_counts"] = dict(
+                fit_status.get("invalid_sentinel_counts", {})
+            )
 
     overall = "PARTIAL_SUCCESS" if incomplete_fit_count else ("PASS_WITH_WARNINGS" if warnings else "PASS")
     return results, warnings, overall
@@ -626,6 +645,15 @@ def run_all(
         "format": "garmin-running-data-normalizer-dataset-summary-v1",
         "status": "PASS",
         "datasets": qa_entries,
+        "fit_semantic_normalization": {
+            "invalid_sentinel_count": int(
+                fit_status.get("invalid_sentinel_count", 0)
+            ),
+            "invalid_sentinel_counts": dict(
+                fit_status.get("invalid_sentinel_counts", {})
+            ),
+            "status": "PASS",
+        },
     }
     csv_data = _activities_csv(records["activities"])
 

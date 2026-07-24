@@ -208,6 +208,19 @@ class OutputExperienceTest(unittest.TestCase):
             expected = (GOLDEN / name).read_text(encoding="utf-8")
             self.assertEqual(rendered, expected, name)
 
+    def test_handoff_explains_fail_closed_multi_session_allocation(self) -> None:
+        manifest, summary, relationship_summary = synthetic_projection_input()
+        handoff = render_analysis_handoff(
+            manifest,
+            summary,
+            self.registry,
+            relationship_summary,
+        )
+        self.assertIn("CRC-valid multi-session FIT files", handoff)
+        self.assertIn("session_lap_allocation_conflict", handoff)
+        self.assertIn("do not enter the eligible", handoff)
+        self.assertIn("Activity/FIT Relationship Coverage population", handoff)
+
     def test_registry_and_documents_cover_the_runtime_dataset_contract(self) -> None:
         validate_registry_alignment(self.registry)
         catalog = (ROOT / "docs/supported_datasets.md").read_text(encoding="utf-8")
@@ -431,6 +444,21 @@ class OutputExperienceTest(unittest.TestCase):
         self.assertEqual(
             {item["dataset"] for item in schema["datasets"]},
             {item["name"] for item in DATASET_TABLE},
+        )
+        flexible_identifier_fields = {
+            descriptor["field"]: descriptor["logical_type"]
+            for dataset in schema["datasets"]
+            for descriptor in dataset["fields"]
+            if descriptor["field"]
+            in {"activity_id", "gear_key", "personal_record_id"}
+        }
+        self.assertEqual(
+            flexible_identifier_fields,
+            {
+                "activity_id": "integer|string",
+                "gear_key": "integer|string",
+                "personal_record_id": "integer|string",
+            },
         )
         self.assertEqual(len(context["relationships"]), 6)
         self.assertEqual(len(context["relationship_coverage"]), 6)

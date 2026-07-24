@@ -26,6 +26,7 @@ def synthetic_fit(
     invalid_header_crc: bool = False,
     invalid_file_crc: bool = False,
     invalid_metrics: bool = False,
+    invalid_sport: bool = False,
     declared_laps_per_session: int = 1,
 ) -> bytes:
     """Create a visibly synthetic FIT activity without using user data."""
@@ -57,7 +58,7 @@ def synthetic_fit(
                 b"".join(
                     [
                         struct.pack("<I", start),
-                        bytes([1, 7]),
+                        bytes([0xFF if invalid_sport else 1, 7]),
                         struct.pack("<II", 3_600_000, 3_500_000),
                         struct.pack("<I", 1_000_000 + ordinal * 100),
                         struct.pack("<H", 0xFFFF if invalid_metrics else 600),

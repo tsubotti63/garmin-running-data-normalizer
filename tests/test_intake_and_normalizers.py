@@ -161,6 +161,28 @@ class IntakeAndNormalizersTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 normalize_personal_records(str(root))
 
+    def test_personal_record_identifier_type_fails_closed(self) -> None:
+        unsupported_values = [True, 1.5, ["synthetic"], {"id": "synthetic"}]
+        for value in unsupported_values:
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "synthetic_personalRecord.json").write_text(
+                    json.dumps(
+                        {
+                            "personalRecords": [
+                                {
+                                    "personalRecordId": value,
+                                    "activityId": 123,
+                                    "personalRecordType": "synthetic_best",
+                                }
+                            ]
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                with self.assertRaisesRegex(ValueError, "unsupported type"):
+                    normalize_personal_records(str(root))
+
     def test_activity_gear_link_missing_stable_key_fails_closed(self) -> None:
         cases = [
             {"gearActivityDTOs": {"7": [{}]}},

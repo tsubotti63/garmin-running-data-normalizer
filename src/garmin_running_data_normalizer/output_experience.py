@@ -879,9 +879,11 @@ def render_start_here(
             "Privacy mode: `local_trusted_full`.",
             "",
             "Run-All output can contain personal records, local stable keys, provenance,",
-            "and exact timestamps. Keep real output local unless the data owner approves a",
-            "specific transfer and the receiving environment has been reviewed. Use the",
-            "optional external-safe handoff only after reviewing its aggregation level.",
+            "exact timestamps, memo text, and source-relative filenames. A Garmin export",
+            "filename may itself contain an email-shaped personal identifier. Keep real",
+            "output local unless the data owner approves a specific transfer and the",
+            "receiving environment has been reviewed. Use the optional external-safe",
+            "handoff only after reviewing its aggregation level.",
             "",
             "## Next Action",
             "",
@@ -941,6 +943,18 @@ def render_analysis_handoff(
         "   answer the question; do not invent source fields or context.",
         "",
         *_relationship_coverage_lines(relationship_summary),
+        "## Multi-Session FIT Completeness",
+        "",
+        "- CRC-valid multi-session FIT files are normalized when every lap can be",
+        "  assigned to exactly one declared session without inference.",
+        "- If declared session/lap counts cannot allocate every lap exactly once, the",
+        "  whole FIT file is excluded from normalized sessions and laps with",
+        "  `session_lap_allocation_conflict` in `audit/fit_audit.json`.",
+        "- Sessions excluded at this parse boundary do not enter the eligible",
+        "  Activity/FIT Relationship Coverage population. Coverage therefore describes",
+        "  only emitted, independently eligible sessions and does not claim that an",
+        "  allocation-conflict file was normalized.",
+        "",
         "## Current Warnings",
         "",
         *warning_lines,
@@ -948,7 +962,9 @@ def render_analysis_handoff(
         "## Privacy Modes",
         "",
         "- `local_trusted_full`: full Run-All output, provenance, stable keys, QA,",
-        "  and audit evidence remain in a user-controlled trusted environment.",
+        "  audit evidence, memo text, and source-relative filenames remain in a",
+        "  user-controlled trusted environment. Source filenames can contain",
+        "  email-shaped personal identifiers.",
         "- `external_safe`: only the explicit safe-pack allowlist may leave that",
         "  environment after review. The pack excludes paths, hashes, raw IDs, stable",
         "  keys, memo text, coordinates, exact timestamps, and unlisted files.",
@@ -990,6 +1006,11 @@ def _field_descriptor(field: str) -> dict[str, Any]:
         "time_delta_seconds", "distance_delta_m", "duration_delta_seconds",
     }
     array_fields = {"match_basis"}
+    flexible_identifier_fields = {
+        "activity_id",
+        "gear_key",
+        "personal_record_id",
+    }
     if field in boolean_fields:
         logical_type = "boolean"
     elif field in integer_fields:
@@ -998,6 +1019,8 @@ def _field_descriptor(field: str) -> dict[str, Any]:
         logical_type = "number"
     elif field in array_fields:
         logical_type = "array[string]"
+    elif field in flexible_identifier_fields:
+        logical_type = "integer|string"
     else:
         logical_type = "string"
 
@@ -1044,6 +1067,13 @@ def _field_descriptor(field: str) -> dict[str, Any]:
         if field in {"memo_text_raw", "name", "display_name", "custom_make_model"}
         else "personal"
     )
+    notes = (
+        "Source identifiers are preserved as JSON integers or strings; "
+        "deterministic fallback identifiers are strings. Compare values only "
+        "after applying the declared explicit relationship contract."
+        if field in flexible_identifier_fields
+        else "Defined by the v1.1 runtime schema; do not infer missing values."
+    )
     return {
         "logical_type": logical_type,
         "nullable": field
@@ -1059,7 +1089,7 @@ def _field_descriptor(field: str) -> dict[str, Any]:
         else "attribute",
         "origin": provenance,
         "privacy_sensitivity": privacy,
-        "notes": "Defined by the v1.1 runtime schema; do not infer missing values.",
+        "notes": notes,
     }
 
 

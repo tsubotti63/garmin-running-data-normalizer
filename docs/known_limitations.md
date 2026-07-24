@@ -17,6 +17,10 @@ boundaries, not hidden fallback behavior.
 
 - Only selected Activity session and lap fields are normalized.
 - Chained FIT payloads are rejected rather than merged.
+- Multi-session FIT is normalized only when declared lap counts allocate every
+  lap to exactly one session. Allocation conflicts exclude the whole file from
+  normalized sessions/laps, remain explicit in FIT audit, and do not enter the
+  eligible Activity/FIT Relationship Coverage population.
 - Activity/FIT linkage is limited to the documented evidence-qualified eligible
   population; excluded and ambiguous candidates are not guessed.
 - Record coordinates, raw telemetry, and arbitrary FIT message preservation are

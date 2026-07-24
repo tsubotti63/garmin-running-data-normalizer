@@ -133,6 +133,11 @@ for the additive v1.1 output layout and privacy boundary. Add
 `--external-safe-pack` to create a deterministic reviewable ZIP; Run-All never
 uploads it.
 
+Full normalized JSON and audit output use the `local_trusted_full` privacy mode.
+They can retain memo text and source-relative Garmin filenames, including
+email-shaped personal identifiers. Keep them local; the optional external-safe
+pack removes those fields.
+
 ## Why this project matters
 
 Run-All creates a reviewable boundary between a complex local Garmin export and

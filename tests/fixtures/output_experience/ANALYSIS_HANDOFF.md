@@ -102,6 +102,18 @@ remain in `audit/activity_fit_linkage.json`.
 - Inference performed: No
 - Primary unresolved reason: None
 
+## Multi-Session FIT Completeness
+
+- CRC-valid multi-session FIT files are normalized when every lap can be
+  assigned to exactly one declared session without inference.
+- If declared session/lap counts cannot allocate every lap exactly once, the
+  whole FIT file is excluded from normalized sessions and laps with
+  `session_lap_allocation_conflict` in `audit/fit_audit.json`.
+- Sessions excluded at this parse boundary do not enter the eligible
+  Activity/FIT Relationship Coverage population. Coverage therefore describes
+  only emitted, independently eligible sessions and does not claim that an
+  allocation-conflict file was normalized.
+
 ## Current Warnings
 
 - None
@@ -109,7 +121,9 @@ remain in `audit/activity_fit_linkage.json`.
 ## Privacy Modes
 
 - `local_trusted_full`: full Run-All output, provenance, stable keys, QA,
-  and audit evidence remain in a user-controlled trusted environment.
+  audit evidence, memo text, and source-relative filenames remain in a
+  user-controlled trusted environment. Source filenames can contain
+  email-shaped personal identifiers.
 - `external_safe`: only the explicit safe-pack allowlist may leave that
   environment after review. The pack excludes paths, hashes, raw IDs, stable
   keys, memo text, coordinates, exact timestamps, and unlisted files.

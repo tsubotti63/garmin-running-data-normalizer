@@ -34,11 +34,6 @@ INVALID_VALUES = {
     "sint64": 0x7FFFFFFFFFFFFFFF, "uint64": 0xFFFFFFFFFFFFFFFF, "uint64z": 0,
 }
 
-INVALID_BEFORE_SCALE_FIELDS = {
-    18: {11, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 26},
-    19: {13, 14, 15, 16, 17, 18, 19, 20, 21, 22},
-}
-
 FIELDS = {
     12: {0: ("sport", None), 1: ("sub_sport", None), 3: ("name", None)},
     18: {
@@ -76,6 +71,7 @@ SPORT_ENUM = {
     31: "swimming",
 }
 SUB_SPORT_ENUM = {6: "treadmill_running", 7: "street", 8: "trail"}
+MESSAGE_NAMES = {12: "sport", 18: "session", 19: "lap"}
 
 
 @dataclass(frozen=True)
@@ -177,17 +173,18 @@ def _read_value(data: bytes, offset: int, field: FieldDef, endian: str) -> Any:
     return values[0] if count == 1 else list(values)
 
 
-def _null_invalid(value: Any, field: FieldDef) -> Any:
+def _null_invalid_with_count(value: Any, field: FieldDef) -> tuple[Any, int]:
     descriptor = BASE_TYPES.get(field.base_type)
     if descriptor is None:
         normalized_type = (field.base_type & 0x1F) | (0x80 if field.base_type & 0x80 else 0)
         descriptor = BASE_TYPES.get(normalized_type)
     invalid = INVALID_VALUES.get(descriptor[0]) if descriptor else None
     if invalid is None:
-        return value
+        return value, 0
     if isinstance(value, list):
-        return [None if item == invalid else item for item in value]
-    return None if value == invalid else value
+        invalid_count = sum(item == invalid for item in value)
+        return [None if item == invalid else item for item in value], invalid_count
+    return (None, 1) if value == invalid else (value, 0)
 
 
 def parse_fit_bytes(
@@ -246,6 +243,7 @@ def parse_fit_bytes(
     definitions: dict[int, Definition] = {}
     messages: dict[int, list[dict[str, Any]]] = {12: [], 18: [], 19: [], 20: []}
     unknown_records = 0
+    invalid_sentinel_counts: dict[str, int] = {}
 
     while position < data_end:
         record_header = data[position]
@@ -337,8 +335,17 @@ def parse_fit_bytes(
             position += field.size
             if selected_fields is not None and field.number in selected_fields:
                 name, scale = selected_fields[field.number]
-                if field.number in INVALID_BEFORE_SCALE_FIELDS.get(definition.global_message, set()):
-                    value = _null_invalid(value, field)
+                value, invalid_count = _null_invalid_with_count(value, field)
+                if invalid_count:
+                    message_name = MESSAGE_NAMES.get(
+                        definition.global_message,
+                        f"message_{definition.global_message}",
+                    )
+                    invalid_key = f"{message_name}.{name}"
+                    invalid_sentinel_counts[invalid_key] = (
+                        invalid_sentinel_counts.get(invalid_key, 0)
+                        + invalid_count
+                    )
                 record[name] = _scale(value, scale, timezone_name)
         position += sum(definition.developer_field_sizes)
         if definition.global_message in messages:
@@ -387,6 +394,8 @@ def parse_fit_bytes(
         "session_count": len(sessions),
         "unallocated_lap_count": max(len(all_laps) - lap_cursor, 0),
         "unknown_records": unknown_records,
+        "invalid_sentinel_count": sum(invalid_sentinel_counts.values()),
+        "invalid_sentinel_counts": dict(sorted(invalid_sentinel_counts.items())),
         "header_crc_status": header_crc_status,
         "file_crc_status": "valid",
     }
@@ -411,6 +420,8 @@ def parse_fit_export(root: str | Path) -> tuple[list[dict[str, Any]], list[dict[
             "header_crc_status": parsed.get("header_crc_status", "not_checked"),
             "file_crc_status": parsed.get("file_crc_status", "not_checked"),
             "unallocated_lap_count": parsed.get("unallocated_lap_count", 0),
+            "invalid_sentinel_count": parsed.get("invalid_sentinel_count", 0),
+            "invalid_sentinel_counts": parsed.get("invalid_sentinel_counts", {}),
         })
         if parsed["status"] != "parsed_activity":
             continue
@@ -419,7 +430,11 @@ def parse_fit_export(root: str | Path) -> tuple[list[dict[str, Any]], list[dict[
             fit_session_key = f"fit_session:{asset.sha256}:{session_ordinal}"
             sport_code = session.get("sport", sport.get("sport"))
             sub_code = session.get("sub_sport", sport.get("sub_sport"))
-            fit_sport = SPORT_ENUM.get(sport_code, str(sport_code or "unknown"))
+            fit_sport = (
+                None
+                if sport_code is None
+                else SPORT_ENUM.get(sport_code, str(sport_code or "unknown"))
+            )
             fit_sub_sport = SUB_SPORT_ENUM.get(sub_code)
             if fit_sub_sport == "trail":
                 fit_sport = "trail_running"

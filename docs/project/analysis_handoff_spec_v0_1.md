@@ -71,6 +71,20 @@ separate privacy review.
 Optional files remain personal local output. Use only the smallest set needed
 for the stated question.
 
+## Multi-session FIT completeness
+
+CRC-valid multi-session FIT files are normalized when declared per-session lap
+counts assign every lap to exactly one session without inference. If the
+declared counts cannot allocate every lap exactly once, the whole FIT file is
+excluded from normalized sessions and laps. `audit/fit_audit.json` records
+`session_lap_allocation_conflict`, source-relative provenance, source hash,
+session/lap counts, and unallocated-lap evidence.
+
+Sessions stopped at this parse boundary are not emitted and therefore do not
+enter the eligible Activity/FIT Relationship Coverage population. Coverage
+describes only emitted sessions that independently satisfy the eligibility
+contract; it is not a claim that allocation-conflict input was normalized.
+
 ## Relationship Coverage
 
 Every explicit relationship has a deterministic coverage entry in
@@ -179,6 +193,8 @@ families. Do not silently drop incomplete FIT files.
 - Keep real exports and detailed Run-All output local and uncommitted.
 - Do not disclose raw IDs, stable keys, source-relative paths,
   filenames, hashes, memo text, coordinates, or record-level health data.
+  Source-relative Garmin filenames can themselves contain an email-shaped
+  personal identifier.
 - Do not upload `run_manifest.json`, normalized JSON, or FIT audit data to an
   external AI service without data-owner approval and a provider-specific
   privacy review.
