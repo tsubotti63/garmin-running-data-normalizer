@@ -38,6 +38,19 @@ INTERNAL = {
     "private_gate_id": re.compile(rb"PLATFORM-ALIGNMENT-AND-REUSE-[0-9-]+|GITHUB-INITIAL-REGISTRATION-READINESS-C[0-9]+", re.IGNORECASE),
 }
 APPROVED_IDENTITY = re.compile(r"^[0-9]+\+[A-Za-z0-9-]+@users\.noreply\.github\.com$")
+APPROVED_GITHUB_COMMITTERS = frozenset(
+    {
+        ("GitHub", "noreply" + "@github.com"),
+    }
+)
+REQUIRED_CI_REFS = frozenset(
+    {
+        "refs/heads/main",
+        "refs/remotes/origin/HEAD",
+        "refs/remotes/origin/main",
+    }
+)
+PRIVATE_REF_MARKER = re.compile(r"(?:^|[/_.-])(?:private|internal)(?:$|[/_.-])", re.IGNORECASE)
 SANITIZED_BASE_COMMITS = (
     "de53b0999b32064168bb69ed5afe3695be5a9564",
     "8404a6900402a88e07e3cc66a534a285f45cd7d5",
@@ -64,6 +77,77 @@ def scan(label: str, data: bytes, *, allow_email: bool = False) -> list[str]:
     return findings
 
 
+def is_approved_committer(
+    author_name: str,
+    author_email: str,
+    committer_name: str,
+    committer_email: str,
+) -> bool:
+    if (author_name, author_email) == (committer_name, committer_email):
+        return True
+    return (committer_name, committer_email) in APPROVED_GITHUB_COMMITTERS
+
+
+def validate_commit_identities(
+    records: list[tuple[str, str, str, str, str]],
+) -> list[str]:
+    findings: list[str] = []
+    author_identities: list[tuple[str, str]] = []
+    for commit, author_name, author_email, committer_name, committer_email in records:
+        author_identities.append((author_name, author_email))
+        if not APPROVED_IDENTITY.fullmatch(author_email):
+            findings.append(f"commit {commit}: unapproved public identity")
+        if not is_approved_committer(
+            author_name,
+            author_email,
+            committer_name,
+            committer_email,
+        ):
+            findings.append(f"commit {commit}: unapproved committer identity")
+    if author_identities and len(set(author_identities)) != 1:
+        findings.append("commit metadata: author identities are not consistent")
+    return findings
+
+
+def is_allowed_ci_ref(ref: str) -> bool:
+    return (
+        ref in REQUIRED_CI_REFS
+        or ref.startswith("refs/tags/")
+        or ref.startswith("refs/remotes/origin/")
+    )
+
+
+def validate_ci_refs(refs: list[str], remotes: list[str]) -> list[str]:
+    findings: list[str] = []
+    missing_refs = sorted(REQUIRED_CI_REFS - set(refs))
+    unexpected_refs = sorted(ref for ref in refs if not is_allowed_ci_ref(ref))
+    if missing_refs:
+        findings.append(f"refs: missing {missing_refs}")
+    if unexpected_refs:
+        findings.append(f"refs: unexpected {unexpected_refs}")
+    if remotes != ["origin"]:
+        findings.append(f"remote: expected origin only, found {remotes}")
+    for ref in refs:
+        findings.extend(scan(f"ref {ref}", ref.encode("utf-8")))
+        if PRIVATE_REF_MARKER.search(ref):
+            findings.append(f"ref {ref}: private_or_internal_marker")
+    return findings
+
+
+def validate_repository_guards(
+    *,
+    is_shallow: bool,
+    sanitized_base_ancestors: dict[str, bool],
+) -> list[str]:
+    findings: list[str] = []
+    if is_shallow:
+        findings.append("history: shallow repository")
+    for base_commit, is_ancestor in sanitized_base_ancestors.items():
+        if not is_ancestor:
+            findings.append(f"history: sanitized base {base_commit} is not an ancestor of HEAD")
+    return findings
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ci", action="store_true", help="allow a normal public clone with origin refs")
@@ -72,23 +156,7 @@ def main() -> None:
     refs = sorted(line for line in git("for-each-ref", "--format=%(refname)").splitlines() if line)
     remotes = sorted(line for line in git("remote").splitlines() if line)
     if args.ci:
-        expected_refs = {
-            "refs/heads/main",
-            "refs/remotes/origin/HEAD",
-            "refs/remotes/origin/main",
-        }
-        missing_refs = sorted(expected_refs - set(refs))
-        unexpected_refs = sorted(
-            ref
-            for ref in refs
-            if ref not in expected_refs and not ref.startswith("refs/tags/")
-        )
-        if missing_refs:
-            findings.append(f"refs: missing {missing_refs}")
-        if unexpected_refs:
-            findings.append(f"refs: unexpected {unexpected_refs}")
-        if remotes != ["origin"]:
-            findings.append(f"remote: expected origin only, found {remotes}")
+        findings.extend(validate_ci_refs(refs, remotes))
         head = git("rev-parse", "HEAD").strip()
         for ref in ("refs/heads/main", "refs/remotes/origin/main"):
             try:
@@ -105,15 +173,14 @@ def main() -> None:
         else:
             if origin_head != "refs/remotes/origin/main":
                 findings.append(f"refs: origin/HEAD targets {origin_head}")
-        commits = [line for line in git("rev-list", "HEAD").splitlines() if line]
+        commits = [line for line in git("rev-list", "--all").splitlines() if line]
     else:
         if refs != ["refs/heads/main"]:
             findings.append(f"refs: unexpected {refs}")
         if remotes:
             findings.append(f"remote: configured {remotes}")
         commits = [line for line in git("rev-list", "--all").splitlines() if line]
-    if git("rev-parse", "--is-shallow-repository").strip() != "false":
-        findings.append("history: shallow repository")
+    sanitized_base_ancestors: dict[str, bool] = {}
     for base_commit in SANITIZED_BASE_COMMITS:
         ancestor = subprocess.run(
             ["git", "merge-base", "--is-ancestor", base_commit, "HEAD"],
@@ -121,27 +188,27 @@ def main() -> None:
             check=False,
             capture_output=True,
         )
-        if ancestor.returncode != 0:
-            findings.append(f"history: sanitized base {base_commit} is not an ancestor of HEAD")
+        sanitized_base_ancestors[base_commit] = ancestor.returncode == 0
+    findings.extend(
+        validate_repository_guards(
+            is_shallow=git("rev-parse", "--is-shallow-repository").strip() != "false",
+            sanitized_base_ancestors=sanitized_base_ancestors,
+        )
+    )
 
-    identities = []
+    identity_records: list[tuple[str, str, str, str, str]] = []
     for commit in commits:
         fields = git("show", "-s", "--format=%an%x00%ae%x00%cn%x00%ce%x00%s%x00%b", commit).split("\0")
         if len(fields) < 6:
             findings.append(f"commit {commit}: malformed metadata")
             continue
         author_name, author_email, committer_name, committer_email, subject, body = fields[:6]
-        identities.append((author_name, author_email, committer_name, committer_email))
-        if author_name != committer_name or author_email != committer_email:
-            findings.append(f"commit {commit}: author/committer identity mismatch")
-        if not APPROVED_IDENTITY.fullmatch(author_email):
-            findings.append(f"commit {commit}: unapproved public identity")
+        identity_records.append((commit, author_name, author_email, committer_name, committer_email))
         findings.extend(scan(f"commit-message {commit}", (subject + "\n" + body).encode("utf-8")))
         paths = git("ls-tree", "-r", "--name-only", commit).splitlines()
         for path in paths:
             findings.extend(scan(f"path {commit}:{path}", path.encode("utf-8")))
-    if identities and len(set(identities)) != 1:
-        findings.append("commit metadata: identities are not consistent")
+    findings.extend(validate_commit_identities(identity_records))
 
     listing = git("cat-file", "--batch-all-objects", "--batch-check=%(objectname) %(objecttype)")
     scanned_objects = 0
