@@ -142,7 +142,7 @@ contracts. v1.1 adds relationship artifacts, FIT session/lap stable keys,
 generated analysis context, and an opt-in safe pack under explicit Product
 approval.
 
-## Additive Snapshot lifecycle output (v1.2 development)
+## Additive Snapshot lifecycle output (v1.2.0)
 
 The existing one-shot command, paths, statuses, and completion semantics remain
 unchanged. `snapshot run-all` first creates an immutable cumulative approved

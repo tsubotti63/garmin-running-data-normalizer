@@ -1,7 +1,7 @@
 # Known Limitations
 
-These limitations apply to the stable `1.1` release. They are explicit product
-boundaries, not hidden fallback behavior.
+These limitations apply to the prepared `1.2.0` release source. They are
+explicit product boundaries, not hidden fallback behavior.
 
 ## Input and orchestration
 
@@ -12,16 +12,16 @@ boundaries, not hidden fallback behavior.
   each run.
 - A detected but incompletely parsed FIT asset produces auditable
   `PARTIAL_SUCCESS` rather than silent omission.
-- Stable v1.1 one-shot Run-All processes one supplied Export. It does not
+- The compatible one-shot Run-All processes one supplied Export. It does not
   accumulate historical records across multiple Export downloads.
 - A newer Export can omit files, periods, records, or fields observed in an
   older Export. Missing from the newer Export is not evidence of deletion.
   Retain every downloaded Export until the additive Snapshot lifecycle has
   registered and verified it.
 
-## Snapshot lifecycle target
+## Snapshot lifecycle
 
-- The v1.2 development workflow stores complete, explicitly confirmed Export
+- The v1.2.0 workflow stores complete, explicitly confirmed Export
   observations in one private local store per opaque account boundary.
 - Canonical merge uses `missing_is_not_delete`; explicit null and empty values
   preserve the prior explicit value and become review holds.
@@ -53,7 +53,7 @@ boundaries, not hidden fallback behavior.
   nightly FIT HRV.
 - Health Status unknown metrics remain in long-form evidence; duplicate metric
   types are not silently overwritten.
-- Sleep, HRV, and Health Status are not Run-All output families in v1.1.
+- Sleep, HRV, and Health Status are not Run-All output families in v1.2.0.
 
 ## Distribution and integrations
 

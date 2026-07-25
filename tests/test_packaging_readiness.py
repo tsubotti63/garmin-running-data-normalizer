@@ -17,7 +17,7 @@ class PackagingReadinessTest(unittest.TestCase):
         project = metadata["project"]
 
         self.assertEqual(project["name"], "garmin-running-data-normalizer")
-        self.assertEqual(project["version"], "1.1.1")
+        self.assertEqual(project["version"], "1.2.0")
         self.assertEqual(project["version"], __version__)
         self.assertEqual(project["license"], "Apache-2.0")
         self.assertEqual(project["requires-python"], ">=3.11")

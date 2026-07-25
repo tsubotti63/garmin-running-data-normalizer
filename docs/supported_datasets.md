@@ -1,7 +1,7 @@
 # Supported Datasets
 
-This document defines the supported Garmin dataset and interface scope prepared
-for the `1.1` release candidate. All processing is local-first. Public fixtures are
+This document defines the supported Garmin dataset and interface scope for the
+prepared `1.2.0` release source. All processing is local-first. Public fixtures are
 synthetic; real exports and generated personal output must remain local.
 
 ## Stable CLI and output scope
@@ -38,7 +38,7 @@ Cross-dataset joins are governed by the [Dataset Relationship
 Catalog](dataset_relationships.md). Stable keys establish identity within their
 declared grain; they do not independently authorize a cross-dataset join.
 
-## Snapshot accumulation policy (v1.2 development)
+## Snapshot accumulation policy (v1.2.0)
 
 | Dataset | Snapshot merge mode | Absence behavior | Materialization |
 |---|---|---|---|

@@ -46,9 +46,10 @@ current review and Human authorization.
 Implementation adapts the reviewed predecessor Snapshot Store, candidate,
 dataset-policy, diff, full-rebuild, and QA contracts to the public package.
 The change is additive: the stable v1.1.1 one-shot Run-All remains compatible.
-Release-candidate promotion requires full synthetic validation, private
-four-Snapshot validation, clean package-installed flows, review evidence, and
-separate release authorization.
+v1.2.0 release preparation completed full synthetic validation, private
+four-Snapshot validation, clean package-installed flows, and review evidence.
+Release execution is separately authorized; each external action is recorded
+as complete only after it is observed.
 
 ## P2 — initial package-index publication
 

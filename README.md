@@ -25,13 +25,13 @@ Reusable descriptive analysis
 Human review
 ```
 
-Current stable release: **v1.1.1** · Python **3.11+** · Apache License 2.0
+Release source version: **v1.2.0** · Python **3.11+** · Apache License 2.0
 
 - [Install from PyPI](https://pypi.org/project/garmin-running-data-normalizer/)
 - [Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
-- [GitHub Release v1.1.1](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.1.1)
+- [Release Notes v1.2.0](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.2.0.md)
 
 ## Why this project
 
@@ -136,15 +136,15 @@ evidence, not product intent. Reports should include the OS, shell, Python
 version, package version, command, exit code, and public-safe error details.
 Never attach a real Garmin Export or full personal Run-All output.
 
-## Accumulate multiple Garmin Exports (v1.2 development)
+## Accumulate multiple Garmin Exports (v1.2.0)
 
-The stable v1.1.1 one-shot command processes one supplied Export and does not
+The compatible one-shot command processes one supplied Export and does not
 accumulate records across separate downloads. A later Garmin Export can omit
 files, periods, records, or fields seen previously; that absence is not proof
 of deletion. Keep every downloaded Export until it has been registered in a
 verified Snapshot Store.
 
-The additive Snapshot workflow being prepared for v1.2 keeps immutable local
+The additive Snapshot workflow in v1.2.0 keeps immutable local
 observations, builds a cumulative approved input, and then reuses the existing
 Run-All parser and output contract:
 
@@ -364,7 +364,7 @@ exports and generated personal output belong in ignored local directories.
 Run-All v1 requires Activities; Gear, Personal Records, and FIT are optional.
 Sleep, HRV, and Health Status are library-level interfaces and are not Run-All
 outputs. Hosted processing, Open-Meteo, Parquet, and automatic upload are not
-included. Stable v1.1.1 one-shot processing does not combine separate Export
+included. One-shot processing does not combine separate Export
 downloads; retain each Export until the additive Snapshot lifecycle has
 registered and verified it. Missing from a later Export is not a deletion
 instruction. The documented CLI and versioned Run-All output contract are the
@@ -400,4 +400,4 @@ Collaboration Platform v0.9 Standard, not a Garmin product release history.
   `.review/`
 
 This project is licensed under the
-[Apache License 2.0](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.1.1/LICENSE).
+[Apache License 2.0](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.2.0/LICENSE).

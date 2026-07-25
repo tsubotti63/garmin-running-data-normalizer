@@ -1,6 +1,6 @@
 # v1.2 Snapshot Accumulation Migration Guide
 
-Status: Draft for the v1.2 release candidate
+Status: Prepared guidance for the v1.2.0 release source
 Compatibility baseline: v1.1.1
 
 ## Compatibility promise
