@@ -133,6 +133,34 @@ contracts. v1.1 adds relationship artifacts, FIT session/lap stable keys,
 generated analysis context, and an opt-in safe pack under explicit Product
 approval.
 
+## Additive Snapshot lifecycle output (v1.2 development)
+
+The existing one-shot command, paths, statuses, and completion semantics remain
+unchanged. `snapshot run-all` first creates an immutable cumulative approved
+input and then invokes the same Run-All implementation. It adds:
+
+```text
+snapshot/
+  snapshot_lineage.json
+  snapshot_coverage.json
+  canonical_merge_summary.json
+```
+
+The lineage binds the ordered immutable Snapshot set, policy registry, current
+parser/schema versions, and deterministic Canonical build identity. Coverage
+reports dataset presence patterns, previous-only retention, new and reappeared
+records, changed records/fields, review holds, unsupported objects, pairwise and
+leave-one-out evidence. Missing from a later Export never means delete.
+Explicit null or empty values preserve an earlier explicit value and remain
+reviewable. Automatic deletion and timestamp-only relationship inference are
+both `false`.
+
+The local Canonical build also records `canonical_merge_manifest.json`,
+`snapshot_delta_report.json`, `presence_pattern_report.json`,
+`field_provenance.json`, `review_holds.json`, and
+`approved_input_manifest.json`. Those build artifacts are private lifecycle
+evidence and are not added to a normal one-shot output.
+
 ## Privacy boundary
 
 Full normalized output contains personal metrics, local identifiers,

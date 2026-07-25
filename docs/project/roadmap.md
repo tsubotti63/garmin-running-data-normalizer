@@ -41,6 +41,15 @@ current review and Human authorization.
 - Update GitHub Actions dependencies before the Node.js 20 compatibility shim
   is removed from hosted runners.
 
+## v1.2 — Snapshot Accumulation and Canonical Merge Foundation
+
+Implementation adapts the reviewed predecessor Snapshot Store, candidate,
+dataset-policy, diff, full-rebuild, and QA contracts to the public package.
+The change is additive: the stable v1.1.1 one-shot Run-All remains compatible.
+Release-candidate promotion requires full synthetic validation, private
+four-Snapshot validation, clean package-installed flows, review evidence, and
+separate release authorization.
+
 ## P2 — initial package-index publication
 
 Version `1.0.1` is the approved packaging-only patch candidate from post-P1

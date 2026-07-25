@@ -81,6 +81,12 @@ exclusions, match coverage, ambiguity, duplicate, and unresolved metrics.
 `run_manifest.json`, and `run_summary.json` qualify a run but do not introduce
 analytical facts.
 
+For Snapshot Run-All, FIT Sessions/Laps and Activity/FIT links are regenerated
+from the cumulative unique FIT blob set and canonical Activities using these
+same contracts. Snapshot order, filename similarity, or timestamp proximity
+does not create an additional relationship. Lifecycle lineage and coverage
+qualify the cumulative input but do not authorize a new analytical join.
+
 ## Prohibited joins
 
 - Do not join Activities and FIT by timestamp proximity outside

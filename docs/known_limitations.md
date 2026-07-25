@@ -12,6 +12,24 @@ boundaries, not hidden fallback behavior.
   each run.
 - A detected but incompletely parsed FIT asset produces auditable
   `PARTIAL_SUCCESS` rather than silent omission.
+- Stable v1.1 one-shot Run-All processes one supplied Export. It does not
+  accumulate historical records across multiple Export downloads.
+- A newer Export can omit files, periods, records, or fields observed in an
+  older Export. Missing from the newer Export is not evidence of deletion.
+  Retain every downloaded Export until the additive Snapshot lifecycle has
+  registered and verified it.
+
+## Snapshot lifecycle target
+
+- The v1.2 development workflow stores complete, explicitly confirmed Export
+  observations in one private local store per opaque account boundary.
+- Canonical merge uses `missing_is_not_delete`; explicit null and empty values
+  preserve the prior explicit value and become review holds.
+- Automatic deletion, snapshot/blob deletion, and garbage collection are not
+  implemented. Unknown and unsupported inputs are preserved as raw evidence,
+  not promoted to normalized public datasets.
+- A Snapshot Store is not a public artifact or a backup service. Back up only
+  after integrity verification and verify again after restore.
 
 ## FIT
 

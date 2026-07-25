@@ -1,0 +1,154 @@
+from __future__ import annotations
+
+from typing import Any
+
+
+REGISTRY_VERSION = "garmin_public_snapshot_dataset_merge_policies:v1.0"
+CONTRACT_VERSION = "garmin_public_snapshot_lifecycle:v1.0"
+
+DEFAULTS: dict[str, Any] = {
+    "absence_policy": "missing_is_not_delete",
+    "explicit_null_policy": "preserve_previous_and_review",
+    "explicit_empty_policy": "preserve_previous_and_review",
+    "deletion_policy": "no_automatic_delete",
+    "exact_duplicate_policy": "dedupe_preserve_all_provenance",
+    "null_key_policy": "preserve_raw_and_review",
+    "conflict_policy": "deterministic_if_ordered_else_stop",
+    "provenance_required": True,
+    "public_status": "approved_for_implementation",
+}
+
+POLICIES: dict[str, dict[str, Any]] = {
+    "activities": {
+        "dataset": "activities",
+        "source_family": "DI-Connect-Fitness",
+        "merge_mode": "entity_upsert",
+        "record_grain": "activity",
+        "stable_key": ["garmin_activity_key"],
+        "materialization": "source_shaped_json",
+    },
+    "gear": {
+        "dataset": "gear",
+        "source_family": "DI-Connect-Fitness",
+        "merge_mode": "entity_upsert",
+        "record_grain": "gear",
+        "stable_key": ["gear_key"],
+        "materialization": "source_shaped_json",
+    },
+    "activity_gear": {
+        "dataset": "activity_gear",
+        "source_family": "DI-Connect-Fitness",
+        "merge_mode": "temporal_event_union",
+        "record_grain": "activity_gear_link",
+        "stable_key": ["gear_key", "activity_id"],
+        "materialization": "source_shaped_json",
+    },
+    "personal_records": {
+        "dataset": "personal_records",
+        "source_family": "DI-Connect-Fitness",
+        "merge_mode": "entity_upsert",
+        "record_grain": "personal_record",
+        "stable_key": ["personal_record_id"],
+        "relationship_exception": "activity_id_zero_is_independent",
+        "materialization": "source_shaped_json",
+    },
+    "fit_blobs": {
+        "dataset": "fit_blobs",
+        "source_family": "DI-Connect-Uploaded-Files",
+        "merge_mode": "immutable_blob_union",
+        "record_grain": "unique_fit_binary",
+        "stable_key": ["fit_blob_sha256"],
+        "materialization": "cumulative_unique_fit_files",
+    },
+    "fit_sessions": {
+        "dataset": "fit_sessions",
+        "source_family": "DI-Connect-Uploaded-Files",
+        "merge_mode": "regenerate",
+        "record_grain": "fit_session",
+        "regeneration_source": "fit_blobs",
+        "stable_key": ["fit_session_key"],
+    },
+    "fit_laps": {
+        "dataset": "fit_laps",
+        "source_family": "DI-Connect-Uploaded-Files",
+        "merge_mode": "regenerate",
+        "record_grain": "fit_session_lap",
+        "regeneration_source": "fit_blobs",
+        "stable_key": ["fit_lap_key"],
+    },
+    "activity_fit_links": {
+        "dataset": "activity_fit_links",
+        "source_family": "derived_relationship",
+        "merge_mode": "regenerate",
+        "record_grain": "activity_fit_session_link",
+        "regeneration_source": ["activities", "fit_sessions"],
+        "stable_key": ["garmin_activity_key", "fit_session_key"],
+        "inference_policy": "no_timestamp_only_inference",
+    },
+    "qa_audit_output_experience": {
+        "dataset": "qa_audit_output_experience",
+        "source_family": "derived_output",
+        "merge_mode": "regenerate",
+        "record_grain": "generated_artifact",
+        "stable_key": ["artifact_path"],
+    },
+    "unknown_or_unsupported": {
+        "dataset": "unknown_or_unsupported",
+        "source_family": "unknown",
+        "merge_mode": "preserve_only",
+        "record_grain": "raw_file_or_member",
+        "stable_key": ["snapshot_id", "relative_path", "sha256"],
+        "canonical_public_output": False,
+    },
+}
+
+PUBLIC_POLICY_ORDER = (
+    "activities",
+    "gear",
+    "activity_gear",
+    "personal_records",
+    "fit_blobs",
+    "fit_sessions",
+    "fit_laps",
+    "activity_fit_links",
+    "qa_audit_output_experience",
+    "unknown_or_unsupported",
+)
+FUTURE_READY_DATASETS = (
+    "sleep",
+    "hrv",
+    "health_status",
+    "training_readiness",
+    "acute_training_load",
+    "training_history_status",
+)
+
+
+def public_registry() -> dict[str, Any]:
+    """Return the frozen public policy registry as a JSON-serializable object."""
+    return {
+        "registry_version": REGISTRY_VERSION,
+        "contract_version": CONTRACT_VERSION,
+        "target_release": "1.2.0",
+        "defaults": DEFAULTS,
+        "policies": [POLICIES[name] for name in PUBLIC_POLICY_ORDER],
+        "future_ready_policies": [
+            {
+                "dataset": name,
+                "merge_mode": "daily_state_upsert",
+                "public_dataset_status": "not_in_v1.2.0",
+            }
+            for name in FUTURE_READY_DATASETS
+        ],
+    }
+
+
+__all__ = [
+    "CONTRACT_VERSION",
+    "DEFAULTS",
+    "FUTURE_READY_DATASETS",
+    "POLICIES",
+    "PUBLIC_POLICY_ORDER",
+    "REGISTRY_VERSION",
+    "public_registry",
+]

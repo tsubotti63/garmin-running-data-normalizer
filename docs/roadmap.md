@@ -35,3 +35,13 @@
 - `v0.1.0-rc.2` is the latest published prerelease, and `v1.0.0` preparation is
   in progress. Any future tag, GitHub Release, stable release, or package
   publication requires its own current review and separate Human authorization.
+
+## Milestone 5 — v1.2 Snapshot Accumulation — implementation
+
+- Preserve complete Garmin Exports as immutable account-bounded observations.
+- Build deterministic cumulative approved input with
+  `missing_is_not_delete`, explicit review holds, and no automatic deletion.
+- Reparse cumulative unique FIT content and regenerate reviewed relationships.
+- Validate public behavior with synthetic fixtures and private behavior against
+  four separately supplied local Snapshots.
+- Keep the stable v1.1.1 one-shot CLI and output contract compatible.

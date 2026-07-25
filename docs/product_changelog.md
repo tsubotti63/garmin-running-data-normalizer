@@ -4,6 +4,23 @@ This file records factual Garmin Running Data Normalizer product changes. The
 root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
 Standard adopted by this repository.
 
+## Unreleased — v1.2 Snapshot Accumulation and Canonical Merge Foundation
+
+- Adds an immutable, account-bounded local Snapshot Store with explicit
+  completeness confirmation, content-addressed file/member preservation,
+  arbitrary historical insertion, idempotent registration, integrity
+  verification, single-writer locking, and journal recovery.
+- Adds versioned per-dataset merge policy, seven-state missing-value evidence,
+  previous-only retention, new/reappeared/changed reporting, field provenance,
+  null/empty review holds, and fail-closed conflict handling.
+- Materializes the cumulative unique FIT blob set, reparses it with the current
+  v1.1.1 parser/key contracts, and regenerates Activity/FIT relationships
+  without timestamp-only inference.
+- Adds lifecycle CLI commands and Snapshot lineage, coverage, and Canonical
+  merge evidence while preserving the stable one-shot Run-All behavior.
+- Keeps real Snapshot Stores and four-Snapshot validation private/local; public
+  tests and examples remain synthetic.
+
 ## v1.1.1 — stable Production release
 
 - Promotes the package metadata, import version, CLI version, generated

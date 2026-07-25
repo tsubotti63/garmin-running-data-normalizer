@@ -77,6 +77,51 @@ For the bounded activities-only Golden Path and its byte-for-byte Golden Result,
 follow the complete
 [Product Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md).
 
+## Accumulate multiple Garmin Exports (v1.2 development)
+
+The stable v1.1.1 one-shot command processes one supplied Export and does not
+accumulate records across separate downloads. A later Garmin Export can omit
+files, periods, records, or fields seen previously; that absence is not proof
+of deletion. Keep every downloaded Export until it has been registered in a
+verified Snapshot Store.
+
+The additive Snapshot workflow being prepared for v1.2 keeps immutable local
+observations, builds a cumulative approved input, and then reuses the existing
+Run-All parser and output contract:
+
+```bash
+garmin-running-data-normalizer snapshot init \
+  --store workspace/snapshot-store \
+  --account local-account-01
+
+garmin-running-data-normalizer snapshot register \
+  --store workspace/snapshot-store \
+  --input /path/to/complete-garmin-export \
+  --label S1 \
+  --requested-at 2030-01-01T00:00:00+00:00 \
+  --downloaded-at 2030-01-01T01:00:00+00:00 \
+  --observed-at 2030-01-01T02:00:00+00:00 \
+  --confirm-complete
+
+garmin-running-data-normalizer snapshot verify \
+  --store workspace/snapshot-store
+
+garmin-running-data-normalizer snapshot run-all \
+  --store workspace/snapshot-store \
+  --output workspace/snapshot-run-all
+```
+
+Use one opaque account token per person/account boundary. Snapshot Stores and
+their Run-All outputs are private local data: place them outside synchronized
+or shared folders where practical, restrict directory permissions (for example,
+`chmod 700 workspace/snapshot-store` on a single-user Unix-like system), and
+never commit them. Back up a store only after `snapshot verify` reports `PASS`;
+verify it again after restoration. Snapshot and blob deletion, automatic
+garbage collection, and automatic deletion inference are not provided.
+See the
+[v1.2 migration guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/project/v1_2_snapshot_migration_guide_v1_0.md)
+for adoption, backup, rollback, and one-shot compatibility guidance.
+
 ## A handoff, not just converted files
 
 Run-All includes the context needed to review and analyze the result without
@@ -248,7 +293,10 @@ exports and generated personal output belong in ignored local directories.
 Run-All v1 requires Activities; Gear, Personal Records, and FIT are optional.
 Sleep, HRV, and Health Status are library-level interfaces and are not Run-All
 outputs. Hosted processing, Open-Meteo, Parquet, and automatic upload are not
-included. The documented CLI and versioned Run-All output contract are the
+included. Stable v1.1.1 one-shot processing does not combine separate Export
+downloads; retain each Export until the additive Snapshot lifecycle has
+registered and verified it. Missing from a later Export is not a deletion
+instruction. The documented CLI and versioned Run-All output contract are the
 stable `1.x` interface; other Python modules may evolve compatibly as their
 contracts mature. See
 [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
