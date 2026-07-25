@@ -38,6 +38,24 @@ Cross-dataset joins are governed by the [Dataset Relationship
 Catalog](dataset_relationships.md). Stable keys establish identity within their
 declared grain; they do not independently authorize a cross-dataset join.
 
+## Snapshot accumulation policy (v1.2 development)
+
+| Dataset | Snapshot merge mode | Absence behavior | Materialization |
+|---|---|---|---|
+| Activities | entity upsert by `garmin_activity_key` | retain previous | source-shaped JSON |
+| Gear | entity upsert by `gear_key` | retain previous | source-shaped JSON |
+| Activity/Gear | event union by `gear_key`, `activity_id` | retain previous | source-shaped JSON |
+| Personal Records | entity upsert by `personal_record_id` | retain previous | source-shaped JSON |
+| FIT blobs | immutable content union | retain old-only content | one file per unique content |
+| FIT Sessions/Laps | regenerate | derived from cumulative FIT union | current parser and stable keys |
+| Activity/FIT links | regenerate | unresolved remains unresolved | current evidence-qualified policy |
+| Unknown/unsupported | preserve only | never discard automatically | raw private evidence only |
+
+The machine-readable policy authority is
+`config/garmin_snapshot_dataset_merge_policies_v1.json`. Sleep, HRV, Health
+Status, and training-state families are future-ready policy entries only; they
+are not promoted to Snapshot Run-All output in v1.2.
+
 ## Library-level scope
 
 | Dataset or output | Implemented behavior | Stable CLI/Run-All status |

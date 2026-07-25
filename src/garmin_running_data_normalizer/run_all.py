@@ -93,6 +93,11 @@ OUTPUT_PATHS = (
     "run_manifest.json",
     "run_summary.json",
 )
+SNAPSHOT_LIFECYCLE_PATHS = (
+    "snapshot/snapshot_lineage.json",
+    "snapshot/snapshot_coverage.json",
+    "snapshot/canonical_merge_summary.json",
+)
 INCOMPLETE_FIT_STATUSES = {
     "too_large",
     "too_small",
@@ -619,6 +624,7 @@ def run_all(
     output_path: str | Path,
     *,
     external_safe_pack: bool = False,
+    snapshot_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compose the existing Garmin normalizers into deterministic Run-All v1."""
     input_root, output_root = _validate_paths(input_path, output_path)
@@ -670,6 +676,26 @@ def run_all(
         "qa/dataset_summary.json": _json_bytes(dataset_summary),
         "qa/relationship_summary.json": _json_bytes(relationship_summary),
     }
+    if snapshot_context is not None:
+        required_snapshot_context = {"lineage", "coverage", "merge_summary"}
+        if set(snapshot_context) != required_snapshot_context:
+            raise RunAllError(
+                "SNAPSHOT_CONTEXT_INVALID",
+                "snapshot lifecycle context is incomplete",
+            )
+        payloads.update(
+            {
+                "snapshot/snapshot_lineage.json": _json_bytes(
+                    snapshot_context["lineage"]
+                ),
+                "snapshot/snapshot_coverage.json": _json_bytes(
+                    snapshot_context["coverage"]
+                ),
+                "snapshot/canonical_merge_summary.json": _json_bytes(
+                    snapshot_context["merge_summary"]
+                ),
+            }
+        )
     generated_paths = list(OUTPUT_PATHS)
     if external_safe_pack:
         safe_pack_path = "analysis/external_safe_handoff.zip"
@@ -682,6 +708,12 @@ def run_all(
             *OUTPUT_PATHS[:-2],
             safe_pack_path,
             *OUTPUT_PATHS[-2:],
+        ]
+    if snapshot_context is not None:
+        generated_paths = [
+            *generated_paths[:-2],
+            *SNAPSHOT_LIFECYCLE_PATHS,
+            *generated_paths[-2:],
         ]
     qa_by_name = {entry["dataset"]: entry for entry in qa_entries}
     manifest = {
@@ -726,6 +758,18 @@ def run_all(
         "generated_paths": generated_paths,
         "deterministic_output_digest": "projection-pending",
     }
+    if snapshot_context is not None:
+        lifecycle_summary = dict(snapshot_context["merge_summary"])
+        manifest["snapshot_lifecycle"] = {
+            "enabled": True,
+            "snapshot_count": snapshot_context["lineage"]["snapshot_count"],
+            "canonical_build_sha256": snapshot_context["lineage"][
+                "canonical_build_sha256"
+            ],
+            "automatic_deletion": False,
+            "inference_performed": False,
+        }
+        summary["snapshot_lifecycle"] = lifecycle_summary
     from .output_experience import (
         DOCUMENT_NAMES,
         MACHINE_CONTEXT_NAMES,
@@ -739,6 +783,8 @@ def run_all(
     allowed_payload_paths = set(MANIFEST_OUTPUT_PATHS)
     if external_safe_pack:
         allowed_payload_paths.update(OPTIONAL_MANIFEST_OUTPUT_PATHS)
+    if snapshot_context is not None:
+        allowed_payload_paths.update(SNAPSHOT_LIFECYCLE_PATHS)
     if set(provisional_payloads) != allowed_payload_paths:
         raise RunAllError(
             "OUTPUT_CONTRACT_INVALID",
@@ -796,6 +842,7 @@ __all__ = [
     "ACTIVITIES_CSV_COLUMNS",
     "DATASET_TABLE",
     "OUTPUT_PATHS",
+    "SNAPSHOT_LIFECYCLE_PATHS",
     "RUN_ALL_VERSION",
     "RunAllError",
     "run_all",

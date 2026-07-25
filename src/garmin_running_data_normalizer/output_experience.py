@@ -5,7 +5,13 @@ from collections.abc import Mapping
 from pathlib import PurePosixPath
 from typing import Any
 
-from .run_all import DATASET_PATHS, DATASET_TABLE, OUTPUT_PATHS, RUN_ALL_VERSION
+from .run_all import (
+    DATASET_PATHS,
+    DATASET_TABLE,
+    OUTPUT_PATHS,
+    RUN_ALL_VERSION,
+    SNAPSHOT_LIFECYCLE_PATHS,
+)
 
 
 MANIFEST_FORMAT = "garmin-running-data-normalizer-run-manifest-v1"
@@ -365,6 +371,14 @@ def _validate_projection_inputs(
     allowed_output_sets = (
         set(MANIFEST_OUTPUT_PATHS),
         set((*MANIFEST_OUTPUT_PATHS, *OPTIONAL_MANIFEST_OUTPUT_PATHS)),
+        set((*MANIFEST_OUTPUT_PATHS, *SNAPSHOT_LIFECYCLE_PATHS)),
+        set(
+            (
+                *MANIFEST_OUTPUT_PATHS,
+                *OPTIONAL_MANIFEST_OUTPUT_PATHS,
+                *SNAPSHOT_LIFECYCLE_PATHS,
+            )
+        ),
     )
     if set(output_paths) not in allowed_output_sets:
         raise OutputExperienceError("run manifest output paths do not match Run-All v1")
@@ -380,7 +394,22 @@ def _validate_projection_inputs(
         *OPTIONAL_MANIFEST_OUTPUT_PATHS,
         *OUTPUT_PATHS[-2:],
     ]
-    if safe_generated_paths not in (list(OUTPUT_PATHS), optional_generated_paths):
+    snapshot_generated_paths = [
+        *OUTPUT_PATHS[:-2],
+        *SNAPSHOT_LIFECYCLE_PATHS,
+        *OUTPUT_PATHS[-2:],
+    ]
+    optional_snapshot_generated_paths = [
+        *optional_generated_paths[:-2],
+        *SNAPSHOT_LIFECYCLE_PATHS,
+        *optional_generated_paths[-2:],
+    ]
+    if safe_generated_paths not in (
+        list(OUTPUT_PATHS),
+        optional_generated_paths,
+        snapshot_generated_paths,
+        optional_snapshot_generated_paths,
+    ):
         raise OutputExperienceError("run summary generated paths do not match Run-All v1")
 
     raw_manifest_datasets = manifest_object.get("datasets")
@@ -740,6 +769,89 @@ def _path_list(title: str, paths: list[str]) -> list[str]:
     return lines
 
 
+def _snapshot_lifecycle_lines(summary: Mapping[str, Any]) -> list[str]:
+    lifecycle = summary.get("snapshot_lifecycle")
+    if not isinstance(lifecycle, Mapping):
+        return []
+    datasets = _mapping(
+        lifecycle.get("datasets"),
+        "snapshot lifecycle datasets",
+    )
+    observed_range = _mapping(
+        lifecycle.get("snapshot_observed_range", {}),
+        "snapshot observed range",
+    )
+    labels = lifecycle.get("snapshot_labels", [])
+    if not isinstance(labels, list):
+        raise OutputExperienceError("snapshot labels must be a list")
+    unknown_families = lifecycle.get("unknown_or_unsupported_families", [])
+    if not isinstance(unknown_families, list):
+        raise OutputExperienceError("snapshot unknown families must be a list")
+    totals = {
+        field: sum(
+            int(item.get(field, 0))
+            for item in datasets.values()
+            if isinstance(item, Mapping)
+        )
+        for field in (
+            "previous_only_retained_count",
+            "new_record_count",
+            "reappeared_record_count",
+            "changed_record_count",
+            "updated_field_count",
+        )
+    }
+    lines = [
+        "## Snapshot Accumulation",
+        "",
+        f"- Snapshots used: {lifecycle.get('snapshot_count')}",
+        f"- Snapshot labels: {', '.join(str(value) for value in labels) or 'not supplied'}",
+        "- Observed range: "
+        f"{observed_range.get('first', 'unknown')} to "
+        f"{observed_range.get('last', 'unknown')}",
+        "- Canonical merge policy: `missing_is_not_delete`",
+        f"- Previous-only retained: {totals['previous_only_retained_count']}",
+        f"- New records added: {totals['new_record_count']}",
+        f"- Reappeared records: {totals['reappeared_record_count']}",
+        f"- Changed records: {totals['changed_record_count']}",
+        f"- Updated fields: {totals['updated_field_count']}",
+        f"- Explicit null reviews: {lifecycle.get('explicit_null_review_count', 0)}",
+        f"- Explicit empty reviews: {lifecycle.get('explicit_empty_review_count', 0)}",
+        f"- Review holds: {lifecycle.get('review_hold_count', 0)}",
+        f"- Stop conflicts: {lifecycle.get('stop_conflict_count', 0)}",
+        f"- Coverage gaps: {lifecycle.get('coverage_gap_count', 0)}",
+        f"- Unknown or unsupported objects preserved: {lifecycle.get('unknown_or_unsupported_object_count', 0)}",
+        "- Unknown or unsupported families: "
+        f"{', '.join(str(value) for value in unknown_families) or 'None'}",
+        "- Canonical completeness boundary: "
+        f"{lifecycle.get('canonical_completeness_boundary', 'not supplied')}",
+        "- Automatic deletion: No",
+        "- Inference performed: No",
+        f"- Policy: `{lifecycle.get('policy_registry_version', 'unknown')}`",
+        f"- Parser: `{lifecycle.get('parser_version', 'unknown')}`",
+        f"- Schema: `{lifecycle.get('schema_version', 'unknown')}`",
+        "- Lifecycle evidence: `snapshot/snapshot_lineage.json`,",
+        "  `snapshot/snapshot_coverage.json`, and",
+        "  `snapshot/canonical_merge_summary.json`.",
+        "",
+        "| Dataset | Canonical | Previous-only retained | New | Reappeared | Changed | Updated fields |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for dataset, item in datasets.items():
+        if not isinstance(item, Mapping):
+            continue
+        lines.append(
+            f"| {_code(dataset)} | {item.get('canonical_record_count', 0)} | "
+            f"{item.get('previous_only_retained_count', 0)} | "
+            f"{item.get('new_record_count', 0)} | "
+            f"{item.get('reappeared_record_count', 0)} | "
+            f"{item.get('changed_record_count', 0)} | "
+            f"{item.get('updated_field_count', 0)} |"
+        )
+    lines.append("")
+    return lines
+
+
 def render_dataset_inventory(
     manifest: Mapping[str, Any],
     summary: Mapping[str, Any],
@@ -777,6 +889,9 @@ def render_dataset_inventory(
             f"{_code(presentation['relationship_status'])} | "
             f"{_code(presentation['privacy_classification'])} |"
         )
+    snapshot_lines = _snapshot_lifecycle_lines(summary)
+    if snapshot_lines:
+        lines.extend(["", *snapshot_lines])
     lines.extend(
         [
             "",
@@ -866,6 +981,7 @@ def render_start_here(
     lines.extend(_path_list("QA Evidence", qa_paths))
     lines.extend(_path_list("Audit Evidence", audit_paths))
     lines.extend(_relationship_coverage_lines(relationship_summary))
+    lines.extend(_snapshot_lifecycle_lines(summary))
     lines.extend(
         [
             "## Relationship Safety",
@@ -985,6 +1101,15 @@ def render_analysis_handoff(
         "> interpretation, and state what remains unknown.",
         "",
     ]
+    if isinstance(summary.get("snapshot_lifecycle"), Mapping):
+        lines.extend(_snapshot_lifecycle_lines(summary))
+        lines.extend(
+            [
+                "Snapshot FIT sessions and laps were regenerated from the cumulative",
+                "unique FIT blob set; Activity/FIT links were regenerated afterward.",
+                "",
+            ]
+        )
     return "\n".join(lines)
 
 
@@ -1126,7 +1251,7 @@ def build_analysis_context(
         summary,
         registry,
     )
-    return {
+    context = {
         "format": "garmin-running-data-normalizer-analysis-context-v1",
         "product_version": manifest["product_version"],
         "run_all_version": RUN_ALL_VERSION,
@@ -1157,6 +1282,58 @@ def build_analysis_context(
         ],
         "warnings": summary.get("warnings", []),
     }
+    if isinstance(summary.get("snapshot_lifecycle"), Mapping):
+        context["snapshot_lifecycle"] = {
+            "enabled": True,
+            "snapshot_count": summary["snapshot_lifecycle"].get("snapshot_count"),
+            "snapshot_labels": summary["snapshot_lifecycle"].get(
+                "snapshot_labels", []
+            ),
+            "snapshot_observed_range": summary["snapshot_lifecycle"].get(
+                "snapshot_observed_range", {}
+            ),
+            "policy": "missing_is_not_delete",
+            "policy_registry_version": summary["snapshot_lifecycle"].get(
+                "policy_registry_version"
+            ),
+            "parser_version": summary["snapshot_lifecycle"].get("parser_version"),
+            "schema_version": summary["snapshot_lifecycle"].get("schema_version"),
+            "datasets": summary["snapshot_lifecycle"].get("datasets", {}),
+            "field_state_counts": summary["snapshot_lifecycle"].get(
+                "field_state_counts", {}
+            ),
+            "review_hold_count": summary["snapshot_lifecycle"].get(
+                "review_hold_count", 0
+            ),
+            "review_hold_type_counts": summary["snapshot_lifecycle"].get(
+                "review_hold_type_counts", {}
+            ),
+            "explicit_null_review_count": summary["snapshot_lifecycle"].get(
+                "explicit_null_review_count", 0
+            ),
+            "explicit_empty_review_count": summary["snapshot_lifecycle"].get(
+                "explicit_empty_review_count", 0
+            ),
+            "stop_conflict_count": summary["snapshot_lifecycle"].get(
+                "stop_conflict_count", 0
+            ),
+            "coverage_gap_count": summary["snapshot_lifecycle"].get(
+                "coverage_gap_count", 0
+            ),
+            "unknown_or_unsupported_object_count": summary[
+                "snapshot_lifecycle"
+            ].get("unknown_or_unsupported_object_count", 0),
+            "unknown_or_unsupported_families": summary[
+                "snapshot_lifecycle"
+            ].get("unknown_or_unsupported_families", []),
+            "canonical_completeness_boundary": summary[
+                "snapshot_lifecycle"
+            ].get("canonical_completeness_boundary"),
+            "automatic_deletion": False,
+            "inference_performed": False,
+            "evidence_paths": list(SNAPSHOT_LIFECYCLE_PATHS),
+        }
+    return context
 
 
 def build_artifact_inventory(

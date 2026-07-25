@@ -12,6 +12,7 @@ from .intake.discovery import discover_export
 from .normalizers.activities import normalize_activities
 from .qa import summarize_records
 from .run_all import RunAllError, run_all
+from .snapshot import SnapshotLifecycleError
 from .standalone import StandaloneHandoffError, validate_standalone_handoff
 
 
@@ -172,6 +173,82 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Add a deterministic, reviewable external-safe Analysis Pack",
     )
+    snapshot = commands.add_parser(
+        "snapshot",
+        help="Manage immutable Garmin Export snapshots and cumulative Run-All.",
+    )
+    snapshot_commands = snapshot.add_subparsers(
+        dest="snapshot_command",
+        required=True,
+    )
+    snapshot_init = snapshot_commands.add_parser(
+        "init",
+        help="Initialize one local snapshot store for one opaque account boundary.",
+    )
+    snapshot_init.add_argument("--store", required=True)
+    snapshot_init.add_argument(
+        "--account",
+        "--account-store-id",
+        dest="account_store_id",
+        required=True,
+    )
+    snapshot_register = snapshot_commands.add_parser(
+        "register",
+        help="Register a complete immutable Garmin Export observation.",
+    )
+    snapshot_register.add_argument("--store", required=True)
+    snapshot_register.add_argument("--input", required=True)
+    snapshot_register.add_argument("--label", required=True)
+    snapshot_register.add_argument(
+        "--requested-at",
+        "--export-requested-at",
+        dest="export_requested_at",
+        required=True,
+    )
+    snapshot_register.add_argument(
+        "--downloaded-at",
+        "--export-downloaded-at",
+        dest="export_downloaded_at",
+        required=True,
+    )
+    snapshot_register.add_argument(
+        "--observed-at",
+        "--export-observed-at",
+        dest="export_observed_at",
+        required=True,
+    )
+    snapshot_register.add_argument(
+        "--confirm-complete",
+        action="store_true",
+        help="Confirm the Export copy is complete before immutable registration.",
+    )
+    snapshot_status_parser = snapshot_commands.add_parser(
+        "status",
+        help="Show privacy-bounded snapshot labels, ordering, and coverage counts.",
+    )
+    snapshot_status_parser.add_argument("--store", required=True)
+    snapshot_verify = snapshot_commands.add_parser(
+        "verify",
+        help="Verify immutable manifests, blobs, registry order, and account boundary.",
+    )
+    snapshot_verify.add_argument("--store", required=True)
+    snapshot_build = snapshot_commands.add_parser(
+        "build-input",
+        help="Build a new deterministic cumulative approved input view.",
+    )
+    snapshot_build.add_argument("--store", required=True)
+    snapshot_build.add_argument("--output", required=True)
+    snapshot_run_all = snapshot_commands.add_parser(
+        "run-all",
+        help="Build cumulative input and execute the existing Run-All contract.",
+    )
+    snapshot_run_all.add_argument("--store", required=True)
+    snapshot_run_all.add_argument("--output", required=True)
+    snapshot_run_all.add_argument(
+        "--external-safe-pack",
+        action="store_true",
+        help="Add the existing deterministic external-safe Analysis Pack",
+    )
     handoff = commands.add_parser(
         "validate-handoff",
         help="Validate a completed Run-All output without repository access.",
@@ -191,6 +268,42 @@ def main(argv: list[str] | None = None) -> int:
                 args.output,
                 external_safe_pack=args.external_safe_pack,
             )
+        elif args.command == "snapshot":
+            from .snapshot import (
+                build_approved_input,
+                initialize_store,
+                register_snapshot,
+                run_snapshot_all,
+                snapshot_status,
+                verify_store,
+            )
+
+            if args.snapshot_command == "init":
+                result = initialize_store(args.store, args.account_store_id)
+            elif args.snapshot_command == "register":
+                result = register_snapshot(
+                    args.store,
+                    args.input,
+                    snapshot_label=args.label,
+                    export_requested_at=args.export_requested_at,
+                    export_downloaded_at=args.export_downloaded_at,
+                    export_observed_at=args.export_observed_at,
+                    confirm_complete=args.confirm_complete,
+                )
+            elif args.snapshot_command == "status":
+                result = snapshot_status(args.store)
+            elif args.snapshot_command == "verify":
+                result = verify_store(args.store)
+            elif args.snapshot_command == "build-input":
+                result = build_approved_input(args.store, args.output)
+            elif args.snapshot_command == "run-all":
+                result = run_snapshot_all(
+                    args.store,
+                    args.output,
+                    external_safe_pack=args.external_safe_pack,
+                )
+            else:
+                raise GoldenPathError("unsupported snapshot command")
         elif args.command == "validate-handoff":
             result = validate_standalone_handoff(args.input)
         else:
@@ -201,17 +314,22 @@ def main(argv: list[str] | None = None) -> int:
     except RunAllError as exc:
         print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)
         return 2
+    except SnapshotLifecycleError as exc:
+        print(f"ERROR [SNAPSHOT_LIFECYCLE_FAILED]: {exc}", file=sys.stderr)
+        return 2
     except StandaloneHandoffError as exc:
         print(f"ERROR [HANDOFF_INVALID]: {exc}", file=sys.stderr)
         return 2
     except Exception:
-        if args.command == "run-all":
+        if args.command in {"run-all", "snapshot"}:
             print("ERROR [RUN_ALL_FAILED]: Run-All failed; verify the input and output contract", file=sys.stderr)
         else:
             print("ERROR: Golden Path failed; verify the input and output contract", file=sys.stderr)
         return 2
 
-    if args.command == "run-all":
+    if args.command == "run-all" or (
+        args.command == "snapshot" and args.snapshot_command == "run-all"
+    ):
         print(f"STATUS: {result['status']}")
         print(f"exit: {result['exit_code']}")
         for family, details in result["family_results"].items():
@@ -225,6 +343,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"generated: {', '.join(result['generated_files'])}")
         print(f"digest: {result['deterministic_digest']}")
         return int(result["exit_code"])
+
+    if args.command == "snapshot":
+        print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0 if result.get("status") == "PASS" else 2
 
     if args.command == "validate-handoff":
         print("PASS")

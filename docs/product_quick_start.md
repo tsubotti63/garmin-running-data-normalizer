@@ -89,6 +89,54 @@ diff -ru workspace/golden-path workspace/golden-path-repeat
 
 No output from the second `diff` confirms byte-identical repeated execution.
 
+## Accumulate complete Exports (v1.2 development)
+
+The stable one-shot workflow remains unchanged. It does not merge separate
+Garmin Export downloads. Keep every download: later absence does not mean that
+Garmin or the user deleted an earlier record.
+
+For a development checkout containing the additive Snapshot commands:
+
+```bash
+garmin-running-data-normalizer snapshot init \
+  --store workspace/snapshot-store \
+  --account local-account-01
+
+garmin-running-data-normalizer snapshot register \
+  --store workspace/snapshot-store \
+  --input /path/to/complete-export \
+  --label S1 \
+  --requested-at 2030-01-01T00:00:00+00:00 \
+  --downloaded-at 2030-01-01T01:00:00+00:00 \
+  --observed-at 2030-01-01T02:00:00+00:00 \
+  --confirm-complete
+
+garmin-running-data-normalizer snapshot status \
+  --store workspace/snapshot-store
+garmin-running-data-normalizer snapshot verify \
+  --store workspace/snapshot-store
+garmin-running-data-normalizer snapshot build-input \
+  --store workspace/snapshot-store \
+  --output workspace/approved-input
+garmin-running-data-normalizer snapshot run-all \
+  --store workspace/snapshot-store \
+  --output workspace/snapshot-run-all
+```
+
+Repeat only `snapshot register` for each complete Export, with its own label and
+timezone-aware request/download/observation timestamps. Registration is
+content-idempotent and chronological order is derived from the observation
+timestamp, so a historical middle Snapshot can be added later. Never reuse one
+store for different accounts. Review `snapshot/snapshot_coverage.json` and
+`snapshot/canonical_merge_summary.json` before making completeness claims.
+
+The Store contains raw personal evidence. Keep it local, restrict filesystem
+access, never commit it, and do not delete blobs or Snapshot directories. Run
+`snapshot verify` before backup and after restore.
+
+For migration and rollback guidance, see
+[`docs/project/v1_2_snapshot_migration_guide_v1_0.md`](project/v1_2_snapshot_migration_guide_v1_0.md).
+
 ## Run the minimum Run-All workflow
 
 Run-All composes the existing Activities, Gear, Personal Records, and bounded
