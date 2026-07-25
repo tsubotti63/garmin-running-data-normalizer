@@ -78,7 +78,8 @@ No output from `diff` means every generated file matches the expected result.
 
 ## Repeat the run
 
-Use a new output directory so existing results are not overwritten:
+Use a new output path that does not already exist so existing results are not
+overwritten:
 
 ```bash
 python -m garmin_running_data_normalizer normalize-activities \
@@ -262,11 +263,12 @@ Continue with:
 
 The `normalize-activities` Golden Path is activities-only. The separate
 multi-family `run-all` command requires Activities and supports optional Gear,
-Personal Records, and bounded FIT sessions/laps. Point `--input` at a local
-export directory containing a JSON file whose name ends in
-`summarizedActivities.json`, or a safe ZIP containing that file. Archive intake
-retains the existing traversal, symbolic-link, encryption, size, and compression
-limits.
+Personal Records, and bounded FIT sessions/laps. `--input` must itself point to
+a local export directory containing a JSON file whose name ends in
+`summarizedActivities.json`. Passing a ZIP file directly as `--input` is
+unsupported. ZIP assets discovered inside the input directory remain subject to
+the existing traversal, symbolic-link, encryption, entry count, size,
+expanded-size, and compression-ratio limits.
 
 Real Garmin exports and generated personal outputs are sensitive. Keep them in
 ignored local locations such as `data/` and `workspace/`; never commit them.

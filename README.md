@@ -1,12 +1,29 @@
 # Garmin Running Data Normalizer
 
 **Turn a local Garmin Account Export into deterministic, auditable datasets and
-analysis context—without uploading the export.**
+reusable analysis context—without uploading the export.**
 
 Garmin Running Data Normalizer is a local-first Python package that normalizes
 Garmin Activities, Gear, Personal Records, FIT Sessions and Laps, and their
 reviewed relationships. Run-All emits normalized data together with QA, audit,
 provenance, explicit warnings, and human- and machine-readable analysis context.
+
+```text
+Garmin Account Data Export
+  ↓
+Deterministic Run-All
+  ↓
+Normalized datasets
++ QA
++ audit
++ provenance
++ explicit relationships
++ analysis context
+  ↓
+Reusable descriptive analysis
+  ↓
+Human review
+```
 
 Current stable release: **v1.1.1** · Python **3.11+** · Apache License 2.0
 
@@ -24,14 +41,43 @@ assets with different grains and relationship boundaries. Ad hoc preprocessing
 can change columns, identifiers, filters, joins, and assumptions from one
 analysis to the next.
 
+Without a stable handoff, repeated AI-assisted analysis can begin with the same
+preparation work each time:
+
+```text
+Read the Export again
+  → inspect the structure again
+  → rebuild preprocessing
+  → redefine missing-value rules
+  → reconsider joins
+  → finally begin the analysis
+```
+
 Run-All creates a reviewable boundary between that local export and downstream
 analysis: deterministic normalization, fixed output, QA and provenance,
 explicit relationships, visible warnings, and a separate human-owned
 interpretation step. Unknown relationships and incomplete input are not guessed
 away; unresolved, excluded, and warning states remain visible as evidence.
 
+```text
+Normalize locally
+  → reuse the reviewed output
+  → ask a specific descriptive question
+  → keep facts, calculations, interpretation, and unknowns separate
+```
+
 The package does not send the export to a hosted processing service. Public
 reproduction uses only synthetic fixtures.
+
+### Built from a runner's own workflow
+
+The project was created by a full-marathon runner who has achieved sub-3:15 and
+is now working toward sub-3. It grew from repeated use of Garmin data for
+long-term running review: the goal is not only to convert files, but to make the
+same reviewed data foundation reusable across later analysis.
+
+This runner story is supporting context, not a substitute for the product
+contract, tests, limitations, or published evidence.
 
 ## Install
 
@@ -68,14 +114,27 @@ garmin-running-data-normalizer run-all \
   --output workspace/run-all
 ```
 
-Use a new output directory for every run. Run-All never uploads the export.
-Start with `START_HERE.md` in the generated output. The tracked fixture contains
-Activities only, so this tested example returns `PASS_WITH_WARNINGS` with exit
-code 0 and records the absent optional families.
+Use a new output path that does not already exist for every run. Run-All never
+uploads the export. Start with `START_HERE.md` in the generated output. The
+tracked fixture contains Activities only, so this tested example returns
+`PASS_WITH_WARNINGS` with exit code 0 and records the absent optional families.
 
 For the bounded activities-only Golden Path and its byte-for-byte Golden Result,
 follow the complete
 [Product Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md).
+
+## Platform validation status
+
+| Platform | Validation status | Current position |
+|---|---|---|
+| macOS | Maintainer validated | Primary development and validation environment |
+| Windows | Validation pending | Intended supported platform; reproducible community reports are welcome |
+| Linux | Automated CI validated | Full tests, validators, builds, and isolated installs run on `ubuntu-latest`; manual environment characterization is not yet claimed |
+
+Windows is not excluded from the project. The current limitation is validation
+evidence, not product intent. Reports should include the OS, shell, Python
+version, package version, command, exit code, and public-safe error details.
+Never attach a real Garmin Export or full personal Run-All output.
 
 ## Accumulate multiple Garmin Exports (v1.2 development)
 
@@ -118,6 +177,16 @@ or shared folders where practical, restrict directory permissions (for example,
 never commit them. Back up a store only after `snapshot verify` reports `PASS`;
 verify it again after restoration. Snapshot and blob deletion, automatic
 garbage collection, and automatic deletion inference are not provided.
+
+Public-safe aggregate validation used four repeated Garmin Account Data Export
+snapshots from the same account. It confirmed deterministic cumulative rebuilds,
+missing-value state handling, FIT content deduplication without duplicate
+decode, and all 13 failure/recovery checks, with zero modification of the source
+Exports.
+
+Snapshot Accumulation is one data-integrity capability within the broader
+analysis-ready foundation; it is not the entire product.
+
 See the
 [v1.2 migration guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/project/v1_2_snapshot_migration_guide_v1_0.md)
 for adoption, backup, rollback, and one-shot compatibility guidance.
@@ -281,8 +350,10 @@ exports and generated personal output belong in ignored local directories.
 - The documented Golden Path produces byte-identical JSON for identical input.
 - Input is read-only; output must be absent or empty and is never silently
   overwritten.
-- ZIP input is validated for traversal, links, encryption, entry count, size,
-  total size, and compression-ratio limits.
+- `--input` must be a directory; passing a ZIP file directly is unsupported.
+  ZIP assets discovered inside that directory are validated for traversal,
+  links, encryption, entry count, size, total size, and compression-ratio
+  limits.
 - Stable keys, activity record grain, source-relative provenance, hashes, and
   deterministic QA are included in the reviewed output contract.
 - Unsupported or unsafe Golden Path input fails closed with a non-zero exit
