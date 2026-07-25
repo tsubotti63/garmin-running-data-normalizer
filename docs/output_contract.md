@@ -87,6 +87,15 @@ emit as either a JSON integer or string—`activity_id`, `gear_key`, and
 `personal_record_id`—use the explicit `integer|string` logical type; the
 normalizer does not silently coerce identity.
 
+Every schema field separately declares `required` and `nullable`. A required
+field must be present in every record but may still allow an explicit JSON
+`null`; an optional field may be omitted when the source FIT definition did
+not contain that field. Runtime values are checked against the catalog before
+Run-All publishes output. Source duration, distance, and timestamp-like
+numeric fields use `number` when Garmin exports may contain either JSON
+integers or decimals. `start_time_local_raw` uses `number|string` because the
+source representation is preserved rather than silently coerced.
+
 `START_HERE.md`, `ANALYSIS_HANDOFF.md`, and `ANALYSIS_CONTEXT.json` include
 Relationship Coverage for every explicit relationship. Each entry reports the
 eligible population, explicit-link count, coverage percentage, unresolved,

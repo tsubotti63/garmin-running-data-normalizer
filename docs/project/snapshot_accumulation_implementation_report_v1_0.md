@@ -1,6 +1,7 @@
 # Snapshot Accumulation Public Adaptation — Implementation Report
 
-Status: Implementation and validation in progress
+Status: Public implementation and validation complete; release candidate
+review in progress
 Target: v1.2.0
 Stable compatibility baseline: v1.1.1
 Public/private boundary: synthetic public evidence; real Snapshots local only
@@ -50,3 +51,12 @@ approved Public lifecycle contract.
   artifacts.
 - Tag, GitHub Release, TestPyPI, and Production PyPI remain separate Human
   Approval Boundaries.
+
+## Validation closeout
+
+Synthetic lifecycle, recovery, order-invariance, determinism, package-installed
+flow, and privacy-boundary checks are complete. Public-safe aggregate evidence
+from four repeated private/local Garmin Exports also confirms cumulative
+rebuild behavior without placing private paths, rows, identifiers, filenames,
+or source hashes in the repository. Release publication remains outside this
+implementation report.

@@ -766,6 +766,7 @@ def run_all(
         MANIFEST_OUTPUT_PATHS,
         OPTIONAL_MANIFEST_OUTPUT_PATHS,
         render_output_experience_artifacts,
+        validate_schema_contract,
     )
 
     projection_names = (*DOCUMENT_NAMES, *MACHINE_CONTEXT_NAMES)
@@ -785,24 +786,27 @@ def run_all(
         for path, data in sorted(provisional_payloads.items())
     ]
     try:
-        payloads.update(
-            render_output_experience_artifacts(
-                manifest,
-                summary,
-                {
-                    "datasets": [
-                        {
-                            "name": dataset["name"],
-                            "record_grain": dataset["record_grain"],
-                            "stable_key": list(dataset["stable_key"]),
-                            "provenance_required": True,
-                        }
-                        for dataset in DATASET_TABLE
-                    ]
-                },
-                relationship_summary,
-            )
+        experience_payloads = render_output_experience_artifacts(
+            manifest,
+            summary,
+            {
+                "datasets": [
+                    {
+                        "name": dataset["name"],
+                        "record_grain": dataset["record_grain"],
+                        "stable_key": list(dataset["stable_key"]),
+                        "provenance_required": True,
+                    }
+                    for dataset in DATASET_TABLE
+                ]
+            },
+            relationship_summary,
         )
+        validate_schema_contract(
+            records,
+            json.loads(experience_payloads["SCHEMA_CATALOG.json"]),
+        )
+        payloads.update(experience_payloads)
     except Exception as exc:
         raise RunAllError(
             "OUTPUT_EXPERIENCE_FAILED",

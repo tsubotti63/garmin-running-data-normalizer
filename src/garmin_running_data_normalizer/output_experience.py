@@ -142,6 +142,85 @@ DATASET_FIELDS = {
     ),
 }
 
+DATASET_OPTIONAL_FIELDS = {
+    "fit_laps": frozenset(
+        {
+            "start_time",
+            "total_elapsed_time",
+            "total_timer_time",
+            "total_distance",
+            "avg_speed",
+            "max_speed",
+            "avg_heart_rate",
+            "max_heart_rate",
+            "avg_cadence",
+            "max_cadence",
+            "avg_power",
+            "max_power",
+            "total_ascent",
+            "total_descent",
+            "timestamp",
+        }
+    ),
+}
+
+DATASET_NONNULL_FIELDS = {
+    "activities": frozenset(
+        {
+            "garmin_activity_key",
+            "memo_present",
+            "source_path",
+            "source_sha256",
+            "source_confidence",
+        }
+    ),
+    "gear": frozenset({"gear_key", "source_path", "source_sha256"}),
+    "activity_gear": frozenset(DATASET_FIELDS["activity_gear"]),
+    "personal_records": frozenset(
+        {
+            "personal_record_id",
+            "activity_id",
+            "source_record_index",
+            "activity_relationship_status",
+            "activity_relationship_reason",
+            "source_path",
+            "source_sha256",
+            "source_confidence",
+        }
+    ),
+    "fit_sessions": frozenset(
+        {
+            "fit_file_id",
+            "fit_session_key",
+            "session_ordinal",
+            "record_count",
+            "lap_count",
+            "source_path",
+            "source_sha256",
+        }
+    ),
+    "fit_laps": frozenset(
+        {
+            "fit_file_id",
+            "fit_session_key",
+            "fit_lap_key",
+            "session_ordinal",
+            "lap_ordinal_within_session",
+            "lap_index",
+            "source_path",
+            "source_sha256",
+        }
+    ),
+    "activity_fit_links": frozenset(
+        set(DATASET_FIELDS["activity_fit_links"])
+        - {
+            "exclusion_reason",
+            "distance_delta_m",
+            "duration_delta_seconds",
+        }
+    ),
+}
+
 RELATIONSHIP_CONTRACTS = (
     {
         "relationship_id": "activity_gear_to_activities",
@@ -274,6 +353,10 @@ RELATIONSHIP_COVERAGE_PRESENTATION = {
 
 class OutputExperienceError(ValueError):
     """Raised when machine artifacts cannot support a safe projection."""
+
+
+class SchemaContractError(ValueError):
+    """Raised when normalized records contradict the public schema catalog."""
 
 
 def _mapping(value: Any, label: str) -> Mapping[str, Any]:
@@ -1113,13 +1196,11 @@ def render_analysis_handoff(
     return "\n".join(lines)
 
 
-def _field_descriptor(field: str) -> dict[str, Any]:
+def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
     boolean_fields = {"memo_present", "current", "confirmed", "ambiguous"}
     integer_fields = {
         "session_ordinal", "lap_ordinal_within_session", "lap_index",
         "record_count", "lap_count", "source_record_index", "match_score",
-        "start_time_gmt_ms", "duration_ms", "elapsed_duration_ms",
-        "moving_duration_ms", "distance_raw_centimeters",
     }
     numeric_fields = {
         "distance_m", "duration_sec", "avg_hr", "max_hr", "avg_power",
@@ -1129,6 +1210,8 @@ def _field_descriptor(field: str) -> dict[str, Any]:
         "total_ascent", "total_descent", "total_elapsed_time",
         "total_timer_time", "total_distance", "avg_speed", "max_speed",
         "time_delta_seconds", "distance_delta_m", "duration_delta_seconds",
+        "start_time_gmt_ms", "duration_ms", "elapsed_duration_ms",
+        "moving_duration_ms", "distance_raw_centimeters",
     }
     array_fields = {"match_basis"}
     flexible_identifier_fields = {
@@ -1136,6 +1219,7 @@ def _field_descriptor(field: str) -> dict[str, Any]:
         "gear_key",
         "personal_record_id",
     }
+    flexible_number_string_fields = {"start_time_local_raw"}
     if field in boolean_fields:
         logical_type = "boolean"
     elif field in integer_fields:
@@ -1146,6 +1230,8 @@ def _field_descriptor(field: str) -> dict[str, Any]:
         logical_type = "array[string]"
     elif field in flexible_identifier_fields:
         logical_type = "integer|string"
+    elif field in flexible_number_string_fields:
+        logical_type = "number|string"
     else:
         logical_type = "string"
 
@@ -1201,11 +1287,8 @@ def _field_descriptor(field: str) -> dict[str, Any]:
     )
     return {
         "logical_type": logical_type,
-        "nullable": field
-        not in {
-            "garmin_activity_key", "gear_key", "personal_record_id",
-            "fit_session_key", "fit_lap_key", "source_path", "source_sha256",
-        },
+        "required": field not in DATASET_OPTIONAL_FIELDS.get(dataset, frozenset()),
+        "nullable": field not in DATASET_NONNULL_FIELDS[dataset],
         "unit_or_domain": unit,
         "semantic_role": "stable_key"
         if field.endswith("_key") or field in {"personal_record_id"}
@@ -1231,12 +1314,176 @@ def build_schema_catalog(
             {
                 "dataset": dataset,
                 "fields": [
-                    {"field": field, **_field_descriptor(field)}
+                    {"field": field, **_field_descriptor(dataset, field)}
                     for field in fields
                 ],
             }
             for dataset, fields in DATASET_FIELDS.items()
         ],
+    }
+
+
+def _logical_type_matches(value: Any, logical_type: str) -> bool:
+    if logical_type == "string":
+        return isinstance(value, str)
+    if logical_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if logical_type == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if logical_type == "boolean":
+        return isinstance(value, bool)
+    if logical_type == "array[string]":
+        return isinstance(value, list) and all(
+            isinstance(item, str) for item in value
+        )
+    if logical_type == "integer|string":
+        return (
+            isinstance(value, int) and not isinstance(value, bool)
+        ) or isinstance(value, str)
+    if logical_type == "number|string":
+        return (
+            isinstance(value, (int, float)) and not isinstance(value, bool)
+        ) or isinstance(value, str)
+    return False
+
+
+SUPPORTED_LOGICAL_TYPES = frozenset(
+    {
+        "string",
+        "integer",
+        "number",
+        "boolean",
+        "array[string]",
+        "integer|string",
+        "number|string",
+    }
+)
+
+
+def validate_schema_contract(
+    records: Mapping[str, Any],
+    schema_catalog: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Validate every normalized dataset field without exposing record values."""
+    if schema_catalog.get("format") != (
+        "garmin-running-data-normalizer-schema-catalog-v1"
+    ):
+        raise SchemaContractError("schema catalog format is not supported")
+    raw_datasets = schema_catalog.get("datasets")
+    if not isinstance(raw_datasets, list):
+        raise SchemaContractError("schema catalog datasets must be a list")
+    catalog_by_name: dict[str, Mapping[str, Any]] = {}
+    for index, raw_dataset in enumerate(raw_datasets):
+        if not isinstance(raw_dataset, Mapping):
+            raise SchemaContractError(
+                f"schema catalog dataset {index} must be an object"
+            )
+        name = raw_dataset.get("dataset")
+        if not isinstance(name, str) or not name or name in catalog_by_name:
+            raise SchemaContractError(
+                "schema catalog dataset names must be non-empty and unique"
+            )
+        catalog_by_name[name] = raw_dataset
+    expected_datasets = set(DATASET_FIELDS)
+    if set(catalog_by_name) != expected_datasets:
+        raise SchemaContractError(
+            "schema catalog datasets do not match normalized datasets"
+        )
+    if set(records) != expected_datasets:
+        raise SchemaContractError(
+            "normalized record datasets do not match schema catalog"
+        )
+
+    dataset_results: list[dict[str, Any]] = []
+    total_records = 0
+    total_fields = 0
+    for dataset in DATASET_FIELDS:
+        raw_fields = catalog_by_name[dataset].get("fields")
+        if not isinstance(raw_fields, list):
+            raise SchemaContractError(f"{dataset}: schema fields must be a list")
+        descriptors: dict[str, Mapping[str, Any]] = {}
+        for index, raw_descriptor in enumerate(raw_fields):
+            if not isinstance(raw_descriptor, Mapping):
+                raise SchemaContractError(
+                    f"{dataset}: schema field {index} must be an object"
+                )
+            field = raw_descriptor.get("field")
+            if (
+                not isinstance(field, str)
+                or not field
+                or field in descriptors
+            ):
+                raise SchemaContractError(
+                    f"{dataset}: schema field names must be non-empty and unique"
+                )
+            if not isinstance(raw_descriptor.get("required"), bool):
+                raise SchemaContractError(
+                    f"{dataset}.{field}: required must be boolean"
+                )
+            if not isinstance(raw_descriptor.get("nullable"), bool):
+                raise SchemaContractError(
+                    f"{dataset}.{field}: nullable must be boolean"
+                )
+            logical_type = raw_descriptor.get("logical_type")
+            if logical_type not in SUPPORTED_LOGICAL_TYPES:
+                raise SchemaContractError(
+                    f"{dataset}.{field}: logical type is unsupported"
+                )
+            descriptors[field] = raw_descriptor
+        if set(descriptors) != set(DATASET_FIELDS[dataset]):
+            raise SchemaContractError(
+                f"{dataset}: schema fields do not match runtime fields"
+            )
+
+        rows = records[dataset]
+        if not isinstance(rows, list):
+            raise SchemaContractError(
+                f"{dataset}: normalized dataset must be an array"
+            )
+        for row_index, row in enumerate(rows):
+            if not isinstance(row, Mapping):
+                raise SchemaContractError(
+                    f"{dataset}[{row_index}]: record must be an object"
+                )
+            extra_fields = set(row) - set(descriptors)
+            if extra_fields:
+                raise SchemaContractError(
+                    f"{dataset}[{row_index}]: record contains undeclared fields"
+                )
+            for field, descriptor in descriptors.items():
+                if field not in row:
+                    if descriptor["required"]:
+                        raise SchemaContractError(
+                            f"{dataset}[{row_index}].{field}: required field is missing"
+                        )
+                    continue
+                value = row[field]
+                if value is None:
+                    if not descriptor["nullable"]:
+                        raise SchemaContractError(
+                            f"{dataset}[{row_index}].{field}: null is not allowed"
+                        )
+                    continue
+                if not _logical_type_matches(value, descriptor["logical_type"]):
+                    raise SchemaContractError(
+                        f"{dataset}[{row_index}].{field}: value type does not match logical type"
+                    )
+        total_records += len(rows)
+        total_fields += len(descriptors)
+        dataset_results.append(
+            {
+                "dataset": dataset,
+                "record_count": len(rows),
+                "field_count": len(descriptors),
+                "status": "PASS",
+            }
+        )
+    return {
+        "status": "PASS",
+        "dataset_count": len(dataset_results),
+        "field_count": total_fields,
+        "record_count": total_records,
+        "datasets": dataset_results,
     }
 
 
@@ -1427,6 +1674,7 @@ __all__ = [
     "MANIFEST_OUTPUT_PATHS",
     "OPTIONAL_MANIFEST_OUTPUT_PATHS",
     "OutputExperienceError",
+    "SchemaContractError",
     "build_analysis_context",
     "build_artifact_inventory",
     "build_schema_catalog",
@@ -1436,4 +1684,5 @@ __all__ = [
     "render_output_experience_documents",
     "render_start_here",
     "validate_registry_alignment",
+    "validate_schema_contract",
 ]
