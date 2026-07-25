@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from ..intake.discovery import discover_export
+from ..intake.discovery import DiscoveredAsset, discover_export
 
 FIT_EPOCH_OFFSET = 631065600
 MAX_FIT_BYTES = 128 * 1024 * 1024
@@ -406,17 +406,24 @@ def parse_fit_export(root: str | Path) -> tuple[list[dict[str, Any]], list[dict[
     laps: list[dict[str, Any]] = []
     audit: list[dict[str, Any]] = []
     fit_assets = [asset for asset in discover_export(root) if asset.kind == "fit"]
+    aliases_by_sha256: dict[str, list[DiscoveredAsset]] = {}
     for asset in fit_assets:
+        aliases_by_sha256.setdefault(asset.sha256, []).append(asset)
+    for source_sha256, aliases in sorted(aliases_by_sha256.items()):
+        asset = min(aliases, key=lambda item: item.provenance_path)
         file_id = f"fit_file:{asset.sha256[:24]}"
         parsed = parse_fit_bytes(asset.data, file_id=file_id, source_path=asset.provenance_path)
         audit.append({
             "fit_file_id": file_id,
             "source_path": asset.provenance_path,
-            "source_sha256": asset.sha256,
+            "source_sha256": source_sha256,
+            "source_alias_count": len(aliases),
+            "duplicate_source_alias_count": len(aliases) - 1,
             "parse_status": parsed["status"],
             "record_count": parsed.get("record_count", 0),
             "lap_count": parsed.get("lap_count", 0),
             "session_count": parsed.get("session_count", 0),
+            "unknown_records": parsed.get("unknown_records", 0),
             "header_crc_status": parsed.get("header_crc_status", "not_checked"),
             "file_crc_status": parsed.get("file_crc_status", "not_checked"),
             "unallocated_lap_count": parsed.get("unallocated_lap_count", 0),

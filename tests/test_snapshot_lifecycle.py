@@ -342,6 +342,33 @@ class SnapshotLifecycleTest(unittest.TestCase):
                 context["snapshot_lifecycle"],
             )
 
+    def test_malformed_supported_json_is_extraction_failed_not_deletion(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            source = root / "source"
+            _write_snapshot(source, [_activity("A1")])
+            malformed = (
+                source
+                / "DI-Connect-Fitness/synthetic_summarizedActivities.json"
+            )
+            malformed.write_text("{malformed-json", encoding="utf-8")
+            source_hash_before = _tree_hash(source)
+            self.register(store, source, "S1", 1)
+
+            with self.assertRaisesRegex(
+                SnapshotMergeError,
+                "supported source extraction failed",
+            ):
+                build_approved_input(store, root / "build")
+
+            self.assertEqual(_tree_hash(source), source_hash_before)
+            self.assertFalse((root / "build").exists())
+            self.assertEqual(verify_store(store)["status"], "PASS")
+
     def test_oversized_canonical_activities_are_partitioned_for_run_all(
         self,
     ) -> None:

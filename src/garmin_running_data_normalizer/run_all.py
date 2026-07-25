@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
-from .fit.parser import parse_fit_bytes, parse_fit_export
+from .fit.parser import parse_fit_export
 from .export.analysis_pack import build_analysis_pack_payloads
 from .intake.discovery import DiscoveredAsset, discover_export
 from .normalizers.activities import normalize_activities
@@ -250,19 +250,9 @@ def _normalize_datasets(
     if families["fit"]:
         try:
             records["fit_sessions"], records["fit_laps"], base_audit = parse_fit_export(input_root)
-            detail_by_file: dict[str, dict[str, Any]] = {}
-            for asset in families["fit"]:
-                file_id = f"fit_file:{asset.sha256[:24]}"
-                detail_by_file[file_id] = parse_fit_bytes(
-                    asset.data,
-                    file_id=file_id,
-                    source_path=asset.provenance_path,
-                )
             for item in base_audit:
-                detail = detail_by_file.get(str(item["fit_file_id"]), {})
-                unknown_records = int(detail.get("unknown_records", 0) or 0)
-                enriched = {**item, "unknown_records": unknown_records}
-                fit_audit.append(enriched)
+                unknown_records = int(item.get("unknown_records", 0) or 0)
+                fit_audit.append(item)
                 status = str(item["parse_status"])
                 fit_status_counts[status] += 1
                 sentinel_counts = item.get("invalid_sentinel_counts", {})

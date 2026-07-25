@@ -279,6 +279,31 @@ class FitAndPackTest(unittest.TestCase):
             self.assertEqual(audit[0]["parse_status"], "too_small")
             self.assertNotIn(str(root), audit[0]["source_path"])
 
+    def test_fit_export_decodes_duplicate_content_once_across_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = synthetic_fit()
+            (root / "direct.fit").write_bytes(payload)
+            with zipfile.ZipFile(root / "preserved.zip", "w") as archive:
+                archive.writestr("nested/alias.fit", payload)
+
+            with patch(
+                "garmin_running_data_normalizer.fit.parser.parse_fit_bytes",
+                wraps=parse_fit_bytes,
+            ) as parse_spy:
+                sessions, laps, audit = parse_fit_export(root)
+
+            self.assertEqual(parse_spy.call_count, 1)
+            self.assertEqual(len(sessions), 1)
+            self.assertEqual(len(laps), 1)
+            self.assertEqual(len(audit), 1)
+            self.assertEqual(audit[0]["source_alias_count"], 2)
+            self.assertEqual(audit[0]["duplicate_source_alias_count"], 1)
+            self.assertEqual(
+                audit[0]["source_sha256"],
+                sessions[0]["source_sha256"],
+            )
+
     def test_analysis_pack_is_allowlist_only_and_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
