@@ -11,6 +11,7 @@ from typing import Any
 
 from .. import __version__
 from ..common.identity import garmin_activity_key, stable_hash
+from ..intake.archive import ArchiveLimits
 from .policies import CONTRACT_VERSION, REGISTRY_VERSION
 from .store import SnapshotStoreError, load_manifests, load_store, sha256_file
 from .store import verify_store
@@ -19,6 +20,7 @@ from .store import verify_store
 BUILD_FORMAT = "garmin-running-data-normalizer-canonical-snapshot-build-v1"
 DATASET_ORDER = ("activities", "gear", "activity_gear", "personal_records")
 SCHEMA_VERSION = "garmin-run-all-output:v1.1"
+APPROVED_INPUT_MAX_FILE_BYTES = ArchiveLimits().max_member_bytes
 
 
 class SnapshotMergeError(SnapshotStoreError):
@@ -56,6 +58,47 @@ def _write_bytes(path: Path, data: bytes) -> None:
 
 def _write_json(path: Path, value: Any) -> None:
     _write_bytes(path, _json_bytes(value))
+
+
+def _write_activity_input(
+    fitness: Path,
+    rows: list[dict[str, Any]],
+) -> None:
+    """Write deterministic Run-All inputs without weakening intake limits."""
+
+    def payload(partition: list[dict[str, Any]]) -> bytes:
+        return _json_bytes([{"summarizedActivitiesExport": partition}])
+
+    complete = payload(rows)
+    if len(complete) <= APPROVED_INPUT_MAX_FILE_BYTES:
+        _write_bytes(fitness / "snapshot_summarizedActivities.json", complete)
+        return
+
+    pending = [rows]
+    partitions: list[bytes] = []
+    while pending:
+        partition = pending.pop(0)
+        data = payload(partition)
+        if len(data) <= APPROVED_INPUT_MAX_FILE_BYTES:
+            partitions.append(data)
+            continue
+        if len(partition) <= 1:
+            raise SnapshotMergeError(
+                "canonical Activity record exceeds the intake file-size limit"
+            )
+        midpoint = len(partition) // 2
+        pending[0:0] = [partition[:midpoint], partition[midpoint:]]
+
+    width = max(4, len(str(len(partitions))))
+    for index, data in enumerate(partitions, start=1):
+        _write_bytes(
+            fitness
+            / (
+                f"snapshot_part_{index:0{width}d}_"
+                "summarizedActivities.json"
+            ),
+            data,
+        )
 
 
 def _read_blob(store: Path, row: dict[str, Any]) -> bytes:
@@ -691,10 +734,7 @@ def build_approved_input(
         activity_rows = [
             item["raw_record"] for item in canonical_by_dataset["activities"]
         ]
-        _write_json(
-            fitness / "snapshot_summarizedActivities.json",
-            [{"summarizedActivitiesExport": activity_rows}],
-        )
+        _write_activity_input(fitness, activity_rows)
         gear_rows = [item["raw_record"] for item in canonical_by_dataset["gear"]]
         link_rows = [
             item["raw_record"] for item in canonical_by_dataset["activity_gear"]

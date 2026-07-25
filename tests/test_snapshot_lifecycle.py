@@ -6,6 +6,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 from garmin_running_data_normalizer.snapshot import (
     SnapshotLifecycleError,
@@ -340,6 +341,94 @@ class SnapshotLifecycleTest(unittest.TestCase):
                 "canonical_completeness_boundary",
                 context["snapshot_lifecycle"],
             )
+
+    def test_oversized_canonical_activities_are_partitioned_for_run_all(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            rows = [
+                _activity(
+                    f"A{index:03d}",
+                    description="synthetic-" + ("x" * 256),
+                    startTimeGmt=1893456000000 + index * 60_000,
+                )
+                for index in range(24)
+            ]
+            source = root / "source"
+            _write_snapshot(source, rows)
+            self.register(store, source, "S1", 1)
+
+            synthetic_limit = 2_048
+            with patch(
+                "garmin_running_data_normalizer.snapshot.merge."
+                "APPROVED_INPUT_MAX_FILE_BYTES",
+                synthetic_limit,
+            ):
+                first = build_approved_input(store, root / "build-a")
+                second = build_approved_input(store, root / "build-b")
+                activity_parts = sorted(
+                    (
+                        root
+                        / "build-a/approved_input/DI-Connect-Fitness"
+                    ).glob("*summarizedActivities.json")
+                )
+                self.assertGreater(len(activity_parts), 1)
+                self.assertTrue(
+                    all(
+                        part.stat().st_size <= synthetic_limit
+                        for part in activity_parts
+                    )
+                )
+                self.assertEqual(
+                    first["approved_input_content_sha256"],
+                    second["approved_input_content_sha256"],
+                )
+                self.assertEqual(
+                    _tree_hash(root / "build-a"),
+                    _tree_hash(root / "build-b"),
+                )
+                result = run_snapshot_all(store, root / "output")
+
+            self.assertEqual(result["status"], "PASS_WITH_WARNINGS")
+            activities = json.loads(
+                (
+                    root / "output/normalized/activities.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(len(activities), len(rows))
+
+    def test_single_oversized_canonical_activity_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            source = root / "source"
+            _write_snapshot(
+                source,
+                [
+                    _activity(
+                        "A1",
+                        description="synthetic-" + ("x" * 4_096),
+                    )
+                ],
+            )
+            self.register(store, source, "S1", 1)
+
+            with patch(
+                "garmin_running_data_normalizer.snapshot.merge."
+                "APPROVED_INPUT_MAX_FILE_BYTES",
+                1_024,
+            ):
+                with self.assertRaisesRegex(
+                    SnapshotMergeError,
+                    "record exceeds the intake file-size limit",
+                ):
+                    build_approved_input(store, root / "build")
+
+            self.assertFalse((root / "build").exists())
 
     def test_fail_closed_boundaries_and_policy_registry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
