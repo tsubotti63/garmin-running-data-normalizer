@@ -1,7 +1,7 @@
 # Product Quick Start
 
-This Golden Path runs the bounded activities workflow entirely on local,
-synthetic data. It does not require a Garmin account or a real Garmin export.
+This Quick Start uses local synthetic data. It does not require a Garmin account
+or a real Garmin export.
 
 The root `QUICK_START.md` belongs to the adopted AI Collaboration Platform. This
 file is the product Quick Start for Garmin Running Data Normalizer.
@@ -12,7 +12,25 @@ file is the product Quick Start for Garmin Running Data Normalizer.
 - Git
 - A local shell
 
-## Set up a clean clone
+## Install the stable release
+
+For normal package use, install the current stable Production release from
+PyPI:
+
+```bash
+python -m pip install garmin-running-data-normalizer
+garmin-running-data-normalizer --version
+```
+
+The version command prints
+`python -m garmin_running_data_normalizer 1.1.1`. The equivalent module command
+is `python -m garmin_running_data_normalizer --version`.
+
+## Set up the repository fixtures
+
+The synthetic fixture used below is tracked in the repository and is not
+asserted to be bundled in the installed wheel. Clone the repository and install
+the checkout in an isolated environment:
 
 ```bash
 git clone https://github.com/tsubotti63/garmin-running-data-normalizer.git
@@ -22,11 +40,6 @@ source .venv/bin/activate
 python -m pip install -e .
 python -m garmin_running_data_normalizer --version
 ```
-
-On the v1.1.1 stable Production candidate, the version command prints
-`python -m garmin_running_data_normalizer 1.1.1`.
-An equivalent console entry point, `garmin-running-data-normalizer`, is also
-installed.
 
 ## Run the synthetic Golden Path
 
@@ -39,9 +52,10 @@ python -m garmin_running_data_normalizer normalize-activities \
   --output workspace/golden-path
 ```
 
-Success prints `PASS`, a record count, and a deterministic digest. The command
-does not modify the input. It refuses a non-empty output directory rather than
-overwriting existing files.
+Success prints `PASS`, a record count, and a deterministic digest. This is the
+synthetic Golden Path status, not the status of the separate real-user
+validation. The command does not modify the input. It refuses a non-empty output
+directory rather than overwriting existing files.
 
 ## Inspect the output
 
@@ -129,10 +143,11 @@ byte-identical output.
 
 Read the Relationship Coverage sections in `START_HERE.md` and
 `ANALYSIS_HANDOFF.md`, or the `relationship_coverage` array in
-`ANALYSIS_CONTEXT.json`, before joining datasets. Coverage is not a success
-score: unresolved, ambiguous, and duplicate counts remain visible, inference
-is prohibited, and detailed evidence remains in
-`qa/relationship_summary.json` and `audit/activity_fit_linkage.json`.
+`ANALYSIS_CONTEXT.json`, before joining datasets. Coverage is an Evidence
+Boundary, not a success score: unresolved, excluded, independent, ambiguous,
+and duplicate states remain visible; inference is prohibited. Detailed evidence
+remains in `qa/relationship_summary.json` and
+`audit/activity_fit_linkage.json`.
 
 The Activities CSV has no separate `activity_id` column and excludes raw memo
 text, source paths, hashes, and coordinates. Its `garmin_activity_key` may
@@ -141,15 +156,16 @@ be removed from any externally shared derivative. Detailed normalized output,
 memo text, and source-relative provenance still contain personal running
 information and must remain local. Garmin source filenames can contain
 email-shaped personal identifiers.
+
 Never commit a real export or generated Run-All output, and do not upload it as
 a CI artifact.
 
-For a separately reviewed external AI handoff, add `--external-safe-pack`.
-The optional ZIP contains only a month-level Activities projection plus its
-safe schema/context and manifest. It excludes paths, hashes, raw IDs/stable
-keys, memo text, coordinates, exact dates/times, heart rate, power, cadence,
-training effect/load, and other unneeded health or performance detail. The
-command never uploads the pack.
+For a separately reviewed external AI handoff, add `--external-safe-pack`. The
+optional ZIP contains only a month-level Activities projection plus its safe
+schema/context and manifest. It excludes paths, hashes, raw IDs/stable keys,
+memo text, coordinates, exact dates/times, heart rate, power, cadence, training
+effect/load, and other unneeded health or performance detail. The command never
+uploads the pack.
 
 ## Run local validation
 
@@ -163,29 +179,43 @@ python scripts/static_policy_scan.py
 python scripts/validate_platform_alignment.py
 ```
 
-The static policy scan intentionally excludes the local `.venv/` created by
-the setup instructions. It continues to scan the project source, configuration,
+The static policy scan intentionally excludes the local `.venv/` created by the
+setup instructions. It continues to scan the project source, configuration,
 tests, documentation, examples, and other repository-owned content.
 
-## Analysis and real-export evidence
+## Reviewed real-user evidence
 
-Use the [Public Usage Example](project/run_all_public_usage_example_v0_1.md),
-[Analysis Handoff Specification](project/analysis_handoff_spec_v0_1.md), and
-[Primary Case Study](case_studies/from_garmin_export_to_reproducible_analysis_handoff_v0_1.md)
-to continue from Run-All output to synthetic analysis examples.
+Public reproduction remains synthetic. Separately, version `1.1.1` was
+validated locally on one real-user dataset spanning approximately 11.1 years,
+with 3,468 Activities, 3,684 FIT Sessions, and 37,432 FIT Laps. These figures
+describe that validation dataset and do not prove continuous or complete export
+coverage.
 
-Public reproduction remains synthetic. A private real-export validation
-completed with status `PASS`, exit code 0, unchanged input, two independent
-byte-identical outputs, and a public-safe privacy check. No private rows, dates,
-filenames, paths, identifiers, hashes, or fingerprints are published. Only
-public-safe aggregate relationship acceptance counts are reported.
+The validation run completed with `PARTIAL_SUCCESS`, 0 errors, and one
+`FIT_PARSE_INCOMPLETE` warning. Twenty incomplete FIT assets—19 session/lap
+allocation conflicts and one unsupported chained asset—were retained as
+auditable partial evidence rather than guessed. FIT-derived analysis is limited
+to the parsed subset.
+
+With the same input, Production package, and host, three repeats produced the
+same digest and byte-identical 20/20 output files in every repeat. The cache
+condition was `warm_or_unknown`; this is not a cross-machine performance
+guarantee. No private rows, dates, filenames, paths, identifiers, hashes, or
+detailed output are published.
+
+Continue with:
+
+- [CS-001: Real Garmin Export to an Auditable AI-Ready Handoff](case_studies/cs-001-real-garmin-export-to-auditable-ai-ready-handoff.md)
+- [CS-002: Relationship Coverage as an Evidence Boundary](case_studies/cs-002-relationship-coverage-as-evidence-boundary.md)
+- [Public Usage Example](project/run_all_public_usage_example_v0_1.md)
+- [Analysis Handoff Specification](project/analysis_handoff_spec_v0_1.md)
 
 ## Known limitations and real exports
 
 The `normalize-activities` Golden Path is activities-only. The separate
 multi-family `run-all` command requires Activities and supports optional Gear,
-Personal Records, and bounded FIT sessions/laps. Point `--input` at a
-local export directory containing a JSON file whose name ends in
+Personal Records, and bounded FIT sessions/laps. Point `--input` at a local
+export directory containing a JSON file whose name ends in
 `summarizedActivities.json`, or a safe ZIP containing that file. Archive intake
 retains the existing traversal, symbolic-link, encryption, size, and compression
 limits.
@@ -196,13 +226,15 @@ Run-All uses the existing exact filename rules. It validates complete FIT file
 CRC and optional header CRC, supports multiple sessions per FIT file, preserves
 file/session/lap identity, and converts selected invalid metric sentinels to
 null before scaling. It emits Activity/FIT links only from evidence-qualified
-mutual unique matches; timestamp-only joins are rejected. Library-level
-`sleepData.json` normalization is implemented separately
-and does not change the Run-All output contract. It performs no filling,
-day-shift inference, score recalculation, or activity join. Library-level HRV
-normalization is also separate: conflicting FIT values are not averaged and
-health-status JSON is comparison evidence, not a promoted source. The separate
-Health Status library normalizer emits fixed daily and long metric
-schemas with explicit duplicate evidence; it is not a Run-All output. Open-Meteo,
-Parquet and automatic external upload are not implemented. See the
-[README](../README.md) for the current implementation scope and limitations.
+mutual unique matches; timestamp-only joins are rejected.
+
+Library-level `sleepData.json` normalization is implemented separately and does
+not change the Run-All output contract. It performs no filling, day-shift
+inference, score recalculation, or activity join. Library-level HRV normalization
+is also separate: conflicting FIT values are not averaged and health-status JSON
+is comparison evidence, not a promoted source. The separate Health Status
+library normalizer emits fixed daily and long metric schemas with explicit
+duplicate evidence; it is not a Run-All output. Open-Meteo, Parquet, hosted
+processing, and automatic external upload are not implemented. See the
+[README](../README.md) and [Known Limitations](known_limitations.md) for the
+current scope.
