@@ -181,8 +181,19 @@ garbage collection, and automatic deletion inference are not provided.
 Public-safe aggregate validation used four repeated Garmin Account Data Export
 snapshots from the same account. It confirmed deterministic cumulative rebuilds,
 missing-value state handling, FIT content deduplication without duplicate
-decode, and all 13 failure/recovery checks, with zero modification of the source
-Exports.
+decode, and all 13 specified failure/recovery checks, with zero modification of
+the source Exports.
+
+These were four repeated complete Exports from one account, not four
+independent datasets. Within the reviewed Snapshot set and merge policy, all
+6/6 pairwise comparisons, 24/24 tested registration-order permutations, and
+13/13 specified failure/recovery checks passed. Seven materially distinct
+missing/value states were preserved, and the reviewed validation reported
+source mutation 0. These are bounded validation results, not a statistical,
+universal order-independence, zero-defect, or external-adoption claim.
+
+Read
+[CS-007: Preserving Garmin History Across Incomplete Repeated Exports](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/case_studies/cs-007-preserving-garmin-history-across-incomplete-repeated-exports.md).
 
 Snapshot Accumulation is one data-integrity capability within the broader
 analysis-ready foundation; it is not the entire product.

@@ -23,6 +23,8 @@ Standard adopted by this repository.
 - Publishes the reviewed release commit as the immutable `v1.2.0` annotated
   tag, stable GitHub Release, TestPyPI distribution, and Production PyPI
   distribution after their separate approval and verification gates passed.
+- Links the bounded, public-safe validation evidence in
+  [CS-007: Preserving Garmin History Across Incomplete Repeated Exports](case_studies/cs-007-preserving-garmin-history-across-incomplete-repeated-exports.md).
 
 ## v1.1.1 — stable Production release
 

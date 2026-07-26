@@ -103,3 +103,12 @@ or content-addressed blobs.
 The cumulative output adds `snapshot/` lineage, coverage, and merge-summary
 artifacts. Start with `START_HERE.md`, then review the Snapshot Accumulation
 section and the referenced machine-readable evidence before analysis.
+
+## Reviewed Evidence
+
+For the bounded public-safe validation summary, including the one-account /
+four-repeated-export scope and required qualifiers, read
+[CS-007: Preserving Garmin History Across Incomplete Repeated Exports](../case_studies/cs-007-preserving-garmin-history-across-incomplete-repeated-exports.md).
+
+CS-007 is reviewed evidence for the v1.2.0 release scope. It does not replace
+this migration contract or authorize a future release.
