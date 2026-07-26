@@ -1,5 +1,10 @@
 # Garmin Running Data Normalizer
 
+[![PyPI version](https://img.shields.io/pypi/v/garmin-running-data-normalizer.svg)](https://pypi.org/project/garmin-running-data-normalizer/)
+[![Python versions](https://img.shields.io/pypi/pyversions/garmin-running-data-normalizer.svg)](https://pypi.org/project/garmin-running-data-normalizer/)
+[![CI](https://github.com/tsubotti63/garmin-running-data-normalizer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tsubotti63/garmin-running-data-normalizer/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/tsubotti63/garmin-running-data-normalizer.svg)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/LICENSE)
+
 **Turn a local Garmin Account Export into deterministic, auditable datasets and
 reusable analysis context—without uploading the export.**
 
@@ -29,6 +34,9 @@ Current stable release: **v1.2.0** · Python **3.11+** · Apache License 2.0
 
 - [Install from PyPI](https://pypi.org/project/garmin-running-data-normalizer/)
 - [Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md)
+- [Getting Started with a Garmin Export](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/getting_started_from_garmin_export.md)
+- [AI Analysis Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/ai_analysis_quick_start.md)
+- [FAQ](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/faq.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
 - [Release Notes v1.2.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.2.0)
@@ -390,6 +398,12 @@ precise boundaries.
 Hosted processing, Garmin account authentication, JMA or Instagram ingestion,
 wellness/coaching interpretation, personal analysis, and non-Garmin data
 platform generalization are outside the project scope.
+
+## Community
+
+- [Contributing](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/CONTRIBUTING.md)
+- [Support and public-safe bug reports](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/SUPPORT.md)
+- [Frequently Asked Questions](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/faq.md)
 
 See the
 [Product Change History](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_changelog.md)
