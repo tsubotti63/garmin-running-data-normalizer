@@ -4,7 +4,7 @@ This file records factual Garmin Running Data Normalizer product changes. The
 root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
 Standard adopted by this repository.
 
-## v1.2.0 — Snapshot Accumulation and Canonical Merge Foundation
+## v1.2.0 — stable Production release
 
 - Adds an immutable, account-bounded local Snapshot Store with explicit
   completeness confirmation, content-addressed file/member preservation,
@@ -20,6 +20,9 @@ Standard adopted by this repository.
   merge evidence while preserving the stable one-shot Run-All behavior.
 - Keeps real Snapshot Stores and four-Snapshot validation private/local; public
   tests and examples remain synthetic.
+- Publishes the reviewed release commit as the immutable `v1.2.0` annotated
+  tag, stable GitHub Release, TestPyPI distribution, and Production PyPI
+  distribution after their separate approval and verification gates passed.
 
 ## v1.1.1 — stable Production release
 

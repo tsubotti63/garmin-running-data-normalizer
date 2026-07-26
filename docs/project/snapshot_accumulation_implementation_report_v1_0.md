@@ -1,6 +1,6 @@
 # Snapshot Accumulation Public Adaptation — Implementation Report
 
-Status: v1.2.0 implementation and validation complete; release authorized
+Status: v1.2.0 stable release published and validated
 Target: v1.2.0
 Stable compatibility baseline: v1.1.1
 Public/private boundary: synthetic public evidence; real Snapshots local only
@@ -48,7 +48,7 @@ approved Public lifecycle contract.
 - Unknown/unsupported input is preserved privately but is not promoted.
 - Snapshot Store, approved input, and full Run-All output are private local
   artifacts.
-- Tag, GitHub Release, TestPyPI, and Production PyPI are executed only after
+- Tag, GitHub Release, TestPyPI, and Production PyPI were executed only after
   their separate Product authorization and recorded after observation.
 
 ## Validation closeout

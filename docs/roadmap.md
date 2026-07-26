@@ -32,13 +32,12 @@
   third-party notices.
 - Complete dependency lock review, security/privacy checks, documentation, and
   release-specific review evidence.
-- `v1.0.0` remains the first stable release. At v1.2.0 release preparation,
-  `v1.1.1` remains the current stable
+- `v1.0.0` remains the first stable release. `v1.2.0` is the current stable
   GitHub Release and Production PyPI version. Any future tag, GitHub Release,
   stable release, or package publication requires its own current review and
   separate Human authorization.
 
-## Milestone 5 — v1.2 Snapshot Accumulation — release prepared
+## Milestone 5 — v1.2 Snapshot Accumulation — complete
 
 - Preserve complete Garmin Exports as immutable account-bounded observations.
 - Build deterministic cumulative approved input with
@@ -48,6 +47,5 @@
   evidence from four separately supplied private/local Snapshots confirms the
   required cumulative behavior without adding private evidence to Git.
 - Keep the v1.1.1 one-shot CLI and output contract compatible.
-- Complete Unit Review, Target Core Review, and Green CI before publication;
-  TestPyPI verification, stable release publication, and Production PyPI
-  verification remain separately observed release steps.
+- Unit Review, Target Core Review, Green CI, TestPyPI verification, stable
+  GitHub Release publication, and Production PyPI verification are complete.

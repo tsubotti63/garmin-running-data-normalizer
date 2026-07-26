@@ -25,13 +25,13 @@ Reusable descriptive analysis
 Human review
 ```
 
-Release source version: **v1.2.0** · Python **3.11+** · Apache License 2.0
+Current stable release: **v1.2.0** · Python **3.11+** · Apache License 2.0
 
 - [Install from PyPI](https://pypi.org/project/garmin-running-data-normalizer/)
 - [Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
-- [Release Notes v1.2.0](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.2.0.md)
+- [Release Notes v1.2.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.2.0)
 
 ## Why this project
 

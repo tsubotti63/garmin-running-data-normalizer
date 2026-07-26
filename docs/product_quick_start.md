@@ -12,16 +12,16 @@ file is the product Quick Start for Garmin Running Data Normalizer.
 - Git
 - A local shell
 
-## Install the v1.2.0 release source
+## Install the v1.2.0 stable release
 
-After v1.2.0 package-index publication has completed, install it from PyPI:
+Install v1.2.0 from PyPI:
 
 ```bash
 python -m pip install garmin-running-data-normalizer
 garmin-running-data-normalizer --version
 ```
 
-After publication, the version command prints
+The version command prints
 `python -m garmin_running_data_normalizer 1.2.0`. The equivalent module command
 is `python -m garmin_running_data_normalizer --version`.
 
@@ -95,7 +95,7 @@ The stable one-shot workflow remains unchanged. It does not merge separate
 Garmin Export downloads. Keep every download: later absence does not mean that
 Garmin or the user deleted an earlier record.
 
-The prepared v1.2.0 release source includes the additive Snapshot commands:
+The stable v1.2.0 release includes the additive Snapshot commands:
 
 ```bash
 garmin-running-data-normalizer snapshot init \

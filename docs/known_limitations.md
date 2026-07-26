@@ -1,6 +1,6 @@
 # Known Limitations
 
-These limitations apply to the prepared `1.2.0` release source. They are
+These limitations apply to the stable `1.2.0` release. They are
 explicit product boundaries, not hidden fallback behavior.
 
 ## Input and orchestration
