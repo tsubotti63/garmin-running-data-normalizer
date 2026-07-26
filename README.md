@@ -40,6 +40,7 @@ Current stable release: **v1.2.0** · Python **3.11+** · Apache License 2.0
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
 - [Release Notes v1.2.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.2.0)
+- [Project story on Zenn (Japanese): フルマラソンランナーが作った、Garmin ExportをAI分析へつなぐ正規化OSS](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-summary)
 
 ## Why this project
 
