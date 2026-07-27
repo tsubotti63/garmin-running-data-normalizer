@@ -19,9 +19,13 @@ python3 -m venv .venv
 ```powershell
 git clone https://github.com/tsubotti63/garmin-running-data-normalizer.git
 Set-Location garmin-running-data-normalizer
-py -3.11 -m venv .venv
+python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
+
+`python` must resolve to Python 3.11 or later. If the Windows Python launcher is
+available and you need to select a specific installed version, you can use
+`py -3.11 -m venv .venv` instead.
 
 The input fixture is already available at
 `examples/synthetic/garmin_export`. Use a new output directory; Run-All never

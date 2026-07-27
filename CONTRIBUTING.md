@@ -31,9 +31,13 @@ python3 -m venv .venv
 ```powershell
 git clone https://github.com/tsubotti63/garmin-running-data-normalizer.git
 Set-Location garmin-running-data-normalizer
-py -3.11 -m venv .venv
+python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[test,release]"
 ```
+
+`python` must resolve to Python 3.11 or later. When selecting among multiple
+installed versions through the Windows Python launcher, contributors may use
+`py -3.11 -m venv .venv` instead.
 
 Create a focused branch, keep the change to one reviewable theme, and open a
 Pull Request against `main`.

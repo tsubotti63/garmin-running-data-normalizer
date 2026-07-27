@@ -52,6 +52,22 @@ class PackagingReadinessTest(unittest.TestCase):
         entries = set((ROOT / ".gitignore").read_text(encoding="utf-8").splitlines())
         self.assertTrue({"build/", "dist/", "*.egg-info/"}.issubset(entries))
 
+    def test_windows_ci_runs_packaged_synthetic_flows(self) -> None:
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+        self.assertIn("runs-on: ubuntu-latest", workflow)
+        self.assertIn("windows-runtime:", workflow)
+        self.assertIn("runs-on: windows-latest", workflow)
+        self.assertIn(
+            "workspace/windows-wheel-run-all/run_summary.json",
+            workflow,
+        )
+        self.assertIn(
+            "workspace/windows-sdist-run-all/run_summary.json",
+            workflow,
+        )
+        self.assertEqual(workflow.count("assert s['status'] == 'PASS_WITH_WARNINGS'"), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

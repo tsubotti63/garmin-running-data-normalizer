@@ -141,10 +141,14 @@ python3 -m venv .venv
 ```powershell
 git clone https://github.com/tsubotti63/garmin-running-data-normalizer.git
 Set-Location garmin-running-data-normalizer
-py -3.11 -m venv .venv
+python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\run-all
 ```
+
+`python` must resolve to Python 3.11 or later. If you use the Windows Python
+launcher to select among multiple installed versions, you can use
+`py -3.11 -m venv .venv` instead.
 
 The installed console script is equivalent when its environment is active.
 The activation-independent `python -m` form above also avoids PowerShell

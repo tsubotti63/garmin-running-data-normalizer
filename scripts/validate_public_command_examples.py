@@ -23,6 +23,13 @@ REQUIRED_PLATFORM_SECTIONS = (
     "docs/getting_started_from_garmin_export.md",
     "docs/project/run_all_public_usage_example_v0_1.md",
 )
+WINDOWS_SETUP_DOCUMENTS = (
+    "README.md",
+    "docs/product_quick_start.md",
+    "docs/getting_started_from_garmin_export.md",
+    "docs/project/run_all_public_usage_example_v0_1.md",
+    "CONTRIBUTING.md",
+)
 
 
 def _fenced_blocks(text: str) -> Iterable[tuple[str, str]]:
@@ -55,6 +62,17 @@ def validate(root: Path = ROOT) -> list[str]:
             findings.append(f"{relative}: macOS / Linux section is missing")
         if "Windows PowerShell" not in text:
             findings.append(f"{relative}: Windows PowerShell section is missing")
+
+    for relative in WINDOWS_SETUP_DOCUMENTS:
+        powershell_blocks = [
+            block
+            for language, block in _fenced_blocks(contents.get(relative, ""))
+            if language in {"powershell", "pwsh"}
+        ]
+        if not any("python -m venv .venv" in block for block in powershell_blocks):
+            findings.append(
+                f"{relative}: Windows setup must use python -m venv .venv"
+            )
 
     quick_start = contents.get("docs/product_quick_start.md", "")
     if "diff -ru" in quick_start:

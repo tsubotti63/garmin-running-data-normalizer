@@ -45,3 +45,19 @@ def test_missing_conditional_dependency_fails(tmp_path: Path) -> None:
         "pyproject.toml: Windows conditional tzdata dependency is missing"
         in validate(tmp_path)
     )
+
+
+def test_py_launcher_only_windows_setup_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    readme = tmp_path / "README.md"
+    readme.write_text(
+        readme.read_text(encoding="utf-8").replace(
+            "python -m venv .venv", "py -3.11 -m venv .venv", 1
+        ),
+        encoding="utf-8",
+    )
+
+    assert (
+        "README.md: Windows setup must use python -m venv .venv"
+        in validate(tmp_path)
+    )

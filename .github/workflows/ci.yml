@@ -84,7 +84,7 @@ jobs:
         run: |
           .\.venv\Scripts\python.exe -m build
           .\.venv\Scripts\python.exe -m twine check --strict .\dist\*
-      - name: Verify isolated wheel installation
+      - name: Verify isolated wheel installation and Synthetic Run-All
         shell: powershell
         run: |
           python -m venv .wheel-venv
@@ -93,7 +93,10 @@ jobs:
           .\.wheel-venv\Scripts\python.exe -m pip install $wheel
           .\.wheel-venv\Scripts\python.exe -c "import importlib.metadata as m; from zoneinfo import ZoneInfo; assert m.version('tzdata'); assert str(ZoneInfo('Asia/Tokyo')) == 'Asia/Tokyo'"
           .\.wheel-venv\Scripts\python.exe -m garmin_running_data_normalizer --version
-      - name: Verify isolated source distribution installation
+          .\.wheel-venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-wheel-run-all
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel Synthetic Run-All failed with exit code $LASTEXITCODE" }
+          .\.wheel-venv\Scripts\python.exe -c "import json, pathlib; p=pathlib.Path('workspace/windows-wheel-run-all/run_summary.json'); assert p.is_file(); s=json.loads(p.read_text(encoding='utf-8')); assert s['status'] == 'PASS_WITH_WARNINGS'; assert s['family_results']['activities']['detected_asset_count'] == 1; assert s['family_results']['activities']['processed_asset_count'] == 1"
+      - name: Verify isolated source distribution installation and Synthetic Run-All
         shell: powershell
         run: |
           python -m venv .sdist-venv
@@ -102,3 +105,6 @@ jobs:
           .\.sdist-venv\Scripts\python.exe -m pip install $sdist
           .\.sdist-venv\Scripts\python.exe -c "import importlib.metadata as m; from zoneinfo import ZoneInfo; assert m.version('tzdata'); assert str(ZoneInfo('Asia/Tokyo')) == 'Asia/Tokyo'"
           .\.sdist-venv\Scripts\python.exe -m garmin_running_data_normalizer --version
+          .\.sdist-venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-sdist-run-all
+          if ($LASTEXITCODE -ne 0) { throw "isolated sdist Synthetic Run-All failed with exit code $LASTEXITCODE" }
+          .\.sdist-venv\Scripts\python.exe -c "import json, pathlib; p=pathlib.Path('workspace/windows-sdist-run-all/run_summary.json'); assert p.is_file(); s=json.loads(p.read_text(encoding='utf-8')); assert s['status'] == 'PASS_WITH_WARNINGS'; assert s['family_results']['activities']['detected_asset_count'] == 1; assert s['family_results']['activities']['processed_asset_count'] == 1"
