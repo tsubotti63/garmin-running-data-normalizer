@@ -28,9 +28,12 @@ python3 -m venv .venv
 
 ### Windows PowerShell
 
+Prepare and tag-verify the repository folder outside Windows, then copy it to
+the Windows machine before starting this runtime-validation setup. Source
+acquisition and Windows runtime validation are separate steps.
+
 ```powershell
-git clone https://github.com/tsubotti63/garmin-running-data-normalizer.git
-Set-Location garmin-running-data-normalizer
+Set-Location C:\Garmin\garmin-running-data-normalizer
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[test,release]"
 ```

@@ -23,9 +23,8 @@ attribution, and compatibility review as appropriate.
 | build >=1.2,<2 | release-tooling only | MIT | Builds wheel and source distribution; not shipped as a runtime dependency |
 | twine >=6,<7 | release-tooling only | Apache-2.0 | Strict distribution metadata/README check; not shipped as a runtime dependency |
 
-Stable v1.2.0 declared no third-party runtime package dependency. The
-unreleased patch candidate adds the Apache-2.0 `tzdata` package only on Windows
-as Python's documented IANA timezone-data fallback. No version is pinned
+Stable v1.2.1 adds the Apache-2.0 `tzdata` package only on Windows as Python's
+documented IANA timezone-data fallback. No version is pinned
 because the product consumes only the standard `zoneinfo` data-provider
 contract and has no dependency on a tzdata package API. macOS and Linux do not
 install it through this marker and continue to use system timezone data.

@@ -14,6 +14,7 @@ PUBLIC_DOCUMENTS = (
     "docs/ai_analysis_quick_start.md",
     "docs/project/run_all_public_usage_example_v0_1.md",
     "docs/faq.md",
+    "docs/known_limitations.md",
     "SUPPORT.md",
     "CONTRIBUTING.md",
 )
@@ -29,6 +30,16 @@ WINDOWS_SETUP_DOCUMENTS = (
     "docs/getting_started_from_garmin_export.md",
     "docs/project/run_all_public_usage_example_v0_1.md",
     "CONTRIBUTING.md",
+)
+CURRENT_STABLE_DOCUMENTS = (
+    "README.md",
+    "docs/product_quick_start.md",
+    "docs/getting_started_from_garmin_export.md",
+    "docs/faq.md",
+    "docs/known_limitations.md",
+)
+WINDOWS_SOURCE_CONTROL_COMMANDS = re.compile(
+    r"(?im)^\s*git\s+(?:clone|fetch|checkout|pull)\b"
 )
 
 
@@ -73,6 +84,13 @@ def validate(root: Path = ROOT) -> list[str]:
             findings.append(
                 f"{relative}: Windows setup must use python -m venv .venv"
             )
+        if any(
+            WINDOWS_SOURCE_CONTROL_COMMANDS.search(block)
+            for block in powershell_blocks
+        ):
+            findings.append(
+                f"{relative}: Windows runtime instructions must not perform Git source acquisition"
+            )
 
     quick_start = contents.get("docs/product_quick_start.md", "")
     if "diff -ru" in quick_start:
@@ -101,16 +119,32 @@ def validate(root: Path = ROOT) -> list[str]:
             if "/path/to/" in block:
                 findings.append(f"{relative}: PowerShell block uses a Unix placeholder path")
 
+    for relative in CURRENT_STABLE_DOCUMENTS:
+        text = contents.get(relative, "")
+        if not re.search(
+            r"(?:(?:current|stable)[^\n]*v?1\.2\.1|"
+            r"v?1\.2\.1[^\n]*(?:current|stable))",
+            text,
+            re.IGNORECASE,
+        ):
+            findings.append(f"{relative}: current stable v1.2.1 is not identified")
+        if re.search(
+            r"(?:patch release is being prepared|unreleased patch|"
+            r"manual(?:ly)? install(?:ing)? `?tzdata`?|"
+            r"python -m pip install tzdata)",
+            text,
+            re.IGNORECASE,
+        ):
+            findings.append(
+                f"{relative}: obsolete v1.2.0 Windows workaround or pending-patch wording remains"
+            )
+
     for relative in ("README.md", "docs/product_quick_start.md"):
         text = contents.get(relative, "")
-        if "v1.2.0" not in text:
-            findings.append(f"{relative}: current stable v1.2.0 is not identified")
-        if "python -m pip install tzdata" not in text:
-            findings.append(f"{relative}: v1.2.0 Windows workaround is missing")
-        if "patch release" not in text.lower():
-            findings.append(f"{relative}: unreleased patch status is missing")
-        if re.search(r"(?:current|stable)[^\n]*v1\.2\.1", text, re.IGNORECASE):
-            findings.append(f"{relative}: unreleased v1.2.1 is presented as stable")
+        if "automatically" not in text or "`tzdata`" not in text:
+            findings.append(
+                f"{relative}: current Windows automatic tzdata behavior is missing"
+            )
 
     getting_started = contents.get("docs/getting_started_from_garmin_export.md", "")
     for command in ("run-all", "validate-handoff", "snapshot"):

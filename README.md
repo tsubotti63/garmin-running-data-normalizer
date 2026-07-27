@@ -30,7 +30,7 @@ Reusable descriptive analysis
 Human review
 ```
 
-Current stable release: **v1.2.0** · Python **3.11+** · Apache License 2.0
+Current stable release: **v1.2.1** · Python **3.11+** · Apache License 2.0
 
 - [Install from PyPI](https://pypi.org/project/garmin-running-data-normalizer/)
 - [Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md)
@@ -39,7 +39,7 @@ Current stable release: **v1.2.0** · Python **3.11+** · Apache License 2.0
 - [FAQ](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/faq.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
-- [Release Notes v1.2.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.2.0)
+- [Release Notes v1.2.1](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.2.1)
 - [Project story on Zenn (Japanese): フルマラソンランナーが作った、Garmin ExportをAI分析へつなぐ正規化OSS](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-summary)
 
 ## Why this project
@@ -96,10 +96,10 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. Stable v1.2.0 declared no
-third-party runtime dependency. The unreleased patch candidate adds `tzdata`
-only on Windows so Python can resolve the existing IANA `Asia/Tokyo` timezone
-contract; macOS and Linux continue to use their system timezone data.
+`python -m garmin_running_data_normalizer --version`. Stable v1.2.1 installs
+`tzdata` automatically on Windows so Python can resolve the existing IANA
+`Asia/Tokyo` timezone contract. macOS and Linux continue to use their system
+timezone data.
 
 Maintainers can reproduce the packaging gate without uploading anything:
 
@@ -111,18 +111,11 @@ python -m twine check --strict dist/*
 
 ## Try the synthetic workflow
 
-No Garmin account or real export is required. Clone the repository so the
-tracked synthetic fixture is available, then install the checkout:
-
-> [!IMPORTANT]
-> Windows users of stable v1.2.0 may need to install `tzdata` manually before
-> running normalization:
->
-> ```powershell
-> python -m pip install tzdata
-> ```
->
-> A patch release is being prepared. Windows remains under public validation.
+No Garmin account or real export is required. Obtain the repository so the
+tracked synthetic fixture is available, then install the checkout. For the
+maintainer-owned physical Windows validation, a clean Production PyPI v1.2.1
+install brought in `tzdata` automatically; no manual timezone-data install was
+needed.
 
 ### macOS / Linux
 
@@ -138,9 +131,12 @@ python3 -m venv .venv
 
 ### Windows PowerShell
 
+Use a clean repository folder prepared and tag-verified outside Windows, then
+copy that folder to the Windows machine. This keeps source acquisition separate
+from the Windows package/runtime gate.
+
 ```powershell
-git clone https://github.com/tsubotti63/garmin-running-data-normalizer.git
-Set-Location garmin-running-data-normalizer
+Set-Location C:\Garmin\garmin-running-data-normalizer
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\run-all
@@ -168,14 +164,18 @@ follow the complete
 | Platform | Validation status | Current position |
 |---|---|---|
 | macOS | Maintainer validated | Primary development and validation environment |
-| Windows | Public validation in progress | One third-party environment reproduced missing IANA timezone data on stable v1.2.0; manual `tzdata` installation restored the tracked Synthetic Run-All |
-| Linux | Automated CI validated | Full tests, validators, builds, and isolated installs run on `ubuntu-latest`; manual environment characterization is not yet claimed |
+| Windows | CI and one physical environment validated | `windows-latest` validates the package paths; one maintainer-owned physical Windows environment clean-installed Production PyPI v1.2.1, automatically installed `tzdata`, resolved `Asia/Tokyo`, and completed the tracked Synthetic Run-All |
+| Linux | GitHub Actions validated | Full tests, validators, builds, and isolated installs run on `ubuntu-latest`; manual environment characterization is not claimed |
 
-Windows is not excluded from the project. The current limitation is validation
-coverage, not product intent. This evidence does not establish universal
-Windows support. Reports should include the OS, shell, Python
+Windows is not excluded from the project. Current evidence remains bounded: one
+maintainer-owned physical Windows environment plus GitHub Actions does not
+establish compatibility with every Windows version or installation. Reports
+should include the OS, shell, Python
 version, package version, command, exit code, and public-safe error details.
 Never attach a real Garmin Export or full personal Run-All output.
+
+The incident, fix, and bounded post-publication evidence are recorded in
+[CS-008: Windows Timezone Hotfix from Field Report to Production Validation](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/case_studies/cs-008-windows-timezone-hotfix-from-field-report-to-production-validation.md).
 
 ## Accumulate multiple Garmin Exports (v1.2.0)
 
@@ -458,4 +458,4 @@ Collaboration Platform v0.9 Standard, not a Garmin product release history.
   `.review/`
 
 This project is licensed under the
-[Apache License 2.0](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.2.0/LICENSE).
+[Apache License 2.0](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v1.2.1/LICENSE).

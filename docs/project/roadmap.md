@@ -47,7 +47,7 @@ publication still requires its own current review and Human authorization.
 Implementation adapts the reviewed predecessor Snapshot Store, candidate,
 dataset-policy, diff, full-rebuild, and QA contracts to the public package.
 The change is additive: the v1.1.1 one-shot Run-All contract remains compatible.
-v1.2.0 is the current stable release. Release preparation completed full
+v1.2.1 is the current stable release. v1.2.0 release preparation completed full
 synthetic validation, private four-Snapshot validation, clean package-installed
 flows, and review evidence; TestPyPI, the annotated tag, GitHub Release, and
 Production PyPI were then completed and verified in their gated order.
