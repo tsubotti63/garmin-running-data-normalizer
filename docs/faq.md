@@ -180,12 +180,36 @@ coaching prescriptions, and causal claims are outside the product boundary.
 
 ### Is Windows supported?
 
-Windows is an intended supported platform, but public validation is pending.
-macOS is maintainer validated. Linux runs the automated CI suite on
-`ubuntu-latest`; manual Linux environment characterization is not claimed.
+Windows is an intended supported platform and public validation is in progress.
+One third-party Windows environment reproduced missing IANA timezone data on
+stable v1.2.0. After manually installing `tzdata`, the tracked Synthetic
+Run-All completed with `PASS_WITH_WARNINGS`, exit code 0, and Activities
+detected=1 / processed=1. This single-environment result is not a claim that all
+Windows versions are validated.
 
 Public-safe Windows reports are welcome through
 [Support](../SUPPORT.md).
+
+### Why does stable v1.2.0 fail with `ACTIVITIES_NORMALIZATION_FAILED` on Windows?
+
+Python may be unable to resolve the IANA `Asia/Tokyo` timezone because stable
+v1.2.0 did not install timezone data on Windows. Confirm the cause inside the
+same environment:
+
+```powershell
+python -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
+```
+
+If this reports `ZoneInfoNotFoundError`, install the temporary workaround:
+
+```powershell
+python -m pip install tzdata
+```
+
+Then rerun normalization with a new output path. A patch release is being
+prepared to install `tzdata` automatically on Windows and provide a bounded
+`TIMEZONE_DATA_UNAVAILABLE` diagnostic. Until that patch is published, v1.2.0
+remains the current stable release.
 
 ### Can I attach my Garmin Export to a GitHub Issue?
 

@@ -21,7 +21,10 @@ class PackagingReadinessTest(unittest.TestCase):
         self.assertEqual(project["version"], __version__)
         self.assertEqual(project["license"], "Apache-2.0")
         self.assertEqual(project["requires-python"], ">=3.11")
-        self.assertEqual(project["dependencies"], [])
+        self.assertEqual(
+            project["dependencies"],
+            ["tzdata; platform_system == 'Windows'"],
+        )
         self.assertIn(
             "Development Status :: 5 - Production/Stable",
             project["classifiers"],

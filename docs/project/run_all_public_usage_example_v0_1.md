@@ -5,12 +5,22 @@ does not contain or describe a real person's export.
 
 ## 1. Prepare a local environment
 
+### macOS / Linux
+
 ```bash
 git clone https://github.com/tsubotti63/garmin-running-data-normalizer.git
 cd garmin-running-data-normalizer
 python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e .
+.venv/bin/python -m pip install -e .
+```
+
+### Windows PowerShell
+
+```powershell
+git clone https://github.com/tsubotti63/garmin-running-data-normalizer.git
+Set-Location garmin-running-data-normalizer
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
 ```
 
 The input fixture is already available at
@@ -19,10 +29,18 @@ overwrites an existing destination.
 
 ## 2. Run the workflow
 
+### macOS / Linux
+
 ```bash
-python -m garmin_running_data_normalizer run-all \
+.venv/bin/python -m garmin_running_data_normalizer run-all \
   --input examples/synthetic/garmin_export \
   --output workspace/run-all-example
+```
+
+### Windows PowerShell
+
+```powershell
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\run-all-example
 ```
 
 The tracked fixture contains Activities only. A successful example therefore
@@ -58,43 +76,26 @@ and coordinates. Its `garmin_activity_key` can contain the source activity ID,
 so that column remains private and must be removed from any externally shared
 derivative.
 
-Print the header and synthetic rows with the standard library:
+Inspect the completion status, header, and synthetic row count without printing
+row values. The helper is cross-platform:
 
 ```bash
-python - <<'PY'
-import csv
-from pathlib import Path
+python scripts/inspect_run_all_output.py workspace/run-all-example
+```
 
-path = Path("workspace/run-all-example/analysis/activities.csv")
-with path.open(newline="", encoding="utf-8") as handle:
-    rows = list(csv.DictReader(handle))
-print("columns:", list(rows[0]) if rows else [])
-print("row_count:", len(rows))
-for row in rows:
-    print(row["activity_date_local"], row["activity_type"], row["distance_m"])
-PY
+On Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\inspect_run_all_output.py .\workspace\run-all-example
 ```
 
 For real local output, avoid printing rows into shared terminals or logs.
 
 ## 5. Review `run_summary.json`
 
-Check completion and warnings before analyzing any metric:
-
-```bash
-python - <<'PY'
-import json
-from pathlib import Path
-
-summary = json.loads(
-    Path("workspace/run-all-example/run_summary.json").read_text(encoding="utf-8")
-)
-print("status:", summary["status"])
-print("warning_count:", summary["warning_count"])
-for family, result in summary["family_results"].items():
-    print(family, result["status"])
-PY
-```
+Check completion and warnings before analyzing any metric. The same
+`scripts/inspect_run_all_output.py` command reports `status`, `warning_count`,
+and every family status without exposing row values.
 
 - `PASS` means every detected family completed without warnings.
 - `PASS_WITH_WARNINGS` is valid output with non-fatal warnings that must be

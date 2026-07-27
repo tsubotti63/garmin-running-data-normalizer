@@ -10,7 +10,9 @@ readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+  "tzdata; platform_system == 'Windows'",
+]
 keywords = ["garmin", "running", "normalization", "fit"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",

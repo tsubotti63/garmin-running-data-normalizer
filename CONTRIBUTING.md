@@ -17,12 +17,22 @@ does not itself authorize a breaking change.
 
 Use Python 3.11 or later:
 
+### macOS / Linux
+
 ```bash
 git clone https://github.com/tsubotti63/garmin-running-data-normalizer.git
 cd garmin-running-data-normalizer
 python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[test,release]'
+.venv/bin/python -m pip install -e '.[test,release]'
+```
+
+### Windows PowerShell
+
+```powershell
+git clone https://github.com/tsubotti63/garmin-running-data-normalizer.git
+Set-Location garmin-running-data-normalizer
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[test,release]"
 ```
 
 Create a focused branch, keep the change to one reviewable theme, and open a
@@ -39,6 +49,7 @@ python scripts/validate_bootstrap.py
 python scripts/static_policy_scan.py
 python scripts/validate_platform_alignment.py
 python scripts/validate_schema_contract.py
+python scripts/validate_public_command_examples.py
 python scripts/validate_public_history.py --ci
 python -m build
 python -m twine check --strict dist/*

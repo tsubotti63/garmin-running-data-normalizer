@@ -94,20 +94,36 @@ workspace, retention, training-use, history, memory, and deletion review.
 
 When limited month-level Activity volume/count context is sufficient, opt in:
 
+### macOS / Linux
+
 ```bash
-garmin-running-data-normalizer run-all \
+python -m garmin_running_data_normalizer run-all \
   --input /path/to/extracted-garmin-export \
   --output /path/to/new-run-all-output \
   --external-safe-pack
 ```
 
+### Windows PowerShell
+
+```powershell
+python -m garmin_running_data_normalizer run-all --input "C:\Garmin\Export" --output "C:\Garmin\Output\external-safe-01" --external-safe-pack
+```
+
 The stable Snapshot path supports the same option:
 
+### macOS / Linux
+
 ```bash
-garmin-running-data-normalizer snapshot run-all \
+python -m garmin_running_data_normalizer snapshot run-all \
   --store /path/to/private-snapshot-store \
   --output /path/to/new-snapshot-run-all-output \
   --external-safe-pack
+```
+
+### Windows PowerShell
+
+```powershell
+python -m garmin_running_data_normalizer snapshot run-all --store "C:\Garmin\SnapshotStore" --output "C:\Garmin\Output\snapshot-safe-01" --external-safe-pack
 ```
 
 The generated file is:
