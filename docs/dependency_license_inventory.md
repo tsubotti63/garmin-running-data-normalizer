@@ -16,16 +16,23 @@ attribution, and compatibility review as appropriate.
 | Dependency | Use | Known license | Gate |
 |---|---|---|---|
 | Python >=3.11 | runtime platform | PSF License | Verify supported versions for a release |
+| tzdata; Windows only | IANA timezone database fallback | Apache-2.0 | Installed conditionally on Windows; verify wheel/sdist metadata and clean install |
 | setuptools >=77 | build | MIT | PEP 639 license metadata; verified during release validation |
 | wheel | build | MIT | Verify the resolved build environment for a release |
 | pytest >=8.4,<9 | test-only | MIT | Verify the resolved test environment for a release |
 | build >=1.2,<2 | release-tooling only | MIT | Builds wheel and source distribution; not shipped as a runtime dependency |
 | twine >=6,<7 | release-tooling only | Apache-2.0 | Strict distribution metadata/README check; not shipped as a runtime dependency |
 
-The project declares no third-party runtime package dependency. Build, test, and
-release tools are not included in the default wheel dependency set, are not
-covered merely by the project's Apache-2.0 license, and remain independently
-licensed.
+Stable v1.2.0 declared no third-party runtime package dependency. The
+unreleased patch candidate adds the Apache-2.0 `tzdata` package only on Windows
+as Python's documented IANA timezone-data fallback. No version is pinned
+because the product consumes only the standard `zoneinfo` data-provider
+contract and has no dependency on a tzdata package API. macOS and Linux do not
+install it through this marker and continue to use system timezone data.
+
+Build, test, and release tools are not included in the default wheel dependency
+set, are not covered merely by the project's Apache-2.0 license, and remain
+independently licensed.
 
 ## Candidate future dependencies
 

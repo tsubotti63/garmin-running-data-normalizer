@@ -50,35 +50,60 @@ not modify it.
 
 Create an isolated environment if practical, then install from PyPI:
 
+### macOS / Linux
+
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install garmin-running-data-normalizer
-garmin-running-data-normalizer --version
+.venv/bin/python -m pip install garmin-running-data-normalizer
+.venv/bin/python -m garmin_running_data_normalizer --version
 ```
 
 The version command for this guide should report `1.2.0`.
 
-On Windows PowerShell, activation is typically:
+### Windows PowerShell
 
 ```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install garmin-running-data-normalizer
-garmin-running-data-normalizer --version
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer --version
 ```
 
-Windows is an intended supported platform, but public validation remains
-pending. See [Platform status](#platform-status).
+`python` must resolve to Python 3.11 or later. If multiple Python versions are
+installed and the Windows Python launcher is available, you can use
+`py -3.11 -m venv .venv` instead.
+
+Stable v1.2.0 can encounter missing IANA timezone data on Windows. Check the
+environment with:
+
+```powershell
+.\.venv\Scripts\python.exe -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
+```
+
+If that reports `ZoneInfoNotFoundError`, install the temporary workaround:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install tzdata
+```
+
+A patch release is being prepared to install this dependency automatically on
+Windows. Public Windows validation remains in progress.
 
 ## 4. Run one-shot normalization first
 
 Use the compatible one-shot path for your first real Export:
 
+### macOS / Linux
+
 ```bash
-garmin-running-data-normalizer run-all \
+python -m garmin_running_data_normalizer run-all \
   --input /path/to/extracted-garmin-export \
   --output /path/to/new-run-all-output
+```
+
+### Windows PowerShell
+
+```powershell
+python -m garmin_running_data_normalizer run-all --input "C:\Garmin\Export" --output "C:\Garmin\Output\run-all-01"
 ```
 
 Replace both example paths. The input must be a directory containing a
@@ -122,9 +147,17 @@ disclose the warning.
 
 You can validate a completed handoff later:
 
+### macOS / Linux
+
 ```bash
-garmin-running-data-normalizer validate-handoff \
+python -m garmin_running_data_normalizer validate-handoff \
   --input /path/to/completed-run-all-output
+```
+
+### Windows PowerShell
+
+```powershell
+python -m garmin_running_data_normalizer validate-handoff --input "C:\Garmin\Output\run-all-01"
 ```
 
 ## 6. Keep the result private
@@ -160,12 +193,14 @@ Keep each original Export. In `v1.2.0`, the optional Snapshot lifecycle can
 register repeated complete Exports from one account boundary and build a
 canonical cumulative input:
 
+### macOS / Linux
+
 ```bash
-garmin-running-data-normalizer snapshot init \
+python -m garmin_running_data_normalizer snapshot init \
   --store /path/to/private-snapshot-store \
   --account opaque-local-account
 
-garmin-running-data-normalizer snapshot register \
+python -m garmin_running_data_normalizer snapshot register \
   --store /path/to/private-snapshot-store \
   --input /path/to/complete-garmin-export \
   --label S1 \
@@ -174,12 +209,21 @@ garmin-running-data-normalizer snapshot register \
   --observed-at 2030-01-01T02:00:00+00:00 \
   --confirm-complete
 
-garmin-running-data-normalizer snapshot verify \
+python -m garmin_running_data_normalizer snapshot verify \
   --store /path/to/private-snapshot-store
 
-garmin-running-data-normalizer snapshot run-all \
+python -m garmin_running_data_normalizer snapshot run-all \
   --store /path/to/private-snapshot-store \
   --output /path/to/new-snapshot-run-all-output
+```
+
+### Windows PowerShell
+
+```powershell
+python -m garmin_running_data_normalizer snapshot init --store "C:\Garmin\SnapshotStore" --account opaque-local-account
+python -m garmin_running_data_normalizer snapshot register --store "C:\Garmin\SnapshotStore" --input "C:\Garmin\Export" --label S1 --requested-at 2030-01-01T00:00:00+00:00 --downloaded-at 2030-01-01T01:00:00+00:00 --observed-at 2030-01-01T02:00:00+00:00 --confirm-complete
+python -m garmin_running_data_normalizer snapshot verify --store "C:\Garmin\SnapshotStore"
+python -m garmin_running_data_normalizer snapshot run-all --store "C:\Garmin\SnapshotStore" --output "C:\Garmin\Output\snapshot-run-all-01"
 ```
 
 Use one opaque account token per person/account boundary. Repeat only the
@@ -199,7 +243,7 @@ before adoption. The bounded public-safe validation is documented in
 | Platform | Current evidence |
 |---|---|
 | macOS | Maintainer validated |
-| Windows | Intended support; public validation pending |
+| Windows | One third-party environment reproduced missing timezone data on stable v1.2.0; the documented `tzdata` workaround restored the tracked Synthetic Run-All; broader validation remains pending |
 | Linux | Automated CI validated on `ubuntu-latest`; manual environment characterization is not claimed |
 
 For a public-safe report, include the OS and version, shell, Python and package

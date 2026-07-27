@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
+from .common.time import (
+    DEFAULT_TIMEZONE,
+    TimezoneDataUnavailableError,
+    require_timezone_data,
+)
 from .intake.discovery import discover_export
 from .normalizers.activities import normalize_activities
 from .qa import summarize_records
@@ -67,6 +72,7 @@ def _validate_paths(input_path: str | Path, output_path: str | Path) -> tuple[Pa
 def run_activities(input_path: str | Path, output_path: str | Path) -> dict[str, Any]:
     """Run the deterministic, activities-only Golden Path."""
     input_root, output_root = _validate_paths(input_path, output_path)
+    require_timezone_data(DEFAULT_TIMEZONE)
     assets = [
         asset
         for asset in discover_export(input_root)
@@ -310,6 +316,9 @@ def main(argv: list[str] | None = None) -> int:
             raise GoldenPathError("unsupported command")
     except GoldenPathError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+    except TimezoneDataUnavailableError as exc:
+        print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)
         return 2
     except RunAllError as exc:
         print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)

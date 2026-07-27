@@ -60,7 +60,14 @@ explicit product boundaries, not hidden fallback behavior.
 - Hosted processing, Garmin authentication, Open-Meteo, JMA, Instagram,
   wellness/coaching interpretation, Parquet output, and automatic personal
   analysis are outside the stable scope.
-- No third-party runtime package dependency is declared.
+- Stable v1.2.0 declares no third-party runtime package dependency. On Windows,
+  Python can therefore lack IANA data for `Asia/Tokyo` and surface
+  `ACTIVITIES_NORMALIZATION_FAILED`. If
+  `ZoneInfo("Asia/Tokyo")` raises `ZoneInfoNotFoundError`, install the temporary
+  workaround with `python -m pip install tzdata` and rerun into a new output
+  path. An unreleased patch candidate adds this dependency conditionally on
+  Windows and a bounded diagnostic; broader Windows validation remains in
+  progress.
 - External-safe output is opt-in, month-granularity, Activities-only, and does
   not automatically upload or provide provider-specific privacy guarantees.
 

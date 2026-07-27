@@ -96,8 +96,10 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. The project has no
-third-party runtime package dependency.
+`python -m garmin_running_data_normalizer --version`. Stable v1.2.0 declared no
+third-party runtime dependency. The unreleased patch candidate adds `tzdata`
+only on Windows so Python can resolve the existing IANA `Asia/Tokyo` timezone
+contract; macOS and Linux continue to use their system timezone data.
 
 Maintainers can reproduce the packaging gate without uploading anything:
 
@@ -112,16 +114,45 @@ python -m twine check --strict dist/*
 No Garmin account or real export is required. Clone the repository so the
 tracked synthetic fixture is available, then install the checkout:
 
+> [!IMPORTANT]
+> Windows users of stable v1.2.0 may need to install `tzdata` manually before
+> running normalization:
+>
+> ```powershell
+> python -m pip install tzdata
+> ```
+>
+> A patch release is being prepared. Windows remains under public validation.
+
+### macOS / Linux
+
 ```bash
 git clone https://github.com/tsubotti63/garmin-running-data-normalizer.git
 cd garmin-running-data-normalizer
 python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e .
-garmin-running-data-normalizer run-all \
+.venv/bin/python -m pip install -e .
+.venv/bin/python -m garmin_running_data_normalizer run-all \
   --input examples/synthetic/garmin_export \
   --output workspace/run-all
 ```
+
+### Windows PowerShell
+
+```powershell
+git clone https://github.com/tsubotti63/garmin-running-data-normalizer.git
+Set-Location garmin-running-data-normalizer
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\run-all
+```
+
+`python` must resolve to Python 3.11 or later. If you use the Windows Python
+launcher to select among multiple installed versions, you can use
+`py -3.11 -m venv .venv` instead.
+
+The installed console script is equivalent when its environment is active.
+The activation-independent `python -m` form above also avoids PowerShell
+execution-policy differences.
 
 Use a new output path that does not already exist for every run. Run-All never
 uploads the export. Start with `START_HERE.md` in the generated output. The
@@ -137,11 +168,12 @@ follow the complete
 | Platform | Validation status | Current position |
 |---|---|---|
 | macOS | Maintainer validated | Primary development and validation environment |
-| Windows | Validation pending | Intended supported platform; reproducible community reports are welcome |
+| Windows | Public validation in progress | One third-party environment reproduced missing IANA timezone data on stable v1.2.0; manual `tzdata` installation restored the tracked Synthetic Run-All |
 | Linux | Automated CI validated | Full tests, validators, builds, and isolated installs run on `ubuntu-latest`; manual environment characterization is not yet claimed |
 
 Windows is not excluded from the project. The current limitation is validation
-evidence, not product intent. Reports should include the OS, shell, Python
+coverage, not product intent. This evidence does not establish universal
+Windows support. Reports should include the OS, shell, Python
 version, package version, command, exit code, and public-safe error details.
 Never attach a real Garmin Export or full personal Run-All output.
 

@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
+from .common.time import (
+    DEFAULT_TIMEZONE,
+    TimezoneDataUnavailableError,
+    require_timezone_data,
+)
 from .fit.parser import parse_fit_export
 from .export.analysis_pack import build_analysis_pack_payloads
 from .intake.discovery import DiscoveredAsset, discover_export
@@ -618,6 +623,10 @@ def run_all(
 ) -> dict[str, Any]:
     """Compose the existing Garmin normalizers into deterministic Run-All v1."""
     input_root, output_root = _validate_paths(input_path, output_path)
+    try:
+        require_timezone_data(DEFAULT_TIMEZONE)
+    except TimezoneDataUnavailableError as exc:
+        raise RunAllError(exc.code, exc.safe_message) from exc
     initial_assets = _discover(input_root)
     initial_snapshot = _snapshot(initial_assets)
     families = _classify_assets(initial_assets)

@@ -26,6 +26,7 @@ jobs:
       - run: python scripts/validate_bootstrap.py
       - run: python scripts/validate_platform_alignment.py
       - run: python scripts/static_policy_scan.py
+      - run: python scripts/validate_public_command_examples.py
       - run: python scripts/validate_public_history.py --ci
       - run: python -m pytest
       - name: Build wheel and source distribution
@@ -46,3 +47,64 @@ jobs:
           /tmp/garmin-normalizer-sdist/bin/python -m pip check
           /tmp/garmin-normalizer-sdist/bin/python -c "import importlib.metadata as m; import garmin_running_data_normalizer as p; assert m.version('garmin-running-data-normalizer') == p.__version__"
           /tmp/garmin-normalizer-sdist/bin/garmin-running-data-normalizer --version
+  windows-runtime:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+      - name: Create clean editable-install environment
+        shell: powershell
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          .\.venv\Scripts\python.exe -m pip install -e ".[release]"
+          .\.venv\Scripts\python.exe -c "import importlib.metadata as m; assert m.version('tzdata')"
+          .\.venv\Scripts\python.exe -c "from zoneinfo import ZoneInfo; assert str(ZoneInfo('Asia/Tokyo')) == 'Asia/Tokyo'"
+          .\.venv\Scripts\python.exe -m garmin_running_data_normalizer --version
+      - name: Validate public command examples
+        shell: powershell
+        run: .\.venv\Scripts\python.exe .\scripts\validate_public_command_examples.py
+      - name: Run Windows synthetic workflows twice
+        shell: powershell
+        run: |
+          .\.venv\Scripts\python.exe -m garmin_running_data_normalizer normalize-activities --input .\examples\synthetic\garmin_export --output .\workspace\windows-golden
+          .\.venv\Scripts\python.exe .\scripts\compare_deterministic_outputs.py .\examples\synthetic\expected\golden_path .\workspace\windows-golden
+          .\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-run-all-1
+          .\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-run-all-2
+          .\.venv\Scripts\python.exe -c "import json, pathlib; s=json.loads(pathlib.Path('workspace/windows-run-all-1/run_summary.json').read_text(encoding='utf-8')); assert s['status'] == 'PASS_WITH_WARNINGS'; assert s['family_results']['activities']['detected_asset_count'] == 1; assert s['family_results']['activities']['processed_asset_count'] == 1"
+          .\.venv\Scripts\python.exe .\scripts\compare_deterministic_outputs.py .\workspace\windows-run-all-1 .\workspace\windows-run-all-2
+      - name: Build distributions
+        shell: powershell
+        run: |
+          .\.venv\Scripts\python.exe -m build
+          .\.venv\Scripts\python.exe -m twine check --strict .\dist\*
+      - name: Verify isolated wheel installation and Synthetic Run-All
+        shell: powershell
+        run: |
+          python -m venv .wheel-venv
+          .\.wheel-venv\Scripts\python.exe -m pip install --upgrade pip
+          $wheel = (Get-ChildItem .\dist\*.whl | Select-Object -First 1).FullName
+          .\.wheel-venv\Scripts\python.exe -m pip install $wheel
+          .\.wheel-venv\Scripts\python.exe -c "import importlib.metadata as m; from zoneinfo import ZoneInfo; assert m.version('tzdata'); assert str(ZoneInfo('Asia/Tokyo')) == 'Asia/Tokyo'"
+          .\.wheel-venv\Scripts\python.exe -m garmin_running_data_normalizer --version
+          .\.wheel-venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-wheel-run-all
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel Synthetic Run-All failed with exit code $LASTEXITCODE" }
+          .\.wheel-venv\Scripts\python.exe -c "import json, pathlib; p=pathlib.Path('workspace/windows-wheel-run-all/run_summary.json'); assert p.is_file(); s=json.loads(p.read_text(encoding='utf-8')); assert s['status'] == 'PASS_WITH_WARNINGS'; assert s['family_results']['activities']['detected_asset_count'] == 1; assert s['family_results']['activities']['processed_asset_count'] == 1"
+      - name: Verify isolated source distribution installation and Synthetic Run-All
+        shell: powershell
+        run: |
+          python -m venv .sdist-venv
+          .\.sdist-venv\Scripts\python.exe -m pip install --upgrade pip
+          $sdist = (Get-ChildItem .\dist\*.tar.gz | Select-Object -First 1).FullName
+          .\.sdist-venv\Scripts\python.exe -m pip install $sdist
+          .\.sdist-venv\Scripts\python.exe -c "import importlib.metadata as m; from zoneinfo import ZoneInfo; assert m.version('tzdata'); assert str(ZoneInfo('Asia/Tokyo')) == 'Asia/Tokyo'"
+          .\.sdist-venv\Scripts\python.exe -m garmin_running_data_normalizer --version
+          .\.sdist-venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-sdist-run-all
+          if ($LASTEXITCODE -ne 0) { throw "isolated sdist Synthetic Run-All failed with exit code $LASTEXITCODE" }
+          .\.sdist-venv\Scripts\python.exe -c "import json, pathlib; p=pathlib.Path('workspace/windows-sdist-run-all/run_summary.json'); assert p.is_file(); s=json.loads(p.read_text(encoding='utf-8')); assert s['status'] == 'PASS_WITH_WARNINGS'; assert s['family_results']['activities']['detected_asset_count'] == 1; assert s['family_results']['activities']['processed_asset_count'] == 1"
