@@ -1,6 +1,6 @@
 # Known Limitations
 
-These limitations apply to the stable `1.2.0` release. They are
+These limitations apply to the stable v1.2.1 release. They are
 explicit product boundaries, not hidden fallback behavior.
 
 ## Input and orchestration
@@ -60,14 +60,11 @@ explicit product boundaries, not hidden fallback behavior.
 - Hosted processing, Garmin authentication, Open-Meteo, JMA, Instagram,
   wellness/coaching interpretation, Parquet output, and automatic personal
   analysis are outside the stable scope.
-- Stable v1.2.0 declares no third-party runtime package dependency. On Windows,
-  Python can therefore lack IANA data for `Asia/Tokyo` and surface
-  `ACTIVITIES_NORMALIZATION_FAILED`. If
-  `ZoneInfo("Asia/Tokyo")` raises `ZoneInfoNotFoundError`, install the temporary
-  workaround with `python -m pip install tzdata` and rerun into a new output
-  path. An unreleased patch candidate adds this dependency conditionally on
-  Windows and a bounded diagnostic; broader Windows validation remains in
-  progress.
+- Stable v1.2.1 declares `tzdata` as a Windows-only runtime dependency and emits
+  the bounded `TIMEZONE_DATA_UNAVAILABLE` diagnostic if IANA timezone data is
+  unavailable in an incomplete environment. Validation covers GitHub Actions
+  `windows-latest` and one maintainer-owned physical Windows Production PyPI
+  clean install. This does not establish universal Windows compatibility.
 - External-safe output is opt-in, month-granularity, Activities-only, and does
   not automatically upload or provide provider-specific privacy guarantees.
 

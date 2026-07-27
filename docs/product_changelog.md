@@ -4,7 +4,7 @@ This file records factual Garmin Running Data Normalizer product changes. The
 root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
 Standard adopted by this repository.
 
-## Unreleased — v1.2.1 Windows timezone-data hotfix candidate
+## v1.2.1 — stable Production release
 
 - Adds the `tzdata` runtime dependency on Windows only so clean package
   installations can resolve the existing IANA `Asia/Tokyo` timezone contract.
@@ -12,14 +12,19 @@ Standard adopted by this repository.
 - Adds the bounded `TIMEZONE_DATA_UNAVAILABLE` diagnostic while preserving the
   general Activities normalization error boundary and avoiding traceback or
   personal-data exposure in normal CLI output.
-- Adds Windows PowerShell onboarding, a temporary stable-v1.2.0 workaround,
-  cross-platform public-command validation, and a `windows-latest` CI job.
+- Adds Windows PowerShell onboarding, cross-platform public-command validation,
+  and a `windows-latest` CI job.
 - Verifies editable, wheel, and source-distribution installs on Windows,
   including automatic `tzdata` installation, timezone resolution, repeated
   Synthetic Run-All, and deterministic output comparison.
-- Keeps v1.2.0 as the current published stable release. Tag, GitHub Release,
-  TestPyPI, and Production PyPI publication for v1.2.1 remain separate Human
-  approval boundaries.
+- Publishes the reviewed source as the immutable annotated `v1.2.1` tag,
+  current stable GitHub Release, verified TestPyPI distribution, and verified
+  Production PyPI distribution after their separate Human approval gates.
+- Confirms a clean Production PyPI v1.2.1 installation on one
+  maintainer-owned physical Windows environment: `tzdata` was installed
+  automatically, `Asia/Tokyo` resolved, and Synthetic Run-All completed with
+  `PASS_WITH_WARNINGS`, exit 0, Activities detected=1 / processed=1, and
+  `run_summary.json` present. This is bounded evidence, not a universal claim.
 
 ## v1.2.0 — stable Production release
 

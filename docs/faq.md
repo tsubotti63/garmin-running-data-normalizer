@@ -1,6 +1,6 @@
 # Frequently Asked Questions
 
-These short answers apply to Garmin Running Data Normalizer `v1.2.0` and route
+These short answers apply to Garmin Running Data Normalizer `v1.2.1` and route
 to the current product authorities.
 
 ## Getting started
@@ -23,8 +23,9 @@ synthetic data.
 
 ### Which version is stable?
 
-`v1.2.0` is the current stable release on PyPI. It includes the compatible
-one-shot workflow and optional Snapshot Accumulation.
+`v1.2.1` is the current stable release on PyPI. It includes the compatible
+one-shot workflow and optional Snapshot Accumulation, plus the Windows
+timezone-data hotfix.
 
 ## Garmin Export and Run-All
 
@@ -180,36 +181,32 @@ coaching prescriptions, and causal claims are outside the product boundary.
 
 ### Is Windows supported?
 
-Windows is an intended supported platform and public validation is in progress.
-One third-party Windows environment reproduced missing IANA timezone data on
-stable v1.2.0. After manually installing `tzdata`, the tracked Synthetic
-Run-All completed with `PASS_WITH_WARNINGS`, exit code 0, and Activities
-detected=1 / processed=1. This single-environment result is not a claim that all
-Windows versions are validated.
+Windows is an intended supported platform. GitHub Actions validates the package
+on `windows-latest`. Separately, one maintainer-owned physical Windows
+environment clean-installed v1.2.1 from Production PyPI, automatically
+installed `tzdata`, resolved `Asia/Tokyo`, and completed the tracked Synthetic
+Run-All with `PASS_WITH_WARNINGS`, exit code 0, Activities detected=1 /
+processed=1, and `run_summary.json` present. This evidence does not claim that
+all Windows versions or environments are validated.
 
 Public-safe Windows reports are welcome through
 [Support](../SUPPORT.md).
 
-### Why does stable v1.2.0 fail with `ACTIVITIES_NORMALIZATION_FAILED` on Windows?
+### Was the v1.2.0 Windows timezone-data issue resolved?
 
-Python may be unable to resolve the IANA `Asia/Tokyo` timezone because stable
-v1.2.0 did not install timezone data on Windows. Confirm the cause inside the
-same environment:
+Yes. v1.2.1 conditionally installs `tzdata` on Windows and provides the bounded
+`TIMEZONE_DATA_UNAVAILABLE` diagnostic if the configured IANA timezone data is
+still unavailable in a damaged or incomplete environment. Confirm the
+environment with:
 
 ```powershell
 python -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
 ```
 
-If this reports `ZoneInfoNotFoundError`, install the temporary workaround:
-
-```powershell
-python -m pip install tzdata
-```
-
-Then rerun normalization with a new output path. A patch release is being
-prepared to install `tzdata` automatically on Windows and provide a bounded
-`TIMEZONE_DATA_UNAVAILABLE` diagnostic. Until that patch is published, v1.2.0
-remains the current stable release.
+For a normal v1.2.1 Production PyPI installation, no separate manual
+`pip install tzdata` step is expected. If the check still fails, reinstall
+v1.2.1 in a new environment and include only sanitized environment details in a
+support report.
 
 ### Can I attach my Garmin Export to a GitHub Issue?
 

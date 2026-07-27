@@ -12,30 +12,30 @@ file is the product Quick Start for Garmin Running Data Normalizer.
 - Git
 - A local shell: macOS/Linux shell or Windows PowerShell
 
-## Install the v1.2.0 stable release
+## Install the v1.2.1 stable release
 
-Install v1.2.0 from PyPI:
+Install the reviewed release from Production PyPI:
 
 ```bash
-python -m pip install garmin-running-data-normalizer
+python -m pip install garmin-running-data-normalizer==1.2.1
 garmin-running-data-normalizer --version
 ```
 
 The version command prints
-`python -m garmin_running_data_normalizer 1.2.0`. The equivalent module command
+`python -m garmin_running_data_normalizer 1.2.1`. The equivalent module command
 is `python -m garmin_running_data_normalizer --version`.
 
-> [!IMPORTANT]
-> Stable v1.2.0 can encounter missing IANA timezone data on Windows. If
-> `ZoneInfo("Asia/Tokyo")` fails, run `python -m pip install tzdata` in the
-> environment before normalization. A patch release is being prepared; Windows
-> remains under public validation.
+On Windows, v1.2.1 installs `tzdata` automatically through its conditional
+runtime dependency. One maintainer-owned physical Windows clean install from
+Production PyPI confirmed that dependency, `Asia/Tokyo` resolution, and the
+tracked Synthetic Run-All without a manual `tzdata` install. This is bounded
+evidence, not a universal compatibility claim.
 
 ## Set up the repository fixtures
 
 The synthetic fixture used below is tracked in the repository and is not
-asserted to be bundled in the installed wheel. Clone the repository and install
-the checkout in an isolated environment:
+asserted to be bundled in the installed wheel. Obtain the repository and
+install the checkout in an isolated environment:
 
 ### macOS / Linux
 
@@ -49,9 +49,12 @@ python3 -m venv .venv
 
 ### Windows PowerShell
 
+Use a repository folder prepared and tag-verified outside Windows, then copy it
+to the Windows machine. Windows runtime validation starts from that copied
+folder and does not perform Git operations.
+
 ```powershell
-git clone https://github.com/tsubotti63/garmin-running-data-normalizer.git
-Set-Location garmin-running-data-normalizer
+Set-Location C:\Garmin\garmin-running-data-normalizer
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer --version

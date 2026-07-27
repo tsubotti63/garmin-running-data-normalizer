@@ -32,7 +32,7 @@
   third-party notices.
 - Complete dependency lock review, security/privacy checks, documentation, and
   release-specific review evidence.
-- `v1.0.0` remains the first stable release. `v1.2.0` is the current stable
+- `v1.0.0` remains the first stable release. `v1.2.1` is the current stable
   GitHub Release and Production PyPI version. Any future tag, GitHub Release,
   stable release, or package publication requires its own current review and
   separate Human authorization.

@@ -61,3 +61,54 @@ def test_py_launcher_only_windows_setup_fails(tmp_path: Path) -> None:
         "README.md: Windows setup must use python -m venv .venv"
         in validate(tmp_path)
     )
+
+
+def test_windows_runtime_instructions_reject_git_source_acquisition(
+    tmp_path: Path,
+) -> None:
+    _copy_validator_inputs(tmp_path)
+    readme = tmp_path / "README.md"
+    readme.write_text(
+        readme.read_text(encoding="utf-8").replace(
+            "```powershell\nSet-Location",
+            "```powershell\ngit clone https://example.invalid/project.git\nSet-Location",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    assert (
+        "README.md: Windows runtime instructions must not perform Git source acquisition"
+        in validate(tmp_path)
+    )
+
+
+def test_obsolete_windows_workaround_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    readme = tmp_path / "README.md"
+    readme.write_text(
+        readme.read_text(encoding="utf-8")
+        + "\nTemporary workaround: `python -m pip install tzdata`.\n",
+        encoding="utf-8",
+    )
+
+    assert (
+        "README.md: obsolete v1.2.0 Windows workaround or pending-patch wording remains"
+        in validate(tmp_path)
+    )
+
+
+def test_stale_stable_version_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    quick_start = tmp_path / "docs/product_quick_start.md"
+    quick_start.write_text(
+        quick_start.read_text(encoding="utf-8").replace(
+            "stable release", "published release"
+        ),
+        encoding="utf-8",
+    )
+
+    assert (
+        "docs/product_quick_start.md: current stable v1.2.1 is not identified"
+        in validate(tmp_path)
+    )

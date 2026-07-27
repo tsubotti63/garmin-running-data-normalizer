@@ -1,8 +1,8 @@
 # Getting Started from a Garmin Account Data Export
 
 This guide takes a first-time user from an official Garmin Account Data Export
-to a completed local Run-All handoff. It applies to Garmin Running Data
-Normalizer `v1.2.0`.
+to a completed local Run-All handoff. It applies to the current stable Garmin
+Running Data Normalizer `v1.2.1`.
 
 Use this guide for a full Garmin Account Data Export. An individual Activity
 GPX or TCX export is not the input described here.
@@ -54,17 +54,17 @@ Create an isolated environment if practical, then install from PyPI:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install garmin-running-data-normalizer
+.venv/bin/python -m pip install garmin-running-data-normalizer==1.2.1
 .venv/bin/python -m garmin_running_data_normalizer --version
 ```
 
-The version command for this guide should report `1.2.0`.
+The version command for this guide should report `1.2.1`.
 
 ### Windows PowerShell
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer
+.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer==1.2.1
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer --version
 ```
 
@@ -72,21 +72,17 @@ python -m venv .venv
 installed and the Windows Python launcher is available, you can use
 `py -3.11 -m venv .venv` instead.
 
-Stable v1.2.0 can encounter missing IANA timezone data on Windows. Check the
-environment with:
+Stable v1.2.1 installs `tzdata` automatically on Windows. Confirm both the
+package version and the existing IANA timezone contract with:
 
 ```powershell
 .\.venv\Scripts\python.exe -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
 ```
 
-If that reports `ZoneInfoNotFoundError`, install the temporary workaround:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install tzdata
-```
-
-A patch release is being prepared to install this dependency automatically on
-Windows. Public Windows validation remains in progress.
+One maintainer-owned physical Windows clean install from Production PyPI
+confirmed automatic `tzdata` installation and successful `Asia/Tokyo`
+resolution without any manual dependency install. This remains bounded
+single-environment evidence.
 
 ## 4. Run one-shot normalization first
 
@@ -243,8 +239,11 @@ before adoption. The bounded public-safe validation is documented in
 | Platform | Current evidence |
 |---|---|
 | macOS | Maintainer validated |
-| Windows | One third-party environment reproduced missing timezone data on stable v1.2.0; the documented `tzdata` workaround restored the tracked Synthetic Run-All; broader validation remains pending |
-| Linux | Automated CI validated on `ubuntu-latest`; manual environment characterization is not claimed |
+| Windows | GitHub Actions `windows-latest` plus one maintainer-owned physical Windows clean Production PyPI v1.2.1 install; `tzdata` installed automatically, `Asia/Tokyo` resolved, and Synthetic Run-All completed with `PASS_WITH_WARNINGS`, exit 0, Activities detected=1 / processed=1 |
+| Linux | GitHub Actions validated on `ubuntu-latest`; manual environment characterization is not claimed |
+
+The Windows evidence does not claim that every Windows version, Python
+distribution, shell configuration, or installation environment is compatible.
 
 For a public-safe report, include the OS and version, shell, Python and package
 versions, sanitized command, exit code, and public-safe error. Never attach
