@@ -21,6 +21,14 @@ machine artifacts. It does not replace `run_summary.json`,
 | `fit` | `PROCESSED` | 4 | 0 | 0 |
 | `hill_score` | `SKIPPED_NOT_PRESENT` | 0 | 0 | 0 |
 | `endurance_score` | `SKIPPED_NOT_PRESENT` | 0 | 0 | 0 |
+| `race_prediction` | `SKIPPED_NOT_PRESENT` | 0 | 0 | 0 |
+| `sleep` | `SKIPPED_NOT_PRESENT` | 0 | 0 | 0 |
+| `uds` | `SKIPPED_NOT_PRESENT` | 0 | 0 | 0 |
+| `acute_training_load` | `SKIPPED_NOT_PRESENT` | 0 | 0 | 0 |
+| `training_readiness` | `SKIPPED_NOT_PRESENT` | 0 | 0 | 0 |
+| `vo2max` | `SKIPPED_NOT_PRESENT` | 0 | 0 | 0 |
+| `hrv` | `SKIPPED_NOT_PRESENT` | 0 | 0 | 0 |
+| `training_history` | `SKIPPED_NOT_PRESENT` | 0 | 0 | 0 |
 
 ## Recommended Reading Order
 
@@ -34,6 +42,8 @@ machine artifacts. It does not replace `run_summary.json`,
 
 Recommended trusted-local activity entry point: `analysis/activities.csv`.
 Daily Hill/Endurance context: `analysis/performance_metrics_daily.csv`.
+Other daily condition datasets are separate normalized JSON files listed
+in `DATASET_INVENTORY.md`; they are not Activity fact-table joins.
 
 ### Available Analysis Files
 
@@ -42,6 +52,7 @@ Daily Hill/Endurance context: `analysis/performance_metrics_daily.csv`.
 
 ### QA Evidence
 
+- `qa/daily_metrics_summary.json`
 - `qa/dataset_summary.json`
 - `qa/performance_metrics_summary.json`
 - `qa/relationship_summary.json`
@@ -49,10 +60,18 @@ Daily Hill/Endurance context: `analysis/performance_metrics_daily.csv`.
 ### Audit Evidence
 
 - `audit/activity_fit_linkage.json`
+- `audit/acute_training_load_daily.json`
 - `audit/endurance_score_daily.json`
 - `audit/fit_audit.json`
 - `audit/hill_score_daily.json`
+- `audit/hrv_daily.json`
 - `audit/lactate_threshold_candidates.json`
+- `audit/race_prediction_daily.json`
+- `audit/sleep_daily.json`
+- `audit/training_history_daily.json`
+- `audit/training_readiness_daily.json`
+- `audit/uds_daily.json`
+- `audit/vo2max_daily.json`
 
 ## Relationship Coverage
 

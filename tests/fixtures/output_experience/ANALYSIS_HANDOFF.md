@@ -33,6 +33,15 @@ question requires them and the local/trusted environment is authorized.
    to activities is not defined, so date-based activity joins are prohibited.
 10. Lactate Threshold is candidate/audit-only. Do not treat candidates as a
     stable dataset, convert unconfirmed units, or apply latest-wins.
+11. Race Prediction, Sleep, UDS, Acute Training Load, Training Readiness,
+    VO2Max, HRV, and Training History remain separate daily context. Do not
+    join them to activities by date or infer missing values.
+12. VO2Max source series are retained explicitly. Do not overwrite one series
+    with another or infer equivalence across device generations.
+13. HRV is `analysis_reference_only`, not a daily source of truth. A null HRV
+    value with a review status must remain unresolved.
+14. Approximate generation ranges (2015-2021 and 2022+) are descriptive
+    source context only; they do not authorize automatic field equivalence.
 
 ## Relationship Coverage
 

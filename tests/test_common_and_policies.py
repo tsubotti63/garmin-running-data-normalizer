@@ -39,7 +39,18 @@ class CommonAndPolicyTest(unittest.TestCase):
                 "activities", "gear", "activity_gear", "personal_records",
                 "fit_sessions", "fit_laps", "activity_fit_links",
             },
-            {"hill_score_daily", "endurance_score_daily"},
+            {
+                "hill_score_daily",
+                "endurance_score_daily",
+                "race_prediction_daily",
+                "sleep_daily",
+                "uds_daily",
+                "acute_training_load_daily",
+                "training_readiness_daily",
+                "vo2max_daily",
+                "hrv_daily",
+                "training_history_daily",
+            },
         )
         self.assertEqual(
             registry["candidate_datasets"][0]["machine_stable_key_status"],
