@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timezone
-from typing import Any
+from collections import Counter
+from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
 from ..common.time import daily_calendar_date
 from ..intake.discovery import DiscoveredAsset, load_json_assets
+from .daily_metrics import DailyMetricResult, finalize_daily, load_rows, logical_basename
 
 MAX_SAFE_INTEGER = (1 << 53) - 1
 
@@ -190,3 +192,131 @@ def normalize_sleep(root: str, timezone_name: str = "Asia/Tokyo") -> list[dict[s
             record["sleep_source_available_for_analysis_flag"] = False
 
     return sorted(normalized, key=lambda record: str(record["sleep_record_key"]))
+
+
+SLEEP_DAILY_FIELDS = (
+    "sleep_day",
+    "sleep_start_local",
+    "sleep_end_local",
+    "sleep_window_minutes_including_awake",
+    "sleep_duration_minutes_ex_awake",
+    "sleep_stage_deep_minutes",
+    "sleep_stage_light_minutes",
+    "sleep_stage_rem_minutes",
+    "sleep_score",
+    "sleep_awake_minutes",
+    "sleep_stage_available_flag",
+    "sleep_score_available_flag",
+    "sleep_normalization_status",
+    "sleep_limitation_type",
+    "sleep_reason_code",
+    "sleep_source_available_for_analysis_flag",
+)
+
+
+def _public_sleep_review_row(
+    sleep_day: str, _rows: list[dict[str, Any]]
+) -> dict[str, Any]:
+    return {
+        "sleep_day": sleep_day,
+        "sleep_start_local": None,
+        "sleep_end_local": None,
+        "sleep_window_minutes_including_awake": None,
+        "sleep_duration_minutes_ex_awake": None,
+        "sleep_stage_deep_minutes": None,
+        "sleep_stage_light_minutes": None,
+        "sleep_stage_rem_minutes": None,
+        "sleep_score": None,
+        "sleep_awake_minutes": None,
+        "sleep_stage_available_flag": False,
+        "sleep_score_available_flag": False,
+        "sleep_normalization_status": "needs_review",
+        "sleep_limitation_type": "duplicate_sleep_day",
+        "sleep_reason_code": "duplicate_sleep_day_no_automatic_selection",
+        "sleep_source_available_for_analysis_flag": False,
+    }
+
+
+def normalize_sleep_daily_assets(
+    assets: Iterable[DiscoveredAsset],
+    timezone_name: str = "Asia/Tokyo",
+) -> DailyMetricResult:
+    selected = [
+        asset
+        for asset in assets
+        if asset.kind == "json" and logical_basename(asset).endswith("sleepdata.json")
+    ]
+    source_rows = [row for asset in selected for row in load_rows(asset)]
+    accepted: list[dict[str, Any]] = []
+    excluded: Counter[str] = Counter()
+    for raw in source_rows:
+        _start_gmt, start_local = _timestamps(
+            raw.get("sleepStartTimestampGMT"), timezone_name
+        )
+        _end_gmt, end_local = _timestamps(
+            raw.get("sleepEndTimestampGMT"), timezone_name
+        )
+        sleep_day = daily_calendar_date(raw.get("calendarDate"))
+        if sleep_day is None and end_local is not None:
+            sleep_day = end_local[:10]
+        if sleep_day is None:
+            excluded["missing_or_invalid_sleep_day"] += 1
+            continue
+        window_minutes = None
+        if start_local is not None and end_local is not None:
+            window_minutes = (
+                datetime.fromisoformat(end_local) - datetime.fromisoformat(start_local)
+            ).total_seconds() / 60.0
+        status = "available"
+        limitation = "none"
+        reason = "sleep_source_available"
+        available = True
+        if start_local is None or end_local is None:
+            status = "needs_review"
+            limitation = "missing_start_or_end"
+            reason = "missing_start_or_end_no_inference"
+            available = False
+        elif window_minutes is None or window_minutes <= 0:
+            status = "needs_review"
+            limitation = "invalid_sleep_window"
+            reason = "invalid_sleep_window_no_inference"
+            available = False
+        deep = _first_number(raw, "deepSleepSeconds", "deep_sleep_seconds")
+        light = _first_number(raw, "lightSleepSeconds", "light_sleep_seconds")
+        rem = _first_number(raw, "remSleepSeconds", "rem_sleep_seconds")
+        awake = _first_number(raw, "awakeSleepSeconds", "awake_sleep_seconds")
+        duration = _first_number(raw, "sleepTimeSeconds", "totalSleepSeconds")
+        score = _sleep_score(raw)
+        accepted.append(
+            {
+                "sleep_day": sleep_day,
+                "sleep_start_local": start_local,
+                "sleep_end_local": end_local,
+                "sleep_window_minutes_including_awake": window_minutes,
+                "sleep_duration_minutes_ex_awake": None if duration is None else duration / 60.0,
+                "sleep_stage_deep_minutes": None if deep is None else deep / 60.0,
+                "sleep_stage_light_minutes": None if light is None else light / 60.0,
+                "sleep_stage_rem_minutes": None if rem is None else rem / 60.0,
+                "sleep_score": score,
+                "sleep_awake_minutes": None if awake is None else awake / 60.0,
+                "sleep_stage_available_flag": any(value is not None for value in (deep, light, rem)),
+                "sleep_score_available_flag": score is not None,
+                "sleep_normalization_status": status,
+                "sleep_limitation_type": limitation,
+                "sleep_reason_code": reason,
+                "sleep_source_available_for_analysis_flag": available,
+            }
+        )
+    return finalize_daily(
+        dataset="sleep_daily",
+        key_field="sleep_day",
+        selected_assets=selected,
+        source_record_count=len(source_rows),
+        accepted=accepted,
+        excluded_reasons=excluded,
+        review_on_any_duplicate=True,
+        duplicate_review_factory=_public_sleep_review_row,
+    )
+
+
+__all__ = ["SLEEP_DAILY_FIELDS", "normalize_sleep", "normalize_sleep_daily_assets"]
