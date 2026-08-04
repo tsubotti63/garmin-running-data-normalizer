@@ -87,6 +87,15 @@ emit as either a JSON integer or string—`activity_id`, `gear_key`, and
 `personal_record_id`—use the explicit `integer|string` logical type; the
 normalizer does not silently coerce identity.
 
+For every normalized dataset, both machine artifacts also declare the runtime
+grain and stable key plus identical `relationship_role`, `semantic_role`,
+`canonical`, `projection_of`, `activity_relationship`, `join_guidance`,
+`forbidden_join_guidance`, `cardinality`, `allowed_use`, `limitations`, and
+`derived_projection` metadata. Direct joins still require a reviewed explicit
+relationship. A `context_only` entry permits a separately labelled same-day
+comparison but never an Activity fact-table merge. Derived CSV and QA daily
+views are non-canonical and have no selected-row rule.
+
 Every schema field separately declares `required` and `nullable`. A required
 field must be present in every record but may still allow an explicit JSON
 `null`; an optional field may be omitted when the source FIT definition did
@@ -221,6 +230,12 @@ semantics; it does not publish a stable dataset, infer a machine stable key, or
 select a latest value. `analysis/performance_metrics_daily.csv` namespaces the
 two stable-candidate daily contexts with `hill_` and `endurance_` prefixes and
 does not authorize an Activity date join.
+
+The Lactate candidate entry in `ANALYSIS_CONTEXT.json` carries the same
+candidate boundary: one source-backed observation grain, no machine stable
+key, Activity relationship `not_yet_defined`, no join guidance, and no
+canonical daily projection. This metadata does not promote the audit file to a
+normalized dataset.
 
 Race Prediction, Sleep, UDS, Acute Training Load, Training Readiness, VO2Max,
 HRV, and Training History remain separate context. Their detailed fields,

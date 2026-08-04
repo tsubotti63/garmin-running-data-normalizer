@@ -3,13 +3,15 @@
 ## Purpose
 
 This catalog defines every cross-dataset relationship supported by the public
-Run-All v1.1 contract. Similar fields, filenames, dates, or timestamps never
-authorize a join by themselves.
+Run-All contract and the bounded contextual guidance under review for v1.3.
+Similar fields, filenames, dates, or timestamps never authorize a direct join
+by themselves.
 
 Relationship status uses `explicit`, `indirect`, `independent`,
 `not_yet_defined`, or `unsupported`. The current stable Run-All datasets use
 only reviewed `explicit` relationships plus the documented independent
-Personal Record exception.
+Personal Record exception. The unreleased v1.3 entries add contextual
+comparison guidance; they do not add a direct Activity relationship.
 
 `analysis/activities.csv` is a reduced deterministic projection of
 `normalized/activities.json`, not an additional cross-dataset relationship.
@@ -30,12 +32,17 @@ Hill Score Daily                Endurance Score Daily
   └─ not_yet_defined       └─ not_yet_defined
      (standalone daily context; no Activity date join)
 
-Race Prediction / Sleep / UDS / Acute Load / Readiness / VO2Max / HRV /
-Training History
-  └─ not_yet_defined (separate daily context; no date-only Activity join)
+Sleep / UDS / HRV
+  └─ context_only by local calendar day (separate facts; no Activity merge)
+
+Race Prediction / Acute Load / Readiness / VO2Max / Training History
+  └─ source observations; derived daily view has no selected row
+
+Lactate Threshold
+  └─ candidate/audit observation families; no stable promotion or join
 ```
 
-## Relationship catalog
+## Stable direct relationship catalog
 
 | Left artifact | Right artifact | Status | Fields | Cardinality | Validation |
 |---|---|---|---|---|---|
@@ -45,16 +52,42 @@ Training History
 | `normalized/fit_laps.json` | `normalized/fit_sessions.json` | `explicit` | `fit_session_key` | many-to-one | every lap has one existing parent session |
 | `normalized/activity_fit_links.json` | `normalized/activities.json` | `explicit` | `garmin_activity_key` | one-to-one within eligible population | link rows are mutual unique evidence-qualified matches |
 | `normalized/activity_fit_links.json` | `normalized/fit_sessions.json` | `explicit` | `fit_session_key` | one-to-one within eligible population | link rows are mutual unique evidence-qualified matches |
-| `normalized/hill_score_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | consume as standalone daily context; matching calendar dates do not authorize a join |
-| `normalized/endurance_score_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | consume as standalone daily context; matching calendar dates do not authorize a join |
-| `normalized/race_prediction_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | source-observation identity does not make prediction context a measured Activity fact |
-| `normalized/sleep_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | `sleep_day` does not authorize an Activity date join |
-| `normalized/uds_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | generation-aware condition context only |
-| `normalized/acute_training_load_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | timestamped source context; no recomputed relationship |
-| `normalized/training_readiness_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | timestamped readiness observations remain separate facts |
-| `normalized/vo2max_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | source series, sport, timestamp, and supplemental source Activity ID do not establish an Activity relationship |
-| `normalized/hrv_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | analysis reference only; same-day conflict is not a join candidate |
-| `normalized/training_history_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | limited timestamped status context only |
+
+## Unreleased v1.3 context and observation catalog
+
+`context_only` means that an analysis may compare separately aggregated facts
+for a declared local calendar day. It does not create row identity, authorize a
+fact-table merge, or establish causality. `not_yet_defined` means that even
+contextual alignment is not a direct relationship contract.
+
+| Dataset | Role | Canonical grain and stable key | Activity guidance | Fields | Cardinality | Canonical / projection | Allowed use | Forbidden use |
+|---|---|---|---|---|---|---|---|---|
+| `normalized/hill_score_daily.json` | daily performance context | one calendar day; `calendar_date` | direct relationship `not_yet_defined` | candidate `calendar_date` to `activity_date_local` | one context row to many Activities | normalized JSON canonical; namespaced CSV derived | standalone trends and separately labelled daily comparison | no Activity merge, causal claim, or date-derived identity |
+| `normalized/endurance_score_daily.json` | daily performance context | one calendar day; `calendar_date` | direct relationship `not_yet_defined` | candidate `calendar_date` to `activity_date_local` | one context row to many Activities | normalized JSON canonical; namespaced CSV derived | standalone trends and separately labelled daily comparison | no Activity merge, causal claim, or date-derived identity |
+| `normalized/race_prediction_daily.json` | daily performance prediction | one source observation; `calendar_date`, `observation_timestamp` | direct relationship `not_yet_defined` | candidate `calendar_date` to `activity_date_local` | many observations to many Activities | observations canonical; daily summary derived with `selection_rule: null` | compare Garmin predictions over time | no measured-result claim, latest-wins, or Activity join |
+| `normalized/sleep_daily.json` | condition context | one reviewed sleep state; `sleep_day` | same-day `context_only`; direct relationship `not_yet_defined` | `sleep_day` to `activity_date_local` | one context row to many Activities | normalized JSON canonical | compare separately aggregated same-day sleep and Activity measures | never copy Sleep fields into Activity facts or infer causality |
+| `normalized/uds_daily.json` | condition context | one source state; `calendar_date` | same-day `context_only`; direct relationship `not_yet_defined` | `calendar_date` to `activity_date_local` | one context row to many Activities | normalized JSON canonical | generation-aware same-day condition comparison | no Activity fact merge or missing-value reconstruction |
+| `normalized/acute_training_load_daily.json` | performance context | one source observation; `calendar_date`, `observation_timestamp` | same-day `context_only`; direct relationship `not_yet_defined` | `calendar_date` to `activity_date_local` | many observations to many Activities | observations canonical; daily summary derived with `selection_rule: null` | compare preserved load observations by day | no latest-wins, direct Activity link, or ratio recomputation |
+| `normalized/training_readiness_daily.json` | performance context | one source observation; `calendar_date`, `observation_timestamp` | same-day `context_only`; direct relationship `not_yet_defined` | `calendar_date` to `activity_date_local` | many observations to many Activities | observations canonical; daily summary derived with `selection_rule: null` | compare preserved readiness context by day | no direct Activity link or component-cause inference |
+| `normalized/vo2max_daily.json` | performance context | one source observation; date, source series, sport, timestamp | same-day `context_only`; direct relationship `not_yet_defined` | `calendar_date` to `activity_date_local` | many observations to many Activities | observations canonical; daily summary derived with `selection_rule: null` | compare each retained source series separately | no join through supplemental `source_activity_id`, cross-series overwrite, or latest-wins |
+| `normalized/hrv_daily.json` | condition context | one resolved or review row; `calendar_date` | same-day `context_only`; direct relationship `not_yet_defined` | `calendar_date` to `activity_date_local` | one context row to many Activities | normalized JSON canonical; `analysis_reference_only` | reviewed trend comparison with unresolved rows preserved | no Activity fact merge, conflicting-value selection, or daily Source-of-Truth claim |
+| `normalized/training_history_daily.json` | performance context | one source observation; `calendar_date`, `observation_timestamp` | same-day `context_only`; direct relationship `not_yet_defined` | `calendar_date` to `activity_date_local` | many observations to many Activities | observations canonical; daily summary derived with `selection_rule: null` | compare limited status context by day | no direct Activity link or latest-wins |
+| `audit/lactate_threshold_candidates.json` | performance threshold observation family | one source-backed observation; stable key pending Product decision | direct relationship `not_yet_defined` | none | many observations across history, latest snapshot, profile state, and derived evidence | candidate/audit only; no canonical daily projection | source-family audit and Product review | no Activity join, unit conversion, cross-family collapse, or latest-wins |
+
+When multiple source observations share a day, analysis must keep the
+observations distinct. `qa/daily_metrics_summary.json` may summarize their
+presence and counts, but it never chooses a canonical daily row.
+
+## Machine-readable authority
+
+`ANALYSIS_CONTEXT.json` and `SCHEMA_CATALOG.json` carry the same grain, stable
+key, semantic role, canonical status, Activity relationship status, join
+guidance, cardinality, allowed use, forbidden guidance, limitations, and
+derived-projection metadata. `DATASET_INVENTORY.md`, `START_HERE.md`, and
+`ANALYSIS_HANDOFF.md` are deterministic human-readable projections of that
+generator-owned contract. `qa/relationship_summary.json` remains evidence for
+the stable explicit links; contextual guidance is not counted as an explicit
+link or coverage score.
 
 ## Activity/FIT eligibility contract
 
@@ -126,8 +159,10 @@ and calendar co-presence never authorizes an Activity or cross-metric join.
 - Do not treat an absent optional family as evidence that the user has no such
   data.
 - Do not override an exclusion or ambiguity recorded by relationship audit.
-- Do not join any daily performance, prediction, sleep, stress, readiness,
-  VO2Max, HRV, or training-status dataset to Activities by date.
+- A documented `context_only` comparison may align separately aggregated rows
+  by local calendar day, but must not create Activity row identity, merge the
+  context fields into Activity facts, or imply causality. All other date-only
+  joins remain prohibited.
 - Do not treat Lactate Threshold candidates as a stable dataset or choose a
   latest observation across source families.
 
@@ -136,3 +171,15 @@ and calendar co-presence never authorizes an Activity or cross-metric join.
 Any future relationship requires field-level rules, cardinality, null and type
 behavior, orphan policy, synthetic positive and negative tests, compatibility
 and privacy review, and Product approval when it expands the public contract.
+
+## Bounded analysis examples
+
+- Compare monthly Activity volume with the separately aggregated monthly trend
+  in Hill or Endurance Score; label the two series as context, not cause.
+- Compare same-day aggregate Activity measures with Sleep, UDS, or HRV context
+  without copying condition fields onto individual Activity rows.
+- Plot all Race Prediction, Acute Load, Readiness, VO2Max, or Training History
+  source observations in timestamp order; do not select one row per day unless
+  a later Product-approved contract defines that selection.
+- Inspect Lactate Threshold candidate families to assess source consistency;
+  do not publish a stable threshold, unit conversion, or Activity relationship.

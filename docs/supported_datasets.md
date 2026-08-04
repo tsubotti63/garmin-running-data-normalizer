@@ -60,6 +60,25 @@ Cross-dataset joins are governed by the [Dataset Relationship
 Catalog](dataset_relationships.md). Stable keys establish identity within their
 declared grain; they do not independently authorize a cross-dataset join.
 
+## v1.3 relationship and projection guidance
+
+The normalized JSON for every listed v1.3 dataset is canonical at its declared
+grain. A CSV or QA day-level view is a non-canonical projection and never
+selects a preferred observation. Direct Activity relationships remain
+`not_yet_defined`; `context_only` permits a separately labelled same-day
+comparison, not an Activity fact-table merge.
+
+| Dataset | Semantic role | Activity guidance | Cardinality | Projection |
+|---|---|---|---|---|
+| `hill_score_daily`, `endurance_score_daily` | daily performance context | date is a candidate context field; direct link `not_yet_defined` | one context row to many Activities | `analysis/performance_metrics_daily.csv`, derived and non-canonical |
+| `race_prediction_daily` | daily performance prediction | direct link `not_yet_defined` | many observations to many Activities | QA daily summary, `selection_rule: null` |
+| `sleep_daily`, `uds_daily`, `hrv_daily` | condition context | same-day `context_only`; direct link `not_yet_defined` | one context row to many Activities | no canonical replacement; HRV stays `analysis_reference_only` |
+| `acute_training_load_daily`, `training_readiness_daily`, `vo2max_daily`, `training_history_daily` | performance context | same-day `context_only`; direct link `not_yet_defined` | many observations to many Activities | QA daily summary, `selection_rule: null` |
+| Lactate Threshold candidate families | performance threshold observation | no join; direct link `not_yet_defined` | many candidates across source families | audit-only, no canonical daily projection |
+
+See the relationship catalog for join fields, allowed and forbidden use,
+multiple-observation behavior, generation limits, and bounded analysis examples.
+
 ## Snapshot accumulation policy (v1.2.0)
 
 | Dataset | Snapshot merge mode | Absence behavior | Materialization |

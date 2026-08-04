@@ -46,8 +46,10 @@ explicit product boundaries, not hidden fallback behavior.
 
 ## Daily-metric boundaries
 
-- The unreleased v1.3 Sleep candidate is not reconciled with FIT, does not recalculate scores, fill missing
-  days, infer naps, shift days, or join activities.
+- The unreleased v1.3 Sleep candidate is not reconciled with FIT and does not
+  recalculate scores, fill missing days, infer naps, shift days, or create an
+  Activity relationship. A same-day `context_only` comparison must keep Sleep
+  and Activity facts separate.
 - The unreleased v1.3 HRV reference does not average conflicting same-date
   values. Garmin/FIT raw sentinel
   `65535` is excluded, and Health Status HRV is not asserted to be equivalent to

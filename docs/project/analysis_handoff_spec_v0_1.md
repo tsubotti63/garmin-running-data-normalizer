@@ -5,6 +5,8 @@
 - Status: v1.1 implemented handoff contract
 - Applies to: `garmin-running-data-normalizer-run-all-v1`
 - Boundary: local Run-All output produced from a user-controlled Garmin Account Export
+- v1.3 note: additive context/observation relationship metadata is implemented
+  on the feature branch for Product review; stable release remains 1.2.1
 
 This specification defines how deterministic Run-All v1.1 output may be handed to a
 human analyst, a local analysis tool, or an AI assistant without confusing
@@ -42,8 +44,8 @@ The input is one complete Run-All output directory. Before analysis:
 | `START_HERE.md` | First-read status, warning, navigation, Relationship Coverage, and privacy guidance |
 | `DATASET_INVENTORY.md` | Dataset roles, states, counts, grains, keys, authority, and suitability |
 | `ANALYSIS_HANDOFF.md` | Standalone receiving rules, Relationship Coverage, and prompt preamble |
-| `ANALYSIS_CONTEXT.json` | Machine-readable datasets, relationships, Relationship Coverage, warnings, and prohibited operations |
-| `SCHEMA_CATALOG.json` | Runtime-defined fields, types, units/domains, origins, and privacy sensitivity |
+| `ANALYSIS_CONTEXT.json` | Machine-readable datasets, explicit relationships, contextual guidance, canonical/projection status, Relationship Coverage, warnings, and prohibited operations |
+| `SCHEMA_CATALOG.json` | Runtime-defined fields, types, units/domains, origins, privacy sensitivity, grain, stable key, and matching relationship metadata |
 | `analysis/activities.csv` | Stable, reduced activity-level table for descriptive analysis |
 | `run_summary.json` | Completion state, family status, warnings, errors, and generated paths |
 | `run_manifest.json` | Reproducibility, dataset grain, stable keys, source counts, and output hashes |
@@ -157,11 +159,44 @@ for an external service.
 | `fit_sessions` | FIT session | `fit_session_key` |
 | `fit_laps` | FIT session lap | `fit_lap_key` |
 | `activity_fit_links` | Activity/FIT session link | `garmin_activity_key`, `fit_session_key` |
+| `hill_score_daily` | Calendar day | `calendar_date` |
+| `endurance_score_daily` | Calendar day | `calendar_date` |
+| `race_prediction_daily` | Source observation | `calendar_date`, `observation_timestamp` |
+| `sleep_daily` | Sleep day | `sleep_day` |
+| `uds_daily` | Calendar day | `calendar_date` |
+| `acute_training_load_daily` | Source observation | `calendar_date`, `observation_timestamp` |
+| `training_readiness_daily` | Source observation | `calendar_date`, `observation_timestamp` |
+| `vo2max_daily` | Source observation | `calendar_date`, `vo2max_source_series`, `sport`, `observation_timestamp` |
+| `hrv_daily` | Calendar day | `calendar_date` |
+| `training_history_daily` | Source observation | `calendar_date`, `observation_timestamp` |
 
 Stable keys support identity and reproducibility within their declared grain.
 Only the [Dataset Relationship Catalog](../dataset_relationships.md) authorizes
 cross-dataset joins. Some keys may incorporate source IDs; none are permission
 to publish or identify a person.
+
+## Unreleased v1.3 relationship interpretation
+
+The v1.3 Machine Truth separates direct identity from contextual comparison:
+
+- Hill and Endurance are canonical daily performance context. Their shared CSV
+  is a derived non-canonical projection, and their direct Activity relationship
+  remains `not_yet_defined`.
+- Race Prediction is a source-observation prediction dataset. Its day view is
+  derived and has no selected row.
+- Sleep, UDS, and HRV allow same-day `context_only` comparison while remaining
+  separate from Activity facts.
+- Acute Training Load, Training Readiness, VO2Max, and Training History retain
+  canonical source observations. A derived day view never applies latest-wins.
+- Lactate Threshold remains candidate/audit-only across four source families,
+  with no stable key, unit conversion, daily projection, or Activity join.
+
+`context_only` is not an explicit link. It permits comparison of separately
+aggregated facts, not row identity, a fact-table merge, or causal inference.
+Use `ANALYSIS_CONTEXT.json` or `SCHEMA_CATALOG.json` for the exact join fields,
+cardinality, allowed use, forbidden guidance, limitations, and projection
+metadata. `qa/relationship_summary.json` remains the measured gate for the six
+explicit v1.2 links only.
 
 ## Missing values and aggregation
 

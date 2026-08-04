@@ -6,11 +6,14 @@ import unittest
 from pathlib import Path
 
 from garmin_running_data_normalizer.output_experience import (
+    DATASET_RELATIONSHIP_METADATA,
     DOCUMENT_NAMES,
+    LACTATE_THRESHOLD_RELATIONSHIP_METADATA,
     MANIFEST_OUTPUT_PATHS,
     MACHINE_CONTEXT_NAMES,
     OutputExperienceError,
     RELATIONSHIP_CONTRACTS,
+    V1_3_RELATIONSHIP_DATASETS,
     build_analysis_context,
     build_schema_catalog,
     render_analysis_handoff,
@@ -603,7 +606,207 @@ class OutputExperienceTest(unittest.TestCase):
         manifest, summary, relationship_summary = synthetic_projection_input()
         summary["family_results"]["activities"]["record_count"] = "2"
         with self.assertRaisesRegex(OutputExperienceError, "record count"):
-            render_output_experience_documents(manifest, summary, self.registry, relationship_summary)
+            render_output_experience_documents(
+                manifest,
+                summary,
+                self.registry,
+                relationship_summary,
+            )
+
+    def test_v1_2_explicit_relationship_contract_is_unchanged(self) -> None:
+        self.assertEqual(
+            RELATIONSHIP_CONTRACTS,
+            (
+                {
+                    "relationship_id": "activity_gear_to_activities",
+                    "left_dataset": "activity_gear",
+                    "right_dataset": "activities",
+                    "status": "explicit",
+                    "left_fields": ["garmin_activity_key"],
+                    "right_fields": ["garmin_activity_key"],
+                    "cardinality": "many_to_one",
+                },
+                {
+                    "relationship_id": "activity_gear_to_gear",
+                    "left_dataset": "activity_gear",
+                    "right_dataset": "gear",
+                    "status": "explicit",
+                    "left_fields": ["gear_key"],
+                    "right_fields": ["gear_key"],
+                    "cardinality": "many_to_one",
+                },
+                {
+                    "relationship_id": "personal_records_to_activities",
+                    "left_dataset": "personal_records",
+                    "right_dataset": "activities",
+                    "status": "explicit",
+                    "left_fields": ["garmin_activity_key"],
+                    "right_fields": ["garmin_activity_key"],
+                    "cardinality": "many_to_zero_or_one",
+                    "exception": "activity_id_zero_is_independent",
+                },
+                {
+                    "relationship_id": "fit_laps_to_fit_sessions",
+                    "left_dataset": "fit_laps",
+                    "right_dataset": "fit_sessions",
+                    "status": "explicit",
+                    "left_fields": ["fit_session_key"],
+                    "right_fields": ["fit_session_key"],
+                    "cardinality": "many_to_one",
+                },
+                {
+                    "relationship_id": "activity_fit_links_to_activities",
+                    "left_dataset": "activity_fit_links",
+                    "right_dataset": "activities",
+                    "status": "explicit",
+                    "left_fields": ["garmin_activity_key"],
+                    "right_fields": ["garmin_activity_key"],
+                    "cardinality": "one_to_one_within_eligible_population",
+                },
+                {
+                    "relationship_id": "activity_fit_links_to_fit_sessions",
+                    "left_dataset": "activity_fit_links",
+                    "right_dataset": "fit_sessions",
+                    "status": "explicit",
+                    "left_fields": ["fit_session_key"],
+                    "right_fields": ["fit_session_key"],
+                    "cardinality": "one_to_one_within_eligible_population",
+                },
+            ),
+        )
+
+    def test_v1_3_relationship_metadata_is_complete_and_safe(self) -> None:
+        runtime_by_name = {item["name"]: item for item in DATASET_TABLE}
+        self.assertEqual(
+            set(DATASET_RELATIONSHIP_METADATA),
+            set(runtime_by_name),
+        )
+        expected_semantic_roles = {
+            "hill_score_daily": "daily_performance_context",
+            "endurance_score_daily": "daily_performance_context",
+            "race_prediction_daily": "daily_performance_prediction",
+            "sleep_daily": "condition_context",
+            "uds_daily": "condition_context",
+            "acute_training_load_daily": "performance_context",
+            "training_readiness_daily": "performance_context",
+            "vo2max_daily": "performance_context",
+            "hrv_daily": "condition_context",
+            "training_history_daily": "performance_context",
+        }
+        for dataset in V1_3_RELATIONSHIP_DATASETS:
+            metadata = DATASET_RELATIONSHIP_METADATA[dataset]
+            self.assertEqual(
+                metadata["semantic_role"],
+                expected_semantic_roles[dataset],
+            )
+            self.assertEqual(
+                metadata["activity_relationship"],
+                "not_yet_defined",
+            )
+            self.assertTrue(metadata["canonical"])
+            self.assertIsNone(metadata["projection_of"])
+            self.assertEqual(len(metadata["join_guidance"]), 1)
+            self.assertIn(
+                metadata["join_guidance"][0]["status"],
+                {"context_only", "not_yet_defined"},
+            )
+            self.assertFalse(metadata["join_guidance"][0]["direct"])
+            self.assertEqual(metadata["join_guidance"][0]["via_datasets"], [])
+            projection = metadata["derived_projection"]
+            if projection is not None:
+                self.assertFalse(projection["canonical"])
+                self.assertEqual(projection["projection_of"], dataset)
+                self.assertIsNone(projection["selection_rule"])
+            self.assertEqual(
+                tuple(runtime_by_name[dataset]["stable_key"]),
+                tuple(
+                    next(
+                        item["stable_key"]
+                        for item in synthetic_projection_input()[0]["datasets"]
+                        if item["name"] == dataset
+                    )
+                ),
+            )
+
+        lactate = LACTATE_THRESHOLD_RELATIONSHIP_METADATA
+        self.assertFalse(lactate["canonical"])
+        self.assertEqual(lactate["stable_key"], [])
+        self.assertEqual(
+            lactate["machine_stable_key_status"],
+            "PRODUCT_DECISION_REQUIRED",
+        )
+        self.assertEqual(lactate["join_guidance"], [])
+
+        serialized = json.dumps(
+            {
+                "datasets": DATASET_RELATIONSHIP_METADATA,
+                "lactate_threshold": lactate,
+            },
+            sort_keys=True,
+        )
+        self.assertNotRegex(serialized, r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+")
+        self.assertNotRegex(serialized, r"/(?:Users|home)/")
+        for private_name in ("deviceId", "userProfilePK", "accountId"):
+            self.assertNotIn(private_name, serialized)
+
+    def test_analysis_context_and_schema_catalog_share_relationship_truth(self) -> None:
+        manifest, summary, relationship_summary = synthetic_projection_input()
+        context = build_analysis_context(
+            manifest,
+            summary,
+            self.registry,
+            relationship_summary,
+        )
+        schema = build_schema_catalog(manifest, summary, self.registry)
+        context_by_name = {item["name"]: item for item in context["datasets"]}
+        schema_by_name = {item["dataset"]: item for item in schema["datasets"]}
+        metadata_fields = tuple(next(iter(DATASET_RELATIONSHIP_METADATA.values())))
+        for dataset, expected in DATASET_RELATIONSHIP_METADATA.items():
+            for field in metadata_fields:
+                self.assertEqual(context_by_name[dataset][field], expected[field])
+                self.assertEqual(schema_by_name[dataset][field], expected[field])
+            runtime = next(
+                item for item in DATASET_TABLE if item["name"] == dataset
+            )
+            self.assertEqual(
+                context_by_name[dataset]["record_grain"],
+                runtime["record_grain"],
+            )
+            self.assertEqual(
+                schema_by_name[dataset]["record_grain"],
+                runtime["record_grain"],
+            )
+            self.assertEqual(
+                context_by_name[dataset]["stable_key"],
+                list(runtime["stable_key"]),
+            )
+            self.assertEqual(
+                schema_by_name[dataset]["stable_key"],
+                list(runtime["stable_key"]),
+            )
+
+        lactate = context["candidate_features"]["lactate_threshold"]
+        for field, expected in LACTATE_THRESHOLD_RELATIONSHIP_METADATA.items():
+            self.assertEqual(lactate[field], expected)
+
+    def test_generated_markdown_explains_v1_3_context_boundaries(self) -> None:
+        manifest, summary, relationship_summary = synthetic_projection_input()
+        rendered = render_output_experience_documents(
+            manifest,
+            summary,
+            self.registry,
+            relationship_summary,
+        )
+        for target in ("START_HERE.md", "ANALYSIS_HANDOFF.md"):
+            document = rendered[target]
+            self.assertIn("v1.3 Context and Observation Relationships", document)
+            self.assertIn("`daily_performance_context`", document)
+            self.assertIn("`daily_performance_prediction`", document)
+            self.assertIn("`context_only`", document)
+            self.assertIn("candidate/audit only", document)
+        inventory = rendered["DATASET_INVENTORY.md"]
+        self.assertIn("Relationship role", inventory)
+        self.assertIn("Canonical/projection", inventory)
 
     def test_relationship_coverage_fails_closed_on_qa_drift(self) -> None:
         manifest, summary, relationship_summary = synthetic_projection_input()

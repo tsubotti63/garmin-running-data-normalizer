@@ -184,6 +184,393 @@ DATASET_PRESENTATION = {
     },
 }
 
+
+def _activity_join(
+    *,
+    status: str,
+    source_fields: tuple[str, ...],
+    target_fields: tuple[str, ...],
+    cardinality: str,
+    semantics: str,
+    via_datasets: tuple[str, ...] = (),
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "target_dataset": "activities",
+            "status": status,
+            "source_fields": list(source_fields),
+            "target_fields": list(target_fields),
+            "cardinality": cardinality,
+            "semantics": semantics,
+            "direct": status in {"self", "explicit", "explicit_or_independent"},
+            "via_datasets": list(via_datasets),
+        }
+    ]
+
+
+def _relationship_metadata(
+    *,
+    relationship_role: str,
+    semantic_role: str | None = None,
+    activity_relationship: str,
+    join_guidance: list[dict[str, Any]],
+    cardinality: str,
+    allowed_use: str,
+    forbidden_join_guidance: tuple[str, ...],
+    limitations: tuple[str, ...] = (),
+    derived_projection: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "relationship_role": relationship_role,
+        "semantic_role": semantic_role or relationship_role,
+        "canonical": True,
+        "projection_of": None,
+        "activity_relationship": activity_relationship,
+        "join_guidance": join_guidance,
+        "forbidden_join_guidance": list(forbidden_join_guidance),
+        "cardinality": cardinality,
+        "allowed_use": allowed_use,
+        "limitations": list(limitations),
+        "derived_projection": derived_projection,
+    }
+
+
+DATASET_RELATIONSHIP_METADATA = {
+    "activities": _relationship_metadata(
+        relationship_role="primary_fact",
+        activity_relationship="allowed",
+        join_guidance=_activity_join(
+            status="self",
+            source_fields=("garmin_activity_key",),
+            target_fields=("garmin_activity_key",),
+            cardinality="one_to_one",
+            semantics="fact",
+        ),
+        cardinality="one_activity_per_stable_key",
+        allowed_use="Primary Activity fact analysis and reviewed explicit links.",
+        forbidden_join_guidance=("Do not infer links from timestamp proximity.",),
+        derived_projection={
+            "path": "analysis/activities.csv",
+            "canonical": False,
+            "projection_of": "activities",
+            "selection_rule": None,
+        },
+    ),
+    "gear": _relationship_metadata(
+        relationship_role="primary_fact",
+        activity_relationship="allowed",
+        join_guidance=_activity_join(
+            status="explicit_via_activity_gear",
+            source_fields=("gear_key",),
+            target_fields=("garmin_activity_key",),
+            cardinality="many_to_many_via_link_table",
+            semantics="fact_attribute",
+            via_datasets=("activity_gear",),
+        ),
+        cardinality="one_gear_per_stable_key",
+        allowed_use="Join through activity_gear only.",
+        forbidden_join_guidance=("Do not join by display name or date.",),
+    ),
+    "activity_gear": _relationship_metadata(
+        relationship_role="direct_explicit_link",
+        activity_relationship="allowed",
+        join_guidance=_activity_join(
+            status="explicit",
+            source_fields=("garmin_activity_key",),
+            target_fields=("garmin_activity_key",),
+            cardinality="many_to_one",
+            semantics="link",
+        ),
+        cardinality="many_links_to_one_activity",
+        allowed_use="Authoritative Activity/Gear link table.",
+        forbidden_join_guidance=("Do not substitute source activity_id for the declared key.",),
+    ),
+    "personal_records": _relationship_metadata(
+        relationship_role="primary_fact",
+        activity_relationship="allowed",
+        join_guidance=_activity_join(
+            status="explicit_or_independent",
+            source_fields=("garmin_activity_key",),
+            target_fields=("garmin_activity_key",),
+            cardinality="many_to_zero_or_one",
+            semantics="fact",
+        ),
+        cardinality="many_records_to_zero_or_one_activity",
+        allowed_use="Join nonzero source Activity identities; preserve zero as independent.",
+        forbidden_join_guidance=("Do not force an Activity identity for independent records.",),
+    ),
+    "fit_sessions": _relationship_metadata(
+        relationship_role="primary_fact",
+        activity_relationship="allowed",
+        join_guidance=_activity_join(
+            status="explicit_via_activity_fit_links",
+            source_fields=("fit_session_key",),
+            target_fields=("garmin_activity_key",),
+            cardinality="one_to_one_within_eligible_population",
+            semantics="fact",
+            via_datasets=("activity_fit_links",),
+        ),
+        cardinality="one_session_per_stable_key",
+        allowed_use="Join to Activities only through activity_fit_links.",
+        forbidden_join_guidance=("Do not join FIT and Activities by timestamp alone.",),
+    ),
+    "fit_laps": _relationship_metadata(
+        relationship_role="direct_explicit_link",
+        activity_relationship="allowed",
+        join_guidance=_activity_join(
+            status="indirect_via_fit_sessions_and_activity_fit_links",
+            source_fields=("fit_session_key",),
+            target_fields=("garmin_activity_key",),
+            cardinality="many_to_one_indirect",
+            semantics="fact_child",
+            via_datasets=("fit_sessions", "activity_fit_links"),
+        ),
+        cardinality="many_laps_to_one_fit_session",
+        allowed_use="Join to FIT Sessions by fit_session_key, then use an explicit Activity/FIT link.",
+        forbidden_join_guidance=("Do not join laps directly to Activities by time or ordinal.",),
+    ),
+    "activity_fit_links": _relationship_metadata(
+        relationship_role="direct_explicit_link",
+        activity_relationship="allowed",
+        join_guidance=_activity_join(
+            status="explicit",
+            source_fields=("garmin_activity_key",),
+            target_fields=("garmin_activity_key",),
+            cardinality="one_to_one_within_eligible_population",
+            semantics="link",
+        ),
+        cardinality="one_to_one_within_eligible_population",
+        allowed_use="Sole Activity/FIT relationship authority.",
+        forbidden_join_guidance=("Do not promote unresolved or ambiguous candidates.",),
+    ),
+    "hill_score_daily": _relationship_metadata(
+        relationship_role="performance_context",
+        semantic_role="daily_performance_context",
+        activity_relationship="not_yet_defined",
+        join_guidance=_activity_join(
+            status="not_yet_defined",
+            source_fields=("calendar_date",),
+            target_fields=("activity_date_local",),
+            cardinality="one_to_many_context_candidate",
+            semantics="daily_performance_context",
+        ),
+        cardinality="one_observation_per_calendar_day",
+        allowed_use="Standalone daily performance context.",
+        forbidden_join_guidance=("Do not materialize an Activity relationship from calendar_date.",),
+        derived_projection={
+            "path": "analysis/performance_metrics_daily.csv",
+            "canonical": False,
+            "projection_of": "hill_score_daily",
+            "selection_rule": None,
+        },
+    ),
+    "endurance_score_daily": _relationship_metadata(
+        relationship_role="performance_context",
+        semantic_role="daily_performance_context",
+        activity_relationship="not_yet_defined",
+        join_guidance=_activity_join(
+            status="not_yet_defined",
+            source_fields=("calendar_date",),
+            target_fields=("activity_date_local",),
+            cardinality="one_to_many_context_candidate",
+            semantics="daily_performance_context",
+        ),
+        cardinality="one_observation_per_calendar_day",
+        allowed_use="Standalone daily performance context.",
+        forbidden_join_guidance=("Do not materialize an Activity relationship from calendar_date.",),
+        derived_projection={
+            "path": "analysis/performance_metrics_daily.csv",
+            "canonical": False,
+            "projection_of": "endurance_score_daily",
+            "selection_rule": None,
+        },
+    ),
+    "race_prediction_daily": _relationship_metadata(
+        relationship_role="prediction_context",
+        semantic_role="daily_performance_prediction",
+        activity_relationship="not_yet_defined",
+        join_guidance=_activity_join(
+            status="not_yet_defined",
+            source_fields=("calendar_date",),
+            target_fields=("activity_date_local",),
+            cardinality="many_to_many_context_only",
+            semantics="daily_performance_prediction",
+        ),
+        cardinality="many_source_observations_per_calendar_day",
+        allowed_use="Compare prediction observations by date without treating them as race facts.",
+        forbidden_join_guidance=("Do not join an observation to an Activity by date or timestamp.",),
+        limitations=("Prediction values are Garmin algorithm output, not measured results.",),
+        derived_projection={
+            "path": "qa/daily_metrics_summary.json",
+            "canonical": False,
+            "projection_of": "race_prediction_daily",
+            "selection_rule": None,
+        },
+    ),
+    "sleep_daily": _relationship_metadata(
+        relationship_role="condition_context",
+        activity_relationship="not_yet_defined",
+        join_guidance=_activity_join(
+            status="context_only",
+            source_fields=("sleep_day",),
+            target_fields=("activity_date_local",),
+            cardinality="one_to_many_context_only",
+            semantics="same_day_condition_context",
+        ),
+        cardinality="one_reviewed_sleep_state_per_sleep_day",
+        allowed_use="Same-day condition comparison while keeping Sleep separate from Activity facts.",
+        forbidden_join_guidance=("Do not merge Sleep fields into an Activity fact or infer causality.",),
+    ),
+    "uds_daily": _relationship_metadata(
+        relationship_role="condition_context",
+        activity_relationship="not_yet_defined",
+        join_guidance=_activity_join(
+            status="context_only",
+            source_fields=("calendar_date",),
+            target_fields=("activity_date_local",),
+            cardinality="one_to_many_context_only",
+            semantics="same_day_condition_context",
+        ),
+        cardinality="one_source_state_per_calendar_day",
+        allowed_use="Same-day condition comparison while keeping UDS separate from Activity facts.",
+        forbidden_join_guidance=("Do not merge UDS fields into an Activity fact or infer missing metrics.",),
+    ),
+    "acute_training_load_daily": _relationship_metadata(
+        relationship_role="performance_context",
+        activity_relationship="not_yet_defined",
+        join_guidance=_activity_join(
+            status="context_only",
+            source_fields=("calendar_date",),
+            target_fields=("activity_date_local",),
+            cardinality="many_to_many_context_only",
+            semantics="same_day_performance_context",
+        ),
+        cardinality="many_source_observations_per_calendar_day",
+        allowed_use="Same-day performance context without selecting one observation.",
+        forbidden_join_guidance=("Do not create a direct Activity link or apply latest-wins.",),
+        derived_projection={
+            "path": "qa/daily_metrics_summary.json",
+            "canonical": False,
+            "projection_of": "acute_training_load_daily",
+            "selection_rule": None,
+        },
+    ),
+    "training_readiness_daily": _relationship_metadata(
+        relationship_role="performance_context",
+        activity_relationship="not_yet_defined",
+        join_guidance=_activity_join(
+            status="context_only",
+            source_fields=("calendar_date",),
+            target_fields=("activity_date_local",),
+            cardinality="many_to_many_context_only",
+            semantics="same_day_performance_context",
+        ),
+        cardinality="many_source_observations_per_calendar_day",
+        allowed_use="Same-day readiness context without selecting one observation.",
+        forbidden_join_guidance=("Do not create a direct Activity link or infer component causes.",),
+        derived_projection={
+            "path": "qa/daily_metrics_summary.json",
+            "canonical": False,
+            "projection_of": "training_readiness_daily",
+            "selection_rule": None,
+        },
+    ),
+    "vo2max_daily": _relationship_metadata(
+        relationship_role="performance_context",
+        activity_relationship="not_yet_defined",
+        join_guidance=_activity_join(
+            status="context_only",
+            source_fields=("calendar_date",),
+            target_fields=("activity_date_local",),
+            cardinality="many_to_many_context_only",
+            semantics="same_day_performance_context",
+        ),
+        cardinality="many_source_observations_per_calendar_day_and_series",
+        allowed_use="Compare source-series observations without collapsing generations.",
+        forbidden_join_guidance=(
+            "Do not use source_activity_id as a public join authority.",
+            "Do not overwrite one source series with another.",
+        ),
+        limitations=("Source series and sport remain part of observation identity.",),
+        derived_projection={
+            "path": "qa/daily_metrics_summary.json",
+            "canonical": False,
+            "projection_of": "vo2max_daily",
+            "selection_rule": None,
+        },
+    ),
+    "hrv_daily": _relationship_metadata(
+        relationship_role="condition_context",
+        activity_relationship="not_yet_defined",
+        join_guidance=_activity_join(
+            status="context_only",
+            source_fields=("calendar_date",),
+            target_fields=("activity_date_local",),
+            cardinality="one_to_many_context_only",
+            semantics="same_day_condition_context",
+        ),
+        cardinality="one_resolved_or_review_row_per_calendar_day",
+        allowed_use="Reviewed same-day trend context only.",
+        forbidden_join_guidance=("Do not merge HRV into Activity facts or select a conflicting value.",),
+        limitations=("analysis_reference_only; not a daily source of truth.",),
+    ),
+    "training_history_daily": _relationship_metadata(
+        relationship_role="performance_context",
+        activity_relationship="not_yet_defined",
+        join_guidance=_activity_join(
+            status="context_only",
+            source_fields=("calendar_date",),
+            target_fields=("activity_date_local",),
+            cardinality="many_to_many_context_only",
+            semantics="same_day_performance_context",
+        ),
+        cardinality="many_source_observations_per_calendar_day",
+        allowed_use="Same-day training-status context without selecting one observation.",
+        forbidden_join_guidance=("Do not create a direct Activity link or apply latest-wins.",),
+        derived_projection={
+            "path": "qa/daily_metrics_summary.json",
+            "canonical": False,
+            "projection_of": "training_history_daily",
+            "selection_rule": None,
+        },
+    ),
+}
+
+
+LACTATE_THRESHOLD_RELATIONSHIP_METADATA = {
+    "relationship_role": "observation_family",
+    "semantic_role": "performance_threshold_observation",
+    "canonical": False,
+    "projection_of": None,
+    "record_grain": "source-backed threshold observation",
+    "stable_key": [],
+    "machine_stable_key_status": "PRODUCT_DECISION_REQUIRED",
+    "activity_relationship": "not_yet_defined",
+    "families": [
+        "history",
+        "latest_snapshot",
+        "profile_state",
+        "derived_evidence",
+    ],
+    "join_guidance": [],
+    "forbidden_join_guidance": [
+        "Do not join candidate observations to Activities.",
+        "Do not select latest-wins across observation families.",
+    ],
+    "cardinality": "many_candidate_observations_across_source_families",
+    "allowed_use": "Audit and Product review of source-backed threshold observations.",
+    "limitations": [
+        "Candidate/audit-only; no stable dataset promotion.",
+        "Units, timezone, and machine stable key remain unconfirmed.",
+    ],
+    "derived_projection": {
+        "path": None,
+        "canonical": False,
+        "projection_of": "lactate_threshold_candidates",
+        "selection_rule": None,
+    },
+}
+
 DATASET_FIELDS = {
     "activities": (
         "garmin_activity_key", "activity_id", "name", "memo_text_raw",
@@ -567,6 +954,144 @@ def _runtime_datasets() -> list[dict[str, Any]]:
     ]
 
 
+RELATIONSHIP_ROLES = frozenset(
+    {
+        "primary_fact",
+        "direct_explicit_link",
+        "daily_context",
+        "condition_context",
+        "performance_context",
+        "prediction_context",
+        "observation_family",
+        "derived_projection",
+        "not_yet_defined",
+    }
+)
+ACTIVITY_RELATIONSHIP_STATUSES = frozenset(
+    {"allowed", "not_yet_defined", "forbidden"}
+)
+JOIN_GUIDANCE_STATUSES = frozenset(
+    {
+        "self",
+        "explicit",
+        "explicit_or_independent",
+        "explicit_via_activity_gear",
+        "explicit_via_activity_fit_links",
+        "indirect_via_fit_sessions_and_activity_fit_links",
+        "context_only",
+        "not_yet_defined",
+    }
+)
+
+
+def _validate_relationship_metadata() -> None:
+    runtime_names = {item["name"] for item in _runtime_datasets()}
+    if set(DATASET_RELATIONSHIP_METADATA) != runtime_names:
+        raise OutputExperienceError(
+            "relationship metadata datasets do not match runtime datasets"
+        )
+    for dataset, metadata in DATASET_RELATIONSHIP_METADATA.items():
+        if metadata.get("relationship_role") not in RELATIONSHIP_ROLES:
+            raise OutputExperienceError(
+                f"{dataset}: relationship role is unsupported"
+            )
+        if not isinstance(metadata.get("semantic_role"), str) or not metadata[
+            "semantic_role"
+        ]:
+            raise OutputExperienceError(
+                f"{dataset}: semantic role must be declared"
+            )
+        if metadata.get("activity_relationship") not in (
+            ACTIVITY_RELATIONSHIP_STATUSES
+        ):
+            raise OutputExperienceError(
+                f"{dataset}: activity relationship status is unsupported"
+            )
+        if metadata.get("canonical") is not True or metadata.get(
+            "projection_of"
+        ) is not None:
+            raise OutputExperienceError(
+                f"{dataset}: normalized dataset must remain canonical"
+            )
+        for field in (
+            "join_guidance",
+            "forbidden_join_guidance",
+            "limitations",
+        ):
+            if not isinstance(metadata.get(field), list):
+                raise OutputExperienceError(
+                    f"{dataset}: {field} must be an array"
+                )
+        if not isinstance(metadata.get("cardinality"), str) or not metadata[
+            "cardinality"
+        ]:
+            raise OutputExperienceError(
+                f"{dataset}: relationship cardinality must be declared"
+            )
+        for guidance in metadata["join_guidance"]:
+            if not isinstance(guidance, Mapping):
+                raise OutputExperienceError(
+                    f"{dataset}: join guidance must contain objects"
+                )
+            if guidance.get("target_dataset") != "activities":
+                raise OutputExperienceError(
+                    f"{dataset}: unsupported join-guidance target"
+                )
+            if guidance.get("status") not in JOIN_GUIDANCE_STATUSES:
+                raise OutputExperienceError(
+                    f"{dataset}: join-guidance status is unsupported"
+                )
+            if not isinstance(guidance.get("source_fields"), list) or not isinstance(
+                guidance.get("target_fields"), list
+            ):
+                raise OutputExperienceError(
+                    f"{dataset}: join-guidance fields must be arrays"
+                )
+            if not isinstance(guidance.get("direct"), bool) or not isinstance(
+                guidance.get("via_datasets"), list
+            ):
+                raise OutputExperienceError(
+                    f"{dataset}: join-guidance path must be explicit"
+                )
+            if metadata["activity_relationship"] != "allowed" and guidance[
+                "direct"
+            ]:
+                raise OutputExperienceError(
+                    f"{dataset}: unsupported direct Activity relationship"
+                )
+        projection = metadata.get("derived_projection")
+        if projection is not None and (
+            not isinstance(projection, Mapping)
+            or projection.get("canonical") is not False
+            or projection.get("projection_of") != dataset
+            or projection.get("selection_rule") is not None
+        ):
+            raise OutputExperienceError(
+                f"{dataset}: derived projection contract is invalid"
+            )
+
+    lactate = LACTATE_THRESHOLD_RELATIONSHIP_METADATA
+    if lactate.get("relationship_role") not in RELATIONSHIP_ROLES:
+        raise OutputExperienceError(
+            "lactate threshold relationship role is unsupported"
+        )
+    if lactate.get("canonical") is not False or lactate.get(
+        "activity_relationship"
+    ) != "not_yet_defined":
+        raise OutputExperienceError(
+            "lactate threshold candidate relationship boundary is invalid"
+        )
+    if (
+        lactate.get("record_grain") != "source-backed threshold observation"
+        or lactate.get("stable_key") != []
+        or lactate.get("machine_stable_key_status")
+        != "PRODUCT_DECISION_REQUIRED"
+    ):
+        raise OutputExperienceError(
+            "lactate threshold candidate identity boundary is invalid"
+        )
+
+
 def validate_registry_alignment(registry: Mapping[str, Any]) -> None:
     registry_object = _mapping(registry, "dataset registry")
     raw_datasets = registry_object.get("datasets")
@@ -600,6 +1125,7 @@ def _validate_projection_inputs(
 ) -> tuple[dict[str, Mapping[str, Any]], dict[str, Mapping[str, Any]], list[str]]:
     manifest_object = _mapping(manifest, "run manifest")
     summary_object = _mapping(summary, "run summary")
+    _validate_relationship_metadata()
     validate_registry_alignment(registry)
     if manifest_object.get("format") != MANIFEST_FORMAT:
         raise OutputExperienceError("run manifest format is not supported")
@@ -1141,8 +1667,8 @@ def render_dataset_inventory(
         "",
         f"Run status: {_code(summary['status'])}",
         "",
-        "| Dataset | Role | Status | Records | Warnings | Path | Grain | Stable key | Authority | Analysis use | Relationships | Privacy |",
-        "|---|---|---|---:|---:|---|---|---|---|---|---|---|",
+        "| Dataset | Role | Status | Records | Warnings | Path | Grain | Stable key | Authority | Analysis use | Relationship role / semantic role | Activity use | Cardinality | Canonical/projection | Privacy |",
+        "|---|---|---|---:|---:|---|---|---|---|---|---|---|---|---|---|",
     ]
     for runtime in _runtime_datasets():
         dataset = manifest_by_name[runtime["name"]]
@@ -1150,6 +1676,12 @@ def render_dataset_inventory(
         family_status = family_result["status"]
         stable_key = ", ".join(_code(field) for field in runtime["stable_key"])
         presentation = DATASET_PRESENTATION[runtime["name"]]
+        relationship = DATASET_RELATIONSHIP_METADATA[runtime["name"]]
+        projection = (
+            "canonical + derived projection"
+            if relationship["derived_projection"] is not None
+            else "canonical"
+        )
         lines.append(
             "| "
             f"{_code(runtime['name'])} | {presentation['role']} | "
@@ -1157,7 +1689,10 @@ def render_dataset_inventory(
             f"{family_result['warning_count']} | {_code(runtime['output_path'])} | "
             f"{runtime['record_grain']} | {stable_key} | "
             f"{presentation['authority']} | {presentation['analysis_suitability']} | "
-            f"{_code(presentation['relationship_status'])} | "
+            f"{_code(relationship['relationship_role'])} / "
+            f"{_code(relationship['semantic_role'])} | "
+            f"{_code(relationship['activity_relationship'])} | "
+            f"{_code(relationship['cardinality'])} | {projection} | "
             f"{_code(presentation['privacy_classification'])} |"
         )
     snapshot_lines = _snapshot_lifecycle_lines(summary)
@@ -1186,6 +1721,66 @@ def render_dataset_inventory(
         ]
     )
     return "\n".join(lines)
+
+
+V1_3_RELATIONSHIP_DATASETS = (
+    "hill_score_daily",
+    "endurance_score_daily",
+    "race_prediction_daily",
+    "sleep_daily",
+    "uds_daily",
+    "acute_training_load_daily",
+    "training_readiness_daily",
+    "vo2max_daily",
+    "hrv_daily",
+    "training_history_daily",
+)
+
+
+def _v1_3_relationship_lines() -> list[str]:
+    runtime_by_name = {item["name"]: item for item in _runtime_datasets()}
+    lines = [
+        "## v1.3 Context and Observation Relationships",
+        "",
+        "These entries are analysis guidance, not newly declared direct links.",
+        "A `context_only` entry permits same-day comparison while datasets remain",
+        "separate; it never authorizes an Activity fact-table merge.",
+        "",
+        "| Dataset | Relationship role | Grain | Stable key | Activity guidance | Join fields | Cardinality | Canonical/projection |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for dataset in V1_3_RELATIONSHIP_DATASETS:
+        runtime = runtime_by_name[dataset]
+        metadata = DATASET_RELATIONSHIP_METADATA[dataset]
+        guidance = metadata["join_guidance"][0]
+        join_fields = (
+            " + ".join(_code(field) for field in guidance["source_fields"])
+            + " → "
+            + " + ".join(_code(field) for field in guidance["target_fields"])
+        )
+        stable_key = ", ".join(_code(field) for field in runtime["stable_key"])
+        projection = (
+            "canonical source + derived non-canonical projection"
+            if metadata["derived_projection"] is not None
+            else "canonical source"
+        )
+        lines.append(
+            f"| {_code(dataset)} | {_code(metadata['semantic_role'])} | "
+            f"{_code(runtime['record_grain'])} | {stable_key} | "
+            f"{_code(guidance['status'])} | {join_fields} | "
+            f"{_code(guidance['cardinality'])} | {projection} |"
+        )
+    lactate = LACTATE_THRESHOLD_RELATIONSHIP_METADATA
+    lines.extend(
+        [
+            f"| `lactate_threshold_candidates` | {_code(lactate['relationship_role'])} | "
+            "`source-backed threshold observation` | `PRODUCT_DECISION_REQUIRED` | "
+            "`not_yet_defined` | none | "
+            f"{_code(lactate['cardinality'])} | candidate/audit only; no canonical daily projection |",
+            "",
+        ]
+    )
+    return lines
 
 
 def render_start_here(
@@ -1286,6 +1881,11 @@ def render_start_here(
             "`activity_fit_links` is the sole Activity/FIT join authority. Do not create",
             "a timestamp-only join or infer a relationship from similar fields.",
             "",
+        ]
+    )
+    lines.extend(_v1_3_relationship_lines())
+    lines.extend(
+        [
             "## Privacy",
             "",
             "Privacy mode: `local_trusted_full`.",
@@ -1347,27 +1947,31 @@ def render_analysis_handoff(
         "1. Separate observed facts, calculations, interpretations, and unknowns.",
         "2. Preserve null and missing values; never convert them to zero.",
         "3. State filters, formulas, denominators, and missing-value counts.",
-        "4. Use only relationships marked `explicit` in `ANALYSIS_CONTEXT.json`.",
+        "4. Use only `explicit` relationships for direct joins. A documented",
+        "   `context_only` alignment permits comparison, never a fact-table merge.",
         "5. Use `activity_fit_links` for Activity/FIT joins; timestamp-only joins are prohibited.",
         "6. Treat Personal Records with `activity_relationship_status=independent`",
         "   as non-activity records and do not force an activity identity.",
         "7. Preserve and disclose warnings or partial FIT status.",
         "8. Ask for an additional approved file when the supplied artifacts cannot",
         "   answer the question; do not invent source fields or context.",
-        "9. Treat Hill and Endurance as standalone daily context. Their relationship",
-        "   to activities is not defined, so date-based activity joins are prohibited.",
+        "9. Treat Hill and Endurance as canonical daily performance context. Their",
+        "   CSV is a derived projection; their Activity relationship remains undefined.",
         "10. Lactate Threshold is candidate/audit-only. Do not treat candidates as a",
         "    stable dataset, convert unconfirmed units, or apply latest-wins.",
-        "11. Race Prediction, Sleep, UDS, Acute Training Load, Training Readiness,",
-        "    VO2Max, HRV, and Training History remain separate daily context. Do not",
-        "    join them to activities by date or infer missing values.",
-        "12. VO2Max source series are retained explicitly. Do not overwrite one series",
+        "11. Sleep, UDS, and HRV may be compared as same-day condition context, but",
+        "    they remain separate datasets and must not become Activity fact fields.",
+        "12. Race Prediction, Acute Training Load, Training Readiness, VO2Max, and",
+        "    Training History retain every canonical source observation. Their daily",
+        "    summaries are derived projections with no selected row.",
+        "13. VO2Max source series are retained explicitly. Do not overwrite one series",
         "    with another or infer equivalence across device generations.",
-        "13. HRV is `analysis_reference_only`, not a daily source of truth. A null HRV",
+        "14. HRV is `analysis_reference_only`, not a daily source of truth. A null HRV",
         "    value with a review status must remain unresolved.",
-        "14. Approximate generation ranges (2015-2021 and 2022+) are descriptive",
+        "15. Approximate generation ranges (2015-2021 and 2022+) are descriptive",
         "    source context only; they do not authorize automatic field equivalence.",
         "",
+        *_v1_3_relationship_lines(),
         *_relationship_coverage_lines(relationship_summary),
         "## Multi-Session FIT Completeness",
         "",
@@ -1599,12 +2203,16 @@ def build_schema_catalog(
     registry: Mapping[str, Any],
 ) -> dict[str, Any]:
     _validate_projection_inputs(manifest, summary, registry)
+    runtime_by_name = {item["name"]: item for item in _runtime_datasets()}
     return {
         "format": "garmin-running-data-normalizer-schema-catalog-v1",
         "run_all_version": RUN_ALL_VERSION,
         "datasets": [
             {
                 "dataset": dataset,
+                "record_grain": runtime_by_name[dataset]["record_grain"],
+                "stable_key": list(runtime_by_name[dataset]["stable_key"]),
+                **DATASET_RELATIONSHIP_METADATA[dataset],
                 "fields": [
                     {"field": field, **_field_descriptor(dataset, field)}
                     for field in fields
@@ -1689,8 +2297,24 @@ def validate_schema_contract(
     dataset_results: list[dict[str, Any]] = []
     total_records = 0
     total_fields = 0
+    runtime_by_name = {item["name"]: item for item in _runtime_datasets()}
     for dataset in DATASET_FIELDS:
-        raw_fields = catalog_by_name[dataset].get("fields")
+        raw_dataset = catalog_by_name[dataset]
+        runtime = runtime_by_name[dataset]
+        if raw_dataset.get("record_grain") != runtime["record_grain"]:
+            raise SchemaContractError(
+                f"{dataset}: schema record grain does not match runtime"
+            )
+        if raw_dataset.get("stable_key") != list(runtime["stable_key"]):
+            raise SchemaContractError(
+                f"{dataset}: schema stable key does not match runtime"
+            )
+        for field, expected in DATASET_RELATIONSHIP_METADATA[dataset].items():
+            if raw_dataset.get(field) != expected:
+                raise SchemaContractError(
+                    f"{dataset}: schema relationship metadata is inconsistent"
+                )
+        raw_fields = raw_dataset.get("fields")
         if not isinstance(raw_fields, list):
             raise SchemaContractError(f"{dataset}: schema fields must be a list")
         descriptors: dict[str, Mapping[str, Any]] = {}
@@ -1790,6 +2414,18 @@ def build_analysis_context(
         summary,
         registry,
     )
+    candidate_features_raw = summary.get("candidate_features", {})
+    candidate_features = (
+        dict(candidate_features_raw)
+        if isinstance(candidate_features_raw, Mapping)
+        else {}
+    )
+    lactate_threshold = candidate_features.get("lactate_threshold")
+    if isinstance(lactate_threshold, Mapping):
+        candidate_features["lactate_threshold"] = {
+            **lactate_threshold,
+            **LACTATE_THRESHOLD_RELATIONSHIP_METADATA,
+        }
     context = {
         "format": "garmin-running-data-normalizer-analysis-context-v1",
         "product_version": manifest["product_version"],
@@ -1813,6 +2449,7 @@ def build_analysis_context(
                 "record_grain": runtime["record_grain"],
                 "stable_key": list(runtime["stable_key"]),
                 **DATASET_PRESENTATION[runtime["name"]],
+                **DATASET_RELATIONSHIP_METADATA[runtime["name"]],
             }
             for runtime in _runtime_datasets()
         ],
@@ -1821,13 +2458,14 @@ def build_analysis_context(
         "prohibited_operations": [
             "timestamp_only_join",
             "join_not_declared_explicit",
+            "context_only_as_fact_join",
             "missing_value_inference",
             "identity_or_location_inference",
             "automatic_external_upload",
             "medical_or_coaching_interpretation",
         ],
         "warnings": summary.get("warnings", []),
-        "candidate_features": summary.get("candidate_features", {}),
+        "candidate_features": candidate_features,
     }
     if isinstance(summary.get("snapshot_lifecycle"), Mapping):
         context["snapshot_lifecycle"] = {

@@ -33,6 +33,12 @@ Analysis rules:
 9. If a warning or PARTIAL_SUCCESS affects a result, label that result partial.
 10. If the evidence cannot answer the question, say so and name the minimum
     additional approved field or file required. Do not invent an answer.
+11. Use only a declared `explicit` relationship for a direct join. A declared
+    `context_only` alignment permits comparison of separately aggregated facts,
+    never row identity, an Activity fact-table merge, or causality.
+12. Treat normalized source observations as canonical at their declared grain.
+    A CSV or QA daily view marked as a derived projection must not replace the
+    source observations or select a preferred row.
 
 Requested aggregation:
 - Population: [for example, all supplied synthetic activities]
