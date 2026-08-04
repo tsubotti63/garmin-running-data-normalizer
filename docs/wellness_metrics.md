@@ -1,8 +1,7 @@
 # Wellness and Daily Metrics Contract
 
 This document defines the daily condition and prediction dataset contract in
-the prepared v1.3.0 stable release source. Production PyPI remains on `1.2.1`
-until the separate publication gate completes.
+the stable v1.3.0 GitHub Release and Production PyPI distribution.
 Every family is optional and remains separate from the Activity fact table.
 Race Prediction, Acute Training Load, Training Readiness, VO2Max, and Training
 History are stored at one source-observation grain. Hill Score, Endurance Score,

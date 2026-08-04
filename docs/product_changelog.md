@@ -4,10 +4,10 @@ This file records factual Garmin Running Data Normalizer product changes. The
 root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
 Standard adopted by this repository.
 
-## v1.3.0 — prepared stable release source
+## v1.3.0 — stable Production release
 
-Status: prepared for final Product authorization; not yet tagged, released, or
-published to PyPI.
+Status: published as an annotated tag, stable GitHub Release, and verified
+Production PyPI distribution on 2026-08-04.
 
 ### Added
 

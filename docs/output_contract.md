@@ -181,9 +181,7 @@ evidence and are not added to a normal one-shot output.
 
 ## v1.3 daily metrics
 
-The prepared v1.3.0 release source adds the following optional Run-All
-artifacts. Production PyPI remains on `1.2.1` until publication is separately
-authorized:
+The stable v1.3.0 release adds the following optional Run-All artifacts:
 
 ```text
 normalized/hill_score_daily.json

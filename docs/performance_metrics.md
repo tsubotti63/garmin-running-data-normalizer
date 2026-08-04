@@ -2,9 +2,8 @@
 
 ## Status
 
-This document describes the performance-metrics contract in the prepared
-v1.3.0 stable release source. Production PyPI remains on v1.2.1 until the
-separate publication gate completes.
+This document describes the performance-metrics contract in the stable v1.3.0
+GitHub Release and Production PyPI distribution.
 
 ## Stable daily datasets
 
