@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import math
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
 from ..common.time import daily_calendar_date
-from ..fit.hrv import parse_fit_hrv_export
+from ..fit.hrv import parse_fit_hrv_bytes, parse_fit_hrv_export
 from ..intake.discovery import DiscoveredAsset, load_json_assets
 
 MAX_SAFE_INTEGER = (1 << 53) - 1
@@ -142,3 +143,101 @@ def normalize_hrv(root: str | Path, timezone_name: str = "Asia/Tokyo") -> dict[s
         "fit_json_consistency": _consistency(fit_daily, json_reference),
         "fit_audit": fit_audit,
     }
+
+
+HRV_DAILY_FIELDS = (
+    "calendar_date",
+    "hrv_value",
+    "semantics_status",
+    "analysis_role",
+    "record_count_for_date",
+    "source_file_count_for_date",
+    "dedupe_status",
+)
+
+
+def normalize_hrv_daily_assets(
+    assets: list[DiscoveredAsset], timezone_name: str = "Asia/Tokyo"
+) -> dict[str, Any]:
+    fit_assets = [asset for asset in assets if asset.kind == "fit"]
+    by_date: dict[str, list[tuple[int | float, str]]] = defaultdict(list)
+    parse_status_counts: Counter[str] = Counter()
+    invalid_value_count = 0
+    missing_date_count = 0
+    source_record_count = 0
+    for asset in fit_assets:
+        parsed = parse_fit_hrv_bytes(
+            asset.data,
+            file_id=f"internal:{asset.sha256}",
+            source_path="not_exposed",
+            timezone_name=timezone_name,
+        )
+        parse_status_counts[str(parsed["status"])] += 1
+        for row in parsed["records"]:
+            source_record_count += 1
+            if row.get("fit_hrv_invalid_raw_value_flag"):
+                invalid_value_count += 1
+                continue
+            date = row.get("date")
+            value = row.get("fit_hrv_value")
+            if date is None:
+                missing_date_count += 1
+                continue
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                by_date[str(date)].append((value, asset.sha256))
+
+    records: list[dict[str, Any]] = []
+    conflict_count = 0
+    duplicate_count = 0
+    for date in sorted(by_date):
+        observations = by_date[date]
+        values = {value for value, _source in observations}
+        duplicate_count += len(observations) - len(values)
+        conflict = len(values) > 1
+        if conflict:
+            conflict_count += 1
+        records.append(
+            {
+                "calendar_date": date,
+                "hrv_value": None if conflict else next(iter(values)),
+                "semantics_status": "semantics_approved_analysis_reference",
+                "analysis_role": "analysis_reference_only",
+                "record_count_for_date": len(observations),
+                "source_file_count_for_date": len({source for _value, source in observations}),
+                "dedupe_status": (
+                    "review_required_same_day_differing_values"
+                    if conflict
+                    else "same_date_same_value_deduped"
+                    if len(observations) > 1
+                    else "single_observation"
+                ),
+            }
+        )
+    review_count = conflict_count + invalid_value_count + missing_date_count
+    return {
+        "records": records,
+        "audit": {
+            "format": "garmin-running-data-normalizer-hrv-daily-audit-v1",
+            "dataset": "hrv_daily",
+            "status": "PASS_WITH_REVIEW_ITEMS" if review_count else "PASS",
+            "detected_asset_count": len(fit_assets),
+            "source_record_count": source_record_count,
+            "accepted_record_count": len(records),
+            "same_value_duplicate_count": duplicate_count,
+            "same_day_conflict_count": conflict_count,
+            "invalid_value_count": invalid_value_count,
+            "missing_date_count": missing_date_count,
+            "parse_status_counts": dict(sorted(parse_status_counts.items())),
+            "source_definition": "non-running FIT message 370 field 1 raw divided by 128",
+            "date_basis": "fit_end_jst_date_from_message_370_field_253_timestamp",
+            "analysis_role": "analysis_reference_only",
+            "source_of_truth": False,
+            "daily_coach_use": False,
+            "latest_wins": False,
+            "source_paths_exposed": False,
+            "source_hashes_exposed": False,
+        },
+    }
+
+
+__all__ = ["HRV_DAILY_FIELDS", "normalize_hrv", "normalize_hrv_daily_assets"]
