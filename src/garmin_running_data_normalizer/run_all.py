@@ -20,7 +20,9 @@ from .fit.parser import parse_fit_export
 from .export.analysis_pack import build_analysis_pack_payloads
 from .intake.discovery import DiscoveredAsset, discover_export
 from .normalizers.activities import normalize_activities
+from .normalizers.daily_metrics import DailyMetricConflictError, DailyMetricError
 from .normalizers.gear import normalize_gear
+from .normalizers.hrv import normalize_hrv_daily_assets
 from .normalizers.personal_records import normalize_personal_records
 from .normalizers.performance_metrics import (
     ENDURANCE_FIELDS,
@@ -32,6 +34,13 @@ from .normalizers.performance_metrics import (
     normalize_endurance_score,
     normalize_hill_score,
 )
+from .normalizers.race_prediction import normalize_race_prediction
+from .normalizers.sleep import normalize_sleep_daily_assets
+from .normalizers.training_history import normalize_training_history
+from .normalizers.training_load import normalize_acute_training_load
+from .normalizers.training_readiness import normalize_training_readiness
+from .normalizers.uds import normalize_uds
+from .normalizers.vo2max import normalize_vo2max
 from .qa import deterministic_records_digest
 from .relationships import (
     RelationshipContractError,
@@ -51,6 +60,14 @@ DATASET_TABLE = (
     {"name": "activity_fit_links", "family": "fit", "record_grain": "activity_fit_session_link", "stable_key": ("garmin_activity_key", "fit_session_key"), "required": False},
     {"name": "hill_score_daily", "family": "hill_score", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
     {"name": "endurance_score_daily", "family": "endurance_score", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
+    {"name": "race_prediction_daily", "family": "race_prediction", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
+    {"name": "sleep_daily", "family": "sleep", "record_grain": "sleep_day", "stable_key": ("sleep_day",), "required": False},
+    {"name": "uds_daily", "family": "uds", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
+    {"name": "acute_training_load_daily", "family": "acute_training_load", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
+    {"name": "training_readiness_daily", "family": "training_readiness", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
+    {"name": "vo2max_daily", "family": "vo2max", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
+    {"name": "hrv_daily", "family": "hrv", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
+    {"name": "training_history_daily", "family": "training_history", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
 )
 
 FAMILY_ORDER = (
@@ -60,6 +77,14 @@ FAMILY_ORDER = (
     "fit",
     "hill_score",
     "endurance_score",
+    "race_prediction",
+    "sleep",
+    "uds",
+    "acute_training_load",
+    "training_readiness",
+    "vo2max",
+    "hrv",
+    "training_history",
 )
 CANDIDATE_FAMILY_ORDER = ("lactate_threshold",)
 DATASET_PATHS = {
@@ -72,6 +97,14 @@ DATASET_PATHS = {
     "activity_fit_links": "normalized/activity_fit_links.json",
     "hill_score_daily": "normalized/hill_score_daily.json",
     "endurance_score_daily": "normalized/endurance_score_daily.json",
+    "race_prediction_daily": "normalized/race_prediction_daily.json",
+    "sleep_daily": "normalized/sleep_daily.json",
+    "uds_daily": "normalized/uds_daily.json",
+    "acute_training_load_daily": "normalized/acute_training_load_daily.json",
+    "training_readiness_daily": "normalized/training_readiness_daily.json",
+    "vo2max_daily": "normalized/vo2max_daily.json",
+    "hrv_daily": "normalized/hrv_daily.json",
+    "training_history_daily": "normalized/training_history_daily.json",
 }
 ACTIVITIES_CSV_COLUMNS = (
     "garmin_activity_key",
@@ -108,16 +141,33 @@ OUTPUT_PATHS = (
     "normalized/activity_fit_links.json",
     "normalized/hill_score_daily.json",
     "normalized/endurance_score_daily.json",
+    "normalized/race_prediction_daily.json",
+    "normalized/sleep_daily.json",
+    "normalized/uds_daily.json",
+    "normalized/acute_training_load_daily.json",
+    "normalized/training_readiness_daily.json",
+    "normalized/vo2max_daily.json",
+    "normalized/hrv_daily.json",
+    "normalized/training_history_daily.json",
     "audit/fit_audit.json",
     "audit/activity_fit_linkage.json",
     "audit/hill_score_daily.json",
     "audit/endurance_score_daily.json",
     "audit/lactate_threshold_candidates.json",
+    "audit/race_prediction_daily.json",
+    "audit/sleep_daily.json",
+    "audit/uds_daily.json",
+    "audit/acute_training_load_daily.json",
+    "audit/training_readiness_daily.json",
+    "audit/vo2max_daily.json",
+    "audit/hrv_daily.json",
+    "audit/training_history_daily.json",
     "analysis/activities.csv",
     "analysis/performance_metrics_daily.csv",
     "qa/dataset_summary.json",
     "qa/relationship_summary.json",
     "qa/performance_metrics_summary.json",
+    "qa/daily_metrics_summary.json",
     "START_HERE.md",
     "DATASET_INVENTORY.md",
     "ANALYSIS_HANDOFF.md",
@@ -209,6 +259,22 @@ def _asset_family(asset: DiscoveredAsset) -> str:
         return "hill_score"
     if asset.kind == "json" and basename.startswith("endurancescore"):
         return "endurance_score"
+    if asset.kind == "json" and basename.startswith("runracepredictions"):
+        return "race_prediction"
+    if asset.kind == "json" and basename.endswith("sleepdata.json"):
+        return "sleep"
+    if asset.kind == "json" and basename.startswith("udsfile"):
+        return "uds"
+    if asset.kind == "json" and basename.startswith("metricsacutetrainingload"):
+        return "acute_training_load"
+    if asset.kind == "json" and basename.startswith("trainingreadinessdto"):
+        return "training_readiness"
+    if asset.kind == "json" and basename.startswith(
+        ("activityvo2max", "metricsmaxmetdata")
+    ):
+        return "vo2max"
+    if asset.kind == "json" and basename.startswith("traininghistory"):
+        return "training_history"
     if asset.kind == "json" and basename.endswith(
         (
             "userbiometrics.json",
@@ -229,6 +295,8 @@ def _classify_assets(assets: list[DiscoveredAsset]) -> dict[str, list[Discovered
         family = _asset_family(asset)
         if family in families:
             families[family].append(asset)
+        if asset.kind == "fit":
+            families["hrv"].append(asset)
     return families
 
 
@@ -251,6 +319,14 @@ def _validate_dataset_table() -> None:
         ),
         "hill_score_daily": ("calendar_day", ("calendar_date",), False),
         "endurance_score_daily": ("calendar_day", ("calendar_date",), False),
+        "race_prediction_daily": ("calendar_day", ("calendar_date",), False),
+        "sleep_daily": ("sleep_day", ("sleep_day",), False),
+        "uds_daily": ("calendar_day", ("calendar_date",), False),
+        "acute_training_load_daily": ("calendar_day", ("calendar_date",), False),
+        "training_readiness_daily": ("calendar_day", ("calendar_date",), False),
+        "vo2max_daily": ("calendar_day", ("calendar_date",), False),
+        "hrv_daily": ("calendar_day", ("calendar_date",), False),
+        "training_history_daily": ("calendar_day", ("calendar_date",), False),
     }
     actual = {
         str(item["name"]): (str(item["record_grain"]), tuple(item["stable_key"]), bool(item["required"]))
@@ -349,6 +425,41 @@ def _normalize_datasets(
     }
 
     try:
+        daily_results = {
+            "race_prediction_daily": normalize_race_prediction(
+                families["race_prediction"]
+            ),
+            "sleep_daily": normalize_sleep_daily_assets(families["sleep"]),
+            "uds_daily": normalize_uds(families["uds"]),
+            "acute_training_load_daily": normalize_acute_training_load(
+                families["acute_training_load"]
+            ),
+            "training_readiness_daily": normalize_training_readiness(
+                families["training_readiness"]
+            ),
+            "vo2max_daily": normalize_vo2max(families["vo2max"]),
+            "training_history_daily": normalize_training_history(
+                families["training_history"]
+            ),
+        }
+        for dataset_name, result in daily_results.items():
+            records[dataset_name] = result.records
+            performance_audit[dataset_name] = result.audit
+        hrv_result = normalize_hrv_daily_assets(families["hrv"])
+        records["hrv_daily"] = hrv_result["records"]
+        performance_audit["hrv_daily"] = hrv_result["audit"]
+    except DailyMetricConflictError as exc:
+        raise RunAllError(
+            "DAILY_METRICS_CONFLICT",
+            "daily metric input contains conflicting values for one stable key",
+        ) from exc
+    except DailyMetricError as exc:
+        raise RunAllError(
+            "DAILY_METRICS_NORMALIZATION_FAILED",
+            "detected daily metric input could not be normalized",
+        ) from exc
+
+    try:
         relationship_summary = validate_declared_relationships(records)
         (
             records["activity_fit_links"],
@@ -444,7 +555,18 @@ def _validate_provenance(
         for family, assets in families.items()
     }
     for dataset in DATASET_TABLE:
-        if dataset["name"] in {"hill_score_daily", "endurance_score_daily"}:
+        if dataset["name"] in {
+            "hill_score_daily",
+            "endurance_score_daily",
+            "race_prediction_daily",
+            "sleep_daily",
+            "uds_daily",
+            "acute_training_load_daily",
+            "training_readiness_daily",
+            "vo2max_daily",
+            "hrv_daily",
+            "training_history_daily",
+        }:
             continue
         if dataset["name"] == "activity_fit_links":
             for record in records["activity_fit_links"]:
@@ -613,16 +735,54 @@ def _family_results(
         ),
         "hill_score": len(records["hill_score_daily"]),
         "endurance_score": len(records["endurance_score_daily"]),
+        "race_prediction": len(records["race_prediction_daily"]),
+        "sleep": len(records["sleep_daily"]),
+        "uds": len(records["uds_daily"]),
+        "acute_training_load": len(records["acute_training_load_daily"]),
+        "training_readiness": len(records["training_readiness_daily"]),
+        "vo2max": len(records["vo2max_daily"]),
+        "hrv": len(records["hrv_daily"]),
+        "training_history": len(records["training_history_daily"]),
+    }
+    quiet_optional_families = {
+        "hill_score",
+        "endurance_score",
+        "race_prediction",
+        "sleep",
+        "uds",
+        "acute_training_load",
+        "training_readiness",
+        "vo2max",
+        "hrv",
+        "training_history",
+    }
+    daily_dataset_by_family = {
+        "hill_score": "hill_score_daily",
+        "endurance_score": "endurance_score_daily",
+        "race_prediction": "race_prediction_daily",
+        "sleep": "sleep_daily",
+        "uds": "uds_daily",
+        "acute_training_load": "acute_training_load_daily",
+        "training_readiness": "training_readiness_daily",
+        "vo2max": "vo2max_daily",
+        "hrv": "hrv_daily",
+        "training_history": "training_history_daily",
     }
     incomplete_fit_count = int(fit_status.get("incomplete_fit_count", 0))
     for family in FAMILY_ORDER:
         detected = len(families[family])
+        if (
+            family == "hrv"
+            and int(performance_audit["hrv_daily"].get("source_record_count", 0))
+            == 0
+        ):
+            detected = 0
         family_warnings = 0
         status = "PROCESSED"
         skipped = 0
         if family != "activities" and detected == 0:
             status = "SKIPPED_NOT_PRESENT"
-            if family not in {"hill_score", "endurance_score"}:
+            if family not in quiet_optional_families:
                 family_warnings += 1
                 warnings.append({
                     "code": "OPTIONAL_FAMILY_NOT_PRESENT",
@@ -638,17 +798,21 @@ def _family_results(
                 "message": "optional dataset family produced no normalized records",
             })
         review_item_count = 0
-        if family in {"hill_score", "endurance_score"}:
-            audit = performance_audit[f"{family}_daily"]
+        if family in daily_dataset_by_family:
+            audit = performance_audit[daily_dataset_by_family[family]]
             review_item_count = int(audit.get("excluded_record_count", 0))
+            review_item_count += int(audit.get("review_key_count", 0))
+            review_item_count += int(audit.get("same_day_conflict_count", 0))
+            review_item_count += int(audit.get("invalid_value_count", 0))
+            review_item_count += int(audit.get("missing_date_count", 0))
             if review_item_count:
                 family_warnings += 1
                 warnings.append(
                     {
-                        "code": "PERFORMANCE_METRICS_ROWS_EXCLUDED",
+                        "code": "DAILY_METRICS_REVIEW_REQUIRED",
                         "family": family,
                         "count": review_item_count,
-                        "message": "one or more performance metric rows were excluded by the public contract",
+                        "message": "one or more daily metric observations require review",
                     }
                 )
         if family == "fit" and incomplete_fit_count:
@@ -823,6 +987,51 @@ def run_all(
             "machine_stable_key_status": "PRODUCT_DECISION_REQUIRED",
         },
     }
+    daily_metric_names = (
+        "race_prediction_daily",
+        "sleep_daily",
+        "uds_daily",
+        "acute_training_load_daily",
+        "training_readiness_daily",
+        "vo2max_daily",
+        "hrv_daily",
+        "training_history_daily",
+    )
+    daily_metrics_summary = {
+        "format": "garmin-running-data-normalizer-daily-metrics-summary-v1",
+        "status": (
+            "PASS_WITH_REVIEW_ITEMS"
+            if any(
+                performance_audit[name].get("status") == "PASS_WITH_REVIEW_ITEMS"
+                for name in daily_metric_names
+            )
+            else "PASS"
+        ),
+        "datasets": {
+            name: {
+                "record_count": len(records[name]),
+                "audit_status": performance_audit[name]["status"],
+                "stable_key": (
+                    ["sleep_day"] if name == "sleep_daily" else ["calendar_date"]
+                ),
+            }
+            for name in daily_metric_names
+        },
+        "generation_boundary": {
+            "earlier_generation": "approximately 2015-2021",
+            "later_generation": "approximately 2022 and later",
+            "automatic_equivalence_assumed": False,
+        },
+        "hrv": {
+            "analysis_role": "analysis_reference_only",
+            "source_of_truth": False,
+            "daily_coach_use": False,
+        },
+        "health_status": {
+            "status": "DEFERRED_PENDING_SEMANTICS",
+            "public_promotion": False,
+        },
+    }
     payloads = {
         **{DATASET_PATHS[name]: _json_bytes(value) for name, value in records.items()},
         "audit/fit_audit.json": _json_bytes(fit_audit),
@@ -836,11 +1045,16 @@ def run_all(
         "audit/lactate_threshold_candidates.json": _json_bytes(
             performance_audit["lactate_threshold"]
         ),
+        **{
+            f"audit/{name}.json": _json_bytes(performance_audit[name])
+            for name in daily_metric_names
+        },
         "analysis/activities.csv": csv_data,
         "analysis/performance_metrics_daily.csv": performance_csv_data,
         "qa/dataset_summary.json": _json_bytes(dataset_summary),
         "qa/relationship_summary.json": _json_bytes(relationship_summary),
         "qa/performance_metrics_summary.json": _json_bytes(performance_summary),
+        "qa/daily_metrics_summary.json": _json_bytes(daily_metrics_summary),
     }
     if snapshot_context is not None:
         required_snapshot_context = {"lineage", "coverage", "merge_summary"}

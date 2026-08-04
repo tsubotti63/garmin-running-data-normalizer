@@ -18,6 +18,18 @@ MANIFEST_FORMAT = "garmin-running-data-normalizer-run-manifest-v1"
 SUMMARY_FORMAT = "garmin-running-data-normalizer-run-summary-v1"
 SUMMARY_STATUSES = {"PASS", "PASS_WITH_WARNINGS", "PARTIAL_SUCCESS"}
 FAMILY_STATUSES = {"PROCESSED", "SKIPPED_NOT_PRESENT", "PROCESSED_EMPTY", "PARTIAL"}
+QUIET_OPTIONAL_FAMILIES = {
+    "hill_score",
+    "endurance_score",
+    "race_prediction",
+    "sleep",
+    "uds",
+    "acute_training_load",
+    "training_readiness",
+    "vo2max",
+    "hrv",
+    "training_history",
+}
 DOCUMENT_NAMES = ("START_HERE.md", "DATASET_INVENTORY.md", "ANALYSIS_HANDOFF.md")
 MACHINE_CONTEXT_NAMES = (
     "ANALYSIS_CONTEXT.json",
@@ -31,11 +43,20 @@ MANIFEST_OUTPUT_PATHS = (
     "audit/hill_score_daily.json",
     "audit/endurance_score_daily.json",
     "audit/lactate_threshold_candidates.json",
+    "audit/race_prediction_daily.json",
+    "audit/sleep_daily.json",
+    "audit/uds_daily.json",
+    "audit/acute_training_load_daily.json",
+    "audit/training_readiness_daily.json",
+    "audit/vo2max_daily.json",
+    "audit/hrv_daily.json",
+    "audit/training_history_daily.json",
     "analysis/activities.csv",
     "analysis/performance_metrics_daily.csv",
     "qa/dataset_summary.json",
     "qa/relationship_summary.json",
     "qa/performance_metrics_summary.json",
+    "qa/daily_metrics_summary.json",
     *DOCUMENT_NAMES,
     *MACHINE_CONTEXT_NAMES,
 )
@@ -105,6 +126,62 @@ DATASET_PRESENTATION = {
         "relationship_status": "not_yet_defined",
         "privacy_classification": "public-safe-metric-fields",
     },
+    "race_prediction_daily": {
+        "role": "source-provided daily race predictions",
+        "authority": "normalized source of truth",
+        "analysis_suitability": "daily condition context; not an Activity fact join",
+        "relationship_status": "not_yet_defined",
+        "privacy_classification": "public-safe-metric-fields",
+    },
+    "sleep_daily": {
+        "role": "bounded daily sleep context",
+        "authority": "normalized source of truth",
+        "analysis_suitability": "daily condition context with explicit review states",
+        "relationship_status": "not_yet_defined",
+        "privacy_classification": "personal-local-metric-fields",
+    },
+    "uds_daily": {
+        "role": "source-provided daily activity and stress context",
+        "authority": "normalized source of truth",
+        "analysis_suitability": "generation-aware daily condition context",
+        "relationship_status": "not_yet_defined",
+        "privacy_classification": "personal-local-metric-fields",
+    },
+    "acute_training_load_daily": {
+        "role": "source-provided acute training-load context",
+        "authority": "normalized source of truth",
+        "analysis_suitability": "daily condition context without recomputation",
+        "relationship_status": "not_yet_defined",
+        "privacy_classification": "personal-local-metric-fields",
+    },
+    "training_readiness_daily": {
+        "role": "source-provided training-readiness context",
+        "authority": "normalized source of truth",
+        "analysis_suitability": "daily condition context without component inference",
+        "relationship_status": "not_yet_defined",
+        "privacy_classification": "personal-local-metric-fields",
+    },
+    "vo2max_daily": {
+        "role": "generation-aware daily VO2Max observations",
+        "authority": "normalized source of truth",
+        "analysis_suitability": "two source series retained without cross-series overwrite",
+        "relationship_status": "not_yet_defined",
+        "privacy_classification": "personal-local-metric-fields",
+    },
+    "hrv_daily": {
+        "role": "bounded FIT-derived HRV reference",
+        "authority": "analysis reference only",
+        "analysis_suitability": "reviewed trend context; not a daily source of truth",
+        "relationship_status": "not_yet_defined",
+        "privacy_classification": "personal-local-metric-fields",
+    },
+    "training_history_daily": {
+        "role": "limited daily training status context",
+        "authority": "normalized source of truth",
+        "analysis_suitability": "two-field public contract only",
+        "relationship_status": "not_yet_defined",
+        "privacy_classification": "personal-local-metric-fields",
+    },
 }
 
 DATASET_FIELDS = {
@@ -166,6 +243,49 @@ DATASET_FIELDS = {
     "endurance_score_daily": (
         "calendar_date", "overall_score", "classification", "feedback_phrase",
     ),
+    "race_prediction_daily": (
+        "calendar_date", "race_time_5k_sec", "race_time_10k_sec",
+        "race_time_half_sec", "race_time_marathon_sec",
+    ),
+    "sleep_daily": (
+        "sleep_day", "sleep_start_local", "sleep_end_local",
+        "sleep_window_minutes_including_awake", "sleep_duration_minutes_ex_awake",
+        "sleep_stage_deep_minutes", "sleep_stage_light_minutes",
+        "sleep_stage_rem_minutes", "sleep_score", "sleep_awake_minutes",
+        "sleep_stage_available_flag", "sleep_score_available_flag",
+        "sleep_normalization_status", "sleep_limitation_type", "sleep_reason_code",
+        "sleep_source_available_for_analysis_flag",
+    ),
+    "uds_daily": (
+        "calendar_date", "steps", "distance_meters", "active_calories",
+        "bmr_calories", "resting_heart_rate", "min_heart_rate", "max_heart_rate",
+        "bb_charged_value", "bb_drained_value", "stress_total_averageStressLevel",
+        "stress_total_maxStressLevel", "stress_total_stressDuration",
+        "stress_total_restDuration", "raw_has_body_battery",
+        "raw_has_all_day_stress", "raw_has_body_battery_feedback",
+    ),
+    "acute_training_load_daily": (
+        "calendar_date", "acwr_percent", "acwr_status",
+        "daily_training_load_acute", "daily_training_load_chronic",
+        "daily_acute_chronic_workload_ratio",
+    ),
+    "training_readiness_daily": (
+        "calendar_date", "training_readiness_score", "training_readiness_level",
+        "training_readiness_recovery_time", "acwr_factor_percent",
+        "stress_history_factor_percent", "hrv_factor_percent",
+        "sleep_history_factor_percent", "training_readiness_acute_load",
+        "training_readiness_hrv_weekly_average", "training_readiness_valid_sleep",
+        "training_readiness_sleep_score",
+    ),
+    "vo2max_daily": (
+        "calendar_date", "vo2max", "vo2max_source_series", "sport",
+        "source_confidence", "max_met", "max_met_category", "calibrated_data",
+    ),
+    "hrv_daily": (
+        "calendar_date", "hrv_value", "semantics_status", "analysis_role",
+        "record_count_for_date", "source_file_count_for_date", "dedupe_status",
+    ),
+    "training_history_daily": ("calendar_date", "training_status"),
 }
 
 DATASET_OPTIONAL_FIELDS = {
@@ -247,6 +367,30 @@ DATASET_NONNULL_FIELDS = {
     ),
     "hill_score_daily": frozenset({"calendar_date", "overall_score"}),
     "endurance_score_daily": frozenset({"calendar_date", "overall_score"}),
+    "race_prediction_daily": frozenset(DATASET_FIELDS["race_prediction_daily"]),
+    "sleep_daily": frozenset(
+        {
+            "sleep_day", "sleep_stage_available_flag", "sleep_score_available_flag",
+            "sleep_normalization_status", "sleep_limitation_type", "sleep_reason_code",
+            "sleep_source_available_for_analysis_flag",
+        }
+    ),
+    "uds_daily": frozenset(
+        {
+            "calendar_date", "raw_has_body_battery", "raw_has_all_day_stress",
+            "raw_has_body_battery_feedback",
+        }
+    ),
+    "acute_training_load_daily": frozenset({"calendar_date"}),
+    "training_readiness_daily": frozenset({"calendar_date"}),
+    "vo2max_daily": frozenset({"calendar_date", "vo2max_source_series"}),
+    "hrv_daily": frozenset(
+        {
+            "calendar_date", "semantics_status", "analysis_role",
+            "record_count_for_date", "source_file_count_for_date", "dedupe_status",
+        }
+    ),
+    "training_history_daily": frozenset({"calendar_date"}),
 }
 
 RELATIONSHIP_CONTRACTS = (
@@ -613,7 +757,7 @@ def _validate_projection_inputs(
             expected_warning_count = 0
             if detected_asset_count == 0:
                 expected_status = "SKIPPED_NOT_PRESENT"
-                if family not in {"hill_score", "endurance_score"}:
+                if family not in QUIET_OPTIONAL_FAMILIES:
                     expected_warning_count += 1
                 if record_count != 0:
                     raise OutputExperienceError(
@@ -646,7 +790,7 @@ def _validate_projection_inputs(
                     f"{family}: non-FIT family cannot contain skipped assets"
                 )
 
-            if family in {"hill_score", "endurance_score"}:
+            if family in QUIET_OPTIONAL_FAMILIES:
                 review_item_count = _non_negative_integer(
                     result.get("review_item_count", 0),
                     f"{family} review item count",
@@ -1099,6 +1243,8 @@ def render_start_here(
             "",
             "Recommended trusted-local activity entry point: `analysis/activities.csv`.",
             "Daily Hill/Endurance context: `analysis/performance_metrics_daily.csv`.",
+            "Other daily condition datasets are separate normalized JSON files listed",
+            "in `DATASET_INVENTORY.md`; they are not Activity fact-table joins.",
             "",
         ]
     )
@@ -1205,6 +1351,15 @@ def render_analysis_handoff(
         "   to activities is not defined, so date-based activity joins are prohibited.",
         "10. Lactate Threshold is candidate/audit-only. Do not treat candidates as a",
         "    stable dataset, convert unconfirmed units, or apply latest-wins.",
+        "11. Race Prediction, Sleep, UDS, Acute Training Load, Training Readiness,",
+        "    VO2Max, HRV, and Training History remain separate daily context. Do not",
+        "    join them to activities by date or infer missing values.",
+        "12. VO2Max source series are retained explicitly. Do not overwrite one series",
+        "    with another or infer equivalence across device generations.",
+        "13. HRV is `analysis_reference_only`, not a daily source of truth. A null HRV",
+        "    value with a review status must remain unresolved.",
+        "14. Approximate generation ranges (2015-2021 and 2022+) are descriptive",
+        "    source context only; they do not authorize automatic field equivalence.",
         "",
         *_relationship_coverage_lines(relationship_summary),
         "## Multi-Session FIT Completeness",
@@ -1262,12 +1417,19 @@ def render_analysis_handoff(
 
 
 def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
-    boolean_fields = {"memo_present", "current", "confirmed", "ambiguous"}
+    boolean_fields = {
+        "memo_present", "current", "confirmed", "ambiguous",
+        "sleep_stage_available_flag", "sleep_score_available_flag",
+        "sleep_source_available_for_analysis_flag", "raw_has_body_battery",
+        "raw_has_all_day_stress", "raw_has_body_battery_feedback",
+        "training_readiness_valid_sleep",
+    }
     integer_fields = {
         "session_ordinal", "lap_ordinal_within_session", "lap_index",
         "record_count", "lap_count", "source_record_index", "match_score",
         "strength_score", "endurance_score", "classification_id",
         "feedback_phrase_id",
+        "record_count_for_date", "source_file_count_for_date",
     }
     numeric_fields = {
         "distance_m", "duration_sec", "avg_hr", "max_hr", "avg_power",
@@ -1279,6 +1441,21 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         "time_delta_seconds", "distance_delta_m", "duration_delta_seconds",
         "start_time_gmt_ms", "duration_ms", "elapsed_duration_ms",
         "moving_duration_ms", "distance_raw_centimeters",
+        "race_time_5k_sec", "race_time_10k_sec", "race_time_half_sec",
+        "race_time_marathon_sec", "sleep_window_minutes_including_awake",
+        "sleep_duration_minutes_ex_awake", "sleep_stage_deep_minutes",
+        "sleep_stage_light_minutes", "sleep_stage_rem_minutes", "sleep_score",
+        "sleep_awake_minutes", "steps", "distance_meters", "active_calories",
+        "bmr_calories", "resting_heart_rate", "min_heart_rate", "max_heart_rate",
+        "bb_charged_value", "bb_drained_value", "stress_total_averageStressLevel",
+        "stress_total_maxStressLevel", "stress_total_stressDuration",
+        "stress_total_restDuration", "acwr_percent", "daily_training_load_acute",
+        "daily_training_load_chronic", "daily_acute_chronic_workload_ratio",
+        "training_readiness_score", "training_readiness_recovery_time",
+        "acwr_factor_percent", "stress_history_factor_percent", "hrv_factor_percent",
+        "sleep_history_factor_percent", "training_readiness_acute_load",
+        "training_readiness_hrv_weekly_average", "training_readiness_sleep_score",
+        "vo2max", "max_met", "calibrated_data", "hrv_value",
     }
     array_fields = {"match_basis"}
     flexible_identifier_fields = {
@@ -1324,8 +1501,12 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         unit = "source_power_value"
     elif dataset in {"hill_score_daily", "endurance_score_daily"} and field != "calendar_date":
         unit = "source_value_or_code"
-    elif field == "calendar_date":
+    elif field in {"calendar_date", "sleep_day"}:
         unit = "ISO-8601-date"
+    elif field.endswith("_minutes") or "minutes_" in field:
+        unit = "minute"
+    elif field.startswith("race_time_") and field.endswith("_sec"):
+        unit = "second"
 
     provenance = (
         "provenance"
@@ -1346,7 +1527,7 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
     )
     privacy = (
         "public_safe"
-        if dataset in {"hill_score_daily", "endurance_score_daily"}
+        if dataset in {"hill_score_daily", "endurance_score_daily", "race_prediction_daily"}
         else
         "restricted_identifier"
         if field.endswith("_key")
@@ -1359,8 +1540,15 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         else "personal"
     )
     notes = (
+        "FIT-derived HRV is analysis_reference_only. Same-date differing values remain unresolved, and this dataset is not a daily source of truth."
+        if dataset == "hrv_daily"
+        else
         "Source-provided daily metric. Missing values are preserved and labels, units, and activity relationships are not inferred."
-        if dataset in {"hill_score_daily", "endurance_score_daily"}
+        if dataset in {
+            "hill_score_daily", "endurance_score_daily", "race_prediction_daily",
+            "sleep_daily", "uds_daily", "acute_training_load_daily",
+            "training_readiness_daily", "vo2max_daily", "training_history_daily",
+        }
         else
         "Source identifiers are preserved as JSON integers or strings; "
         "deterministic fallback identifiers are strings. Compare values only "

@@ -66,6 +66,87 @@
       "keep_last": false
     },
     {
+      "dataset": "race_prediction_daily",
+      "source_family": "DI-Connect-Metrics",
+      "merge_mode": "daily_state_upsert",
+      "record_grain": "calendar_day",
+      "stable_key": ["calendar_date"],
+      "materialization": "source_shaped_json",
+      "conflict_policy": "review_fail_closed",
+      "keep_last": false
+    },
+    {
+      "dataset": "sleep_daily",
+      "source_family": "DI-Connect-Wellness",
+      "merge_mode": "daily_state_upsert",
+      "record_grain": "sleep_day",
+      "stable_key": ["sleep_day"],
+      "materialization": "source_shaped_json",
+      "conflict_policy": "review_fail_closed",
+      "keep_last": false
+    },
+    {
+      "dataset": "uds_daily",
+      "source_family": "DI-Connect-Aggregator",
+      "merge_mode": "daily_state_upsert",
+      "record_grain": "calendar_day",
+      "stable_key": ["calendar_date"],
+      "materialization": "source_shaped_json",
+      "conflict_policy": "review_fail_closed",
+      "keep_last": false
+    },
+    {
+      "dataset": "acute_training_load_daily",
+      "source_family": "DI-Connect-Metrics",
+      "merge_mode": "daily_state_upsert",
+      "record_grain": "calendar_day",
+      "stable_key": ["calendar_date"],
+      "materialization": "source_shaped_json",
+      "conflict_policy": "review_fail_closed",
+      "keep_last": false
+    },
+    {
+      "dataset": "training_readiness_daily",
+      "source_family": "DI-Connect-Metrics",
+      "merge_mode": "daily_state_upsert",
+      "record_grain": "calendar_day",
+      "stable_key": ["calendar_date"],
+      "materialization": "source_shaped_json",
+      "conflict_policy": "review_fail_closed",
+      "keep_last": false
+    },
+    {
+      "dataset": "vo2max_daily",
+      "source_family": "DI-Connect-Metrics",
+      "merge_mode": "daily_state_upsert",
+      "record_grain": "calendar_day",
+      "stable_key": ["calendar_date"],
+      "materialization": "source_shaped_json",
+      "conflict_policy": "review_fail_closed",
+      "keep_last": false,
+      "source_series_required": true
+    },
+    {
+      "dataset": "hrv_daily",
+      "source_family": "DI-Connect-Uploaded-Files",
+      "merge_mode": "regenerate",
+      "record_grain": "calendar_day",
+      "regeneration_source": "fit_blobs",
+      "stable_key": ["calendar_date"],
+      "analysis_role": "analysis_reference_only",
+      "source_of_truth": false
+    },
+    {
+      "dataset": "training_history_daily",
+      "source_family": "DI-Connect-Metrics",
+      "merge_mode": "daily_state_upsert",
+      "record_grain": "calendar_day",
+      "stable_key": ["calendar_date"],
+      "materialization": "source_shaped_json",
+      "conflict_policy": "review_fail_closed",
+      "keep_last": false
+    },
+    {
       "dataset": "lactate_threshold_candidates",
       "source_family": "DI-Connect-Wellness",
       "merge_mode": "immutable_observation_union",
@@ -128,32 +209,7 @@
   ],
   "future_ready_policies": [
     {
-      "dataset": "sleep",
-      "merge_mode": "daily_state_upsert",
-      "public_dataset_status": "not_in_v1.2.0"
-    },
-    {
-      "dataset": "hrv",
-      "merge_mode": "daily_state_upsert",
-      "public_dataset_status": "not_in_v1.2.0"
-    },
-    {
       "dataset": "health_status",
-      "merge_mode": "daily_state_upsert",
-      "public_dataset_status": "not_in_v1.2.0"
-    },
-    {
-      "dataset": "training_readiness",
-      "merge_mode": "daily_state_upsert",
-      "public_dataset_status": "not_in_v1.2.0"
-    },
-    {
-      "dataset": "acute_training_load",
-      "merge_mode": "daily_state_upsert",
-      "public_dataset_status": "not_in_v1.2.0"
-    },
-    {
-      "dataset": "training_history_status",
       "merge_mode": "daily_state_upsert",
       "public_dataset_status": "not_in_v1.2.0"
     }

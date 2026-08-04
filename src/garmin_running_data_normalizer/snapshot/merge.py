@@ -26,9 +26,26 @@ DATASET_ORDER = (
     "personal_records",
     "hill_score_daily",
     "endurance_score_daily",
+    "race_prediction_daily",
+    "sleep_daily",
+    "uds_daily",
+    "acute_training_load_daily",
+    "training_readiness_daily",
+    "vo2max_daily",
+    "training_history_daily",
     "lactate_threshold_candidates",
 )
-DAILY_PERFORMANCE_DATASETS = {"hill_score_daily", "endurance_score_daily"}
+DAILY_FAIL_CLOSED_DATASETS = {
+    "hill_score_daily",
+    "endurance_score_daily",
+    "race_prediction_daily",
+    "sleep_daily",
+    "uds_daily",
+    "acute_training_load_daily",
+    "training_readiness_daily",
+    "vo2max_daily",
+    "training_history_daily",
+}
 SCHEMA_VERSION = "garmin-run-all-output:v1.1"
 APPROVED_INPUT_MAX_FILE_BYTES = ArchiveLimits().max_member_bytes
 
@@ -212,6 +229,111 @@ def _metric_row(dataset: str, row: dict[str, Any]) -> dict[str, Any]:
     return {field: row[field] for field in fields if field in row}
 
 
+def _daily_source_rows(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if isinstance(value, dict):
+        for key in ("data", "items", "records", "values", "summaries", "sleepData"):
+            nested = value.get(key)
+            if isinstance(nested, list):
+                return [item for item in nested if isinstance(item, dict)]
+        return [value]
+    return []
+
+
+def _daily_definition(
+    logical_name: str,
+) -> tuple[str, tuple[str, ...], str | None] | None:
+    name = PurePosixPath(logical_name).name.lower()
+    definitions = (
+        (
+            "runracepredictions",
+            "race_prediction_daily",
+            ("calendarDate", "raceTime5K", "raceTime10K", "raceTimeHalf", "raceTimeMarathon"),
+            None,
+        ),
+        (
+            "sleepdata.json",
+            "sleep_daily",
+            (
+                "calendarDate", "sleepStartTimestampGMT", "sleepEndTimestampGMT",
+                "sleepTimeSeconds", "totalSleepSeconds", "deepSleepSeconds",
+                "lightSleepSeconds", "remSleepSeconds", "awakeSleepSeconds",
+                "sleepScores",
+            ),
+            None,
+        ),
+        (
+            "udsfile",
+            "uds_daily",
+            (
+                "calendarDate", "date", "totalSteps", "steps", "totalDistanceMeters",
+                "distanceMeters", "activeKilocalories", "bmrKilocalories",
+                "restingHeartRate", "minHeartRate", "maxHeartRate", "bodyBattery",
+                "allDayStress", "bodyBatteryFeedback",
+            ),
+            None,
+        ),
+        (
+            "metricsacutetrainingload",
+            "acute_training_load_daily",
+            (
+                "calendarDate", "acwrPercent", "acwrStatus", "dailyTrainingLoadAcute",
+                "dailyTrainingLoadChronic", "dailyAcuteChronicWorkloadRatio",
+            ),
+            None,
+        ),
+        (
+            "trainingreadinessdto",
+            "training_readiness_daily",
+            (
+                "calendarDate", "score", "level", "recoveryTime", "acwrFactorPercent",
+                "stressHistoryFactorPercent", "hrvFactorPercent",
+                "sleepHistoryFactorPercent", "acuteLoad", "hrvWeeklyAverage",
+                "validSleep", "sleepScore",
+            ),
+            None,
+        ),
+        (
+            "activityvo2max",
+            "vo2max_daily",
+            (
+                "calendarDate", "vo2MaxValue", "sport", "maxMet", "maxMetCategory",
+                "calibratedData", "vo2MaxSourceSeries",
+            ),
+            "activity_vo2max_daily",
+        ),
+        (
+            "metricsmaxmetdata",
+            "vo2max_daily",
+            (
+                "calendarDate", "vo2MaxValue", "sport", "maxMet", "maxMetCategory",
+                "calibratedData", "vo2MaxSourceSeries",
+            ),
+            "performance_metrics_daily",
+        ),
+        (
+            "snapshot_vo2max",
+            "vo2max_daily",
+            (
+                "calendarDate", "vo2MaxValue", "sport", "maxMet", "maxMetCategory",
+                "calibratedData", "vo2MaxSourceSeries",
+            ),
+            None,
+        ),
+        (
+            "traininghistory",
+            "training_history_daily",
+            ("calendarDate", "trainingStatus"),
+            None,
+        ),
+    )
+    for marker, dataset, fields, source_series in definitions:
+        if marker in name:
+            return dataset, fields, source_series
+    return None
+
+
 def _lactate_family(logical_name: str) -> str | None:
     name = PurePosixPath(logical_name).name.lower()
     for family, suffix in (
@@ -324,6 +446,25 @@ def _dataset_records(
             result.append(
                 (
                     "endurance_score_daily",
+                    str(index),
+                    record,
+                    None if calendar_date in (None, "") else (calendar_date,),
+                )
+            )
+    elif (definition := _daily_definition(logical_name)) is not None:
+        dataset, fields, source_series = definition
+        for index, row in enumerate(_daily_source_rows(payload)):
+            record = {field: row[field] for field in fields if field in row}
+            if source_series is not None and "vo2MaxSourceSeries" not in record:
+                record["vo2MaxSourceSeries"] = source_series
+            calendar_date = daily_calendar_date(
+                record.get("calendarDate") or record.get("date")
+            )
+            if calendar_date is not None:
+                record["calendarDate"] = calendar_date
+            result.append(
+                (
+                    dataset,
                     str(index),
                     record,
                     None if calendar_date in (None, "") else (calendar_date,),
@@ -492,7 +633,7 @@ def _merge_dataset(
             ),
         )
         distinct_signatures = {_stable_json(item["record"]) for item in ordered}
-        if dataset in DAILY_PERFORMANCE_DATASETS and len(distinct_signatures) > 1:
+        if dataset in DAILY_FAIL_CLOSED_DATASETS and len(distinct_signatures) > 1:
             conflicts.append(
                 {
                     "severity": "stop",
@@ -882,7 +1023,9 @@ def build_approved_input(
         fitness = approved / "DI-Connect-Fitness"
         uploaded = approved / "DI-Connect-Uploaded-Files"
         metrics = approved / "DI-Connect-Metrics"
-        lactate_source = approved / "DI-Connect-Wellness"
+        sleep_source = approved / "DI-Connect-Wellness"
+        aggregator = approved / "DI-Connect-Aggregator"
+        lactate_source = sleep_source
         activity_rows = [
             item["raw_record"] for item in canonical_by_dataset["activities"]
         ]
@@ -923,6 +1066,25 @@ def build_approved_input(
         ]
         if endurance_rows:
             _write_json(metrics / "snapshot_EnduranceScore.json", endurance_rows)
+        daily_materialization = {
+            "race_prediction_daily": (metrics, "RunRacePredictions_snapshot.json"),
+            "sleep_daily": (sleep_source, "snapshot_sleepData.json"),
+            "uds_daily": (aggregator, "UDSFile_snapshot.json"),
+            "acute_training_load_daily": (
+                metrics,
+                "MetricsAcuteTrainingLoad_snapshot.json",
+            ),
+            "training_readiness_daily": (
+                metrics,
+                "TrainingReadinessDTO_snapshot.json",
+            ),
+            "vo2max_daily": (metrics, "snapshot_vo2max.json"),
+            "training_history_daily": (metrics, "TrainingHistory_snapshot.json"),
+        }
+        for dataset, (directory, filename) in daily_materialization.items():
+            rows = [item["raw_record"] for item in canonical_by_dataset[dataset]]
+            if rows:
+                _write_json(directory / filename, rows)
         lactate_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for item in canonical_by_dataset["lactate_threshold_candidates"]:
             raw_record = item["raw_record"]
