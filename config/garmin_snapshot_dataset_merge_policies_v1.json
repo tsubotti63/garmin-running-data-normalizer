@@ -46,6 +46,38 @@
       "materialization": "source_shaped_json"
     },
     {
+      "dataset": "hill_score_daily",
+      "source_family": "DI-Connect-Metrics",
+      "merge_mode": "daily_state_upsert",
+      "record_grain": "calendar_day",
+      "stable_key": ["calendar_date"],
+      "materialization": "source_shaped_json",
+      "conflict_policy": "review_fail_closed",
+      "keep_last": false
+    },
+    {
+      "dataset": "endurance_score_daily",
+      "source_family": "DI-Connect-Metrics",
+      "merge_mode": "daily_state_upsert",
+      "record_grain": "calendar_day",
+      "stable_key": ["calendar_date"],
+      "materialization": "source_shaped_json",
+      "conflict_policy": "review_fail_closed",
+      "keep_last": false
+    },
+    {
+      "dataset": "lactate_threshold_candidates",
+      "source_family": "DI-Connect-Wellness",
+      "merge_mode": "immutable_observation_union",
+      "record_grain": "threshold_observation_candidate",
+      "identity_anchor": "observation_timestamp",
+      "machine_stable_key_status": "PRODUCT_DECISION_REQUIRED",
+      "candidate_identity": "internal_content_fingerprint_not_public_stable_key",
+      "materialization": "source_shaped_candidate_json",
+      "canonical_public_output": false,
+      "latest_wins": false
+    },
+    {
       "dataset": "fit_blobs",
       "merge_mode": "immutable_blob_union",
       "record_grain": "unique_fit_binary",
@@ -127,5 +159,5 @@
     }
   ],
   "registry_version": "garmin_public_snapshot_dataset_merge_policies:v1.0",
-  "target_release": "1.2.0"
+  "target_release": "1.3.0-candidate"
 }

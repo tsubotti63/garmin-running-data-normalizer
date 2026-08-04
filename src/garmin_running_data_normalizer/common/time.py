@@ -57,6 +57,8 @@ def daily_calendar_date(value: Any) -> str | None:
     """Normalize Garmin daily labels without shifting epoch-millisecond dates."""
     if value in (None, ""):
         return None
+    if isinstance(value, bool):
+        return None
     if isinstance(value, (int, float)):
         try:
             return datetime.fromtimestamp(float(value) / 1000.0, timezone.utc).date().isoformat()

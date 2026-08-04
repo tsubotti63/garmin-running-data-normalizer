@@ -28,9 +28,14 @@ MANIFEST_OUTPUT_PATHS = (
     *DATASET_PATHS.values(),
     "audit/fit_audit.json",
     "audit/activity_fit_linkage.json",
+    "audit/hill_score_daily.json",
+    "audit/endurance_score_daily.json",
+    "audit/lactate_threshold_candidates.json",
     "analysis/activities.csv",
+    "analysis/performance_metrics_daily.csv",
     "qa/dataset_summary.json",
     "qa/relationship_summary.json",
+    "qa/performance_metrics_summary.json",
     *DOCUMENT_NAMES,
     *MACHINE_CONTEXT_NAMES,
 )
@@ -86,6 +91,20 @@ DATASET_PRESENTATION = {
         "relationship_status": "explicit",
         "privacy_classification": "identifier-bearing-local",
     },
+    "hill_score_daily": {
+        "role": "source-provided daily hill performance context",
+        "authority": "normalized source of truth",
+        "analysis_suitability": "daily context with raw source codes; no label inference",
+        "relationship_status": "not_yet_defined",
+        "privacy_classification": "public-safe-metric-fields",
+    },
+    "endurance_score_daily": {
+        "role": "source-provided daily endurance performance context",
+        "authority": "normalized source of truth",
+        "analysis_suitability": "daily context with raw source codes; no label inference",
+        "relationship_status": "not_yet_defined",
+        "privacy_classification": "public-safe-metric-fields",
+    },
 }
 
 DATASET_FIELDS = {
@@ -139,6 +158,13 @@ DATASET_FIELDS = {
         "duration_delta_seconds", "activity_source_path",
         "activity_source_sha256", "fit_source_path", "fit_source_sha256",
         "source_path", "source_sha256",
+    ),
+    "hill_score_daily": (
+        "calendar_date", "overall_score", "strength_score", "endurance_score",
+        "classification_id", "feedback_phrase_id",
+    ),
+    "endurance_score_daily": (
+        "calendar_date", "overall_score", "classification", "feedback_phrase",
     ),
 }
 
@@ -219,6 +245,8 @@ DATASET_NONNULL_FIELDS = {
             "duration_delta_seconds",
         }
     ),
+    "hill_score_daily": frozenset({"calendar_date", "overall_score"}),
+    "endurance_score_daily": frozenset({"calendar_date", "overall_score"}),
 }
 
 RELATIONSHIP_CONTRACTS = (
@@ -585,7 +613,8 @@ def _validate_projection_inputs(
             expected_warning_count = 0
             if detected_asset_count == 0:
                 expected_status = "SKIPPED_NOT_PRESENT"
-                expected_warning_count += 1
+                if family not in {"hill_score", "endurance_score"}:
+                    expected_warning_count += 1
                 if record_count != 0:
                     raise OutputExperienceError(
                         f"{family}: absent family cannot contain normalized records"
@@ -616,6 +645,14 @@ def _validate_projection_inputs(
                 raise OutputExperienceError(
                     f"{family}: non-FIT family cannot contain skipped assets"
                 )
+
+            if family in {"hill_score", "endurance_score"}:
+                review_item_count = _non_negative_integer(
+                    result.get("review_item_count", 0),
+                    f"{family} review item count",
+                )
+                if review_item_count:
+                    expected_warning_count += 1
 
         if status != expected_status:
             raise OutputExperienceError(
@@ -990,6 +1027,10 @@ def render_dataset_inventory(
             "  timestamp proximity.",
             "- Required/optional input behavior remains available in `run_manifest.json`",
             "  and `run_summary.json`; an absent optional family is not a claim of no data.",
+            "- Hill and Endurance are standalone daily observations. Their activity",
+            "  relationship is `not_yet_defined`; do not join them to activities by date.",
+            "- Lactate Threshold remains candidate/audit-only until Product approves a",
+            "  machine stable key and the remaining field authority gates.",
             "",
         ]
     )
@@ -1056,7 +1097,8 @@ def render_start_here(
             "6. Use QA or audit evidence when a warning, partial result, or validation",
             "   question affects the analysis.",
             "",
-            "Recommended trusted-local analysis entry point: `analysis/activities.csv`.",
+            "Recommended trusted-local activity entry point: `analysis/activities.csv`.",
+            "Daily Hill/Endurance context: `analysis/performance_metrics_daily.csv`.",
             "",
         ]
     )
@@ -1065,6 +1107,24 @@ def render_start_here(
     lines.extend(_path_list("Audit Evidence", audit_paths))
     lines.extend(_relationship_coverage_lines(relationship_summary))
     lines.extend(_snapshot_lifecycle_lines(summary))
+    candidate = summary.get("candidate_features", {})
+    if isinstance(candidate, Mapping) and isinstance(
+        candidate.get("lactate_threshold"), Mapping
+    ):
+        lactate = candidate["lactate_threshold"]
+        lines.extend(
+            [
+                "## Lactate Threshold Candidate Boundary",
+                "",
+                f"- Status: {_code(lactate.get('status'))}",
+                f"- Candidate observations: {lactate.get('candidate_count', 0)}",
+                "- Stable public promotion: No",
+                "- Machine stable key: `PRODUCT_DECISION_REQUIRED`",
+                "- Audit: `audit/lactate_threshold_candidates.json`",
+                "- Units and source timezone remain unconfirmed; do not convert or infer them.",
+                "",
+            ]
+        )
     lines.extend(
         [
             "## Relationship Safety",
@@ -1123,6 +1183,7 @@ def render_analysis_handoff(
         "- `ANALYSIS_CONTEXT.json`",
         "- `SCHEMA_CATALOG.json`",
         "- `analysis/activities.csv`",
+        "- `analysis/performance_metrics_daily.csv`",
         "- `run_summary.json`",
         "",
         "Use normalized JSON, relationship links, QA, or audit files only when the",
@@ -1140,6 +1201,10 @@ def render_analysis_handoff(
         "7. Preserve and disclose warnings or partial FIT status.",
         "8. Ask for an additional approved file when the supplied artifacts cannot",
         "   answer the question; do not invent source fields or context.",
+        "9. Treat Hill and Endurance as standalone daily context. Their relationship",
+        "   to activities is not defined, so date-based activity joins are prohibited.",
+        "10. Lactate Threshold is candidate/audit-only. Do not treat candidates as a",
+        "    stable dataset, convert unconfirmed units, or apply latest-wins.",
         "",
         *_relationship_coverage_lines(relationship_summary),
         "## Multi-Session FIT Completeness",
@@ -1201,6 +1266,8 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
     integer_fields = {
         "session_ordinal", "lap_ordinal_within_session", "lap_index",
         "record_count", "lap_count", "source_record_index", "match_score",
+        "strength_score", "endurance_score", "classification_id",
+        "feedback_phrase_id",
     }
     numeric_fields = {
         "distance_m", "duration_sec", "avg_hr", "max_hr", "avg_power",
@@ -1220,7 +1287,13 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         "personal_record_id",
     }
     flexible_number_string_fields = {"start_time_local_raw"}
-    if field in boolean_fields:
+    if dataset == "hill_score_daily" and field == "overall_score":
+        logical_type = "integer"
+    elif dataset == "endurance_score_daily" and field in {
+        "overall_score", "classification", "feedback_phrase"
+    }:
+        logical_type = "number"
+    elif field in boolean_fields:
         logical_type = "boolean"
     elif field in integer_fields:
         logical_type = "integer"
@@ -1249,6 +1322,10 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         unit = "beats_per_minute"
     elif "power" in field:
         unit = "source_power_value"
+    elif dataset in {"hill_score_daily", "endurance_score_daily"} and field != "calendar_date":
+        unit = "source_value_or_code"
+    elif field == "calendar_date":
+        unit = "ISO-8601-date"
 
     provenance = (
         "provenance"
@@ -1268,6 +1345,9 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         else "source"
     )
     privacy = (
+        "public_safe"
+        if dataset in {"hill_score_daily", "endurance_score_daily"}
+        else
         "restricted_identifier"
         if field.endswith("_key")
         or field.endswith("_id")
@@ -1279,6 +1359,9 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         else "personal"
     )
     notes = (
+        "Source-provided daily metric. Missing values are preserved and labels, units, and activity relationships are not inferred."
+        if dataset in {"hill_score_daily", "endurance_score_daily"}
+        else
         "Source identifiers are preserved as JSON integers or strings; "
         "deterministic fallback identifiers are strings. Compare values only "
         "after applying the declared explicit relationship contract."
@@ -1504,6 +1587,13 @@ def build_analysis_context(
         "run_all_version": RUN_ALL_VERSION,
         "run_status": summary["status"],
         "analysis_entry_point": "analysis/activities.csv",
+        "additional_analysis_entry_points": [
+            {
+                "path": "analysis/performance_metrics_daily.csv",
+                "role": "standalone daily Hill and Endurance context",
+                "activity_relationship": "not_yet_defined",
+            }
+        ],
         "privacy_mode": "local_trusted_full",
         "datasets": [
             {
@@ -1528,6 +1618,7 @@ def build_analysis_context(
             "medical_or_coaching_interpretation",
         ],
         "warnings": summary.get("warnings", []),
+        "candidate_features": summary.get("candidate_features", {}),
     }
     if isinstance(summary.get("snapshot_lifecycle"), Mapping):
         context["snapshot_lifecycle"] = {

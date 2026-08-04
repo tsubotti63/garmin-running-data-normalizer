@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any
 
 ALLOWED_MERGE_MODES = {
-    "entity_upsert", "temporal_event_union", "immutable_blob_union", "preserve_only",
+    "entity_upsert", "temporal_event_union", "immutable_blob_union",
+    "daily_state_upsert", "preserve_only",
 }
 ALLOWED_REGISTRY_STATUSES = {
     "local_implementation_not_publication_ready",
