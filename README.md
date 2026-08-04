@@ -106,6 +106,28 @@ See [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-norma
 [Dataset Relationships](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/dataset_relationships.md),
 and [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md).
 
+### Evidence-backed observation contracts
+
+The v1.3.0 contract documents **17 datasets**, **212 fields**, and **6 explicit
+relationships**. Five Wellness and Performance datasets use source-backed
+observation grains so multiple source observations are not collapsed by an
+unsupported latest-wins rule. A bounded private aggregate check found **0
+divergent Stable Grain keys** across those five datasets; exact key composition,
+private records, identifiers, paths, and validation artifacts remain private.
+Source-backed grain is a Product contract, not a Garmin-official semantic
+guarantee.
+
+The reviewed release source passed **199 pytest checks**, **170 unittest
+checks**, **44/44 deterministic cases**, Ubuntu and Windows CI, and build,
+wheel, sdist, installed-package, and clean-install gates. These results apply
+to the reviewed release scope and CI configurations; they do not imply zero
+defects or universal platform compatibility. The six established relationships
+remain authoritative, while the new Wellness and Performance datasets are
+context-only and do not define direct Activity joins.
+
+Read
+[CS-009: From Daily-Grain Assumptions to Source-Backed Observation Contracts in Garmin Data](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/case_studies/cs-009-from-daily-grain-assumptions-to-source-backed-observation-contracts.md).
+
 ### Built from a runner's own workflow
 
 The project was created by a full-marathon runner who has achieved sub-3:15 and
