@@ -60,14 +60,14 @@ DATASET_TABLE = (
     {"name": "activity_fit_links", "family": "fit", "record_grain": "activity_fit_session_link", "stable_key": ("garmin_activity_key", "fit_session_key"), "required": False},
     {"name": "hill_score_daily", "family": "hill_score", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
     {"name": "endurance_score_daily", "family": "endurance_score", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
-    {"name": "race_prediction_daily", "family": "race_prediction", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
+    {"name": "race_prediction_daily", "family": "race_prediction", "record_grain": "source_observation", "stable_key": ("calendar_date", "observation_timestamp"), "required": False},
     {"name": "sleep_daily", "family": "sleep", "record_grain": "sleep_day", "stable_key": ("sleep_day",), "required": False},
     {"name": "uds_daily", "family": "uds", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
-    {"name": "acute_training_load_daily", "family": "acute_training_load", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
-    {"name": "training_readiness_daily", "family": "training_readiness", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
-    {"name": "vo2max_daily", "family": "vo2max", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
+    {"name": "acute_training_load_daily", "family": "acute_training_load", "record_grain": "source_observation", "stable_key": ("calendar_date", "observation_timestamp"), "required": False},
+    {"name": "training_readiness_daily", "family": "training_readiness", "record_grain": "source_observation", "stable_key": ("calendar_date", "observation_timestamp"), "required": False},
+    {"name": "vo2max_daily", "family": "vo2max", "record_grain": "source_observation", "stable_key": ("calendar_date", "vo2max_source_series", "sport", "observation_timestamp"), "required": False},
     {"name": "hrv_daily", "family": "hrv", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
-    {"name": "training_history_daily", "family": "training_history", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
+    {"name": "training_history_daily", "family": "training_history", "record_grain": "source_observation", "stable_key": ("calendar_date", "observation_timestamp"), "required": False},
 )
 
 FAMILY_ORDER = (
@@ -87,6 +87,15 @@ FAMILY_ORDER = (
     "training_history",
 )
 CANDIDATE_FAMILY_ORDER = ("lactate_threshold",)
+OBSERVATION_GRAIN_DATASETS = frozenset(
+    {
+        "race_prediction_daily",
+        "acute_training_load_daily",
+        "training_readiness_daily",
+        "vo2max_daily",
+        "training_history_daily",
+    }
+)
 DATASET_PATHS = {
     "activities": "normalized/activities.json",
     "gear": "normalized/gear.json",
@@ -319,14 +328,14 @@ def _validate_dataset_table() -> None:
         ),
         "hill_score_daily": ("calendar_day", ("calendar_date",), False),
         "endurance_score_daily": ("calendar_day", ("calendar_date",), False),
-        "race_prediction_daily": ("calendar_day", ("calendar_date",), False),
+        "race_prediction_daily": ("source_observation", ("calendar_date", "observation_timestamp"), False),
         "sleep_daily": ("sleep_day", ("sleep_day",), False),
         "uds_daily": ("calendar_day", ("calendar_date",), False),
-        "acute_training_load_daily": ("calendar_day", ("calendar_date",), False),
-        "training_readiness_daily": ("calendar_day", ("calendar_date",), False),
-        "vo2max_daily": ("calendar_day", ("calendar_date",), False),
+        "acute_training_load_daily": ("source_observation", ("calendar_date", "observation_timestamp"), False),
+        "training_readiness_daily": ("source_observation", ("calendar_date", "observation_timestamp"), False),
+        "vo2max_daily": ("source_observation", ("calendar_date", "vo2max_source_series", "sport", "observation_timestamp"), False),
         "hrv_daily": ("calendar_day", ("calendar_date",), False),
-        "training_history_daily": ("calendar_day", ("calendar_date",), False),
+        "training_history_daily": ("source_observation", ("calendar_date", "observation_timestamp"), False),
     }
     actual = {
         str(item["name"]): (str(item["record_grain"]), tuple(item["stable_key"]), bool(item["required"]))
@@ -622,6 +631,28 @@ def _performance_metrics_csv(
     for row in build_performance_metrics_daily_context(hill_rows, endurance_rows):
         writer.writerow(row)
     return stream.getvalue().encode("utf-8")
+
+
+def _daily_observation_projection(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Describe a non-canonical day-level view without selecting a source row."""
+    counts = Counter(str(row["calendar_date"]) for row in rows)
+    timestamps = sorted(
+        str(row["observation_timestamp"])
+        for row in rows
+        if row.get("observation_timestamp") not in (None, "")
+    )
+    return {
+        "status": "DERIVED_NON_CANONICAL",
+        "selection_rule": None,
+        "source_observations_preserved": True,
+        "calendar_date_count": len(counts),
+        "multiple_observation_date_count": sum(
+            1 for count in counts.values() if count > 1
+        ),
+        "maximum_observation_count_per_date": max(counts.values(), default=0),
+        "first_observation_timestamp": timestamps[0] if timestamps else None,
+        "last_observation_timestamp": timestamps[-1] if timestamps else None,
+    }
 
 
 def _external_safe_pack(
@@ -1011,8 +1042,16 @@ def run_all(
             name: {
                 "record_count": len(records[name]),
                 "audit_status": performance_audit[name]["status"],
-                "stable_key": (
-                    ["sleep_day"] if name == "sleep_daily" else ["calendar_date"]
+                "record_grain": next(
+                    item["record_grain"] for item in DATASET_TABLE if item["name"] == name
+                ),
+                "stable_key": list(
+                    next(item["stable_key"] for item in DATASET_TABLE if item["name"] == name)
+                ),
+                **(
+                    {"daily_projection": _daily_observation_projection(records[name])}
+                    if name in OBSERVATION_GRAIN_DATASETS
+                    else {}
                 ),
             }
             for name in daily_metric_names

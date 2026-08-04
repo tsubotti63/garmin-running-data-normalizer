@@ -74,3 +74,39 @@ def daily_calendar_date(value: Any) -> str | None:
         return datetime.fromisoformat(text.replace("Z", "+00:00")).date().isoformat()
     except ValueError:
         return None
+
+
+def normalize_observation_timestamp(
+    value: Any,
+    *,
+    naive_timezone_semantics: str = "UNCONFIRMED",
+) -> tuple[str | None, str]:
+    """Normalize a source timestamp without inventing unknown timezone semantics.
+
+    Epoch-millisecond values are UTC instants. Offset-aware strings are
+    canonicalized to UTC. Naive ISO strings are retained as naive values unless
+    the source field itself explicitly establishes UTC/GMT semantics.
+    """
+    if value in (None, "") or isinstance(value, bool):
+        return None, "MISSING"
+    if isinstance(value, (int, float)):
+        try:
+            parsed = datetime.fromtimestamp(float(value) / 1000.0, timezone.utc)
+        except (OverflowError, TypeError, ValueError):
+            return None, "INVALID"
+        return parsed.isoformat().replace("+00:00", "Z"), "EPOCH_MILLISECONDS_UTC"
+    try:
+        parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None, "INVALID"
+    if parsed.tzinfo is not None:
+        return (
+            parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "EXPLICIT_OFFSET_UTC_NORMALIZED",
+        )
+    if naive_timezone_semantics == "UTC_SOURCE_FIELD":
+        return (
+            parsed.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
+            "SOURCE_FIELD_NAMED_UTC_OR_GMT",
+        )
+    return parsed.isoformat(), "NAIVE_ISO8601_TIMEZONE_UNCONFIRMED"

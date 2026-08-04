@@ -253,8 +253,10 @@ workspace/run-all/
 
 On the unreleased v1.3 candidate branch, Run-All additionally emits optional
 Hill Score, Endurance Score, Race Prediction, Sleep, UDS, Acute Training Load,
-Training Readiness, VO2Max, HRV-reference, and limited Training History daily
-datasets with aggregate audits. Their normalized paths follow
+Training Readiness, VO2Max, HRV-reference, and limited Training History datasets
+with aggregate audits. Race Prediction, Acute Training Load, Training Readiness,
+VO2Max, and Training History preserve source-observation grain; their day-level
+summary is derived and never selects a canonical row. Their normalized paths follow
 `normalized/<dataset>.json`; `qa/daily_metrics_summary.json` provides the
 cross-family status view. Absence of these optional source families does not
 add a warning. Lactate Threshold is not promoted to a stable normalized

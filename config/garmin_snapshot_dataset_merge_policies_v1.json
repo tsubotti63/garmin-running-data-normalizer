@@ -68,9 +68,9 @@
     {
       "dataset": "race_prediction_daily",
       "source_family": "DI-Connect-Metrics",
-      "merge_mode": "daily_state_upsert",
-      "record_grain": "calendar_day",
-      "stable_key": ["calendar_date"],
+      "merge_mode": "immutable_observation_union",
+      "record_grain": "source_observation",
+      "stable_key": ["calendar_date", "observation_timestamp"],
       "materialization": "source_shaped_json",
       "conflict_policy": "review_fail_closed",
       "keep_last": false
@@ -98,9 +98,9 @@
     {
       "dataset": "acute_training_load_daily",
       "source_family": "DI-Connect-Metrics",
-      "merge_mode": "daily_state_upsert",
-      "record_grain": "calendar_day",
-      "stable_key": ["calendar_date"],
+      "merge_mode": "immutable_observation_union",
+      "record_grain": "source_observation",
+      "stable_key": ["calendar_date", "observation_timestamp"],
       "materialization": "source_shaped_json",
       "conflict_policy": "review_fail_closed",
       "keep_last": false
@@ -108,9 +108,9 @@
     {
       "dataset": "training_readiness_daily",
       "source_family": "DI-Connect-Metrics",
-      "merge_mode": "daily_state_upsert",
-      "record_grain": "calendar_day",
-      "stable_key": ["calendar_date"],
+      "merge_mode": "immutable_observation_union",
+      "record_grain": "source_observation",
+      "stable_key": ["calendar_date", "observation_timestamp"],
       "materialization": "source_shaped_json",
       "conflict_policy": "review_fail_closed",
       "keep_last": false
@@ -118,9 +118,9 @@
     {
       "dataset": "vo2max_daily",
       "source_family": "DI-Connect-Metrics",
-      "merge_mode": "daily_state_upsert",
-      "record_grain": "calendar_day",
-      "stable_key": ["calendar_date"],
+      "merge_mode": "immutable_observation_union",
+      "record_grain": "source_observation",
+      "stable_key": ["calendar_date", "vo2max_source_series", "sport", "observation_timestamp"],
       "materialization": "source_shaped_json",
       "conflict_policy": "review_fail_closed",
       "keep_last": false,
@@ -139,9 +139,9 @@
     {
       "dataset": "training_history_daily",
       "source_family": "DI-Connect-Metrics",
-      "merge_mode": "daily_state_upsert",
-      "record_grain": "calendar_day",
-      "stable_key": ["calendar_date"],
+      "merge_mode": "immutable_observation_union",
+      "record_grain": "source_observation",
+      "stable_key": ["calendar_date", "observation_timestamp"],
       "materialization": "source_shaped_json",
       "conflict_policy": "review_fail_closed",
       "keep_last": false

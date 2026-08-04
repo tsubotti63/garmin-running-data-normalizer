@@ -10,7 +10,7 @@ from typing import Any
 
 ALLOWED_MERGE_MODES = {
     "entity_upsert", "temporal_event_union", "immutable_blob_union",
-    "daily_state_upsert", "preserve_only",
+    "immutable_observation_union", "daily_state_upsert", "preserve_only",
 }
 ALLOWED_REGISTRY_STATUSES = {
     "local_implementation_not_publication_ready",

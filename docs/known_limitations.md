@@ -58,6 +58,12 @@ explicit product boundaries, not hidden fallback behavior.
   Acute load and readiness components are source-provided and are not
   recalculated. VO2Max source-series differences are not automatically
   explained or collapsed.
+- Race Prediction, Acute Training Load, Training Readiness, VO2Max, and Training
+  History preserve each source observation. Their day-level QA view is a
+  non-canonical aggregate; the package does not choose a latest or preferred row.
+- Naive source timestamps are retained with timezone semantics explicitly
+  unconfirmed. Epoch-millisecond timestamps are normalized as UTC, and the
+  Activity VO2Max `timestampGmt` field is treated as UTC by its source-field name.
 - The v1.3 daily datasets are implemented on this feature branch for Product
   review; they are not part of stable v1.2.1. Health Status remains deferred.
 

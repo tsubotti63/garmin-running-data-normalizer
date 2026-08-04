@@ -80,7 +80,7 @@ def normalize_uds(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
         )
     return finalize_daily(
         dataset="uds_daily",
-        key_field="calendar_date",
+        key_fields=("calendar_date",),
         selected_assets=selected,
         source_record_count=len(rows),
         accepted=accepted,

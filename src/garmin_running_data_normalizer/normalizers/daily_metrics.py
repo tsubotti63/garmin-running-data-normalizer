@@ -88,7 +88,7 @@ def stable_json(value: Any) -> str:
 def finalize_daily(
     *,
     dataset: str,
-    key_field: str,
+    key_fields: tuple[str, ...],
     selected_assets: list[DiscoveredAsset],
     source_record_count: int,
     accepted: list[dict[str, Any]],
@@ -96,9 +96,11 @@ def finalize_daily(
     review_on_any_duplicate: bool = False,
     duplicate_review_factory: Callable[[str, list[dict[str, Any]]], dict[str, Any]] | None = None,
 ) -> DailyMetricResult:
-    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    if not key_fields:
+        raise DailyMetricError("daily metric stable key must not be empty")
+    grouped: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
     for row in accepted:
-        grouped[str(row[key_field])].append(row)
+        grouped[tuple(str(row[field]) for field in key_fields)].append(row)
     output: list[dict[str, Any]] = []
     same_value_duplicates = 0
     review_key_count = 0
@@ -109,12 +111,12 @@ def finalize_daily(
         if review_on_any_duplicate and len(rows) > 1:
             if duplicate_review_factory is None:
                 raise DailyMetricError("duplicate review factory is required")
-            output.append(duplicate_review_factory(key, rows))
+            output.append(duplicate_review_factory(key[0], rows))
             review_key_count += 1
             continue
         if len(signatures) > 1:
             raise DailyMetricConflictError(
-                f"{dataset} contains divergent values for one daily stable key"
+                f"{dataset} contains divergent values for one stable key"
             )
         output.append(rows[0])
     review_items = sum(excluded_reasons.values()) + review_key_count
@@ -131,8 +133,8 @@ def finalize_daily(
             "excluded_reason_counts": dict(sorted(excluded_reasons.items())),
             "same_value_duplicate_count": same_value_duplicates,
             "review_key_count": review_key_count,
-            "stable_key": [key_field],
-            "merge_policy": "daily_state_upsert_missing_is_not_delete_conflict_fail_closed",
+            "stable_key": list(key_fields),
+            "merge_policy": "observation_union_missing_is_not_delete_conflict_fail_closed",
             "keep_last": False,
             "carry_forward": False,
             "interpolation": False,

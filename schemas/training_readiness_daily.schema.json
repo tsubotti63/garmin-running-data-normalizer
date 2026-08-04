@@ -1,1 +1,26 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"Training Readiness Daily","description":"Garmin source-provided readiness. HRV factor and weekly-average fields are Garmin-derived, not FIT HRV recomputations.","type":"array","items":{"type":"object","required":["calendar_date","training_readiness_score","training_readiness_level","training_readiness_recovery_time","acwr_factor_percent","stress_history_factor_percent","hrv_factor_percent","sleep_history_factor_percent","training_readiness_acute_load","training_readiness_hrv_weekly_average","training_readiness_valid_sleep","training_readiness_sleep_score"],"properties":{"calendar_date":{"type":"string","format":"date"},"training_readiness_score":{"type":["number","null"]},"training_readiness_level":{"type":["string","null"]},"training_readiness_recovery_time":{"type":["number","null"]},"acwr_factor_percent":{"type":["number","null"]},"stress_history_factor_percent":{"type":["number","null"]},"hrv_factor_percent":{"type":["number","null"]},"sleep_history_factor_percent":{"type":["number","null"]},"training_readiness_acute_load":{"type":["number","null"]},"training_readiness_hrv_weekly_average":{"type":["number","null"]},"training_readiness_valid_sleep":{"type":["boolean","null"]},"training_readiness_sleep_score":{"type":["number","null"]}},"additionalProperties":false}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Training Readiness Source Observations",
+  "description": "Garmin source-provided readiness observations. HRV factor and weekly-average fields are Garmin-derived, not FIT HRV recomputations.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["calendar_date", "observation_timestamp", "training_readiness_score", "training_readiness_level", "training_readiness_recovery_time", "acwr_factor_percent", "stress_history_factor_percent", "hrv_factor_percent", "sleep_history_factor_percent", "training_readiness_acute_load", "training_readiness_hrv_weekly_average", "training_readiness_valid_sleep", "training_readiness_sleep_score"],
+    "properties": {
+      "calendar_date": {"type": "string", "format": "date"},
+      "observation_timestamp": {"type": "string", "description": "Source observation timestamp. Naive source timestamps are preserved without inventing a timezone."},
+      "training_readiness_score": {"type": ["number", "null"]},
+      "training_readiness_level": {"type": ["string", "null"]},
+      "training_readiness_recovery_time": {"type": ["number", "null"]},
+      "acwr_factor_percent": {"type": ["number", "null"]},
+      "stress_history_factor_percent": {"type": ["number", "null"]},
+      "hrv_factor_percent": {"type": ["number", "null"]},
+      "sleep_history_factor_percent": {"type": ["number", "null"]},
+      "training_readiness_acute_load": {"type": ["number", "null"]},
+      "training_readiness_hrv_weekly_average": {"type": ["number", "null"]},
+      "training_readiness_valid_sleep": {"type": ["boolean", "null"]},
+      "training_readiness_sleep_score": {"type": ["number", "null"]}
+    },
+    "additionalProperties": false
+  }
+}

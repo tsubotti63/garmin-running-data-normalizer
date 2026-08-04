@@ -202,14 +202,18 @@ qa/performance_metrics_summary.json
 qa/daily_metrics_summary.json
 ```
 
-The listed normalized daily datasets are optional stable candidates. When their
+The listed normalized datasets are optional stable candidates. When their
 source files are absent, Run-All emits empty normalized arrays and
 `SKIPPED_NOT_PRESENT` family evidence without adding a warning. Detected rows
 with missing or invalid required values remain visible through aggregate audit
-and warning counts. Divergent public values for one daily stable key fail
+and warning counts. Race Prediction, Acute Training Load, Training Readiness,
+VO2Max, and Training History retain one row per source observation and expose
+`observation_timestamp`; no latest-wins or canonical daily-row selection is
+performed. Divergent public values for one stable key fail
 closed; HRV instead emits an unresolved review row with no selected value. The
-public rows intentionally exclude device, account, raw timestamp, and
-source-path fields. Health Status remains deferred.
+public rows intentionally exclude device, account, unapproved raw timestamp,
+and source-path fields. The five observation contracts expose only their
+normalized `observation_timestamp`. Health Status remains deferred.
 
 The Lactate Threshold file is an audit-only candidate catalog. It preserves
 source-family distinctions and explicitly records unconfirmed unit/timezone
@@ -219,7 +223,7 @@ two stable-candidate daily contexts with `hill_` and `endurance_` prefixes and
 does not authorize an Activity date join.
 
 Race Prediction, Sleep, UDS, Acute Training Load, Training Readiness, VO2Max,
-HRV, and Training History remain separate daily context. Their detailed fields,
+HRV, and Training History remain separate context. Their detailed fields,
 generation boundary, source-series behavior, missing-value policy, and
 interpretation limits are defined in [Wellness and Daily Metrics](wellness_metrics.md).
 

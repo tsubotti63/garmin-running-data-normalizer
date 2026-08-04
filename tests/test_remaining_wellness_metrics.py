@@ -44,11 +44,25 @@ def fit_asset(name: str, data: bytes) -> DiscoveredAsset:
 
 class RemainingWellnessMetricsTest(unittest.TestCase):
     def test_race_prediction_allowlist_and_conflict(self) -> None:
-        row = {"calendarDate": "2026-01-01", "raceTime5K": 1000, "raceTime10K": 2100, "raceTimeHalf": 4700, "raceTimeMarathon": 9900, "deviceId": "private"}
+        row = {"calendarDate": "2026-01-01", "timestamp": "2026-01-01T06:00:00", "raceTime5K": 1000, "raceTime10K": 2100, "raceTimeHalf": 4700, "raceTimeMarathon": 9900, "deviceId": "private"}
         result = normalize_race_prediction([json_asset("RunRacePredictions_test.json", [row])])
         self.assertEqual(set(result.records[0]), set(RACE_PREDICTION_FIELDS))
+        self.assertEqual(result.records[0]["observation_timestamp"], "2026-01-01T06:00:00")
         with self.assertRaises(DailyMetricConflictError):
             normalize_race_prediction([json_asset("RunRacePredictions_conflict.json", [row, {**row, "raceTime5K": 1001}])])
+
+    def test_same_day_distinct_observations_are_preserved_and_exact_keys_dedupe(self) -> None:
+        first = {"calendarDate": "2026-01-01", "timestamp": "2026-01-01T06:00:00", "raceTime5K": 1000, "raceTime10K": 2100, "raceTimeHalf": 4700, "raceTimeMarathon": 9900}
+        second = {**first, "timestamp": "2026-01-01T18:00:00", "raceTime5K": 1001}
+        result = normalize_race_prediction(
+            [json_asset("RunRacePredictions_observations.json", [first, second, first])]
+        )
+        self.assertEqual(len(result.records), 2)
+        self.assertEqual(result.audit["same_value_duplicate_count"], 1)
+        self.assertEqual(
+            result.audit["stable_key"],
+            ["calendar_date", "observation_timestamp"],
+        )
 
     def test_sleep_public_contract_and_duplicate_review(self) -> None:
         row = {"calendarDate": "2026-01-02", "sleepStartTimestampGMT": "2026-01-01T14:00:00Z", "sleepEndTimestampGMT": "2026-01-01T22:00:00Z", "sleepTimeSeconds": 27000, "deepSleepSeconds": 3600, "lightSleepSeconds": 18000, "remSleepSeconds": 5400, "awakeSleepSeconds": None, "sleepScores": {"overall": {"value": 80}}, "userProfilePK": "private"}
@@ -67,25 +81,77 @@ class RemainingWellnessMetricsTest(unittest.TestCase):
         self.assertNotIn("hydration_ml", result.records[0])
 
     def test_acute_load_preserves_source_values_without_recalculation(self) -> None:
-        row = {"calendarDate": 1767225600000, "acwrPercent": 90, "acwrStatus": "SYNTHETIC", "dailyTrainingLoadAcute": 9, "dailyTrainingLoadChronic": 10, "dailyAcuteChronicWorkloadRatio": None}
+        row = {"calendarDate": 1767225600000, "timestamp": 1767229200000, "acwrPercent": 90, "acwrStatus": "SYNTHETIC", "dailyTrainingLoadAcute": 9, "dailyTrainingLoadChronic": 10, "dailyAcuteChronicWorkloadRatio": None}
         result = normalize_acute_training_load([json_asset("MetricsAcuteTrainingLoad_test.json", [row])])
         self.assertEqual(set(result.records[0]), set(ACUTE_TRAINING_LOAD_FIELDS))
+        self.assertEqual(result.records[0]["observation_timestamp"], "2026-01-01T01:00:00Z")
         self.assertIsNone(result.records[0]["daily_acute_chronic_workload_ratio"])
 
     def test_training_readiness_hrv_derived_fields_are_source_values(self) -> None:
-        row = {"calendarDate": "2026-01-04", "score": 50, "level": "SYNTHETIC", "recoveryTime": 2, "acwrFactorPercent": 3, "stressHistoryFactorPercent": 4, "hrvFactorPercent": 5, "sleepHistoryFactorPercent": 6, "acuteLoad": 7, "hrvWeeklyAverage": 8, "validSleep": True, "sleepScore": 9, "inputContext": "excluded"}
+        row = {"calendarDate": "2026-01-04", "timestamp": "2026-01-04T07:30:00", "score": 50, "level": "SYNTHETIC", "recoveryTime": 2, "acwrFactorPercent": 3, "stressHistoryFactorPercent": 4, "hrvFactorPercent": 5, "sleepHistoryFactorPercent": 6, "acuteLoad": 7, "hrvWeeklyAverage": 8, "validSleep": True, "sleepScore": 9, "inputContext": "excluded"}
         result = normalize_training_readiness([json_asset("TrainingReadinessDTO_test.json", [row])])
         self.assertEqual(set(result.records[0]), set(TRAINING_READINESS_FIELDS))
         self.assertNotIn("input_context", result.records[0])
 
-    def test_vo2max_unifies_series_and_stops_overlap(self) -> None:
-        old = {"calendarDate": "2022-01-22", "vo2MaxValue": 60, "sport": "RUNNING", "deviceId": "private"}
-        new = {"calendarDate": "2022-01-23", "vo2MaxValue": 61, "sport": "RUNNING", "maxMet": 17, "maxMetCategory": "SYNTHETIC", "calibratedData": 1}
+    def test_observation_grain_duplicate_contracts_for_remaining_families(self) -> None:
+        cases = (
+            (
+                normalize_acute_training_load,
+                "MetricsAcuteTrainingLoad_observations.json",
+                {"calendarDate": "2026-01-04", "timestamp": 1767502800000, "dailyTrainingLoadAcute": 9},
+                {"timestamp": 1767506400000, "dailyTrainingLoadAcute": 10},
+                {"dailyTrainingLoadAcute": 11},
+            ),
+            (
+                normalize_training_readiness,
+                "TrainingReadinessDTO_observations.json",
+                {"calendarDate": "2026-01-05", "timestamp": "2026-01-05T06:00:00", "score": 50},
+                {"timestamp": "2026-01-05T18:00:00", "score": 51},
+                {"score": 52},
+            ),
+            (
+                normalize_training_history,
+                "TrainingHistory_observations.json",
+                {"calendarDate": "2026-01-06", "timestamp": "2026-01-06T06:00:00", "trainingStatus": "PRODUCTIVE", "sport": "RUNNING"},
+                {"timestamp": "2026-01-06T18:00:00", "trainingStatus": "MAINTAINING"},
+                {"trainingStatus": "RECOVERY"},
+            ),
+        )
+        for normalizer, name, first, distinct_changes, conflict_changes in cases:
+            with self.subTest(dataset=name):
+                distinct = {**first, **distinct_changes}
+                result = normalizer([json_asset(name, [first, distinct, first])])
+                self.assertEqual(len(result.records), 2)
+                self.assertEqual(result.audit["same_value_duplicate_count"], 1)
+                with self.assertRaises(DailyMetricConflictError):
+                    normalizer([json_asset(name, [first, {**first, **conflict_changes}])])
+
+    def test_vo2max_preserves_series_observations_and_stops_same_key_conflict(self) -> None:
+        old = {"calendarDate": "2022-01-22", "timestampGmt": "2022-01-22T05:00:00", "activityId": 123, "vo2MaxValue": 60, "sport": "RUNNING", "deviceId": "private"}
+        new = {"calendarDate": "2022-01-22", "updateTimestamp": "2022-01-22T06:00:00", "vo2MaxValue": 61, "sport": "RUNNING", "maxMet": 17, "maxMetCategory": "SYNTHETIC", "calibratedData": 1}
         result = normalize_vo2max([json_asset("ActivityVo2Max_test.json", [old]), json_asset("MetricsMaxMetData_test.json", [new])])
         self.assertEqual([row["vo2max_source_series"] for row in result.records], ["activity_vo2max_daily", "performance_metrics_daily"])
         self.assertTrue(all(set(row) == set(VO2MAX_FIELDS) for row in result.records))
+        self.assertEqual(result.records[0]["source_activity_id"], 123)
+        self.assertEqual(result.records[0]["observation_timestamp"], "2022-01-22T05:00:00Z")
         with self.assertRaises(DailyMetricConflictError):
-            normalize_vo2max([json_asset("ActivityVo2Max_test.json", [old]), json_asset("MetricsMaxMetData_test.json", [{**new, "calendarDate": "2022-01-22"}])])
+            normalize_vo2max([json_asset("ActivityVo2Max_test.json", [old, {**old, "vo2MaxValue": 62}])])
+
+    def test_vo2max_stable_key_dimensions_preserve_observations(self) -> None:
+        base = {"calendarDate": "2022-01-22", "updateTimestamp": "2022-01-22T06:00:00", "vo2MaxValue": 60, "sport": "RUNNING"}
+        rows = [
+            base,
+            {**base, "sport": "CYCLING", "vo2MaxValue": 55},
+            {**base, "updateTimestamp": "2022-01-22T18:00:00", "vo2MaxValue": 61},
+            base,
+        ]
+        result = normalize_vo2max([json_asset("MetricsMaxMetData_dimensions.json", rows)])
+        self.assertEqual(len(result.records), 3)
+        self.assertEqual(result.audit["same_value_duplicate_count"], 1)
+        self.assertEqual(
+            result.audit["stable_key"],
+            ["calendar_date", "vo2max_source_series", "sport", "observation_timestamp"],
+        )
 
     def test_hrv_analysis_reference_conflict_has_no_selected_value(self) -> None:
         timestamp = fit_timestamp("2026-01-05T12:00:00Z")
@@ -100,8 +166,8 @@ class RemainingWellnessMetricsTest(unittest.TestCase):
             "fit_end_jst_date_from_message_370_field_253_timestamp",
         )
 
-    def test_training_history_is_exactly_two_fields(self) -> None:
-        row = {"calendarDate": "2026-01-06", "trainingStatus": "PRODUCTIVE", "fitnessLevelTrend": "excluded", "weeklyTrainingLoadSum": 100}
+    def test_training_history_is_limited_to_approved_observation_fields(self) -> None:
+        row = {"calendarDate": "2026-01-06", "timestamp": "2026-01-06T08:00:00", "trainingStatus": "PRODUCTIVE", "sport": "RUNNING", "fitnessLevelTrend": "excluded", "weeklyTrainingLoadSum": 100}
         result = normalize_training_history([json_asset("TrainingHistory_test.json", [row])])
         self.assertEqual(set(result.records[0]), set(TRAINING_HISTORY_FIELDS))
 
@@ -124,13 +190,13 @@ class RemainingWellnessMetricsTest(unittest.TestCase):
             metrics = input_root / "DI_CONNECT" / "DI-Connect-Metrics"
             metrics.mkdir(parents=True, exist_ok=True)
             fixtures = {
-                "RunRacePredictions_synthetic.json": [{"calendarDate": "2026-01-01", "raceTime5K": 1000, "raceTime10K": 2100, "raceTimeHalf": 4700, "raceTimeMarathon": 9900}],
+                "RunRacePredictions_synthetic.json": [{"calendarDate": "2026-01-01", "timestamp": "2026-01-01T06:00:00", "raceTime5K": 1000, "raceTime10K": 2100, "raceTimeHalf": 4700, "raceTimeMarathon": 9900}],
                 "sleepData.json": [{"calendarDate": "2026-01-02", "sleepStartTimestampGMT": "2026-01-01T14:00:00Z", "sleepEndTimestampGMT": "2026-01-01T22:00:00Z", "sleepTimeSeconds": 27000}],
                 "UDSFile_synthetic.json": [{"calendarDate": "2026-01-03", "totalSteps": 0}],
-                "MetricsAcuteTrainingLoad_synthetic.json": [{"calendarDate": "2026-01-04", "dailyTrainingLoadAcute": 9}],
-                "TrainingReadinessDTO_synthetic.json": [{"calendarDate": "2026-01-05", "score": 50}],
-                "MetricsMaxMetData_synthetic.json": [{"calendarDate": "2026-01-06", "vo2MaxValue": 60}],
-                "TrainingHistory_synthetic.json": [{"calendarDate": "2026-01-07", "trainingStatus": "PRODUCTIVE"}],
+                "MetricsAcuteTrainingLoad_synthetic.json": [{"calendarDate": "2026-01-04", "timestamp": 1767502800000, "dailyTrainingLoadAcute": 9}],
+                "TrainingReadinessDTO_synthetic.json": [{"calendarDate": "2026-01-05", "timestamp": "2026-01-05T06:00:00", "score": 50}],
+                "MetricsMaxMetData_synthetic.json": [{"calendarDate": "2026-01-06", "updateTimestamp": "2026-01-06T06:00:00", "vo2MaxValue": 60, "sport": "RUNNING"}],
+                "TrainingHistory_synthetic.json": [{"calendarDate": "2026-01-07", "timestamp": "2026-01-07T06:00:00", "trainingStatus": "PRODUCTIVE", "sport": "RUNNING"}],
             }
             for name, value in fixtures.items():
                 (metrics / name).write_text(json.dumps(value), encoding="utf-8")
@@ -165,6 +231,9 @@ class RemainingWellnessMetricsTest(unittest.TestCase):
                 )
             )
             self.assertEqual(summary["health_status"]["status"], "DEFERRED_PENDING_SEMANTICS")
+            race_summary = summary["datasets"]["race_prediction_daily"]
+            self.assertEqual(race_summary["record_grain"], "source_observation")
+            self.assertIsNone(race_summary["daily_projection"]["selection_rule"])
 
 
 if __name__ == "__main__":

@@ -288,14 +288,14 @@ locally and never uploads it.
 | Hill Score Daily | Public-safe calendar-day Hill Score state with fail-closed same-day conflict handling | Unreleased P13-M3 candidate; Product review pending |
 | Endurance Score Daily | Public-safe calendar-day Endurance Score state with fail-closed same-day conflict handling | Unreleased P13-M3 candidate; Product review pending |
 | Lactate Threshold | Four-family candidate/audit collection; unit, timezone, stable-key, and promotion gates remain open | Candidate audit only; not a stable dataset |
-| Race Prediction Daily | Garmin-provided 5K/10K/Half/Marathon predictions; no private device fields | Unreleased v1.3 candidate; Product review pending |
+| Race Prediction observations | Garmin-provided 5K/10K/Half/Marathon predictions keyed by date and source timestamp; no private device fields | Unreleased v1.3 candidate; Product review pending |
 | Sleep Daily | `sleepData.json` bounded daily normalization with explicit review states; no filling or inferred awake time | Unreleased v1.3 candidate; Product review pending |
 | UDS Daily | Selected steps, calories, heart rate, Body Battery, total stress, and source-presence flags | Unreleased v1.3 candidate; Product review pending |
-| Acute Training Load Daily | Garmin-provided acute/chronic values and ratio without recomputation | Unreleased v1.3 candidate; Product review pending |
-| Training Readiness Daily | Garmin-provided readiness score, level, recovery, and component context | Unreleased v1.3 candidate; Product review pending |
-| VO2Max Daily | Two source series in one generation-aware schema without cross-series overwrite | Unreleased v1.3 candidate; Product review pending |
+| Acute Training Load observations | Garmin-provided timestamped acute/chronic values and ratio without recomputation or daily row selection | Unreleased v1.3 candidate; Product review pending |
+| Training Readiness observations | Garmin-provided timestamped readiness score, level, recovery, and component context | Unreleased v1.3 candidate; Product review pending |
+| VO2Max observations | Two source series in one generation-aware observation schema without cross-series overwrite | Unreleased v1.3 candidate; Product review pending |
 | HRV Daily | FIT Message 370 / Field 1 bounded daily `analysis_reference_only` output | Unreleased v1.3 candidate; Product review pending |
-| Training History Daily | Limited `calendar_date` + `training_status` contract | Unreleased v1.3 candidate; Product review pending |
+| Training History observations | Limited date, source timestamp, status, and optional sport context | Unreleased v1.3 candidate; Product review pending |
 | Health Status | Exact-suffix `healthStatusData.json` long metrics and fixed daily schema with explicit dedupe/review evidence | No; library level only |
 | Analysis Pack | Deterministic allowlist-only ZIP; optional external-safe profile is limited to month-level activity volume/count and removes identifiers, provenance, exact timestamps, and unneeded health/performance detail | Run-All opt-in |
 

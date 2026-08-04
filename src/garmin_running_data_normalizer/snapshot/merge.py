@@ -11,7 +11,7 @@ from typing import Any
 
 from .. import __version__
 from ..common.identity import garmin_activity_key, stable_hash
-from ..common.time import daily_calendar_date
+from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..intake.archive import ArchiveLimits
 from .policies import CONTRACT_VERSION, REGISTRY_VERSION
 from .store import SnapshotStoreError, load_manifests, load_store, sha256_file
@@ -41,6 +41,13 @@ DAILY_FAIL_CLOSED_DATASETS = {
     "race_prediction_daily",
     "sleep_daily",
     "uds_daily",
+    "acute_training_load_daily",
+    "training_readiness_daily",
+    "vo2max_daily",
+    "training_history_daily",
+}
+SOURCE_OBSERVATION_DATASETS = {
+    "race_prediction_daily",
     "acute_training_load_daily",
     "training_readiness_daily",
     "vo2max_daily",
@@ -249,7 +256,10 @@ def _daily_definition(
         (
             "runracepredictions",
             "race_prediction_daily",
-            ("calendarDate", "raceTime5K", "raceTime10K", "raceTimeHalf", "raceTimeMarathon"),
+            (
+                "calendarDate", "timestamp", "raceTime5K", "raceTime10K",
+                "raceTimeHalf", "raceTimeMarathon",
+            ),
             None,
         ),
         (
@@ -279,7 +289,7 @@ def _daily_definition(
             "acute_training_load_daily",
             (
                 "calendarDate", "acwrPercent", "acwrStatus", "dailyTrainingLoadAcute",
-                "dailyTrainingLoadChronic", "dailyAcuteChronicWorkloadRatio",
+                "dailyTrainingLoadChronic", "dailyAcuteChronicWorkloadRatio", "timestamp",
             ),
             None,
         ),
@@ -290,7 +300,7 @@ def _daily_definition(
                 "calendarDate", "score", "level", "recoveryTime", "acwrFactorPercent",
                 "stressHistoryFactorPercent", "hrvFactorPercent",
                 "sleepHistoryFactorPercent", "acuteLoad", "hrvWeeklyAverage",
-                "validSleep", "sleepScore",
+                "validSleep", "sleepScore", "timestamp",
             ),
             None,
         ),
@@ -299,7 +309,8 @@ def _daily_definition(
             "vo2max_daily",
             (
                 "calendarDate", "vo2MaxValue", "sport", "maxMet", "maxMetCategory",
-                "calibratedData", "vo2MaxSourceSeries",
+                "calibratedData", "vo2MaxSourceSeries", "timestampGmt",
+                "observationTimestamp", "activityId",
             ),
             "activity_vo2max_daily",
         ),
@@ -308,7 +319,8 @@ def _daily_definition(
             "vo2max_daily",
             (
                 "calendarDate", "vo2MaxValue", "sport", "maxMet", "maxMetCategory",
-                "calibratedData", "vo2MaxSourceSeries",
+                "calibratedData", "vo2MaxSourceSeries", "updateTimestamp",
+                "observationTimestamp",
             ),
             "performance_metrics_daily",
         ),
@@ -317,14 +329,15 @@ def _daily_definition(
             "vo2max_daily",
             (
                 "calendarDate", "vo2MaxValue", "sport", "maxMet", "maxMetCategory",
-                "calibratedData", "vo2MaxSourceSeries",
+                "calibratedData", "vo2MaxSourceSeries", "timestampGmt",
+                "updateTimestamp", "observationTimestamp", "activityId",
             ),
             None,
         ),
         (
             "traininghistory",
             "training_history_daily",
-            ("calendarDate", "trainingStatus"),
+            ("calendarDate", "timestamp", "trainingStatus", "sport"),
             None,
         ),
     )
@@ -332,6 +345,49 @@ def _daily_definition(
         if marker in name:
             return dataset, fields, source_series
     return None
+
+
+def _daily_raw_key(
+    dataset: str,
+    record: dict[str, Any],
+    source_series: str | None,
+) -> tuple[Any, ...] | None:
+    calendar_date = daily_calendar_date(
+        record.get("calendarDate") or record.get("date")
+    )
+    if calendar_date in (None, ""):
+        return None
+    if dataset not in SOURCE_OBSERVATION_DATASETS:
+        return (calendar_date,)
+
+    series = source_series or record.get("vo2MaxSourceSeries")
+    if dataset == "vo2max_daily":
+        if series == "activity_vo2max_daily":
+            raw_timestamp = record.get("timestampGmt")
+            semantics = "UTC_SOURCE_FIELD"
+        else:
+            raw_timestamp = record.get("updateTimestamp")
+            semantics = "UNCONFIRMED"
+        if raw_timestamp in (None, ""):
+            raw_timestamp = record.get("observationTimestamp")
+            semantics = "UNCONFIRMED"
+        observation_timestamp, _ = normalize_observation_timestamp(
+            raw_timestamp,
+            naive_timezone_semantics=semantics,
+        )
+        sport = record.get("sport")
+        if series in (None, "") or sport in (None, "") or observation_timestamp is None:
+            return None
+        return (calendar_date, series, sport, observation_timestamp)
+
+    observation_timestamp, _ = normalize_observation_timestamp(record.get("timestamp"))
+    if observation_timestamp is None:
+        observation_timestamp, _ = normalize_observation_timestamp(
+            record.get("observationTimestamp")
+        )
+    if observation_timestamp is None:
+        return None
+    return (calendar_date, observation_timestamp)
 
 
 def _lactate_family(logical_name: str) -> str | None:
@@ -457,17 +513,16 @@ def _dataset_records(
             record = {field: row[field] for field in fields if field in row}
             if source_series is not None and "vo2MaxSourceSeries" not in record:
                 record["vo2MaxSourceSeries"] = source_series
-            calendar_date = daily_calendar_date(
-                record.get("calendarDate") or record.get("date")
-            )
+            calendar_date = daily_calendar_date(record.get("calendarDate") or record.get("date"))
             if calendar_date is not None:
                 record["calendarDate"] = calendar_date
+            raw_key = _daily_raw_key(dataset, record, source_series)
             result.append(
                 (
                     dataset,
                     str(index),
                     record,
-                    None if calendar_date in (None, "") else (calendar_date,),
+                    raw_key,
                 )
             )
     else:
@@ -637,7 +692,7 @@ def _merge_dataset(
             conflicts.append(
                 {
                     "severity": "stop",
-                    "conflict_type": "same_daily_key_different_public_value",
+                    "conflict_type": "same_stable_key_different_public_value",
                     "dataset": dataset,
                     "canonical_key": key,
                 }

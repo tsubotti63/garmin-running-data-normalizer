@@ -309,7 +309,7 @@ def normalize_sleep_daily_assets(
         )
     return finalize_daily(
         dataset="sleep_daily",
-        key_field="sleep_day",
+        key_fields=("sleep_day",),
         selected_assets=selected,
         source_record_count=len(source_rows),
         accepted=accepted,

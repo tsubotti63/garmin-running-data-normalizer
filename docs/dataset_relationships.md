@@ -47,14 +47,14 @@ Training History
 | `normalized/activity_fit_links.json` | `normalized/fit_sessions.json` | `explicit` | `fit_session_key` | one-to-one within eligible population | link rows are mutual unique evidence-qualified matches |
 | `normalized/hill_score_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | consume as standalone daily context; matching calendar dates do not authorize a join |
 | `normalized/endurance_score_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | consume as standalone daily context; matching calendar dates do not authorize a join |
-| `normalized/race_prediction_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | Garmin prediction context is not a measured Activity fact |
+| `normalized/race_prediction_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | source-observation identity does not make prediction context a measured Activity fact |
 | `normalized/sleep_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | `sleep_day` does not authorize an Activity date join |
 | `normalized/uds_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | generation-aware condition context only |
-| `normalized/acute_training_load_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | source-provided daily context; no recomputed relationship |
-| `normalized/training_readiness_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | readiness components remain a separate fact |
-| `normalized/vo2max_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | source-series labels do not establish an Activity relationship |
+| `normalized/acute_training_load_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | timestamped source context; no recomputed relationship |
+| `normalized/training_readiness_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | timestamped readiness observations remain separate facts |
+| `normalized/vo2max_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | source series, sport, timestamp, and supplemental source Activity ID do not establish an Activity relationship |
 | `normalized/hrv_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | analysis reference only; same-day conflict is not a join candidate |
-| `normalized/training_history_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | limited status context only |
+| `normalized/training_history_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | limited timestamped status context only |
 
 ## Activity/FIT eligibility contract
 

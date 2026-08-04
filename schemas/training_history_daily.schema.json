@@ -1,1 +1,17 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"Training History Daily Limited","description":"Limited public contract containing only source-present calendar date and Garmin training status.","type":"array","items":{"type":"object","required":["calendar_date","training_status"],"properties":{"calendar_date":{"type":"string","format":"date"},"training_status":{"type":"string"}},"additionalProperties":false}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Training History Source Observations",
+  "description": "Limited public source-observation contract containing date, timestamp, Garmin training status, and optional sport context.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["calendar_date", "observation_timestamp", "training_status", "sport"],
+    "properties": {
+      "calendar_date": {"type": "string", "format": "date"},
+      "observation_timestamp": {"type": "string", "description": "Source observation timestamp. Naive source timestamps are preserved without inventing a timezone."},
+      "training_status": {"type": "string"},
+      "sport": {"type": ["string", "null"], "description": "Optional source context; not part of the stable key."}
+    },
+    "additionalProperties": false
+  }
+}

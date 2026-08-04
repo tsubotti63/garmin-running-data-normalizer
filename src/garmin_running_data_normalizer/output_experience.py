@@ -127,9 +127,9 @@ DATASET_PRESENTATION = {
         "privacy_classification": "public-safe-metric-fields",
     },
     "race_prediction_daily": {
-        "role": "source-provided daily race predictions",
+        "role": "source-provided race-prediction observations",
         "authority": "normalized source of truth",
-        "analysis_suitability": "daily condition context; not an Activity fact join",
+        "analysis_suitability": "observation context with a non-canonical derived daily view; not an Activity fact join",
         "relationship_status": "not_yet_defined",
         "privacy_classification": "public-safe-metric-fields",
     },
@@ -148,21 +148,21 @@ DATASET_PRESENTATION = {
         "privacy_classification": "personal-local-metric-fields",
     },
     "acute_training_load_daily": {
-        "role": "source-provided acute training-load context",
+        "role": "source-provided acute training-load observations",
         "authority": "normalized source of truth",
-        "analysis_suitability": "daily condition context without recomputation",
+        "analysis_suitability": "observation context without recomputation or daily row selection",
         "relationship_status": "not_yet_defined",
         "privacy_classification": "personal-local-metric-fields",
     },
     "training_readiness_daily": {
-        "role": "source-provided training-readiness context",
+        "role": "source-provided training-readiness observations",
         "authority": "normalized source of truth",
-        "analysis_suitability": "daily condition context without component inference",
+        "analysis_suitability": "observation context without component inference or daily row selection",
         "relationship_status": "not_yet_defined",
         "privacy_classification": "personal-local-metric-fields",
     },
     "vo2max_daily": {
-        "role": "generation-aware daily VO2Max observations",
+        "role": "generation-aware VO2Max source observations",
         "authority": "normalized source of truth",
         "analysis_suitability": "two source series retained without cross-series overwrite",
         "relationship_status": "not_yet_defined",
@@ -176,9 +176,9 @@ DATASET_PRESENTATION = {
         "privacy_classification": "personal-local-metric-fields",
     },
     "training_history_daily": {
-        "role": "limited daily training status context",
+        "role": "limited training-status source observations",
         "authority": "normalized source of truth",
-        "analysis_suitability": "two-field public contract only",
+        "analysis_suitability": "date, timestamp, status, and optional sport context only",
         "relationship_status": "not_yet_defined",
         "privacy_classification": "personal-local-metric-fields",
     },
@@ -244,7 +244,7 @@ DATASET_FIELDS = {
         "calendar_date", "overall_score", "classification", "feedback_phrase",
     ),
     "race_prediction_daily": (
-        "calendar_date", "race_time_5k_sec", "race_time_10k_sec",
+        "calendar_date", "observation_timestamp", "race_time_5k_sec", "race_time_10k_sec",
         "race_time_half_sec", "race_time_marathon_sec",
     ),
     "sleep_daily": (
@@ -265,12 +265,12 @@ DATASET_FIELDS = {
         "raw_has_all_day_stress", "raw_has_body_battery_feedback",
     ),
     "acute_training_load_daily": (
-        "calendar_date", "acwr_percent", "acwr_status",
+        "calendar_date", "observation_timestamp", "acwr_percent", "acwr_status",
         "daily_training_load_acute", "daily_training_load_chronic",
         "daily_acute_chronic_workload_ratio",
     ),
     "training_readiness_daily": (
-        "calendar_date", "training_readiness_score", "training_readiness_level",
+        "calendar_date", "observation_timestamp", "training_readiness_score", "training_readiness_level",
         "training_readiness_recovery_time", "acwr_factor_percent",
         "stress_history_factor_percent", "hrv_factor_percent",
         "sleep_history_factor_percent", "training_readiness_acute_load",
@@ -278,14 +278,17 @@ DATASET_FIELDS = {
         "training_readiness_sleep_score",
     ),
     "vo2max_daily": (
-        "calendar_date", "vo2max", "vo2max_source_series", "sport",
+        "calendar_date", "observation_timestamp", "vo2max", "vo2max_source_series", "sport",
+        "source_activity_id",
         "source_confidence", "max_met", "max_met_category", "calibrated_data",
     ),
     "hrv_daily": (
         "calendar_date", "hrv_value", "semantics_status", "analysis_role",
         "record_count_for_date", "source_file_count_for_date", "dedupe_status",
     ),
-    "training_history_daily": ("calendar_date", "training_status"),
+    "training_history_daily": (
+        "calendar_date", "observation_timestamp", "training_status", "sport",
+    ),
 }
 
 DATASET_OPTIONAL_FIELDS = {
@@ -381,16 +384,20 @@ DATASET_NONNULL_FIELDS = {
             "raw_has_body_battery_feedback",
         }
     ),
-    "acute_training_load_daily": frozenset({"calendar_date"}),
-    "training_readiness_daily": frozenset({"calendar_date"}),
-    "vo2max_daily": frozenset({"calendar_date", "vo2max_source_series"}),
+    "acute_training_load_daily": frozenset({"calendar_date", "observation_timestamp"}),
+    "training_readiness_daily": frozenset({"calendar_date", "observation_timestamp"}),
+    "vo2max_daily": frozenset(
+        {"calendar_date", "observation_timestamp", "vo2max", "vo2max_source_series", "sport"}
+    ),
     "hrv_daily": frozenset(
         {
             "calendar_date", "semantics_status", "analysis_role",
             "record_count_for_date", "source_file_count_for_date", "dedupe_status",
         }
     ),
-    "training_history_daily": frozenset({"calendar_date"}),
+    "training_history_daily": frozenset(
+        {"calendar_date", "observation_timestamp", "training_status"}
+    ),
 }
 
 RELATIONSHIP_CONTRACTS = (
@@ -1430,6 +1437,7 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         "strength_score", "endurance_score", "classification_id",
         "feedback_phrase_id",
         "record_count_for_date", "source_file_count_for_date",
+        "source_activity_id",
     }
     numeric_fields = {
         "distance_m", "duration_sec", "avg_hr", "max_hr", "avg_power",
@@ -1503,6 +1511,8 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         unit = "source_value_or_code"
     elif field in {"calendar_date", "sleep_day"}:
         unit = "ISO-8601-date"
+    elif field == "observation_timestamp":
+        unit = "ISO-8601-source-timestamp"
     elif field.endswith("_minutes") or "minutes_" in field:
         unit = "minute"
     elif field.startswith("race_time_") and field.endswith("_sec"):
@@ -1543,7 +1553,7 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         "FIT-derived HRV is analysis_reference_only. Same-date differing values remain unresolved, and this dataset is not a daily source of truth."
         if dataset == "hrv_daily"
         else
-        "Source-provided daily metric. Missing values are preserved and labels, units, and activity relationships are not inferred."
+        "Source-provided metric observation. Missing values are preserved and labels, units, daily canonical rows, and activity relationships are not inferred."
         if dataset in {
             "hill_score_daily", "endurance_score_daily", "race_prediction_daily",
             "sleep_daily", "uds_daily", "acute_training_load_daily",
@@ -1556,13 +1566,24 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         if field in flexible_identifier_fields
         else "Defined by the v1.1 runtime schema; do not infer missing values."
     )
+    observation_stable_keys = {
+        "race_prediction_daily": {"calendar_date", "observation_timestamp"},
+        "acute_training_load_daily": {"calendar_date", "observation_timestamp"},
+        "training_readiness_daily": {"calendar_date", "observation_timestamp"},
+        "vo2max_daily": {
+            "calendar_date", "vo2max_source_series", "sport", "observation_timestamp",
+        },
+        "training_history_daily": {"calendar_date", "observation_timestamp"},
+    }
     return {
         "logical_type": logical_type,
         "required": field not in DATASET_OPTIONAL_FIELDS.get(dataset, frozenset()),
         "nullable": field not in DATASET_NONNULL_FIELDS[dataset],
         "unit_or_domain": unit,
         "semantic_role": "stable_key"
-        if field.endswith("_key") or field in {"personal_record_id"}
+        if field.endswith("_key")
+        or field in {"personal_record_id"}
+        or field in observation_stable_keys.get(dataset, set())
         else "provenance"
         if provenance == "provenance"
         else "attribute",

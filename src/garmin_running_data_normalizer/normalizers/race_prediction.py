@@ -3,13 +3,14 @@ from __future__ import annotations
 from collections import Counter
 from typing import Iterable
 
-from ..common.time import daily_calendar_date
+from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..intake.discovery import DiscoveredAsset
 from .daily_metrics import DailyMetricResult, finalize_daily, number, selected_rows
 
 
 RACE_PREDICTION_FIELDS = (
     "calendar_date",
+    "observation_timestamp",
     "race_time_5k_sec",
     "race_time_10k_sec",
     "race_time_half_sec",
@@ -25,8 +26,11 @@ def normalize_race_prediction(
     )
     accepted = []
     excluded: Counter[str] = Counter()
+    timestamp_semantics: Counter[str] = Counter()
     for raw in rows:
         date = daily_calendar_date(raw.get("calendarDate"))
+        timestamp, semantics = normalize_observation_timestamp(raw.get("timestamp"))
+        timestamp_semantics[semantics] += 1
         values = {
             "race_time_5k_sec": number(raw.get("raceTime5K")),
             "race_time_10k_sec": number(raw.get("raceTime10K")),
@@ -35,18 +39,32 @@ def normalize_race_prediction(
         }
         if date is None:
             excluded["missing_or_invalid_calendar_date"] += 1
+        elif timestamp is None:
+            excluded["missing_or_invalid_observation_timestamp"] += 1
         elif any(value is None or value <= 0 for value in values.values()):
             excluded["missing_or_invalid_race_prediction"] += 1
         else:
-            accepted.append({"calendar_date": date, **values})
-    return finalize_daily(
+            accepted.append(
+                {
+                    "calendar_date": date,
+                    "observation_timestamp": timestamp,
+                    **values,
+                }
+            )
+    result = finalize_daily(
         dataset="race_prediction_daily",
-        key_field="calendar_date",
+        key_fields=("calendar_date", "observation_timestamp"),
         selected_assets=selected,
         source_record_count=len(rows),
         accepted=accepted,
         excluded_reasons=excluded,
     )
+    result.audit["observation_timestamp_semantics_counts"] = dict(
+        sorted(timestamp_semantics.items())
+    )
+    result.audit["storage_grain"] = "source_observation"
+    result.audit["daily_projection_selection_rule"] = None
+    return result
 
 
 __all__ = ["RACE_PREDICTION_FIELDS", "normalize_race_prediction"]

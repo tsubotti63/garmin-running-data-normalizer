@@ -3,13 +3,14 @@ from __future__ import annotations
 from collections import Counter
 from typing import Iterable
 
-from ..common.time import daily_calendar_date
+from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..intake.discovery import DiscoveredAsset
 from .daily_metrics import DailyMetricResult, boolean, finalize_daily, number, selected_rows, text
 
 
 TRAINING_READINESS_FIELDS = (
     "calendar_date",
+    "observation_timestamp",
     "training_readiness_score",
     "training_readiness_level",
     "training_readiness_recovery_time",
@@ -32,14 +33,21 @@ def normalize_training_readiness(
     )
     accepted = []
     excluded: Counter[str] = Counter()
+    timestamp_semantics: Counter[str] = Counter()
     for raw in rows:
         date = daily_calendar_date(raw.get("calendarDate"))
+        timestamp, semantics = normalize_observation_timestamp(raw.get("timestamp"))
+        timestamp_semantics[semantics] += 1
         if date is None:
             excluded["missing_or_invalid_calendar_date"] += 1
+            continue
+        if timestamp is None:
+            excluded["missing_or_invalid_observation_timestamp"] += 1
             continue
         accepted.append(
             {
                 "calendar_date": date,
+                "observation_timestamp": timestamp,
                 "training_readiness_score": number(raw.get("score")),
                 "training_readiness_level": text(raw.get("level")),
                 "training_readiness_recovery_time": number(raw.get("recoveryTime")),
@@ -53,14 +61,20 @@ def normalize_training_readiness(
                 "training_readiness_sleep_score": number(raw.get("sleepScore")),
             }
         )
-    return finalize_daily(
+    result = finalize_daily(
         dataset="training_readiness_daily",
-        key_field="calendar_date",
+        key_fields=("calendar_date", "observation_timestamp"),
         selected_assets=selected,
         source_record_count=len(rows),
         accepted=accepted,
         excluded_reasons=excluded,
     )
+    result.audit["observation_timestamp_semantics_counts"] = dict(
+        sorted(timestamp_semantics.items())
+    )
+    result.audit["storage_grain"] = "source_observation"
+    result.audit["daily_projection_selection_rule"] = None
+    return result
 
 
 __all__ = ["TRAINING_READINESS_FIELDS", "normalize_training_readiness"]

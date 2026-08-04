@@ -11,14 +11,14 @@
     {"name": "activity_fit_links", "source_family": "garmin_account_export", "record_grain": "activity_fit_session_link", "stable_key": ["garmin_activity_key", "fit_session_key"], "merge_policy": "temporal_event_union", "provenance_required": true},
     {"name": "hill_score_daily", "source_family": "garmin_account_export", "record_grain": "calendar_day", "stable_key": ["calendar_date"], "merge_policy": "daily_state_upsert", "provenance_required": true},
     {"name": "endurance_score_daily", "source_family": "garmin_account_export", "record_grain": "calendar_day", "stable_key": ["calendar_date"], "merge_policy": "daily_state_upsert", "provenance_required": true},
-    {"name": "race_prediction_daily", "source_family": "garmin_account_export", "record_grain": "calendar_day", "stable_key": ["calendar_date"], "merge_policy": "daily_state_upsert", "provenance_required": true},
+    {"name": "race_prediction_daily", "source_family": "garmin_account_export", "record_grain": "source_observation", "stable_key": ["calendar_date", "observation_timestamp"], "merge_policy": "immutable_observation_union", "provenance_required": true},
     {"name": "sleep_daily", "source_family": "garmin_account_export", "record_grain": "sleep_day", "stable_key": ["sleep_day"], "merge_policy": "daily_state_upsert", "provenance_required": true},
     {"name": "uds_daily", "source_family": "garmin_account_export", "record_grain": "calendar_day", "stable_key": ["calendar_date"], "merge_policy": "daily_state_upsert", "provenance_required": true},
-    {"name": "acute_training_load_daily", "source_family": "garmin_account_export", "record_grain": "calendar_day", "stable_key": ["calendar_date"], "merge_policy": "daily_state_upsert", "provenance_required": true},
-    {"name": "training_readiness_daily", "source_family": "garmin_account_export", "record_grain": "calendar_day", "stable_key": ["calendar_date"], "merge_policy": "daily_state_upsert", "provenance_required": true},
-    {"name": "vo2max_daily", "source_family": "garmin_account_export", "record_grain": "calendar_day", "stable_key": ["calendar_date"], "merge_policy": "daily_state_upsert", "provenance_required": true},
+    {"name": "acute_training_load_daily", "source_family": "garmin_account_export", "record_grain": "source_observation", "stable_key": ["calendar_date", "observation_timestamp"], "merge_policy": "immutable_observation_union", "provenance_required": true},
+    {"name": "training_readiness_daily", "source_family": "garmin_account_export", "record_grain": "source_observation", "stable_key": ["calendar_date", "observation_timestamp"], "merge_policy": "immutable_observation_union", "provenance_required": true},
+    {"name": "vo2max_daily", "source_family": "garmin_account_export", "record_grain": "source_observation", "stable_key": ["calendar_date", "vo2max_source_series", "sport", "observation_timestamp"], "merge_policy": "immutable_observation_union", "provenance_required": true},
     {"name": "hrv_daily", "source_family": "garmin_account_export", "record_grain": "calendar_day", "stable_key": ["calendar_date"], "merge_policy": "immutable_blob_union", "provenance_required": true},
-    {"name": "training_history_daily", "source_family": "garmin_account_export", "record_grain": "calendar_day", "stable_key": ["calendar_date"], "merge_policy": "daily_state_upsert", "provenance_required": true}
+    {"name": "training_history_daily", "source_family": "garmin_account_export", "record_grain": "source_observation", "stable_key": ["calendar_date", "observation_timestamp"], "merge_policy": "immutable_observation_union", "provenance_required": true}
   ],
   "candidate_datasets": [
     {
