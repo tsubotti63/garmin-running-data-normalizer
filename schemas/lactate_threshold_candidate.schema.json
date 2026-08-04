@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lactate Threshold Candidate Audit",
+  "type": "object",
+  "required": ["status", "public_promotion", "machine_stable_key_status", "units", "candidates"],
+  "properties": {
+    "status": {"const": "REVIEW_REQUIRED_STABLE_PROMOTION_BLOCKED"},
+    "public_promotion": {"const": false},
+    "machine_stable_key_status": {"const": "PRODUCT_DECISION_REQUIRED"},
+    "units": {"type": "object"},
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["observation_timestamp", "observation_family", "lactate_threshold_speed", "lactate_threshold_heart_rate", "functional_threshold_power", "lactate_threshold_type"],
+        "properties": {
+          "observation_timestamp": {"type": ["string", "null"]},
+          "observation_family": {"enum": ["history", "latest_snapshot", "profile_state", "derived_evidence"]},
+          "lactate_threshold_speed": {"type": ["number", "null"]},
+          "lactate_threshold_heart_rate": {"type": ["number", "null"]},
+          "functional_threshold_power": {"type": ["number", "null"]},
+          "lactate_threshold_type": {"type": ["string", "null"]}
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

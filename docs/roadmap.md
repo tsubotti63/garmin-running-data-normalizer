@@ -49,3 +49,15 @@
 - Keep the v1.1.1 one-shot CLI and output contract compatible.
 - Unit Review, Target Core Review, Green CI, TestPyPI verification, stable
   GitHub Release publication, and Production PyPI verification are complete.
+
+## Milestone 6 — v1.3 Wellness / Metrics — release preparation
+
+- Add ten optional normalized daily/observation datasets, expanding Run-All to
+  17 normalized datasets without changing existing IDs or stable keys.
+- Carry each new dataset through schema, registry, Snapshot, deterministic QA,
+  Output Experience, and relationship documentation.
+- Keep Wellness/Metrics separate from Activity facts; preserve the six existing
+  explicit relationships and use same-day context only where documented.
+- Keep Lactate Threshold candidate/audit-only and defer Health Status.
+- Prepare version `1.3.0` directly as the next stable release. Merge, tag,
+  GitHub Release, and package-index publication remain separate Human gates.

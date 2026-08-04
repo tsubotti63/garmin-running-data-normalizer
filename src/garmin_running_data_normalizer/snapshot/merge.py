@@ -6,11 +6,12 @@ import os
 import shutil
 import tempfile
 from collections import Counter, defaultdict
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .. import __version__
 from ..common.identity import garmin_activity_key, stable_hash
+from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..intake.archive import ArchiveLimits
 from .policies import CONTRACT_VERSION, REGISTRY_VERSION
 from .store import SnapshotStoreError, load_manifests, load_store, sha256_file
@@ -18,7 +19,40 @@ from .store import verify_store
 
 
 BUILD_FORMAT = "garmin-running-data-normalizer-canonical-snapshot-build-v1"
-DATASET_ORDER = ("activities", "gear", "activity_gear", "personal_records")
+DATASET_ORDER = (
+    "activities",
+    "gear",
+    "activity_gear",
+    "personal_records",
+    "hill_score_daily",
+    "endurance_score_daily",
+    "race_prediction_daily",
+    "sleep_daily",
+    "uds_daily",
+    "acute_training_load_daily",
+    "training_readiness_daily",
+    "vo2max_daily",
+    "training_history_daily",
+    "lactate_threshold_candidates",
+)
+DAILY_FAIL_CLOSED_DATASETS = {
+    "hill_score_daily",
+    "endurance_score_daily",
+    "race_prediction_daily",
+    "sleep_daily",
+    "uds_daily",
+    "acute_training_load_daily",
+    "training_readiness_daily",
+    "vo2max_daily",
+    "training_history_daily",
+}
+SOURCE_OBSERVATION_DATASETS = {
+    "race_prediction_daily",
+    "acute_training_load_daily",
+    "training_readiness_daily",
+    "vo2max_daily",
+    "training_history_daily",
+}
 SCHEMA_VERSION = "garmin-run-all-output:v1.1"
 APPROVED_INPUT_MAX_FILE_BYTES = ArchiveLimits().max_member_bytes
 
@@ -182,6 +216,213 @@ def _personal_record_key(row: dict[str, Any]) -> int | str | None:
     return stable_hash(fallback, prefix="garmin_personal_record_hash:")
 
 
+def _metric_row(dataset: str, row: dict[str, Any]) -> dict[str, Any]:
+    if dataset == "hill_score_daily":
+        fields = (
+            "calendarDate",
+            "overallScore",
+            "strengthScore",
+            "enduranceScore",
+            "hillScoreClassificationId",
+            "hillScoreFeedbackPhraseId",
+        )
+    else:
+        fields = (
+            "calendarDate",
+            "overallScore",
+            "classification",
+            "feedbackPhrase",
+        )
+    return {field: row[field] for field in fields if field in row}
+
+
+def _daily_source_rows(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if isinstance(value, dict):
+        for key in ("data", "items", "records", "values", "summaries", "sleepData"):
+            nested = value.get(key)
+            if isinstance(nested, list):
+                return [item for item in nested if isinstance(item, dict)]
+        return [value]
+    return []
+
+
+def _daily_definition(
+    logical_name: str,
+) -> tuple[str, tuple[str, ...], str | None] | None:
+    name = PurePosixPath(logical_name).name.lower()
+    definitions = (
+        (
+            "runracepredictions",
+            "race_prediction_daily",
+            (
+                "calendarDate", "timestamp", "raceTime5K", "raceTime10K",
+                "raceTimeHalf", "raceTimeMarathon",
+            ),
+            None,
+        ),
+        (
+            "sleepdata.json",
+            "sleep_daily",
+            (
+                "calendarDate", "sleepStartTimestampGMT", "sleepEndTimestampGMT",
+                "sleepTimeSeconds", "totalSleepSeconds", "deepSleepSeconds",
+                "lightSleepSeconds", "remSleepSeconds", "awakeSleepSeconds",
+                "sleepScores",
+            ),
+            None,
+        ),
+        (
+            "udsfile",
+            "uds_daily",
+            (
+                "calendarDate", "date", "totalSteps", "steps", "totalDistanceMeters",
+                "distanceMeters", "activeKilocalories", "bmrKilocalories",
+                "restingHeartRate", "minHeartRate", "maxHeartRate", "bodyBattery",
+                "allDayStress", "bodyBatteryFeedback",
+            ),
+            None,
+        ),
+        (
+            "metricsacutetrainingload",
+            "acute_training_load_daily",
+            (
+                "calendarDate", "acwrPercent", "acwrStatus", "dailyTrainingLoadAcute",
+                "dailyTrainingLoadChronic", "dailyAcuteChronicWorkloadRatio", "timestamp",
+            ),
+            None,
+        ),
+        (
+            "trainingreadinessdto",
+            "training_readiness_daily",
+            (
+                "calendarDate", "score", "level", "recoveryTime", "acwrFactorPercent",
+                "stressHistoryFactorPercent", "hrvFactorPercent",
+                "sleepHistoryFactorPercent", "acuteLoad", "hrvWeeklyAverage",
+                "validSleep", "sleepScore", "timestamp",
+            ),
+            None,
+        ),
+        (
+            "activityvo2max",
+            "vo2max_daily",
+            (
+                "calendarDate", "vo2MaxValue", "sport", "maxMet", "maxMetCategory",
+                "calibratedData", "vo2MaxSourceSeries", "timestampGmt",
+                "observationTimestamp", "activityId",
+            ),
+            "activity_vo2max_daily",
+        ),
+        (
+            "metricsmaxmetdata",
+            "vo2max_daily",
+            (
+                "calendarDate", "vo2MaxValue", "sport", "maxMet", "maxMetCategory",
+                "calibratedData", "vo2MaxSourceSeries", "updateTimestamp",
+                "observationTimestamp",
+            ),
+            "performance_metrics_daily",
+        ),
+        (
+            "snapshot_vo2max",
+            "vo2max_daily",
+            (
+                "calendarDate", "vo2MaxValue", "sport", "maxMet", "maxMetCategory",
+                "calibratedData", "vo2MaxSourceSeries", "timestampGmt",
+                "updateTimestamp", "observationTimestamp", "activityId",
+            ),
+            None,
+        ),
+        (
+            "traininghistory",
+            "training_history_daily",
+            ("calendarDate", "timestamp", "trainingStatus", "sport"),
+            None,
+        ),
+    )
+    for marker, dataset, fields, source_series in definitions:
+        if marker in name:
+            return dataset, fields, source_series
+    return None
+
+
+def _daily_raw_key(
+    dataset: str,
+    record: dict[str, Any],
+    source_series: str | None,
+) -> tuple[Any, ...] | None:
+    calendar_date = daily_calendar_date(
+        record.get("calendarDate") or record.get("date")
+    )
+    if calendar_date in (None, ""):
+        return None
+    if dataset not in SOURCE_OBSERVATION_DATASETS:
+        return (calendar_date,)
+
+    series = source_series or record.get("vo2MaxSourceSeries")
+    if dataset == "vo2max_daily":
+        if series == "activity_vo2max_daily":
+            raw_timestamp = record.get("timestampGmt")
+            semantics = "UTC_SOURCE_FIELD"
+        else:
+            raw_timestamp = record.get("updateTimestamp")
+            semantics = "UNCONFIRMED"
+        if raw_timestamp in (None, ""):
+            raw_timestamp = record.get("observationTimestamp")
+            semantics = "UNCONFIRMED"
+        observation_timestamp, _ = normalize_observation_timestamp(
+            raw_timestamp,
+            naive_timezone_semantics=semantics,
+        )
+        sport = record.get("sport")
+        if series in (None, "") or sport in (None, "") or observation_timestamp is None:
+            return None
+        return (calendar_date, series, sport, observation_timestamp)
+
+    observation_timestamp, _ = normalize_observation_timestamp(record.get("timestamp"))
+    if observation_timestamp is None:
+        observation_timestamp, _ = normalize_observation_timestamp(
+            record.get("observationTimestamp")
+        )
+    if observation_timestamp is None:
+        return None
+    return (calendar_date, observation_timestamp)
+
+
+def _lactate_family(logical_name: str) -> str | None:
+    name = PurePosixPath(logical_name).name.lower()
+    for family, suffix in (
+        ("history", "userbiometrics.json"),
+        ("latest_snapshot", "biometrics_latest.json"),
+        ("profile_state", "userbiometricprofiledata.json"),
+        ("derived_evidence", "heartratezones.json"),
+    ):
+        if name.endswith(suffix):
+            return family
+    return None
+
+
+def _lactate_row(family: str, row: dict[str, Any]) -> dict[str, Any]:
+    fields = (
+        "lactateThresholdSpeed",
+        "lactateThresholdHeartRate",
+        "functionalThresholdPower",
+    )
+    result = {field: row[field] for field in fields if field in row}
+    if family == "history":
+        metadata = row.get("metaData")
+        if isinstance(metadata, dict):
+            result["metaData"] = {
+                field: metadata[field]
+                for field in ("calendarDate", "sequence")
+                if field in metadata
+            }
+    elif family == "derived_evidence" and "trainingMethod" in row:
+        result["trainingMethod"] = row["trainingMethod"]
+    return result
+
+
 def _dataset_records(
     logical_name: str,
     payload: Any,
@@ -238,6 +479,68 @@ def _dataset_records(
                         None if record_key is None else (record_key,),
                     )
                 )
+    elif PurePosixPath(lower).name.startswith("hillscore"):
+        for index, row in enumerate(_containers(payload)):
+            record = _metric_row("hill_score_daily", row)
+            calendar_date = daily_calendar_date(record.get("calendarDate"))
+            if calendar_date is not None:
+                record["calendarDate"] = calendar_date
+            result.append(
+                (
+                    "hill_score_daily",
+                    str(index),
+                    record,
+                    None if calendar_date in (None, "") else (calendar_date,),
+                )
+            )
+    elif PurePosixPath(lower).name.startswith("endurancescore"):
+        for index, row in enumerate(_containers(payload)):
+            record = _metric_row("endurance_score_daily", row)
+            calendar_date = daily_calendar_date(record.get("calendarDate"))
+            if calendar_date is not None:
+                record["calendarDate"] = calendar_date
+            result.append(
+                (
+                    "endurance_score_daily",
+                    str(index),
+                    record,
+                    None if calendar_date in (None, "") else (calendar_date,),
+                )
+            )
+    elif (definition := _daily_definition(logical_name)) is not None:
+        dataset, fields, source_series = definition
+        for index, row in enumerate(_daily_source_rows(payload)):
+            record = {field: row[field] for field in fields if field in row}
+            if source_series is not None and "vo2MaxSourceSeries" not in record:
+                record["vo2MaxSourceSeries"] = source_series
+            calendar_date = daily_calendar_date(record.get("calendarDate") or record.get("date"))
+            if calendar_date is not None:
+                record["calendarDate"] = calendar_date
+            raw_key = _daily_raw_key(dataset, record, source_series)
+            result.append(
+                (
+                    dataset,
+                    str(index),
+                    record,
+                    raw_key,
+                )
+            )
+    else:
+        lactate_family = _lactate_family(logical_name)
+        if lactate_family is not None:
+            for index, row in enumerate(_containers(payload)):
+                record = _lactate_row(lactate_family, row)
+                measurement_fields = set(record) - {"metaData"}
+                if not measurement_fields:
+                    continue
+                result.append(
+                    (
+                        "lactate_threshold_candidates",
+                        str(index),
+                        record,
+                        (lactate_family, _stable_json(record)),
+                    )
+                )
     return result
 
 
@@ -247,6 +550,37 @@ def _value_state(value: Any) -> str:
     if value == "" or value == [] or value == {}:
         return "explicit_empty"
     return "explicit_value"
+
+
+def _lactate_power_conflicts(
+    observations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for observation in observations:
+        raw_key = observation.get("raw_key")
+        family = str(raw_key[0]) if isinstance(raw_key, tuple) and raw_key else "unknown"
+        record = observation.get("record", {})
+        if not isinstance(record, dict):
+            continue
+        power = record.get("functionalThresholdPower")
+        if power is None:
+            continue
+        timestamp = "timestamp-unavailable"
+        metadata = record.get("metaData")
+        if isinstance(metadata, dict) and metadata.get("calendarDate") not in (None, ""):
+            timestamp = str(metadata["calendarDate"])
+        grouped[(family, timestamp)].add(_stable_json(power))
+    return [
+        {
+            "severity": "stop",
+            "conflict_type": "lactate_functional_threshold_power_conflict",
+            "dataset": "lactate_threshold_candidates",
+            "observation_family": family,
+            "observation_timestamp": timestamp,
+        }
+        for (family, timestamp), values in sorted(grouped.items())
+        if len(values) > 1
+    ]
 
 
 def _canonical_key(dataset: str, values: tuple[Any, ...]) -> str:
@@ -353,6 +687,17 @@ def _merge_dataset(
                 str(item["source_record_index"]),
             ),
         )
+        distinct_signatures = {_stable_json(item["record"]) for item in ordered}
+        if dataset in DAILY_FAIL_CLOSED_DATASETS and len(distinct_signatures) > 1:
+            conflicts.append(
+                {
+                    "severity": "stop",
+                    "conflict_type": "same_stable_key_different_public_value",
+                    "dataset": dataset,
+                    "canonical_key": key,
+                }
+            )
+            continue
         bits = "".join(
             "1" if logical_order in by_snapshot else "0"
             for logical_order in range(1, snapshot_count + 1)
@@ -377,7 +722,6 @@ def _merge_dataset(
             )
             for value in observation["record"].values():
                 state_counts[_value_state(value)] += 1
-        distinct_signatures = {_stable_json(item["record"]) for item in ordered}
         if len(distinct_signatures) > 1:
             changed += 1
         for observation in ordered:
@@ -701,7 +1045,9 @@ def build_approved_input(
         all_provenance: list[dict[str, Any]] = []
         all_field_provenance: list[dict[str, Any]] = []
         all_holds: list[dict[str, Any]] = []
-        all_conflicts: list[dict[str, Any]] = []
+        all_conflicts: list[dict[str, Any]] = _lactate_power_conflicts(
+            observations_by_dataset.get("lactate_threshold_candidates", [])
+        )
         dataset_summaries: dict[str, Any] = {}
         for dataset in DATASET_ORDER:
             (
@@ -731,6 +1077,10 @@ def build_approved_input(
         approved = stage / "approved_input"
         fitness = approved / "DI-Connect-Fitness"
         uploaded = approved / "DI-Connect-Uploaded-Files"
+        metrics = approved / "DI-Connect-Metrics"
+        sleep_source = approved / "DI-Connect-Wellness"
+        aggregator = approved / "DI-Connect-Aggregator"
+        lactate_source = sleep_source
         activity_rows = [
             item["raw_record"] for item in canonical_by_dataset["activities"]
         ]
@@ -759,6 +1109,65 @@ def build_approved_input(
                 fitness / "snapshot_personalRecord.json",
                 [{"personalRecords": personal_rows}],
             )
+        hill_rows = [
+            item["raw_record"]
+            for item in canonical_by_dataset["hill_score_daily"]
+        ]
+        if hill_rows:
+            _write_json(metrics / "snapshot_HillScore.json", hill_rows)
+        endurance_rows = [
+            item["raw_record"]
+            for item in canonical_by_dataset["endurance_score_daily"]
+        ]
+        if endurance_rows:
+            _write_json(metrics / "snapshot_EnduranceScore.json", endurance_rows)
+        daily_materialization = {
+            "race_prediction_daily": (metrics, "RunRacePredictions_snapshot.json"),
+            "sleep_daily": (sleep_source, "snapshot_sleepData.json"),
+            "uds_daily": (aggregator, "UDSFile_snapshot.json"),
+            "acute_training_load_daily": (
+                metrics,
+                "MetricsAcuteTrainingLoad_snapshot.json",
+            ),
+            "training_readiness_daily": (
+                metrics,
+                "TrainingReadinessDTO_snapshot.json",
+            ),
+            "vo2max_daily": (metrics, "snapshot_vo2max.json"),
+            "training_history_daily": (metrics, "TrainingHistory_snapshot.json"),
+        }
+        for dataset, (directory, filename) in daily_materialization.items():
+            rows = [item["raw_record"] for item in canonical_by_dataset[dataset]]
+            if rows:
+                _write_json(directory / filename, rows)
+        lactate_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for item in canonical_by_dataset["lactate_threshold_candidates"]:
+            raw_record = item["raw_record"]
+            raw_key = item["canonical_key"]
+            family = next(
+                (
+                    str(observation["raw_key"][0])
+                    for observation in observations_by_dataset[
+                        "lactate_threshold_candidates"
+                    ]
+                    if _canonical_key(
+                        "lactate_threshold_candidates",
+                        observation["raw_key"],
+                    )
+                    == raw_key
+                ),
+                "unknown",
+            )
+            lactate_rows[family].append(raw_record)
+        lactate_names = {
+            "history": "snapshot_userBioMetrics.json",
+            "latest_snapshot": "snapshot_bioMetrics_latest.json",
+            "profile_state": "snapshot_userBioMetricProfileData.json",
+            "derived_evidence": "snapshot_heartRateZones.json",
+        }
+        for family, rows in sorted(lactate_rows.items()):
+            if family in lactate_names and rows:
+                _write_json(lactate_source / lactate_names[family], rows)
         for digest, source in sorted(fit_unique.items()):
             destination = uploaded / f"snapshot_fit_{digest}.fit"
             destination.parent.mkdir(parents=True, exist_ok=True)

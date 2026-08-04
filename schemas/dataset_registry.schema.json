@@ -21,7 +21,30 @@
           "source_family": {"const": "garmin_account_export"},
           "record_grain": {"type": "string"},
           "stable_key": {"type": "array", "items": {"type": "string"}},
-          "merge_policy": {"enum": ["entity_upsert", "temporal_event_union", "immutable_blob_union", "preserve_only"]},
+          "merge_policy": {"enum": ["entity_upsert", "temporal_event_union", "immutable_blob_union", "immutable_observation_union", "daily_state_upsert", "preserve_only"]},
+          "provenance_required": {"const": true}
+        },
+        "additionalProperties": false
+      }
+    },
+    "candidate_datasets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "record_grain", "identity_anchor", "machine_stable_key_status", "publication_status", "observation_families", "merge_policy", "provenance_required"],
+        "properties": {
+          "name": {"type": "string"},
+          "record_grain": {"type": "string"},
+          "identity_anchor": {"const": "observation_timestamp"},
+          "machine_stable_key_status": {"const": "PRODUCT_DECISION_REQUIRED"},
+          "publication_status": {"const": "candidate_audit_only"},
+          "observation_families": {
+            "type": "array",
+            "items": {"enum": ["history", "latest_snapshot", "profile_state", "derived_evidence"]},
+            "minItems": 4,
+            "uniqueItems": true
+          },
+          "merge_policy": {"const": "immutable_observation_union"},
           "provenance_required": {"const": true}
         },
         "additionalProperties": false

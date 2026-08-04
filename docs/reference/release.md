@@ -1,12 +1,22 @@
 # Release Readiness Reference
 
+## Prepared next release
+
+- Candidate source version: `1.3.0`
+- Scope: additive Wellness/Metrics datasets and Output Experience expansion
+- Review: Aggregate Product Review ready with Lactate field-level gates
+- Merge, tag, GitHub Release, TestPyPI, Production PyPI: not performed
+
+The candidate state does not replace the published facts below.
+
 ## Current facts
 
 - Repository publication: Public
 - Default branch: `main`
 - License: `Apache-2.0`
 - CI: Operational
-- Python package version on `main`: `1.2.1`
+- Prepared branch source version: `1.3.0`
+- Current Production PyPI version: `1.2.1`
 - Latest GitHub Release: `v1.2.1`
 - Release classification: Public, non-prerelease, and marked latest
 - Release tag: Annotated `v1.2.1` on the reviewed release commit

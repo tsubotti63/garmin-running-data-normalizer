@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Endurance Score Daily",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["calendar_date", "overall_score", "classification", "feedback_phrase"],
+    "properties": {
+      "calendar_date": {"type": "string", "format": "date"},
+      "overall_score": {"type": "number"},
+      "classification": {"type": ["number", "null"]},
+      "feedback_phrase": {"type": ["number", "null"]}
+    },
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Acute Training Load Source Observations",
+  "description": "Garmin source-provided load observations; the tool does not recalculate ratios or select one canonical observation per day.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["calendar_date", "observation_timestamp", "acwr_percent", "acwr_status", "daily_training_load_acute", "daily_training_load_chronic", "daily_acute_chronic_workload_ratio"],
+    "properties": {
+      "calendar_date": {"type": "string", "format": "date"},
+      "observation_timestamp": {"type": "string", "description": "Source timestamp normalized from epoch milliseconds to a UTC ISO-8601 instant."},
+      "acwr_percent": {"type": ["number", "null"]},
+      "acwr_status": {"type": ["string", "null"]},
+      "daily_training_load_acute": {"type": ["number", "null"]},
+      "daily_training_load_chronic": {"type": ["number", "null"]},
+      "daily_acute_chronic_workload_ratio": {"type": ["number", "null"]}
+    },
+    "additionalProperties": false
+  }
+}

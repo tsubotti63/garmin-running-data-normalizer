@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Hill Score Daily",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["calendar_date", "overall_score", "strength_score", "endurance_score", "classification_id", "feedback_phrase_id"],
+    "properties": {
+      "calendar_date": {"type": "string", "format": "date"},
+      "overall_score": {"type": "integer"},
+      "strength_score": {"type": ["integer", "null"]},
+      "endurance_score": {"type": ["integer", "null"]},
+      "classification_id": {"type": ["integer", "null"]},
+      "feedback_phrase_id": {"type": ["integer", "null"]}
+    },
+    "additionalProperties": false
+  }
+}

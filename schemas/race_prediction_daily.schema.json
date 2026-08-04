@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Race Prediction Source Observations",
+  "description": "Garmin algorithm prediction observations, not observed race results or tool-generated predictions. The public path retains its historical daily suffix, but the storage grain is one source observation.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["calendar_date", "observation_timestamp", "race_time_5k_sec", "race_time_10k_sec", "race_time_half_sec", "race_time_marathon_sec"],
+    "properties": {
+      "calendar_date": {"type": "string", "format": "date"},
+      "observation_timestamp": {"type": "string", "description": "Source observation timestamp. Naive source timestamps are preserved without inventing a timezone."},
+      "race_time_5k_sec": {"type": "number"},
+      "race_time_10k_sec": {"type": "number"},
+      "race_time_half_sec": {"type": "number"},
+      "race_time_marathon_sec": {"type": "number"}
+    },
+    "additionalProperties": false
+  }
+}

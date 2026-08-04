@@ -52,6 +52,15 @@ synthetic validation, private four-Snapshot validation, clean package-installed
 flows, and review evidence; TestPyPI, the annotated tag, GitHub Release, and
 Production PyPI were then completed and verified in their gated order.
 
+## v1.3 — Wellness / Metrics release preparation
+
+The prepared v1.3.0 source adds ten optional normalized Wellness/Metrics
+datasets and expands generated Output Experience to 17 datasets. Existing CLI,
+dataset IDs, stable keys, exit codes, imports, explicit relationships, Snapshot
+semantics, and privacy boundaries remain compatible. Lactate Threshold is
+candidate/audit-only and Health Status is deferred. Publication remains a
+separate Human-authorized sequence.
+
 ## P2 — initial package-index publication — historical complete
 
 Version `1.0.1` was the packaging-only patch used for the initial package-index

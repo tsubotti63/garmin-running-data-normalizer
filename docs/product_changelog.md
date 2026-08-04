@@ -4,6 +4,65 @@ This file records factual Garmin Running Data Normalizer product changes. The
 root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
 Standard adopted by this repository.
 
+## v1.3.0 — prepared stable release source
+
+Status: prepared for final Product authorization; not yet tagged, released, or
+published to PyPI.
+
+### Added
+
+- Adds ten optional normalized Run-All datasets: Hill Score Daily, Endurance
+  Score Daily, Race Prediction, Sleep Daily, UDS Daily, Acute Training Load,
+  Training Readiness, VO2Max, HRV Daily, and Training History.
+- Expands the stable registry and generated Output Experience to 17 normalized
+  datasets and 212 documented public fields.
+- Adds per-dataset Snapshot policies for daily-state upsert,
+  immutable-observation union, or FIT-derived regeneration.
+- Adds human- and machine-readable relationship guidance for every new dataset,
+  including grain, stable key, semantic role, cardinality, allowed use,
+  forbidden joins, and derived-projection status.
+
+### Changed
+
+- Generated `START_HERE.md`, `DATASET_INVENTORY.md`, `ANALYSIS_HANDOFF.md`,
+  `ANALYSIS_CONTEXT.json`, and `SCHEMA_CATALOG.json` now describe the expanded
+  dataset catalog.
+- Run-All emits additive normalized JSON and audit/QA artifacts when the
+  corresponding optional Garmin source families are present.
+- Package version metadata now derives from the package `__version__` source so
+  the distribution and runtime identity cannot drift through duplicate manual
+  version declarations.
+
+### Fixed
+
+- Daily-metric collisions no longer imply an unsupported latest-wins record;
+  source-observation families preserve every stable observation and derived
+  day summaries keep `selection_rule: null`.
+- HRV conflicts remain explicit review rows rather than being averaged or
+  silently selected.
+
+### Compatibility
+
+- The CLI, existing dataset IDs, existing stable keys, existing output paths,
+  exit codes, package imports, six explicit relationship contracts, Snapshot
+  missing-is-not-delete behavior, and privacy boundary are unchanged.
+- All v1.3 outputs are additive; absent optional families remain
+  `SKIPPED_NOT_PRESENT` and do not add a warning.
+
+### Known Limitations
+
+- HRV Daily is `analysis_reference_only`, not a daily coaching or medical
+  Source of Truth, and is not interchangeable with Health Status HRV.
+- New Wellness/Metrics datasets remain separate from Activity facts. Same-day
+  comparison is context only; direct Activity relationships are not defined.
+
+### Deferred
+
+- Lactate Threshold remains candidate/audit-only until its machine stable key,
+  units, timezone, heart-rate authority, FTP/power authority, and public field
+  types are approved.
+- Health Status is not a v1.3 supported dataset.
+
 ## v1.2.1 — stable Production release
 
 - Adds the `tzdata` runtime dependency on Windows only so clean package

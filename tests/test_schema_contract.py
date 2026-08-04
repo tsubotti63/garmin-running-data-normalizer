@@ -140,6 +140,43 @@ class SchemaContractTest(unittest.TestCase):
         with self.assertRaisesRegex(SchemaContractError, "unsupported"):
             validate_schema_contract(_valid_records(schema), invalid_schema)
 
+    def test_validator_rejects_grain_key_and_relationship_metadata_drift(
+        self,
+    ) -> None:
+        schema = _schema()
+        records = _valid_records(schema)
+
+        invalid_schema = copy.deepcopy(schema)
+        invalid_schema["datasets"][0]["record_grain"] = "unknown"
+        with self.assertRaisesRegex(SchemaContractError, "record grain"):
+            validate_schema_contract(records, invalid_schema)
+
+        invalid_schema = copy.deepcopy(schema)
+        invalid_schema["datasets"][0]["stable_key"] = ["activity_id"]
+        with self.assertRaisesRegex(SchemaContractError, "stable key"):
+            validate_schema_contract(records, invalid_schema)
+
+        invalid_schema = copy.deepcopy(schema)
+        invalid_schema["datasets"][0]["canonical"] = False
+        with self.assertRaisesRegex(
+            SchemaContractError,
+            "relationship metadata is inconsistent",
+        ):
+            validate_schema_contract(records, invalid_schema)
+
+        invalid_schema = copy.deepcopy(schema)
+        hill = next(
+            item
+            for item in invalid_schema["datasets"]
+            if item["dataset"] == "hill_score_daily"
+        )
+        hill["join_guidance"][0]["status"] = "explicit"
+        with self.assertRaisesRegex(
+            SchemaContractError,
+            "relationship metadata is inconsistent",
+        ):
+            validate_schema_contract(records, invalid_schema)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -120,6 +120,71 @@ class RunAllTest(unittest.TestCase):
         if include_bad_fit:
             (input_root / "synthetic-incomplete.fit").write_bytes(b"not-fit")
 
+    @staticmethod
+    def add_performance_metric_families(input_root: Path) -> None:
+        metrics = input_root / "DI-Connect-Metrics"
+        wellness = input_root / "DI-Connect-Wellness"
+        metrics.mkdir(exist_ok=True)
+        wellness.mkdir(exist_ok=True)
+        (metrics / "HillScore_synthetic.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "calendarDate": "2030-01-01",
+                        "overallScore": 80,
+                        "strengthScore": 70,
+                        "enduranceScore": 90,
+                        "hillScoreClassificationId": 4,
+                        "hillScoreFeedbackPhraseId": 12,
+                        "deviceId": "PRIVATE-DEVICE",
+                        "userProfilePk": "PRIVATE-ACCOUNT",
+                        "timestamp": 1_893_456_000_000,
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (metrics / "EnduranceScore_synthetic.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "calendarDate": "2030-01-01",
+                        "overallScore": 6100,
+                        "classification": 5,
+                        "feedbackPhrase": 19,
+                        "primaryTrainingDevice": "PRIVATE-DEVICE",
+                        "userProfilePK": "PRIVATE-ACCOUNT",
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (wellness / "synthetic_userBioMetrics.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "metaData": {
+                            "calendarDate": "2030-01-01",
+                            "sequence": 2,
+                            "userProfilePK": "PRIVATE-ACCOUNT",
+                        },
+                        "lactateThresholdHeartRate": 171,
+                        "lactateThresholdSpeed": 285.5,
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (wellness / "synthetic_bioMetrics_latest.json").write_text(
+            json.dumps(
+                {
+                    "functionalThresholdPower": 300,
+                    "lactateThresholdHeartRate": 172,
+                }
+            ),
+            encoding="utf-8",
+        )
+
     def synthetic_input(self, parent: Path, *, optional: bool = False, bad_fit: bool = False) -> Path:
         parent.mkdir(parents=True, exist_ok=True)
         input_root = parent / "input"
@@ -225,6 +290,9 @@ class RunAllTest(unittest.TestCase):
             self.assertEqual(summary["status"], "PASS_WITH_WARNINGS")
             for family in ("gear", "personal_records", "fit"):
                 self.assertEqual(summary["family_results"][family]["status"], "SKIPPED_NOT_PRESENT")
+            for family in ("hill_score", "endurance_score"):
+                self.assertEqual(summary["family_results"][family]["status"], "SKIPPED_NOT_PRESENT")
+                self.assertEqual(summary["family_results"][family]["warning_count"], 0)
             for relative in (
                 "normalized/gear.json",
                 "normalized/activity_gear.json",
@@ -248,6 +316,83 @@ class RunAllTest(unittest.TestCase):
             self.assertIsNone(fit_coverage["coverage_percentage"])
             self.assertEqual(fit_coverage["unresolved_count"], 0)
         self.assertEqual(before, tree_hashes(ACTIVITIES_FIXTURE))
+
+    def test_performance_metrics_are_public_safe_and_lactate_stays_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            input_root = self.synthetic_input(temporary)
+            self.add_performance_metric_families(input_root)
+            output = temporary / "output"
+
+            first = self.run_command(input_root, output)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            hill = json.loads(
+                (output / "normalized/hill_score_daily.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            endurance = json.loads(
+                (output / "normalized/endurance_score_daily.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                set(hill[0]),
+                {
+                    "calendar_date",
+                    "overall_score",
+                    "strength_score",
+                    "endurance_score",
+                    "classification_id",
+                    "feedback_phrase_id",
+                },
+            )
+            self.assertEqual(
+                set(endurance[0]),
+                {
+                    "calendar_date",
+                    "overall_score",
+                    "classification",
+                    "feedback_phrase",
+                },
+            )
+            serialized = json.dumps({"hill": hill, "endurance": endurance})
+            for private_value in ("PRIVATE-DEVICE", "PRIVATE-ACCOUNT"):
+                self.assertNotIn(private_value, serialized)
+
+            lactate = json.loads(
+                (output / "audit/lactate_threshold_candidates.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertFalse(lactate["public_promotion"])
+            self.assertEqual(
+                lactate["machine_stable_key_status"],
+                "PRODUCT_DECISION_REQUIRED",
+            )
+            self.assertEqual(lactate["units"]["functional_threshold_power"], "UNCONFIRMED")
+            self.assertEqual(lactate["timezone"], "UNCONFIRMED")
+            self.assertFalse(lactate["latest_wins"])
+            self.assertFalse(lactate["inference_performed"])
+            self.assertNotIn("PRIVATE-ACCOUNT", json.dumps(lactate))
+            self.assertTrue(
+                (output / "analysis/performance_metrics_daily.csv").read_text(
+                    encoding="utf-8"
+                ).startswith("calendar_date,hill_")
+            )
+            context = json.loads(
+                (output / "ANALYSIS_CONTEXT.json").read_text(encoding="utf-8")
+            )
+            self.assertFalse(
+                context["candidate_features"]["lactate_threshold"][
+                    "public_promotion"
+                ]
+            )
+
+            repeat = temporary / "repeat"
+            second = self.run_command(input_root, repeat)
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertEqual(tree_hashes(output), tree_hashes(repeat))
 
     def test_personal_record_identifier_type_fails_closed_end_to_end(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

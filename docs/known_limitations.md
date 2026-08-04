@@ -1,7 +1,9 @@
 # Known Limitations
 
-These limitations apply to the stable v1.2.1 release. They are
-explicit product boundaries, not hidden fallback behavior.
+These limitations apply to the prepared v1.3.0 stable release source. The
+currently published stable release remains v1.2.1 until the separate release
+and package-publication gates complete. These are explicit product boundaries,
+not hidden fallback behavior.
 
 ## Input and orchestration
 
@@ -44,16 +46,35 @@ explicit product boundaries, not hidden fallback behavior.
 - Record coordinates, raw telemetry, and arbitrary FIT message preservation are
   intentionally excluded from public output.
 
-## Library-only datasets
+## Daily-metric boundaries
 
-- Sleep is not reconciled with FIT, does not recalculate scores, fill missing
-  days, infer naps, shift days, or join activities.
-- Conflicting same-date HRV candidates are not averaged. Garmin/FIT raw sentinel
+- v1.3 Sleep is not reconciled with FIT and does not
+  recalculate scores, fill missing days, infer naps, shift days, or create an
+  Activity relationship. A same-day `context_only` comparison must keep Sleep
+  and Activity facts separate.
+- The v1.3 HRV reference does not average conflicting same-date
+  values. Garmin/FIT raw sentinel
   `65535` is excluded, and Health Status HRV is not asserted to be equivalent to
-  nightly FIT HRV.
+  nightly FIT HRV. It is `analysis_reference_only`, not a Source of Truth and
+  not intended for daily coaching, medical, or readiness decisions.
 - Health Status unknown metrics remain in long-form evidence; duplicate metric
   types are not silently overwritten.
-- Sleep, HRV, and Health Status are not Run-All output families in v1.2.0.
+- Race Prediction is a Garmin algorithm prediction, not a measured result.
+  Acute load and readiness components are source-provided and are not
+  recalculated. VO2Max source-series differences are not automatically
+  explained or collapsed.
+- Race Prediction, Acute Training Load, Training Readiness, VO2Max, and Training
+  History preserve each source observation. Their day-level QA view is a
+  non-canonical aggregate; the package does not choose a latest or preferred row.
+- Naive source timestamps are retained with timezone semantics explicitly
+  unconfirmed. Epoch-millisecond timestamps are normalized as UTC, and the
+  Activity VO2Max `timestampGmt` field is treated as UTC by its source-field name.
+- The v1.3 daily datasets are included in the prepared release source. Health
+  Status remains deferred, is not supported in v1.3, and is not present in the
+  stable registry or Run-All.
+- Wellness/Metrics datasets are not Activity facts. Their direct Activity
+  relationships remain `not_yet_defined`; documented same-day comparison is
+  context only and must not create row identity or imply causality.
 
 ## Distribution and integrations
 
@@ -71,3 +92,17 @@ explicit product boundaries, not hidden fallback behavior.
 The documented CLI and versioned Run-All output contract are stable for `1.x`.
 Other Python modules are usable but are not all promoted to an independently
 stable third-party API contract.
+
+## Performance metrics and deferred promotion
+
+- Hill Score Daily and Endurance Score Daily are stable v1.3 datasets.
+- No Activity relationship is defined for either daily dataset. Date equality
+  is not sufficient evidence for a join.
+- Lactate Threshold is provided as candidate/audit infrastructure only. Stable
+  public promotion is intentionally deferred until machine identity, units,
+  timezone semantics, heart-rate authority, FTP/power authority, and public
+  field/type rules are finalized. Fail-closed behavior is retained.
+- Lactate source sequence may order records within its source family, but it is
+  not identity and never authorizes latest-wins behavior.
+- Power conflicts remain review evidence and are not averaged, converted, or
+  silently resolved.

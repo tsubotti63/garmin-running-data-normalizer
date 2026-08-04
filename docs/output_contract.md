@@ -87,6 +87,15 @@ emit as either a JSON integer or string—`activity_id`, `gear_key`, and
 `personal_record_id`—use the explicit `integer|string` logical type; the
 normalizer does not silently coerce identity.
 
+For every normalized dataset, both machine artifacts also declare the runtime
+grain and stable key plus identical `relationship_role`, `semantic_role`,
+`canonical`, `projection_of`, `activity_relationship`, `join_guidance`,
+`forbidden_join_guidance`, `cardinality`, `allowed_use`, `limitations`, and
+`derived_projection` metadata. Direct joins still require a reviewed explicit
+relationship. A `context_only` entry permits a separately labelled same-day
+comparison but never an Activity fact-table merge. Derived CSV and QA daily
+views are non-canonical and have no selected-row rule.
+
 Every schema field separately declares `required` and `nullable`. A required
 field must be present in every record but may still allow an explicit JSON
 `null`; an optional field may be omitted when the source FIT definition did
@@ -169,6 +178,70 @@ The local Canonical build also records `canonical_merge_manifest.json`,
 `field_provenance.json`, `review_holds.json`, and
 `approved_input_manifest.json`. Those build artifacts are private lifecycle
 evidence and are not added to a normal one-shot output.
+
+## v1.3 daily metrics
+
+The prepared v1.3.0 release source adds the following optional Run-All
+artifacts. Production PyPI remains on `1.2.1` until publication is separately
+authorized:
+
+```text
+normalized/hill_score_daily.json
+normalized/endurance_score_daily.json
+normalized/race_prediction_daily.json
+normalized/sleep_daily.json
+normalized/uds_daily.json
+normalized/acute_training_load_daily.json
+normalized/training_readiness_daily.json
+normalized/vo2max_daily.json
+normalized/hrv_daily.json
+normalized/training_history_daily.json
+audit/hill_score_daily.json
+audit/endurance_score_daily.json
+audit/lactate_threshold_candidates.json
+audit/race_prediction_daily.json
+audit/sleep_daily.json
+audit/uds_daily.json
+audit/acute_training_load_daily.json
+audit/training_readiness_daily.json
+audit/vo2max_daily.json
+audit/hrv_daily.json
+audit/training_history_daily.json
+analysis/performance_metrics_daily.csv
+qa/performance_metrics_summary.json
+qa/daily_metrics_summary.json
+```
+
+The listed normalized datasets are optional stable datasets. When their
+source files are absent, Run-All emits empty normalized arrays and
+`SKIPPED_NOT_PRESENT` family evidence without adding a warning. Detected rows
+with missing or invalid required values remain visible through aggregate audit
+and warning counts. Race Prediction, Acute Training Load, Training Readiness,
+VO2Max, and Training History retain one row per source observation and expose
+`observation_timestamp`; no latest-wins or canonical daily-row selection is
+performed. Divergent public values for one stable key fail
+closed; HRV instead emits an unresolved review row with no selected value. The
+public rows intentionally exclude device, account, unapproved raw timestamp,
+and source-path fields. The five observation contracts expose only their
+normalized `observation_timestamp`. Health Status remains deferred.
+
+The Lactate Threshold file is an audit-only candidate catalog. It preserves
+source-family distinctions and explicitly records unconfirmed unit/timezone
+semantics; it does not publish a stable dataset, infer a machine stable key, or
+select a latest value. `analysis/performance_metrics_daily.csv` namespaces the
+two stable daily contexts with `hill_` and `endurance_` prefixes and
+does not authorize an Activity date join.
+
+The Lactate candidate entry in `ANALYSIS_CONTEXT.json` carries the same
+candidate boundary: one source-backed observation grain, no machine stable
+key, Activity relationship `not_yet_defined`, no join guidance, and no
+canonical daily projection. This metadata does not promote the audit file to a
+normalized dataset.
+
+Race Prediction, Sleep, UDS, Acute Training Load, Training Readiness, VO2Max,
+HRV, and Training History remain separate context. Their detailed fields,
+generation boundary, source-series behavior, missing-value policy, and
+interpretation limits are defined in [Wellness and Daily Metrics](wellness_metrics.md).
 
 ## Privacy boundary
 

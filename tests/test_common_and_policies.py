@@ -6,7 +6,11 @@ import unittest
 from pathlib import Path
 
 from garmin_running_data_normalizer.common.identity import garmin_activity_key, stable_hash
-from garmin_running_data_normalizer.common.time import daily_calendar_date, unix_ms_to_local_date
+from garmin_running_data_normalizer.common.time import (
+    daily_calendar_date,
+    normalize_observation_timestamp,
+    unix_ms_to_local_date,
+)
 from garmin_running_data_normalizer.policies.datasets import inspect_records, load_registry, validate_registry
 from garmin_running_data_normalizer.qa import deterministic_records_digest, summarize_records
 
@@ -22,14 +26,58 @@ class CommonAndPolicyTest(unittest.TestCase):
 
     def test_time_normalization(self) -> None:
         self.assertEqual(daily_calendar_date("2026-07-17T12:00:00"), "2026-07-17")
+        self.assertIsNone(daily_calendar_date(True))
         self.assertEqual(unix_ms_to_local_date(0, "Asia/Tokyo"), "1970-01-01")
+        self.assertEqual(
+            normalize_observation_timestamp(0),
+            ("1970-01-01T00:00:00Z", "EPOCH_MILLISECONDS_UTC"),
+        )
+        self.assertEqual(
+            normalize_observation_timestamp("2026-01-01T09:00:00+09:00"),
+            ("2026-01-01T00:00:00Z", "EXPLICIT_OFFSET_UTC_NORMALIZED"),
+        )
+        self.assertEqual(
+            normalize_observation_timestamp("2026-01-01T09:00:00"),
+            ("2026-01-01T09:00:00", "NAIVE_ISO8601_TIMEZONE_UNCONFIRMED"),
+        )
+        self.assertEqual(
+            normalize_observation_timestamp(
+                "2026-01-01T09:00:00", naive_timezone_semantics="UTC_SOURCE_FIELD"
+            ),
+            ("2026-01-01T09:00:00Z", "SOURCE_FIELD_NAMED_UTC_OR_GMT"),
+        )
 
     def test_registry_and_record_policy(self) -> None:
         root = Path(__file__).resolve().parents[1]
         registry, digest = load_registry(root / "config/dataset_registry.example.json")
         self.assertEqual(validate_registry(registry)["status"], "PASS")
-        self.assertEqual(registry["registry_version"], "1.1.0")
-        self.assertEqual(registry["status"], "stable_release_ready")
+        self.assertEqual(registry["registry_version"], "1.3.0")
+        self.assertEqual(
+            registry["status"],
+            "stable_release_ready",
+        )
+        self.assertEqual(
+            {item["name"] for item in registry["datasets"]} - {
+                "activities", "gear", "activity_gear", "personal_records",
+                "fit_sessions", "fit_laps", "activity_fit_links",
+            },
+            {
+                "hill_score_daily",
+                "endurance_score_daily",
+                "race_prediction_daily",
+                "sleep_daily",
+                "uds_daily",
+                "acute_training_load_daily",
+                "training_readiness_daily",
+                "vo2max_daily",
+                "hrv_daily",
+                "training_history_daily",
+            },
+        )
+        self.assertEqual(
+            registry["candidate_datasets"][0]["machine_stable_key_status"],
+            "PRODUCT_DECISION_REQUIRED",
+        )
         self.assertEqual(len(digest), 64)
         legacy_registry = {**registry, "status": "local_implementation_not_publication_ready"}
         self.assertEqual(validate_registry(legacy_registry)["status"], "PASS")

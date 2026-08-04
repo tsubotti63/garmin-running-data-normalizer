@@ -68,6 +68,21 @@ class StaticPolicyTest(unittest.TestCase):
                 ["src/production.py: non-Garmin production term"],
             )
 
+    def test_exact_garmin_wellness_source_name_is_allowed(self) -> None:
+        module = load_static_policy_module()
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            source = temporary / "src"
+            source.mkdir()
+            (source / "production.py").write_text(
+                "source_family = 'DI-Connect-Wellness'\n",
+                encoding="utf-8",
+            )
+
+            module.ROOT = temporary
+            module.SOURCE = source
+            self.assertEqual(module.content_violations(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

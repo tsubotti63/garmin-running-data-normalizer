@@ -1,5 +1,5 @@
 {
-  "registry_version": "1.1.0",
+  "registry_version": "1.3.0",
   "status": "stable_release_ready",
   "datasets": [
     {"name": "activities", "source_family": "garmin_account_export", "record_grain": "activity", "stable_key": ["garmin_activity_key"], "merge_policy": "entity_upsert", "provenance_required": true},
@@ -8,6 +8,28 @@
     {"name": "personal_records", "source_family": "garmin_account_export", "record_grain": "personal_record", "stable_key": ["personal_record_id"], "merge_policy": "entity_upsert", "provenance_required": true},
     {"name": "fit_sessions", "source_family": "garmin_account_export", "record_grain": "fit_session", "stable_key": ["fit_session_key"], "merge_policy": "immutable_blob_union", "provenance_required": true},
     {"name": "fit_laps", "source_family": "garmin_account_export", "record_grain": "fit_session_lap", "stable_key": ["fit_lap_key"], "merge_policy": "immutable_blob_union", "provenance_required": true},
-    {"name": "activity_fit_links", "source_family": "garmin_account_export", "record_grain": "activity_fit_session_link", "stable_key": ["garmin_activity_key", "fit_session_key"], "merge_policy": "temporal_event_union", "provenance_required": true}
+    {"name": "activity_fit_links", "source_family": "garmin_account_export", "record_grain": "activity_fit_session_link", "stable_key": ["garmin_activity_key", "fit_session_key"], "merge_policy": "temporal_event_union", "provenance_required": true},
+    {"name": "hill_score_daily", "source_family": "garmin_account_export", "record_grain": "calendar_day", "stable_key": ["calendar_date"], "merge_policy": "daily_state_upsert", "provenance_required": true},
+    {"name": "endurance_score_daily", "source_family": "garmin_account_export", "record_grain": "calendar_day", "stable_key": ["calendar_date"], "merge_policy": "daily_state_upsert", "provenance_required": true},
+    {"name": "race_prediction_daily", "source_family": "garmin_account_export", "record_grain": "source_observation", "stable_key": ["calendar_date", "observation_timestamp"], "merge_policy": "immutable_observation_union", "provenance_required": true},
+    {"name": "sleep_daily", "source_family": "garmin_account_export", "record_grain": "sleep_day", "stable_key": ["sleep_day"], "merge_policy": "daily_state_upsert", "provenance_required": true},
+    {"name": "uds_daily", "source_family": "garmin_account_export", "record_grain": "calendar_day", "stable_key": ["calendar_date"], "merge_policy": "daily_state_upsert", "provenance_required": true},
+    {"name": "acute_training_load_daily", "source_family": "garmin_account_export", "record_grain": "source_observation", "stable_key": ["calendar_date", "observation_timestamp"], "merge_policy": "immutable_observation_union", "provenance_required": true},
+    {"name": "training_readiness_daily", "source_family": "garmin_account_export", "record_grain": "source_observation", "stable_key": ["calendar_date", "observation_timestamp"], "merge_policy": "immutable_observation_union", "provenance_required": true},
+    {"name": "vo2max_daily", "source_family": "garmin_account_export", "record_grain": "source_observation", "stable_key": ["calendar_date", "vo2max_source_series", "sport", "observation_timestamp"], "merge_policy": "immutable_observation_union", "provenance_required": true},
+    {"name": "hrv_daily", "source_family": "garmin_account_export", "record_grain": "calendar_day", "stable_key": ["calendar_date"], "merge_policy": "immutable_blob_union", "provenance_required": true},
+    {"name": "training_history_daily", "source_family": "garmin_account_export", "record_grain": "source_observation", "stable_key": ["calendar_date", "observation_timestamp"], "merge_policy": "immutable_observation_union", "provenance_required": true}
+  ],
+  "candidate_datasets": [
+    {
+      "name": "lactate_threshold",
+      "record_grain": "threshold_observation",
+      "identity_anchor": "observation_timestamp",
+      "machine_stable_key_status": "PRODUCT_DECISION_REQUIRED",
+      "publication_status": "candidate_audit_only",
+      "observation_families": ["history", "latest_snapshot", "profile_state", "derived_evidence"],
+      "merge_policy": "immutable_observation_union",
+      "provenance_required": true
+    }
   ]
 }

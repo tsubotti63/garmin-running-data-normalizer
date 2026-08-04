@@ -1,12 +1,26 @@
 # Release Readiness
 
+## v1.3.0 prepared source
+
+Draft PR #10 prepares version `1.3.0` directly as the next stable release. The
+source includes 17 normalized datasets, reviewed Snapshot policies, expanded
+Output Experience, and lifecycle-aware relationship guidance. Aggregate Product
+Review reported `V1_3_READY_WITH_FIELD_LEVEL_GATES` with no release blocker;
+the remaining field-level gates apply only to future Lactate Threshold stable
+promotion.
+
+This preparation does not merge the PR, create `v1.3.0`, publish a GitHub
+Release, or upload to TestPyPI/Production PyPI. Until those separately approved
+steps complete, the published state below remains authoritative.
+
 ## Current repository state
 
 - Public repository operation: Active
 - Default branch: `main`
 - License: `Apache-2.0`
 - GitHub Actions: Operational
-- Python package version on `main`: `1.2.1`
+- Prepared branch source version: `1.3.0`
+- Current Production PyPI version: `1.2.1`
 - Latest GitHub Release: `v1.2.1`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VO2Max Source Observations",
+  "description": "Two Garmin source series presented as source observations with their series boundary explicit. No cross-series overwrite or causal claim is made.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["calendar_date", "observation_timestamp", "vo2max", "vo2max_source_series", "sport", "source_activity_id", "source_confidence", "max_met", "max_met_category", "calibrated_data"],
+    "properties": {
+      "calendar_date": {"type": "string", "format": "date"},
+      "observation_timestamp": {"type": "string", "description": "Activity timestampGmt is interpreted as UTC by source-field semantics; other naive source timestamps remain timezone-unconfirmed."},
+      "vo2max": {"type": "number"},
+      "vo2max_source_series": {"enum": ["activity_vo2max_daily", "performance_metrics_daily"]},
+      "sport": {"type": "string"},
+      "source_activity_id": {"type": ["integer", "null"], "description": "Supplemental source provenance only; never part of the stable key."},
+      "source_confidence": {"type": ["string", "null"]},
+      "max_met": {"type": ["number", "null"]},
+      "max_met_category": {"type": ["string", "null"]},
+      "calibrated_data": {"type": ["number", "null"]}
+    },
+    "additionalProperties": false
+  }
+}

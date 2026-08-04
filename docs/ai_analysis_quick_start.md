@@ -1,8 +1,9 @@
 # AI Analysis Quick Start
 
-This guide explains how to begin a bounded descriptive analysis from Garmin
-Running Data Normalizer `v1.2.1` output. The default path is local or otherwise
-trusted analysis. The product never uploads data automatically.
+This guide explains how to begin a bounded descriptive analysis from the
+currently published `v1.2.1` output and the compatible prepared `v1.3.0`
+release source. The default path is local or otherwise trusted analysis. The
+product never uploads data automatically.
 
 “AI-ready” means the handoff includes data-contract context. It does not
 guarantee that an AI answer is correct.
@@ -72,7 +73,10 @@ coverage != success rate
 
 - Report included, excluded, and missing row counts.
 - Use only explicit relationships declared by the handoff.
-- Do not join by date, timestamp, label, or filename similarity.
+- Do not join by date, timestamp, label, or filename similarity. For v1.3
+  Wellness/Metrics, a documented `context_only` same-day comparison must keep
+  separately aggregated context distinct from Activity facts and must not imply
+  row identity or causality.
 - Do not infer unavailable identity, location, unit, or source meaning.
 - Keep observed facts, calculations, interpretations, and unknowns separate.
 - Treat anomaly candidates as Human Review prompts, not conclusions.
