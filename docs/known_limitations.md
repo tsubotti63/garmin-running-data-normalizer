@@ -1,9 +1,8 @@
 # Known Limitations
 
-These limitations apply to the prepared v1.3.0 stable release source. The
-currently published stable release remains v1.2.1 until the separate release
-and package-publication gates complete. These are explicit product boundaries,
-not hidden fallback behavior.
+These limitations apply to the stable v1.3.0 GitHub Release and Production
+PyPI distribution. These are explicit product boundaries, not hidden fallback
+behavior.
 
 ## Input and orchestration
 
@@ -69,7 +68,7 @@ not hidden fallback behavior.
 - Naive source timestamps are retained with timezone semantics explicitly
   unconfirmed. Epoch-millisecond timestamps are normalized as UTC, and the
   Activity VO2Max `timestampGmt` field is treated as UTC by its source-field name.
-- The v1.3 daily datasets are included in the prepared release source. Health
+- The v1.3 daily datasets are included in stable v1.3.0. Health
   Status remains deferred, is not supported in v1.3, and is not present in the
   stable registry or Run-All.
 - Wellness/Metrics datasets are not Activity facts. Their direct Activity
@@ -81,7 +80,7 @@ not hidden fallback behavior.
 - Hosted processing, Garmin authentication, Open-Meteo, JMA, Instagram,
   wellness/coaching interpretation, Parquet output, and automatic personal
   analysis are outside the stable scope.
-- Stable v1.2.1 declares `tzdata` as a Windows-only runtime dependency and emits
+- Stable v1.3.0 retains `tzdata` as a Windows-only runtime dependency and emits
   the bounded `TIMEZONE_DATA_UNAVAILABLE` diagnostic if IANA timezone data is
   unavailable in an incomplete environment. Validation covers GitHub Actions
   `windows-latest` and one maintainer-owned physical Windows Production PyPI

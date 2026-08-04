@@ -1,10 +1,8 @@
 # Supported Datasets
 
 This document defines the supported Garmin dataset and interface scope for the
-prepared stable `1.3.0` release source. The currently published stable release
-remains `1.2.1` until the separate publication gates complete. All processing
-is local-first. Public fixtures are synthetic; real exports and generated
-personal output must remain local.
+stable `1.3.0` release. All processing is local-first. Public fixtures are
+synthetic; real exports and generated personal output must remain local.
 
 ## Stable CLI and output scope
 

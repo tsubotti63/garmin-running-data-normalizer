@@ -47,19 +47,21 @@ publication still requires its own current review and Human authorization.
 Implementation adapts the reviewed predecessor Snapshot Store, candidate,
 dataset-policy, diff, full-rebuild, and QA contracts to the public package.
 The change is additive: the v1.1.1 one-shot Run-All contract remains compatible.
-v1.2.1 is the current stable release. v1.2.0 release preparation completed full
-synthetic validation, private four-Snapshot validation, clean package-installed
-flows, and review evidence; TestPyPI, the annotated tag, GitHub Release, and
-Production PyPI were then completed and verified in their gated order.
+v1.2.1 was the stable Windows hotfix before v1.3.0. v1.2.0 release preparation
+completed full synthetic validation, private four-Snapshot validation, clean
+package-installed flows, and review evidence; TestPyPI, the annotated tag,
+GitHub Release, and Production PyPI were then completed and verified in their
+gated order.
 
-## v1.3 — Wellness / Metrics release preparation
+## v1.3 — Wellness / Metrics release — complete
 
-The prepared v1.3.0 source adds ten optional normalized Wellness/Metrics
+Stable v1.3.0 adds ten optional normalized Wellness/Metrics
 datasets and expands generated Output Experience to 17 datasets. Existing CLI,
 dataset IDs, stable keys, exit codes, imports, explicit relationships, Snapshot
 semantics, and privacy boundaries remain compatible. Lactate Threshold is
-candidate/audit-only and Health Status is deferred. Publication remains a
-separate Human-authorized sequence.
+candidate/audit-only and Health Status is deferred. The annotated tag, stable
+GitHub Release, Production PyPI publication, and exact-version verification
+completed on 2026-08-04. Additional v1.3 features are closed.
 
 ## P2 — initial package-index publication — historical complete
 

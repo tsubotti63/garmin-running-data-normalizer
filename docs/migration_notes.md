@@ -2,8 +2,8 @@
 
 ## v1.2.1 to v1.3.0
 
-v1.3.0 is an additive dataset release. The prepared source does not require an
-in-place data migration and does not overwrite existing output.
+v1.3.0 is an additive dataset release. It does not require an in-place data
+migration and does not overwrite existing output.
 
 | Contract | v1.3.0 position |
 |---|---|

@@ -31,13 +31,10 @@ Reusable descriptive analysis
 Human review
 ```
 
-Prepared release source: **v1.3.0** · Current published stable: **v1.2.1** ·
-Python **3.11+** · Apache License 2.0
+Current stable release: **v1.3.0** · Python **3.11+** · Apache License 2.0
 
-The v1.3.0 source is prepared for final Product authorization. It is not yet a
-GitHub Release or PyPI publication; install commands without an explicit local
-checkout continue to resolve the currently published v1.2.1 release until the
-separate publication gate completes.
+v1.3.0 is available as an annotated Git tag, a stable GitHub Release, and a
+verified Production PyPI distribution.
 
 - [Install from PyPI](https://pypi.org/project/garmin-running-data-normalizer/)
 - [Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md)
@@ -46,8 +43,8 @@ separate publication gate completes.
 - [FAQ](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/faq.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
-- [v1.3.0 Release Notes candidate](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.3.0.md)
-- [Current published Release v1.2.1](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.2.1)
+- [v1.3.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.3.0.md)
+- [Current stable Release v1.3.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.0)
 - [Project story on Zenn (Japanese): フルマラソンランナーが作った、Garmin ExportをAI分析へつなぐ正規化OSS](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-summary)
 
 ## Why this project
@@ -88,7 +85,7 @@ reproduction uses only synthetic fixtures.
 
 ## What v1.3.0 adds
 
-The prepared v1.3.0 source expands Run-All from the seven existing normalized
+The stable v1.3.0 release expands Run-All from the seven existing normalized
 datasets to **17 stable normalized datasets**. It adds Hill Score, Endurance
 Score, Race Prediction, Sleep, UDS, Acute Training Load, Training Readiness,
 VO2Max, HRV reference, and Training History outputs while preserving each
@@ -127,7 +124,7 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. Stable v1.2.1 installs
+`python -m garmin_running_data_normalizer --version`. Stable v1.3.0 installs
 `tzdata` automatically on Windows so Python can resolve the existing IANA
 `Asia/Tokyo` timezone contract. macOS and Linux continue to use their system
 timezone data.
@@ -316,17 +313,17 @@ locally and never uploads it.
 | Personal records | `personalRecord.json` normalizer | Run-All |
 | FIT sessions and laps | CRC-validated multi-session parser with `fit_session_key` and `fit_lap_key`; record coordinates and raw telemetry are not emitted | Run-All |
 | Activity/FIT links | Auditable evidence-qualified links with exclusions and relationship QA | Run-All |
-| Hill Score Daily | Public-safe calendar-day Hill Score state with fail-closed same-day conflict handling | Run-All in prepared v1.3.0 source |
-| Endurance Score Daily | Public-safe calendar-day Endurance Score state with fail-closed same-day conflict handling | Run-All in prepared v1.3.0 source |
+| Hill Score Daily | Public-safe calendar-day Hill Score state with fail-closed same-day conflict handling | Run-All in v1.3.0 |
+| Endurance Score Daily | Public-safe calendar-day Endurance Score state with fail-closed same-day conflict handling | Run-All in v1.3.0 |
 | Lactate Threshold | Four-family candidate/audit collection; unit, timezone, stable-key, and promotion gates remain open | Candidate audit only; not a stable dataset |
-| Race Prediction observations | Garmin-provided 5K/10K/Half/Marathon predictions keyed by date and source timestamp; no private device fields | Run-All in prepared v1.3.0 source |
-| Sleep Daily | `sleepData.json` bounded daily normalization with explicit review states; no filling or inferred awake time | Run-All in prepared v1.3.0 source |
-| UDS Daily | Selected steps, calories, heart rate, Body Battery, total stress, and source-presence flags | Run-All in prepared v1.3.0 source |
-| Acute Training Load observations | Garmin-provided timestamped acute/chronic values and ratio without recomputation or daily row selection | Run-All in prepared v1.3.0 source |
-| Training Readiness observations | Garmin-provided timestamped readiness score, level, recovery, and component context | Run-All in prepared v1.3.0 source |
-| VO2Max observations | Two source series in one generation-aware observation schema without cross-series overwrite | Run-All in prepared v1.3.0 source |
-| HRV Daily | FIT Message 370 / Field 1 bounded daily `analysis_reference_only` output | Run-All in prepared v1.3.0 source |
-| Training History observations | Limited date, source timestamp, status, and optional sport context | Run-All in prepared v1.3.0 source |
+| Race Prediction observations | Garmin-provided 5K/10K/Half/Marathon predictions keyed by date and source timestamp; no private device fields | Run-All in v1.3.0 |
+| Sleep Daily | `sleepData.json` bounded daily normalization with explicit review states; no filling or inferred awake time | Run-All in v1.3.0 |
+| UDS Daily | Selected steps, calories, heart rate, Body Battery, total stress, and source-presence flags | Run-All in v1.3.0 |
+| Acute Training Load observations | Garmin-provided timestamped acute/chronic values and ratio without recomputation or daily row selection | Run-All in v1.3.0 |
+| Training Readiness observations | Garmin-provided timestamped readiness score, level, recovery, and component context | Run-All in v1.3.0 |
+| VO2Max observations | Two source series in one generation-aware observation schema without cross-series overwrite | Run-All in v1.3.0 |
+| HRV Daily | FIT Message 370 / Field 1 bounded daily `analysis_reference_only` output | Run-All in v1.3.0 |
+| Training History observations | Limited date, source timestamp, status, and optional sport context | Run-All in v1.3.0 |
 | Health Status | Exact-suffix `healthStatusData.json` long metrics and fixed daily schema with explicit dedupe/review evidence | No; library level only |
 | Analysis Pack | Deterministic allowlist-only ZIP; optional external-safe profile is limited to month-level activity volume/count and removes identifiers, provenance, exact timestamps, and unneeded health/performance detail | Run-All opt-in |
 
@@ -335,8 +332,8 @@ provenance requirements. See
 [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 for the stable CLI/output boundary and library-level scope.
 
-The added rows above are part of the prepared v1.3.0 release source but are not
-available from Production PyPI until the separate publication gate completes.
+The added rows above are available in the stable v1.3.0 GitHub Release and
+Production PyPI distribution.
 See the [Performance Metrics
 Contract](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/performance_metrics.md)
 and [Wellness and Daily Metrics
@@ -461,8 +458,8 @@ exports and generated personal output belong in ignored local directories.
 ## Known limitations
 
 Run-All v1 requires Activities; all other dataset families are optional. The
-daily Wellness/Metrics outputs described above are included in the prepared
-v1.3.0 source, while Health Status remains deferred. Hosted processing,
+daily Wellness/Metrics outputs described above are included in stable v1.3.0,
+while Health Status remains deferred. Hosted processing,
 Open-Meteo, Parquet, and automatic upload are not
 included. One-shot processing does not combine separate Export
 downloads; retain each Export until the additive Snapshot lifecycle has

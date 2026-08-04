@@ -6,8 +6,7 @@
 - Applies to: `garmin-running-data-normalizer-run-all-v1`
 - Boundary: local Run-All output produced from a user-controlled Garmin Account Export
 - v1.3 note: additive context/observation relationship metadata is included in
-  the prepared v1.3.0 release source; Production PyPI remains 1.2.1 until the
-  separate publication gate completes
+  the stable v1.3.0 GitHub Release and Production PyPI distribution
 
 This specification defines how deterministic Run-All v1.1 output may be handed to a
 human analyst, a local analysis tool, or an AI assistant without confusing

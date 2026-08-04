@@ -6,9 +6,7 @@ or a real Garmin export.
 The root `QUICK_START.md` belongs to the adopted AI Collaboration Platform. This
 file is the product Quick Start for Garmin Running Data Normalizer.
 
-The repository currently contains the prepared v1.3.0 release source.
-Production PyPI continues to serve v1.2.1 until the separate publication gate
-completes.
+The repository and Production PyPI currently serve stable v1.3.0.
 
 ## Prerequisites
 
@@ -16,24 +14,25 @@ completes.
 - Git
 - A local shell: macOS/Linux shell or Windows PowerShell
 
-## Install the v1.2.1 stable release
+## Install the v1.3.0 stable release
 
 Install the reviewed release from Production PyPI:
 
 ```bash
-python -m pip install garmin-running-data-normalizer==1.2.1
+python -m pip install garmin-running-data-normalizer==1.3.0
 garmin-running-data-normalizer --version
 ```
 
 The version command prints
-`python -m garmin_running_data_normalizer 1.2.1`. The equivalent module command
+`python -m garmin_running_data_normalizer 1.3.0`. The equivalent module command
 is `python -m garmin_running_data_normalizer --version`.
 
-On Windows, v1.2.1 installs `tzdata` automatically through its conditional
-runtime dependency. One maintainer-owned physical Windows clean install from
-Production PyPI confirmed that dependency, `Asia/Tokyo` resolution, and the
-tracked Synthetic Run-All without a manual `tzdata` install. This is bounded
-evidence, not a universal compatibility claim.
+On Windows, v1.3.0 automatically installs `tzdata` through its conditional
+runtime dependency. One maintainer-owned physical Windows clean install of
+v1.2.1 previously confirmed that behavior, `Asia/Tokyo` resolution, and the
+tracked Synthetic Run-All without a manual `tzdata` install. Current v1.3.0
+Windows package paths are also validated by `windows-latest`; this remains
+bounded evidence, not a universal compatibility claim.
 
 ## Set up the repository fixtures
 
@@ -255,7 +254,7 @@ workspace/run-all/
   run_summary.json
 ```
 
-The prepared v1.3.0 release source additionally emits optional
+The stable v1.3.0 release additionally emits optional
 Hill Score, Endurance Score, Race Prediction, Sleep, UDS, Acute Training Load,
 Training Readiness, VO2Max, HRV-reference, and limited Training History datasets
 with aggregate audits. Race Prediction, Acute Training Load, Training Readiness,

@@ -1,13 +1,14 @@
 # Release Readiness Reference
 
-## Prepared next release
+## Current stable release
 
-- Candidate source version: `1.3.0`
+- Version: `1.3.0`
 - Scope: additive Wellness/Metrics datasets and Output Experience expansion
-- Review: Aggregate Product Review ready with Lactate field-level gates
-- Merge, tag, GitHub Release, TestPyPI, Production PyPI: not performed
-
-The candidate state does not replace the published facts below.
+- Review: Product review, release preparation, and release execution complete
+- GitHub Release: Published, non-prerelease, and marked latest
+- Production PyPI: Published and exact-version clean-install verified
+- TestPyPI: Not used for v1.3.0; it was not required by the approved release
+  contract
 
 ## Current facts
 
@@ -15,29 +16,30 @@ The candidate state does not replace the published facts below.
 - Default branch: `main`
 - License: `Apache-2.0`
 - CI: Operational
-- Prepared branch source version: `1.3.0`
-- Current Production PyPI version: `1.2.1`
-- Latest GitHub Release: `v1.2.1`
+- Current source and package version: `1.3.0`
+- Current Production PyPI version: `1.3.0`
+- Latest GitHub Release: `v1.3.0`
 - Release classification: Public, non-prerelease, and marked latest
-- Release tag: Annotated `v1.2.1` on the reviewed release commit
+- Release tag: Annotated `v1.3.0` on commit
+  `d2aca48b9a5b0bee732fa3f004c25289972e7e15`
 - PyPI packaging readiness: PASS on `main`
-- TestPyPI `1.2.1`: Published and clean-install verified
-- Production PyPI `1.2.1`: Published and clean-install verified
+- Production PyPI `1.3.0`: Published and clean-install verified
 
 Repository publication makes the source available for public maintenance. A Git
 tag identifies a Git object, a GitHub Release is a separately created GitHub
 artifact, and a versioned product release is a distinct project event. The
-published earlier tags and Releases remain immutable. v1.2.1 was published from
-a separately reviewed release commit without rewriting history or renaming an
-earlier artifact.
+published earlier tags and Releases remain immutable. v1.3.0 was published from
+the separately reviewed PR #10 Squash Commit without rewriting history or
+renaming an earlier artifact.
 
 ## Release readiness
 
 The Human owner confirmed redistribution rights for the predecessor-derived
-responsibilities retained by the reviewed implementation. v1.2.1 passed local
+responsibilities retained by the reviewed implementation. v1.3.0 passed local
 exact-source build, strict metadata, isolated installation, dependency,
-privacy, static-policy, packaging, and installed-product gates. CI and each
-external publication result were recorded only after they were observed.
+privacy, static-policy, packaging, schema/registry/relationship, Snapshot, and
+installed-product gates. Main CI and each external publication result were
+recorded only after they were observed.
 
 Post-publication evidence also records one maintainer-owned physical Windows
 clean install from Production PyPI. The Windows-only `tzdata` dependency was
