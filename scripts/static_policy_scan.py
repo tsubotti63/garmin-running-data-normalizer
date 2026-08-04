@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src"
 BANNED_IMPORT_PREFIXES = ("running_platform", "phase" + "1_", "phase" + "2_")
 BANNED_PRODUCTION_TERMS = re.compile(r"\b(jma|instagram|wellness|coaching)\b", re.IGNORECASE)
+GARMIN_WELLNESS_SOURCE_NAME = re.compile(r"DI-Connect-Wellness", re.IGNORECASE)
 EMAIL = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
 HOST_PATH = re.compile(
     r"(?:/" + r"Users/[^/\s]+|/" + r"home/[^/\s]+|[A-Za-z]:\\\\" + r"Users\\\\[^\\\s]+)"
@@ -59,7 +60,8 @@ def content_violations() -> list[str]:
             violations.append(f"{relative}: host absolute path")
         if SECRET_ASSIGNMENT.search(text):
             violations.append(f"{relative}: secret-like assignment")
-        if relative.startswith(("src/", "config/")) and BANNED_PRODUCTION_TERMS.search(text):
+        policy_text = GARMIN_WELLNESS_SOURCE_NAME.sub("DI-Connect-GarminSource", text)
+        if relative.startswith(("src/", "config/")) and BANNED_PRODUCTION_TERMS.search(policy_text):
             violations.append(f"{relative}: non-Garmin production term")
     return violations
 

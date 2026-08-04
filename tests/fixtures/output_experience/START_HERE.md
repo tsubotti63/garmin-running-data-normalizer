@@ -19,6 +19,8 @@ machine artifacts. It does not replace `run_summary.json`,
 | `gear` | `PROCESSED` | 2 | 0 | 0 |
 | `personal_records` | `PROCESSED` | 1 | 0 | 0 |
 | `fit` | `PROCESSED` | 4 | 0 | 0 |
+| `hill_score` | `SKIPPED_NOT_PRESENT` | 0 | 0 | 0 |
+| `endurance_score` | `SKIPPED_NOT_PRESENT` | 0 | 0 | 0 |
 
 ## Recommended Reading Order
 
@@ -30,21 +32,27 @@ machine artifacts. It does not replace `run_summary.json`,
 6. Use QA or audit evidence when a warning, partial result, or validation
    question affects the analysis.
 
-Recommended trusted-local analysis entry point: `analysis/activities.csv`.
+Recommended trusted-local activity entry point: `analysis/activities.csv`.
+Daily Hill/Endurance context: `analysis/performance_metrics_daily.csv`.
 
 ### Available Analysis Files
 
 - `analysis/activities.csv`
+- `analysis/performance_metrics_daily.csv`
 
 ### QA Evidence
 
 - `qa/dataset_summary.json`
+- `qa/performance_metrics_summary.json`
 - `qa/relationship_summary.json`
 
 ### Audit Evidence
 
 - `audit/activity_fit_linkage.json`
+- `audit/endurance_score_daily.json`
 - `audit/fit_audit.json`
+- `audit/hill_score_daily.json`
+- `audit/lactate_threshold_candidates.json`
 
 ## Relationship Coverage
 
@@ -118,6 +126,15 @@ remain in `audit/activity_fit_linkage.json`.
 - Duplicate: 0
 - Inference performed: No
 - Primary unresolved reason: None
+
+## Lactate Threshold Candidate Boundary
+
+- Status: `REVIEW_REQUIRED_STABLE_PROMOTION_BLOCKED`
+- Candidate observations: 0
+- Stable public promotion: No
+- Machine stable key: `PRODUCT_DECISION_REQUIRED`
+- Audit: `audit/lactate_threshold_candidates.json`
+- Units and source timezone remain unconfirmed; do not convert or infer them.
 
 ## Relationship Safety
 

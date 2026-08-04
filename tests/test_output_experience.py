@@ -39,6 +39,8 @@ def synthetic_projection_input() -> tuple[dict, dict, dict]:
         "fit_sessions": 1,
         "fit_laps": 2,
         "activity_fit_links": 1,
+        "hill_score_daily": 0,
+        "endurance_score_daily": 0,
     }
     manifest = {
         "format": "garmin-running-data-normalizer-run-manifest-v1",
@@ -108,6 +110,26 @@ def synthetic_projection_input() -> tuple[dict, dict, dict]:
                 "warning_count": 0,
                 "error_count": 0,
             },
+            "hill_score": {
+                "status": "SKIPPED_NOT_PRESENT",
+                "detected_asset_count": 0,
+                "processed_asset_count": 0,
+                "skipped_asset_count": 0,
+                "record_count": 0,
+                "warning_count": 0,
+                "error_count": 0,
+                "review_item_count": 0,
+            },
+            "endurance_score": {
+                "status": "SKIPPED_NOT_PRESENT",
+                "detected_asset_count": 0,
+                "processed_asset_count": 0,
+                "skipped_asset_count": 0,
+                "record_count": 0,
+                "warning_count": 0,
+                "error_count": 0,
+                "review_item_count": 0,
+            },
         },
         "warning_count": 0,
         "error_count": 0,
@@ -115,6 +137,15 @@ def synthetic_projection_input() -> tuple[dict, dict, dict]:
         "errors": [],
         "generated_paths": list(OUTPUT_PATHS),
         "deterministic_output_digest": "synthetic-digest",
+        "candidate_features": {
+            "lactate_threshold": {
+                "status": "REVIEW_REQUIRED_STABLE_PROMOTION_BLOCKED",
+                "candidate_count": 0,
+                "public_promotion": False,
+                "machine_stable_key_status": "PRODUCT_DECISION_REQUIRED",
+                "audit_path": "audit/lactate_threshold_candidates.json"
+            }
+        },
     }
     relationship_summary = {
         "status": "PASS",
@@ -262,11 +293,18 @@ class OutputExperienceTest(unittest.TestCase):
                 "normalized/fit_sessions.json",
                 "normalized/fit_laps.json",
                 "normalized/activity_fit_links.json",
+                "normalized/hill_score_daily.json",
+                "normalized/endurance_score_daily.json",
                 "audit/fit_audit.json",
                 "audit/activity_fit_linkage.json",
+                "audit/hill_score_daily.json",
+                "audit/endurance_score_daily.json",
+                "audit/lactate_threshold_candidates.json",
                 "analysis/activities.csv",
+                "analysis/performance_metrics_daily.csv",
                 "qa/dataset_summary.json",
                 "qa/relationship_summary.json",
+                "qa/performance_metrics_summary.json",
                 "START_HERE.md",
                 "DATASET_INVENTORY.md",
                 "ANALYSIS_HANDOFF.md",
@@ -486,7 +524,19 @@ class OutputExperienceTest(unittest.TestCase):
             "qa/relationship_summary.json",
         )
         self.assertEqual(context["product_version"], "1.2.1")
-        self.assertNotIn("not_yet_defined", json.dumps(context))
+        candidate_relationships = {
+            item["name"]: item["relationship_status"]
+            for item in context["datasets"]
+            if item["name"] in {"hill_score_daily", "endurance_score_daily"}
+        }
+        self.assertEqual(
+            candidate_relationships,
+            {
+                "hill_score_daily": "not_yet_defined",
+                "endurance_score_daily": "not_yet_defined",
+            },
+        )
+        self.assertFalse(context["candidate_features"]["lactate_threshold"]["public_promotion"])
         rendered = render_output_experience_artifacts(
             manifest,
             summary,

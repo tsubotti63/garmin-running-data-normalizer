@@ -85,6 +85,59 @@ def _write_snapshot(
     (root / "preserved-unknown.txt").write_text("synthetic\n", encoding="utf-8")
 
 
+def _write_performance_metrics(root: Path, day: int) -> None:
+    metrics = root / "DI-Connect-Metrics"
+    wellness = root / "DI-Connect-Wellness"
+    metrics.mkdir(exist_ok=True)
+    wellness.mkdir(exist_ok=True)
+    calendar_date = f"2030-01-{day:02d}"
+    (metrics / f"HillScore_synthetic_{day}.json").write_text(
+        json.dumps(
+            [
+                {
+                    "calendarDate": calendar_date,
+                    "overallScore": 70 + day,
+                    "strengthScore": 60 + day,
+                    "enduranceScore": 80 + day,
+                    "hillScoreClassificationId": 4,
+                    "hillScoreFeedbackPhraseId": 12,
+                    "deviceId": "PRIVATE-DEVICE",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (metrics / f"EnduranceScore_synthetic_{day}.json").write_text(
+        json.dumps(
+            [
+                {
+                    "calendarDate": calendar_date,
+                    "overallScore": 6000 + day,
+                    "classification": 5,
+                    "feedbackPhrase": 19,
+                    "userProfilePK": "PRIVATE-ACCOUNT",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (wellness / f"synthetic_{day}_userBioMetrics.json").write_text(
+        json.dumps(
+            [
+                {
+                    "metaData": {
+                        "calendarDate": calendar_date,
+                        "sequence": day,
+                        "userProfilePK": "PRIVATE-ACCOUNT",
+                    },
+                    "lactateThresholdHeartRate": 165 + day,
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 class SnapshotLifecycleTest(unittest.TestCase):
     def register(
         self,
@@ -240,6 +293,153 @@ class SnapshotLifecycleTest(unittest.TestCase):
             )
             self.assertTrue(
                 list((root / "build-a/approved_input/preserved_unknown").iterdir())
+            )
+
+    def test_performance_metrics_accumulate_without_private_fields_or_promotion(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            for day in range(1, 5):
+                source = root / f"source-{day}"
+                _write_snapshot(source, [_activity(f"A{day}")])
+                if day in {1, 3}:
+                    _write_performance_metrics(source, day)
+                self.register(store, source, f"S{day}", day)
+
+            build = build_approved_input(store, root / "build")
+            approved = root / "build/approved_input"
+            hill = json.loads(
+                (approved / "DI-Connect-Metrics/snapshot_HillScore.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            endurance = json.loads(
+                (
+                    approved
+                    / "DI-Connect-Metrics/snapshot_EnduranceScore.json"
+                ).read_text(encoding="utf-8")
+            )
+            lactate = json.loads(
+                (
+                    approved
+                    / "DI-Connect-Wellness/snapshot_userBioMetrics.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                [row["calendarDate"] for row in hill],
+                ["2030-01-01", "2030-01-03"],
+            )
+            self.assertEqual(
+                [row["calendarDate"] for row in endurance],
+                ["2030-01-01", "2030-01-03"],
+            )
+            public_payload = json.dumps(
+                {"hill": hill, "endurance": endurance, "lactate": lactate}
+            )
+            self.assertNotIn("PRIVATE-DEVICE", public_payload)
+            self.assertNotIn("PRIVATE-ACCOUNT", public_payload)
+            self.assertEqual(
+                build["merge_summary"]["datasets"]["hill_score_daily"][
+                    "previous_only_retained_count"
+                ],
+                2,
+            )
+            self.assertEqual(
+                build["merge_summary"]["datasets"]["endurance_score_daily"][
+                    "previous_only_retained_count"
+                ],
+                2,
+            )
+            policy = next(
+                item
+                for item in public_registry()["policies"]
+                if item["dataset"] == "lactate_threshold_candidates"
+            )
+            self.assertFalse(policy["canonical_public_output"])
+            self.assertEqual(
+                policy["machine_stable_key_status"], "PRODUCT_DECISION_REQUIRED"
+            )
+
+    def test_performance_metric_same_day_conflict_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            for day, score in ((1, 71), (2, 99)):
+                source = root / f"source-{day}"
+                _write_snapshot(source, [_activity(f"A{day}")])
+                metrics = source / "DI-Connect-Metrics"
+                metrics.mkdir()
+                (metrics / f"HillScore_conflict_{day}.json").write_text(
+                    json.dumps(
+                        [
+                            {
+                                "calendarDate": "2030-01-01",
+                                "overallScore": score,
+                                "strengthScore": 60,
+                                "enduranceScore": 80,
+                                "hillScoreClassificationId": 4,
+                                "hillScoreFeedbackPhraseId": 12,
+                            }
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+                self.register(store, source, f"S{day}", day)
+
+            with self.assertRaisesRegex(
+                SnapshotMergeError,
+                "canonical merge contains unresolved stop conflicts",
+            ):
+                build_approved_input(store, root / "build")
+            self.assertFalse((root / "build").exists())
+
+    def test_performance_metric_calendar_date_encodings_share_one_key(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            for day, calendar_date in (
+                (1, "2026-01-01"),
+                (2, 1_767_225_600_000),
+            ):
+                source = root / f"source-{day}"
+                _write_snapshot(source, [_activity(f"A{day}")])
+                metrics = source / "DI-Connect-Metrics"
+                metrics.mkdir()
+                (metrics / f"HillScore_encoding_{day}.json").write_text(
+                    json.dumps(
+                        [
+                            {
+                                "calendarDate": calendar_date,
+                                "overallScore": 71,
+                                "strengthScore": 60,
+                                "enduranceScore": 80,
+                                "hillScoreClassificationId": 4,
+                                "hillScoreFeedbackPhraseId": 12,
+                            }
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+                self.register(store, source, f"S{day}", day)
+
+            build = build_approved_input(store, root / "build")
+            hill = json.loads(
+                (
+                    root
+                    / "build/approved_input/DI-Connect-Metrics/"
+                    "snapshot_HillScore.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(len(hill), 1)
+            self.assertEqual(hill[0]["calendarDate"], "2026-01-01")
+            self.assertEqual(
+                build["merge_summary"]["datasets"]["hill_score_daily"][
+                    "canonical_record_count"
+                ],
+                1,
             )
 
     def test_archive_inventory_fit_dedup_and_run_all_lineage(self) -> None:

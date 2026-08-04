@@ -11,6 +11,7 @@ Internet access. The normalized data and machine artifacts remain authoritative.
 - `ANALYSIS_CONTEXT.json`
 - `SCHEMA_CATALOG.json`
 - `analysis/activities.csv`
+- `analysis/performance_metrics_daily.csv`
 - `run_summary.json`
 
 Use normalized JSON, relationship links, QA, or audit files only when the
@@ -28,6 +29,10 @@ question requires them and the local/trusted environment is authorized.
 7. Preserve and disclose warnings or partial FIT status.
 8. Ask for an additional approved file when the supplied artifacts cannot
    answer the question; do not invent source fields or context.
+9. Treat Hill and Endurance as standalone daily context. Their relationship
+   to activities is not defined, so date-based activity joins are prohibited.
+10. Lactate Threshold is candidate/audit-only. Do not treat candidates as a
+    stable dataset, convert unconfirmed units, or apply latest-wins.
 
 ## Relationship Coverage
 

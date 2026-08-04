@@ -22,14 +22,29 @@ class CommonAndPolicyTest(unittest.TestCase):
 
     def test_time_normalization(self) -> None:
         self.assertEqual(daily_calendar_date("2026-07-17T12:00:00"), "2026-07-17")
+        self.assertIsNone(daily_calendar_date(True))
         self.assertEqual(unix_ms_to_local_date(0, "Asia/Tokyo"), "1970-01-01")
 
     def test_registry_and_record_policy(self) -> None:
         root = Path(__file__).resolve().parents[1]
         registry, digest = load_registry(root / "config/dataset_registry.example.json")
         self.assertEqual(validate_registry(registry)["status"], "PASS")
-        self.assertEqual(registry["registry_version"], "1.1.0")
-        self.assertEqual(registry["status"], "stable_release_ready")
+        self.assertEqual(registry["registry_version"], "1.3.0-candidate")
+        self.assertEqual(
+            registry["status"],
+            "local_implementation_not_publication_ready",
+        )
+        self.assertEqual(
+            {item["name"] for item in registry["datasets"]} - {
+                "activities", "gear", "activity_gear", "personal_records",
+                "fit_sessions", "fit_laps", "activity_fit_links",
+            },
+            {"hill_score_daily", "endurance_score_daily"},
+        )
+        self.assertEqual(
+            registry["candidate_datasets"][0]["machine_stable_key_status"],
+            "PRODUCT_DECISION_REQUIRED",
+        )
         self.assertEqual(len(digest), 64)
         legacy_registry = {**registry, "status": "local_implementation_not_publication_ready"}
         self.assertEqual(validate_registry(legacy_registry)["status"], "PASS")
