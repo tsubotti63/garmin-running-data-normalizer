@@ -251,12 +251,16 @@ workspace/run-all/
   run_summary.json
 ```
 
-On the unreleased P13-M3 candidate branch, Run-All additionally emits optional
-Hill Score and Endurance Score daily datasets, their aggregate audits,
-`analysis/performance_metrics_daily.csv`, and a Lactate Threshold candidate
-audit. Absence of the two new optional source families does not add a warning.
-Lactate Threshold is not promoted to a stable normalized dataset. See
-[Performance Metrics Candidate Contract](performance_metrics.md).
+On the unreleased v1.3 candidate branch, Run-All additionally emits optional
+Hill Score, Endurance Score, Race Prediction, Sleep, UDS, Acute Training Load,
+Training Readiness, VO2Max, HRV-reference, and limited Training History daily
+datasets with aggregate audits. Their normalized paths follow
+`normalized/<dataset>.json`; `qa/daily_metrics_summary.json` provides the
+cross-family status view. Absence of these optional source families does not
+add a warning. Lactate Threshold is not promoted to a stable normalized
+dataset, and Health Status remains deferred. See [Performance Metrics Candidate
+Contract](performance_metrics.md) and [Wellness and Daily Metrics Candidate
+Contract](wellness_metrics.md).
 
 `run_summary.json` is written last and is the only completion marker. Exit code
 0 means `PASS` or `PASS_WITH_WARNINGS`; exit code 2 is a fatal contract, input,

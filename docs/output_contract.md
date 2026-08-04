@@ -170,7 +170,7 @@ The local Canonical build also records `canonical_merge_manifest.json`,
 `approved_input_manifest.json`. Those build artifacts are private lifecycle
 evidence and are not added to a normal one-shot output.
 
-## Unreleased P13-M3 performance-metrics candidate
+## Unreleased v1.3 daily-metrics candidate
 
 The P13-M3 feature branch adds the following Product-review artifacts without
 changing the published `1.2.1` package version:
@@ -178,20 +178,38 @@ changing the published `1.2.1` package version:
 ```text
 normalized/hill_score_daily.json
 normalized/endurance_score_daily.json
+normalized/race_prediction_daily.json
+normalized/sleep_daily.json
+normalized/uds_daily.json
+normalized/acute_training_load_daily.json
+normalized/training_readiness_daily.json
+normalized/vo2max_daily.json
+normalized/hrv_daily.json
+normalized/training_history_daily.json
 audit/hill_score_daily.json
 audit/endurance_score_daily.json
 audit/lactate_threshold_candidates.json
+audit/race_prediction_daily.json
+audit/sleep_daily.json
+audit/uds_daily.json
+audit/acute_training_load_daily.json
+audit/training_readiness_daily.json
+audit/vo2max_daily.json
+audit/hrv_daily.json
+audit/training_history_daily.json
 analysis/performance_metrics_daily.csv
 qa/performance_metrics_summary.json
+qa/daily_metrics_summary.json
 ```
 
-Hill Score and Endurance Score are optional stable-candidate daily datasets.
-When their files are absent, Run-All emits empty normalized arrays and
+The listed normalized daily datasets are optional stable candidates. When their
+source files are absent, Run-All emits empty normalized arrays and
 `SKIPPED_NOT_PRESENT` family evidence without adding a warning. Detected rows
 with missing or invalid required values remain visible through aggregate audit
-and warning counts. Divergent public values for one `calendar_date` fail
-closed. The public rows intentionally exclude device, account, raw timestamp,
-and source-path fields.
+and warning counts. Divergent public values for one daily stable key fail
+closed; HRV instead emits an unresolved review row with no selected value. The
+public rows intentionally exclude device, account, raw timestamp, and
+source-path fields. Health Status remains deferred.
 
 The Lactate Threshold file is an audit-only candidate catalog. It preserves
 source-family distinctions and explicitly records unconfirmed unit/timezone
@@ -199,6 +217,11 @@ semantics; it does not publish a stable dataset, infer a machine stable key, or
 select a latest value. `analysis/performance_metrics_daily.csv` namespaces the
 two stable-candidate daily contexts with `hill_` and `endurance_` prefixes and
 does not authorize an Activity date join.
+
+Race Prediction, Sleep, UDS, Acute Training Load, Training Readiness, VO2Max,
+HRV, and Training History remain separate daily context. Their detailed fields,
+generation boundary, source-series behavior, missing-value policy, and
+interpretation limits are defined in [Wellness and Daily Metrics](wellness_metrics.md).
 
 ## Privacy boundary
 

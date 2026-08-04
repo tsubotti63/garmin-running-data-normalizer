@@ -44,16 +44,22 @@ explicit product boundaries, not hidden fallback behavior.
 - Record coordinates, raw telemetry, and arbitrary FIT message preservation are
   intentionally excluded from public output.
 
-## Library-only datasets
+## Daily-metric boundaries
 
-- Sleep is not reconciled with FIT, does not recalculate scores, fill missing
+- The unreleased v1.3 Sleep candidate is not reconciled with FIT, does not recalculate scores, fill missing
   days, infer naps, shift days, or join activities.
-- Conflicting same-date HRV candidates are not averaged. Garmin/FIT raw sentinel
+- The unreleased v1.3 HRV reference does not average conflicting same-date
+  values. Garmin/FIT raw sentinel
   `65535` is excluded, and Health Status HRV is not asserted to be equivalent to
   nightly FIT HRV.
 - Health Status unknown metrics remain in long-form evidence; duplicate metric
   types are not silently overwritten.
-- Sleep, HRV, and Health Status are not Run-All output families in v1.2.0.
+- Race Prediction is a Garmin algorithm prediction, not a measured result.
+  Acute load and readiness components are source-provided and are not
+  recalculated. VO2Max source-series differences are not automatically
+  explained or collapsed.
+- The v1.3 daily datasets are implemented on this feature branch for Product
+  review; they are not part of stable v1.2.1. Health Status remains deferred.
 
 ## Distribution and integrations
 

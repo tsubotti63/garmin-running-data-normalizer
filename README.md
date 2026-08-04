@@ -288,8 +288,14 @@ locally and never uploads it.
 | Hill Score Daily | Public-safe calendar-day Hill Score state with fail-closed same-day conflict handling | Unreleased P13-M3 candidate; Product review pending |
 | Endurance Score Daily | Public-safe calendar-day Endurance Score state with fail-closed same-day conflict handling | Unreleased P13-M3 candidate; Product review pending |
 | Lactate Threshold | Four-family candidate/audit collection; unit, timezone, stable-key, and promotion gates remain open | Candidate audit only; not a stable dataset |
-| Sleep | `sleepData.json` daily normalization with review states and provenance; no filling or inference | No; library level only |
-| HRV | FIT Message 370 / Field 1 daily candidate with invalid-sentinel handling and non-promotional JSON consistency evidence | No; library level only |
+| Race Prediction Daily | Garmin-provided 5K/10K/Half/Marathon predictions; no private device fields | Unreleased v1.3 candidate; Product review pending |
+| Sleep Daily | `sleepData.json` bounded daily normalization with explicit review states; no filling or inferred awake time | Unreleased v1.3 candidate; Product review pending |
+| UDS Daily | Selected steps, calories, heart rate, Body Battery, total stress, and source-presence flags | Unreleased v1.3 candidate; Product review pending |
+| Acute Training Load Daily | Garmin-provided acute/chronic values and ratio without recomputation | Unreleased v1.3 candidate; Product review pending |
+| Training Readiness Daily | Garmin-provided readiness score, level, recovery, and component context | Unreleased v1.3 candidate; Product review pending |
+| VO2Max Daily | Two source series in one generation-aware schema without cross-series overwrite | Unreleased v1.3 candidate; Product review pending |
+| HRV Daily | FIT Message 370 / Field 1 bounded daily `analysis_reference_only` output | Unreleased v1.3 candidate; Product review pending |
+| Training History Daily | Limited `calendar_date` + `training_status` contract | Unreleased v1.3 candidate; Product review pending |
 | Health Status | Exact-suffix `healthStatusData.json` long metrics and fixed daily schema with explicit dedupe/review evidence | No; library level only |
 | Analysis Pack | Deterministic allowlist-only ZIP; optional external-safe profile is limited to month-level activity volume/count and removes identifiers, provenance, exact timestamps, and unneeded health/performance detail | Run-All opt-in |
 
@@ -298,9 +304,11 @@ provenance requirements. See
 [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 for the stable CLI/output boundary and library-level scope.
 
-The performance-metrics rows above describe work on the v1.3 candidate branch,
-not the current stable v1.2.1 package. See the
-[Performance Metrics Candidate Contract](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/performance_metrics.md).
+The candidate rows above describe work on the v1.3 branch, not the current
+stable v1.2.1 package. See the [Performance Metrics Candidate
+Contract](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/performance_metrics.md)
+and [Wellness and Daily Metrics Candidate
+Contract](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/wellness_metrics.md).
 
 ## Reviewed real-user validation
 
@@ -420,9 +428,10 @@ exports and generated personal output belong in ignored local directories.
 
 ## Known limitations
 
-Run-All v1 requires Activities; Gear, Personal Records, and FIT are optional.
-Sleep, HRV, and Health Status are library-level interfaces and are not Run-All
-outputs. Hosted processing, Open-Meteo, Parquet, and automatic upload are not
+Run-All v1 requires Activities; all other dataset families are optional. The
+daily Wellness/Metrics outputs described above remain unreleased v1.3
+candidates, and Health Status remains library-only. Hosted processing,
+Open-Meteo, Parquet, and automatic upload are not
 included. One-shot processing does not combine separate Export
 downloads; retain each Export until the additive Snapshot lifecycle has
 registered and verified it. Missing from a later Export is not a deletion

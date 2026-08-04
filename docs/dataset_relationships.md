@@ -29,6 +29,10 @@ Personal Records (activity_id = 0)
 Hill Score Daily                Endurance Score Daily
   └─ not_yet_defined       └─ not_yet_defined
      (standalone daily context; no Activity date join)
+
+Race Prediction / Sleep / UDS / Acute Load / Readiness / VO2Max / HRV /
+Training History
+  └─ not_yet_defined (separate daily context; no date-only Activity join)
 ```
 
 ## Relationship catalog
@@ -43,6 +47,14 @@ Hill Score Daily                Endurance Score Daily
 | `normalized/activity_fit_links.json` | `normalized/fit_sessions.json` | `explicit` | `fit_session_key` | one-to-one within eligible population | link rows are mutual unique evidence-qualified matches |
 | `normalized/hill_score_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | consume as standalone daily context; matching calendar dates do not authorize a join |
 | `normalized/endurance_score_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | consume as standalone daily context; matching calendar dates do not authorize a join |
+| `normalized/race_prediction_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | Garmin prediction context is not a measured Activity fact |
+| `normalized/sleep_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | `sleep_day` does not authorize an Activity date join |
+| `normalized/uds_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | generation-aware condition context only |
+| `normalized/acute_training_load_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | source-provided daily context; no recomputed relationship |
+| `normalized/training_readiness_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | readiness components remain a separate fact |
+| `normalized/vo2max_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | source-series labels do not establish an Activity relationship |
+| `normalized/hrv_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | analysis reference only; same-day conflict is not a join candidate |
+| `normalized/training_history_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | limited status context only |
 
 ## Activity/FIT eligibility contract
 
@@ -100,6 +112,10 @@ context, not an inferred causal or Activity relationship. Lactate Threshold
 observations remain candidate/audit evidence only and introduce no analytical
 relationship.
 
+The remaining v1.3 daily candidates are exposed as separate normalized JSON
+artifacts and aggregate audits. They do not form a denormalized daily master,
+and calendar co-presence never authorizes an Activity or cross-metric join.
+
 ## Prohibited joins
 
 - Do not join Activities and FIT by timestamp proximity outside
@@ -110,7 +126,8 @@ relationship.
 - Do not treat an absent optional family as evidence that the user has no such
   data.
 - Do not override an exclusion or ambiguity recorded by relationship audit.
-- Do not join Hill Score or Endurance Score to Activities by date.
+- Do not join any daily performance, prediction, sleep, stress, readiness,
+  VO2Max, HRV, or training-status dataset to Activities by date.
 - Do not treat Lactate Threshold candidates as a stable dataset or choose a
   latest observation across source families.
 

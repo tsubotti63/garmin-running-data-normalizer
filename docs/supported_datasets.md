@@ -4,9 +4,10 @@ This document defines the supported Garmin dataset and interface scope for the
 stable `1.2.1` release. All processing is local-first. Public fixtures are
 synthetic; real exports and generated personal output must remain local.
 
-The P13-M3 work on this feature branch is an **unreleased v1.3 candidate**. It
-adds the Hill Score and Endurance Score contracts described below for Product
-review; it does not change the current stable release.
+The work on this feature branch is an **unreleased v1.3 candidate**. It adds
+daily performance, prediction, sleep, stress, readiness, VO2Max, HRV-reference,
+and limited training-status contracts for Product review; it does not change
+the current stable release.
 
 ## Stable CLI and output scope
 
@@ -25,18 +26,26 @@ machine authorities.
 | `activity_fit_links` | Activities and CRC-valid FIT Sessions; Run-All | Auditable evidence-qualified relationship records | Activity/FIT session link | `garmin_activity_key`, `fit_session_key` | no | both Activity and FIT provenance | Explicit one-to-one join within the evidence-qualified eligible population |
 | `hill_score_daily` | exact-suffix `HillScore*.json`; candidate Run-All | Authoritative public-safe daily Hill Score state | calendar day | `calendar_date` | no | aggregate source-lineage audit; private source fields are not emitted | Standalone daily performance context; no Activity relationship is defined |
 | `endurance_score_daily` | exact-suffix `EnduranceScore*.json`; candidate Run-All | Authoritative public-safe daily Endurance Score state | calendar day | `calendar_date` | no | aggregate source-lineage audit; private source fields are not emitted | Standalone daily performance context; no Activity relationship is defined |
+| `race_prediction_daily` | `RunRacePredictions*.json`; candidate Run-All | Garmin source-provided race predictions | calendar day | `calendar_date` | no | aggregate source-lineage audit | Standalone prediction context; not a measured race result |
+| `sleep_daily` | `*sleepData.json`; candidate Run-All | Bounded normalized sleep state and explicit review rows | sleep day | `sleep_day` | no | aggregate source-lineage audit | Standalone condition context; missing values are not inferred |
+| `uds_daily` | `UDSFile*.json`; candidate Run-All | Selected source-provided activity, heart-rate, Body Battery, and stress context | calendar day | `calendar_date` | no | aggregate source-lineage audit | Generation-aware condition context with explicit source-presence flags |
+| `acute_training_load_daily` | `MetricsAcuteTrainingLoad*.json`; candidate Run-All | Source-provided acute/chronic load context | calendar day | `calendar_date` | no | aggregate source-lineage audit | No ratio or status recomputation |
+| `training_readiness_daily` | `TrainingReadinessDTO*.json`; candidate Run-All | Source-provided readiness and component context | calendar day | `calendar_date` | no | aggregate source-lineage audit | HRV-labelled components remain source-provided readiness fields |
+| `vo2max_daily` | `ActivityVo2Max*.json`, `MetricsMaxMetData*.json`; candidate Run-All | Unified schema retaining two source series | calendar day | `calendar_date` | no | aggregate source-lineage audit | Source-series boundary is explicit; no cross-series overwrite |
+| `hrv_daily` | non-running FIT message 370 field 1; candidate Run-All | Bounded FIT-derived analysis reference | calendar day | `calendar_date` | no | aggregate FIT audit | `analysis_reference_only`; conflicting same-day values remain unresolved |
+| `training_history_daily` | `TrainingHistory*.json`; candidate Run-All | Limited two-field training-status state | calendar day | `calendar_date` | no | aggregate source-lineage audit | No promotion of sparse or unapproved history fields |
 
 Run-All requires Activities. Gear, Personal Records, and FIT are optional and
 produce explicit `SKIPPED_NOT_PRESENT` evidence when absent. The documented CLI,
 exit-code behavior, fixed output paths, run completion marker, provenance, and
 versioned Run-All manifest fields form the stable `1.x` interface.
 
-On the P13-M3 candidate branch, Hill Score and Endurance Score are also
-optional. Their absence is an expected source condition and does not add a new
-warning. If present, a row is accepted only with a valid `calendar_date` and
-numeric `overall_score`. Exact duplicates and same-public-value duplicates are
-deduplicated; divergent public values for the same day fail closed. Missing
-from a later Snapshot never means delete.
+All v1.3 candidate daily families are optional. Their absence is an expected
+source condition and does not add a warning. Exact duplicates are deduplicated;
+divergent public values for the same stable key fail closed, except that the HRV
+reference preserves an explicit unresolved review row. Missing from a later
+Snapshot never means delete. The shared generation/source boundary and exact
+field contracts are defined in [Wellness and Daily Metrics](wellness_metrics.md).
 
 The deterministic `analysis/activities.csv` is a reduced one-row-per-activity
 projection of `normalized/activities.json`. It is the existing analysis handoff
@@ -64,20 +73,25 @@ declared grain; they do not independently authorize a cross-dataset join.
 | Activity/FIT links | regenerate | unresolved remains unresolved | current evidence-qualified policy |
 | Hill Score Daily | daily state upsert by `calendar_date` | retain previous | public-safe daily JSON |
 | Endurance Score Daily | daily state upsert by `calendar_date` | retain previous | public-safe daily JSON |
+| Race Prediction Daily | daily state upsert by `calendar_date` | retain previous | source-shaped candidate JSON |
+| Sleep Daily | daily state upsert by `sleep_day` | retain previous | source-shaped candidate JSON |
+| UDS Daily | daily state upsert by `calendar_date` | retain previous | source-shaped candidate JSON |
+| Acute Training Load Daily | daily state upsert by `calendar_date` | retain previous | source-shaped candidate JSON |
+| Training Readiness Daily | daily state upsert by `calendar_date` | retain previous | source-shaped candidate JSON |
+| VO2Max Daily | daily state upsert by `calendar_date` | retain previous | two-series source-shaped candidate JSON |
+| HRV Daily | regenerate from cumulative FIT blob union | derived from retained FIT evidence | analysis-reference JSON |
+| Training History Daily | daily state upsert by `calendar_date` | retain previous | limited source-shaped candidate JSON |
 | Lactate Threshold candidates | immutable candidate observation union | retain all source families | audit-only; no stable dataset promotion |
 | Unknown/unsupported | preserve only | never discard automatically | raw private evidence only |
 
 The machine-readable policy authority is
-`config/garmin_snapshot_dataset_merge_policies_v1.json`. Sleep, HRV, Health
-Status, and training-state families are future-ready policy entries only; they
-are not promoted to Snapshot Run-All output in v1.2.
+`config/garmin_snapshot_dataset_merge_policies_v1.json`. Health Status remains
+the only deferred future-ready policy entry in this tranche.
 
 ## Library-level scope
 
 | Dataset or output | Implemented behavior | Stable CLI/Run-All status |
 |---|---|---|
-| Sleep | Daily normalization, review states, content identity, provenance | Library only |
-| HRV | Bounded FIT Message 370 candidate and JSON consistency evidence | Library only |
 | Health Status | Complete long metrics and fixed daily schema | Library only |
 | Analysis Pack | Deterministic allowlist-only ZIP builder | Library only |
 
@@ -98,10 +112,10 @@ performed. A machine stable key remains a Product decision gate.
 ## Registry lifecycle
 
 The example registry on this feature branch is version `1.3.0-candidate` with
-status `local_implementation_not_publication_ready`. It declares Hill Score and
-Endurance Score as stable-candidate datasets and keeps Lactate Threshold in the
-separate candidate registry section. This is implementation evidence, not a
-release or publication claim.
+status `local_implementation_not_publication_ready`. It declares the reviewed
+daily datasets as stable candidates, keeps Lactate Threshold in the separate
+candidate registry section, and defers Health Status. This is implementation
+evidence, not a release or publication claim.
 
 See [Known Limitations](known_limitations.md), the
 [Product Quick Start](product_quick_start.md), and the
