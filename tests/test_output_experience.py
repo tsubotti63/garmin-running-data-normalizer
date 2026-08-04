@@ -55,7 +55,7 @@ def synthetic_projection_input() -> tuple[dict, dict, dict]:
     }
     manifest = {
         "format": "garmin-running-data-normalizer-run-manifest-v1",
-        "product_version": "1.2.1",
+        "product_version": "1.3.0",
         "run_all_version": 1,
         "input_assets": [
             {
@@ -80,7 +80,7 @@ def synthetic_projection_input() -> tuple[dict, dict, dict]:
     }
     summary = {
         "format": "garmin-running-data-normalizer-run-summary-v1",
-        "product_version": "1.2.1",
+        "product_version": "1.3.0",
         "run_all_version": 1,
         "status": "PASS",
         "family_results": {
@@ -573,7 +573,7 @@ class OutputExperienceTest(unittest.TestCase):
             activity_coverage["qa_reference"],
             "qa/relationship_summary.json",
         )
-        self.assertEqual(context["product_version"], "1.2.1")
+        self.assertEqual(context["product_version"], "1.3.0")
         candidate_relationships = {
             item["name"]: item["relationship_status"]
             for item in context["datasets"]

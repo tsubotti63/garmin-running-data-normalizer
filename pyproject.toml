@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "garmin-running-data-normalizer"
-version = "1.2.1"
+dynamic = ["version"]
 description = "Deterministic local Garmin Account Export normalization primitives"
 readme = "README.md"
 license = "Apache-2.0"
@@ -36,6 +36,9 @@ garmin-running-data-normalizer = "garmin_running_data_normalizer.runner:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "garmin_running_data_normalizer.__version__"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

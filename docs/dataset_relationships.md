@@ -8,9 +8,9 @@ Similar fields, filenames, dates, or timestamps never authorize a direct join
 by themselves.
 
 Relationship status uses `explicit`, `indirect`, `independent`,
-`not_yet_defined`, or `unsupported`. The current stable Run-All datasets use
+`not_yet_defined`, or `unsupported`. The stable Run-All datasets use
 only reviewed `explicit` relationships plus the documented independent
-Personal Record exception. The unreleased v1.3 entries add contextual
+Personal Record exception. The v1.3 entries add contextual
 comparison guidance; they do not add a direct Activity relationship.
 
 `analysis/activities.csv` is a reduced deterministic projection of
@@ -138,14 +138,14 @@ same contracts. Snapshot order, filename similarity, or timestamp proximity
 does not create an additional relationship. Lifecycle lineage and coverage
 qualify the cumulative input but do not authorize a new analytical join.
 
-The P13-M3 candidate also emits `analysis/performance_metrics_daily.csv` as a
+v1.3 also emits `analysis/performance_metrics_daily.csv` as a
 convenience projection of the two daily datasets. Columns are namespaced with
 `hill_` and `endurance_`; co-presence on a calendar day is presentation
 context, not an inferred causal or Activity relationship. Lactate Threshold
 observations remain candidate/audit evidence only and introduce no analytical
 relationship.
 
-The remaining v1.3 daily candidates are exposed as separate normalized JSON
+The remaining v1.3 daily datasets are exposed as separate normalized JSON
 artifacts and aggregate audits. They do not form a denormalized daily master,
 and calendar co-presence never authorizes an Activity or cross-metric join.
 

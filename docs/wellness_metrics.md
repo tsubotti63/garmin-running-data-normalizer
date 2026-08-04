@@ -1,7 +1,8 @@
-# Wellness and Daily Metrics Candidate Contract
+# Wellness and Daily Metrics Contract
 
-This document defines the unreleased v1.3 Product-review contract for daily
-condition and prediction datasets. The current stable package remains `1.2.1`.
+This document defines the daily condition and prediction dataset contract in
+the prepared v1.3.0 stable release source. Production PyPI remains on `1.2.1`
+until the separate publication gate completes.
 Every family is optional and remains separate from the Activity fact table.
 Race Prediction, Acute Training Load, Training Readiness, VO2Max, and Training
 History are stored at one source-observation grain. Hill Score, Endurance Score,
@@ -28,7 +29,7 @@ UDS, and HRV retain calendar-day contracts; Sleep uses `sleep_day`.
 ## Generation boundary
 
 Available Garmin measurements change across device and export generations. For
-this candidate, approximately 2015-2021 is described as the earlier generation
+this contract, approximately 2015-2021 is described as the earlier generation
 and 2022 onward as the later generation. This is descriptive source context,
 not a claim that the periods are complete, homogeneous, or automatically
 equivalent. A missing field outside its source period remains null. The VO2Max

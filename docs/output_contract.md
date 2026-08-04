@@ -179,10 +179,11 @@ The local Canonical build also records `canonical_merge_manifest.json`,
 `approved_input_manifest.json`. Those build artifacts are private lifecycle
 evidence and are not added to a normal one-shot output.
 
-## Unreleased v1.3 daily-metrics candidate
+## v1.3 daily metrics
 
-The P13-M3 feature branch adds the following Product-review artifacts without
-changing the published `1.2.1` package version:
+The prepared v1.3.0 release source adds the following optional Run-All
+artifacts. Production PyPI remains on `1.2.1` until publication is separately
+authorized:
 
 ```text
 normalized/hill_score_daily.json
@@ -211,7 +212,7 @@ qa/performance_metrics_summary.json
 qa/daily_metrics_summary.json
 ```
 
-The listed normalized datasets are optional stable candidates. When their
+The listed normalized datasets are optional stable datasets. When their
 source files are absent, Run-All emits empty normalized arrays and
 `SKIPPED_NOT_PRESENT` family evidence without adding a warning. Detected rows
 with missing or invalid required values remain visible through aggregate audit
@@ -228,7 +229,7 @@ The Lactate Threshold file is an audit-only candidate catalog. It preserves
 source-family distinctions and explicitly records unconfirmed unit/timezone
 semantics; it does not publish a stable dataset, infer a machine stable key, or
 select a latest value. `analysis/performance_metrics_daily.csv` namespaces the
-two stable-candidate daily contexts with `hill_` and `endurance_` prefixes and
+two stable daily contexts with `hill_` and `endurance_` prefixes and
 does not authorize an Activity date join.
 
 The Lactate candidate entry in `ANALYSIS_CONTEXT.json` carries the same

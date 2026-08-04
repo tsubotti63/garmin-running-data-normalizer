@@ -246,7 +246,7 @@ def public_registry() -> dict[str, Any]:
     return {
         "registry_version": REGISTRY_VERSION,
         "contract_version": CONTRACT_VERSION,
-        "target_release": "1.3.0-candidate",
+        "target_release": "1.3.0",
         "defaults": DEFAULTS,
         "policies": [POLICIES[name] for name in PUBLIC_POLICY_ORDER],
         "future_ready_policies": [

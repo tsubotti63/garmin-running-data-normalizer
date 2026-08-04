@@ -1,12 +1,12 @@
-# Performance Metrics Candidate Contract
+# Performance Metrics Contract
 
 ## Status
 
-This document describes the P13-M3 implementation candidate for Product
-review. The current stable release remains v1.2.1. No version, release, or PyPI
-publication is implied.
+This document describes the performance-metrics contract in the prepared
+v1.3.0 stable release source. Production PyPI remains on v1.2.1 until the
+separate publication gate completes.
 
-## Stable-candidate daily datasets
+## Stable daily datasets
 
 `hill_score_daily` has calendar-day grain and exposes only:
 

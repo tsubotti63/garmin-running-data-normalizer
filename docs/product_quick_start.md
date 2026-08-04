@@ -6,6 +6,10 @@ or a real Garmin export.
 The root `QUICK_START.md` belongs to the adopted AI Collaboration Platform. This
 file is the product Quick Start for Garmin Running Data Normalizer.
 
+The repository currently contains the prepared v1.3.0 release source.
+Production PyPI continues to serve v1.2.1 until the separate publication gate
+completes.
+
 ## Prerequisites
 
 - Python 3.11 or later
@@ -251,7 +255,7 @@ workspace/run-all/
   run_summary.json
 ```
 
-On the unreleased v1.3 candidate branch, Run-All additionally emits optional
+The prepared v1.3.0 release source additionally emits optional
 Hill Score, Endurance Score, Race Prediction, Sleep, UDS, Acute Training Load,
 Training Readiness, VO2Max, HRV-reference, and limited Training History datasets
 with aggregate audits. Race Prediction, Acute Training Load, Training Readiness,
@@ -260,8 +264,8 @@ summary is derived and never selects a canonical row. Their normalized paths fol
 `normalized/<dataset>.json`; `qa/daily_metrics_summary.json` provides the
 cross-family status view. Absence of these optional source families does not
 add a warning. Lactate Threshold is not promoted to a stable normalized
-dataset, and Health Status remains deferred. See [Performance Metrics Candidate
-Contract](performance_metrics.md) and [Wellness and Daily Metrics Candidate
+dataset, and Health Status remains deferred. See [Performance Metrics
+Contract](performance_metrics.md) and [Wellness and Daily Metrics
 Contract](wellness_metrics.md).
 
 `run_summary.json` is written last and is the only completion marker. Exit code

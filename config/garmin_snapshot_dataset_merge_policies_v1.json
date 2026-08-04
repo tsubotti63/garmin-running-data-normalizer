@@ -215,5 +215,5 @@
     }
   ],
   "registry_version": "garmin_public_snapshot_dataset_merge_policies:v1.0",
-  "target_release": "1.3.0-candidate"
+  "target_release": "1.3.0"
 }
