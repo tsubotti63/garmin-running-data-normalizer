@@ -4,6 +4,10 @@ This document defines the supported Garmin dataset and interface scope for the
 stable `1.2.1` release. All processing is local-first. Public fixtures are
 synthetic; real exports and generated personal output must remain local.
 
+The P13-M3 work on this feature branch is an **unreleased v1.3 candidate**. It
+adds the Hill Score and Endurance Score contracts described below for Product
+review; it does not change the current stable release.
+
 ## Stable CLI and output scope
 
 This section is the human-readable Dataset Catalog for the stable Run-All v1
@@ -19,11 +23,20 @@ machine authorities.
 | `fit_sessions` | CRC-valid bounded Activity `.fit`; Run-All | Authoritative bounded FIT session summaries | FIT session | `fit_session_key` | no | `source_path`, `source_sha256`; compatible `fit_file_id` retained | Local bounded session analysis after audit review |
 | `fit_laps` | CRC-valid bounded Activity `.fit`; Run-All | Authoritative bounded FIT lap summaries | FIT session lap | `fit_lap_key` | no | `source_path`, `source_sha256`; compatible `fit_file_id`, `lap_index` retained | Explicit child of a FIT session through `fit_session_key` |
 | `activity_fit_links` | Activities and CRC-valid FIT Sessions; Run-All | Auditable evidence-qualified relationship records | Activity/FIT session link | `garmin_activity_key`, `fit_session_key` | no | both Activity and FIT provenance | Explicit one-to-one join within the evidence-qualified eligible population |
+| `hill_score_daily` | exact-suffix `HillScore*.json`; candidate Run-All | Authoritative public-safe daily Hill Score state | calendar day | `calendar_date` | no | aggregate source-lineage audit; private source fields are not emitted | Standalone daily performance context; no Activity relationship is defined |
+| `endurance_score_daily` | exact-suffix `EnduranceScore*.json`; candidate Run-All | Authoritative public-safe daily Endurance Score state | calendar day | `calendar_date` | no | aggregate source-lineage audit; private source fields are not emitted | Standalone daily performance context; no Activity relationship is defined |
 
 Run-All requires Activities. Gear, Personal Records, and FIT are optional and
 produce explicit `SKIPPED_NOT_PRESENT` evidence when absent. The documented CLI,
 exit-code behavior, fixed output paths, run completion marker, provenance, and
 versioned Run-All manifest fields form the stable `1.x` interface.
+
+On the P13-M3 candidate branch, Hill Score and Endurance Score are also
+optional. Their absence is an expected source condition and does not add a new
+warning. If present, a row is accepted only with a valid `calendar_date` and
+numeric `overall_score`. Exact duplicates and same-public-value duplicates are
+deduplicated; divergent public values for the same day fail closed. Missing
+from a later Snapshot never means delete.
 
 The deterministic `analysis/activities.csv` is a reduced one-row-per-activity
 projection of `normalized/activities.json`. It is the existing analysis handoff
@@ -49,6 +62,9 @@ declared grain; they do not independently authorize a cross-dataset join.
 | FIT blobs | immutable content union | retain old-only content | one file per unique content |
 | FIT Sessions/Laps | regenerate | derived from cumulative FIT union | current parser and stable keys |
 | Activity/FIT links | regenerate | unresolved remains unresolved | current evidence-qualified policy |
+| Hill Score Daily | daily state upsert by `calendar_date` | retain previous | public-safe daily JSON |
+| Endurance Score Daily | daily state upsert by `calendar_date` | retain previous | public-safe daily JSON |
+| Lactate Threshold candidates | immutable candidate observation union | retain all source families | audit-only; no stable dataset promotion |
 | Unknown/unsupported | preserve only | never discard automatically | raw private evidence only |
 
 The machine-readable policy authority is
@@ -69,12 +85,23 @@ Library-level support means the implementation and synthetic tests are present,
 but the dataset is not a promised Run-All output. These interfaces may evolve
 compatibly as their normative contracts mature.
 
+## Lactate Threshold candidate boundary
+
+P13-M3 discovers Lactate Threshold observations from history,
+latest-snapshot, profile-state, and derived-evidence source families. The
+records remain in `audit/lactate_threshold_candidates.json`; they are not
+promoted to a stable normalized dataset. Units and timezone are explicitly
+`UNCONFIRMED`, sequence is ordering evidence only, and no latest-wins,
+cross-source collapse, value conversion, or relationship inference is
+performed. A machine stable key remains a Product decision gate.
+
 ## Registry lifecycle
 
-The example registry is version `1.1.0` with status `stable_release_ready`.
-Validation continues to accept the previous
-`local_implementation_not_publication_ready` status so existing registries are
-not invalidated by this release.
+The example registry on this feature branch is version `1.3.0-candidate` with
+status `local_implementation_not_publication_ready`. It declares Hill Score and
+Endurance Score as stable-candidate datasets and keeps Lactate Threshold in the
+separate candidate registry section. This is implementation evidence, not a
+release or publication claim.
 
 See [Known Limitations](known_limitations.md), the
 [Product Quick Start](product_quick_start.md), and the

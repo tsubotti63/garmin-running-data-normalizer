@@ -71,3 +71,17 @@ explicit product boundaries, not hidden fallback behavior.
 The documented CLI and versioned Run-All output contract are stable for `1.x`.
 Other Python modules are usable but are not all promoted to an independently
 stable third-party API contract.
+
+## Unreleased performance-metrics candidate
+
+- Hill Score Daily and Endurance Score Daily are implemented on the P13-M3
+  feature branch for Product review; they are not part of stable v1.2.1.
+- No Activity relationship is defined for either daily dataset. Date equality
+  is not sufficient evidence for a join.
+- Lactate Threshold remains candidate/audit-only. Its machine stable key,
+  numeric units, and timezone semantics require Product decisions or stronger
+  source evidence before stable promotion.
+- Lactate source sequence may order records within its source family, but it is
+  not identity and never authorizes latest-wins behavior.
+- Power conflicts remain review evidence and are not averaged, converted, or
+  silently resolved.

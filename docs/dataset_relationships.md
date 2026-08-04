@@ -25,6 +25,10 @@ Activities
 
 Personal Records (activity_id = 0)
   └─ independent non-activity record
+
+Hill Score Daily                Endurance Score Daily
+  └─ not_yet_defined       └─ not_yet_defined
+     (standalone daily context; no Activity date join)
 ```
 
 ## Relationship catalog
@@ -37,6 +41,8 @@ Personal Records (activity_id = 0)
 | `normalized/fit_laps.json` | `normalized/fit_sessions.json` | `explicit` | `fit_session_key` | many-to-one | every lap has one existing parent session |
 | `normalized/activity_fit_links.json` | `normalized/activities.json` | `explicit` | `garmin_activity_key` | one-to-one within eligible population | link rows are mutual unique evidence-qualified matches |
 | `normalized/activity_fit_links.json` | `normalized/fit_sessions.json` | `explicit` | `fit_session_key` | one-to-one within eligible population | link rows are mutual unique evidence-qualified matches |
+| `normalized/hill_score_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | consume as standalone daily context; matching calendar dates do not authorize a join |
+| `normalized/endurance_score_daily.json` | Activities and other normalized datasets | `not_yet_defined` | none | none | consume as standalone daily context; matching calendar dates do not authorize a join |
 
 ## Activity/FIT eligibility contract
 
@@ -87,6 +93,13 @@ same contracts. Snapshot order, filename similarity, or timestamp proximity
 does not create an additional relationship. Lifecycle lineage and coverage
 qualify the cumulative input but do not authorize a new analytical join.
 
+The P13-M3 candidate also emits `analysis/performance_metrics_daily.csv` as a
+convenience projection of the two daily datasets. Columns are namespaced with
+`hill_` and `endurance_`; co-presence on a calendar day is presentation
+context, not an inferred causal or Activity relationship. Lactate Threshold
+observations remain candidate/audit evidence only and introduce no analytical
+relationship.
+
 ## Prohibited joins
 
 - Do not join Activities and FIT by timestamp proximity outside
@@ -97,6 +110,9 @@ qualify the cumulative input but do not authorize a new analytical join.
 - Do not treat an absent optional family as evidence that the user has no such
   data.
 - Do not override an exclusion or ambiguity recorded by relationship audit.
+- Do not join Hill Score or Endurance Score to Activities by date.
+- Do not treat Lactate Threshold candidates as a stable dataset or choose a
+  latest observation across source families.
 
 ## Promotion requirements
 

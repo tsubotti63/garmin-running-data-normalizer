@@ -285,6 +285,9 @@ locally and never uploads it.
 | Personal records | `personalRecord.json` normalizer | Run-All |
 | FIT sessions and laps | CRC-validated multi-session parser with `fit_session_key` and `fit_lap_key`; record coordinates and raw telemetry are not emitted | Run-All |
 | Activity/FIT links | Auditable evidence-qualified links with exclusions and relationship QA | Run-All |
+| Hill Score Daily | Public-safe calendar-day Hill Score state with fail-closed same-day conflict handling | Unreleased P13-M3 candidate; Product review pending |
+| Endurance Score Daily | Public-safe calendar-day Endurance Score state with fail-closed same-day conflict handling | Unreleased P13-M3 candidate; Product review pending |
+| Lactate Threshold | Four-family candidate/audit collection; unit, timezone, stable-key, and promotion gates remain open | Candidate audit only; not a stable dataset |
 | Sleep | `sleepData.json` daily normalization with review states and provenance; no filling or inference | No; library level only |
 | HRV | FIT Message 370 / Field 1 daily candidate with invalid-sentinel handling and non-promotional JSON consistency evidence | No; library level only |
 | Health Status | Exact-suffix `healthStatusData.json` long metrics and fixed daily schema with explicit dedupe/review evidence | No; library level only |
@@ -294,6 +297,10 @@ The dataset registry documents stable keys, record grain, merge policy, and
 provenance requirements. See
 [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 for the stable CLI/output boundary and library-level scope.
+
+The performance-metrics rows above describe work on the v1.3 candidate branch,
+not the current stable v1.2.1 package. See the
+[Performance Metrics Candidate Contract](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/performance_metrics.md).
 
 ## Reviewed real-user validation
 

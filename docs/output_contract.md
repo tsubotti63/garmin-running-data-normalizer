@@ -170,6 +170,36 @@ The local Canonical build also records `canonical_merge_manifest.json`,
 `approved_input_manifest.json`. Those build artifacts are private lifecycle
 evidence and are not added to a normal one-shot output.
 
+## Unreleased P13-M3 performance-metrics candidate
+
+The P13-M3 feature branch adds the following Product-review artifacts without
+changing the published `1.2.1` package version:
+
+```text
+normalized/hill_score_daily.json
+normalized/endurance_score_daily.json
+audit/hill_score_daily.json
+audit/endurance_score_daily.json
+audit/lactate_threshold_candidates.json
+analysis/performance_metrics_daily.csv
+qa/performance_metrics_summary.json
+```
+
+Hill Score and Endurance Score are optional stable-candidate daily datasets.
+When their files are absent, Run-All emits empty normalized arrays and
+`SKIPPED_NOT_PRESENT` family evidence without adding a warning. Detected rows
+with missing or invalid required values remain visible through aggregate audit
+and warning counts. Divergent public values for one `calendar_date` fail
+closed. The public rows intentionally exclude device, account, raw timestamp,
+and source-path fields.
+
+The Lactate Threshold file is an audit-only candidate catalog. It preserves
+source-family distinctions and explicitly records unconfirmed unit/timezone
+semantics; it does not publish a stable dataset, infer a machine stable key, or
+select a latest value. `analysis/performance_metrics_daily.csv` namespaces the
+two stable-candidate daily contexts with `hill_` and `endurance_` prefixes and
+does not authorize an Activity date join.
+
 ## Privacy boundary
 
 Full normalized output contains personal metrics, local identifiers,
