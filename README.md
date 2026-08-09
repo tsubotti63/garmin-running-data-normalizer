@@ -31,9 +31,9 @@ Reusable descriptive analysis
 Human review
 ```
 
-Current stable release: **v1.3.0** · Python **3.11+** · Apache License 2.0
+Current stable release: **v1.3.1** · Python **3.11+** · Apache License 2.0
 
-v1.3.0 is available as an annotated Git tag, a stable GitHub Release, and a
+v1.3.1 is available as an annotated Git tag, a stable GitHub Release, and a
 verified Production PyPI distribution.
 
 - [Install from PyPI](https://pypi.org/project/garmin-running-data-normalizer/)
@@ -43,8 +43,8 @@ verified Production PyPI distribution.
 - [FAQ](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/faq.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
-- [v1.3.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.3.0.md)
-- [Current stable Release v1.3.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.0)
+- [v1.3.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.3.1.md)
+- [Current stable Release v1.3.1](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.1)
 - [Project story on Zenn (Japanese): フルマラソンランナーが作った、Garmin ExportをAI分析へつなぐ正規化OSS](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-summary)
 
 ## Why this project
@@ -146,7 +146,7 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. Stable v1.3.0 installs
+`python -m garmin_running_data_normalizer --version`. Stable v1.3.1 installs
 `tzdata` automatically on Windows so Python can resolve the existing IANA
 `Asia/Tokyo` timezone contract. macOS and Linux continue to use their system
 timezone data.
@@ -508,8 +508,8 @@ platform generalization are outside the project scope.
 See the
 [Product Change History](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_changelog.md)
 for factual product
-changes. The root `CHANGELOG.md` is the byte-locked change log of the adopted AI
-Collaboration Platform v0.9 Standard, not a Garmin product release history.
+changes. The root `CHANGELOG.md` is the Product-owned router to that history;
+the AI Collaboration Platform maintains its own separate changelog.
 
 ## Project map
 

@@ -1,5 +1,20 @@
 # Release Readiness Reference
 
+## Prepared next release
+
+- Candidate source version: `1.3.1`
+- Classification: patch release
+- Scope: Product-owned public entry points, public-state validation, and
+  documentation/platform-alignment consistency
+- Product API, dataset, output, Snapshot, relationship, and privacy changes:
+  none
+- Publication authorization: explicitly granted for version bump, annotated
+  tag, GitHub Release, Production PyPI, and post-release verification
+
+Until each external action is observed successfully, the published v1.3.0
+facts below remain authoritative. Prepared source does not itself create a tag,
+GitHub Release, or package-index version.
+
 ## Current stable release
 
 - Version: `1.3.0`
