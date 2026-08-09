@@ -6,6 +6,9 @@ Platform maintains its own separate changelog.
 
 ## v1.3.1 — stable Production patch release
 
+Status: published as an annotated tag, stable GitHub Release, and verified
+Production PyPI distribution on 2026-08-09.
+
 ### Added
 
 - Adds the Public Product State Validator to keep package identity, current

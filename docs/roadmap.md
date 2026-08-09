@@ -32,7 +32,7 @@
   third-party notices.
 - Complete dependency lock review, security/privacy checks, documentation, and
   release-specific review evidence.
-- `v1.0.0` remains the first stable release. `v1.3.0` is the current stable
+- `v1.0.0` remains the first stable release. `v1.3.1` is the current stable
   GitHub Release and Production PyPI version. Any future tag, GitHub Release,
   stable release, or package publication requires its own current review and
   separate Human authorization.
@@ -61,6 +61,9 @@
 - Keep Lactate Threshold candidate/audit-only and defer Health Status.
 - Published version `1.3.0` directly as the next stable release after its
   separate merge, tag, GitHub Release, Production PyPI, and verification gates.
+- Published patch version `1.3.1` after separate review and release gates to
+  align Product-owned public entry points and public-state validation without
+  changing the v1.3 runtime or data contracts.
 - Close additional v1.3 feature work and hand future Integrity / Evidence
   Foundation planning to the v1.4 candidate phase without starting
   implementation.
