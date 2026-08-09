@@ -36,6 +36,9 @@ Current stable release: **v1.3.1** · Python **3.11+** · Apache License 2.0
 v1.3.1 is available as an annotated Git tag, a stable GitHub Release, and a
 verified Production PyPI distribution.
 
+v1.3.1 is a documentation and public-state validation patch. The v1.3.0
+dataset and runtime contracts remain unchanged.
+
 - [Install from PyPI](https://pypi.org/project/garmin-running-data-normalizer/)
 - [Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md)
 - [Getting Started with a Garmin Export](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/getting_started_from_garmin_export.md)

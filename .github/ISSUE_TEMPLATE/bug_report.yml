@@ -51,14 +51,15 @@ body:
     id: package_version
     attributes:
       label: Package version
-      placeholder: "1.2.0"
+      description: Paste the exact output of garmin-running-data-normalizer --version.
+      placeholder: "Paste the exact output of garmin-running-data-normalizer --version"
     validations:
       required: true
   - type: textarea
     id: reproduction
     attributes:
       label: Sanitized reproduction
-      description: Use placeholders for private paths and values. Do not upload files.
+      description: Use placeholders for private paths and values. Do not upload files or paste real Garmin data.
       render: shell
     validations:
       required: true
@@ -94,7 +95,7 @@ body:
       options:
         - label: I have not attached or pasted a real Garmin Export, full output, or real Activity rows.
           required: true
-        - label: I have removed IDs, stable keys, filenames, private paths, and hashes.
+        - label: I have removed account identifiers, stable keys, source filenames, private paths, hashes, and personal metrics.
           required: true
         - label: I have removed exact dates, timestamps, routes, locations, and memo text.
           required: true

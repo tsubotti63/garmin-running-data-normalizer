@@ -26,15 +26,26 @@ Before reporting a problem:
 Use the repository's public bug-report Issue form. A minimal synthetic
 reproduction is preferred.
 
-Windows is an intended supported platform with public validation in progress.
-For stable v1.2.0 timezone-data failures, follow the
-[Windows FAQ](docs/faq.md#why-does-stable-v120-fail-with-activities_normalization_failed-on-windows)
-first. Public-safe Windows reports are welcome. Include whether
+## Current Windows status
+
+Windows is an intended supported platform. Current evidence includes
+`windows-latest` packaged-runtime CI and one maintainer-owned physical Windows
+validation. This remains bounded evidence and does not establish universal
+compatibility.
+
+Public-safe Windows reports are welcome. Include whether
 `ZoneInfo("Asia/Tokyo")` resolved and whether the tracked synthetic fixture
 completed, but do not attach terminal screenshots that contain user names,
 private paths, or unrelated desktop content. Linux automated CI runs on
 `ubuntu-latest`; that is not a claim of manual characterization on every Linux
 environment.
+
+## Historical v1.2.0 timezone issue
+
+For stable v1.2.0 timezone-data failures, follow the
+[Windows FAQ](docs/faq.md#was-the-v120-windows-timezone-data-issue-resolved)
+first. This troubleshooting record describes the superseded v1.2.0 incident,
+not the current Windows support state.
 
 ## Never include personal data
 

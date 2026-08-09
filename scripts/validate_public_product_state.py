@@ -11,8 +11,11 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION_SOURCE = "src/garmin_running_data_normalizer/__init__.py"
 CURRENT_DOCUMENTS = (
     "README.md",
+    "SUPPORT.md",
+    ".github/ISSUE_TEMPLATE/bug_report.yml",
     "docs/architecture_overview.md",
     "docs/dataset_relationships.md",
+    "docs/faq.md",
     "docs/product_quick_start.md",
     "docs/output_contract.md",
     "AGENTS.md",
@@ -39,6 +42,41 @@ def _package_version(root: Path) -> str:
 def _contains_whitespace_normalized(text: str, phrase: str) -> bool:
     pattern = r"\s+".join(re.escape(part) for part in phrase.split())
     return re.search(pattern, text) is not None
+
+
+def _issue_form_field_block(text: str, field_id: str) -> str | None:
+    lines = text.splitlines()
+    id_line = f"id: {field_id}"
+    try:
+        id_index = next(
+            index for index, line in enumerate(lines) if line.strip() == id_line
+        )
+    except StopIteration:
+        return None
+
+    start = id_index
+    while start >= 0 and not lines[start].startswith("  - type:"):
+        start -= 1
+    if start < 0:
+        return None
+
+    end = id_index + 1
+    while end < len(lines) and not lines[end].startswith("  - type:"):
+        end += 1
+    return "\n".join(lines[start:end])
+
+
+def _has_fixed_version_placeholder(field_block: str) -> bool:
+    fixed_version = re.compile(
+        r"v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?"
+    )
+    for line in field_block.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("placeholder:"):
+            continue
+        value = stripped.split(":", 1)[1].strip().strip("\"'").strip()
+        return fixed_version.search(value) is not None
+    return False
 
 
 def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
@@ -78,6 +116,19 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
     )
     required_markers = {
         "README.md": ("17 stable normalized datasets",),
+        "SUPPORT.md": (
+            "## Current Windows status",
+            "Windows is an intended supported platform.",
+            "Current evidence includes `windows-latest` packaged-runtime CI and one maintainer-owned physical Windows validation.",
+            "does not establish universal compatibility.",
+            "## Historical v1.2.0 timezone issue",
+            "docs/faq.md#was-the-v120-windows-timezone-data-issue-resolved",
+        ),
+        ".github/ISSUE_TEMPLATE/bug_report.yml": (
+            "Do not upload files or paste real Garmin data.",
+            "account identifiers, stable keys, source filenames, private paths, hashes, and personal metrics",
+            "This report does not publicly disclose a suspected vulnerability or sensitive security detail.",
+        ),
         "docs/architecture_overview.md": (
             "- Compatibility family: stable 1.x",
             "17 stable normalized datasets",
@@ -85,6 +136,9 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
         ),
         "docs/dataset_relationships.md": (
             "## Stable v1.3 context and observation catalog",
+        ),
+        "docs/faq.md": (
+            "### Was the v1.2.0 Windows timezone-data issue resolved?",
         ),
         "docs/product_quick_start.md": (
             "The root `QUICK_START.md` is a short router to the product guides.",
@@ -111,7 +165,31 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
             if not _contains_whitespace_normalized(text, marker):
                 findings.append(f"{relative}: required marker is missing: {marker}")
 
+    bug_form_path = ".github/ISSUE_TEMPLATE/bug_report.yml"
+    package_version_block = _issue_form_field_block(
+        contents.get(bug_form_path, ""), "package_version"
+    )
+    if package_version_block is None:
+        findings.append(f"{bug_form_path}: package_version field is missing")
+    else:
+        version_command = (
+            "Paste the exact output of garmin-running-data-normalizer --version"
+        )
+        if not _contains_whitespace_normalized(
+            package_version_block, version_command
+        ):
+            findings.append(
+                f"{bug_form_path}: package_version field must request exact --version output"
+            )
+        if _has_fixed_version_placeholder(package_version_block):
+            findings.append(
+                f"{bug_form_path}: package_version placeholder must be version-independent"
+            )
+
     obsolete_phrases = {
+        "SUPPORT.md": (
+            "Windows is an intended supported platform with public validation in progress.",
+        ),
         "docs/architecture_overview.md": (
             "Deferred: a final Run-All command",
             "those facts do not imply that a versioned release exists",

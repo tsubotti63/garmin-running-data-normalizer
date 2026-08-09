@@ -42,8 +42,9 @@ Apache-2.0. Future material still requires its own review.
 - The repository is already public. Each maintenance push requires the
   applicable Human authorization as well as the project's normal review and CI
   process; public status does not create standing push permission.
-- Public availability does not mean that every planned feature is implemented
-  or that a formal product release has been issued.
+- Public availability by itself does not prove release status. The current
+  stable release is recorded in the Product Changelog and Release Notes; public
+  availability also does not mean that every planned feature is implemented.
 - New or changed dependencies require their own license and compatibility
   review. The project license does not replace that review.
 - Rights must be confirmed before adding material whose redistribution rights
