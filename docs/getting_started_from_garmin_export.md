@@ -2,7 +2,7 @@
 
 This guide takes a first-time user from an official Garmin Account Data Export
 to a completed local Run-All handoff. It applies to the current stable Garmin
-Running Data Normalizer `v1.3.0`.
+Running Data Normalizer `v1.3.1`.
 
 Use this guide for a full Garmin Account Data Export. An individual Activity
 GPX or TCX export is not the input described here.
@@ -54,17 +54,17 @@ Create an isolated environment if practical, then install from PyPI:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install garmin-running-data-normalizer==1.3.0
+.venv/bin/python -m pip install garmin-running-data-normalizer==1.3.1
 .venv/bin/python -m garmin_running_data_normalizer --version
 ```
 
-The version command for this guide should report `1.3.0`.
+The version command for this guide should report `1.3.1`.
 
 ### Windows PowerShell
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer==1.3.0
+.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer==1.3.1
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer --version
 ```
 
@@ -72,7 +72,7 @@ python -m venv .venv
 installed and the Windows Python launcher is available, you can use
 `py -3.11 -m venv .venv` instead.
 
-Stable v1.3.0 installs `tzdata` automatically on Windows. Confirm both the
+Stable v1.3.1 installs `tzdata` automatically on Windows. Confirm both the
 package version and the existing IANA timezone contract with:
 
 ```powershell

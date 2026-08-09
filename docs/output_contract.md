@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-- Current stable contract: v1.3.0
+- Current stable contract: v1.3.1
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each

@@ -1,5 +1,17 @@
 # Release Readiness
 
+## v1.3.1 prepared patch release
+
+Version `1.3.1` is prepared as a documentation, GitHub public-surface,
+Product-owned entry-point, Public Product State Validator, and Platform
+Alignment patch. It changes no Product API, runtime behavior, dataset, schema,
+stable key, output path, Snapshot policy, relationship contract, or privacy
+boundary.
+
+Its version bump, annotated tag, GitHub Release, Production PyPI publication,
+and verification have explicit Human authorization. The published v1.3.0 facts
+below remain current until those external actions are observed successfully.
+
 ## v1.3.0 stable release
 
 PR #10 was merged as `d2aca48b9a5b0bee732fa3f004c25289972e7e15`.

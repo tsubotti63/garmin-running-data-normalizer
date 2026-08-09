@@ -1,6 +1,6 @@
 # Known Limitations
 
-These limitations apply to the stable v1.3.0 GitHub Release and Production
+These limitations apply to the stable v1.3.1 GitHub Release and Production
 PyPI distribution. These are explicit product boundaries, not hidden fallback
 behavior.
 
@@ -80,7 +80,7 @@ behavior.
 - Hosted processing, Garmin authentication, Open-Meteo, JMA, Instagram,
   wellness/coaching interpretation, Parquet output, and automatic personal
   analysis are outside the stable scope.
-- Stable v1.3.0 retains `tzdata` as a Windows-only runtime dependency and emits
+- Stable v1.3.1 retains `tzdata` as a Windows-only runtime dependency and emits
   the bounded `TIMEZONE_DATA_UNAVAILABLE` diagnostic if IANA timezone data is
   unavailable in an incomplete environment. Validation covers GitHub Actions
   `windows-latest` and one maintainer-owned physical Windows Production PyPI

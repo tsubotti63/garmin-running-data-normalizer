@@ -1,5 +1,32 @@
 # Migration Notes
 
+## v1.3.0 to v1.3.1
+
+v1.3.1 is a documentation, public-surface, and validation patch. It does not
+require data migration and does not change normalized output semantics.
+
+| Contract | v1.3.1 position |
+|---|---|
+| CLI and Python imports | Unchanged |
+| Datasets, schemas, and stable keys | Unchanged |
+| Output paths and exit codes | Unchanged |
+| Snapshot policies | Unchanged |
+| Relationships and privacy boundary | Unchanged |
+| Public documentation | Current stable state and Product-owned entry points aligned |
+| Validation | Public Product State and ownership-alignment regression coverage added |
+
+Upgrade the package in a new or existing Python 3.11+ environment:
+
+```bash
+python -m pip install --upgrade garmin-running-data-normalizer==1.3.1
+python -m garmin_running_data_normalizer --version
+```
+
+Existing v1.3.0 outputs remain valid evidence for their original package
+version. Use a new output directory when rerunning with v1.3.1; deterministic
+output includes exact product-version metadata, so cross-version bytes are not
+expected to be identical.
+
 ## v1.2.1 to v1.3.0
 
 v1.3.0 is an additive dataset release. It does not require an in-place data

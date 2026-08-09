@@ -1,8 +1,43 @@
 # Product Change History
 
 This file records factual Garmin Running Data Normalizer product changes. The
-root `CHANGELOG.md` belongs to the byte-locked AI Collaboration Platform v0.9
-Standard adopted by this repository.
+Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
+Platform maintains its own separate changelog.
+
+## v1.3.1 — stable Production patch release
+
+### Added
+
+- Adds the Public Product State Validator to keep package identity, current
+  stable documentation, Output Contract, Architecture Overview, relationship
+  guidance, and the Product/ACP ownership boundary aligned.
+- Adds regression tests for stale public product state and for the current
+  Product-owned entry-point model.
+
+### Changed
+
+- Reclassifies `QUICK_START.md`, `CHANGELOG.md`, and `docs/README.md` as
+  Product-owned public entry points while retaining the historical ACP
+  byte-lock and hash evidence.
+- Updates Platform Alignment validation to distinguish current Product-owned
+  entry points from unchanged embedded ACP governance assets.
+- Aligns README, Quick Start, FAQ, architecture, release references, and other
+  current-state documentation with the published Product surface.
+
+### Fixed
+
+- Removes stale or conflicting public-state wording that could route users to
+  historical ACP material instead of the current Product guides.
+- Restores consistent stable-version markers across package metadata, public
+  documentation, and release validation.
+
+### Compatibility
+
+- No CLI command, Python import, dataset, schema, stable key, output path,
+  Snapshot policy, relationship contract, exit code, privacy boundary, or
+  runtime behavior changes in this patch.
+- The v1.3.0 Wellness/Metrics contract and stable `1.x` compatibility family
+  remain unchanged.
 
 ## v1.3.0 — stable Production release
 
