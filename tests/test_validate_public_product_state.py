@@ -24,6 +24,113 @@ def test_repository_public_product_state_passes() -> None:
     assert findings == []
 
 
+def test_obsolete_support_windows_state_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    support = tmp_path / "SUPPORT.md"
+    support.write_text(
+        support.read_text(encoding="utf-8")
+        + "\nWindows is an intended supported platform with public validation in progress.\n",
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any("public validation in progress" in item for item in findings)
+
+
+def test_obsolete_support_windows_faq_anchor_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    support = tmp_path / "SUPPORT.md"
+    support.write_text(
+        support.read_text(encoding="utf-8").replace(
+            "#was-the-v120-windows-timezone-data-issue-resolved",
+            "#why-does-stable-v120-fail-with-activities_normalization_failed-on-windows",
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any("was-the-v120-windows-timezone-data-issue-resolved" in item for item in findings)
+
+
+def test_fixed_bug_form_version_placeholder_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    bug_form = tmp_path / ".github/ISSUE_TEMPLATE/bug_report.yml"
+    bug_form.write_text(
+        bug_form.read_text(encoding="utf-8").replace(
+            'placeholder: "Paste the exact output of garmin-running-data-normalizer --version"',
+            'placeholder: "1.2.0"',
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any("placeholder must be version-independent" in item for item in findings)
+
+
+def test_current_fixed_bug_form_version_placeholder_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    bug_form = tmp_path / ".github/ISSUE_TEMPLATE/bug_report.yml"
+    bug_form.write_text(
+        bug_form.read_text(encoding="utf-8").replace(
+            'placeholder: "Paste the exact output of garmin-running-data-normalizer --version"',
+            'placeholder: "Example: 1.3.1"',
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any("placeholder must be version-independent" in item for item in findings)
+
+
+def test_bug_form_without_exact_version_output_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    bug_form = tmp_path / ".github/ISSUE_TEMPLATE/bug_report.yml"
+    text = bug_form.read_text(encoding="utf-8").replace(
+        "Paste the exact output of garmin-running-data-normalizer --version",
+        "Enter the package version",
+    )
+    bug_form.write_text(
+        text
+        + "\n# Paste the exact output of garmin-running-data-normalizer --version\n",
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any("--version" in item for item in findings)
+
+
+def test_bug_form_without_public_safe_boundaries_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    bug_form = tmp_path / ".github/ISSUE_TEMPLATE/bug_report.yml"
+    bug_form.write_text(
+        bug_form.read_text(encoding="utf-8")
+        .replace(
+            "Do not upload files or paste real Garmin data.",
+            "Use a minimal reproduction.",
+        )
+        .replace(
+            "account identifiers, stable keys, source filenames, private paths, hashes, and personal metrics",
+            "private values",
+        )
+        .replace(
+            "This report does not publicly disclose a suspected vulnerability or sensitive security detail.",
+            "This report is ready to submit.",
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any("real Garmin data" in item for item in findings)
+    assert any("account identifiers" in item for item in findings)
+    assert any("sensitive security detail" in item for item in findings)
+
+
 def test_package_version_drift_fails(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
     version_source = tmp_path / VERSION_SOURCE
