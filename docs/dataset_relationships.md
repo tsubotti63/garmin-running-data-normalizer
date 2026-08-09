@@ -53,7 +53,7 @@ Lactate Threshold
 | `normalized/activity_fit_links.json` | `normalized/activities.json` | `explicit` | `garmin_activity_key` | one-to-one within eligible population | link rows are mutual unique evidence-qualified matches |
 | `normalized/activity_fit_links.json` | `normalized/fit_sessions.json` | `explicit` | `fit_session_key` | one-to-one within eligible population | link rows are mutual unique evidence-qualified matches |
 
-## Unreleased v1.3 context and observation catalog
+## Stable v1.3 context and observation catalog
 
 `context_only` means that an analysis may compare separately aggregated facts
 for a declared local calendar day. It does not create row identity, authorize a

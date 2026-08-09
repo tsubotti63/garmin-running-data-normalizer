@@ -4,6 +4,12 @@
 **Status**: Platform Standard with Project Customization
 **Purpose**: AI実行環境のBoot Rules
 
+- **Audience**: AI-assisted development tasks and maintainers
+- **Not a product installation or usage guide**
+- **Product behavior authority**: Product contracts, schemas, tests, and the
+  stable release
+- **Platform authority**: AI collaboration and review operations only
+
 ---
 
 ## 1. Authority Order
@@ -16,9 +22,8 @@
 4. Project Governance (`docs/project/project_governance.md`)
 5. Project Definition of Done (`docs/project/definition_of_done.md`)
 6. Project Boundary (`docs/project/project_boundary.md`)
-7. Phase Kickoff (`docs/project/phases/phase0_1/kickoff.md`)
-8. Work Package
-9. Local Runtime Rules (`runtime/project_runtime_addendum.md`)
+7. Current Work Package / Review Package
+8. Local Runtime Rules (`runtime/project_runtime_addendum.md`)
 
 解消不能な矛盾は`HUMAN_DECISION_REQUIRED`です。
 
@@ -100,18 +105,28 @@ Human向けチャット出力は日本語を基本とし、最小構成にしま
 
 ### Current Phase
 
-`Phase 0.1 — Platform alignment and safe local reuse`
+`Stable v1.3.0 maintenance and public-surface alignment`
 
 ### Mandatory Reading
 
 1. `README.md`
 2. `docs/README.md`
-3. `docs/project_os/README.md`
-4. `docs/project_os/governance/platform_charter_v0_9.md`
-5. `docs/project/phases/phase0_1/reading_order.md`
-6. `runtime/work/implementation/implementation_runtime_prompt_v0_9.md`
-7. `runtime/project_runtime_addendum.md`
-8. Current Work Package / Review Package
+3. `docs/supported_datasets.md`
+4. `docs/output_contract.md`
+5. `docs/dataset_relationships.md`
+6. `docs/known_limitations.md`
+7. `docs/project/project_charter.md`, `docs/project/project_boundary.md`, and
+   `docs/project/definition_of_done.md`
+8. `docs/project_os/governance/platform_charter_v0_9.md` for development
+   governance
+9. Current Work Package / Review Package
+
+### Responsibility Boundary
+
+- Product contracts own Product behavior.
+- ACP documents own AI-assisted development governance.
+- `AGENTS.md` adapts the execution environment and must not redefine Product
+  contracts.
 
 ### Authorized Write Scope
 
