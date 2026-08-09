@@ -2,9 +2,13 @@
 
 ## Status and authority
 
-This document defines the additive Run-All v1.1 contract. Executable authority
-remains in `run_all.py`, the versioned dataset registry, and each run's
-`run_manifest.json` and `run_summary.json`.
+- Current stable contract: v1.3.0
+- Compatibility family: stable 1.x
+
+This document describes the current stable contract and identifies when each
+additive layer entered the `1.x` family. Executable authority remains in
+`run_all.py`, the versioned dataset registry, and each run's `run_manifest.json`
+and `run_summary.json`.
 
 Both machine authorities record the exact installed `product_version`;
 `ANALYSIS_CONTEXT.json` preserves the same value for standalone handoff.
@@ -13,7 +17,7 @@ The Dataset Catalog, Dataset Relationship Catalog, and Analysis Handoff
 Specification are normative human-readable guidance projected from those
 authorities.
 
-## Run-All v1.1 layout
+## Core stable 1.x layout
 
 ```text
 <output>/
@@ -75,7 +79,7 @@ Cross-dataset joins are valid only through the Dataset Relationship Catalog.
 Activity/FIT identity is represented by the separate
 `activity_fit_links` dataset and never replaces physical FIT identity.
 
-## Output Experience
+## Additive v1.1 relationship handoff
 
 `START_HERE.md`, `DATASET_INVENTORY.md`, and `ANALYSIS_HANDOFF.md` are
 deterministic projections of the machine authorities. They do not recompute
@@ -151,7 +155,7 @@ contracts. v1.1 adds relationship artifacts, FIT session/lap stable keys,
 generated analysis context, and an opt-in safe pack under explicit Product
 approval.
 
-## Additive Snapshot lifecycle output (v1.2.0)
+## Additive v1.2 Snapshot lifecycle
 
 The existing one-shot command, paths, statuses, and completion semantics remain
 unchanged. `snapshot run-all` first creates an immutable cumulative approved
@@ -179,7 +183,7 @@ The local Canonical build also records `canonical_merge_manifest.json`,
 `approved_input_manifest.json`. Those build artifacts are private lifecycle
 evidence and are not added to a normal one-shot output.
 
-## v1.3 daily metrics
+## Additive v1.3 Wellness / Metrics
 
 The stable v1.3.0 release adds the following optional Run-All artifacts:
 

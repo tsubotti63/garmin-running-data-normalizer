@@ -27,6 +27,7 @@ jobs:
       - run: python scripts/validate_platform_alignment.py
       - run: python scripts/static_policy_scan.py
       - run: python scripts/validate_public_command_examples.py
+      - run: python scripts/validate_public_product_state.py
       - run: python scripts/validate_public_history.py --ci
       - run: python -m pytest
       - name: Build wheel and source distribution

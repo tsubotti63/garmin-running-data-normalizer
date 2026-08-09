@@ -3,8 +3,8 @@
 This Quick Start uses local synthetic data. It does not require a Garmin account
 or a real Garmin export.
 
-The root `QUICK_START.md` belongs to the adopted AI Collaboration Platform. This
-file is the product Quick Start for Garmin Running Data Normalizer.
+The root `QUICK_START.md` is a short router to the product guides. This file
+contains the complete synthetic Product Quick Start.
 
 The repository and Production PyPI currently serve stable v1.3.0.
 
@@ -203,9 +203,9 @@ For migration and rollback guidance, see
 
 ## Run the minimum Run-All workflow
 
-Run-All composes the existing Activities, Gear, Personal Records, and bounded
-FIT components. Activities are required; the other three input families are
-optional. The destination must be new and outside the input directory.
+Run-All requires Activities. Gear, Personal Records, bounded FIT, and the ten
+v1.3 Wellness / Metrics families are optional. The destination must be new and
+outside the input directory.
 
 ### macOS / Linux
 
@@ -350,8 +350,9 @@ Continue with:
 
 The `normalize-activities` Golden Path is activities-only. The separate
 multi-family `run-all` command requires Activities and supports optional Gear,
-Personal Records, and bounded FIT sessions/laps. `--input` must itself point to
-a local export directory containing a JSON file whose name ends in
+Personal Records, bounded FIT sessions/laps, and the ten stable v1.3 Wellness /
+Metrics families listed above. `--input` must itself point to a local export
+directory containing a JSON file whose name ends in
 `summarizedActivities.json`. Passing a ZIP file directly as `--input` is
 unsupported. ZIP assets discovered inside the input directory remain subject to
 the existing traversal, symbolic-link, encryption, entry count, size,
@@ -365,13 +366,11 @@ file/session/lap identity, and converts selected invalid metric sentinels to
 null before scaling. It emits Activity/FIT links only from evidence-qualified
 mutual unique matches; timestamp-only joins are rejected.
 
-Library-level `sleepData.json` normalization is implemented separately and does
-not change the Run-All output contract. It performs no filling, day-shift
-inference, score recalculation, or activity join. Library-level HRV normalization
-is also separate: conflicting FIT values are not averaged and health-status JSON
-is comparison evidence, not a promoted source. The separate Health Status
-library normalizer emits fixed daily and long metric schemas with explicit
-duplicate evidence; it is not a Run-All output. Open-Meteo, Parquet, hosted
-processing, and automatic external upload are not implemented. See the
-[README](../README.md) and [Known Limitations](known_limitations.md) for the
-current scope.
+Sleep Daily and HRV Daily are optional stable v1.3.0 Run-All datasets. Sleep
+performs no filling, day-shift inference, score recalculation, or Activity join.
+HRV is `analysis_reference_only`: conflicting FIT values are not averaged, and
+Health Status JSON is not promoted as equivalent HRV evidence. Health Status
+remains library-level / deferred. Lactate Threshold remains candidate / audit
+only. Open-Meteo, Parquet, hosted processing, and automatic external upload are
+not implemented. See the [README](../README.md) and
+[Known Limitations](known_limitations.md) for the current scope.
