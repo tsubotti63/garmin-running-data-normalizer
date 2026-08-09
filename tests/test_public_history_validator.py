@@ -62,6 +62,22 @@ def test_multiple_author_identities_fail() -> None:
     assert "commit metadata: author identities are not consistent" in findings
 
 
+def test_profile_display_name_change_with_same_author_email_passes() -> None:
+    renamed_author = (
+        "つぼっち / tsubotti63",
+        APPROVED_AUTHOR[1],
+    )
+    records = [
+        identity_record("before-profile-change"),
+        identity_record(
+            "after-profile-change",
+            author=renamed_author,
+            committer=GITHUB_COMMITTER,
+        ),
+    ]
+    assert validator.validate_commit_identities(records) == []
+
+
 def test_required_ci_refs_pass() -> None:
     assert validator.validate_ci_refs(REQUIRED_REFS, ["origin"]) == []
 

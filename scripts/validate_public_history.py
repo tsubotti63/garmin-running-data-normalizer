@@ -92,9 +92,9 @@ def validate_commit_identities(
     records: list[tuple[str, str, str, str, str]],
 ) -> list[str]:
     findings: list[str] = []
-    author_identities: list[tuple[str, str]] = []
+    author_emails: list[str] = []
     for commit, author_name, author_email, committer_name, committer_email in records:
-        author_identities.append((author_name, author_email))
+        author_emails.append(author_email)
         if not APPROVED_IDENTITY.fullmatch(author_email):
             findings.append(f"commit {commit}: unapproved public identity")
         if not is_approved_committer(
@@ -104,7 +104,9 @@ def validate_commit_identities(
             committer_email,
         ):
             findings.append(f"commit {commit}: unapproved committer identity")
-    if author_identities and len(set(author_identities)) != 1:
+    # GitHub profile display names are mutable metadata. The verified noreply
+    # email identifies the account and must remain consistent across history.
+    if author_emails and len(set(author_emails)) != 1:
         findings.append("commit metadata: author identities are not consistent")
     return findings
 
