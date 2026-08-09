@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">Garmin Running Data Normalizer synthetic product flow</title>
+  <desc id="desc">Synthetic and fictional diagram showing Garmin Account Export flowing through deterministic Run-All into 17 stable datasets, QA, audit, provenance, and reusable analysis context. Downstream bounded descriptive analysis ends in Human review.</desc>
+  <style>
+    .bg { fill: #f7fafc; }
+    .panel { fill: #ffffff; stroke: #8fa3b8; stroke-width: 2; }
+    .accent { fill: #0f766e; }
+    .accent2 { fill: #075985; }
+    .ink { fill: #102a43; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .muted { fill: #486581; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .inverse { fill: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .line { stroke: #0f766e; stroke-width: 4; fill: none; }
+  </style>
+  <rect class="bg" width="1200" height="420" rx="24"/>
+  <text x="40" y="54" class="ink" font-size="28" font-weight="700">From Export to reusable analysis</text>
+  <rect x="930" y="28" width="230" height="38" rx="19" class="accent"/>
+  <text x="1045" y="53" text-anchor="middle" class="inverse" font-size="16" font-weight="700">Synthetic / fictional data</text>
+  <text x="40" y="90" class="muted" font-size="18">A local-first, reviewable product flow</text>
+  <rect x="30" y="145" width="196" height="150" rx="18" class="panel"/>
+  <circle cx="128" cy="178" r="17" class="accent2"/>
+  <text x="128" y="184" text-anchor="middle" class="inverse" font-size="16" font-weight="700">1</text>
+  <text x="128" y="224" text-anchor="middle" class="ink" font-size="19" font-weight="700">Garmin Account</text>
+  <text x="128" y="252" text-anchor="middle" class="ink" font-size="19" font-weight="700">Export</text>
+  <path d="M 233 220 H 261" class="line"/>
+  <path d="M 253 210 L 265 220 L 253 230" class="line"/>
+  <rect x="266" y="145" width="196" height="150" rx="18" class="panel"/>
+  <circle cx="364" cy="178" r="17" class="accent2"/>
+  <text x="364" y="184" text-anchor="middle" class="inverse" font-size="16" font-weight="700">2</text>
+  <text x="364" y="224" text-anchor="middle" class="ink" font-size="19" font-weight="700">Deterministic</text>
+  <text x="364" y="252" text-anchor="middle" class="ink" font-size="19" font-weight="700">Run-All</text>
+  <path d="M 469 220 H 497" class="line"/>
+  <path d="M 489 210 L 501 220 L 489 230" class="line"/>
+  <rect x="502" y="145" width="196" height="150" rx="18" class="panel"/>
+  <circle cx="600" cy="178" r="17" class="accent2"/>
+  <text x="600" y="184" text-anchor="middle" class="inverse" font-size="16" font-weight="700">3</text>
+  <text x="600" y="224" text-anchor="middle" class="ink" font-size="19" font-weight="700">17 stable</text>
+  <text x="600" y="252" text-anchor="middle" class="ink" font-size="19" font-weight="700">datasets</text>
+  <path d="M 705 220 H 733" class="line"/>
+  <path d="M 725 210 L 737 220 L 725 230" class="line"/>
+  <rect x="738" y="145" width="196" height="150" rx="18" class="panel"/>
+  <circle cx="836" cy="178" r="17" class="accent2"/>
+  <text x="836" y="184" text-anchor="middle" class="inverse" font-size="16" font-weight="700">4</text>
+  <text x="836" y="224" text-anchor="middle" class="ink" font-size="19" font-weight="700">QA / Audit</text>
+  <text x="836" y="252" text-anchor="middle" class="ink" font-size="19" font-weight="700">/ Provenance</text>
+  <path d="M 941 220 H 969" class="line"/>
+  <path d="M 961 210 L 973 220 L 961 230" class="line"/>
+  <rect x="974" y="145" width="196" height="150" rx="18" class="panel"/>
+  <circle cx="1072" cy="178" r="17" class="accent2"/>
+  <text x="1072" y="184" text-anchor="middle" class="inverse" font-size="16" font-weight="700">5</text>
+  <text x="1072" y="224" text-anchor="middle" class="ink" font-size="19" font-weight="700">Reusable</text>
+  <text x="1072" y="252" text-anchor="middle" class="ink" font-size="19" font-weight="700">analysis context</text>
+  <rect x="30" y="330" width="1140" height="56" rx="14" fill="#e6fffa"/>
+  <text x="600" y="365" text-anchor="middle" class="ink" font-size="18">Downstream: bounded descriptive analysis → Human review</text>
+</svg>
