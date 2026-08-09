@@ -131,6 +131,9 @@ context-only and do not define direct Activity joins.
 Read
 [CS-009: From Daily-Grain Assumptions to Source-Backed Observation Contracts in Garmin Data](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/case_studies/cs-009-from-daily-grain-assumptions-to-source-backed-observation-contracts.md).
 
+For a Japanese-language walkthrough, see
+[Zenn: Garminの日次データを1行にまとめると何が消える？——v1.3で複数観測を残した理由](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract).
+
 ### Built from a runner's own workflow
 
 The project was created by a full-marathon runner who has achieved sub-3:15 and
