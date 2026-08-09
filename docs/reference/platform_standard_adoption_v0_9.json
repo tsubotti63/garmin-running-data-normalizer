@@ -5,6 +5,29 @@
     "platform_qa_v0_9.json"
   ],
   "platform_version": "0.9",
+  "product_owned_entrypoint_overrides": [
+    {
+      "baseline_bytes": 1228,
+      "baseline_sha256": "52dddb9109bae7605b35dc8e1495383e61d8be3072957a8d5519e37a992dc046",
+      "ownership": "product",
+      "path": "CHANGELOG.md",
+      "reason": "Product release-history router"
+    },
+    {
+      "baseline_bytes": 2524,
+      "baseline_sha256": "6b22d2d28eacf0bea1f02dfd7a108b959cb128871c212173c5c1ad23724085de",
+      "ownership": "product",
+      "path": "QUICK_START.md",
+      "reason": "Product getting-started router"
+    },
+    {
+      "baseline_bytes": 907,
+      "baseline_sha256": "0bc9f3e0875b45e0d3b27b99311a2ff6a36526a3a084ec1c52ac0aa74208d0c6",
+      "ownership": "product",
+      "path": "docs/README.md",
+      "reason": "Product documentation hub"
+    }
+  ],
   "record_type": "target_platform_standard_adoption",
   "source_artifact": "ai-collaboration-platform.zip",
   "source_sha256": "d824ed255b5a258eae6db13a8c605762d451194f94c4ace801ae0d7cccac66ce",

@@ -1,24 +1,44 @@
-# Documentation Hub
+# Garmin Running Data Normalizer Documentation
 
-## Platform Documents
+## Start here
 
-- `project_os/architecture/` — 協働構造・Task連携・Storage
-- `project_os/governance/` — Charter・Boundary・DoD・Escalation・Project Governance Extension
-- `project_os/conventions/` — 文書・言語・命名・配布標準
-- `project_os/operation/` — Gate・長時間運用・改善・ログ
-- `proofs/` — 実証済みCapability
+| Goal | Guide |
+|---|---|
+| Try the product without real Garmin data | [Product Quick Start](product_quick_start.md) |
+| Start from a Garmin Account Export | [Getting Started from Garmin Export](getting_started_from_garmin_export.md) |
+| Start AI-assisted analysis | [AI Analysis Quick Start](ai_analysis_quick_start.md) |
+| Read short answers | [FAQ](faq.md) |
 
-## Project Documents
+Garmin users can begin with the export guide. Data analysts can begin with the
+AI Analysis Quick Start. Contributors and maintainers should read the project
+and platform material linked below after reviewing the product documentation.
 
-Project固有文書は`templates/project/`から作成し、対象Projectの`docs/project/`等へ配置してください。
+## Product reference
 
-## Responsibility Boundary
+- [Supported Datasets](supported_datasets.md)
+- [Run-All Output Contract](output_contract.md)
+- [Dataset Relationships](dataset_relationships.md)
+- [Wellness and Daily Metrics](wellness_metrics.md)
+- [Performance Metrics](performance_metrics.md)
+- [Known Limitations](known_limitations.md)
 
-- `docs/project_os/`: Platform Standard
-- `docs/project/`: Project Customization
-- `runtime/`: Taskを起動・運用する実行資産
-- `templates/`: 新規Project作成用
+## Examples and evidence
 
-## Project Governance Extension
+- [Synthetic analysis examples](../examples/analysis/README.md)
+- [Case Studies](case_studies/)
+- [Product Changelog](product_changelog.md)
+- [Release Notes](release_notes/)
 
-- `project_os/governance/project_governance_extension/` — 継続運営・保守・レビュー・Platform feedbackの標準
+## Privacy and support
+
+- [Support](../SUPPORT.md)
+- [Contributing](../CONTRIBUTING.md)
+- [Known Limitations](known_limitations.md)
+
+## Maintainers and AI collaboration
+
+- [Architecture Overview](architecture_overview.md)
+- [`AGENTS.md`](../AGENTS.md) — AI development adapter, not a product guide
+- [AI Collaboration Platform](https://github.com/tsubotti63/ai-collaboration-platform)
+- Embedded `project_os/`, `runtime/`, and `templates/` assets are maintainer-facing
+  platform materials and are not the product entry point.
