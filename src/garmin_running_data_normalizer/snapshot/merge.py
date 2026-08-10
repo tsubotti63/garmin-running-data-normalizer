@@ -46,6 +46,10 @@ DAILY_FAIL_CLOSED_DATASETS = {
     "vo2max_daily",
     "training_history_daily",
 }
+PRESERVE_OBSERVED_VARIANT_DATASETS = {
+    "endurance_score_daily",
+    "uds_daily",
+}
 SOURCE_OBSERVATION_DATASETS = {
     "race_prediction_daily",
     "acute_training_load_daily",
@@ -636,6 +640,11 @@ def _merge_dataset(
     changed = 0
     updated_fields = 0
     state_counts: Counter[str] = Counter()
+    observed_variants: list[dict[str, Any]] = []
+    single_variant_key_count = 0
+    multi_variant_key_count = 0
+    observed_variant_count = 0
+    exact_repeat_count = 0
     for key in sorted(groups):
         group = groups[key]
         by_snapshot: dict[int, list[dict[str, Any]]] = defaultdict(list)
@@ -689,6 +698,29 @@ def _merge_dataset(
         )
         distinct_signatures = {_stable_json(item["record"]) for item in ordered}
         if dataset in DAILY_FAIL_CLOSED_DATASETS and len(distinct_signatures) > 1:
+            if dataset in PRESERVE_OBSERVED_VARIANT_DATASETS:
+                multi_variant_key_count += 1
+                observed_variant_count += len(distinct_signatures)
+                exact_repeat_count += len(ordered) - len(distinct_signatures)
+                by_signature: dict[str, list[dict[str, Any]]] = defaultdict(list)
+                for observation in ordered:
+                    by_signature[_stable_json(observation["record"])].append(observation)
+                for signature in sorted(by_signature):
+                    variant_rows = by_signature[signature]
+                    observed_variants.append(
+                        {
+                            "canonical_key": key,
+                            "variant_fingerprint": _sha256_value(variant_rows[0]["record"]),
+                            "observed_value": variant_rows[0]["record"],
+                            "observation_count": len(variant_rows),
+                            "snapshot_orders": sorted(
+                                {int(item["logical_order"]) for item in variant_rows}
+                            ),
+                            "variant_status": "observed_variant",
+                            "canonical_status": "unresolved_multiple_observed_values",
+                        }
+                    )
+                continue
             conflicts.append(
                 {
                     "severity": "stop",
@@ -698,6 +730,10 @@ def _merge_dataset(
                 }
             )
             continue
+        if len(distinct_signatures) == 1:
+            single_variant_key_count += 1
+            exact_repeat_count += len(ordered) - 1
+            observed_variant_count += 1
         bits = "".join(
             "1" if logical_order in by_snapshot else "0"
             for logical_order in range(1, snapshot_count + 1)
@@ -824,6 +860,26 @@ def _merge_dataset(
         "automatic_deletion": False,
         "inference_performed": False,
     }
+    if dataset in PRESERVE_OBSERVED_VARIANT_DATASETS:
+        summary.update(
+            {
+                "single_variant_key_count": single_variant_key_count,
+                "multi_variant_key_count": multi_variant_key_count,
+                "observed_variant_count": observed_variant_count,
+                "exact_repeat_count": exact_repeat_count,
+                "malformed_count": summary["null_key_hold_count"],
+                "canonicalization_unresolved_count": multi_variant_key_count,
+                "automatic_winner": False,
+                "observed_variants": sorted(
+                    observed_variants,
+                    key=lambda item: (
+                        str(item["canonical_key"]),
+                        str(item["variant_fingerprint"]),
+                    ),
+                ),
+                "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
+            }
+        )
     return canonical, provenance, field_provenance, holds, conflicts, summary
 
 
@@ -1231,6 +1287,14 @@ def build_approved_input(
                     "presence_pattern": item["presence_pattern"],
                 }
                 for item in rows
+            ]
+            + [
+                {
+                    "variant_fingerprint": item["variant_fingerprint"],
+                    "canonical_key": item["canonical_key"],
+                    "snapshot_orders": item["snapshot_orders"],
+                }
+                for item in dataset_summaries[dataset].get("observed_variants", [])
             ]
             for dataset, rows in canonical_by_dataset.items()
         }

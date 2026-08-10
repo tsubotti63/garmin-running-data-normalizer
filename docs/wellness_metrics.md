@@ -12,8 +12,10 @@ UDS, and HRV retain calendar-day contracts; Sleep uses `sleep_day`.
 - Missing is not zero and missing from a later Snapshot is not deletion.
 - Nulls are not filled, carried forward, averaged, or interpolated.
 - Source values are not recalculated and unconfirmed units are not inferred.
-- Exact duplicates are deterministic; divergent values for the same stable key
-  fail closed or remain an explicit review item where the dataset contract says so.
+- Exact duplicates are deterministic. Snapshot-based Endurance and UDS values
+  that differ for one stable key are preserved in audit evidence while
+  canonicalization remains unresolved; same-export malformed/divergent values
+  fail closed.
 - Source observations are never collapsed by latest-wins, keep-last, source
   order, or a canonical daily-row selection. A day-level summary is derived
   from preserved observations and is not a normalized Source of Truth.
@@ -75,10 +77,10 @@ registry, Run-All output, Snapshot merge, or schema catalog.
 
 | Dataset or family | Relationship role | Activity guidance | Canonical / derived | Multiple observations and limits |
 |---|---|---|---|---|
-| Hill Score / Endurance Score | daily performance context | `calendar_date` is a candidate context field; direct link `not_yet_defined` | daily normalized JSON canonical; namespaced CSV derived | one canonical state per day; no Activity identity or causal interpretation |
+| Hill Score / Endurance Score | daily performance context | `calendar_date` is a candidate context field; direct link `not_yet_defined` | daily normalized JSON canonical; namespaced CSV derived | one canonical state per day when resolved; accepted Snapshot variants remain audit-only until canonical authority is known; no Activity identity or causal interpretation |
 | Lactate Threshold | performance threshold observation | no join; direct link `not_yet_defined` | candidate/audit-only, not a stable normalized dataset | retain history, latest-snapshot, profile-state, and derived-evidence families; no latest-wins, unit conversion, or cross-family collapse |
 | Race Prediction | daily performance prediction | direct link `not_yet_defined` | source observations canonical; QA day view derived | preserve every stable observation; no measured-result claim or selected daily row |
-| Sleep / UDS / HRV | condition context | same-day `context_only`; direct link `not_yet_defined` | normalized JSON canonical | context must stay separate from Activity facts; HRV conflict rows remain unresolved |
+| Sleep / UDS / HRV | condition context | same-day `context_only`; direct link `not_yet_defined` | normalized JSON canonical; UDS Snapshot variants are audit-preserved when canonicalization is unresolved | context must stay separate from Activity facts; UDS canonicalization and HRV conflict rows remain unresolved when authority is unknown |
 | Acute Training Load / Training Readiness / VO2Max / Training History | performance context | same-day `context_only`; direct link `not_yet_defined` | source observations canonical; QA day view derived | keep all source observations; `selection_rule` remains null and source generations/series remain distinct |
 
 `context_only` allows comparison of separately aggregated daily series. It does

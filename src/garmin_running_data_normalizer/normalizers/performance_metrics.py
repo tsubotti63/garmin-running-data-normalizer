@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import PurePosixPath
@@ -100,10 +101,16 @@ def _stable_row(value: dict[str, Any]) -> str:
     )
 
 
+def _variant_fingerprint(value: dict[str, Any]) -> str:
+    return hashlib.sha256(_stable_row(value).encode("utf-8")).hexdigest()
+
+
 def _normalize_daily(
     assets: Iterable[DiscoveredAsset],
     *,
     dataset: str,
+    preserve_observed_variants: bool = False,
+    variant_lineage: dict[tuple[str, str], dict[str, Any]] | None = None,
 ) -> DailyNormalizationResult:
     is_hill = dataset == "hill_score_daily"
     prefix = "hillscore" if is_hill else "endurancescore"
@@ -170,20 +177,47 @@ def _normalize_daily(
 
     by_date: dict[str, set[str]] = defaultdict(set)
     row_by_signature: dict[str, dict[str, Any]] = {}
+    rows_by_date: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in accepted:
         signature = _stable_row(row)
         by_date[row["calendar_date"]].add(signature)
         row_by_signature[signature] = row
+        rows_by_date[row["calendar_date"]].append(row)
     conflicts = [key for key, values in by_date.items() if len(values) > 1]
-    if conflicts:
+    if conflicts and not preserve_observed_variants:
         raise PerformanceMetricsConflictError(
             f"{dataset} contains divergent values for one calendar date"
         )
     normalized = [
         row_by_signature[next(iter(by_date[key]))]
         for key in sorted(by_date)
+        if len(by_date[key]) == 1 or not preserve_observed_variants
     ]
-    duplicate_count = len(accepted) - len(normalized)
+    duplicate_count = sum(
+        len(rows_by_date[key]) - len(by_date[key]) for key in rows_by_date
+    )
+    observed_variants: list[dict[str, Any]] = []
+    if preserve_observed_variants:
+        for calendar_date in sorted(conflicts):
+            signatures = sorted(by_date[calendar_date])
+            for signature in signatures:
+                row = row_by_signature[signature]
+                fingerprint = _variant_fingerprint(row)
+                evidence = {
+                    "canonical_key": {"calendar_date": calendar_date},
+                    "variant_fingerprint": fingerprint,
+                    "observed_value": dict(row),
+                    "observation_count": sum(
+                        _stable_row(item) == signature
+                        for item in rows_by_date[calendar_date]
+                    ),
+                    "variant_status": "observed_variant",
+                    "canonical_status": "unresolved_multiple_observed_values",
+                }
+                lineage = (variant_lineage or {}).get((calendar_date, fingerprint))
+                if lineage:
+                    evidence["snapshot_lineage"] = dict(lineage)
+                observed_variants.append(evidence)
     audit = {
         "format": "garmin-running-data-normalizer-performance-daily-audit-v1",
         "dataset": dataset,
@@ -204,6 +238,24 @@ def _normalize_daily(
         "source_paths_exposed": False,
         "source_hashes_exposed": False,
     }
+    if preserve_observed_variants:
+        audit.update(
+            {
+                "status": "PASS_WITH_REVIEW_ITEMS" if conflicts or excluded_reasons else "PASS",
+                "canonical_key_count": len(by_date),
+                "single_variant_key_count": len(by_date) - len(conflicts),
+                "multi_variant_key_count": len(conflicts),
+                "observed_variant_count": sum(len(values) for values in by_date.values()),
+                "exact_repeat_count": sum(
+                    len(rows_by_date[key]) - len(by_date[key]) for key in rows_by_date
+                ),
+                "malformed_count": sum(excluded_reasons.values()),
+                "canonicalization_unresolved_count": len(conflicts),
+                "automatic_winner": False,
+                "observed_variants": observed_variants,
+                "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
+            }
+        )
     return DailyNormalizationResult(normalized, audit)
 
 
@@ -215,8 +267,16 @@ def normalize_hill_score(
 
 def normalize_endurance_score(
     assets: Iterable[DiscoveredAsset],
+    *,
+    preserve_observed_variants: bool = False,
+    variant_lineage: dict[tuple[str, str], dict[str, Any]] | None = None,
 ) -> DailyNormalizationResult:
-    return _normalize_daily(assets, dataset="endurance_score_daily")
+    return _normalize_daily(
+        assets,
+        dataset="endurance_score_daily",
+        preserve_observed_variants=preserve_observed_variants,
+        variant_lineage=variant_lineage,
+    )
 
 
 def _optional_number(value: Any, review_counts: Counter[str], field: str) -> int | float | None:

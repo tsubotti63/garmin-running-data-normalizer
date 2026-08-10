@@ -1653,6 +1653,20 @@ def _snapshot_lifecycle_lines(summary: Mapping[str, Any]) -> list[str]:
     return lines
 
 
+def _has_observed_variant_evidence(summary: Mapping[str, Any]) -> bool:
+    lifecycle = summary.get("snapshot_lifecycle")
+    if not isinstance(lifecycle, Mapping):
+        return False
+    datasets = lifecycle.get("datasets")
+    if not isinstance(datasets, Mapping):
+        return False
+    return any(
+        isinstance(datasets.get(name), Mapping)
+        and bool(datasets[name].get("observed_variants"))
+        for name in ("endurance_score_daily", "uds_daily")
+    )
+
+
 def render_dataset_inventory(
     manifest: Mapping[str, Any],
     summary: Mapping[str, Any],
@@ -1801,6 +1815,7 @@ def render_start_here(
     audit_paths = sorted(path for path in generated_paths if path.startswith("audit/"))
     warning_count = _non_negative_integer(summary.get("warning_count"), "warning count")
     error_count = _non_negative_integer(summary.get("error_count"), "error count")
+    variant_guidance = _has_observed_variant_evidence(summary)
     lines = [
         "# Start Here",
         "",
@@ -1854,6 +1869,16 @@ def render_start_here(
             "",
         ]
     )
+    if variant_guidance:
+        lines.extend(
+            [
+                "When Endurance or UDS audit reports multiple observed values for one",
+                "stable key, no value is automatically newer or more correct. Use the",
+                "preserved observed variants for review or sensitivity analysis; a single",
+                "canonical daily value is not selected without source-backed authority.",
+                "",
+            ]
+        )
     lines.extend(_path_list("Available Analysis Files", analysis_paths))
     lines.extend(_path_list("QA Evidence", qa_paths))
     lines.extend(_path_list("Audit Evidence", audit_paths))
@@ -1926,6 +1951,16 @@ def render_analysis_handoff(
         ]
         or ["- None"]
     )
+    variant_rule_lines = (
+        [
+            "16. Multiple observed Endurance or UDS values for one stable key are",
+            "    preserved in the corresponding audit evidence. Do not choose a winner",
+            "    without source-backed authority; use single-variant days for ordinary",
+            "    single-value analysis and review multi-variant days separately.",
+        ]
+        if _has_observed_variant_evidence(summary)
+        else []
+    )
     lines = [
         "# Analysis Handoff",
         "",
@@ -1974,6 +2009,7 @@ def render_analysis_handoff(
         "    value with a review status must remain unresolved.",
         "15. Approximate generation ranges (2015-2021 and 2022+) are descriptive",
         "    source context only; they do not authorize automatic field equivalence.",
+        *variant_rule_lines,
         "",
         *_v1_3_relationship_lines(),
         *_relationship_coverage_lines(relationship_summary),

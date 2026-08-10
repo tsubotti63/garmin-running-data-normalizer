@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -85,6 +86,11 @@ def stable_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def variant_fingerprint(value: Any) -> str:
+    """Return a deterministic, content-only identity for an observed value."""
+    return hashlib.sha256(stable_json(value).encode("utf-8")).hexdigest()
+
+
 def finalize_daily(
     *,
     dataset: str,
@@ -99,6 +105,8 @@ def finalize_daily(
     provenance_conflict_predicate: Callable[[list[dict[str, Any]]], bool] | None = None,
     strip_internal_fields: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     dedupe_exact_duplicates: bool = False,
+    preserve_observed_variants: bool = False,
+    variant_lineage: dict[tuple[str, str], dict[str, Any]] | None = None,
 ) -> DailyMetricResult:
     if not key_fields:
         raise DailyMetricError("daily metric stable key must not be empty")
@@ -112,6 +120,9 @@ def finalize_daily(
     duplicate_row_count = 0
     divergent_duplicate_count = 0
     dedupe_method = "none"
+    observed_variants: list[dict[str, Any]] = []
+    multi_variant_key_count = 0
+    observed_variant_count = 0
     for key in sorted(grouped):
         rows = grouped[key]
         signatures = {
@@ -134,13 +145,38 @@ def finalize_daily(
             continue
         if len(signatures) > 1:
             divergent_duplicate_count += 1
-            raise DailyMetricConflictError(
-                f"{dataset} contains divergent values for one stable key"
-            )
+            if not preserve_observed_variants:
+                raise DailyMetricConflictError(
+                    f"{dataset} contains divergent values for one stable key"
+                )
+            multi_variant_key_count += 1
+            observed_variant_count += len(signatures)
+            for signature in sorted(signatures):
+                row = next(item for item in rows if (signature_factory(item) if signature_factory else stable_json(item)) == signature)
+                evidence = {
+                    "canonical_key": {field: value for field, value in zip(key_fields, key)},
+                    "variant_fingerprint": variant_fingerprint(row),
+                    "observed_value": strip_internal_fields(row) if strip_internal_fields else dict(row),
+                    "observation_count": sum(
+                        (signature_factory(item) if signature_factory else stable_json(item)) == signature
+                        for item in rows
+                    ),
+                    "variant_status": "observed_variant",
+                    "canonical_status": "unresolved_multiple_observed_values",
+                }
+                lineage = (variant_lineage or {}).get((key[0], variant_fingerprint(row)))
+                if lineage:
+                    evidence["snapshot_lineage"] = dict(lineage)
+                observed_variants.append(evidence)
+            continue
         output.append(strip_internal_fields(rows[0]) if strip_internal_fields else rows[0])
         if len(rows) > 1 and dedupe_exact_duplicates:
             dedupe_method = "exact_canonical_duplicate_collapsed"
-    review_items = sum(excluded_reasons.values()) + review_key_count
+    review_items = (
+        sum(excluded_reasons.values())
+        + review_key_count
+        + (multi_variant_key_count if preserve_observed_variants else 0)
+    )
     audit = {
         "format": "garmin-running-data-normalizer-daily-metric-audit-v1",
         "dataset": dataset,
@@ -160,6 +196,27 @@ def finalize_daily(
         "source_paths_exposed": False,
         "private_identifiers_exposed": False,
     }
+    if preserve_observed_variants:
+        audit.update(
+            {
+                "canonical_key_count": len(grouped),
+                "single_variant_key_count": len(grouped) - multi_variant_key_count,
+                "multi_variant_key_count": multi_variant_key_count,
+                "observed_variant_count": observed_variant_count,
+                "exact_repeat_count": same_value_duplicates,
+                "malformed_count": sum(excluded_reasons.values()),
+                "canonicalization_unresolved_count": multi_variant_key_count,
+                "automatic_winner": False,
+                "observed_variants": sorted(
+                    observed_variants,
+                    key=lambda item: (
+                        stable_json(item["canonical_key"]),
+                        item["variant_fingerprint"],
+                    ),
+                ),
+                "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
+            }
+        )
     if duplicate_group_count and (dedupe_exact_duplicates or provenance_conflict_predicate is not None):
         audit.update(
             {
@@ -188,4 +245,5 @@ __all__ = [
     "selected_rows",
     "stable_json",
     "text",
+    "variant_fingerprint",
 ]

@@ -349,6 +349,7 @@ def _normalize_datasets(
     input_root: Path,
     families: dict[str, list[DiscoveredAsset]],
     relationship_context: dict[str, Any] | None = None,
+    snapshot_context: dict[str, Any] | None = None,
 ) -> tuple[
     dict[str, list[dict[str, Any]]],
     list[dict[str, Any]],
@@ -468,6 +469,53 @@ def _normalize_datasets(
             "DAILY_METRICS_NORMALIZATION_FAILED",
             "detected daily metric input could not be normalized",
         ) from exc
+
+    if snapshot_context is not None:
+        merge_summary = snapshot_context.get("merge_summary", {})
+        summaries = (
+            merge_summary.get("datasets", {})
+            if isinstance(merge_summary, dict)
+            else {}
+        )
+        for dataset in ("endurance_score_daily", "uds_daily"):
+            source_summary = summaries.get(dataset, {})
+            variants = source_summary.get("observed_variants", [])
+            if not variants:
+                continue
+            safe_variants = []
+            for variant in variants:
+                item = dict(variant)
+                orders = item.pop("snapshot_orders", [])
+                item["snapshot_lineage"] = {
+                    "snapshots": [f"S{int(order)}" for order in orders],
+                    "source_snapshot_count": len(orders),
+                }
+                safe_variants.append(item)
+            audit = performance_audit[dataset]
+            audit.update(
+                {
+                    "status": "PASS_WITH_REVIEW_ITEMS",
+                    "canonical_key_count": int(source_summary.get("canonical_record_count", 0))
+                    + int(source_summary.get("multi_variant_key_count", 0)),
+                    "single_variant_key_count": int(source_summary.get("single_variant_key_count", 0)),
+                    "multi_variant_key_count": int(source_summary.get("multi_variant_key_count", 0)),
+                    "observed_variant_count": int(source_summary.get("observed_variant_count", 0)),
+                    "exact_repeat_count": int(source_summary.get("exact_repeat_count", 0)),
+                    "malformed_count": int(source_summary.get("malformed_count", 0)),
+                    "canonicalization_unresolved_count": int(
+                        source_summary.get("canonicalization_unresolved_count", 0)
+                    ),
+                    "automatic_winner": False,
+                    "observed_variants": sorted(
+                        safe_variants,
+                        key=lambda item: (
+                            json.dumps(item.get("canonical_key"), sort_keys=True),
+                            item.get("variant_fingerprint", ""),
+                        ),
+                    ),
+                    "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
+                }
+            )
 
     try:
         relationship_summary = validate_declared_relationships(
@@ -833,6 +881,17 @@ def _family_results(
         family_warnings = 0
         status = "PROCESSED"
         skipped = 0
+        variant_review_count = 0
+        if family in daily_dataset_by_family:
+            variant_review_count = int(
+                performance_audit[daily_dataset_by_family[family]].get(
+                    "canonicalization_unresolved_count", 0
+                )
+            )
+            if variant_review_count and detected == 0:
+                # Snapshot merge may omit conflicted canonical rows while keeping
+                # their public-safe variants in audit evidence.
+                detected = 1
         if family != "activities" and detected == 0:
             status = "SKIPPED_NOT_PRESENT"
             if family not in quiet_optional_families:
@@ -858,6 +917,9 @@ def _family_results(
             review_item_count += int(audit.get("same_day_conflict_count", 0))
             review_item_count += int(audit.get("invalid_value_count", 0))
             review_item_count += int(audit.get("missing_date_count", 0))
+            review_item_count += int(
+                audit.get("canonicalization_unresolved_count", 0)
+            )
             if review_item_count:
                 family_warnings += 1
                 warnings.append(
@@ -988,7 +1050,12 @@ def run_all(
         activity_fit_audit,
         relationship_summary,
         performance_audit,
-    ) = _normalize_datasets(input_root, families, snapshot_context)
+    ) = _normalize_datasets(
+        input_root,
+        families,
+        relationship_context=snapshot_context,
+        snapshot_context=snapshot_context,
+    )
     _validate_provenance(records, fit_audit, families)
     qa_entries = [
         _dataset_qa(dataset, records[str(dataset["name"])], len(families[str(dataset["family"])]))
@@ -1031,6 +1098,7 @@ def run_all(
             "PASS_WITH_REVIEW_ITEMS"
             if any(
                 int(performance_audit[name].get("excluded_record_count", 0))
+                or int(performance_audit[name].get("canonicalization_unresolved_count", 0))
                 for name in ("hill_score_daily", "endurance_score_daily")
             )
             else "PASS"

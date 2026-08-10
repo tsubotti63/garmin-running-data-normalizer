@@ -65,6 +65,10 @@ behavior.
 - Race Prediction, Acute Training Load, Training Readiness, VO2Max, and Training
   History preserve each source observation. Their day-level QA view is a
   non-canonical aggregate; the package does not choose a latest or preferred row.
+- Snapshot-based Endurance and UDS values that differ for one calendar key are
+  preserved as public-safe observed variants in the corresponding audit output.
+  Their canonical daily interpretation remains unresolved, so no winner is
+  emitted. Same-export malformed/divergent values remain fail-closed.
 - Naive source timestamps are retained with timezone semantics explicitly
   unconfirmed. Epoch-millisecond timestamps are normalized as UTC, and the
   Activity VO2Max `timestampGmt` field is treated as UTC by its source-field name.

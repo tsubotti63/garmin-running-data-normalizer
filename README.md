@@ -96,6 +96,10 @@ dataset's reviewed grain and stable key.
 
 - Snapshot Accumulation applies the matching daily-state, immutable-observation,
   or regenerate policy and retains missing-is-not-delete behavior.
+- In Snapshot-based runs, accepted Endurance and UDS values that differ for one
+  stable key are retained in audit evidence as observed variants. A canonical
+  daily winner is not selected without source-backed authority; same-export
+  malformed/divergent input remains fail-closed.
 - Generated Output Experience documents all 17 datasets and keeps the six
   existing explicit relationships unchanged.
 - Wellness/Metrics context remains separate from Activity facts. Same-day
@@ -342,11 +346,11 @@ locally and never uploads it.
 | FIT sessions and laps | CRC-validated multi-session parser with `fit_session_key` and `fit_lap_key`; record coordinates and raw telemetry are not emitted | Run-All |
 | Activity/FIT links | Auditable evidence-qualified links with exclusions and relationship QA | Run-All |
 | Hill Score Daily | Public-safe calendar-day Hill Score state with fail-closed same-day conflict handling | Run-All in v1.3.0 |
-| Endurance Score Daily | Public-safe calendar-day Endurance Score state with fail-closed same-day conflict handling | Run-All in v1.3.0 |
+| Endurance Score Daily | Public-safe calendar-day Endurance Score state; Snapshot variants remain audit-preserved when canonicalization is unresolved | Run-All in v1.3.0 |
 | Lactate Threshold | Four-family candidate/audit collection; unit, timezone, stable-key, and promotion gates remain open | Candidate audit only; not a stable dataset |
 | Race Prediction observations | Garmin-provided 5K/10K/Half/Marathon predictions keyed by date and source timestamp; no private device fields | Run-All in v1.3.0 |
 | Sleep Daily | `sleepData.json` bounded daily normalization with explicit review states; no filling or inferred awake time | Run-All in v1.3.0 |
-| UDS Daily | Selected steps, calories, heart rate, Body Battery, total stress, and source-presence flags | Run-All in v1.3.0 |
+| UDS Daily | Selected steps, calories, heart rate, Body Battery, total stress, and source-presence flags; Snapshot variants remain audit-preserved when canonicalization is unresolved | Run-All in v1.3.0 |
 | Acute Training Load observations | Garmin-provided timestamped acute/chronic values and ratio without recomputation or daily row selection | Run-All in v1.3.0 |
 | Training Readiness observations | Garmin-provided timestamped readiness score, level, recovery, and component context | Run-All in v1.3.0 |
 | VO2Max observations | Two source series in one generation-aware observation schema without cross-series overwrite | Run-All in v1.3.0 |
