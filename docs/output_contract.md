@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-- Current stable contract: v1.3.2 release candidate
+- Current stable contract: v1.3.2
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each

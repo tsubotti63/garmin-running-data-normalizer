@@ -4,10 +4,10 @@ This file records factual Garmin Running Data Normalizer product changes. The
 Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
 Platform maintains its own separate changelog.
 
-## v1.3.2 — release candidate
+## v1.3.2 — stable Production patch release
 
-Status: release preparation complete; merge, tag, GitHub Release, and Production
-PyPI publication remain pending separate Human approval.
+Status: published as an annotated tag, the latest stable GitHub Release, and a
+verified Production PyPI distribution on 2026-08-11 JST.
 
 ### Fixed
 
@@ -27,10 +27,13 @@ PyPI publication remain pending separate Human approval.
 
 ### Validation
 
-- Four real Snapshots, 15/15 non-empty subset Full Run-All validations,
-  Synthetic 24/24 processing orders, and representative real 4/4 orders.
-- Lost values, invented values, automatic winners, and silently tolerated
-  malformed observations: zero.
+- Four real Garmin Export Snapshots, 15/15 non-empty real-data subset Full
+  Run-All validations, 24/24 Synthetic processing-order permutations, and 4/4
+  representative real-data processing orders.
+- Lost observed values, invented values, and automatic winners: zero.
+- A full private real-data 24/24 Full Run-All order matrix remains deferred;
+  these bounded results do not claim universal order independence or zero
+  defects.
 - pytest 251, unittest 208, isolated packaging and installed-flow gates PASS.
 
 ### Compatibility

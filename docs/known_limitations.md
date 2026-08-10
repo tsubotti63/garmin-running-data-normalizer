@@ -1,9 +1,8 @@
 # Known Limitations
 
-These limitations apply to the v1.3.2 release candidate and will remain explicit
-product boundaries after publication. The published v1.3.1 GitHub Release and
-Production PyPI distribution remains the external stable baseline until the
-v1.3.2 release gate completes.
+These limitations apply to the published stable v1.3.2 GitHub Release and
+Production PyPI distribution. They remain explicit Product boundaries after
+publication.
 
 ## Input and orchestration
 

@@ -13,11 +13,12 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
-## v1.3.2 — release candidate
+## v1.3.2 — stable Production patch release
 
 Snapshot-aware relationship resolution, deterministic Sleep exact-duplicate
 handling, observed-variant preservation for Endurance/UDS, Lactate candidate
-preservation without winner selection, and acquisition-order separation are
-prepared for the v1.3.2 release. See the
-[v1.3.2 Release Notes](docs/release_notes/v1.3.2.md). Tag, GitHub Release, and
-PyPI publication remain pending separate approval.
+preservation without winner selection, and acquisition-order separation were
+published in v1.3.2. See the
+[v1.3.2 Release Notes](docs/release_notes/v1.3.2.md),
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.2),
+and [Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.3.2/).

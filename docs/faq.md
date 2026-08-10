@@ -23,8 +23,7 @@ synthetic data.
 
 ### Which version is stable?
 
-`v1.3.2` is the current release candidate in this branch; PyPI continues to
-serve published `v1.3.1` until the release gate completes. The candidate
+`v1.3.2` is the current stable release on GitHub and Production PyPI. It
 includes the compatible one-shot workflow, optional Snapshot Accumulation, the
 Windows timezone-data hotfix, and the additive Wellness/Metrics datasets
 documented for v1.3.

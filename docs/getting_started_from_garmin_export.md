@@ -2,8 +2,7 @@
 
 This guide takes a first-time user from an official Garmin Account Data Export
 to a completed local Run-All handoff. It applies to the current stable Garmin
-Running Data Normalizer `v1.3.2` release candidate. This is the current stable
-release candidate for this guide.
+Running Data Normalizer `v1.3.2` release.
 
 Use this guide for a full Garmin Account Data Export. An individual Activity
 GPX or TCX export is not the input described here.
@@ -47,11 +46,10 @@ extracted duplicate of that same inner content in the input root.
 Keep generated output outside the input root. Run-All reads the Export and does
 not modify it.
 
-## 3. Install the v1.3.2 release candidate
+## 3. Install stable v1.3.2
 
-Create an isolated environment if practical, then install the reviewed
-candidate from a local artifact, or use the exact-version commands below after
-the v1.3.2 release gate publishes it. Production PyPI serves v1.3.1 until then:
+Create an isolated environment if practical, then install the exact stable
+version from Production PyPI:
 
 ### macOS / Linux
 
@@ -75,7 +73,7 @@ python -m venv .venv
 installed and the Windows Python launcher is available, you can use
 `py -3.11 -m venv .venv` instead.
 
-The v1.3.2 candidate installs `tzdata` automatically on Windows. Confirm both the
+Stable v1.3.2 installs `tzdata` automatically on Windows. Confirm both the
 package version and the existing IANA timezone contract with:
 
 ```powershell

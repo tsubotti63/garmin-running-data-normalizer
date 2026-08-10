@@ -32,7 +32,7 @@
   third-party notices.
 - Complete dependency lock review, security/privacy checks, documentation, and
   release-specific review evidence.
-- `v1.0.0` remains the first stable release. `v1.3.1` is the current stable
+- `v1.0.0` remains the first stable release. `v1.3.2` is the current stable
   GitHub Release and Production PyPI version. Any future tag, GitHub Release,
   stable release, or package publication requires its own current review and
   separate Human authorization.
@@ -64,6 +64,10 @@
 - Published patch version `1.3.1` after separate review and release gates to
   align Product-owned public entry points and public-state validation without
   changing the v1.3 runtime or data contracts.
+- Published patch version `1.3.2` after separate review, tag, GitHub Release,
+  Trusted Publishing, and Production PyPI verification gates. The patch
+  improves Snapshot correctness and evidence preservation without changing the
+  17-dataset contract, stable keys, grains, or privacy boundary.
 - Close additional v1.3 feature work and hand future Integrity / Evidence
   Foundation planning to the v1.4 candidate phase without starting
   implementation.
