@@ -31,11 +31,11 @@ Reusable descriptive analysis
 Human review
 ```
 
-Current stable release: **v1.3.2** (release candidate; publication pending) ·
-Python **3.11+** · Apache License 2.0
+Current stable release: **v1.3.2** · Python **3.11+** · Apache License 2.0
 
-v1.3.2 is the prepared patch candidate. The tag, GitHub Release, and Production
-PyPI publication remain separate Human-approved actions.
+v1.3.2 is published as an annotated tag, the latest stable GitHub Release, and
+a Production PyPI distribution. The release artifacts were built and verified
+from the reviewed release commit through GitHub Actions Trusted Publishing.
 
 v1.3.2 is a Snapshot correctness and evidence-preservation patch. The v1.3.0
 dataset and runtime contracts remain unchanged.
@@ -48,7 +48,7 @@ dataset and runtime contracts remain unchanged.
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
 - [v1.3.2 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.3.2.md)
-- [Published stable Release v1.3.1](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.1)
+- [Published stable Release v1.3.2](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.2)
 - Project story on Zenn: [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
 
 ## Why this project
@@ -158,12 +158,11 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. The v1.3.2 candidate installs
+`python -m garmin_running_data_normalizer --version`. Stable v1.3.2 installs
 `tzdata` automatically on Windows so Python can resolve the existing IANA
 `Asia/Tokyo` timezone contract. macOS and Linux continue to use their system
-timezone data. Until the candidate is published, the unpinned install command
-resolves the published v1.3.1 package; use the reviewed wheel or editable
-checkout when validating v1.3.2 locally.
+timezone data. The unpinned install command resolves the current Production
+PyPI release; use `==1.3.2` when exact release identity is required.
 
 Maintainers can reproduce the packaging gate without uploading anything:
 

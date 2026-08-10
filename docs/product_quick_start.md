@@ -6,9 +6,9 @@ or a real Garmin export.
 The root `QUICK_START.md` is a short router to the product guides. This file
 contains the complete synthetic Product Quick Start.
 
-Current stable release candidate: v1.3.2. The current release documents
-currently serve stable v1.3.2 candidate guidance. Production PyPI continues to
-serve the published v1.3.1 release until the next release gate completes.
+Current stable release: v1.3.2. The current release documents currently serve
+stable v1.3.2 guidance, and Production PyPI provides the published v1.3.2
+distribution.
 
 ## Prerequisites
 
@@ -16,11 +16,10 @@ serve the published v1.3.1 release until the next release gate completes.
 - Git
 - A local shell: macOS/Linux shell or Windows PowerShell
 
-## Install the v1.3.2 release candidate
+## Install stable v1.3.2
 
-Install the reviewed candidate from a locally built artifact, or use this exact
-version after the v1.3.2 release gate publishes it. Production PyPI continues
-to serve v1.3.1 until then:
+Install the current stable distribution from Production PyPI. Pin the exact
+version when release identity must be reproducible:
 
 ```bash
 python -m pip install garmin-running-data-normalizer==1.3.2

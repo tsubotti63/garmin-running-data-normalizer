@@ -2,19 +2,18 @@
 
 ## Current stable release
 
-- Version: `1.3.1`
+- Version: `1.3.2`
 - Classification: patch release
-- Scope: Product-owned public entry points, public-state validation, and
-  documentation/platform-alignment consistency
-- Product API, dataset, output, Snapshot, relationship, privacy, and runtime
-  changes: none
-- Source commit: `9fac26ee8f81f1db1273cac5984415e103e756b3`
-- Annotated tag: `v1.3.1` (tag object
-  `45cfc77d75f57d43224217294f2fead3fcd9d547`)
-- GitHub Release: [Published, non-prerelease, and marked latest](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.1)
-- Production PyPI: [Published](https://pypi.org/project/garmin-running-data-normalizer/1.3.1/)
+- Scope: Snapshot correctness and evidence preservation
+- Product API, dataset count, stable keys, grains, output paths, privacy, and
+  exit-code changes: none
+- Source commit: `c6f7737aa24d099b30e897cef0840f0189fb1d7b`
+- Annotated tag: `v1.3.2` (tag object
+  `7d539cbf7851c24bc592c8aae1f17ad2361c77ed`)
+- GitHub Release: [Published, non-prerelease, and marked latest](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.2)
+- Production PyPI: [Published](https://pypi.org/project/garmin-running-data-normalizer/1.3.2/)
   and exact-version clean-install verified
-- TestPyPI: Not used for v1.3.1; it was not required by the approved patch
+- TestPyPI: Not used for v1.3.2; it was not required by the approved patch
   release contract
 
 ## Current facts
@@ -23,48 +22,51 @@
 - Default branch: `main`
 - License: `Apache-2.0`
 - CI: Operational
-- Current source and package version: `1.3.1`
-- Current Production PyPI version: `1.3.1`
-- Latest GitHub Release: `v1.3.1`
+- Current source and package version: `1.3.2`
+- Current Production PyPI version: `1.3.2`
+- Latest GitHub Release: `v1.3.2`
 - Release classification: Public, non-prerelease, and marked latest
-- Release tag: Annotated `v1.3.1` on commit
-  `9fac26ee8f81f1db1273cac5984415e103e756b3`
+- Release tag: Annotated `v1.3.2` on commit
+  `c6f7737aa24d099b30e897cef0840f0189fb1d7b`
 - PyPI packaging readiness: PASS on `main`
-- Production PyPI `1.3.1`: Published and clean-install verified
+- Production PyPI `1.3.2`: Published and clean-install verified
 
 Repository publication makes the source available for public maintenance. A Git
 tag identifies a Git object, a GitHub Release is a separately created GitHub
 artifact, and a versioned product release is a distinct project event. The
 published earlier tags and Releases remain immutable. v1.3.1 was published from
 the separately reviewed PR #15 Squash Commit without rewriting history or
-renaming an earlier artifact.
+renaming an earlier artifact. v1.3.2 was subsequently published from the exact
+reviewed source commit shown above through its separate tag, Release, and
+Trusted Publishing gates.
 
 ## Release verification
 
-- Release-candidate pytest: 210 passed
+- Release-source pytest: 251 passed; unittest: 208 passed
 - Main CI run
-  [`31295319603`](https://github.com/tsubotti63/garmin-running-data-normalizer/actions/runs/31295319603):
+  [`31405707069`](https://github.com/tsubotti63/garmin-running-data-normalizer/actions/runs/31405707069):
   Ubuntu `test` and `windows-runtime` passed
 - Production publish workflow
-  [`31295493750`](https://github.com/tsubotti63/garmin-running-data-normalizer/actions/runs/31295493750):
+  [`31407525307`](https://github.com/tsubotti63/garmin-running-data-normalizer/actions/runs/31407525307):
   exact-source build, approval gate, PyPI publication, and PyPI verification
   passed
 - Public Product State, bootstrap, Platform Alignment, static policy, public
   command, public history, and relative-link validation: PASS
 - Wheel SHA-256:
-  `e314767194061d5c739bb767a4f9807297b7eb1752043759f6f634da05bea577`
+  `612a16bb269983972294d20bdb5c6507422bacd4a3daf62ac5cd52f383272624`
 - Source distribution SHA-256:
-  `c54f1aabac2e81d9ce4750e35036521b8c46698c92eea6c74e43dd5f231d20b6`
-- Clean Production PyPI install, version/import check, Synthetic Golden Path,
-  repeated Synthetic Run-All, and 44-file deterministic comparison: PASS
+  `88b1e3fa3af63cc9a037cba8134a95aa4504f397ef9d014b1853e58da1772a4c`
+- Clean Production PyPI install, version/import check, `pip check`, Synthetic
+  Run-All, 44-file output, and 17-dataset/6-relationship handoff: PASS
 - Target-specific TestPyPI and PyPI approval variables: returned to `false`
 
 ## Compatibility and historical context
 
 v1.3.0 remains the immutable Wellness/Metrics feature release that established
-the 17-dataset Product contract. v1.3.1 changes the public Product surface and
-release validation only; it does not revise the v1.3.0 runtime or data
-contracts.
+the 17-dataset Product contract. v1.3.1 changed the public Product surface and
+release validation only. v1.3.2 improves Snapshot correctness and evidence
+preservation without changing the v1.3.0 dataset count, stable keys, grains, or
+privacy boundary.
 
 Post-publication evidence also records one maintainer-owned physical Windows
 clean install from Production PyPI. The Windows-only `tzdata` dependency was
