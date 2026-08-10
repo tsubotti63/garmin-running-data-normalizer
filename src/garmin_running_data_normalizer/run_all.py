@@ -516,6 +516,46 @@ def _normalize_datasets(
                     "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
                 }
             )
+        lactate_source_summary = summaries.get(
+            "lactate_threshold_candidates", {}
+        )
+        if lactate_source_summary:
+            lactate_audit = performance_audit["lactate_threshold"]
+            lactate_audit.update(
+                {
+                    "candidate_rows": int(
+                        lactate_source_summary.get("candidate_rows", 0)
+                    ),
+                    "distinct_candidate_count": int(
+                        lactate_source_summary.get("distinct_candidate_count", 0)
+                    ),
+                    "exact_repeat_count": int(
+                        lactate_source_summary.get("exact_repeat_count", 0)
+                    ),
+                    "multiple_candidate_group_count": int(
+                        lactate_source_summary.get(
+                            "multiple_candidate_group_count", 0
+                        )
+                    ),
+                    "authority_unresolved_count": int(
+                        lactate_source_summary.get(
+                            "authority_unresolved_count", 0
+                        )
+                    ),
+                    "stable_promotion_available": False,
+                    "malformed_count": int(
+                        lactate_source_summary.get("malformed_count", 0)
+                    ),
+                    "candidate_status": lactate_source_summary.get(
+                        "candidate_status", "identity_or_semantics_unknown"
+                    ),
+                    "candidate_review_required": bool(
+                        lactate_source_summary.get(
+                            "candidate_review_required", False
+                        )
+                    ),
+                }
+            )
 
     try:
         relationship_summary = validate_declared_relationships(
@@ -967,6 +1007,25 @@ def _family_results(
     unresolved_relationship_count = int(
         relationship_summary.get("relationship_unresolved", 0)
     )
+    lactate_audit = performance_audit.get("lactate_threshold", {})
+    lactate_review_count = int(
+        lactate_audit.get("multiple_candidate_group_count", 0)
+        or lactate_audit.get("review_condition_counts", {}).get(
+            "functional_threshold_power_conflict", 0
+        )
+    )
+    if lactate_review_count:
+        warnings.append(
+            {
+                "code": "LACTATE_CANDIDATE_AUTHORITY_UNRESOLVED",
+                "family": "lactate_threshold",
+                "count": lactate_review_count,
+                "message": (
+                    "multiple accepted Lactate Threshold candidates are preserved; "
+                    "Stable promotion remains unavailable"
+                ),
+            }
+        )
     if unresolved_relationship_count:
         warnings.append(
             {
@@ -1249,6 +1308,40 @@ def run_all(
             *generated_paths[-2:],
         ]
     qa_by_name = {entry["dataset"]: entry for entry in qa_entries}
+    lactate_audit = performance_audit["lactate_threshold"]
+    lactate_candidate_features = {
+        "status": lactate_audit["status"],
+        "candidate_count": lactate_audit["candidate_count"],
+        "public_promotion": False,
+        "machine_stable_key_status": "PRODUCT_DECISION_REQUIRED",
+        "audit_path": "audit/lactate_threshold_candidates.json",
+    }
+    if snapshot_context is not None and "candidate_rows" in lactate_audit:
+        lactate_candidate_features.update(
+            {
+                "candidate_rows": int(lactate_audit["candidate_rows"]),
+                "distinct_candidate_count": int(
+                    lactate_audit.get(
+                        "distinct_candidate_count",
+                        lactate_audit["candidate_count"],
+                    )
+                ),
+                "exact_repeat_count": int(
+                    lactate_audit.get("exact_repeat_count", 0)
+                ),
+                "multiple_candidate_group_count": int(
+                    lactate_audit.get("multiple_candidate_group_count", 0)
+                ),
+                "authority_unresolved_count": int(
+                    lactate_audit.get("authority_unresolved_count", 0)
+                ),
+                "stable_promotion_available": False,
+                "malformed_count": int(lactate_audit.get("malformed_count", 0)),
+                "candidate_status": lactate_audit.get(
+                    "candidate_status", "identity_or_semantics_unknown"
+                ),
+            }
+        )
     manifest = {
         "format": "garmin-running-data-normalizer-run-manifest-v1",
         "product_version": __version__,
@@ -1275,17 +1368,7 @@ def run_all(
         ],
         "outputs": [],
         "deterministic_output_digest": "projection-pending",
-        "candidate_features": {
-            "lactate_threshold": {
-                "status": performance_audit["lactate_threshold"]["status"],
-                "candidate_count": performance_audit["lactate_threshold"][
-                    "candidate_count"
-                ],
-                "public_promotion": False,
-                "machine_stable_key_status": "PRODUCT_DECISION_REQUIRED",
-                "audit_path": "audit/lactate_threshold_candidates.json",
-            }
-        },
+        "candidate_features": {"lactate_threshold": lactate_candidate_features},
     }
     summary = {
         "format": "garmin-running-data-normalizer-run-summary-v1",
@@ -1301,18 +1384,19 @@ def run_all(
         "errors": [],
         "generated_paths": generated_paths,
         "deterministic_output_digest": "projection-pending",
-        "candidate_features": {
-            "lactate_threshold": {
-                "status": performance_audit["lactate_threshold"]["status"],
-                "candidate_count": performance_audit["lactate_threshold"][
-                    "candidate_count"
-                ],
-                "public_promotion": False,
-                "machine_stable_key_status": "PRODUCT_DECISION_REQUIRED",
-                "audit_path": "audit/lactate_threshold_candidates.json",
-            }
-        },
+        "candidate_features": {"lactate_threshold": lactate_candidate_features},
     }
+    lactate_warning_count = sum(
+        1
+        for item in warnings
+        if item.get("code") == "LACTATE_CANDIDATE_AUTHORITY_UNRESOLVED"
+    )
+    if lactate_warning_count:
+        # Candidate-layer warnings are intentionally separate from runtime
+        # family results: Lactate is audit-only and has no normalized public
+        # dataset family.  The output validator accounts for this additive
+        # warning bucket without fabricating a family result.
+        summary["candidate_warning_count"] = lactate_warning_count
     relationship_warning_count = int(
         bool(relationship_summary.get("relationship_unresolved", 0))
     )

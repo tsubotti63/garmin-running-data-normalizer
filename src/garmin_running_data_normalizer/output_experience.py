@@ -1350,6 +1350,10 @@ def _validate_projection_inputs(
         summary_object.get("relationship_warning_count", 0),
         "relationship warning count",
     )
+    candidate_warning_count = _non_negative_integer(
+        summary_object.get("candidate_warning_count", 0),
+        "candidate warning count",
+    )
     summary_error_count = _non_negative_integer(
         summary_object.get("error_count"), "error count"
     )
@@ -1359,7 +1363,9 @@ def _validate_projection_inputs(
         raise OutputExperienceError("warning list does not match warning count")
     if not isinstance(errors, list) or len(errors) != summary_error_count:
         raise OutputExperienceError("error list does not match error count")
-    if summary_warning_count != total_family_warnings + relationship_warning_count:
+    if summary_warning_count != (
+        total_family_warnings + relationship_warning_count + candidate_warning_count
+    ):
         raise OutputExperienceError(
             "summary warning count does not match family warning counts"
         )
@@ -1902,6 +1908,13 @@ def render_start_here(
                 "",
             ]
         )
+        if "candidate_status" in lactate:
+            lines[-1:-1] = [
+                f"- Candidate status: {_code(lactate['candidate_status'])}",
+                f"- Distinct candidate count: {lactate.get('distinct_candidate_count', lactate.get('candidate_count', 0))}",
+                f"- Exact repeats: {lactate.get('exact_repeat_count', 0)}",
+                f"- Authority-unresolved groups: {lactate.get('authority_unresolved_count', 0)}",
+            ]
     lines.extend(
         [
             "## Relationship Safety",

@@ -576,15 +576,59 @@ def _lactate_power_conflicts(
         grouped[(family, timestamp)].add(_stable_json(power))
     return [
         {
-            "severity": "stop",
+            "severity": "review",
             "conflict_type": "lactate_functional_threshold_power_conflict",
             "dataset": "lactate_threshold_candidates",
             "observation_family": family,
             "observation_timestamp": timestamp,
+            "candidate_status": "multiple_observed_candidates",
+            "authority_status": "unresolved",
+            "stable_promotion_available": False,
         }
         for (family, timestamp), values in sorted(grouped.items())
         if len(values) > 1
     ]
+
+
+def _lactate_malformed_conflicts(
+    observations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return fail-closed records for structurally invalid candidate fields."""
+
+    conflicts: list[dict[str, Any]] = []
+    numeric_fields = {
+        "lactateThresholdSpeed",
+        "lactateThresholdHeartRate",
+        "functionalThresholdPower",
+    }
+    for observation in observations:
+        record = observation.get("record", {})
+        if not isinstance(record, dict):
+            conflicts.append(
+                {
+                    "severity": "stop",
+                    "conflict_type": "lactate_malformed_candidate",
+                    "dataset": "lactate_threshold_candidates",
+                    "reason": "candidate record is not an object",
+                }
+            )
+            continue
+        for field in numeric_fields:
+            value = record.get(field)
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, (int, float))
+            ):
+                conflicts.append(
+                    {
+                        "severity": "stop",
+                        "conflict_type": "lactate_malformed_candidate",
+                        "dataset": "lactate_threshold_candidates",
+                        "field": field,
+                        "reason": "numeric candidate field has invalid type",
+                    }
+                )
+                break
+    return conflicts
 
 
 def _canonical_key(dataset: str, values: tuple[Any, ...]) -> str:
@@ -880,6 +924,11 @@ def _merge_dataset(
                 "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
             }
         )
+    elif dataset == "lactate_threshold_candidates":
+        # Candidate-layer audit metadata is extended by build_approved_input,
+        # but the primitive merge summary must expose deterministic repeat
+        # accounting as well for direct merge QA and permutation tests.
+        summary["exact_repeat_count"] = exact_repeat_count
     return canonical, provenance, field_provenance, holds, conflicts, summary
 
 
@@ -1137,7 +1186,10 @@ def build_approved_input(
         all_provenance: list[dict[str, Any]] = []
         all_field_provenance: list[dict[str, Any]] = []
         all_holds: list[dict[str, Any]] = []
-        all_conflicts: list[dict[str, Any]] = _lactate_power_conflicts(
+        candidate_reviews = _lactate_power_conflicts(
+            observations_by_dataset.get("lactate_threshold_candidates", [])
+        )
+        all_conflicts: list[dict[str, Any]] = _lactate_malformed_conflicts(
             observations_by_dataset.get("lactate_threshold_candidates", [])
         )
         dataset_summaries: dict[str, Any] = {}
@@ -1160,8 +1212,44 @@ def build_approved_input(
             all_holds.extend(holds)
             all_conflicts.extend(conflicts)
             dataset_summaries[dataset] = summary
+        lactate_summary = dataset_summaries["lactate_threshold_candidates"]
+        lactate_observations = observations_by_dataset.get(
+            "lactate_threshold_candidates", []
+        )
+        lactate_null_key_count = int(lactate_summary.get("null_key_hold_count", 0))
+        lactate_summary.update(
+            {
+                "candidate_rows": len(lactate_observations),
+                "distinct_candidate_count": int(
+                    lactate_summary.get("canonical_record_count", 0)
+                ),
+                "exact_repeat_count": max(
+                    0,
+                    len(lactate_observations)
+                    - int(lactate_summary.get("canonical_record_count", 0))
+                    - lactate_null_key_count,
+                ),
+                "multiple_candidate_group_count": len(candidate_reviews),
+                "authority_unresolved_count": len(candidate_reviews),
+                "stable_promotion_available": False,
+                "malformed_count": lactate_null_key_count
+                + sum(
+                    item["conflict_type"] == "lactate_malformed_candidate"
+                    for item in all_conflicts
+                ),
+                "candidate_status": (
+                    "multiple_observed_candidates"
+                    if candidate_reviews
+                    else "identity_or_semantics_unknown"
+                ),
+                "candidate_review_required": bool(candidate_reviews),
+            }
+        )
         if all_conflicts:
-            _write_json(stage / "canonical/review_holds.json", all_holds + all_conflicts)
+            _write_json(
+                stage / "canonical/review_holds.json",
+                all_holds + candidate_reviews + all_conflicts,
+            )
             raise SnapshotMergeError("canonical merge contains unresolved stop conflicts")
         if not canonical_by_dataset["activities"]:
             raise SnapshotMergeError("canonical input contains no Activities records")
@@ -1380,6 +1468,10 @@ def build_approved_input(
                 "activity_fit_links_regenerated": True,
             },
             "review_hold_count": len(all_holds),
+            "candidate_review_count": len(candidate_reviews),
+            "candidate_review_type_counts": dict(
+                sorted(Counter(item["conflict_type"] for item in candidate_reviews).items())
+            ),
             "review_hold_type_counts": dict(
                 sorted(Counter(item["hold_type"] for item in all_holds).items())
             ),
@@ -1448,6 +1540,10 @@ def build_approved_input(
             "dataset_summaries": dataset_summaries,
             "fit_unique_blob_count": len(fit_unique),
             "review_hold_count": len(all_holds),
+            "candidate_review_count": len(candidate_reviews),
+            "candidate_review_type_counts": dict(
+                sorted(Counter(item["conflict_type"] for item in candidate_reviews).items())
+            ),
             "stop_conflict_count": 0,
             "automatic_deletion": False,
             "inference_performed": False,
@@ -1473,7 +1569,10 @@ def build_approved_input(
             stage / "canonical/field_provenance.json",
             all_field_provenance,
         )
-        _write_json(stage / "canonical/review_holds.json", all_holds)
+        _write_json(
+            stage / "canonical/review_holds.json",
+            all_holds + candidate_reviews,
+        )
         _write_json(stage / "canonical/fit_blob_aliases.json", fit_aliases)
         _write_json(stage / "canonical/preserved_unknown_aliases.json", unknown_aliases)
         _write_json(stage / "canonical/approved_input_manifest.json", approved_manifest)

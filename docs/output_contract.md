@@ -240,6 +240,12 @@ key, Activity relationship `not_yet_defined`, no join guidance, and no
 canonical daily projection. This metadata does not promote the audit file to a
 normalized dataset.
 
+When Snapshot Merge observes multiple accepted Lactate candidates without
+resolved authority, it preserves the distinct candidates, records exact replay
+counts and an unresolved candidate status, and continues with a warning. This
+candidate-only warning does not make Stable promotion available and does not
+select a winner. Malformed source structure remains fail-closed.
+
 Race Prediction, Sleep, UDS, Acute Training Load, Training Readiness, VO2Max,
 HRV, and Training History remain separate context. Their detailed fields,
 generation boundary, source-series behavior, missing-value policy, and

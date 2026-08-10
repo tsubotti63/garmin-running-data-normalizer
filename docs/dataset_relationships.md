@@ -74,6 +74,11 @@ contextual alignment is not a direct relationship contract.
 | `normalized/training_history_daily.json` | performance context | one source observation; `calendar_date`, `observation_timestamp` | same-day `context_only`; direct relationship `not_yet_defined` | `calendar_date` to `activity_date_local` | many observations to many Activities | observations canonical; daily summary derived with `selection_rule: null` | compare limited status context by day | no direct Activity link or latest-wins |
 | `audit/lactate_threshold_candidates.json` | performance threshold observation family | one source-backed observation; stable key pending Product decision | direct relationship `not_yet_defined` | none | many observations across history, latest snapshot, profile state, and derived evidence | candidate/audit only; no canonical daily projection | source-family audit and Product review | no Activity join, unit conversion, cross-family collapse, or latest-wins |
 
+Snapshot Merge treats a structurally valid Lactate candidate-only authority
+conflict as review evidence: distinct accepted candidates and exact replay
+counts are preserved, no winner is selected, and Stable promotion remains
+blocked. Malformed candidate structure remains fail-closed.
+
 When multiple source observations share a day, analysis must keep the
 observations distinct. `qa/daily_metrics_summary.json` may summarize their
 presence and counts, but it never chooses a canonical daily row.
