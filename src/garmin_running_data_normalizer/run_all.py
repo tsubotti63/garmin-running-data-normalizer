@@ -348,6 +348,7 @@ def _validate_dataset_table() -> None:
 def _normalize_datasets(
     input_root: Path,
     families: dict[str, list[DiscoveredAsset]],
+    relationship_context: dict[str, Any] | None = None,
 ) -> tuple[
     dict[str, list[dict[str, Any]]],
     list[dict[str, Any]],
@@ -469,7 +470,27 @@ def _normalize_datasets(
         ) from exc
 
     try:
-        relationship_summary = validate_declared_relationships(records)
+        relationship_summary = validate_declared_relationships(
+            records,
+            current_activity_ids=(
+                set(relationship_context["current_activity_ids"])
+                if relationship_context is not None
+                and "current_activity_ids" in relationship_context
+                else None
+            ),
+            current_gear_keys=(
+                set(relationship_context["current_gear_keys"])
+                if relationship_context is not None
+                and "current_gear_keys" in relationship_context
+                else None
+            ),
+            current_fit_session_keys=(
+                set(relationship_context["current_fit_session_keys"])
+                if relationship_context is not None
+                and "current_fit_session_keys" in relationship_context
+                else None
+            ),
+        )
         (
             records["activity_fit_links"],
             activity_fit_audit,
@@ -752,6 +773,7 @@ def _family_results(
     records: dict[str, list[dict[str, Any]]],
     fit_status: dict[str, Any],
     performance_audit: dict[str, Any],
+    relationship_summary: dict[str, Any],
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]], str]:
     warnings: list[dict[str, Any]] = []
     results: dict[str, dict[str, Any]] = {}
@@ -880,6 +902,22 @@ def _family_results(
                 fit_status.get("invalid_sentinel_counts", {})
             )
 
+    unresolved_relationship_count = int(
+        relationship_summary.get("relationship_unresolved", 0)
+    )
+    if unresolved_relationship_count:
+        warnings.append(
+            {
+                "code": "RELATIONSHIP_UNRESOLVED_VALID_LINK",
+                "family": "relationships",
+                "count": unresolved_relationship_count,
+                "message": (
+                    "valid relationship links have unresolved endpoints; "
+                    "no endpoint was inferred"
+                ),
+            }
+        )
+
     overall = "PARTIAL_SUCCESS" if incomplete_fit_count else ("PASS_WITH_WARNINGS" if warnings else "PASS")
     return results, warnings, overall
 
@@ -950,7 +988,7 @@ def run_all(
         activity_fit_audit,
         relationship_summary,
         performance_audit,
-    ) = _normalize_datasets(input_root, families)
+    ) = _normalize_datasets(input_root, families, snapshot_context)
     _validate_provenance(records, fit_audit, families)
     qa_entries = [
         _dataset_qa(dataset, records[str(dataset["name"])], len(families[str(dataset["family"])]))
@@ -985,6 +1023,7 @@ def run_all(
         records,
         fit_status,
         performance_audit,
+        relationship_summary,
     )
     performance_summary = {
         "format": "garmin-running-data-normalizer-performance-metrics-summary-v1",
@@ -1097,7 +1136,14 @@ def run_all(
     }
     if snapshot_context is not None:
         required_snapshot_context = {"lineage", "coverage", "merge_summary"}
-        if set(snapshot_context) != required_snapshot_context:
+        allowed_snapshot_context = required_snapshot_context | {
+            "current_activity_ids",
+            "current_gear_keys",
+            "current_fit_session_keys",
+        }
+        if not required_snapshot_context <= set(snapshot_context) or not set(
+            snapshot_context
+        ) <= allowed_snapshot_context:
             raise RunAllError(
                 "SNAPSHOT_CONTEXT_INVALID",
                 "snapshot lifecycle context is incomplete",
@@ -1199,6 +1245,13 @@ def run_all(
             }
         },
     }
+    relationship_warning_count = int(
+        bool(relationship_summary.get("relationship_unresolved", 0))
+    )
+    if relationship_warning_count:
+        # Keep the established PASS summary byte-stable; this additive field
+        # appears only when a valid unresolved relationship warning exists.
+        summary["relationship_warning_count"] = relationship_warning_count
     if snapshot_context is not None:
         lifecycle_summary = dict(snapshot_context["merge_summary"])
         manifest["snapshot_lifecycle"] = {
