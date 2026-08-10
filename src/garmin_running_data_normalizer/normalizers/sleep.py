@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from ..common.time import daily_calendar_date
 from ..intake.discovery import DiscoveredAsset, load_json_assets
-from .daily_metrics import DailyMetricResult, finalize_daily, load_rows, logical_basename
+from .daily_metrics import DailyMetricResult, finalize_daily, load_rows, logical_basename, stable_json
 
 MAX_SAFE_INTEGER = (1 << 53) - 1
 
@@ -213,6 +213,40 @@ SLEEP_DAILY_FIELDS = (
     "sleep_source_available_for_analysis_flag",
 )
 
+# Presence is part of the duplicate contract even though raw provenance is not.
+# Missing and explicit null are therefore not silently treated as equal.
+_SLEEP_PRESENCE_GROUPS = (
+    ("calendarDate",),
+    ("sleepStartTimestampGMT",),
+    ("sleepEndTimestampGMT",),
+    ("sleepTimeSeconds", "totalSleepSeconds"),
+    ("deepSleepSeconds", "deep_sleep_seconds"),
+    ("lightSleepSeconds", "light_sleep_seconds"),
+    ("remSleepSeconds", "rem_sleep_seconds"),
+    ("awakeSleepSeconds", "awake_sleep_seconds"),
+    ("sleepScores", "overallScore", "sleepScore"),
+)
+
+
+def _sleep_presence_signature(raw: dict[str, Any]) -> tuple[tuple[str, bool], ...]:
+    return tuple(
+        (group[0], any(field in raw for field in group))
+        for group in _SLEEP_PRESENCE_GROUPS
+    )
+
+
+def _sleep_duplicate_signature(row: dict[str, Any]) -> str:
+    return stable_json(
+        {
+            "public": {field: row.get(field) for field in SLEEP_DAILY_FIELDS},
+            "presence": row.get("_sleep_presence_signature"),
+        }
+    )
+
+
+def _strip_sleep_internal_fields(row: dict[str, Any]) -> dict[str, Any]:
+    return {field: row[field] for field in SLEEP_DAILY_FIELDS}
+
 
 def _public_sleep_review_row(
     sleep_day: str, _rows: list[dict[str, Any]]
@@ -305,6 +339,7 @@ def normalize_sleep_daily_assets(
                 "sleep_limitation_type": limitation,
                 "sleep_reason_code": reason,
                 "sleep_source_available_for_analysis_flag": available,
+                "_sleep_presence_signature": _sleep_presence_signature(raw),
             }
         )
     return finalize_daily(
@@ -314,8 +349,11 @@ def normalize_sleep_daily_assets(
         source_record_count=len(source_rows),
         accepted=accepted,
         excluded_reasons=excluded,
-        review_on_any_duplicate=True,
+        review_on_any_duplicate=False,
         duplicate_review_factory=_public_sleep_review_row,
+        signature_factory=_sleep_duplicate_signature,
+        strip_internal_fields=_strip_sleep_internal_fields,
+        dedupe_exact_duplicates=True,
     )
 
 

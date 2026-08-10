@@ -95,6 +95,10 @@ def finalize_daily(
     excluded_reasons: Counter[str],
     review_on_any_duplicate: bool = False,
     duplicate_review_factory: Callable[[str, list[dict[str, Any]]], dict[str, Any]] | None = None,
+    signature_factory: Callable[[dict[str, Any]], str] | None = None,
+    provenance_conflict_predicate: Callable[[list[dict[str, Any]]], bool] | None = None,
+    strip_internal_fields: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    dedupe_exact_duplicates: bool = False,
 ) -> DailyMetricResult:
     if not key_fields:
         raise DailyMetricError("daily metric stable key must not be empty")
@@ -104,43 +108,71 @@ def finalize_daily(
     output: list[dict[str, Any]] = []
     same_value_duplicates = 0
     review_key_count = 0
+    duplicate_group_count = 0
+    duplicate_row_count = 0
+    divergent_duplicate_count = 0
+    dedupe_method = "none"
     for key in sorted(grouped):
         rows = grouped[key]
-        signatures = {stable_json(row) for row in rows}
+        signatures = {
+            (signature_factory(row) if signature_factory else stable_json(row))
+            for row in rows
+        }
         same_value_duplicates += len(rows) - len(signatures)
-        if review_on_any_duplicate and len(rows) > 1:
+        if len(rows) > 1:
+            duplicate_group_count += 1
+            duplicate_row_count += len(rows) - 1
+        provenance_conflict = bool(
+            provenance_conflict_predicate and len(rows) > 1 and provenance_conflict_predicate(rows)
+        )
+        if provenance_conflict or (review_on_any_duplicate and len(rows) > 1):
             if duplicate_review_factory is None:
                 raise DailyMetricError("duplicate review factory is required")
             output.append(duplicate_review_factory(key[0], rows))
             review_key_count += 1
+            dedupe_method = "review_required"
             continue
         if len(signatures) > 1:
+            divergent_duplicate_count += 1
             raise DailyMetricConflictError(
                 f"{dataset} contains divergent values for one stable key"
             )
-        output.append(rows[0])
+        output.append(strip_internal_fields(rows[0]) if strip_internal_fields else rows[0])
+        if len(rows) > 1 and dedupe_exact_duplicates:
+            dedupe_method = "exact_canonical_duplicate_collapsed"
     review_items = sum(excluded_reasons.values()) + review_key_count
+    audit = {
+        "format": "garmin-running-data-normalizer-daily-metric-audit-v1",
+        "dataset": dataset,
+        "status": "PASS_WITH_REVIEW_ITEMS" if review_items else "PASS",
+        "detected_asset_count": len(selected_assets),
+        "source_record_count": source_record_count,
+        "accepted_record_count": len(output),
+        "excluded_record_count": sum(excluded_reasons.values()),
+        "excluded_reason_counts": dict(sorted(excluded_reasons.items())),
+        "same_value_duplicate_count": same_value_duplicates,
+        "review_key_count": review_key_count,
+        "stable_key": list(key_fields),
+        "merge_policy": "observation_union_missing_is_not_delete_conflict_fail_closed",
+        "keep_last": False,
+        "carry_forward": False,
+        "interpolation": False,
+        "source_paths_exposed": False,
+        "private_identifiers_exposed": False,
+    }
+    if duplicate_group_count and (dedupe_exact_duplicates or provenance_conflict_predicate is not None):
+        audit.update(
+            {
+                "duplicate_group_count": duplicate_group_count,
+                "duplicate_row_count": duplicate_row_count,
+                "dedupe_method": dedupe_method,
+                "review_required_count": review_key_count,
+                "divergent_duplicate_count": divergent_duplicate_count,
+            }
+        )
     return DailyMetricResult(
         records=output,
-        audit={
-            "format": "garmin-running-data-normalizer-daily-metric-audit-v1",
-            "dataset": dataset,
-            "status": "PASS_WITH_REVIEW_ITEMS" if review_items else "PASS",
-            "detected_asset_count": len(selected_assets),
-            "source_record_count": source_record_count,
-            "accepted_record_count": len(output),
-            "excluded_record_count": sum(excluded_reasons.values()),
-            "excluded_reason_counts": dict(sorted(excluded_reasons.items())),
-            "same_value_duplicate_count": same_value_duplicates,
-            "review_key_count": review_key_count,
-            "stable_key": list(key_fields),
-            "merge_policy": "observation_union_missing_is_not_delete_conflict_fail_closed",
-            "keep_last": False,
-            "carry_forward": False,
-            "interpolation": False,
-            "source_paths_exposed": False,
-            "private_identifiers_exposed": False,
-        },
+        audit=audit,
     )
 
 

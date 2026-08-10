@@ -64,14 +64,20 @@ class RemainingWellnessMetricsTest(unittest.TestCase):
             ["calendar_date", "observation_timestamp"],
         )
 
-    def test_sleep_public_contract_and_duplicate_review(self) -> None:
+    def test_sleep_public_contract_and_exact_duplicate_dedupe(self) -> None:
         row = {"calendarDate": "2026-01-02", "sleepStartTimestampGMT": "2026-01-01T14:00:00Z", "sleepEndTimestampGMT": "2026-01-01T22:00:00Z", "sleepTimeSeconds": 27000, "deepSleepSeconds": 3600, "lightSleepSeconds": 18000, "remSleepSeconds": 5400, "awakeSleepSeconds": None, "sleepScores": {"overall": {"value": 80}}, "userProfilePK": "private"}
         result = normalize_sleep_daily_assets([json_asset("synthetic_sleepData.json", [row])])
         self.assertEqual(set(result.records[0]), set(SLEEP_DAILY_FIELDS))
         self.assertIsNone(result.records[0]["sleep_awake_minutes"])
         duplicate = normalize_sleep_daily_assets([json_asset("synthetic_sleepData.json", [row, row])])
-        self.assertEqual(duplicate.records[0]["sleep_normalization_status"], "needs_review")
-        self.assertFalse(duplicate.records[0]["sleep_source_available_for_analysis_flag"])
+        self.assertEqual(len(duplicate.records), 1)
+        self.assertEqual(duplicate.records[0]["sleep_normalization_status"], "available")
+        self.assertTrue(duplicate.records[0]["sleep_source_available_for_analysis_flag"])
+        self.assertEqual(duplicate.audit["duplicate_group_count"], 1)
+        self.assertEqual(duplicate.audit["duplicate_row_count"], 1)
+        self.assertEqual(duplicate.audit["dedupe_method"], "exact_canonical_duplicate_collapsed")
+        self.assertEqual(duplicate.audit["review_required_count"], 0)
+        self.assertEqual(duplicate.audit["divergent_duplicate_count"], 0)
 
     def test_uds_generation_flags_and_no_private_fields(self) -> None:
         row = {"calendarDate": "2026-01-03", "totalSteps": 0, "totalDistanceMeters": 0, "activeKilocalories": 100, "bmrKilocalories": 1500, "bodyBattery": {"chargedValue": 20, "drainedValue": 10}, "allDayStress": {"aggregatorList": [{"type": "TOTAL", "averageStressLevel": 22, "maxStressLevel": 70, "stressDuration": 100, "restDuration": 200}]}, "bodyBatteryFeedback": {}, "hydration": {"valueInML": 2000}, "userProfilePK": "private"}
