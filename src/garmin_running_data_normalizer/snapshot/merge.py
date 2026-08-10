@@ -906,6 +906,42 @@ def _validation_matrix(
     }
 
 
+def _latest_relationship_state(
+    observations_by_dataset: dict[str, list[dict[str, Any]]],
+    snapshot_count: int,
+) -> dict[str, list[str]]:
+    """Return only the latest Export endpoint identities for validation.
+
+    The cumulative approved input remains the validation record set. These
+    latest-only sets let the relationship classifier distinguish an endpoint
+    retained from an earlier authoritative Snapshot from one present in the
+    current Export without inferring any identity.
+    """
+
+    latest = {
+        dataset: [
+            item
+            for item in observations
+            if int(item["logical_order"]) == snapshot_count
+        ]
+        for dataset, observations in observations_by_dataset.items()
+    }
+    activity_ids = {
+        str(item["record"].get("activityId"))
+        for item in latest.get("activities", [])
+        if item["record"].get("activityId") not in (None, "")
+    }
+    gear_keys = {
+        str(item["record"].get("gearPk"))
+        for item in latest.get("gear", [])
+        if item["record"].get("gearPk") not in (None, "")
+    }
+    return {
+        "current_activity_ids": sorted(activity_ids),
+        "current_gear_keys": sorted(gear_keys),
+    }
+
+
 def _approved_input_inventory(root: Path) -> tuple[list[dict[str, Any]], str]:
     rows: list[dict[str, Any]] = []
     for path in sorted(item for item in root.rglob("*") if item.is_file()):
@@ -1392,6 +1428,10 @@ def build_approved_input(
             "lineage": lineage,
             "coverage": coverage,
             "merge_summary": aggregate_summary,
+            "relationship_context": _latest_relationship_state(
+                observations_by_dataset,
+                len(manifests),
+            ),
         }
     except Exception:
         if stage.exists():

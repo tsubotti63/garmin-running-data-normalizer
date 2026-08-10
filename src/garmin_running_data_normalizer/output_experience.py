@@ -1346,6 +1346,10 @@ def _validate_projection_inputs(
     summary_warning_count = _non_negative_integer(
         summary_object.get("warning_count"), "warning count"
     )
+    relationship_warning_count = _non_negative_integer(
+        summary_object.get("relationship_warning_count", 0),
+        "relationship warning count",
+    )
     summary_error_count = _non_negative_integer(
         summary_object.get("error_count"), "error count"
     )
@@ -1355,7 +1359,7 @@ def _validate_projection_inputs(
         raise OutputExperienceError("warning list does not match warning count")
     if not isinstance(errors, list) or len(errors) != summary_error_count:
         raise OutputExperienceError("error list does not match error count")
-    if summary_warning_count != total_family_warnings:
+    if summary_warning_count != total_family_warnings + relationship_warning_count:
         raise OutputExperienceError(
             "summary warning count does not match family warning counts"
         )

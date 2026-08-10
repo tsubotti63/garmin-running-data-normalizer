@@ -1,12 +1,80 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from typing import Any
 
 
 class RelationshipContractError(ValueError):
     """Raised when a declared public relationship cannot be proven safely."""
+
+
+class RelationshipEndpointStatus(StrEnum):
+    """Bounded endpoint classification for explicit relationships."""
+
+    RESOLVED = "RESOLVED"
+    UNRESOLVED_VALID_LINK = "UNRESOLVED_VALID_LINK"
+    MALFORMED = "MALFORMED"
+    CONFLICT = "CONFLICT"
+
+
+@dataclass(frozen=True)
+class RelationshipEndpointResult:
+    status: RelationshipEndpointStatus
+    token: str | None
+    authority: str | None
+    reason: str | None
+
+
+def classify_relationship_endpoint(
+    value: Any,
+    *,
+    label: str,
+    current_state: set[str],
+    cumulative_state: set[str] | None = None,
+    conflict_state: set[str] | None = None,
+    allow_zero: bool = False,
+) -> RelationshipEndpointResult:
+    """Classify an endpoint without inference or side effects."""
+
+    try:
+        token = _identity(value, label, allow_zero=allow_zero)
+    except RelationshipContractError:
+        return RelationshipEndpointResult(
+            RelationshipEndpointStatus.MALFORMED,
+            None,
+            None,
+            "invalid_or_missing_endpoint",
+        )
+    if conflict_state is not None and token in conflict_state:
+        return RelationshipEndpointResult(
+            RelationshipEndpointStatus.CONFLICT,
+            token,
+            None,
+            "conflicting_endpoint_identity",
+        )
+    if token in current_state:
+        return RelationshipEndpointResult(
+            RelationshipEndpointStatus.RESOLVED,
+            token,
+            "current",
+            None,
+        )
+    if cumulative_state is not None and token in cumulative_state:
+        return RelationshipEndpointResult(
+            RelationshipEndpointStatus.RESOLVED,
+            token,
+            "snapshot",
+            None,
+        )
+    return RelationshipEndpointResult(
+        RelationshipEndpointStatus.UNRESOLVED_VALID_LINK,
+        token,
+        None,
+        "missing_endpoint_in_authoritative_state",
+    )
 
 
 def _identity(value: Any, label: str, *, allow_zero: bool = False) -> str:
@@ -64,8 +132,20 @@ def _record_key_index(
 
 def validate_declared_relationships(
     records: dict[str, list[dict[str, Any]]],
+    *,
+    current_activity_ids: set[str] | None = None,
+    current_gear_keys: set[str] | None = None,
+    current_fit_session_keys: set[str] | None = None,
 ) -> dict[str, Any]:
     """Validate and enrich the non-heuristic v1.1 relationship contracts."""
+    snapshot_mode = any(
+        value is not None
+        for value in (
+            current_activity_ids,
+            current_gear_keys,
+            current_fit_session_keys,
+        )
+    )
     activity_ids = _index_unique(
         records["activities"],
         "activity_id",
@@ -80,26 +160,87 @@ def validate_declared_relationships(
         "fit_session_key",
     )
 
+    current_activity_ids = (
+        set(activity_ids) if current_activity_ids is None else set(current_activity_ids)
+    )
+    current_gear_keys = (
+        set(gear_keys) if current_gear_keys is None else set(current_gear_keys)
+    )
+    current_fit_session_keys = (
+        set(fit_session_keys)
+        if current_fit_session_keys is None
+        else set(current_fit_session_keys)
+    )
+
     enriched_activity_gear: list[dict[str, Any]] = []
     seen_activity_gear: set[tuple[str, str]] = set()
+    unresolved_activity_gear: list[dict[str, Any]] = []
+    activity_gear_snapshot_resolved = 0
     for record in records["activity_gear"]:
-        gear_key = _identity(record.get("gear_key"), "activity_gear.gear_key")
-        activity_id = _identity(
-            record.get("activity_id"),
-            "activity_gear.activity_id",
+        gear_result = classify_relationship_endpoint(
+            record.get("gear_key"),
+            label="activity_gear.gear_key",
+            current_state=current_gear_keys,
+            cumulative_state=gear_keys,
         )
+        activity_result = classify_relationship_endpoint(
+            record.get("activity_id"),
+            label="activity_gear.activity_id",
+            current_state=current_activity_ids,
+            cumulative_state=set(activity_ids),
+        )
+        if gear_result.status in {
+            RelationshipEndpointStatus.MALFORMED,
+            RelationshipEndpointStatus.CONFLICT,
+        }:
+            raise RelationshipContractError(
+                "activity_gear contains a malformed or conflicting gear endpoint"
+            )
+        if activity_result.status in {
+            RelationshipEndpointStatus.MALFORMED,
+            RelationshipEndpointStatus.CONFLICT,
+        }:
+            raise RelationshipContractError(
+                "activity_gear contains a malformed or conflicting activity endpoint"
+            )
+        gear_key = str(gear_result.token)
+        activity_id = str(activity_result.token)
         pair = (gear_key, activity_id)
         if pair in seen_activity_gear:
             raise RelationshipContractError("activity_gear contains a duplicate link")
         seen_activity_gear.add(pair)
-        if gear_key not in gear_keys:
-            raise RelationshipContractError("activity_gear contains an orphan gear link")
-        activity_key = activity_ids.get(activity_id)
-        if activity_key is None:
-            raise RelationshipContractError("activity_gear contains an orphan activity link")
+        unresolved = False
+        if gear_result.status == RelationshipEndpointStatus.UNRESOLVED_VALID_LINK:
+            unresolved = True
+            unresolved_activity_gear.append(
+                {
+                    "relationship_id": "activity_gear_to_gear",
+                    "reason": "missing_gear_endpoint",
+                }
+            )
+        if activity_result.status == RelationshipEndpointStatus.UNRESOLVED_VALID_LINK:
+            unresolved = True
+            unresolved_activity_gear.append(
+                {
+                    "relationship_id": "activity_gear_to_activities",
+                    "reason": "missing_activity_endpoint",
+                }
+            )
+        if unresolved:
+            continue
+        if (
+            gear_result.authority == "snapshot"
+            or activity_result.authority == "snapshot"
+        ):
+            activity_gear_snapshot_resolved += 1
+        activity_key = activity_ids[activity_id]
         enriched_activity_gear.append(
             {
                 **record,
+                "gear_key": int(gear_key) if gear_key.isdecimal() else gear_key,
+                "activity_id": int(activity_id)
+                if activity_id.isdecimal()
+                else activity_id,
                 "garmin_activity_key": activity_key,
                 "activity_relationship_status": "explicit",
                 "gear_relationship_status": "explicit",
@@ -115,14 +256,26 @@ def validate_declared_relationships(
     )
 
     enriched_personal_records: list[dict[str, Any]] = []
+    unresolved_personal_records: list[dict[str, Any]] = []
     personal_record_activity_links = 0
     independent_personal_records = 0
+    personal_record_snapshot_resolved = 0
     for record in records["personal_records"]:
-        activity_id = _identity(
+        activity_result = classify_relationship_endpoint(
             record.get("activity_id"),
-            "personal_records.activity_id",
+            label="personal_records.activity_id",
+            current_state=current_activity_ids,
+            cumulative_state=set(activity_ids),
             allow_zero=True,
         )
+        if activity_result.status in {
+            RelationshipEndpointStatus.MALFORMED,
+            RelationshipEndpointStatus.CONFLICT,
+        }:
+            raise RelationshipContractError(
+                "personal_records contains a malformed or conflicting activity endpoint"
+            )
+        activity_id = str(activity_result.token)
         if activity_id == "0":
             independent_personal_records += 1
             enriched_personal_records.append(
@@ -134,11 +287,17 @@ def validate_declared_relationships(
                 }
             )
             continue
-        activity_key = activity_ids.get(activity_id)
-        if activity_key is None:
-            raise RelationshipContractError(
-                "personal_records contains an unresolved nonzero activity identity"
+        if activity_result.status == RelationshipEndpointStatus.UNRESOLVED_VALID_LINK:
+            unresolved_personal_records.append(
+                {
+                    "relationship_id": "personal_records_to_activities",
+                    "reason": "missing_activity_endpoint",
+                }
             )
+            continue
+        if activity_result.authority == "snapshot":
+            personal_record_snapshot_resolved += 1
+        activity_key = activity_ids[activity_id]
         personal_record_activity_links += 1
         enriched_personal_records.append(
             {
@@ -157,77 +316,177 @@ def validate_declared_relationships(
     )
 
     seen_laps: set[str] = set()
+    enriched_fit_laps: list[dict[str, Any]] = []
+    unresolved_fit_laps: list[dict[str, Any]] = []
+    fit_lap_snapshot_resolved = 0
     for record in records["fit_laps"]:
         lap_key = _identity(record.get("fit_lap_key"), "fit_lap_key")
         if lap_key in seen_laps:
             raise RelationshipContractError("fit_laps contains a duplicate identity")
         seen_laps.add(lap_key)
-        session_key = _identity(record.get("fit_session_key"), "fit_session_key")
-        if session_key not in fit_session_keys:
-            raise RelationshipContractError("fit_laps contains an orphan session link")
+        session_result = classify_relationship_endpoint(
+            record.get("fit_session_key"),
+            label="fit_session_key",
+            current_state=current_fit_session_keys,
+            cumulative_state=fit_session_keys,
+        )
+        if session_result.status in {
+            RelationshipEndpointStatus.MALFORMED,
+            RelationshipEndpointStatus.CONFLICT,
+        }:
+            raise RelationshipContractError(
+                "fit_laps contains a malformed or conflicting session endpoint"
+            )
+        if session_result.status == RelationshipEndpointStatus.UNRESOLVED_VALID_LINK:
+            unresolved_fit_laps.append(
+                {
+                    "relationship_id": "fit_laps_to_fit_sessions",
+                    "reason": "missing_session_endpoint",
+                }
+            )
+            continue
+        if session_result.authority == "snapshot":
+            fit_lap_snapshot_resolved += 1
+        enriched_fit_laps.append(record)
+    records["fit_laps"] = enriched_fit_laps
 
-    return {
+    unresolved_links = [
+        *unresolved_activity_gear,
+        *unresolved_personal_records,
+        *unresolved_fit_laps,
+    ]
+
+    def _coverage(resolved: int, total: int) -> float | None:
+        return resolved / total if total else None
+
+    activity_gear_total = len(enriched_activity_gear) + len(unresolved_activity_gear)
+    # Coverage is link-level: if either endpoint is unresolved, the declared
+    # relationship pair is not promoted for either endpoint view.
+    activity_gear_activity_unresolved = activity_gear_total - len(enriched_activity_gear)
+    activity_gear_gear_unresolved = activity_gear_total - len(enriched_activity_gear)
+    personal_record_total = (
+        personal_record_activity_links + len(unresolved_personal_records)
+    )
+    fit_lap_total = len(enriched_fit_laps) + len(unresolved_fit_laps)
+
+    def _relationship_entry(
+        *,
+        resolved: int,
+        total: int,
+        unresolved: int,
+        snapshot_resolved: int,
+        primary_reason: str | None,
+        orphan_count: int = 0,
+        independent_count: int | None = None,
+    ) -> dict[str, Any]:
+        entry = {
+            "status": "explicit",
+            "link_count": resolved,
+            "eligible_count": total,
+            "coverage": _coverage(resolved, total),
+            "unresolved_count": unresolved,
+            "ambiguous_count": 0,
+            "orphan_count": orphan_count,
+            "duplicate_count": 0,
+            "inference_performed": False,
+            "primary_unresolved_reason": primary_reason,
+        }
+        if snapshot_mode or unresolved:
+            entry.update(
+                {
+                    "relationship_total": total,
+                    "relationship_resolved": resolved,
+                    "relationship_snapshot_resolved": snapshot_resolved,
+                    "relationship_unresolved": unresolved,
+                    "relationship_malformed": 0,
+                    "relationship_conflict": 0,
+                }
+            )
+        if independent_count is not None:
+            entry["independent_count"] = independent_count
+        return entry
+
+    result = {
         "status": "PASS",
         "relationships": {
             "activity_gear_to_activities": {
-                "status": "explicit",
-                "link_count": len(records["activity_gear"]),
-                "eligible_count": len(records["activity_gear"]),
-                "coverage": (
-                    1.0 if records["activity_gear"] else None
+                **_relationship_entry(
+                    resolved=len(enriched_activity_gear),
+                    total=activity_gear_total,
+                    unresolved=activity_gear_activity_unresolved,
+                    snapshot_resolved=activity_gear_snapshot_resolved,
+                    primary_reason=(
+                        "missing_activity_endpoint"
+                        if activity_gear_activity_unresolved
+                        else None
+                    ),
+                    orphan_count=activity_gear_activity_unresolved,
                 ),
-                "unresolved_count": 0,
-                "ambiguous_count": 0,
-                "orphan_count": 0,
-                "duplicate_count": 0,
-                "inference_performed": False,
-                "primary_unresolved_reason": None,
             },
             "activity_gear_to_gear": {
-                "status": "explicit",
-                "link_count": len(records["activity_gear"]),
-                "eligible_count": len(records["activity_gear"]),
-                "coverage": (
-                    1.0 if records["activity_gear"] else None
+                **_relationship_entry(
+                    resolved=len(enriched_activity_gear),
+                    total=activity_gear_total,
+                    unresolved=activity_gear_gear_unresolved,
+                    snapshot_resolved=activity_gear_snapshot_resolved,
+                    primary_reason=(
+                        "missing_gear_endpoint" if activity_gear_gear_unresolved else None
+                    ),
+                    orphan_count=activity_gear_gear_unresolved,
                 ),
-                "unresolved_count": 0,
-                "ambiguous_count": 0,
-                "orphan_count": 0,
-                "duplicate_count": 0,
-                "inference_performed": False,
-                "primary_unresolved_reason": None,
             },
             "personal_records_to_activities": {
-                "status": "explicit",
-                "link_count": personal_record_activity_links,
-                "eligible_count": personal_record_activity_links,
-                "coverage": (
-                    1.0 if personal_record_activity_links else None
+                **_relationship_entry(
+                    resolved=personal_record_activity_links,
+                    total=personal_record_total,
+                    unresolved=len(unresolved_personal_records),
+                    snapshot_resolved=personal_record_snapshot_resolved,
+                    primary_reason=(
+                        "missing_activity_endpoint"
+                        if unresolved_personal_records
+                        else None
+                    ),
+                    orphan_count=len(unresolved_personal_records),
+                    independent_count=independent_personal_records,
                 ),
-                "unresolved_count": 0,
-                "ambiguous_count": 0,
-                "independent_count": independent_personal_records,
-                "orphan_count": 0,
-                "duplicate_count": 0,
-                "inference_performed": False,
-                "primary_unresolved_reason": None,
             },
             "fit_laps_to_fit_sessions": {
-                "status": "explicit",
-                "link_count": len(records["fit_laps"]),
-                "eligible_count": len(records["fit_laps"]),
-                "coverage": (
-                    1.0 if records["fit_laps"] else None
+                **_relationship_entry(
+                    resolved=len(enriched_fit_laps),
+                    total=fit_lap_total,
+                    unresolved=len(unresolved_fit_laps),
+                    snapshot_resolved=fit_lap_snapshot_resolved,
+                    primary_reason=(
+                        "missing_session_endpoint" if unresolved_fit_laps else None
+                    ),
+                    orphan_count=len(unresolved_fit_laps),
                 ),
-                "unresolved_count": 0,
-                "ambiguous_count": 0,
-                "orphan_count": 0,
-                "duplicate_count": 0,
-                "inference_performed": False,
-                "primary_unresolved_reason": None,
             },
         },
     }
+    if snapshot_mode or unresolved_links:
+        result.update(
+            {
+                "relationship_total": (
+                    activity_gear_total + personal_record_total + fit_lap_total
+                ),
+                "relationship_resolved": (
+                    len(enriched_activity_gear)
+                    + personal_record_activity_links
+                    + len(enriched_fit_laps)
+                ),
+                "relationship_snapshot_resolved": (
+                    activity_gear_snapshot_resolved
+                    + personal_record_snapshot_resolved
+                    + fit_lap_snapshot_resolved
+                ),
+                "relationship_unresolved": len(unresolved_links),
+                "relationship_malformed": 0,
+                "relationship_conflict": 0,
+                "unresolved_links": unresolved_links,
+            }
+        )
+    return result
 
 
 def _number(value: Any) -> float | None:
@@ -644,6 +903,9 @@ def build_activity_fit_relationship(
 
 __all__ = [
     "RelationshipContractError",
+    "RelationshipEndpointResult",
+    "RelationshipEndpointStatus",
     "build_activity_fit_relationship",
+    "classify_relationship_endpoint",
     "validate_declared_relationships",
 ]
