@@ -1,7 +1,7 @@
 # AI Analysis Quick Start
 
 This guide explains how to begin a bounded descriptive analysis from the
-currently published stable `v1.3.1` output. The default path is local or
+v1.3.2 release-candidate output. The default path is local or
 otherwise trusted analysis. The product never uploads data automatically.
 
 “AI-ready” means the handoff includes data-contract context. It does not

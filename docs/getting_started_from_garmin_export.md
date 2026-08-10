@@ -2,7 +2,8 @@
 
 This guide takes a first-time user from an official Garmin Account Data Export
 to a completed local Run-All handoff. It applies to the current stable Garmin
-Running Data Normalizer `v1.3.1`.
+Running Data Normalizer `v1.3.2` release candidate. This is the current stable
+release candidate for this guide.
 
 Use this guide for a full Garmin Account Data Export. An individual Activity
 GPX or TCX export is not the input described here.
@@ -46,25 +47,27 @@ extracted duplicate of that same inner content in the input root.
 Keep generated output outside the input root. Run-All reads the Export and does
 not modify it.
 
-## 3. Install the stable package
+## 3. Install the v1.3.2 release candidate
 
-Create an isolated environment if practical, then install from PyPI:
+Create an isolated environment if practical, then install the reviewed
+candidate from a local artifact, or use the exact-version commands below after
+the v1.3.2 release gate publishes it. Production PyPI serves v1.3.1 until then:
 
 ### macOS / Linux
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install garmin-running-data-normalizer==1.3.1
+.venv/bin/python -m pip install garmin-running-data-normalizer==1.3.2
 .venv/bin/python -m garmin_running_data_normalizer --version
 ```
 
-The version command for this guide should report `1.3.1`.
+The version command for this guide should report `1.3.2`.
 
 ### Windows PowerShell
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer==1.3.1
+.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer==1.3.2
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer --version
 ```
 
@@ -72,17 +75,18 @@ python -m venv .venv
 installed and the Windows Python launcher is available, you can use
 `py -3.11 -m venv .venv` instead.
 
-Stable v1.3.1 installs `tzdata` automatically on Windows. Confirm both the
+The v1.3.2 candidate installs `tzdata` automatically on Windows. Confirm both the
 package version and the existing IANA timezone contract with:
 
 ```powershell
 .\.venv\Scripts\python.exe -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
 ```
 
-One maintainer-owned physical Windows clean install from Production PyPI
+Earlier maintainer-owned physical Windows validation from Production PyPI
 confirmed automatic `tzdata` installation and successful `Asia/Tokyo`
-resolution without any manual dependency install. This remains bounded
-single-environment evidence.
+resolution without any manual dependency install. Current v1.3.2 CI covers the
+packaged Windows path; both remain bounded evidence rather than a universal
+compatibility claim.
 
 ## 4. Run one-shot normalization first
 

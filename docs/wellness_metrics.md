@@ -12,8 +12,10 @@ UDS, and HRV retain calendar-day contracts; Sleep uses `sleep_day`.
 - Missing is not zero and missing from a later Snapshot is not deletion.
 - Nulls are not filled, carried forward, averaged, or interpolated.
 - Source values are not recalculated and unconfirmed units are not inferred.
-- Exact duplicates are deterministic; divergent values for the same stable key
-  fail closed or remain an explicit review item where the dataset contract says so.
+- Exact duplicates are deterministic. Snapshot-based Endurance and UDS values
+  that differ for one stable key are preserved in audit evidence while
+  canonicalization remains unresolved; same-export malformed/divergent values
+  fail closed.
 - Source observations are never collapsed by latest-wins, keep-last, source
   order, or a canonical daily-row selection. A day-level summary is derived
   from preserved observations and is not a normalized Source of Truth.
@@ -40,7 +42,7 @@ by `vo2max_source_series`; neither series overwrites the other.
 | Dataset | Stable key | Public fields | Interpretation boundary |
 |---|---|---|---|
 | `race_prediction_daily` | `calendar_date`, `observation_timestamp` | date, source observation timestamp, and 5K/10K/Half/Marathon predictions | Garmin algorithm predictions, not measured race results or calculations made by this package |
-| `sleep_daily` | `sleep_day` | `sleep_day`, local start/end, sleep-window and duration minutes, stage minutes, score, awake minutes, availability flags, normalization/reason fields | Duplicate day and missing/invalid windows remain reviewable; missing awake time is never derived |
+| `sleep_daily` | `sleep_day` | `sleep_day`, local start/end, sleep-window and duration minutes, stage minutes, score, awake minutes, availability flags, normalization/reason fields | Exact canonical duplicates collapse deterministically with audit counts; divergent or provenance-conflicted duplicates and missing/invalid windows remain reviewable; missing awake time is never derived |
 | `uds_daily` | `calendar_date` | date; steps, distance, calories and heart-rate fields; Body Battery charged/drained; total stress values; three `raw_has_*` flags | Sparse generation-specific source context; excluded respiration, detailed stress, hydration, and private provenance are not reconstructed |
 | `acute_training_load_daily` | `calendar_date`, `observation_timestamp` | date, source timestamp, ACWR fields, and acute/chronic load values | Garmin source values only; the ratio is not recalculated when absent |
 | `training_readiness_daily` | `calendar_date`, `observation_timestamp` | date and source timestamp; readiness score/level/recovery; ACWR, stress-history, HRV and sleep factors; acute load; HRV weekly average; valid-sleep and sleep-score fields | HRV-labelled fields are Garmin source-provided readiness components, not HRV values calculated by this package |
@@ -75,10 +77,10 @@ registry, Run-All output, Snapshot merge, or schema catalog.
 
 | Dataset or family | Relationship role | Activity guidance | Canonical / derived | Multiple observations and limits |
 |---|---|---|---|---|
-| Hill Score / Endurance Score | daily performance context | `calendar_date` is a candidate context field; direct link `not_yet_defined` | daily normalized JSON canonical; namespaced CSV derived | one canonical state per day; no Activity identity or causal interpretation |
+| Hill Score / Endurance Score | daily performance context | `calendar_date` is a candidate context field; direct link `not_yet_defined` | daily normalized JSON canonical; namespaced CSV derived | one canonical state per day when resolved; accepted Snapshot variants remain audit-only until canonical authority is known; no Activity identity or causal interpretation |
 | Lactate Threshold | performance threshold observation | no join; direct link `not_yet_defined` | candidate/audit-only, not a stable normalized dataset | retain history, latest-snapshot, profile-state, and derived-evidence families; no latest-wins, unit conversion, or cross-family collapse |
 | Race Prediction | daily performance prediction | direct link `not_yet_defined` | source observations canonical; QA day view derived | preserve every stable observation; no measured-result claim or selected daily row |
-| Sleep / UDS / HRV | condition context | same-day `context_only`; direct link `not_yet_defined` | normalized JSON canonical | context must stay separate from Activity facts; HRV conflict rows remain unresolved |
+| Sleep / UDS / HRV | condition context | same-day `context_only`; direct link `not_yet_defined` | normalized JSON canonical; UDS Snapshot variants are audit-preserved when canonicalization is unresolved | context must stay separate from Activity facts; UDS canonicalization and HRV conflict rows remain unresolved when authority is unknown |
 | Acute Training Load / Training Readiness / VO2Max / Training History | performance context | same-day `context_only`; direct link `not_yet_defined` | source observations canonical; QA day view derived | keep all source observations; `selection_rule` remains null and source generations/series remain distinct |
 
 `context_only` allows comparison of separately aggregated daily series. It does

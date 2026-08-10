@@ -138,7 +138,7 @@ and publication authority.
 - [Wellness and Daily Metrics Contract](../wellness_metrics.md)
 - [Known Limitations](../known_limitations.md)
 - [v1.3.0 Release Notes](../release_notes/v1.3.0.md)
-- [Japanese article on Zenn: Garminの日次データを1行にまとめると何が消える？——v1.3で複数観測を残した理由](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
+- [Zenn project story: English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
 
 Publication of this page does not authorize a future product release or an
 unsupported expansion of the documented claims.

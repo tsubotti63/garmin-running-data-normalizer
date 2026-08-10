@@ -317,6 +317,46 @@ class RunAllTest(unittest.TestCase):
             self.assertEqual(fit_coverage["unresolved_count"], 0)
         self.assertEqual(before, tree_hashes(ACTIVITIES_FIXTURE))
 
+    def test_valid_orphan_relationship_is_warning_and_preserves_unrelated_activity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            input_root = self.synthetic_input(temporary, optional=True)
+            (input_root / "synthetic_gear.json").write_text(
+                json.dumps(
+                    {
+                        "gearDTOS": [
+                            {"gearPk": "SYNTHETIC-GEAR-1", "displayName": "Synthetic Shoe"}
+                        ],
+                        "gearActivityDTOs": {
+                            "SYNTHETIC-GEAR-1": [{"activityId": "MISSING-ACTIVITY"}]
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            output = temporary / "output"
+            result = self.run_command(input_root, output)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("STATUS: PASS_WITH_WARNINGS", result.stdout)
+            summary = json.loads((output / "run_summary.json").read_text(encoding="utf-8"))
+            relationship = json.loads(
+                (output / "qa/relationship_summary.json").read_text(encoding="utf-8")
+            )
+            activities = json.loads(
+                (output / "normalized/activities.json").read_text(encoding="utf-8")
+            )
+            activity_gear = json.loads(
+                (output / "normalized/activity_gear.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(summary["status"], "PASS_WITH_WARNINGS")
+            self.assertTrue(
+                any(item["code"] == "RELATIONSHIP_UNRESOLVED_VALID_LINK" for item in summary["warnings"])
+            )
+            self.assertEqual(relationship["relationship_unresolved"], 1)
+            self.assertEqual(relationship["relationship_resolved"], 2)
+            self.assertEqual(len(activities), 1)
+            self.assertEqual(activity_gear, [])
+
     def test_performance_metrics_are_public_safe_and_lactate_stays_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)
