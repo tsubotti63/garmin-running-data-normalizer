@@ -22,6 +22,7 @@ def run_snapshot_all(
     output_root: str | Path,
     *,
     external_safe_pack: bool = False,
+    processing_sequence: list[str] | None = None,
 ) -> dict[str, Any]:
     """Build an approved cumulative input and run the existing Run-All pipeline."""
     verification = verify_store(store_root)
@@ -30,7 +31,11 @@ def run_snapshot_all(
     output = Path(output_root)
     with tempfile.TemporaryDirectory(prefix="garmin-snapshot-run-all-") as temporary:
         build_root = Path(temporary) / "canonical-build"
-        build = build_approved_input(store_root, build_root)
+        build = build_approved_input(
+            store_root,
+            build_root,
+            processing_sequence=processing_sequence,
+        )
         from ..run_all import run_all
 
         result = run_all(
@@ -49,6 +54,7 @@ def run_snapshot_all(
         "snapshot_count": build["snapshot_count"],
         "canonical_build_sha256": build["canonical_build_sha256"],
         "store_verification": verification["status"],
+        "processing_sequence": build["processing_sequence"],
     }
 
 

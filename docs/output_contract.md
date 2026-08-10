@@ -10,6 +10,13 @@ additive layer entered the `1.x` family. Executable authority remains in
 `run_all.py`, the versioned dataset registry, and each run's `run_manifest.json`
 and `run_summary.json`.
 
+For Snapshot-backed inputs, acquisition chronology is derived only from the
+timezone-aware `manifest.export_observed_at` value (with the registered
+Snapshot ID as the deterministic tie-breaker). Runtime processing sequence is
+diagnostic execution order only; it never selects a current endpoint, merge
+winner, observed variant, candidate, or normalized value. Existing
+`logical_order` fields remain the backward-compatible acquisition-order alias.
+
 Both machine authorities record the exact installed `product_version`;
 `ANALYSIS_CONTEXT.json` preserves the same value for standalone handoff.
 

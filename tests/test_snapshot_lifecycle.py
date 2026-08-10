@@ -17,7 +17,14 @@ from garmin_running_data_normalizer.snapshot import (
     snapshot_status,
     verify_store,
 )
-from garmin_running_data_normalizer.snapshot.merge import SnapshotMergeError
+from garmin_running_data_normalizer.snapshot.merge import (
+    SnapshotMergeError,
+    _latest_relationship_state,
+)
+from garmin_running_data_normalizer.snapshot.store import (
+    SnapshotStoreError,
+    load_manifests,
+)
 from garmin_running_data_normalizer.snapshot.policies import public_registry
 
 
@@ -176,6 +183,189 @@ class SnapshotLifecycleTest(unittest.TestCase):
             export_observed_at=f"2030-01-{day:02d}T02:00:00+00:00",
             confirm_complete=True,
         )
+
+    def test_processing_sequence_is_runtime_only_and_acquisition_order_is_stable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            for day in (1, 2, 3, 4):
+                source = root / f"source-{day}"
+                _write_snapshot(source, [_activity(f"A{day}")])
+                self.register(store, source, f"S{day}", day)
+
+            canonical = build_approved_input(store, root / "build-canonical")
+            reverse = build_approved_input(
+                store,
+                root / "build-reverse",
+                processing_sequence=["S4", "S3", "S2", "S1"],
+            )
+            arbitrary = build_approved_input(
+                store,
+                root / "build-arbitrary",
+                processing_sequence=["S3", "S1", "S4", "S2"],
+            )
+
+            for result in (reverse, arbitrary):
+                self.assertEqual(
+                    result["canonical_build_sha256"],
+                    canonical["canonical_build_sha256"],
+                )
+                self.assertEqual(
+                    result["approved_input_content_sha256"],
+                    canonical["approved_input_content_sha256"],
+                )
+                self.assertEqual(
+                    _tree_hash(root / "build-canonical"),
+                    _tree_hash(
+                        root
+                        / ("build-reverse" if result is reverse else "build-arbitrary")
+                    ),
+                )
+                self.assertEqual(
+                    result["relationship_context"],
+                    canonical["relationship_context"],
+                )
+                self.assertEqual(
+                    result["lineage"]["snapshots"],
+                    canonical["lineage"]["snapshots"],
+                )
+            self.assertEqual(reverse["processing_sequence"], ["S4", "S3", "S2", "S1"])
+            self.assertEqual(arbitrary["processing_sequence"], ["S3", "S1", "S4", "S2"])
+
+    def test_latest_relationship_state_uses_acquisition_order_not_processing_sequence(self) -> None:
+        observations = {
+            "activities": [
+                {
+                    "record": {"activityId": "old"},
+                    "logical_order": 1,
+                    "acquisition_order": 1,
+                    "processing_sequence": 4,
+                },
+                {
+                    "record": {"activityId": "current"},
+                    "logical_order": 2,
+                    "acquisition_order": 2,
+                    "processing_sequence": 1,
+                },
+            ],
+            "gear": [],
+        }
+        self.assertEqual(
+            _latest_relationship_state(observations, 2),
+            {"current_activity_ids": ["current"], "current_gear_keys": []},
+        )
+
+    def test_latest_relationship_state_does_not_retain_missing_dataset_endpoint(self) -> None:
+        observations = {
+            "activities": [
+                {
+                    "record": {"activityId": "old"},
+                    "logical_order": 1,
+                    "acquisition_order": 1,
+                }
+            ],
+            "gear": [],
+        }
+        self.assertEqual(
+            _latest_relationship_state(observations, 2),
+            {"current_activity_ids": [], "current_gear_keys": []},
+        )
+
+    def test_processing_sequence_must_be_a_complete_registered_permutation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            for day in (1, 2):
+                source = root / f"source-{day}"
+                _write_snapshot(source, [_activity(f"A{day}")])
+                self.register(store, source, f"S{day}", day)
+            with self.assertRaises(SnapshotMergeError):
+                build_approved_input(
+                    store,
+                    root / "duplicate",
+                    processing_sequence=["S1", "S1"],
+                )
+            with self.assertRaises(SnapshotMergeError):
+                build_approved_input(
+                    store,
+                    root / "unknown",
+                    processing_sequence=["S1", "S9"],
+                )
+
+    def test_all_24_processing_sequences_preserve_build_semantics(self) -> None:
+        import itertools
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            for day in (1, 2, 3, 4):
+                source = root / f"source-{day}"
+                _write_snapshot(source, [_activity(f"A{day}")])
+                self.register(store, source, f"S{day}", day)
+            baseline = build_approved_input(store, root / "baseline")
+            baseline_tree = _tree_hash(root / "baseline")
+            for index, order in enumerate(itertools.permutations((1, 2, 3, 4))):
+                result = build_approved_input(
+                    store,
+                    root / f"order-{index}",
+                    processing_sequence=[f"S{day}" for day in order],
+                )
+                self.assertEqual(result["canonical_build_sha256"], baseline["canonical_build_sha256"])
+                self.assertEqual(result["approved_input_content_sha256"], baseline["approved_input_content_sha256"])
+                self.assertEqual(result["relationship_context"], baseline["relationship_context"])
+                self.assertEqual(_tree_hash(root / f"order-{index}"), baseline_tree)
+
+    def test_chronology_missing_and_invalid_values_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            source = root / "source"
+            _write_snapshot(source, [_activity("A1")])
+            self.register(store, source, "S1", 1)
+            manifest_path = next((store / "snapshots").glob("*/manifest.json"))
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest.pop("export_observed_at")
+            with patch(
+                "garmin_running_data_normalizer.snapshot.store._load_json",
+                return_value=manifest,
+            ):
+                with self.assertRaises(SnapshotStoreError):
+                    load_manifests(store)
+
+            manifest["export_observed_at"] = "2030-01-01T02:00:00"
+            with patch(
+                "garmin_running_data_normalizer.snapshot.store._load_json",
+                return_value=manifest,
+            ):
+                with self.assertRaises(SnapshotStoreError):
+                    load_manifests(store)
+
+    def test_equal_chronology_uses_snapshot_id_tie_breaker_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            for label in ("S2", "S1"):
+                source = root / label
+                _write_snapshot(source, [_activity(label)])
+                register_snapshot(
+                    store,
+                    source,
+                    snapshot_label=label,
+                    export_requested_at="2030-01-01T00:00:00+00:00",
+                    export_downloaded_at="2030-01-01T01:00:00+00:00",
+                    export_observed_at="2030-01-01T02:00:00+00:00",
+                    confirm_complete=True,
+                )
+            manifests = load_manifests(store)
+            self.assertEqual(
+                [item["snapshot_id"] for item in manifests],
+                sorted(item["snapshot_id"] for item in manifests),
+            )
 
     def test_four_snapshot_merge_missing_is_not_delete_and_is_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

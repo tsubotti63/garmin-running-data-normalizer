@@ -1023,11 +1023,17 @@ def _latest_relationship_state(
     current Export without inferring any identity.
     """
 
+    # `logical_order` is now fixed to the canonical acquisition chronology, so
+    # the final registered Snapshot is the maximum authoritative order even
+    # when a Dataset has no observations in that Snapshot. This preserves an
+    # empty current endpoint instead of retaining a stale older endpoint.
+    latest_acquisition_order = int(snapshot_count)
     latest = {
         dataset: [
             item
             for item in observations
-            if int(item["logical_order"]) == snapshot_count
+            if int(item.get("acquisition_order", item["logical_order"]))
+            == latest_acquisition_order
         ]
         for dataset, observations in observations_by_dataset.items()
     }
@@ -1064,6 +1070,8 @@ def _approved_input_inventory(root: Path) -> tuple[list[dict[str, Any]], str]:
 def build_approved_input(
     store_root: str | Path,
     output_root: str | Path,
+    *,
+    processing_sequence: list[str] | None = None,
 ) -> dict[str, Any]:
     verification = verify_store(store_root)
     if verification["status"] != "PASS":
@@ -1073,6 +1081,34 @@ def build_approved_input(
     manifests = load_manifests(store)
     if not manifests:
         raise SnapshotMergeError("snapshot store has no registered snapshots")
+    acquisition_order_by_snapshot_id = {
+        str(manifest["snapshot_id"]): index
+        for index, manifest in enumerate(manifests, start=1)
+    }
+    manifests_by_label = {
+        str(manifest["snapshot_label"]): manifest for manifest in manifests
+    }
+    manifests_by_id = {
+        str(manifest["snapshot_id"]): manifest for manifest in manifests
+    }
+    if processing_sequence is None:
+        processing_manifests = list(manifests)
+        processing_labels = [str(item["snapshot_label"]) for item in manifests]
+    else:
+        sequence = [str(item) for item in processing_sequence]
+        if len(sequence) != len(manifests) or len(set(sequence)) != len(sequence):
+            raise SnapshotMergeError(
+                "processing_sequence must contain each registered snapshot exactly once"
+            )
+        if set(sequence).issubset(manifests_by_label):
+            processing_manifests = [manifests_by_label[item] for item in sequence]
+        elif set(sequence).issubset(manifests_by_id):
+            processing_manifests = [manifests_by_id[item] for item in sequence]
+        else:
+            raise SnapshotMergeError(
+                "processing_sequence must use registered snapshot labels or IDs"
+            )
+        processing_labels = [str(item["snapshot_label"]) for item in processing_manifests]
     requested_output = Path(output_root)
     if requested_output.is_symlink():
         raise SnapshotMergeError("canonical build output must not be a symbolic link")
@@ -1092,7 +1128,10 @@ def build_approved_input(
         fit_unique: dict[str, dict[str, Any]] = {}
         unknown_aliases: list[dict[str, Any]] = []
         unknown_unique: dict[str, dict[str, Any]] = {}
-        for logical_order, manifest in enumerate(manifests, start=1):
+        for processing_index, manifest in enumerate(processing_manifests, start=1):
+            acquisition_order = acquisition_order_by_snapshot_id[
+                str(manifest["snapshot_id"])
+            ]
             for source in manifest["objects"]:
                 extension = str(source.get("extension", "")).lower()
                 object_kind = source.get("object_kind")
@@ -1104,7 +1143,8 @@ def build_approved_input(
                         {
                             "fit_blob_sha256": digest,
                             "snapshot_id": manifest["snapshot_id"],
-                            "logical_order": logical_order,
+                            "logical_order": acquisition_order,
+                            "acquisition_order": acquisition_order,
                             "source_relative_path": logical_name,
                             "source_object_sha256": source["sha256"],
                         }
@@ -1133,7 +1173,8 @@ def build_approved_input(
                         {
                             "object_sha256": digest,
                             "snapshot_id": manifest["snapshot_id"],
-                            "logical_order": logical_order,
+                            "logical_order": acquisition_order,
+                            "acquisition_order": acquisition_order,
                             "source_relative_path": logical_name,
                             "parser_state": "parser_unsupported",
                         }
@@ -1158,7 +1199,8 @@ def build_approved_input(
                         {
                             "object_sha256": digest,
                             "snapshot_id": manifest["snapshot_id"],
-                            "logical_order": logical_order,
+                            "logical_order": acquisition_order,
+                            "acquisition_order": acquisition_order,
                             "source_relative_path": logical_name,
                             "parser_state": "parser_unsupported",
                         }
@@ -1172,7 +1214,9 @@ def build_approved_input(
                             "record": record,
                             "raw_key": raw_key,
                             "snapshot_id": manifest["snapshot_id"],
-                            "logical_order": logical_order,
+                            "logical_order": acquisition_order,
+                            "acquisition_order": acquisition_order,
+                            "processing_sequence": processing_index,
                             "export_observed_at": manifest["export_observed_at"],
                             "source_relative_path": logical_name,
                             "source_record_index": record_index,
@@ -1366,6 +1410,46 @@ def build_approved_input(
                 raise SnapshotMergeError("preserved unknown blob failed verification")
             shutil.copyfile(blob, destination)
 
+        # Source discovery follows runtime processing order, but every
+        # audit/provenance list is serialized in authoritative acquisition
+        # order so processing_sequence cannot change normalized truth or its
+        # semantic digest.
+        fit_aliases.sort(
+            key=lambda item: (
+                int(item["acquisition_order"]),
+                str(item["snapshot_id"]),
+                str(item["source_relative_path"]),
+            )
+        )
+        unknown_aliases.sort(
+            key=lambda item: (
+                int(item["acquisition_order"]),
+                str(item["snapshot_id"]),
+                str(item["source_relative_path"]),
+            )
+        )
+        all_provenance.sort(
+            key=lambda item: (
+                str(item["dataset"]),
+                str(item["canonical_key"]),
+                int(item["logical_order"]),
+                str(item["snapshot_id"]),
+                str(item["source_relative_path"]),
+                str(item["source_record_index"]),
+            )
+        )
+        all_field_provenance.sort(
+            key=lambda item: (
+                str(item["dataset"]),
+                str(item["canonical_key"]),
+                str(item["field_name"]),
+                int(item["logical_order"]),
+                str(item["snapshot_id"]),
+            )
+        )
+        all_holds.sort(key=_stable_json)
+        all_conflicts.sort(key=_stable_json)
+
         approved_inventory, approved_hash = _approved_input_inventory(approved)
         canonical_records = {
             dataset: [
@@ -1407,11 +1491,14 @@ def build_approved_input(
             "schema_version": SCHEMA_VERSION,
             "account_store_id": store_metadata["account_store_id"],
             "snapshot_count": len(manifests),
+            "chronology_authority": "manifest.export_observed_at",
+            "processing_sequence": "runtime-only; never authoritative",
             "snapshots": [
                 {
                     "snapshot_id": manifest["snapshot_id"],
                     "snapshot_label": manifest["snapshot_label"],
                     "logical_order": index,
+                    "acquisition_order": index,
                     "export_observed_at": manifest["export_observed_at"],
                     "snapshot_content_id": manifest["snapshot_content_id"],
                 }
@@ -1595,6 +1682,9 @@ def build_approved_input(
                 observations_by_dataset,
                 len(manifests),
             ),
+            # This is returned for runtime diagnostics only and is not written
+            # into the public normalized payload or semantic digest.
+            "processing_sequence": processing_labels,
         }
     except Exception:
         if stage.exists():
