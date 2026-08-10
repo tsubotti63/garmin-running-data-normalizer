@@ -4,6 +4,40 @@ This file records factual Garmin Running Data Normalizer product changes. The
 Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
 Platform maintains its own separate changelog.
 
+## v1.3.2 — release candidate
+
+Status: release preparation complete; merge, tag, GitHub Release, and Production
+PyPI publication remain pending separate Human approval.
+
+### Fixed
+
+- Snapshot-aware relationship endpoint resolution can use an authoritative
+  earlier observation when the current Export omits the endpoint; valid
+  unresolved relationships remain auditable and malformed input remains
+  fail-closed.
+- Exact canonical Sleep duplicates collapse deterministically while divergent or
+  provenance-conflicted duplicates remain reviewable.
+- Snapshot relationship classification no longer depends on runtime processing
+  order; acquisition chronology comes from `manifest.export_observed_at`.
+
+### Changed
+
+- Endurance and UDS observed variants are retained without selecting a winner.
+- Lactate Threshold candidates are retained without Stable Public Promotion.
+
+### Validation
+
+- Four real Snapshots, 15/15 non-empty subset Full Run-All validations,
+  Synthetic 24/24 processing orders, and representative real 4/4 orders.
+- Lost values, invented values, automatic winners, and silently tolerated
+  malformed observations: zero.
+- pytest 251, unittest 208, isolated packaging and installed-flow gates PASS.
+
+### Compatibility
+
+No Product API, dataset count, stable key, grain, output path, relationship
+contract, privacy boundary, or exit-code contract was intentionally changed.
+
 ## v1.3.1 — stable Production patch release
 
 Status: published as an annotated tag, stable GitHub Release, and verified

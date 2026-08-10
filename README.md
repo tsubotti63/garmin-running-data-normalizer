@@ -31,12 +31,13 @@ Reusable descriptive analysis
 Human review
 ```
 
-Current stable release: **v1.3.1** · Python **3.11+** · Apache License 2.0
+Current stable release: **v1.3.2** (release candidate; publication pending) ·
+Python **3.11+** · Apache License 2.0
 
-v1.3.1 is available as an annotated Git tag, a stable GitHub Release, and a
-verified Production PyPI distribution.
+v1.3.2 is the prepared patch candidate. The tag, GitHub Release, and Production
+PyPI publication remain separate Human-approved actions.
 
-v1.3.1 is a documentation and public-state validation patch. The v1.3.0
+v1.3.2 is a Snapshot correctness and evidence-preservation patch. The v1.3.0
 dataset and runtime contracts remain unchanged.
 
 - [Install from PyPI](https://pypi.org/project/garmin-running-data-normalizer/)
@@ -46,9 +47,9 @@ dataset and runtime contracts remain unchanged.
 - [FAQ](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/faq.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
-- [v1.3.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.3.1.md)
-- [Current stable Release v1.3.1](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.1)
-- [Project story on Zenn (Japanese): フルマラソンランナーが作った、Garmin ExportをAI分析へつなぐ正規化OSS](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-summary)
+- [v1.3.2 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.3.2.md)
+- [Published stable Release v1.3.1](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.1)
+- Project story on Zenn: [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
 
 ## Why this project
 
@@ -135,8 +136,9 @@ context-only and do not define direct Activity joins.
 Read
 [CS-009: From Daily-Grain Assumptions to Source-Backed Observation Contracts in Garmin Data](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/case_studies/cs-009-from-daily-grain-assumptions-to-source-backed-observation-contracts.md).
 
-For a Japanese-language walkthrough, see
-[Zenn: Garminの日次データを1行にまとめると何が消える？——v1.3で複数観測を残した理由](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract).
+For the v1.3 design walkthrough on Zenn:
+[English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) /
+[日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract).
 
 ### Built from a runner's own workflow
 
@@ -156,10 +158,12 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. Stable v1.3.1 installs
+`python -m garmin_running_data_normalizer --version`. The v1.3.2 candidate installs
 `tzdata` automatically on Windows so Python can resolve the existing IANA
 `Asia/Tokyo` timezone contract. macOS and Linux continue to use their system
-timezone data.
+timezone data. Until the candidate is published, the unpinned install command
+resolves the published v1.3.1 package; use the reviewed wheel or editable
+checkout when validating v1.3.2 locally.
 
 Maintainers can reproduce the packaging gate without uploading anything:
 

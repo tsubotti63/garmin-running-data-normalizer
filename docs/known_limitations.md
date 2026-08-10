@@ -1,8 +1,9 @@
 # Known Limitations
 
-These limitations apply to the stable v1.3.1 GitHub Release and Production
-PyPI distribution. These are explicit product boundaries, not hidden fallback
-behavior.
+These limitations apply to the v1.3.2 release candidate and will remain explicit
+product boundaries after publication. The published v1.3.1 GitHub Release and
+Production PyPI distribution remains the external stable baseline until the
+v1.3.2 release gate completes.
 
 ## Input and orchestration
 
@@ -69,6 +70,12 @@ behavior.
   preserved as public-safe observed variants in the corresponding audit output.
   Their canonical daily interpretation remains unresolved, so no winner is
   emitted. Same-export malformed/divergent values remain fail-closed.
+- Snapshot-aware relationship resolution can use earlier authoritative
+  observations when a later Export omits an endpoint. Valid unresolved links
+  remain auditable; malformed links remain fail-closed.
+- Runtime processing sequence is diagnostic only. It cannot alter acquisition
+  chronology, normalized truth, relationship classification, or candidate
+  selection.
 - Naive source timestamps are retained with timezone semantics explicitly
   unconfirmed. Epoch-millisecond timestamps are normalized as UTC, and the
   Activity VO2Max `timestampGmt` field is treated as UTC by its source-field name.
@@ -84,7 +91,7 @@ behavior.
 - Hosted processing, Garmin authentication, Open-Meteo, JMA, Instagram,
   wellness/coaching interpretation, Parquet output, and automatic personal
   analysis are outside the stable scope.
-- Stable v1.3.1 retains `tzdata` as a Windows-only runtime dependency and emits
+- Stable v1.3.2 retains `tzdata` as a Windows-only runtime dependency and emits
   the bounded `TIMEZONE_DATA_UNAVAILABLE` diagnostic if IANA timezone data is
   unavailable in an incomplete environment. Validation covers GitHub Actions
   `windows-latest` and one maintainer-owned physical Windows Production PyPI
