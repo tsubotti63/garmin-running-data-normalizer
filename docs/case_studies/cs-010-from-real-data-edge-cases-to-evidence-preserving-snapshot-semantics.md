@@ -239,7 +239,3 @@ tracked fixture.
 - [CS-009: From Daily-Grain Assumptions to Source-Backed Observation Contracts](cs-009-from-daily-grain-assumptions-to-source-backed-observation-contracts.md)
 - [Supported Datasets](../supported_datasets.md)
 - [Dataset Relationships](../dataset_relationships.md)
-
-This draft is a candidate for Product review. Its presence on a review branch
-does not authorize merge, Zenn publication, external outreach, or a future
-release.

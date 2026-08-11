@@ -9,6 +9,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_SOURCE = "src/garmin_running_data_normalizer/__init__.py"
+CS010_DOCUMENT = (
+    "docs/case_studies/"
+    "cs-010-from-real-data-edge-cases-to-evidence-preserving-snapshot-semantics.md"
+)
 CURRENT_DOCUMENTS = (
     "README.md",
     "SUPPORT.md",
@@ -19,6 +23,14 @@ CURRENT_DOCUMENTS = (
     "docs/product_quick_start.md",
     "docs/output_contract.md",
     "AGENTS.md",
+    CS010_DOCUMENT,
+)
+
+CS010_STALE_PUBLIC_STATUS_PHRASES = (
+    "This draft is a candidate for Product review",
+    "presence on a review branch does not authorize merge",
+    "draft is a candidate for Product review",
+    "review branch does not authorize merge",
 )
 
 
@@ -211,6 +223,13 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
         for phrase in phrases:
             if _contains_whitespace_normalized(text, phrase):
                 findings.append(f"{relative}: obsolete current-state phrase remains: {phrase}")
+
+    cs010_text = contents.get(CS010_DOCUMENT, "")
+    for phrase in CS010_STALE_PUBLIC_STATUS_PHRASES:
+        if _contains_whitespace_normalized(cs010_text, phrase):
+            findings.append(
+                f"{CS010_DOCUMENT}: stale public pre-publication status phrase remains: {phrase}"
+            )
 
     return version, findings
 
