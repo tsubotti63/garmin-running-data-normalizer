@@ -14,22 +14,51 @@ Wellness/Metrics datasets, and their reviewed relationship boundaries. Run-All
 emits normalized data together with QA, audit, provenance, explicit warnings,
 and human- and machine-readable analysis context.
 
-```text
-Garmin Account Data Export
-  ↓
-Deterministic Run-All
-  ↓
-Normalized datasets
-+ QA
-+ audit
-+ provenance
-+ explicit relationships
-+ analysis context
-  ↓
-Reusable descriptive analysis
-  ↓
-Human review
-```
+## Start here
+
+### Who this is for
+
+- You want to process a Garmin Account Export locally.
+- You want a stable foundation for long-term retrospective analysis.
+- You do not want missing values or relationships filled by guesswork.
+- You can use a Python CLI.
+- You want reproducible outputs that can be reviewed before analysis.
+
+### What you get
+
+- **17 stable normalized datasets** with documented grains and stable keys.
+- QA, audit, and provenance evidence alongside the normalized data.
+- Deterministic output for the same supported input and environment.
+- Explicit relationship boundaries instead of inferred joins.
+- A human- and machine-readable analysis handoff.
+
+[![Synthetic / fictional product flow: Garmin Account Export to deterministic Run-All, 17 stable datasets, QA, audit, provenance, reusable analysis context, bounded descriptive analysis, and Human review](https://raw.githubusercontent.com/tsubotti63/garmin-running-data-normalizer/main/docs/assets/first-user-conversion/product-flow.svg)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/product-flow.svg)
+
+Select the image to inspect the full-size accessible SVG.
+
+### Try it
+
+- [Product Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md)
+  — run the tracked synthetic fixture without a Garmin account.
+- [Getting Started from Garmin Export](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/getting_started_from_garmin_export.md)
+  — move from a private local Export to a completed Run-All handoff.
+- [AI Analysis Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/ai_analysis_quick_start.md)
+  — begin bounded descriptive analysis from a reviewed output.
+- [日本語の短い案内](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/README.ja.md)
+
+### See the result
+
+The previews below were generated from the tracked Synthetic Run-All fixture
+and a tracked fictional analysis CSV. They contain no personal Garmin data.
+
+[![Synthetic / fictional Run-All preview: PASS_WITH_WARNINGS, one Activity record, three warnings, zero errors, 17 dataset entries, 44 generated files, and the first-read order START_HERE.md, DATASET_INVENTORY.md, then ANALYSIS_HANDOFF.md](https://raw.githubusercontent.com/tsubotti63/garmin-running-data-normalizer/main/docs/assets/first-user-conversion/synthetic-output-preview.svg)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/synthetic-output-preview.svg)
+
+[![Synthetic / fictional monthly activity distance: four activities and 37.0 km in 2030-01; four activities and 47.0 km in 2030-02](https://raw.githubusercontent.com/tsubotti63/garmin-running-data-normalizer/main/docs/assets/first-user-conversion/synthetic-monthly-distance.svg)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/synthetic-monthly-distance.svg)
+
+Select either preview to inspect its full-size accessible SVG.
+
+See the
+[asset sources and reproduction notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/README.md).
 
 Current stable release: **v1.3.2** · Python **3.11+** · Apache License 2.0
 
