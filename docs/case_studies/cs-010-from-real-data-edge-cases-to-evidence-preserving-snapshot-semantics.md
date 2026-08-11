@@ -150,6 +150,23 @@ and output evidence, with zero lost values, invented values, or automatic
 winners. Their known non-fatal boundary remains visible in the reported
 `PARTIAL_SUCCESS` / exit `3` status.
 
+### Post-release bounded order validation
+
+After the v1.3.2 release, the same four maintainer-owned export snapshots were
+processed in all 24 possible orders as a bounded private validation. This
+post-release evidence is separate from the release-time evidence above.
+
+Across those 24 permutations, the normalized semantic result remained the
+same. Within this bounded validation, no observed values were lost, no values
+were invented, and no unsupported automatic winner was selected. All 24 runs
+completed as `PARTIAL_SUCCESS` / exit `3` with only known warnings and no errors
+or unknown warnings.
+
+This is bounded evidence from one maintainer-owned Garmin export history. It is
+not multi-user validation, proof of universal order independence, proof of zero
+defects, or validation of all Garmin exports. It makes no Garmin-official
+semantics, medical, or coaching claim.
+
 ### Preservation and quality evidence
 
 The confirmed aggregate evidence records:
