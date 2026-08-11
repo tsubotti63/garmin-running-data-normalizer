@@ -5,7 +5,9 @@ import unittest
 
 from garmin_running_data_normalizer.relationships import (
     RelationshipContractError,
+    RelationshipEndpointStatus,
     build_activity_fit_relationship,
+    classify_relationship_endpoint,
     validate_declared_relationships,
 )
 
@@ -96,6 +98,50 @@ def declared_records() -> dict[str, list[dict]]:
 
 
 class RelationshipContractTest(unittest.TestCase):
+    def test_endpoint_classifier_is_bounded_and_side_effect_free(self) -> None:
+        self.assertEqual(
+            classify_relationship_endpoint(
+                "1",
+                label="activity_id",
+                current_state={"1"},
+            ).status,
+            RelationshipEndpointStatus.RESOLVED,
+        )
+        snapshot = classify_relationship_endpoint(
+            "1",
+            label="activity_id",
+            current_state=set(),
+            cumulative_state={"1"},
+        )
+        self.assertEqual(snapshot.status, RelationshipEndpointStatus.RESOLVED)
+        self.assertEqual(snapshot.authority, "snapshot")
+        self.assertEqual(
+            classify_relationship_endpoint(
+                "999",
+                label="activity_id",
+                current_state=set(),
+                cumulative_state={"1"},
+            ).status,
+            RelationshipEndpointStatus.UNRESOLVED_VALID_LINK,
+        )
+        self.assertEqual(
+            classify_relationship_endpoint(
+                None,
+                label="activity_id",
+                current_state=set(),
+            ).status,
+            RelationshipEndpointStatus.MALFORMED,
+        )
+        self.assertEqual(
+            classify_relationship_endpoint(
+                "1",
+                label="activity_id",
+                current_state={"1"},
+                conflict_state={"1"},
+            ).status,
+            RelationshipEndpointStatus.CONFLICT,
+        )
+
     def test_declared_relationships_are_explicit_and_zero_pr_is_independent(self) -> None:
         records = declared_records()
         summary = validate_declared_relationships(records)
@@ -116,17 +162,8 @@ class RelationshipContractTest(unittest.TestCase):
         self.assertEqual(independent["activity_relationship_status"], "independent")
         self.assertIsNone(independent["garmin_activity_key"])
 
-    def test_declared_relationships_fail_closed_on_orphan_duplicate_null_and_type(self) -> None:
+    def test_declared_relationships_keep_malformed_and_conflict_fail_closed(self) -> None:
         mutations = []
-        orphan_activity = declared_records()
-        orphan_activity["activity_gear"][0]["activity_id"] = 999
-        mutations.append(orphan_activity)
-        orphan_gear = declared_records()
-        orphan_gear["activity_gear"][0]["gear_key"] = 999
-        mutations.append(orphan_gear)
-        orphan_session = declared_records()
-        orphan_session["fit_laps"][0]["fit_session_key"] = "missing"
-        mutations.append(orphan_session)
         duplicate = declared_records()
         duplicate["activity_gear"].append(copy.deepcopy(duplicate["activity_gear"][0]))
         mutations.append(duplicate)
@@ -136,14 +173,42 @@ class RelationshipContractTest(unittest.TestCase):
         type_mismatch = declared_records()
         type_mismatch["activity_gear"][0]["activity_id"] = 1.5
         mutations.append(type_mismatch)
-        unresolved_pr = declared_records()
-        unresolved_pr["personal_records"][0]["activity_id"] = 999
-        mutations.append(unresolved_pr)
         for records in mutations:
             with self.subTest(records=records), self.assertRaises(
                 RelationshipContractError
             ):
                 validate_declared_relationships(records)
+
+    def test_valid_orphan_endpoints_are_unresolved_and_non_fatal(self) -> None:
+        records = declared_records()
+        records["activity_gear"][0]["activity_id"] = 999
+        records["personal_records"][0]["activity_id"] = 999
+        records["fit_laps"][0]["fit_session_key"] = "missing"
+        summary = validate_declared_relationships(records)
+        self.assertEqual(summary["status"], "PASS")
+        self.assertEqual(summary["relationship_unresolved"], 3)
+        self.assertEqual(len(records["activity_gear"]), 0)
+        self.assertEqual(len(records["personal_records"]), 1)
+        self.assertEqual(len(records["fit_laps"]), 0)
+        self.assertEqual(
+            summary["relationships"]["activity_gear_to_activities"][
+                "primary_unresolved_reason"
+            ],
+            "missing_activity_endpoint",
+        )
+
+    def test_snapshot_only_endpoint_is_resolved_without_inference(self) -> None:
+        records = declared_records()
+        summary = validate_declared_relationships(
+            records,
+            current_activity_ids=set(),
+            current_gear_keys=set(),
+            current_fit_session_keys=set(),
+        )
+        self.assertEqual(summary["relationship_unresolved"], 0)
+        self.assertEqual(summary["relationship_snapshot_resolved"], 3)
+        self.assertFalse(summary["relationships"]["activity_gear_to_activities"]["inference_performed"])
+        self.assertEqual(records["activity_gear"][0]["activity_relationship_status"], "explicit")
 
     def test_activity_fit_link_is_deterministic_and_not_timestamp_only(self) -> None:
         activities = [activity("garmin_activity:1", 1)]

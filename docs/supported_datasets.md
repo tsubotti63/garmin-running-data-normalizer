@@ -1,7 +1,7 @@
 # Supported Datasets
 
 This document defines the supported Garmin dataset and interface scope for the
-stable `1.3.1` release. All processing is local-first. Public fixtures are
+stable `1.3.2` release. All processing is local-first. Public fixtures are
 synthetic; real exports and generated personal output must remain local.
 
 ## Stable CLI and output scope
@@ -36,11 +36,13 @@ exit-code behavior, fixed output paths, run completion marker, provenance, and
 versioned Run-All manifest fields form the stable `1.x` interface.
 
 All v1.3 daily families are optional. Their absence is an expected
-source condition and does not add a warning. Exact duplicates are deduplicated;
-divergent public values for the same stable key fail closed, except that the HRV
-reference preserves an explicit unresolved review row. Missing from a later
-Snapshot never means delete. The shared generation/source boundary and exact
-field contracts are defined in [Wellness and Daily Metrics](wellness_metrics.md).
+source condition and does not add a warning. Exact duplicates are deduplicated.
+Snapshot-based Endurance and UDS values that differ for one stable key are
+preserved in their audit evidence while canonicalization remains unresolved;
+same-export malformed/divergent values fail closed. The HRV reference preserves
+an explicit unresolved review row. Missing from a later Snapshot never means
+delete. The shared generation/source boundary and exact field contracts are
+defined in [Wellness and Daily Metrics](wellness_metrics.md).
 
 The deterministic `analysis/activities.csv` is a reduced one-row-per-activity
 projection of `normalized/activities.json`. It is the existing analysis handoff

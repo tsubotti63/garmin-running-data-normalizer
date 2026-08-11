@@ -46,6 +46,10 @@ DAILY_FAIL_CLOSED_DATASETS = {
     "vo2max_daily",
     "training_history_daily",
 }
+PRESERVE_OBSERVED_VARIANT_DATASETS = {
+    "endurance_score_daily",
+    "uds_daily",
+}
 SOURCE_OBSERVATION_DATASETS = {
     "race_prediction_daily",
     "acute_training_load_daily",
@@ -572,15 +576,59 @@ def _lactate_power_conflicts(
         grouped[(family, timestamp)].add(_stable_json(power))
     return [
         {
-            "severity": "stop",
+            "severity": "review",
             "conflict_type": "lactate_functional_threshold_power_conflict",
             "dataset": "lactate_threshold_candidates",
             "observation_family": family,
             "observation_timestamp": timestamp,
+            "candidate_status": "multiple_observed_candidates",
+            "authority_status": "unresolved",
+            "stable_promotion_available": False,
         }
         for (family, timestamp), values in sorted(grouped.items())
         if len(values) > 1
     ]
+
+
+def _lactate_malformed_conflicts(
+    observations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return fail-closed records for structurally invalid candidate fields."""
+
+    conflicts: list[dict[str, Any]] = []
+    numeric_fields = {
+        "lactateThresholdSpeed",
+        "lactateThresholdHeartRate",
+        "functionalThresholdPower",
+    }
+    for observation in observations:
+        record = observation.get("record", {})
+        if not isinstance(record, dict):
+            conflicts.append(
+                {
+                    "severity": "stop",
+                    "conflict_type": "lactate_malformed_candidate",
+                    "dataset": "lactate_threshold_candidates",
+                    "reason": "candidate record is not an object",
+                }
+            )
+            continue
+        for field in numeric_fields:
+            value = record.get(field)
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, (int, float))
+            ):
+                conflicts.append(
+                    {
+                        "severity": "stop",
+                        "conflict_type": "lactate_malformed_candidate",
+                        "dataset": "lactate_threshold_candidates",
+                        "field": field,
+                        "reason": "numeric candidate field has invalid type",
+                    }
+                )
+                break
+    return conflicts
 
 
 def _canonical_key(dataset: str, values: tuple[Any, ...]) -> str:
@@ -636,6 +684,11 @@ def _merge_dataset(
     changed = 0
     updated_fields = 0
     state_counts: Counter[str] = Counter()
+    observed_variants: list[dict[str, Any]] = []
+    single_variant_key_count = 0
+    multi_variant_key_count = 0
+    observed_variant_count = 0
+    exact_repeat_count = 0
     for key in sorted(groups):
         group = groups[key]
         by_snapshot: dict[int, list[dict[str, Any]]] = defaultdict(list)
@@ -689,6 +742,29 @@ def _merge_dataset(
         )
         distinct_signatures = {_stable_json(item["record"]) for item in ordered}
         if dataset in DAILY_FAIL_CLOSED_DATASETS and len(distinct_signatures) > 1:
+            if dataset in PRESERVE_OBSERVED_VARIANT_DATASETS:
+                multi_variant_key_count += 1
+                observed_variant_count += len(distinct_signatures)
+                exact_repeat_count += len(ordered) - len(distinct_signatures)
+                by_signature: dict[str, list[dict[str, Any]]] = defaultdict(list)
+                for observation in ordered:
+                    by_signature[_stable_json(observation["record"])].append(observation)
+                for signature in sorted(by_signature):
+                    variant_rows = by_signature[signature]
+                    observed_variants.append(
+                        {
+                            "canonical_key": key,
+                            "variant_fingerprint": _sha256_value(variant_rows[0]["record"]),
+                            "observed_value": variant_rows[0]["record"],
+                            "observation_count": len(variant_rows),
+                            "snapshot_orders": sorted(
+                                {int(item["logical_order"]) for item in variant_rows}
+                            ),
+                            "variant_status": "observed_variant",
+                            "canonical_status": "unresolved_multiple_observed_values",
+                        }
+                    )
+                continue
             conflicts.append(
                 {
                     "severity": "stop",
@@ -698,6 +774,10 @@ def _merge_dataset(
                 }
             )
             continue
+        if len(distinct_signatures) == 1:
+            single_variant_key_count += 1
+            exact_repeat_count += len(ordered) - 1
+            observed_variant_count += 1
         bits = "".join(
             "1" if logical_order in by_snapshot else "0"
             for logical_order in range(1, snapshot_count + 1)
@@ -824,6 +904,31 @@ def _merge_dataset(
         "automatic_deletion": False,
         "inference_performed": False,
     }
+    if dataset in PRESERVE_OBSERVED_VARIANT_DATASETS:
+        summary.update(
+            {
+                "single_variant_key_count": single_variant_key_count,
+                "multi_variant_key_count": multi_variant_key_count,
+                "observed_variant_count": observed_variant_count,
+                "exact_repeat_count": exact_repeat_count,
+                "malformed_count": summary["null_key_hold_count"],
+                "canonicalization_unresolved_count": multi_variant_key_count,
+                "automatic_winner": False,
+                "observed_variants": sorted(
+                    observed_variants,
+                    key=lambda item: (
+                        str(item["canonical_key"]),
+                        str(item["variant_fingerprint"]),
+                    ),
+                ),
+                "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
+            }
+        )
+    elif dataset == "lactate_threshold_candidates":
+        # Candidate-layer audit metadata is extended by build_approved_input,
+        # but the primitive merge summary must expose deterministic repeat
+        # accounting as well for direct merge QA and permutation tests.
+        summary["exact_repeat_count"] = exact_repeat_count
     return canonical, provenance, field_provenance, holds, conflicts, summary
 
 
@@ -906,6 +1011,48 @@ def _validation_matrix(
     }
 
 
+def _latest_relationship_state(
+    observations_by_dataset: dict[str, list[dict[str, Any]]],
+    snapshot_count: int,
+) -> dict[str, list[str]]:
+    """Return only the latest Export endpoint identities for validation.
+
+    The cumulative approved input remains the validation record set. These
+    latest-only sets let the relationship classifier distinguish an endpoint
+    retained from an earlier authoritative Snapshot from one present in the
+    current Export without inferring any identity.
+    """
+
+    # `logical_order` is now fixed to the canonical acquisition chronology, so
+    # the final registered Snapshot is the maximum authoritative order even
+    # when a Dataset has no observations in that Snapshot. This preserves an
+    # empty current endpoint instead of retaining a stale older endpoint.
+    latest_acquisition_order = int(snapshot_count)
+    latest = {
+        dataset: [
+            item
+            for item in observations
+            if int(item.get("acquisition_order", item["logical_order"]))
+            == latest_acquisition_order
+        ]
+        for dataset, observations in observations_by_dataset.items()
+    }
+    activity_ids = {
+        str(item["record"].get("activityId"))
+        for item in latest.get("activities", [])
+        if item["record"].get("activityId") not in (None, "")
+    }
+    gear_keys = {
+        str(item["record"].get("gearPk"))
+        for item in latest.get("gear", [])
+        if item["record"].get("gearPk") not in (None, "")
+    }
+    return {
+        "current_activity_ids": sorted(activity_ids),
+        "current_gear_keys": sorted(gear_keys),
+    }
+
+
 def _approved_input_inventory(root: Path) -> tuple[list[dict[str, Any]], str]:
     rows: list[dict[str, Any]] = []
     for path in sorted(item for item in root.rglob("*") if item.is_file()):
@@ -923,6 +1070,8 @@ def _approved_input_inventory(root: Path) -> tuple[list[dict[str, Any]], str]:
 def build_approved_input(
     store_root: str | Path,
     output_root: str | Path,
+    *,
+    processing_sequence: list[str] | None = None,
 ) -> dict[str, Any]:
     verification = verify_store(store_root)
     if verification["status"] != "PASS":
@@ -932,6 +1081,34 @@ def build_approved_input(
     manifests = load_manifests(store)
     if not manifests:
         raise SnapshotMergeError("snapshot store has no registered snapshots")
+    acquisition_order_by_snapshot_id = {
+        str(manifest["snapshot_id"]): index
+        for index, manifest in enumerate(manifests, start=1)
+    }
+    manifests_by_label = {
+        str(manifest["snapshot_label"]): manifest for manifest in manifests
+    }
+    manifests_by_id = {
+        str(manifest["snapshot_id"]): manifest for manifest in manifests
+    }
+    if processing_sequence is None:
+        processing_manifests = list(manifests)
+        processing_labels = [str(item["snapshot_label"]) for item in manifests]
+    else:
+        sequence = [str(item) for item in processing_sequence]
+        if len(sequence) != len(manifests) or len(set(sequence)) != len(sequence):
+            raise SnapshotMergeError(
+                "processing_sequence must contain each registered snapshot exactly once"
+            )
+        if set(sequence).issubset(manifests_by_label):
+            processing_manifests = [manifests_by_label[item] for item in sequence]
+        elif set(sequence).issubset(manifests_by_id):
+            processing_manifests = [manifests_by_id[item] for item in sequence]
+        else:
+            raise SnapshotMergeError(
+                "processing_sequence must use registered snapshot labels or IDs"
+            )
+        processing_labels = [str(item["snapshot_label"]) for item in processing_manifests]
     requested_output = Path(output_root)
     if requested_output.is_symlink():
         raise SnapshotMergeError("canonical build output must not be a symbolic link")
@@ -951,7 +1128,10 @@ def build_approved_input(
         fit_unique: dict[str, dict[str, Any]] = {}
         unknown_aliases: list[dict[str, Any]] = []
         unknown_unique: dict[str, dict[str, Any]] = {}
-        for logical_order, manifest in enumerate(manifests, start=1):
+        for processing_index, manifest in enumerate(processing_manifests, start=1):
+            acquisition_order = acquisition_order_by_snapshot_id[
+                str(manifest["snapshot_id"])
+            ]
             for source in manifest["objects"]:
                 extension = str(source.get("extension", "")).lower()
                 object_kind = source.get("object_kind")
@@ -963,7 +1143,8 @@ def build_approved_input(
                         {
                             "fit_blob_sha256": digest,
                             "snapshot_id": manifest["snapshot_id"],
-                            "logical_order": logical_order,
+                            "logical_order": acquisition_order,
+                            "acquisition_order": acquisition_order,
                             "source_relative_path": logical_name,
                             "source_object_sha256": source["sha256"],
                         }
@@ -992,7 +1173,8 @@ def build_approved_input(
                         {
                             "object_sha256": digest,
                             "snapshot_id": manifest["snapshot_id"],
-                            "logical_order": logical_order,
+                            "logical_order": acquisition_order,
+                            "acquisition_order": acquisition_order,
                             "source_relative_path": logical_name,
                             "parser_state": "parser_unsupported",
                         }
@@ -1017,7 +1199,8 @@ def build_approved_input(
                         {
                             "object_sha256": digest,
                             "snapshot_id": manifest["snapshot_id"],
-                            "logical_order": logical_order,
+                            "logical_order": acquisition_order,
+                            "acquisition_order": acquisition_order,
                             "source_relative_path": logical_name,
                             "parser_state": "parser_unsupported",
                         }
@@ -1031,7 +1214,9 @@ def build_approved_input(
                             "record": record,
                             "raw_key": raw_key,
                             "snapshot_id": manifest["snapshot_id"],
-                            "logical_order": logical_order,
+                            "logical_order": acquisition_order,
+                            "acquisition_order": acquisition_order,
+                            "processing_sequence": processing_index,
                             "export_observed_at": manifest["export_observed_at"],
                             "source_relative_path": logical_name,
                             "source_record_index": record_index,
@@ -1045,7 +1230,10 @@ def build_approved_input(
         all_provenance: list[dict[str, Any]] = []
         all_field_provenance: list[dict[str, Any]] = []
         all_holds: list[dict[str, Any]] = []
-        all_conflicts: list[dict[str, Any]] = _lactate_power_conflicts(
+        candidate_reviews = _lactate_power_conflicts(
+            observations_by_dataset.get("lactate_threshold_candidates", [])
+        )
+        all_conflicts: list[dict[str, Any]] = _lactate_malformed_conflicts(
             observations_by_dataset.get("lactate_threshold_candidates", [])
         )
         dataset_summaries: dict[str, Any] = {}
@@ -1068,8 +1256,44 @@ def build_approved_input(
             all_holds.extend(holds)
             all_conflicts.extend(conflicts)
             dataset_summaries[dataset] = summary
+        lactate_summary = dataset_summaries["lactate_threshold_candidates"]
+        lactate_observations = observations_by_dataset.get(
+            "lactate_threshold_candidates", []
+        )
+        lactate_null_key_count = int(lactate_summary.get("null_key_hold_count", 0))
+        lactate_summary.update(
+            {
+                "candidate_rows": len(lactate_observations),
+                "distinct_candidate_count": int(
+                    lactate_summary.get("canonical_record_count", 0)
+                ),
+                "exact_repeat_count": max(
+                    0,
+                    len(lactate_observations)
+                    - int(lactate_summary.get("canonical_record_count", 0))
+                    - lactate_null_key_count,
+                ),
+                "multiple_candidate_group_count": len(candidate_reviews),
+                "authority_unresolved_count": len(candidate_reviews),
+                "stable_promotion_available": False,
+                "malformed_count": lactate_null_key_count
+                + sum(
+                    item["conflict_type"] == "lactate_malformed_candidate"
+                    for item in all_conflicts
+                ),
+                "candidate_status": (
+                    "multiple_observed_candidates"
+                    if candidate_reviews
+                    else "identity_or_semantics_unknown"
+                ),
+                "candidate_review_required": bool(candidate_reviews),
+            }
+        )
         if all_conflicts:
-            _write_json(stage / "canonical/review_holds.json", all_holds + all_conflicts)
+            _write_json(
+                stage / "canonical/review_holds.json",
+                all_holds + candidate_reviews + all_conflicts,
+            )
             raise SnapshotMergeError("canonical merge contains unresolved stop conflicts")
         if not canonical_by_dataset["activities"]:
             raise SnapshotMergeError("canonical input contains no Activities records")
@@ -1186,6 +1410,46 @@ def build_approved_input(
                 raise SnapshotMergeError("preserved unknown blob failed verification")
             shutil.copyfile(blob, destination)
 
+        # Source discovery follows runtime processing order, but every
+        # audit/provenance list is serialized in authoritative acquisition
+        # order so processing_sequence cannot change normalized truth or its
+        # semantic digest.
+        fit_aliases.sort(
+            key=lambda item: (
+                int(item["acquisition_order"]),
+                str(item["snapshot_id"]),
+                str(item["source_relative_path"]),
+            )
+        )
+        unknown_aliases.sort(
+            key=lambda item: (
+                int(item["acquisition_order"]),
+                str(item["snapshot_id"]),
+                str(item["source_relative_path"]),
+            )
+        )
+        all_provenance.sort(
+            key=lambda item: (
+                str(item["dataset"]),
+                str(item["canonical_key"]),
+                int(item["logical_order"]),
+                str(item["snapshot_id"]),
+                str(item["source_relative_path"]),
+                str(item["source_record_index"]),
+            )
+        )
+        all_field_provenance.sort(
+            key=lambda item: (
+                str(item["dataset"]),
+                str(item["canonical_key"]),
+                str(item["field_name"]),
+                int(item["logical_order"]),
+                str(item["snapshot_id"]),
+            )
+        )
+        all_holds.sort(key=_stable_json)
+        all_conflicts.sort(key=_stable_json)
+
         approved_inventory, approved_hash = _approved_input_inventory(approved)
         canonical_records = {
             dataset: [
@@ -1195,6 +1459,14 @@ def build_approved_input(
                     "presence_pattern": item["presence_pattern"],
                 }
                 for item in rows
+            ]
+            + [
+                {
+                    "variant_fingerprint": item["variant_fingerprint"],
+                    "canonical_key": item["canonical_key"],
+                    "snapshot_orders": item["snapshot_orders"],
+                }
+                for item in dataset_summaries[dataset].get("observed_variants", [])
             ]
             for dataset, rows in canonical_by_dataset.items()
         }
@@ -1219,11 +1491,14 @@ def build_approved_input(
             "schema_version": SCHEMA_VERSION,
             "account_store_id": store_metadata["account_store_id"],
             "snapshot_count": len(manifests),
+            "chronology_authority": "manifest.export_observed_at",
+            "processing_sequence": "runtime-only; never authoritative",
             "snapshots": [
                 {
                     "snapshot_id": manifest["snapshot_id"],
                     "snapshot_label": manifest["snapshot_label"],
                     "logical_order": index,
+                    "acquisition_order": index,
                     "export_observed_at": manifest["export_observed_at"],
                     "snapshot_content_id": manifest["snapshot_content_id"],
                 }
@@ -1280,6 +1555,10 @@ def build_approved_input(
                 "activity_fit_links_regenerated": True,
             },
             "review_hold_count": len(all_holds),
+            "candidate_review_count": len(candidate_reviews),
+            "candidate_review_type_counts": dict(
+                sorted(Counter(item["conflict_type"] for item in candidate_reviews).items())
+            ),
             "review_hold_type_counts": dict(
                 sorted(Counter(item["hold_type"] for item in all_holds).items())
             ),
@@ -1348,6 +1627,10 @@ def build_approved_input(
             "dataset_summaries": dataset_summaries,
             "fit_unique_blob_count": len(fit_unique),
             "review_hold_count": len(all_holds),
+            "candidate_review_count": len(candidate_reviews),
+            "candidate_review_type_counts": dict(
+                sorted(Counter(item["conflict_type"] for item in candidate_reviews).items())
+            ),
             "stop_conflict_count": 0,
             "automatic_deletion": False,
             "inference_performed": False,
@@ -1373,7 +1656,10 @@ def build_approved_input(
             stage / "canonical/field_provenance.json",
             all_field_provenance,
         )
-        _write_json(stage / "canonical/review_holds.json", all_holds)
+        _write_json(
+            stage / "canonical/review_holds.json",
+            all_holds + candidate_reviews,
+        )
         _write_json(stage / "canonical/fit_blob_aliases.json", fit_aliases)
         _write_json(stage / "canonical/preserved_unknown_aliases.json", unknown_aliases)
         _write_json(stage / "canonical/approved_input_manifest.json", approved_manifest)
@@ -1392,6 +1678,13 @@ def build_approved_input(
             "lineage": lineage,
             "coverage": coverage,
             "merge_summary": aggregate_summary,
+            "relationship_context": _latest_relationship_state(
+                observations_by_dataset,
+                len(manifests),
+            ),
+            # This is returned for runtime diagnostics only and is not written
+            # into the public normalized payload or semantic digest.
+            "processing_sequence": processing_labels,
         }
     except Exception:
         if stage.exists():

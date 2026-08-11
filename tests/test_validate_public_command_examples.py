@@ -106,11 +106,11 @@ def test_stale_stable_version_fails(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
     quick_start = tmp_path / "docs/product_quick_start.md"
     quick_start.write_text(
-        quick_start.read_text(encoding="utf-8").replace("1.3.1", "9.9.9"),
+        quick_start.read_text(encoding="utf-8").replace("v1.3.2", "v9.9.9"),
         encoding="utf-8",
     )
 
     assert (
-        "docs/product_quick_start.md: current stable v1.3.1 is not identified"
+        "docs/product_quick_start.md: current stable v1.3.2 is not identified"
         in validate(tmp_path)
     )

@@ -45,7 +45,12 @@ def _total_stress(value: Any) -> dict[str, Any]:
     )
 
 
-def normalize_uds(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
+def normalize_uds(
+    assets: Iterable[DiscoveredAsset],
+    *,
+    preserve_observed_variants: bool = False,
+    variant_lineage: dict[tuple[str, str], dict[str, Any]] | None = None,
+) -> DailyMetricResult:
     selected, rows = selected_rows(assets, lambda name: name.startswith("udsfile"))
     accepted = []
     excluded: Counter[str] = Counter()
@@ -85,6 +90,8 @@ def normalize_uds(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
         source_record_count=len(rows),
         accepted=accepted,
         excluded_reasons=excluded,
+        preserve_observed_variants=preserve_observed_variants,
+        variant_lineage=variant_lineage,
     )
 
 

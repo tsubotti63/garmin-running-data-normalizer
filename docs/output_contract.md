@@ -2,13 +2,20 @@
 
 ## Status and authority
 
-- Current stable contract: v1.3.1
+- Current stable contract: v1.3.2
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each
 additive layer entered the `1.x` family. Executable authority remains in
 `run_all.py`, the versioned dataset registry, and each run's `run_manifest.json`
 and `run_summary.json`.
+
+For Snapshot-backed inputs, acquisition chronology is derived only from the
+timezone-aware `manifest.export_observed_at` value (with the registered
+Snapshot ID as the deterministic tie-breaker). Runtime processing sequence is
+diagnostic execution order only; it never selects a current endpoint, merge
+winner, observed variant, candidate, or normalized value. Existing
+`logical_order` fields remain the backward-compatible acquisition-order alias.
 
 Both machine authorities record the exact installed `product_version`;
 `ANALYSIS_CONTEXT.json` preserves the same value for standalone handoff.
@@ -239,6 +246,12 @@ candidate boundary: one source-backed observation grain, no machine stable
 key, Activity relationship `not_yet_defined`, no join guidance, and no
 canonical daily projection. This metadata does not promote the audit file to a
 normalized dataset.
+
+When Snapshot Merge observes multiple accepted Lactate candidates without
+resolved authority, it preserves the distinct candidates, records exact replay
+counts and an unresolved candidate status, and continues with a warning. This
+candidate-only warning does not make Stable promotion available and does not
+select a winner. Malformed source structure remains fail-closed.
 
 Race Prediction, Sleep, UDS, Acute Training Load, Training Readiness, VO2Max,
 HRV, and Training History remain separate context. Their detailed fields,

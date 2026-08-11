@@ -70,6 +70,7 @@ POLICIES: dict[str, dict[str, Any]] = {
         "stable_key": ["calendar_date"],
         "materialization": "source_shaped_json",
         "conflict_policy": "review_fail_closed",
+        "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
         "keep_last": False,
     },
     "race_prediction_daily": {
@@ -100,6 +101,7 @@ POLICIES: dict[str, dict[str, Any]] = {
         "stable_key": ["calendar_date"],
         "materialization": "source_shaped_json",
         "conflict_policy": "review_fail_closed",
+        "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
         "keep_last": False,
     },
     "acute_training_load_daily": {

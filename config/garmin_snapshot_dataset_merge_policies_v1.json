@@ -63,6 +63,7 @@
       "stable_key": ["calendar_date"],
       "materialization": "source_shaped_json",
       "conflict_policy": "review_fail_closed",
+      "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
       "keep_last": false
     },
     {
@@ -93,6 +94,7 @@
       "stable_key": ["calendar_date"],
       "materialization": "source_shaped_json",
       "conflict_policy": "review_fail_closed",
+      "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
       "keep_last": false
     },
     {

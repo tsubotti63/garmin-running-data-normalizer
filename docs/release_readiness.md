@@ -1,5 +1,17 @@
 # Release Readiness
 
+## v1.3.2 stable patch release
+
+Version `1.3.2` is published as a Snapshot correctness and
+evidence-preservation patch. Snapshot-aware relationship resolution, exact
+Sleep duplicate handling, Endurance/UDS observed-variant preservation, Lactate
+candidate preservation, and acquisition/processing-order separation retain
+observed evidence without selecting an unsupported winner.
+
+The release source is `c6f7737aa24d099b30e897cef0840f0189fb1d7b`.
+The annotated `v1.3.2` tag, latest stable GitHub Release, Production PyPI
+publication, and exact-version clean-install smoke test are complete.
+
 ## v1.3.1 stable patch release
 
 Version `1.3.1` is published as a documentation, GitHub public-surface,
@@ -28,35 +40,36 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Default branch: `main`
 - License: `Apache-2.0`
 - GitHub Actions: Operational
-- Current source and package version: `1.3.1`
-- Current Production PyPI version: `1.3.1`
-- Latest GitHub Release: `v1.3.1`
+- Current source and package version: `1.3.2`
+- Current Production PyPI version: `1.3.2`
+- Latest GitHub Release: `v1.3.2`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
-- TestPyPI `1.3.1`: Not used; not required by the approved patch release
+- TestPyPI `1.3.2`: Not used; not required by the approved patch release
   contract
-- Production PyPI `1.3.1`: Published and exact-version clean-install verified
+- Production PyPI `1.3.2`: Published and exact-version clean-install verified
 - Trusted Publishing: Configured for protected `testpypi` and `pypi`
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
-and GitHub Releases remain immutable. v1.3.1 is the current stable release; its
+and GitHub Releases remain immutable. v1.3.2 is the current stable release; its
 tag, GitHub Release, and Production PyPI publication were recorded only after
 the corresponding external state was observed.
 
 ## Current release assessment
 
-The reviewed v1.3.1 source passed 210 pytest tests, repository validators,
-relative-link checks, strict wheel and source-distribution metadata checks,
-isolated artifact installs, Ubuntu and Windows CI, and the existing 44-file
-deterministic comparison while preserving the stable `1.x` one-shot and
-Snapshot contracts. Main CI run `31295319603` and Production publish workflow
-run `31295493750` passed. Earlier tags, Releases, and package artifacts remain
-immutable and are not renamed or reused.
+The reviewed v1.3.2 source passed 251 pytest tests, 208 unittest checks,
+repository validators, strict wheel and source-distribution metadata checks,
+isolated artifact installs, and Ubuntu and Windows CI while preserving the
+stable `1.x` one-shot and Snapshot contracts. Main CI run `31405707069` and
+Production publish workflow run `31407525307` passed. Clean Production PyPI
+installation, version/import checks, `pip check`, Synthetic Run-All, and its
+17-dataset/6-relationship handoff passed. Earlier tags, Releases, and package
+artifacts remain immutable and are not renamed or reused.
 
 The prior v1.3.0 feature release remains the immutable source of the 17-dataset
-and 212-field Wellness/Metrics contract. The v1.3.1 patch does not alter that
-contract.
+and 212-field Wellness/Metrics contract. Neither the v1.3.1 nor v1.3.2 patch
+changes that contract.
 
 Post-publication validation on one maintainer-owned physical Windows
 environment clean-installed Production PyPI v1.2.1, installed `tzdata`

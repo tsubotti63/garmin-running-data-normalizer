@@ -3,7 +3,11 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from scripts.validate_public_product_state import CURRENT_DOCUMENTS, validate
+from scripts.validate_public_product_state import (
+    CS010_DOCUMENT,
+    CURRENT_DOCUMENTS,
+    validate,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,7 +24,7 @@ def _copy_validator_inputs(destination: Path) -> None:
 def test_repository_public_product_state_passes() -> None:
     version, findings = validate(ROOT)
 
-    assert version == "1.3.1"
+    assert version == "1.3.2"
     assert findings == []
 
 
@@ -135,15 +139,15 @@ def test_package_version_drift_fails(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
     version_source = tmp_path / VERSION_SOURCE
     version_source.write_text(
-        version_source.read_text(encoding="utf-8").replace('"1.3.1"', '"1.3.2"'),
+        version_source.read_text(encoding="utf-8").replace('"1.3.2"', '"1.3.3"'),
         encoding="utf-8",
     )
 
     version, findings = validate(tmp_path)
 
-    assert version == "1.3.2"
+    assert version == "1.3.3"
     assert any(
-        "current stable marker does not match package v1.3.2" in item
+        "current stable marker does not match package v1.3.3" in item
         for item in findings
     )
 
@@ -221,3 +225,66 @@ def test_obsolete_agents_phase_fails(tmp_path: Path) -> None:
     _, findings = validate(tmp_path)
 
     assert any("Phase 0.1" in item for item in findings)
+
+
+def test_current_cs010_public_case_study_passes() -> None:
+    version, findings = validate(ROOT)
+
+    assert version == "1.3.2"
+    assert not any(CS010_DOCUMENT in item for item in findings)
+
+
+def test_general_review_word_in_cs010_passes(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    case_study = tmp_path / CS010_DOCUMENT
+    case_study.write_text(
+        case_study.read_text(encoding="utf-8")
+        + "\nThe review process is described as historical context.\n",
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert not any("stale public pre-publication status" in item for item in findings)
+
+
+def test_historical_branch_word_in_cs010_passes(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    case_study = tmp_path / CS010_DOCUMENT
+    case_study.write_text(
+        case_study.read_text(encoding="utf-8")
+        + "\nHistorical branch names are retained only for context.\n",
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert not any("stale public pre-publication status" in item for item in findings)
+
+
+def test_cs010_draft_candidate_phrase_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    case_study = tmp_path / CS010_DOCUMENT
+    case_study.write_text(
+        case_study.read_text(encoding="utf-8")
+        + "\nThis draft is a candidate for Product review.\n",
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any("stale public pre-publication status" in item for item in findings)
+
+
+def test_cs010_review_branch_merge_phrase_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    case_study = tmp_path / CS010_DOCUMENT
+    case_study.write_text(
+        case_study.read_text(encoding="utf-8")
+        + "\nThe presence on a review branch does not authorize merge.\n",
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any("stale public pre-publication status" in item for item in findings)

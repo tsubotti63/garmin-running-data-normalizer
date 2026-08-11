@@ -1346,6 +1346,14 @@ def _validate_projection_inputs(
     summary_warning_count = _non_negative_integer(
         summary_object.get("warning_count"), "warning count"
     )
+    relationship_warning_count = _non_negative_integer(
+        summary_object.get("relationship_warning_count", 0),
+        "relationship warning count",
+    )
+    candidate_warning_count = _non_negative_integer(
+        summary_object.get("candidate_warning_count", 0),
+        "candidate warning count",
+    )
     summary_error_count = _non_negative_integer(
         summary_object.get("error_count"), "error count"
     )
@@ -1355,7 +1363,9 @@ def _validate_projection_inputs(
         raise OutputExperienceError("warning list does not match warning count")
     if not isinstance(errors, list) or len(errors) != summary_error_count:
         raise OutputExperienceError("error list does not match error count")
-    if summary_warning_count != total_family_warnings:
+    if summary_warning_count != (
+        total_family_warnings + relationship_warning_count + candidate_warning_count
+    ):
         raise OutputExperienceError(
             "summary warning count does not match family warning counts"
         )
@@ -1649,6 +1659,20 @@ def _snapshot_lifecycle_lines(summary: Mapping[str, Any]) -> list[str]:
     return lines
 
 
+def _has_observed_variant_evidence(summary: Mapping[str, Any]) -> bool:
+    lifecycle = summary.get("snapshot_lifecycle")
+    if not isinstance(lifecycle, Mapping):
+        return False
+    datasets = lifecycle.get("datasets")
+    if not isinstance(datasets, Mapping):
+        return False
+    return any(
+        isinstance(datasets.get(name), Mapping)
+        and bool(datasets[name].get("observed_variants"))
+        for name in ("endurance_score_daily", "uds_daily")
+    )
+
+
 def render_dataset_inventory(
     manifest: Mapping[str, Any],
     summary: Mapping[str, Any],
@@ -1797,6 +1821,7 @@ def render_start_here(
     audit_paths = sorted(path for path in generated_paths if path.startswith("audit/"))
     warning_count = _non_negative_integer(summary.get("warning_count"), "warning count")
     error_count = _non_negative_integer(summary.get("error_count"), "error count")
+    variant_guidance = _has_observed_variant_evidence(summary)
     lines = [
         "# Start Here",
         "",
@@ -1850,6 +1875,16 @@ def render_start_here(
             "",
         ]
     )
+    if variant_guidance:
+        lines.extend(
+            [
+                "When Endurance or UDS audit reports multiple observed values for one",
+                "stable key, no value is automatically newer or more correct. Use the",
+                "preserved observed variants for review or sensitivity analysis; a single",
+                "canonical daily value is not selected without source-backed authority.",
+                "",
+            ]
+        )
     lines.extend(_path_list("Available Analysis Files", analysis_paths))
     lines.extend(_path_list("QA Evidence", qa_paths))
     lines.extend(_path_list("Audit Evidence", audit_paths))
@@ -1873,6 +1908,13 @@ def render_start_here(
                 "",
             ]
         )
+        if "candidate_status" in lactate:
+            lines[-1:-1] = [
+                f"- Candidate status: {_code(lactate['candidate_status'])}",
+                f"- Distinct candidate count: {lactate.get('distinct_candidate_count', lactate.get('candidate_count', 0))}",
+                f"- Exact repeats: {lactate.get('exact_repeat_count', 0)}",
+                f"- Authority-unresolved groups: {lactate.get('authority_unresolved_count', 0)}",
+            ]
     lines.extend(
         [
             "## Relationship Safety",
@@ -1922,6 +1964,16 @@ def render_analysis_handoff(
         ]
         or ["- None"]
     )
+    variant_rule_lines = (
+        [
+            "16. Multiple observed Endurance or UDS values for one stable key are",
+            "    preserved in the corresponding audit evidence. Do not choose a winner",
+            "    without source-backed authority; use single-variant days for ordinary",
+            "    single-value analysis and review multi-variant days separately.",
+        ]
+        if _has_observed_variant_evidence(summary)
+        else []
+    )
     lines = [
         "# Analysis Handoff",
         "",
@@ -1970,6 +2022,7 @@ def render_analysis_handoff(
         "    value with a review status must remain unresolved.",
         "15. Approximate generation ranges (2015-2021 and 2022+) are descriptive",
         "    source context only; they do not authorize automatic field equivalence.",
+        *variant_rule_lines,
         "",
         *_v1_3_relationship_lines(),
         *_relationship_coverage_lines(relationship_summary),

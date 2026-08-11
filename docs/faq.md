@@ -1,6 +1,6 @@
 # Frequently Asked Questions
 
-These short answers apply to Garmin Running Data Normalizer `v1.3.1` and route
+These short answers apply to Garmin Running Data Normalizer `v1.3.2` and route
 to the current product authorities.
 
 ## Getting started
@@ -23,9 +23,10 @@ synthetic data.
 
 ### Which version is stable?
 
-`v1.3.1` is the current stable release on PyPI. It includes the compatible
-one-shot workflow, optional Snapshot Accumulation, the Windows timezone-data
-hotfix, and the additive Wellness/Metrics datasets documented for v1.3.
+`v1.3.2` is the current stable release on GitHub and Production PyPI. It
+includes the compatible one-shot workflow, optional Snapshot Accumulation, the
+Windows timezone-data hotfix, and the additive Wellness/Metrics datasets
+documented for v1.3.
 
 ## Garmin Export and Run-All
 
@@ -195,7 +196,7 @@ Public-safe Windows reports are welcome through
 ### Was the v1.2.0 Windows timezone-data issue resolved?
 
 Yes. v1.2.1 introduced the conditional Windows `tzdata` dependency, which
-v1.3.1 retains. The current release also provides the bounded
+v1.3.2 retains. The current release also provides the bounded
 `TIMEZONE_DATA_UNAVAILABLE` diagnostic if the configured IANA timezone data is
 still unavailable in a damaged or incomplete environment. Confirm the
 environment with:
@@ -204,9 +205,9 @@ environment with:
 python -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
 ```
 
-For a normal v1.3.1 Production PyPI installation, no separate manual
+For a normal v1.3.2 Production PyPI installation, no separate manual
 `pip install tzdata` step is expected. If the check still fails, reinstall
-v1.3.1 in a new environment and include only sanitized environment details in a
+v1.3.2 in a new environment and include only sanitized environment details in a
 support report.
 
 ### Can I attach my Garmin Export to a GitHub Issue?

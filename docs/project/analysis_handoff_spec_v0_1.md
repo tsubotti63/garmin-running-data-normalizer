@@ -6,7 +6,7 @@
 - Applies to: `garmin-running-data-normalizer-run-all-v1`
 - Boundary: local Run-All output produced from a user-controlled Garmin Account Export
 - v1.3 note: additive context/observation relationship metadata is included in
-  the stable v1.3.1 GitHub Release and Production PyPI distribution
+  the stable v1.3.2 GitHub Release and Production PyPI distribution
 
 This specification defines how deterministic Run-All v1.1 output may be handed to a
 human analyst, a local analysis tool, or an AI assistant without confusing
@@ -175,7 +175,7 @@ Only the [Dataset Relationship Catalog](../dataset_relationships.md) authorizes
 cross-dataset joins. Some keys may incorporate source IDs; none are permission
 to publish or identify a person.
 
-## Unreleased v1.3 relationship interpretation
+## Stable v1.3 relationship interpretation
 
 The v1.3 Machine Truth separates direct identity from contextual comparison:
 

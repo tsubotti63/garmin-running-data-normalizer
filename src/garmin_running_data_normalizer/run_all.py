@@ -348,6 +348,8 @@ def _validate_dataset_table() -> None:
 def _normalize_datasets(
     input_root: Path,
     families: dict[str, list[DiscoveredAsset]],
+    relationship_context: dict[str, Any] | None = None,
+    snapshot_context: dict[str, Any] | None = None,
 ) -> tuple[
     dict[str, list[dict[str, Any]]],
     list[dict[str, Any]],
@@ -468,8 +470,115 @@ def _normalize_datasets(
             "detected daily metric input could not be normalized",
         ) from exc
 
+    if snapshot_context is not None:
+        merge_summary = snapshot_context.get("merge_summary", {})
+        summaries = (
+            merge_summary.get("datasets", {})
+            if isinstance(merge_summary, dict)
+            else {}
+        )
+        for dataset in ("endurance_score_daily", "uds_daily"):
+            source_summary = summaries.get(dataset, {})
+            variants = source_summary.get("observed_variants", [])
+            if not variants:
+                continue
+            safe_variants = []
+            for variant in variants:
+                item = dict(variant)
+                orders = item.pop("snapshot_orders", [])
+                item["snapshot_lineage"] = {
+                    "snapshots": [f"S{int(order)}" for order in orders],
+                    "source_snapshot_count": len(orders),
+                }
+                safe_variants.append(item)
+            audit = performance_audit[dataset]
+            audit.update(
+                {
+                    "status": "PASS_WITH_REVIEW_ITEMS",
+                    "canonical_key_count": int(source_summary.get("canonical_record_count", 0))
+                    + int(source_summary.get("multi_variant_key_count", 0)),
+                    "single_variant_key_count": int(source_summary.get("single_variant_key_count", 0)),
+                    "multi_variant_key_count": int(source_summary.get("multi_variant_key_count", 0)),
+                    "observed_variant_count": int(source_summary.get("observed_variant_count", 0)),
+                    "exact_repeat_count": int(source_summary.get("exact_repeat_count", 0)),
+                    "malformed_count": int(source_summary.get("malformed_count", 0)),
+                    "canonicalization_unresolved_count": int(
+                        source_summary.get("canonicalization_unresolved_count", 0)
+                    ),
+                    "automatic_winner": False,
+                    "observed_variants": sorted(
+                        safe_variants,
+                        key=lambda item: (
+                            json.dumps(item.get("canonical_key"), sort_keys=True),
+                            item.get("variant_fingerprint", ""),
+                        ),
+                    ),
+                    "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
+                }
+            )
+        lactate_source_summary = summaries.get(
+            "lactate_threshold_candidates", {}
+        )
+        if lactate_source_summary:
+            lactate_audit = performance_audit["lactate_threshold"]
+            lactate_audit.update(
+                {
+                    "candidate_rows": int(
+                        lactate_source_summary.get("candidate_rows", 0)
+                    ),
+                    "distinct_candidate_count": int(
+                        lactate_source_summary.get("distinct_candidate_count", 0)
+                    ),
+                    "exact_repeat_count": int(
+                        lactate_source_summary.get("exact_repeat_count", 0)
+                    ),
+                    "multiple_candidate_group_count": int(
+                        lactate_source_summary.get(
+                            "multiple_candidate_group_count", 0
+                        )
+                    ),
+                    "authority_unresolved_count": int(
+                        lactate_source_summary.get(
+                            "authority_unresolved_count", 0
+                        )
+                    ),
+                    "stable_promotion_available": False,
+                    "malformed_count": int(
+                        lactate_source_summary.get("malformed_count", 0)
+                    ),
+                    "candidate_status": lactate_source_summary.get(
+                        "candidate_status", "identity_or_semantics_unknown"
+                    ),
+                    "candidate_review_required": bool(
+                        lactate_source_summary.get(
+                            "candidate_review_required", False
+                        )
+                    ),
+                }
+            )
+
     try:
-        relationship_summary = validate_declared_relationships(records)
+        relationship_summary = validate_declared_relationships(
+            records,
+            current_activity_ids=(
+                set(relationship_context["current_activity_ids"])
+                if relationship_context is not None
+                and "current_activity_ids" in relationship_context
+                else None
+            ),
+            current_gear_keys=(
+                set(relationship_context["current_gear_keys"])
+                if relationship_context is not None
+                and "current_gear_keys" in relationship_context
+                else None
+            ),
+            current_fit_session_keys=(
+                set(relationship_context["current_fit_session_keys"])
+                if relationship_context is not None
+                and "current_fit_session_keys" in relationship_context
+                else None
+            ),
+        )
         (
             records["activity_fit_links"],
             activity_fit_audit,
@@ -752,6 +861,7 @@ def _family_results(
     records: dict[str, list[dict[str, Any]]],
     fit_status: dict[str, Any],
     performance_audit: dict[str, Any],
+    relationship_summary: dict[str, Any],
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]], str]:
     warnings: list[dict[str, Any]] = []
     results: dict[str, dict[str, Any]] = {}
@@ -811,6 +921,17 @@ def _family_results(
         family_warnings = 0
         status = "PROCESSED"
         skipped = 0
+        variant_review_count = 0
+        if family in daily_dataset_by_family:
+            variant_review_count = int(
+                performance_audit[daily_dataset_by_family[family]].get(
+                    "canonicalization_unresolved_count", 0
+                )
+            )
+            if variant_review_count and detected == 0:
+                # Snapshot merge may omit conflicted canonical rows while keeping
+                # their public-safe variants in audit evidence.
+                detected = 1
         if family != "activities" and detected == 0:
             status = "SKIPPED_NOT_PRESENT"
             if family not in quiet_optional_families:
@@ -836,6 +957,9 @@ def _family_results(
             review_item_count += int(audit.get("same_day_conflict_count", 0))
             review_item_count += int(audit.get("invalid_value_count", 0))
             review_item_count += int(audit.get("missing_date_count", 0))
+            review_item_count += int(
+                audit.get("canonicalization_unresolved_count", 0)
+            )
             if review_item_count:
                 family_warnings += 1
                 warnings.append(
@@ -879,6 +1003,41 @@ def _family_results(
             results[family]["invalid_sentinel_counts"] = dict(
                 fit_status.get("invalid_sentinel_counts", {})
             )
+
+    unresolved_relationship_count = int(
+        relationship_summary.get("relationship_unresolved", 0)
+    )
+    lactate_audit = performance_audit.get("lactate_threshold", {})
+    lactate_review_count = int(
+        lactate_audit.get("multiple_candidate_group_count", 0)
+        or lactate_audit.get("review_condition_counts", {}).get(
+            "functional_threshold_power_conflict", 0
+        )
+    )
+    if lactate_review_count:
+        warnings.append(
+            {
+                "code": "LACTATE_CANDIDATE_AUTHORITY_UNRESOLVED",
+                "family": "lactate_threshold",
+                "count": lactate_review_count,
+                "message": (
+                    "multiple accepted Lactate Threshold candidates are preserved; "
+                    "Stable promotion remains unavailable"
+                ),
+            }
+        )
+    if unresolved_relationship_count:
+        warnings.append(
+            {
+                "code": "RELATIONSHIP_UNRESOLVED_VALID_LINK",
+                "family": "relationships",
+                "count": unresolved_relationship_count,
+                "message": (
+                    "valid relationship links have unresolved endpoints; "
+                    "no endpoint was inferred"
+                ),
+            }
+        )
 
     overall = "PARTIAL_SUCCESS" if incomplete_fit_count else ("PASS_WITH_WARNINGS" if warnings else "PASS")
     return results, warnings, overall
@@ -950,7 +1109,12 @@ def run_all(
         activity_fit_audit,
         relationship_summary,
         performance_audit,
-    ) = _normalize_datasets(input_root, families)
+    ) = _normalize_datasets(
+        input_root,
+        families,
+        relationship_context=snapshot_context,
+        snapshot_context=snapshot_context,
+    )
     _validate_provenance(records, fit_audit, families)
     qa_entries = [
         _dataset_qa(dataset, records[str(dataset["name"])], len(families[str(dataset["family"])]))
@@ -985,6 +1149,7 @@ def run_all(
         records,
         fit_status,
         performance_audit,
+        relationship_summary,
     )
     performance_summary = {
         "format": "garmin-running-data-normalizer-performance-metrics-summary-v1",
@@ -992,6 +1157,7 @@ def run_all(
             "PASS_WITH_REVIEW_ITEMS"
             if any(
                 int(performance_audit[name].get("excluded_record_count", 0))
+                or int(performance_audit[name].get("canonicalization_unresolved_count", 0))
                 for name in ("hill_score_daily", "endurance_score_daily")
             )
             else "PASS"
@@ -1097,7 +1263,14 @@ def run_all(
     }
     if snapshot_context is not None:
         required_snapshot_context = {"lineage", "coverage", "merge_summary"}
-        if set(snapshot_context) != required_snapshot_context:
+        allowed_snapshot_context = required_snapshot_context | {
+            "current_activity_ids",
+            "current_gear_keys",
+            "current_fit_session_keys",
+        }
+        if not required_snapshot_context <= set(snapshot_context) or not set(
+            snapshot_context
+        ) <= allowed_snapshot_context:
             raise RunAllError(
                 "SNAPSHOT_CONTEXT_INVALID",
                 "snapshot lifecycle context is incomplete",
@@ -1135,6 +1308,40 @@ def run_all(
             *generated_paths[-2:],
         ]
     qa_by_name = {entry["dataset"]: entry for entry in qa_entries}
+    lactate_audit = performance_audit["lactate_threshold"]
+    lactate_candidate_features = {
+        "status": lactate_audit["status"],
+        "candidate_count": lactate_audit["candidate_count"],
+        "public_promotion": False,
+        "machine_stable_key_status": "PRODUCT_DECISION_REQUIRED",
+        "audit_path": "audit/lactate_threshold_candidates.json",
+    }
+    if snapshot_context is not None and "candidate_rows" in lactate_audit:
+        lactate_candidate_features.update(
+            {
+                "candidate_rows": int(lactate_audit["candidate_rows"]),
+                "distinct_candidate_count": int(
+                    lactate_audit.get(
+                        "distinct_candidate_count",
+                        lactate_audit["candidate_count"],
+                    )
+                ),
+                "exact_repeat_count": int(
+                    lactate_audit.get("exact_repeat_count", 0)
+                ),
+                "multiple_candidate_group_count": int(
+                    lactate_audit.get("multiple_candidate_group_count", 0)
+                ),
+                "authority_unresolved_count": int(
+                    lactate_audit.get("authority_unresolved_count", 0)
+                ),
+                "stable_promotion_available": False,
+                "malformed_count": int(lactate_audit.get("malformed_count", 0)),
+                "candidate_status": lactate_audit.get(
+                    "candidate_status", "identity_or_semantics_unknown"
+                ),
+            }
+        )
     manifest = {
         "format": "garmin-running-data-normalizer-run-manifest-v1",
         "product_version": __version__,
@@ -1161,17 +1368,7 @@ def run_all(
         ],
         "outputs": [],
         "deterministic_output_digest": "projection-pending",
-        "candidate_features": {
-            "lactate_threshold": {
-                "status": performance_audit["lactate_threshold"]["status"],
-                "candidate_count": performance_audit["lactate_threshold"][
-                    "candidate_count"
-                ],
-                "public_promotion": False,
-                "machine_stable_key_status": "PRODUCT_DECISION_REQUIRED",
-                "audit_path": "audit/lactate_threshold_candidates.json",
-            }
-        },
+        "candidate_features": {"lactate_threshold": lactate_candidate_features},
     }
     summary = {
         "format": "garmin-running-data-normalizer-run-summary-v1",
@@ -1187,18 +1384,26 @@ def run_all(
         "errors": [],
         "generated_paths": generated_paths,
         "deterministic_output_digest": "projection-pending",
-        "candidate_features": {
-            "lactate_threshold": {
-                "status": performance_audit["lactate_threshold"]["status"],
-                "candidate_count": performance_audit["lactate_threshold"][
-                    "candidate_count"
-                ],
-                "public_promotion": False,
-                "machine_stable_key_status": "PRODUCT_DECISION_REQUIRED",
-                "audit_path": "audit/lactate_threshold_candidates.json",
-            }
-        },
+        "candidate_features": {"lactate_threshold": lactate_candidate_features},
     }
+    lactate_warning_count = sum(
+        1
+        for item in warnings
+        if item.get("code") == "LACTATE_CANDIDATE_AUTHORITY_UNRESOLVED"
+    )
+    if lactate_warning_count:
+        # Candidate-layer warnings are intentionally separate from runtime
+        # family results: Lactate is audit-only and has no normalized public
+        # dataset family.  The output validator accounts for this additive
+        # warning bucket without fabricating a family result.
+        summary["candidate_warning_count"] = lactate_warning_count
+    relationship_warning_count = int(
+        bool(relationship_summary.get("relationship_unresolved", 0))
+    )
+    if relationship_warning_count:
+        # Keep the established PASS summary byte-stable; this additive field
+        # appears only when a valid unresolved relationship warning exists.
+        summary["relationship_warning_count"] = relationship_warning_count
     if snapshot_context is not None:
         lifecycle_summary = dict(snapshot_context["merge_summary"])
         manifest["snapshot_lifecycle"] = {
