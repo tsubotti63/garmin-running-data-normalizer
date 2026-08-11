@@ -136,6 +136,9 @@ context-only and do not define direct Activity joins.
 Read
 [CS-009: From Daily-Grain Assumptions to Source-Backed Observation Contracts in Garmin Data](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/case_studies/cs-009-from-daily-grain-assumptions-to-source-backed-observation-contracts.md).
 
+Read
+[CS-010: From Real-Data Edge Cases to Evidence-Preserving Snapshot Semantics](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/case_studies/cs-010-from-real-data-edge-cases-to-evidence-preserving-snapshot-semantics.md).
+
 For the v1.3 design walkthrough on Zenn:
 [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) /
 [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract).
