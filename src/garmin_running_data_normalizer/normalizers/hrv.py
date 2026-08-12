@@ -214,7 +214,7 @@ def normalize_hrv_daily_assets(
             }
         )
     review_count = conflict_count + invalid_value_count + missing_date_count
-    return {
+    result = {
         "records": records,
         "audit": {
             "format": "garmin-running-data-normalizer-hrv-daily-audit-v1",
@@ -238,6 +238,14 @@ def normalize_hrv_daily_assets(
             "source_hashes_exposed": False,
         },
     }
+    if review_count:
+        result["audit"].update(
+            {
+                "review_required_count": review_count,
+                "review_item_count": review_count,
+            }
+        )
+    return result
 
 
 __all__ = ["HRV_DAILY_FIELDS", "normalize_hrv", "normalize_hrv_daily_assets"]

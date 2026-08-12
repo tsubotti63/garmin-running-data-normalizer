@@ -172,11 +172,14 @@ def finalize_daily(
         output.append(strip_internal_fields(rows[0]) if strip_internal_fields else rows[0])
         if len(rows) > 1 and dedupe_exact_duplicates:
             dedupe_method = "exact_canonical_duplicate_collapsed"
-    review_items = (
-        sum(excluded_reasons.values())
-        + review_key_count
-        + (multi_variant_key_count if preserve_observed_variants else 0)
+    # Exclusions are evidence about records that could not enter the accepted
+    # population; they are not themselves review-required observations.  Keep
+    # the two counters separate so an excluded-only family remains a clean PASS
+    # while its exclusion evidence stays visible in the audit.
+    review_required_count = review_key_count + (
+        multi_variant_key_count if preserve_observed_variants else 0
     )
+    review_items = review_required_count
     audit = {
         "format": "garmin-running-data-normalizer-daily-metric-audit-v1",
         "dataset": dataset,
@@ -217,14 +220,23 @@ def finalize_daily(
                 "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
             }
         )
-    if duplicate_group_count and (dedupe_exact_duplicates or provenance_conflict_predicate is not None):
+    if (
+        source_record_count
+        and (
+            dedupe_exact_duplicates
+            or provenance_conflict_predicate is not None
+            or excluded_reasons
+            or review_required_count
+        )
+    ):
         audit.update(
             {
                 "duplicate_group_count": duplicate_group_count,
                 "duplicate_row_count": duplicate_row_count,
                 "dedupe_method": dedupe_method,
-                "review_required_count": review_key_count,
                 "divergent_duplicate_count": divergent_duplicate_count,
+                "review_required_count": review_required_count,
+                "review_item_count": review_items,
             }
         )
     return DailyMetricResult(

@@ -42,7 +42,7 @@ by `vo2max_source_series`; neither series overwrites the other.
 | Dataset | Stable key | Public fields | Interpretation boundary |
 |---|---|---|---|
 | `race_prediction_daily` | `calendar_date`, `observation_timestamp` | date, source observation timestamp, and 5K/10K/Half/Marathon predictions | Garmin algorithm predictions, not measured race results or calculations made by this package |
-| `sleep_daily` | `sleep_day` | `sleep_day`, local start/end, sleep-window and duration minutes, stage minutes, score, awake minutes, availability flags, normalization/reason fields | Exact canonical duplicates collapse deterministically with audit counts; divergent or provenance-conflicted duplicates and missing/invalid windows remain reviewable; missing awake time is never derived |
+| `sleep_daily` | `sleep_day` | `sleep_day`, local start/end, sleep-window and duration minutes, stage minutes, score, awake minutes, availability flags, normalization/reason fields | Exact canonical duplicates collapse deterministically with audit counts; divergent or provenance-conflicted duplicates and missing/invalid windows remain reviewable; `sleep_duration_minutes_ex_awake` sums observed finite deep/light/REM stages when present, otherwise uses an agreeing approved direct source alias or remains null; awake time is never derived |
 | `uds_daily` | `calendar_date` | date; steps, distance, calories and heart-rate fields; Body Battery charged/drained; total stress values; three `raw_has_*` flags | Sparse generation-specific source context; excluded respiration, detailed stress, hydration, and private provenance are not reconstructed |
 | `acute_training_load_daily` | `calendar_date`, `observation_timestamp` | date, source timestamp, ACWR fields, and acute/chronic load values | Garmin source values only; the ratio is not recalculated when absent |
 | `training_readiness_daily` | `calendar_date`, `observation_timestamp` | date and source timestamp; readiness score/level/recovery; ACWR, stress-history, HRV and sleep factors; acute load; HRV weekly average; valid-sleep and sleep-score fields | HRV-labelled fields are Garmin source-provided readiness components, not HRV values calculated by this package |
@@ -72,6 +72,29 @@ reported as `SKIPPED_NOT_PRESENT` and does not fail the run.
 
 Health Status is deferred from v1.3. Its fields are not promoted to the public
 registry, Run-All output, Snapshot merge, or schema catalog.
+
+## Sleep duration contract (v1.3.3 patch candidate)
+
+`sleep_duration_minutes_ex_awake` is a derived restoration of the observed
+Sleep stage contract, not a recalculation from the sleep window. When one or
+more finite deep, light, or REM stage values are present, only those observed
+values are summed. An absent stage is not replaced with zero, and awake minutes
+or `sleep_window_minutes_including_awake - sleep_awake_minutes` are never used.
+
+Only when all three stages are absent may the approved direct aliases
+`sleepTimeSeconds`, `totalSleepSeconds`, `durationInSeconds`, and
+`sleepDuration` supply a value. Equal finite aliases collapse deterministically;
+conflicting finite aliases fail closed rather than using first-wins or
+latest-wins. If no authoritative direct value exists, the result is `null`.
+Explicit zero remains an observed value. The field remains nullable and keeps
+the same `sleep_day` grain and stable key.
+
+Sleep rows with `sleep_normalization_status=available` and
+`sleep_source_available_for_analysis_flag=true` may be used as same-day context.
+`needs_review` and `excluded` rows remain evidence but are not eligible for an
+Activity context join. `review_required_count` is separate from
+`excluded_record_count`; an excluded-only family is a clean `PASS` with its
+exclusion evidence retained.
 
 ## Relationship and projection contract
 

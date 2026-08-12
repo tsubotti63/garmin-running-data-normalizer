@@ -218,10 +218,11 @@ def _normalize_daily(
                 if lineage:
                     evidence["snapshot_lineage"] = dict(lineage)
                 observed_variants.append(evidence)
+    review_required_count = len(conflicts)
     audit = {
         "format": "garmin-running-data-normalizer-performance-daily-audit-v1",
         "dataset": dataset,
-        "status": "PASS_WITH_REVIEW_ITEMS" if excluded_reasons else "PASS",
+        "status": "PASS_WITH_REVIEW_ITEMS" if review_required_count else "PASS",
         "detected_asset_count": len(selected_assets),
         "source_record_count": source_record_count,
         "accepted_record_count": len(normalized),
@@ -241,7 +242,7 @@ def _normalize_daily(
     if preserve_observed_variants:
         audit.update(
             {
-                "status": "PASS_WITH_REVIEW_ITEMS" if conflicts or excluded_reasons else "PASS",
+                "status": "PASS_WITH_REVIEW_ITEMS" if conflicts else "PASS",
                 "canonical_key_count": len(by_date),
                 "single_variant_key_count": len(by_date) - len(conflicts),
                 "multi_variant_key_count": len(conflicts),
@@ -254,6 +255,13 @@ def _normalize_daily(
                 "automatic_winner": False,
                 "observed_variants": observed_variants,
                 "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
+            }
+        )
+    if excluded_reasons or review_required_count:
+        audit.update(
+            {
+                "review_required_count": review_required_count,
+                "review_item_count": review_required_count,
             }
         )
     return DailyNormalizationResult(normalized, audit)
