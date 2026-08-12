@@ -6,9 +6,10 @@ or a real Garmin export.
 The root `QUICK_START.md` is a short router to the product guides. This file
 contains the complete synthetic Product Quick Start.
 
-Current stable release: v1.3.2. The current release documents currently serve
-stable v1.3.2 guidance, and Production PyPI provides the published v1.3.2
-distribution.
+Current stable release: v1.3.3 (release candidate; publication pending). The
+current release documents currently serve stable v1.3.3 guidance, while
+Production PyPI remains the published v1.3.2 baseline until the publication
+gate completes.
 
 ## Prerequisites
 
@@ -369,7 +370,7 @@ file/session/lap identity, and converts selected invalid metric sentinels to
 null before scaling. It emits Activity/FIT links only from evidence-qualified
 mutual unique matches; timestamp-only joins are rejected.
 
-Sleep Daily and HRV Daily are optional stable v1.3.2 Run-All datasets. Sleep
+Sleep Daily and HRV Daily are optional stable v1.3.3 Run-All datasets. Sleep
 performs no filling, day-shift inference, score recalculation, or Activity join.
 HRV is `analysis_reference_only`: conflicting FIT values are not averaged, and
 Health Status JSON is not promoted as equivalent HRV evidence. Health Status

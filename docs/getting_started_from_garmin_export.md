@@ -1,8 +1,9 @@
 # Getting Started from a Garmin Account Data Export
 
 This guide takes a first-time user from an official Garmin Account Data Export
-to a completed local Run-All handoff. It applies to the current stable Garmin
-Running Data Normalizer `v1.3.2` release.
+to a completed local Run-All handoff. It applies to the current stable v1.3.3
+Garmin Running Data Normalizer release source. Until the separate publication
+gate completes, the commands below install the published v1.3.2 baseline.
 
 Use this guide for a full Garmin Account Data Export. An individual Activity
 GPX or TCX export is not the input described here.
@@ -46,10 +47,10 @@ extracted duplicate of that same inner content in the input root.
 Keep generated output outside the input root. Run-All reads the Export and does
 not modify it.
 
-## 3. Install stable v1.3.2
+## 3. Install the published baseline
 
-Create an isolated environment if practical, then install the exact stable
-version from Production PyPI:
+Create an isolated environment if practical, then install the exact published
+baseline from Production PyPI:
 
 ### macOS / Linux
 
@@ -73,7 +74,7 @@ python -m venv .venv
 installed and the Windows Python launcher is available, you can use
 `py -3.11 -m venv .venv` instead.
 
-Stable v1.3.2 installs `tzdata` automatically on Windows. Confirm both the
+The v1.3.2 baseline installs `tzdata` automatically on Windows. Confirm both the
 package version and the existing IANA timezone contract with:
 
 ```powershell
@@ -83,8 +84,8 @@ package version and the existing IANA timezone contract with:
 Earlier maintainer-owned physical Windows validation from Production PyPI
 confirmed automatic `tzdata` installation and successful `Asia/Tokyo`
 resolution without any manual dependency install. Current v1.3.2 CI covers the
-packaged Windows path; both remain bounded evidence rather than a universal
-compatibility claim.
+packaged Windows path; the v1.3.3 release source retains this contract. Both
+remain bounded evidence rather than a universal compatibility claim.
 
 ## 4. Run one-shot normalization first
 

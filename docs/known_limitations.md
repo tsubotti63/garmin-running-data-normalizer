@@ -1,8 +1,9 @@
 # Known Limitations
 
-These limitations apply to the published stable v1.3.2 GitHub Release and
-Production PyPI distribution. They remain explicit Product boundaries after
-publication.
+These limitations apply to the current stable v1.3.3 release source. The
+published v1.3.2 GitHub Release and Production PyPI distribution remain the
+external baseline until the separate publication gate completes. These remain
+explicit Product boundaries.
 
 ## Input and orchestration
 
@@ -51,7 +52,7 @@ publication.
   recalculate scores, fill missing days, infer naps, shift days, or create an
   Activity relationship. A same-day `context_only` comparison must keep Sleep
   and Activity facts separate.
-- The v1.3.3 Sleep contract candidate derives ex-awake duration only from
+- The v1.3.3 Sleep contract derives ex-awake duration only from
   observed finite deep/light/REM stages when any are present. It never fills a
   missing stage with zero or subtracts awake time from the sleep window. When
   all stages are absent, only the approved direct aliases
@@ -100,7 +101,7 @@ publication.
 - Hosted processing, Garmin authentication, Open-Meteo, JMA, Instagram,
   wellness/coaching interpretation, Parquet output, and automatic personal
   analysis are outside the stable scope.
-- Stable v1.3.2 retains `tzdata` as a Windows-only runtime dependency and emits
+- Stable v1.3.3 retains `tzdata` as a Windows-only runtime dependency and emits
   the bounded `TIMEZONE_DATA_UNAVAILABLE` diagnostic if IANA timezone data is
   unavailable in an incomplete environment. Validation covers GitHub Actions
   `windows-latest` and one maintainer-owned physical Windows Production PyPI

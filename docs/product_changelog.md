@@ -4,7 +4,7 @@ This file records factual Garmin Running Data Normalizer product changes. The
 Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
 Platform maintains its own separate changelog.
 
-## v1.3.3 — unreleased Sleep contract restoration candidate
+## v1.3.3 — release candidate Sleep contract restoration
 
 - Restores the approved observed-stage Sleep duration contract with an
   all-stages-absent direct fallback and fail-closed alias conflicts.

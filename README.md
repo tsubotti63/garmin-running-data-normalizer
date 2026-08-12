@@ -60,14 +60,14 @@ Select either preview to inspect its full-size accessible SVG.
 See the
 [asset sources and reproduction notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/README.md).
 
-Current stable release: **v1.3.2** · Python **3.11+** · Apache License 2.0
+Current stable release: **v1.3.3** · Python **3.11+** · Apache License 2.0
 
-v1.3.2 is published as an annotated tag, the latest stable GitHub Release, and
-a Production PyPI distribution. The release artifacts were built and verified
-from the reviewed release commit through GitHub Actions Trusted Publishing.
+v1.3.3 is the reviewed release candidate. Tag, GitHub Release, and Production
+PyPI publication remain separate gates; until those gates complete, the
+published v1.3.2 artifact remains the Production PyPI baseline.
 
-v1.3.2 is a Snapshot correctness and evidence-preservation patch. The v1.3.0
-dataset and runtime contracts remain unchanged.
+v1.3.3 restores the approved Sleep contract and keeps the v1.3.0 dataset and
+runtime contracts unchanged.
 
 - [Install from PyPI](https://pypi.org/project/garmin-running-data-normalizer/)
 - [Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md)
@@ -190,11 +190,11 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. Stable v1.3.2 installs
-`tzdata` automatically on Windows so Python can resolve the existing IANA
-`Asia/Tokyo` timezone contract. macOS and Linux continue to use their system
-timezone data. The unpinned install command resolves the current Production
-PyPI release; use `==1.3.2` when exact release identity is required.
+`python -m garmin_running_data_normalizer --version`. The v1.3.3 candidate
+installs `tzdata` automatically on Windows so Python can resolve the existing
+IANA `Asia/Tokyo` timezone contract. macOS and Linux continue to use their
+system timezone data. Production PyPI remains v1.3.2 until the separate
+publication gate completes.
 
 Maintainers can reproduce the packaging gate without uploading anything:
 

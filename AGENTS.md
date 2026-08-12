@@ -105,7 +105,7 @@ Human向けチャット出力は日本語を基本とし、最小構成にしま
 
 ### Current Phase
 
-`Stable v1.3.2 maintenance and public-surface alignment`
+`Stable v1.3.3 maintenance and public-surface alignment`
 
 ### Mandatory Reading
 
