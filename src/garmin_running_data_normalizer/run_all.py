@@ -952,13 +952,14 @@ def _family_results(
         review_item_count = 0
         if family in daily_dataset_by_family:
             audit = performance_audit[daily_dataset_by_family[family]]
-            review_item_count = int(audit.get("excluded_record_count", 0))
-            review_item_count += int(audit.get("review_key_count", 0))
-            review_item_count += int(audit.get("same_day_conflict_count", 0))
-            review_item_count += int(audit.get("invalid_value_count", 0))
-            review_item_count += int(audit.get("missing_date_count", 0))
-            review_item_count += int(
-                audit.get("canonicalization_unresolved_count", 0)
+            review_item_count = int(
+                audit.get("review_required_count", 0)
+                or audit.get("review_item_count", 0)
+                or audit.get("review_key_count", 0)
+                + audit.get("same_day_conflict_count", 0)
+                + audit.get("invalid_value_count", 0)
+                + audit.get("missing_date_count", 0)
+                + audit.get("canonicalization_unresolved_count", 0)
             )
             if review_item_count:
                 family_warnings += 1
@@ -988,6 +989,7 @@ def _family_results(
             "record_count": family_record_counts[family],
             "warning_count": family_warnings,
             "error_count": 0,
+            "review_required_count": review_item_count,
             "review_item_count": review_item_count,
         }
         if family == "fit":
@@ -1156,8 +1158,11 @@ def run_all(
         "status": (
             "PASS_WITH_REVIEW_ITEMS"
             if any(
-                int(performance_audit[name].get("excluded_record_count", 0))
-                or int(performance_audit[name].get("canonicalization_unresolved_count", 0))
+                int(
+                    performance_audit[name].get("review_required_count", 0)
+                    or performance_audit[name].get("review_item_count", 0)
+                    or performance_audit[name].get("canonicalization_unresolved_count", 0)
+                )
                 for name in ("hill_score_daily", "endurance_score_daily")
             )
             else "PASS"

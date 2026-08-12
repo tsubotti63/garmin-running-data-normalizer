@@ -8,9 +8,27 @@ from zoneinfo import ZoneInfo
 
 from ..common.time import daily_calendar_date
 from ..intake.discovery import DiscoveredAsset, load_json_assets
-from .daily_metrics import DailyMetricResult, finalize_daily, load_rows, logical_basename, stable_json
+from .daily_metrics import (
+    DailyMetricConflictError,
+    DailyMetricResult,
+    finalize_daily,
+    load_rows,
+    logical_basename,
+    stable_json,
+)
 
 MAX_SAFE_INTEGER = (1 << 53) - 1
+SLEEP_STAGE_ALIASES = (
+    ("deepSleepSeconds", "deep_sleep_seconds"),
+    ("lightSleepSeconds", "light_sleep_seconds"),
+    ("remSleepSeconds", "rem_sleep_seconds"),
+)
+SLEEP_DIRECT_DURATION_ALIASES = (
+    "sleepTimeSeconds",
+    "totalSleepSeconds",
+    "durationInSeconds",
+    "sleepDuration",
+)
 
 
 def _records(value: Any) -> list[dict[str, Any]]:
@@ -47,6 +65,42 @@ def _first_number(row: dict[str, Any], *names: str) -> int | float | None:
         if value is not None:
             return value
     return None
+
+
+def _sleep_duration_seconds(
+    row: dict[str, Any],
+) -> tuple[int | float | None, str]:
+    """Return the approved observed-stage/direct-fallback duration contract.
+
+    Stage values have precedence whenever at least one finite stage is present.
+    Missing stages are not replaced with zero.  Direct aliases are considered as
+    an allowlist: equal finite candidates collapse deterministically, while
+    differing candidates fail closed instead of using first-wins.
+    """
+    stages = [
+        _first_number(row, *aliases)
+        for aliases in SLEEP_STAGE_ALIASES
+    ]
+    observed_stages = [value for value in stages if value is not None]
+    if observed_stages:
+        return sum(observed_stages), "stage_derived"
+
+    direct_candidates = [
+        (name, _number(row.get(name)))
+        for name in SLEEP_DIRECT_DURATION_ALIASES
+    ]
+    finite_candidates = [
+        (name, value) for name, value in direct_candidates if value is not None
+    ]
+    distinct_values = {value for _name, value in finite_candidates}
+    if len(distinct_values) > 1:
+        names = ", ".join(name for name, _value in finite_candidates)
+        raise DailyMetricConflictError(
+            "sleep_daily direct duration aliases disagree: " + names
+        )
+    if finite_candidates:
+        return finite_candidates[0][1], "direct_fallback"
+    return None, "null_fallback"
 
 
 def _timestamps(value: Any, timezone_name: str) -> tuple[str | None, str | None]:
@@ -93,12 +147,7 @@ def _normalize_record(
     rem_seconds = _first_number(row, "remSleepSeconds", "rem_sleep_seconds")
     awake_seconds = _first_number(row, "awakeSleepSeconds", "awake_sleep_seconds")
     stages = [deep_seconds, light_seconds, rem_seconds]
-    stage_sum = sum(value for value in stages if value is not None) if any(
-        value is not None for value in stages
-    ) else None
-    total_seconds = stage_sum
-    if total_seconds is None:
-        total_seconds = _first_number(row, "totalSleepSeconds", "durationInSeconds", "sleepDuration")
+    total_seconds, _duration_source = _sleep_duration_seconds(row)
 
     window_minutes = None
     if start_gmt and end_gmt:
@@ -219,7 +268,7 @@ _SLEEP_PRESENCE_GROUPS = (
     ("calendarDate",),
     ("sleepStartTimestampGMT",),
     ("sleepEndTimestampGMT",),
-    ("sleepTimeSeconds", "totalSleepSeconds"),
+    ("sleepTimeSeconds", "totalSleepSeconds", "durationInSeconds", "sleepDuration"),
     ("deepSleepSeconds", "deep_sleep_seconds"),
     ("lightSleepSeconds", "light_sleep_seconds"),
     ("remSleepSeconds", "rem_sleep_seconds"),
@@ -283,6 +332,7 @@ def normalize_sleep_daily_assets(
     source_rows = [row for asset in selected for row in load_rows(asset)]
     accepted: list[dict[str, Any]] = []
     excluded: Counter[str] = Counter()
+    duration_source_counts: Counter[str] = Counter()
     for raw in source_rows:
         _start_gmt, start_local = _timestamps(
             raw.get("sleepStartTimestampGMT"), timezone_name
@@ -319,7 +369,8 @@ def normalize_sleep_daily_assets(
         light = _first_number(raw, "lightSleepSeconds", "light_sleep_seconds")
         rem = _first_number(raw, "remSleepSeconds", "rem_sleep_seconds")
         awake = _first_number(raw, "awakeSleepSeconds", "awake_sleep_seconds")
-        duration = _first_number(raw, "sleepTimeSeconds", "totalSleepSeconds")
+        duration, duration_source = _sleep_duration_seconds(raw)
+        duration_source_counts[duration_source] += 1
         score = _sleep_score(raw)
         accepted.append(
             {
@@ -339,10 +390,11 @@ def normalize_sleep_daily_assets(
                 "sleep_limitation_type": limitation,
                 "sleep_reason_code": reason,
                 "sleep_source_available_for_analysis_flag": available,
+                "_sleep_duration_source": duration_source,
                 "_sleep_presence_signature": _sleep_presence_signature(raw),
             }
         )
-    return finalize_daily(
+    result = finalize_daily(
         dataset="sleep_daily",
         key_fields=("sleep_day",),
         selected_assets=selected,
@@ -355,6 +407,18 @@ def normalize_sleep_daily_assets(
         strip_internal_fields=_strip_sleep_internal_fields,
         dedupe_exact_duplicates=True,
     )
+    result.audit["sleep_duration_source_counts"] = dict(
+        sorted(duration_source_counts.items())
+    )
+    result.audit["stage_derived_count"] = duration_source_counts["stage_derived"]
+    result.audit["direct_fallback_count"] = duration_source_counts["direct_fallback"]
+    result.audit["null_fallback_count"] = duration_source_counts["null_fallback"]
+    return result
 
 
-__all__ = ["SLEEP_DAILY_FIELDS", "normalize_sleep", "normalize_sleep_daily_assets"]
+__all__ = [
+    "SLEEP_DAILY_FIELDS",
+    "SLEEP_DIRECT_DURATION_ALIASES",
+    "normalize_sleep",
+    "normalize_sleep_daily_assets",
+]

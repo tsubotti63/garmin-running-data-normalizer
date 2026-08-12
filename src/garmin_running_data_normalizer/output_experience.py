@@ -418,8 +418,14 @@ DATASET_RELATIONSHIP_METADATA = {
             semantics="same_day_condition_context",
         ),
         cardinality="one_reviewed_sleep_state_per_sleep_day",
-        allowed_use="Same-day condition comparison while keeping Sleep separate from Activity facts.",
-        forbidden_join_guidance=("Do not merge Sleep fields into an Activity fact or infer causality.",),
+        allowed_use=(
+            "Same-day comparison using only resolved/available Sleep context while "
+            "keeping Sleep separate from Activity facts."
+        ),
+        forbidden_join_guidance=(
+            "Do not use needs_review or excluded Sleep rows for context joins, "
+            "merge Sleep fields into an Activity fact, or infer causality.",
+        ),
     ),
     "uds_daily": _relationship_metadata(
         relationship_role="condition_context",
@@ -1328,6 +1334,15 @@ def _validate_projection_inputs(
                     result.get("review_item_count", 0),
                     f"{family} review item count",
                 )
+                if "review_required_count" in result:
+                    review_required_count = _non_negative_integer(
+                        result.get("review_required_count"),
+                        f"{family} review required count",
+                    )
+                    if review_required_count != review_item_count:
+                        raise OutputExperienceError(
+                            f"{family}: review-required and review-item counts differ"
+                        )
                 if review_item_count:
                     expected_warning_count += 1
 
@@ -2175,7 +2190,10 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
     elif field.startswith("race_time_") and field.endswith("_sec"):
         unit = "second"
 
-    provenance = (
+    if dataset == "sleep_daily" and field == "sleep_duration_minutes_ex_awake":
+        provenance = "derived"
+    else:
+        provenance = (
         "provenance"
         if field.startswith("source_")
         or field.endswith("_source_path")
@@ -2191,7 +2209,7 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
             "duration_delta_seconds",
         }
         else "source"
-    )
+        )
     privacy = (
         "public_safe"
         if dataset in {"hill_score_daily", "endurance_score_daily", "race_prediction_daily"}
@@ -2207,6 +2225,14 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         else "personal"
     )
     notes = (
+        "Observed non-null deep/light/REM stage minutes are summed when any "
+        "finite stage is present. When all stages are absent, the approved "
+        "direct source aliases are used only when they agree; otherwise the "
+        "value remains null or the row fails closed. Missing stages are never "
+        "filled with zero, awake time and window-minus-awake are never used, "
+        "and available-only Sleep rows may be used as context."
+        if dataset == "sleep_daily" and field == "sleep_duration_minutes_ex_awake"
+        else
         "FIT-derived HRV is analysis_reference_only. Same-date differing values remain unresolved, and this dataset is not a daily source of truth."
         if dataset == "hrv_daily"
         else

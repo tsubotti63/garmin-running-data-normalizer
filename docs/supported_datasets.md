@@ -22,7 +22,7 @@ machine authorities.
 | `hill_score_daily` | exact-suffix `HillScore*.json`; Run-All | Authoritative public-safe daily Hill Score state | calendar day | `calendar_date` | no | aggregate source-lineage audit; private source fields are not emitted | Standalone daily performance context; no Activity relationship is defined |
 | `endurance_score_daily` | exact-suffix `EnduranceScore*.json`; Run-All | Authoritative public-safe daily Endurance Score state | calendar day | `calendar_date` | no | aggregate source-lineage audit; private source fields are not emitted | Standalone daily performance context; no Activity relationship is defined |
 | `race_prediction_daily` | `RunRacePredictions*.json`; Run-All | Garmin source-provided race predictions | source observation | `calendar_date`, `observation_timestamp` | no | aggregate source-lineage audit | Standalone prediction context; not a measured race result |
-| `sleep_daily` | `*sleepData.json`; Run-All | Bounded normalized sleep state and explicit review rows | sleep day | `sleep_day` | no | aggregate source-lineage audit | Standalone condition context; missing values are not inferred |
+| `sleep_daily` | `*sleepData.json`; Run-All | Bounded normalized sleep state and explicit review rows; observed-stage duration restoration is nullable | sleep day | `sleep_day` | no | aggregate source-lineage audit | Standalone available-only condition context; missing values are not inferred |
 | `uds_daily` | `UDSFile*.json`; Run-All | Selected source-provided activity, heart-rate, Body Battery, and stress context | calendar day | `calendar_date` | no | aggregate source-lineage audit | Generation-aware condition context with explicit source-presence flags |
 | `acute_training_load_daily` | `MetricsAcuteTrainingLoad*.json`; Run-All | Source-provided acute/chronic load observations | source observation | `calendar_date`, `observation_timestamp` | no | aggregate source-lineage audit | No ratio or status recomputation; no daily row selection |
 | `training_readiness_daily` | `TrainingReadinessDTO*.json`; Run-All | Source-provided readiness and component observations | source observation | `calendar_date`, `observation_timestamp` | no | aggregate source-lineage audit | HRV-labelled components remain source-provided readiness fields |
@@ -40,7 +40,9 @@ source condition and does not add a warning. Exact duplicates are deduplicated.
 Snapshot-based Endurance and UDS values that differ for one stable key are
 preserved in their audit evidence while canonicalization remains unresolved;
 same-export malformed/divergent values fail closed. The HRV reference preserves
-an explicit unresolved review row. Missing from a later Snapshot never means
+an explicit unresolved review row. Sleep exact duplicates collapse with
+`review_required_count=0`; exclusions remain separate from review-required
+observations. Missing from a later Snapshot never means
 delete. The shared generation/source boundary and exact field contracts are
 defined in [Wellness and Daily Metrics](wellness_metrics.md).
 

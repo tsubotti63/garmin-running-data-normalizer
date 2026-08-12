@@ -51,6 +51,16 @@ publication.
   recalculate scores, fill missing days, infer naps, shift days, or create an
   Activity relationship. A same-day `context_only` comparison must keep Sleep
   and Activity facts separate.
+- The v1.3.3 Sleep contract candidate derives ex-awake duration only from
+  observed finite deep/light/REM stages when any are present. It never fills a
+  missing stage with zero or subtracts awake time from the sleep window. When
+  all stages are absent, only the approved direct aliases
+  (`sleepTimeSeconds`, `totalSleepSeconds`, `durationInSeconds`,
+  `sleepDuration`) may provide a value; conflicting aliases fail closed and no
+  authoritative value remains `null`.
+- Sleep `review_required_count` and `excluded_record_count` are separate audit
+  concepts. Excluded-only evidence does not create a review-required warning;
+  `needs_review` and excluded rows remain ineligible for Activity context use.
 - The v1.3 HRV reference does not average conflicting same-date
   values. Garmin/FIT raw sentinel
   `65535` is excluded, and Health Status HRV is not asserted to be equivalent to

@@ -20,6 +20,14 @@ winner, observed variant, candidate, or normalized value. Existing
 Both machine authorities record the exact installed `product_version`;
 `ANALYSIS_CONTEXT.json` preserves the same value for standalone handoff.
 
+For the v1.3.3 Sleep contract candidate, `sleep_duration_minutes_ex_awake` is
+an observed-stage sum when any finite deep/light/REM stage exists, with an
+approved direct-source fallback only when all stages are absent. Missing stages
+are not zero-filled; awake and window-minus-awake are not used; conflicting
+direct aliases fail closed. Available-only Sleep rows may be used as
+`context_only` analysis context, while `needs_review` and excluded rows remain
+ineligible.
+
 The Dataset Catalog, Dataset Relationship Catalog, and Analysis Handoff
 Specification are normative human-readable guidance projected from those
 authorities.
