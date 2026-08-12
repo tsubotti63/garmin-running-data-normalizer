@@ -24,7 +24,7 @@ def _copy_validator_inputs(destination: Path) -> None:
 def test_repository_public_product_state_passes() -> None:
     version, findings = validate(ROOT)
 
-    assert version == "1.3.2"
+    assert version == "1.3.3"
     assert findings == []
 
 
@@ -139,15 +139,15 @@ def test_package_version_drift_fails(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
     version_source = tmp_path / VERSION_SOURCE
     version_source.write_text(
-        version_source.read_text(encoding="utf-8").replace('"1.3.2"', '"1.3.3"'),
+        version_source.read_text(encoding="utf-8").replace('"1.3.3"', '"1.3.4"'),
         encoding="utf-8",
     )
 
     version, findings = validate(tmp_path)
 
-    assert version == "1.3.3"
+    assert version == "1.3.4"
     assert any(
-        "current stable marker does not match package v1.3.3" in item
+        "current stable marker does not match package v1.3.4" in item
         for item in findings
     )
 
@@ -230,7 +230,7 @@ def test_obsolete_agents_phase_fails(tmp_path: Path) -> None:
 def test_current_cs010_public_case_study_passes() -> None:
     version, findings = validate(ROOT)
 
-    assert version == "1.3.2"
+    assert version == "1.3.3"
     assert not any(CS010_DOCUMENT in item for item in findings)
 
 

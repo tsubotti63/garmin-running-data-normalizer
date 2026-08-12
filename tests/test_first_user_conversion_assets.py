@@ -144,7 +144,7 @@ def test_readme_uses_stable_absolute_asset_urls() -> None:
             "https://github.com/tsubotti63/garmin-running-data-normalizer/"
             f"blob/main/docs/assets/first-user-conversion/{name}"
         ) == 1
-    assert "Current stable release: **v1.3.2**" in readme
+    assert "Current stable release: **v1.3.3**" in readme
     assert "Current stable release: **v1.3.1**" not in readme
     assert "## Start here" in readme
     assert "### Who this is for" in readme
@@ -161,7 +161,7 @@ def test_japanese_readme_remains_a_short_noncanonical_summary() -> None:
     readme = (ROOT / "README.ja.md").read_text(encoding="utf-8")
 
     assert len(readme) < 5_000
-    assert readme.count("v1.3.2") == 1
+    assert readme.count("v1.3.3") == 1
     assert "v1.3.1" not in readme
     assert "|---" not in readme
     assert "英語の契約文書が正本です" in readme

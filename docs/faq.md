@@ -1,7 +1,9 @@
 # Frequently Asked Questions
 
-These short answers apply to Garmin Running Data Normalizer `v1.3.2` and route
-to the current product authorities.
+These short answers apply to the current stable Garmin Running Data Normalizer
+`v1.3.3` release source and route to the current product authorities. Production
+PyPI remains the published v1.3.2 baseline until the separate publication gate
+completes.
 
 ## Getting started
 
@@ -23,10 +25,11 @@ synthetic data.
 
 ### Which version is stable?
 
-`v1.3.2` is the current stable release on GitHub and Production PyPI. It
-includes the compatible one-shot workflow, optional Snapshot Accumulation, the
-Windows timezone-data hotfix, and the additive Wellness/Metrics datasets
-documented for v1.3.
+`v1.3.3` is the current stable release source. It restores the approved Sleep
+contract while preserving the compatible one-shot workflow, optional Snapshot
+Accumulation, the Windows timezone-data hotfix, and the additive
+Wellness/Metrics datasets documented for v1.3. Production PyPI remains v1.3.2
+until the separate publication gate completes.
 
 ## Garmin Export and Run-All
 
@@ -205,7 +208,7 @@ environment with:
 python -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
 ```
 
-For a normal v1.3.2 Production PyPI installation, no separate manual
+For a normal v1.3.2 Production PyPI installation, no separate
 `pip install tzdata` step is expected. If the check still fails, reinstall
 v1.3.2 in a new environment and include only sanitized environment details in a
 support report.
