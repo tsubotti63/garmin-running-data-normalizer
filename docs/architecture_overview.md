@@ -3,7 +3,7 @@
 - Applies to: stable v1.3.3
 - Compatibility family: stable 1.x
 - Authority: human-readable architecture overview
-- Last reviewed: 2026-08-11
+- Last reviewed: 2026-08-13
 
 ## Current stable architecture
 
@@ -108,14 +108,15 @@ not redefine normalization semantics.
 
 ## Packaging, release, and CI status
 
-Version 1.3.3 is the current release candidate. Its tag, GitHub Release, and
-Production PyPI publication remain separate pending gates; the published
-v1.3.2 artifact remains the external baseline until those gates complete. The
-package is licensed under Apache-2.0 for Python 3.11 or later. Packaging
-metadata derives the version from the package source. CI
-validates the repository on Ubuntu and the installed runtime path on
-`windows-latest`; Windows receives `tzdata` through a conditional dependency.
-This is bounded compatibility evidence, not a universal platform guarantee.
+Version 1.3.3 is published as the annotated tag, the
+[latest stable GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.3),
+and the
+[latest Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.3.3/).
+The package is licensed under Apache-2.0 for Python 3.11 or later. Packaging
+metadata derives the version from the package source. CI validates the
+repository on Ubuntu and the installed runtime path on `windows-latest`;
+Windows receives `tzdata` through a conditional dependency. This is bounded
+compatibility evidence, not a universal platform guarantee.
 
 ## ACP adoption and Product authority
 

@@ -6,10 +6,9 @@ or a real Garmin export.
 The root `QUICK_START.md` is a short router to the product guides. This file
 contains the complete synthetic Product Quick Start.
 
-Current stable release: v1.3.3 (release candidate; publication pending). The
-current release documents currently serve stable v1.3.3 guidance, while
-Production PyPI remains the published v1.3.2 baseline until the publication
-gate completes.
+Current stable release: v1.3.3. The current release documents currently serve
+stable v1.3.3 guidance, and the same version is available from the latest
+GitHub Release and Production PyPI.
 
 ## Prerequisites
 
@@ -17,24 +16,24 @@ gate completes.
 - Git
 - A local shell: macOS/Linux shell or Windows PowerShell
 
-## Install stable v1.3.2
+## Install stable v1.3.3
 
 Install the current stable distribution from Production PyPI. Pin the exact
 version when release identity must be reproducible:
 
 ```bash
-python -m pip install garmin-running-data-normalizer==1.3.2
+python -m pip install garmin-running-data-normalizer==1.3.3
 garmin-running-data-normalizer --version
 ```
 
 The version command prints
-`python -m garmin_running_data_normalizer 1.3.2`. The equivalent module command
+`python -m garmin_running_data_normalizer 1.3.3`. The equivalent module command
 is `python -m garmin_running_data_normalizer --version`.
 
-On Windows, v1.3.2 automatically installs `tzdata` through its conditional
+On Windows, v1.3.3 automatically installs `tzdata` through its conditional
 runtime dependency. One maintainer-owned physical Windows clean install of
 v1.2.1 previously confirmed that behavior, `Asia/Tokyo` resolution, and the
-tracked Synthetic Run-All without a manual `tzdata` install. Current v1.3.2
+tracked Synthetic Run-All without a manual `tzdata` install. Current v1.3.3
 Windows package paths are also validated by `windows-latest`; this remains
 bounded evidence, not a universal compatibility claim.
 

@@ -2,8 +2,7 @@
 
 This guide takes a first-time user from an official Garmin Account Data Export
 to a completed local Run-All handoff. It applies to the current stable v1.3.3
-Garmin Running Data Normalizer release source. Until the separate publication
-gate completes, the commands below install the published v1.3.2 baseline.
+Garmin Running Data Normalizer release published on GitHub and Production PyPI.
 
 Use this guide for a full Garmin Account Data Export. An individual Activity
 GPX or TCX export is not the input described here.
@@ -56,17 +55,17 @@ baseline from Production PyPI:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install garmin-running-data-normalizer==1.3.2
+.venv/bin/python -m pip install garmin-running-data-normalizer==1.3.3
 .venv/bin/python -m garmin_running_data_normalizer --version
 ```
 
-The version command for this guide should report `1.3.2`.
+The version command for this guide should report `1.3.3`.
 
 ### Windows PowerShell
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer==1.3.2
+.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer==1.3.3
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer --version
 ```
 
@@ -74,7 +73,7 @@ python -m venv .venv
 installed and the Windows Python launcher is available, you can use
 `py -3.11 -m venv .venv` instead.
 
-The v1.3.2 baseline installs `tzdata` automatically on Windows. Confirm both the
+The v1.3.3 release installs `tzdata` automatically on Windows. Confirm both the
 package version and the existing IANA timezone contract with:
 
 ```powershell
@@ -83,9 +82,9 @@ package version and the existing IANA timezone contract with:
 
 Earlier maintainer-owned physical Windows validation from Production PyPI
 confirmed automatic `tzdata` installation and successful `Asia/Tokyo`
-resolution without any manual dependency install. Current v1.3.2 CI covers the
-packaged Windows path; the v1.3.3 release source retains this contract. Both
-remain bounded evidence rather than a universal compatibility claim.
+resolution without any manual dependency install. Current v1.3.3 CI covers the
+packaged Windows path and the published v1.3.3 package retains this contract.
+Both remain bounded evidence rather than a universal compatibility claim.
 
 ## 4. Run one-shot normalization first
 

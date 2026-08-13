@@ -3,9 +3,9 @@
 このファイルは、初めて利用する方向けの短い日本語入口です。仕様や契約の
 正本は、英語の [`README.md`](README.md) とリンク先のProduct文書です。
 
-現行の安定版は **v1.3.3** です。Versionや変更履歴の正本は英語のREADMEと
-Release Notesを確認してください。Production PyPIの公開ベースラインは、
-別の公開ゲートが完了するまでv1.3.2です。
+現行の安定版は **v1.3.3** です。[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/latest)と
+[Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/)で公開済みです。
+Versionや変更履歴の正本は英語のREADMEとRelease Notesを確認してください。
 
 ## 何をするOSSか
 

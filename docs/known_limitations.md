@@ -1,9 +1,8 @@
 # Known Limitations
 
-These limitations apply to the current stable v1.3.3 release source. The
-published v1.3.2 GitHub Release and Production PyPI distribution remain the
-external baseline until the separate publication gate completes. These remain
-explicit Product boundaries.
+These limitations apply to the current stable v1.3.3 release published as the
+latest GitHub Release and Production PyPI distribution. These remain explicit
+Product boundaries.
 
 ## Input and orchestration
 
@@ -108,6 +107,10 @@ explicit Product boundaries.
   clean install. This does not establish universal Windows compatibility.
 - External-safe output is opt-in, month-granularity, Activities-only, and does
   not automatically upload or provide provider-specific privacy guarantees.
+- Production PyPI `1.3.3` is immutable. Its long description preserves the
+  publication-time README snapshot, including pre-publication candidate
+  wording; current repository documentation is the maintained public truth for
+  future package builds.
 
 The documented CLI and versioned Run-All output contract are stable for `1.x`.
 Other Python modules are usable but are not all promoted to an independently

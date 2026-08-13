@@ -13,7 +13,12 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
-## v1.3.3 — unreleased patch candidate
+## v1.3.3 — stable Production patch release
+
+Published on 2026-08-13 JST as the annotated `v1.3.3` tag, the latest stable
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.3),
+and the verified
+[Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.3.3/).
 
 - Restores the approved observed Sleep-stage duration contract with direct
   fallback only when every stage is absent; missing stages remain missing,
@@ -23,8 +28,7 @@ canonical platform repository:
   metric summaries so excluded-only input does not create a review-required
   warning.
 - Aligns the public Run-All and Python Sleep helper semantics and documents the
-  available-only context boundary. Release, Tag, and PyPI publication remain
-  separate gates.
+  available-only context boundary.
 
 ## v1.3.2 — stable Production patch release
 

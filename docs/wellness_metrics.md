@@ -73,7 +73,7 @@ reported as `SKIPPED_NOT_PRESENT` and does not fail the run.
 Health Status is deferred from v1.3. Its fields are not promoted to the public
 registry, Run-All output, Snapshot merge, or schema catalog.
 
-## Sleep duration contract (v1.3.3 patch candidate)
+## Sleep duration contract (v1.3.3 stable patch release)
 
 `sleep_duration_minutes_ex_awake` is a derived restoration of the observed
 Sleep stage contract, not a recalculation from the sleep window. When one or
