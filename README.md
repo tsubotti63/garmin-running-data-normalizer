@@ -62,9 +62,8 @@ See the
 
 Current stable release: **v1.3.3** · Python **3.11+** · Apache License 2.0
 
-v1.3.3 is the reviewed release candidate. Tag, GitHub Release, and Production
-PyPI publication remain separate gates; until those gates complete, the
-published v1.3.2 artifact remains the Production PyPI baseline.
+v1.3.3 is published as the annotated tag, the latest stable GitHub Release, and
+the latest Production PyPI distribution.
 
 v1.3.3 restores the approved Sleep contract and keeps the v1.3.0 dataset and
 runtime contracts unchanged.
@@ -76,8 +75,9 @@ runtime contracts unchanged.
 - [FAQ](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/faq.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
-- [v1.3.2 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.3.2.md)
-- [Published stable Release v1.3.2](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.2)
+- [v1.3.3 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.3.3.md)
+- [Published stable Release v1.3.3](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.3)
+- [Production PyPI v1.3.3](https://pypi.org/project/garmin-running-data-normalizer/1.3.3/)
 - Project story on Zenn: [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
 
 ## Why this project
@@ -190,11 +190,10 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. The v1.3.3 candidate
-installs `tzdata` automatically on Windows so Python can resolve the existing
-IANA `Asia/Tokyo` timezone contract. macOS and Linux continue to use their
-system timezone data. Production PyPI remains v1.3.2 until the separate
-publication gate completes.
+`python -m garmin_running_data_normalizer --version`. The published v1.3.3
+package installs `tzdata` automatically on Windows so Python can resolve the
+existing IANA `Asia/Tokyo` timezone contract. macOS and Linux continue to use
+their system timezone data.
 
 Maintainers can reproduce the packaging gate without uploading anything:
 

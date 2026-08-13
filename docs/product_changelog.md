@@ -4,15 +4,20 @@ This file records factual Garmin Running Data Normalizer product changes. The
 Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
 Platform maintains its own separate changelog.
 
-## v1.3.3 — release candidate Sleep contract restoration
+## v1.3.3 — stable Production Sleep contract restoration patch
+
+Status: published as an annotated tag, the latest stable
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.3),
+and a verified
+[Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.3.3/)
+on 2026-08-13 JST.
 
 - Restores the approved observed-stage Sleep duration contract with an
   all-stages-absent direct fallback and fail-closed alias conflicts.
 - Separates review-required counts from excluded-record evidence so excluded
   observations remain visible without becoming review-required warnings.
 - Keeps the 17-dataset/212-field inventory, `sleep_day` grain, stable key, and
-  context-only Activity boundary unchanged. Tag, Release, and PyPI publication
-  are separate gates.
+  context-only Activity boundary unchanged.
 
 ## v1.3.2 — stable Production patch release
 
