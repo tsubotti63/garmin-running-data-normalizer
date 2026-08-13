@@ -9,14 +9,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_SOURCE = "src/garmin_running_data_normalizer/__init__.py"
+README_JA_DOCUMENT = "README.ja.md"
+BUG_REPORT_FORM = ".github/ISSUE_TEMPLATE/bug_report.yml"
+SYNTHETIC_VALIDATION_FORM = (
+    ".github/ISSUE_TEMPLATE/synthetic_validation_report.yml"
+)
+DOCUMENTATION_PROBLEM_FORM = ".github/ISSUE_TEMPLATE/documentation_problem.yml"
 CS010_DOCUMENT = (
     "docs/case_studies/"
     "cs-010-from-real-data-edge-cases-to-evidence-preserving-snapshot-semantics.md"
 )
 CURRENT_DOCUMENTS = (
     "README.md",
+    README_JA_DOCUMENT,
     "SUPPORT.md",
-    ".github/ISSUE_TEMPLATE/bug_report.yml",
+    BUG_REPORT_FORM,
+    SYNTHETIC_VALIDATION_FORM,
+    DOCUMENTATION_PROBLEM_FORM,
     "docs/architecture_overview.md",
     "docs/dataset_relationships.md",
     "docs/faq.md",
@@ -143,6 +152,99 @@ def _has_fixed_version_placeholder(field_block: str) -> bool:
     return False
 
 
+def _checkbox_option_is_required(field_block: str, phrase: str) -> bool:
+    lines = field_block.splitlines()
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped.startswith("- label:"):
+            continue
+        if not _contains_whitespace_normalized(stripped, phrase):
+            continue
+        option_indent = len(line) - len(line.lstrip())
+        for following in lines[index + 1 :]:
+            following_indent = len(following) - len(following.lstrip())
+            if following.strip() and following_indent <= option_indent:
+                break
+            if (
+                following.strip() == "required: true"
+                and following_indent > option_indent
+            ):
+                return True
+    return False
+
+
+def _field_validation_is_required(field_block: str) -> bool:
+    lines = field_block.splitlines()
+    for index, line in enumerate(lines):
+        if line.strip() != "validations:":
+            continue
+        validation_indent = len(line) - len(line.lstrip())
+        for following in lines[index + 1 :]:
+            following_indent = len(following) - len(following.lstrip())
+            if following.strip() and following_indent <= validation_indent:
+                break
+            if (
+                following.strip() == "required: true"
+                and following_indent > validation_indent
+            ):
+                return True
+    return False
+
+
+def _private_data_encouragement_lines(text: str) -> list[str]:
+    actions = ("attach", "paste", "upload", "include", "share")
+    targets = (
+        "real garmin data",
+        "real garmin export",
+        "raw garmin export",
+        "personal health data",
+    )
+    negations = (
+        "do not",
+        "does not",
+        "must not",
+        "never",
+        "without",
+        "not attach",
+        "not paste",
+        "not upload",
+        "not include",
+        "not share",
+    )
+    findings: list[str] = []
+    for line in text.splitlines():
+        normalized = " ".join(line.lower().split())
+        if not normalized:
+            continue
+        if not any(action in normalized for action in actions):
+            continue
+        if not any(target in normalized for target in targets):
+            continue
+        if any(negation in normalized for negation in negations):
+            continue
+        findings.append(line.strip())
+    return findings
+
+
+def _validate_version_field(
+    findings: list[str], form_path: str, form_text: str
+) -> None:
+    package_version_block = _issue_form_field_block(form_text, "package_version")
+    if package_version_block is None:
+        findings.append(f"{form_path}: package_version field is missing")
+        return
+
+    version_command = "Paste the exact output of garmin-running-data-normalizer --version"
+    if not _contains_whitespace_normalized(package_version_block, version_command):
+        findings.append(
+            f"{form_path}: package_version field must request exact --version output"
+        )
+    if _has_fixed_version_placeholder(package_version_block):
+        findings.append(
+            f"{form_path}: package_version placeholder must be version-independent"
+        )
+
+
 def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
     findings: list[str] = []
     try:
@@ -180,7 +282,16 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
         else "Sleep Daily and HRV Daily are optional stable Run-All datasets."
     )
     required_markers = {
-        "README.md": ("17 stable normalized datasets",),
+        "README.md": (
+            "17 stable normalized datasets",
+            "issues/new?template=synthetic_validation_report.yml",
+            "Do not include real Garmin data or personal health information.",
+        ),
+        README_JA_DOCUMENT: (
+            "Synthetic Validation Report",
+            "issues/new?template=synthetic_validation_report.yml",
+            "個人Garminデータを含めず",
+        ),
         "SUPPORT.md": (
             "## Current Windows status",
             "Windows is an intended supported platform.",
@@ -189,10 +300,29 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
             "## Historical v1.2.0 timezone issue",
             "docs/faq.md#was-the-v120-windows-timezone-data-issue-resolved",
         ),
-        ".github/ISSUE_TEMPLATE/bug_report.yml": (
+        BUG_REPORT_FORM: (
+            "Use this form when the Product itself fails.",
+            "Documentation Problem form",
+            "Synthetic Validation Report form",
             "Do not upload files or paste real Garmin data.",
             "account identifiers, stable keys, source filenames, private paths, hashes, and personal metrics",
             "This report does not publicly disclose a suspected vulnerability or sensitive security detail.",
+        ),
+        SYNTHETIC_VALIDATION_FORM: (
+            "Use this form only for the documented Synthetic / fictional workflow.",
+            "Use the Bug Report when the Product itself fails.",
+            "Do not attach or paste real Garmin exports, personal health data",
+            "Paste the final status and exit code shown by your run.",
+            "docs/output_contract.md#status-and-exit-contract",
+            "I used only the documented Synthetic / fictional workflow for this report.",
+            "I confirm that this report does not contain real Garmin data, personal health data, account identifiers, local private paths, raw exports, private screenshots, or other sensitive information.",
+        ),
+        DOCUMENTATION_PROBLEM_FORM: (
+            "Use this form when the Product runs, but the documentation is unclear",
+            "issues/new?template=bug_report.yml",
+            "issues/new?template=synthetic_validation_report.yml",
+            "Do not attach or paste real Garmin exports, personal health data",
+            "I confirm that this report does not contain real Garmin data, personal health data, account identifiers, local private paths, or other sensitive information.",
         ),
         "docs/architecture_overview.md": (
             "- Compatibility family: stable 1.x",
@@ -255,25 +385,87 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
                 f"{status} requires exit {expected_exit}, not exit {observed_exit}"
             )
 
-    bug_form_path = ".github/ISSUE_TEMPLATE/bug_report.yml"
-    package_version_block = _issue_form_field_block(
-        contents.get(bug_form_path, ""), "package_version"
-    )
-    if package_version_block is None:
-        findings.append(f"{bug_form_path}: package_version field is missing")
-    else:
-        version_command = (
-            "Paste the exact output of garmin-running-data-normalizer --version"
-        )
-        if not _contains_whitespace_normalized(
-            package_version_block, version_command
-        ):
+    for form_path in (
+        BUG_REPORT_FORM,
+        SYNTHETIC_VALIDATION_FORM,
+        DOCUMENTATION_PROBLEM_FORM,
+    ):
+        _validate_version_field(findings, form_path, contents.get(form_path, ""))
+
+    required_form_fields = {
+        SYNTHETIC_VALIDATION_FORM: (
+            "operating_system",
+            "python_version",
+            "package_version",
+            "install_source",
+            "workflow",
+            "final_status",
+            "exit_code",
+            "run_summary",
+            "output_handoff",
+            "experience",
+            "confirmations",
+        ),
+        DOCUMENTATION_PROBLEM_FORM: (
+            "documentation_page",
+            "section_heading",
+            "step_number",
+            "expected_understanding",
+            "unclear",
+            "tried",
+            "execution_result",
+            "operating_system",
+            "python_version",
+            "package_version",
+            "privacy",
+        ),
+    }
+    for form_path, field_ids in required_form_fields.items():
+        form_text = contents.get(form_path, "")
+        for field_id in field_ids:
+            block = _issue_form_field_block(form_text, field_id)
+            if block is None:
+                findings.append(f"{form_path}: required field is missing: {field_id}")
+            elif field_id not in {"confirmations", "privacy"} and not (
+                _field_validation_is_required(block)
+            ):
+                findings.append(
+                    f"{form_path}: required field is optional: {field_id}"
+                )
+
+    checkbox_requirements = {
+        SYNTHETIC_VALIDATION_FORM: (
+            "confirmations",
+            (
+                "I used only the documented Synthetic / fictional workflow for this report.",
+                "I confirm that this report does not contain real Garmin data, personal health data, account identifiers, local private paths, raw exports, private screenshots, or other sensitive information.",
+            ),
+        ),
+        DOCUMENTATION_PROBLEM_FORM: (
+            "privacy",
+            (
+                "I confirm that this report does not contain real Garmin data, personal health data, account identifiers, local private paths, or other sensitive information.",
+            ),
+        ),
+    }
+    for form_path, (field_id, phrases) in checkbox_requirements.items():
+        block = _issue_form_field_block(contents.get(form_path, ""), field_id)
+        if block is None:
+            continue
+        for phrase in phrases:
+            if not _checkbox_option_is_required(block, phrase):
+                findings.append(
+                    f"{form_path}: required confirmation is missing or optional: {phrase}"
+                )
+
+    for form_path in (
+        BUG_REPORT_FORM,
+        SYNTHETIC_VALIDATION_FORM,
+        DOCUMENTATION_PROBLEM_FORM,
+    ):
+        for line in _private_data_encouragement_lines(contents.get(form_path, "")):
             findings.append(
-                f"{bug_form_path}: package_version field must request exact --version output"
-            )
-        if _has_fixed_version_placeholder(package_version_block):
-            findings.append(
-                f"{bug_form_path}: package_version placeholder must be version-independent"
+                f"{form_path}: form encourages public sharing of private data: {line}"
             )
 
     obsolete_phrases = {

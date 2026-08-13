@@ -1,0 +1,113 @@
+name: Synthetic validation report
+description: Report a public-safe successful run of the documented Synthetic workflow
+title: "[Synthetic Validation]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for validating the first-user workflow outside the maintainer
+        environment. Use this form only for the documented Synthetic / fictional
+        workflow. Use the Bug Report when the Product itself fails. If the
+        Product ran but the documentation was unclear, use the Documentation
+        Problem form.
+
+        **Do not attach or paste real Garmin exports, personal health data,
+        account identifiers, raw FIT/JSON/CSV data, local private paths, or
+        screenshots containing private metrics.**
+  - type: input
+    id: operating_system
+    attributes:
+      label: Operating system
+      description: Include the operating system and version.
+      placeholder: "Ubuntu 24.04"
+    validations:
+      required: true
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      placeholder: "Python 3.11.9"
+    validations:
+      required: true
+  - type: input
+    id: package_version
+    attributes:
+      label: Package version
+      description: Paste the exact output of garmin-running-data-normalizer --version.
+      placeholder: "Paste the exact output of garmin-running-data-normalizer --version"
+    validations:
+      required: true
+  - type: dropdown
+    id: install_source
+    attributes:
+      label: Install source
+      options:
+        - PyPI
+        - Source checkout
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Documented workflow and command
+      description: Name the documented path and paste only a sanitized Synthetic command.
+      placeholder: "Product Quick Start — Synthetic Run-All"
+      render: shell
+    validations:
+      required: true
+  - type: dropdown
+    id: final_status
+    attributes:
+      label: Final Product status
+      description: Paste the final status and exit code shown by your run. See the linked Output Contract below; use Bug Report for an unexpected failure.
+      options:
+        - PASS
+        - PASS_WITH_WARNINGS
+        - PARTIAL_SUCCESS
+        - Fatal error
+    validations:
+      required: true
+  - type: input
+    id: exit_code
+    attributes:
+      label: Product exit code
+      description: Use the Product exit shown by the run, not an outer shell or harness result. See https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/output_contract.md#status-and-exit-contract
+      placeholder: "Paste the Product exit code shown by the run"
+    validations:
+      required: true
+  - type: dropdown
+    id: run_summary
+    attributes:
+      label: Was run_summary.json generated?
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true
+  - type: dropdown
+    id: output_handoff
+    attributes:
+      label: Was the output handoff generated?
+      description: Confirm that START_HERE.md and the documented handoff artifacts were generated.
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true
+  - type: textarea
+    id: experience
+    attributes:
+      label: First-run experience
+      description: Tell us where you hesitated, what was unclear, and any additional comments. Write "Nothing unclear" when the path was clear.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Required confirmations
+      options:
+        - label: I used only the documented Synthetic / fictional workflow for this report.
+          required: true
+        - label: I confirm that this report does not contain real Garmin data, personal health data, account identifiers, local private paths, raw exports, private screenshots, or other sensitive information.
+          required: true
