@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible, public-safe product or documentation problem
+description: Report a reproducible, public-safe Product failure
 title: "[Bug]: "
 labels:
   - bug
@@ -7,8 +7,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for the report. Use synthetic data and remove all personal
-        Garmin information. Read SUPPORT.md before continuing.
+        Thank you for the report. Use this form when the Product itself fails.
+        If the Product ran but the documentation was unclear, use the
+        Documentation Problem form. If the documented Synthetic workflow
+        completed successfully, use the Synthetic Validation Report form.
+
+        Use synthetic data and remove all personal Garmin information. Read
+        SUPPORT.md before continuing.
   - type: textarea
     id: problem
     attributes:

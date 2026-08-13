@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 
 from scripts.validate_public_product_state import (
+    DOCUMENTATION_PROBLEM_FORM,
+    SYNTHETIC_VALIDATION_FORM,
     CS010_DOCUMENT,
     current_documents,
     validate,
@@ -135,6 +137,167 @@ def test_bug_form_without_public_safe_boundaries_fails(tmp_path: Path) -> None:
     assert any("real Garmin data" in item for item in findings)
     assert any("account identifiers" in item for item in findings)
     assert any("sensitive security detail" in item for item in findings)
+
+
+def test_synthetic_validation_form_without_privacy_confirmation_fails(
+    tmp_path: Path,
+) -> None:
+    _copy_validator_inputs(tmp_path)
+    form = tmp_path / SYNTHETIC_VALIDATION_FORM
+    form.write_text(
+        form.read_text(encoding="utf-8").replace(
+            "I confirm that this report does not contain real Garmin data, personal health data, account identifiers, local private paths, raw exports, private screenshots, or other sensitive information.",
+            "I confirm that this report is complete.",
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any(
+        SYNTHETIC_VALIDATION_FORM in item and "real Garmin data" in item
+        for item in findings
+    )
+
+
+def test_synthetic_validation_form_that_encourages_real_data_fails(
+    tmp_path: Path,
+) -> None:
+    _copy_validator_inputs(tmp_path)
+    form = tmp_path / SYNTHETIC_VALIDATION_FORM
+    form.write_text(
+        form.read_text(encoding="utf-8").replace(
+            "screenshots containing private metrics.**",
+            "screenshots containing private metrics.**\n\n"
+            "        Attach real Garmin data to help us investigate.",
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any("encourages public sharing of private data" in item for item in findings)
+
+
+def test_synthetic_only_confirmation_must_be_required(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    form = tmp_path / SYNTHETIC_VALIDATION_FORM
+    text = form.read_text(encoding="utf-8")
+    marker = (
+        "- label: I used only the documented Synthetic / fictional workflow for this report.\n"
+        "          required: true"
+    )
+    form.write_text(
+        text.replace(marker, marker.replace("required: true", "required: false")),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any("required confirmation is missing or optional" in item for item in findings)
+
+
+def test_synthetic_environment_field_must_be_required(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    form = tmp_path / SYNTHETIC_VALIDATION_FORM
+    text = form.read_text(encoding="utf-8")
+    field = (
+        "  - type: dropdown\n"
+        "    id: install_source\n"
+        "    attributes:\n"
+        "      label: Install source\n"
+        "      options:\n"
+        "        - PyPI\n"
+        "        - Source checkout\n"
+        "        - Other\n"
+        "    validations:\n"
+        "      required: true"
+    )
+    form.write_text(
+        text.replace(field, field.replace("required: true", "required: false")),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any("required field is optional: install_source" in item for item in findings)
+
+
+def test_documentation_problem_form_without_bug_routing_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    form = tmp_path / DOCUMENTATION_PROBLEM_FORM
+    form.write_text(
+        form.read_text(encoding="utf-8").replace(
+            "issues/new?template=bug_report.yml",
+            "issues",
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any(
+        DOCUMENTATION_PROBLEM_FORM in item and "bug_report.yml" in item
+        for item in findings
+    )
+
+
+def test_documentation_privacy_confirmation_must_be_required(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    form = tmp_path / DOCUMENTATION_PROBLEM_FORM
+    text = form.read_text(encoding="utf-8")
+    marker = (
+        "- label: I confirm that this report does not contain real Garmin data, personal health data, account identifiers, local private paths, or other sensitive information.\n"
+        "          required: true"
+    )
+    form.write_text(
+        text.replace(marker, marker.replace("required: true", "required: false")),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any("required confirmation is missing or optional" in item for item in findings)
+
+
+@pytest.mark.parametrize(
+    "form_path", (SYNTHETIC_VALIDATION_FORM, DOCUMENTATION_PROBLEM_FORM)
+)
+def test_feedback_form_fixed_version_placeholder_fails(
+    tmp_path: Path, form_path: str
+) -> None:
+    _copy_validator_inputs(tmp_path)
+    form = tmp_path / form_path
+    form.write_text(
+        form.read_text(encoding="utf-8").replace(
+            'placeholder: "Paste the exact output of garmin-running-data-normalizer --version"',
+            'placeholder: "Version 1.3.3"',
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any(
+        form_path in item and "placeholder must be version-independent" in item
+        for item in findings
+    )
+
+
+def test_readme_without_synthetic_validation_cta_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    readme = tmp_path / "README.md"
+    readme.write_text(
+        readme.read_text(encoding="utf-8").replace(
+            "issues/new?template=synthetic_validation_report.yml",
+            "issues",
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any("README.md" in item and "synthetic_validation_report.yml" in item for item in findings)
 
 
 def test_package_version_drift_fails(tmp_path: Path) -> None:

@@ -1,0 +1,110 @@
+name: Documentation problem
+description: Report public-safe first-user guidance that was unclear or incomplete
+title: "[Docs]: "
+labels:
+  - documentation
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form when the Product runs, but the documentation is unclear,
+        or when you are not sure whether the problem is a Product failure.
+
+        Use the [Bug Report](https://github.com/tsubotti63/garmin-running-data-normalizer/issues/new?template=bug_report.yml)
+        when the Product itself fails. Use the
+        [Synthetic Validation Report](https://github.com/tsubotti63/garmin-running-data-normalizer/issues/new?template=synthetic_validation_report.yml)
+        when the documented Synthetic workflow completed successfully and you
+        want to report that result.
+
+        **Do not attach or paste real Garmin exports, personal health data,
+        account identifiers, raw FIT/JSON/CSV data, local private paths, or
+        screenshots containing private metrics.**
+  - type: input
+    id: documentation_page
+    attributes:
+      label: Documentation page or URL
+      placeholder: "https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md"
+    validations:
+      required: true
+  - type: input
+    id: section_heading
+    attributes:
+      label: Section or heading
+      placeholder: "Run the Synthetic workflow"
+    validations:
+      required: true
+  - type: input
+    id: step_number
+    attributes:
+      label: Step number
+      description: Enter the step number or "Not numbered".
+      placeholder: "Step 3"
+    validations:
+      required: true
+  - type: textarea
+    id: expected_understanding
+    attributes:
+      label: What did you expect to understand or do?
+    validations:
+      required: true
+  - type: textarea
+    id: unclear
+    attributes:
+      label: What was unclear?
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What did you try?
+      description: Use placeholders for paths and do not paste real data, logs, or screenshots.
+    validations:
+      required: true
+  - type: dropdown
+    id: execution_result
+    attributes:
+      label: Product execution result
+      options:
+        - Product ran successfully
+        - Product was not run
+        - Not sure whether this is a Product failure
+        - Product failed; I will use the Bug Report instead
+    validations:
+      required: true
+  - type: input
+    id: operating_system
+    attributes:
+      label: Operating system
+      description: Include the operating system and version.
+      placeholder: "Windows 11"
+    validations:
+      required: true
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      placeholder: "Python 3.11.9"
+    validations:
+      required: true
+  - type: input
+    id: package_version
+    attributes:
+      label: Package version
+      description: Paste the exact output of garmin-running-data-normalizer --version.
+      placeholder: "Paste the exact output of garmin-running-data-normalizer --version"
+    validations:
+      required: true
+  - type: textarea
+    id: suggested_improvement
+    attributes:
+      label: Suggested improvement
+      description: Optional wording, example, diagram, screenshot, or navigation suggestion. Do not attach a private screenshot.
+    validations:
+      required: false
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I confirm that this report does not contain real Garmin data, personal health data, account identifiers, local private paths, or other sensitive information.
+          required: true

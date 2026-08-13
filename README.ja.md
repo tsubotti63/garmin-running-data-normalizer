@@ -32,6 +32,10 @@ Garminアカウントを使わず、リポジトリ内のSynthetic fixtureだけ
 生成結果のイメージは英語READMEの[See the result](README.md#see-the-result)で
 確認できます。表示される画像と例はすべてSynthetic / fictional dataです。
 
+Synthetic Quick Startを完了できた場合は、個人Garminデータを含めずに
+[Synthetic Validation Report](https://github.com/tsubotti63/garmin-running-data-normalizer/issues/new?template=synthetic_validation_report.yml)
+から結果を共有できます。
+
 ## Garmin Exportから始める
 
 実際のExportを使う場合は、先にSynthetic workflowで導入を確認し、その後

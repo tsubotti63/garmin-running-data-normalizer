@@ -46,6 +46,11 @@ Select the image to inspect the full-size accessible SVG.
   — begin bounded descriptive analysis from a reviewed output.
 - [日本語の短い案内](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/README.ja.md)
 
+Completed the Synthetic Quick Start? Share a public-safe
+[Synthetic Validation Report](https://github.com/tsubotti63/garmin-running-data-normalizer/issues/new?template=synthetic_validation_report.yml)
+so we can learn whether the first-user workflow works outside the maintainer
+environment. Do not include real Garmin data or personal health information.
+
 ### See the result
 
 The previews below were generated from the tracked Synthetic Run-All fixture
