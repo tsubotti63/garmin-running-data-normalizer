@@ -149,6 +149,19 @@ volume and count context. It is never uploaded automatically.
 | `PARTIAL_SUCCESS` | 3 | Activities are valid and detected FIT input is auditably incomplete |
 | Fatal error | 2 | No valid completed output is published |
 
+Validation and evidence tooling must record the Product result separately from
+the process that invokes it:
+
+- `product_status` is the Run-All status from `run_summary.json`.
+- `product_exit_code` is the Product CLI/result exit code governed by the table
+  above.
+- `harness_exit_code` is the exit code of an outer test or orchestration
+  process, when one exists.
+
+An outer harness exit code must never replace or be reported as the Product
+exit code. In particular, harness completion with code 0 does not change a
+`PARTIAL_SUCCESS` Product result from exit code 3.
+
 Family states include `PROCESSED`, `SKIPPED_NOT_PRESENT`,
 `PROCESSED_EMPTY`, and FIT-specific `PARTIAL`.
 

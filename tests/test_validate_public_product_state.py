@@ -3,9 +3,11 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+import pytest
+
 from scripts.validate_public_product_state import (
     CS010_DOCUMENT,
-    CURRENT_DOCUMENTS,
+    current_documents,
     validate,
 )
 
@@ -15,7 +17,7 @@ VERSION_SOURCE = "src/garmin_running_data_normalizer/__init__.py"
 
 
 def _copy_validator_inputs(destination: Path) -> None:
-    for relative in (*CURRENT_DOCUMENTS, VERSION_SOURCE):
+    for relative in (*current_documents("1.3.3"), VERSION_SOURCE):
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / relative, target)
@@ -211,6 +213,132 @@ def test_missing_output_contract_marker_fails(tmp_path: Path) -> None:
     _, findings = validate(tmp_path)
 
     assert any("Compatibility family: stable 1.x" in item for item in findings)
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_exit", "incorrect_exit"),
+    (
+        ("PASS", 0, 3),
+        ("PASS_WITH_WARNINGS", 0, 3),
+        ("PARTIAL_SUCCESS", 3, 0),
+        ("Fatal error", 2, 0),
+    ),
+)
+def test_status_exit_contract_table_drift_fails(
+    tmp_path: Path,
+    status: str,
+    expected_exit: int,
+    incorrect_exit: int,
+) -> None:
+    _copy_validator_inputs(tmp_path)
+    output_contract = tmp_path / "docs/output_contract.md"
+    correct_row = f"| `{status}` | {expected_exit} |" if status != "Fatal error" else f"| {status} | {expected_exit} |"
+    incorrect_row = f"| `{status}` | {incorrect_exit} |" if status != "Fatal error" else f"| {status} | {incorrect_exit} |"
+    output_contract.write_text(
+        output_contract.read_text(encoding="utf-8").replace(
+            correct_row,
+            incorrect_row,
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any(correct_row in item for item in findings)
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_exit", "incorrect_exit"),
+    (
+        ("PASS", 0, 3),
+        ("PASS_WITH_WARNINGS", 0, 3),
+        ("PARTIAL_SUCCESS", 3, 0),
+        ("Fatal error", 2, 0),
+    ),
+)
+@pytest.mark.parametrize("reverse", (False, True))
+@pytest.mark.parametrize("separator", ("/", "→", "->", ":", "="))
+def test_contradictory_status_exit_pair_in_current_document_fails(
+    tmp_path: Path,
+    status: str,
+    expected_exit: int,
+    incorrect_exit: int,
+    reverse: bool,
+    separator: str,
+) -> None:
+    _copy_validator_inputs(tmp_path)
+    readme = tmp_path / "README.md"
+    contradiction = (
+        f"exit {incorrect_exit} {separator} `{status}`"
+        if reverse
+        else f"`{status}` {separator} exit {incorrect_exit}"
+    )
+    readme.write_text(
+        readme.read_text(encoding="utf-8") + f"\n{contradiction}\n",
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any(
+        f"{status} requires exit {expected_exit}, not exit {incorrect_exit}" in item
+        for item in findings
+    )
+
+
+def test_partial_success_exit_zero_in_current_release_notes_fails(
+    tmp_path: Path,
+) -> None:
+    _copy_validator_inputs(tmp_path)
+    release_notes = tmp_path / "docs/release_notes/v1.3.3.md"
+    release_notes.write_text(
+        release_notes.read_text(encoding="utf-8").replace(
+            "`PARTIAL_SUCCESS` / exit 3",
+            "`PARTIAL_SUCCESS` / exit 0",
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any("PARTIAL_SUCCESS requires exit 3, not exit 0" in item for item in findings)
+
+
+def test_partial_success_exit_zero_in_faq_table_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    faq = tmp_path / "docs/faq.md"
+    correct_row = (
+        "| `3` | `PARTIAL_SUCCESS` because detected FIT is auditably incomplete |"
+    )
+    faq.write_text(
+        faq.read_text(encoding="utf-8").replace(
+            correct_row,
+            "| `0` | `PARTIAL_SUCCESS` because detected FIT is auditably incomplete |",
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert any(correct_row in item for item in findings)
+
+
+def test_current_release_notes_follow_package_version(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    version_source = tmp_path / VERSION_SOURCE
+    version_source.write_text(
+        version_source.read_text(encoding="utf-8").replace('"1.3.3"', '"1.3.4"'),
+        encoding="utf-8",
+    )
+
+    version, findings = validate(tmp_path)
+
+    assert version == "1.3.4"
+    assert any(
+        "docs/release_notes/v1.3.4.md: required current-state document is missing"
+        in item
+        for item in findings
+    )
 
 
 def test_obsolete_agents_phase_fails(tmp_path: Path) -> None:
