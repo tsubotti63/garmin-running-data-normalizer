@@ -783,6 +783,7 @@ class SnapshotLifecycleTest(unittest.TestCase):
             output = root / "output"
             result = run_snapshot_all(store, output)
             self.assertEqual(result["status"], "PARTIAL_SUCCESS")
+            self.assertEqual(result["exit_code"], 3)
             self.assertEqual(result["snapshot_count"], 2)
             self.assertEqual(result["store_verification"], "PASS")
             self.assertTrue((output / "snapshot/snapshot_lineage.json").is_file())

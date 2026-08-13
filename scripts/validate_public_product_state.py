@@ -20,11 +20,32 @@ CURRENT_DOCUMENTS = (
     "docs/architecture_overview.md",
     "docs/dataset_relationships.md",
     "docs/faq.md",
+    "docs/getting_started_from_garmin_export.md",
     "docs/product_quick_start.md",
     "docs/output_contract.md",
     "AGENTS.md",
     CS010_DOCUMENT,
 )
+CURRENT_RELEASE_NOTES_TEMPLATE = "docs/release_notes/v{version}.md"
+
+STATUS_EXIT_CONTRACT_MARKERS = (
+    "| `PASS` | 0 |",
+    "| `PASS_WITH_WARNINGS` | 0 |",
+    "| `PARTIAL_SUCCESS` | 3 |",
+    "| Fatal error | 2 |",
+)
+
+STATUS_EXIT_CONTRACT = (
+    ("PASS_WITH_WARNINGS", 0),
+    ("PARTIAL_SUCCESS", 3),
+    ("Fatal error", 2),
+    ("PASS", 0),
+)
+
+STATUS_EXIT_SEPARATOR = (
+    r"(?:/|,|→|->|:|=|\bwith\b|\band\b|\breturns?\b|\bfor\b|\bwhen\b|\bmeans\b)"
+)
+EXIT_LABEL = r"(?:exit(?:\s+code)?|process\s+return(?:\s+code)?)"
 
 CS010_STALE_PUBLIC_STATUS_PHRASES = (
     "This draft is a candidate for Product review",
@@ -54,6 +75,37 @@ def _package_version(root: Path) -> str:
 def _contains_whitespace_normalized(text: str, phrase: str) -> bool:
     pattern = r"\s+".join(re.escape(part) for part in phrase.split())
     return re.search(pattern, text) is not None
+
+
+def current_documents(version: str | None) -> tuple[str, ...]:
+    if version is None:
+        return CURRENT_DOCUMENTS
+    release_notes = CURRENT_RELEASE_NOTES_TEMPLATE.format(version=version)
+    return (*CURRENT_DOCUMENTS, release_notes)
+
+
+def _status_exit_contradictions(text: str) -> list[tuple[str, int, int]]:
+    contradictions: list[tuple[str, int, int]] = []
+    for status, expected_exit in STATUS_EXIT_CONTRACT:
+        status_pattern = re.escape(status).replace(r"\ ", r"\s+")
+        patterns = (
+            re.compile(
+                rf"`?{status_pattern}`?\s*{STATUS_EXIT_SEPARATOR}\s*"
+                rf"(?:an?\s+)?{EXIT_LABEL}\s*`?([0-9]+)`?\b",
+                re.IGNORECASE,
+            ),
+            re.compile(
+                rf"{EXIT_LABEL}\s*`?([0-9]+)`?\s*{STATUS_EXIT_SEPARATOR}\s*"
+                rf"`?{status_pattern}`?\b",
+                re.IGNORECASE,
+            ),
+        )
+        for pattern in patterns:
+            for match in pattern.finditer(text):
+                observed_exit = int(match.group(1))
+                if observed_exit != expected_exit:
+                    contradictions.append((status, expected_exit, observed_exit))
+    return contradictions
 
 
 def _issue_form_field_block(text: str, field_id: str) -> str | None:
@@ -93,19 +145,20 @@ def _has_fixed_version_placeholder(field_block: str) -> bool:
 
 def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
     findings: list[str] = []
-    contents: dict[str, str] = {}
-    for relative in CURRENT_DOCUMENTS:
-        path = root / relative
-        if not path.is_file():
-            findings.append(f"{relative}: required current-state document is missing")
-            continue
-        contents[relative] = path.read_text(encoding="utf-8")
-
     try:
         version = _package_version(root)
     except (FileNotFoundError, SyntaxError, ValueError):
         findings.append(f"{VERSION_SOURCE}: package version is missing or invalid")
         version = None
+
+    documents = current_documents(version)
+    contents: dict[str, str] = {}
+    for relative in documents:
+        path = root / relative
+        if not path.is_file():
+            findings.append(f"{relative}: required current-state document is missing")
+            continue
+        contents[relative] = path.read_text(encoding="utf-8")
 
     if version is not None:
         required_version_markers = {
@@ -151,6 +204,14 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
         ),
         "docs/faq.md": (
             "### Was the v1.2.0 Windows timezone-data issue resolved?",
+            "| `0` | `PASS` or `PASS_WITH_WARNINGS` |",
+            "| `2` | Fatal contract, input, QA, or publication error |",
+            "| `3` | `PARTIAL_SUCCESS` because detected FIT is auditably incomplete |",
+        ),
+        "docs/getting_started_from_garmin_export.md": (
+            "| `0` | `PASS` or `PASS_WITH_WARNINGS` |",
+            "| `2` | Fatal contract, input, QA, or publication error; no completed output |",
+            "| `3` | `PARTIAL_SUCCESS`; Activities are valid and detected FIT is auditably incomplete |",
         ),
         "docs/product_quick_start.md": (
             "The root `QUICK_START.md` is a short router to the product guides.",
@@ -164,6 +225,10 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
             "## Additive v1.1 relationship handoff",
             "## Additive v1.2 Snapshot lifecycle",
             "## Additive v1.3 Wellness / Metrics",
+            *STATUS_EXIT_CONTRACT_MARKERS,
+            "`product_status`",
+            "`product_exit_code`",
+            "`harness_exit_code`",
         ),
         "AGENTS.md": (
             "Audience**: AI-assisted development tasks and maintainers",
@@ -171,11 +236,24 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
             "ACP documents own AI-assisted development governance.",
         ),
     }
+    if version is not None:
+        release_notes = CURRENT_RELEASE_NOTES_TEMPLATE.format(version=version)
+        required_markers[release_notes] = (
+            f"# Garmin Running Data Normalizer v{version}",
+            "`PARTIAL_SUCCESS` / exit 3",
+        )
     for relative, markers in required_markers.items():
         text = contents.get(relative, "")
         for marker in markers:
             if not _contains_whitespace_normalized(text, marker):
                 findings.append(f"{relative}: required marker is missing: {marker}")
+
+    for relative, text in contents.items():
+        for status, expected_exit, observed_exit in _status_exit_contradictions(text):
+            findings.append(
+                f"{relative}: contradictory status-to-exit mapping remains: "
+                f"{status} requires exit {expected_exit}, not exit {observed_exit}"
+            )
 
     bug_form_path = ".github/ISSUE_TEMPLATE/bug_report.yml"
     package_version_block = _issue_form_field_block(
@@ -239,7 +317,7 @@ def main() -> None:
     result = {
         "status": "PASS" if not findings else "FAIL",
         "product_version": version,
-        "documents_checked": list(CURRENT_DOCUMENTS),
+        "documents_checked": list(current_documents(version)),
         "findings": findings,
     }
     print(json.dumps(result, indent=2, sort_keys=True))
