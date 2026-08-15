@@ -67,9 +67,10 @@ containing that material.
 ## Security-sensitive reports
 
 Do not disclose a suspected vulnerability or sensitive security detail in a
-public Issue. This repository does not currently publish a verified private
-vulnerability-reporting route. Until the maintainer publishes one, retain the
-details privately rather than posting them publicly.
+public Issue. Use
+[GitHub Private Vulnerability Reporting](https://github.com/tsubotti63/garmin-running-data-normalizer/security/advisories/new).
+If that private route is unavailable, retain the details privately rather than
+posting them through another public channel.
 
 ## Scope of support
 
