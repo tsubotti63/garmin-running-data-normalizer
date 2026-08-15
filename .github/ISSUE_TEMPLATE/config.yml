@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/tsubotti63/garmin-running-data-normalizer/security/advisories/new
+    about: Report security vulnerabilities privately. Do not post real Garmin data, health data, credentials, or security-sensitive reproduction details publicly.
