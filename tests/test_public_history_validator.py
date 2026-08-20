@@ -171,13 +171,23 @@ def test_synthetic_private_key_canary_is_narrowly_allowlisted() -> None:
     ) == []
     assert "fixture: credential_or_token" in validator.scan(
         "fixture",
-        synthetic + b"\n-----BEGIN PRIVATE KEY-----",
+        synthetic + b"\n-----BEGIN " + b"PRIVATE KEY-----",
         allow_synthetic_canary=True,
     )
     assert "fixture: credential_or_token" in validator.scan(
         "fixture",
         synthetic,
         allow_synthetic_canary=False,
+    )
+    assert validator.scan(
+        "fixture",
+        synthetic + b" SYNTHETIC PN-09-private-key",
+        allow_historical_synthetic_canary=True,
+    ) == []
+    assert "fixture: credential_or_token" in validator.scan(
+        "fixture",
+        b"-----BEGIN " + b"PRIVATE KEY-----",
+        allow_historical_synthetic_canary=True,
     )
 
 

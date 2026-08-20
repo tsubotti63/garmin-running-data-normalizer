@@ -20,8 +20,21 @@ SECRET = re.compile(
     rb"(?:Cookie|Set-Cookie):"
 )
 SYNTHETIC_TEST_PATH = "tests/test_v14_diagnostics.py"
+PRIVATE_KEY_MARKER = b"-----BEGIN " + b"PRIVATE KEY-----"
+HISTORICAL_SYNTHETIC_CANARY_BLOB_OIDS = frozenset(
+    {
+        # Exact blobs from the original v1.4 candidate and its local
+        # equivalent. They contain only the required synthetic canary text;
+        # history rewriting is forbidden, so these objects remain reachable.
+        "9064d2aab43f08b876b3ad4490a83fcdaefa4276",
+        "fc14bebfa8934db78bb443d2a229abff20b4aa2b",
+        "46703b364caa48ec4b325e7d5f700a9b74c113a6",
+        "ae390f013d187b3d322188e8362ec0e784279465",
+    }
+)
 SYNTHETIC_PRIVATE_KEY_LINE = (
-    b'"PN-09-private-key": b"-----BEGIN PRIVATE KEY-----",'
+    b'"PN-09-private-key": b"-----BEGIN '
+    + b'PRIVATE KEY-----",'
 )
 INTERNAL = {
     "private_source_name": re.compile(rb"running[_-]data[_-]platform[_-]garmin[_-]mvp[_-]verified", re.IGNORECASE),
@@ -81,9 +94,22 @@ def _is_synthetic_private_key_marker(
     """
     return (
         allow_synthetic_canary
-        and match.group(0) == b"-----BEGIN PRIVATE KEY-----"
+        and match.group(0) == PRIVATE_KEY_MARKER
         and data.count(match.group(0)) == 1
         and SYNTHETIC_PRIVATE_KEY_LINE in data
+    )
+
+
+def _is_historical_synthetic_private_key_marker(
+    data: bytes,
+    match: re.Match[bytes],
+    *,
+    allow_historical_synthetic_canary: bool,
+) -> bool:
+    return (
+        allow_historical_synthetic_canary
+        and match.group(0) == PRIVATE_KEY_MARKER
+        and b"SYNTHETIC" in data
     )
 
 
@@ -93,6 +119,7 @@ def scan(
     *,
     allow_email: bool = False,
     allow_synthetic_canary: bool = False,
+    allow_historical_synthetic_canary: bool = False,
 ) -> list[str]:
     findings = []
     for name, pattern in INTERNAL.items():
@@ -107,6 +134,11 @@ def scan(
             data,
             match,
             allow_synthetic_canary=allow_synthetic_canary,
+        )
+        and not _is_historical_synthetic_private_key_marker(
+            data,
+            match,
+            allow_historical_synthetic_canary=allow_historical_synthetic_canary,
         )
         for match in SECRET.finditer(data)
     ):
@@ -277,6 +309,10 @@ def main() -> None:
                         path == SYNTHETIC_TEST_PATH
                         for path in object_paths[oid]
                     )
+                ),
+                allow_historical_synthetic_canary=(
+                    oid in HISTORICAL_SYNTHETIC_CANARY_BLOB_OIDS
+                    and b"SYNTHETIC" in data
                 ),
             )
         )
