@@ -2,8 +2,7 @@
 
 ## Status and authority
 
-- Current stable contract: v1.3.3
-- Implementation candidate: v1.4.0 (not published)
+- Current stable contract: v1.4.0
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each
@@ -21,7 +20,7 @@ winner, observed variant, candidate, or normalized value. Existing
 Both machine authorities record the exact installed `product_version`;
 `ANALYSIS_CONTEXT.json` preserves the same value for standalone handoff.
 
-For the released v1.3.3 Sleep contract, `sleep_duration_minutes_ex_awake` is
+For the released v1.4.0 Sleep contract, `sleep_duration_minutes_ex_awake` is
 an observed-stage sum when any finite deep/light/REM stage exists, with an
 approved direct-source fallback only when all stages are absent. Missing stages
 are not zero-filled; awake and window-minus-awake are not used; conflicting
@@ -288,9 +287,9 @@ Garmin source filenames can contain email-shaped personal identifiers. It is a
 local/trusted handoff. Public fixtures are synthetic. External transfer requires
 review of the optional safe pack and the receiving environment.
 
-## Additive v1.4 Export Evidence and Diagnostics candidate
+## v1.4 Export Evidence and Diagnostics release
 
-The local v1.4.0 implementation candidate adds two deterministic projections to
+The v1.4.0 release adds two deterministic projections to
 every completed Run-All handoff:
 
 ```text

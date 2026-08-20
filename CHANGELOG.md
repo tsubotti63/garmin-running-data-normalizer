@@ -13,7 +13,12 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
-## v1.4.0 — implementation candidate (unreleased)
+## v1.4.0 — stable Production release
+
+Published on 2026-08-21 JST as the annotated `v1.4.0` tag, the latest stable
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.4.0),
+and the verified
+[Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.4.0/).
 
 ### Added
 
@@ -27,11 +32,12 @@ canonical platform repository:
 - The existing 17 datasets, 212 fields, 6 explicit relationships, stable keys,
   Snapshot behavior, normalized truth, External-safe Pack, and Product exit
   mapping remain unchanged.
-- This candidate is not tagged, released, or published to Production PyPI.
+- The release preserves the existing public output, stable-key, Snapshot,
+  Run-All, and Product exit contracts.
 
 ## v1.3.3 — stable Production patch release
 
-Published on 2026-08-13 JST as the annotated `v1.3.3` tag, the latest stable
+Published on 2026-08-13 JST as the annotated `v1.3.3` tag,
 [GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.3),
 and the verified
 [Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.3.3/).

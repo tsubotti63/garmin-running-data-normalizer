@@ -1,7 +1,7 @@
 # Frequently Asked Questions
 
 These short answers apply to the current stable Garmin Running Data Normalizer
-`v1.3.3` release and route to the current product authorities. Version `1.3.3`
+`v1.4.0` release and route to the current product authorities. Version `1.4.0`
 is available from the latest GitHub Release and Production PyPI.
 
 ## Getting started
@@ -24,12 +24,12 @@ synthetic data.
 
 ### Which version is stable?
 
-`v1.3.3` is the current stable release. It restores the approved Sleep
+`v1.4.0` is the current stable release. It includes the approved Sleep
 contract while preserving the compatible one-shot workflow, optional Snapshot
 Accumulation, the Windows timezone-data hotfix, and the additive
 Wellness/Metrics datasets documented for v1.3. It is published on
-[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.3)
-and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/1.3.3/).
+[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.4.0)
+and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/1.4.0/).
 
 ## Garmin Export and Run-All
 
@@ -199,7 +199,7 @@ Public-safe Windows reports are welcome through
 ### Was the v1.2.0 Windows timezone-data issue resolved?
 
 Yes. v1.2.1 introduced the conditional Windows `tzdata` dependency, which
-v1.3.3 retains. The current release also provides the bounded
+v1.4.0 retains. The current release also provides the bounded
 `TIMEZONE_DATA_UNAVAILABLE` diagnostic if the configured IANA timezone data is
 still unavailable in a damaged or incomplete environment. Confirm the
 environment with:
@@ -208,9 +208,9 @@ environment with:
 python -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
 ```
 
-For a normal v1.3.3 Production PyPI installation, no separate
+For a normal v1.4.0 Production PyPI installation, no separate
 `pip install tzdata` step is expected. If the check still fails, reinstall
-v1.3.3 in a new environment and include only sanitized environment details in a
+v1.4.0 in a new environment and include only sanitized environment details in a
 support report.
 
 ### Can I attach my Garmin Export to a GitHub Issue?
