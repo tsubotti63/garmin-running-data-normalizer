@@ -162,6 +162,35 @@ def test_existing_sensitive_content_scans_still_fail() -> None:
     )
 
 
+def test_synthetic_private_key_canary_is_narrowly_allowlisted() -> None:
+    synthetic = validator.SYNTHETIC_PRIVATE_KEY_LINE
+    assert validator.scan(
+        "fixture",
+        synthetic,
+        allow_synthetic_canary=True,
+    ) == []
+    assert "fixture: credential_or_token" in validator.scan(
+        "fixture",
+        synthetic + b"\n-----BEGIN " + b"PRIVATE KEY-----",
+        allow_synthetic_canary=True,
+    )
+    assert "fixture: credential_or_token" in validator.scan(
+        "fixture",
+        synthetic,
+        allow_synthetic_canary=False,
+    )
+    assert validator.scan(
+        "fixture",
+        synthetic + b" SYNTHETIC PN-09-private-key",
+        allow_historical_synthetic_canary=True,
+    ) == []
+    assert "fixture: credential_or_token" in validator.scan(
+        "fixture",
+        b"-----BEGIN " + b"PRIVATE KEY-----",
+        allow_historical_synthetic_canary=True,
+    )
+
+
 def test_shallow_repository_fails() -> None:
     findings = validator.validate_repository_guards(
         is_shallow=True,

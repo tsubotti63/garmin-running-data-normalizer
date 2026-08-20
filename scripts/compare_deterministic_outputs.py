@@ -58,8 +58,12 @@ def compare_output_directories(first: Path, second: Path) -> dict[str, Any]:
                     ("first", first_summary),
                     ("second", second_summary),
                 ):
-                    if summary.get("status") not in {"PASS", "PASS_WITH_WARNINGS"}:
-                        findings.append(f"{label} output status is not successful")
+                    if summary.get("status") not in {
+                        "PASS",
+                        "PASS_WITH_WARNINGS",
+                        "PARTIAL_SUCCESS",
+                    }:
+                        findings.append(f"{label} output status is not completed")
                     if not summary.get("deterministic_output_digest"):
                         findings.append(f"{label} output has no deterministic digest")
                 if first_summary.get("deterministic_output_digest") != second_summary.get(

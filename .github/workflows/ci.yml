@@ -64,7 +64,7 @@ jobs:
         run: |
           python -m venv .venv
           .\.venv\Scripts\python.exe -m pip install --upgrade pip
-          .\.venv\Scripts\python.exe -m pip install -e ".[release]"
+          .\.venv\Scripts\python.exe -m pip install -e ".[test,release]"
           .\.venv\Scripts\python.exe -c "import importlib.metadata as m; assert m.version('tzdata')"
           .\.venv\Scripts\python.exe -c "from zoneinfo import ZoneInfo; assert str(ZoneInfo('Asia/Tokyo')) == 'Asia/Tokyo'"
           .\.venv\Scripts\python.exe -m garmin_running_data_normalizer --version
@@ -80,6 +80,13 @@ jobs:
           .\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-run-all-2
           .\.venv\Scripts\python.exe -c "import json, pathlib; s=json.loads(pathlib.Path('workspace/windows-run-all-1/run_summary.json').read_text(encoding='utf-8')); assert s['status'] == 'PASS_WITH_WARNINGS'; assert s['family_results']['activities']['detected_asset_count'] == 1; assert s['family_results']['activities']['processed_asset_count'] == 1"
           .\.venv\Scripts\python.exe .\scripts\compare_deterministic_outputs.py .\workspace\windows-run-all-1 .\workspace\windows-run-all-2
+      - name: Verify Windows Core 4 diagnostics and tracked vector
+        shell: powershell
+        run: |
+          .\.venv\Scripts\python.exe -m pytest .\tests\test_v14_diagnostics.py -q
+          .\.venv\Scripts\python.exe -m garmin_running_data_normalizer doctor --run-output .\workspace\windows-run-all-1 --format json
+          .\.venv\Scripts\python.exe -m garmin_running_data_normalizer support-bundle --run-output .\workspace\windows-run-all-1 --output .\workspace\windows-support-bundle.zip
+          if ($LASTEXITCODE -ne 0) { throw "Windows Support Bundle failed with exit code $LASTEXITCODE" }
       - name: Build distributions
         shell: powershell
         run: |

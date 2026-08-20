@@ -3,6 +3,7 @@
 ## Status and authority
 
 - Current stable contract: v1.3.3
+- Implementation candidate: v1.4.0 (not published)
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each
@@ -286,3 +287,26 @@ provenance, hashes, exact timestamps, memo text, and source-relative filenames.
 Garmin source filenames can contain email-shaped personal identifiers. It is a
 local/trusted handoff. Public fixtures are synthetic. External transfer requires
 review of the optional safe pack and the receiving environment.
+
+## Additive v1.4 Export Evidence and Diagnostics candidate
+
+The local v1.4.0 implementation candidate adds two deterministic projections to
+every completed Run-All handoff:
+
+```text
+diagnostics/source_completeness.json
+diagnostics/run_quality.json
+```
+
+It also adds the read-only `doctor` command and the explicit
+`support-bundle` command. Doctor never repairs or normalizes input. The Support
+Bundle is a newly generated six-member public-safe diagnostic derivative; it is
+not the existing Activities-only External-safe Analysis Pack, performs no
+automatic upload, and still requires Human review before sharing.
+
+Source Completeness uses exactly `PRESENT`, `EMPTY`, `ABSENT`, `UNREADABLE`,
+`UNSUPPORTED`, and `AMBIGUOUS`; unclassified evidence remains separately
+`UNKNOWN`. Run Quality projects existing manifest, summary, QA, audit, and six
+relationship authorities without selecting values or creating a new Source of
+Truth. The existing 17 datasets, 212 fields, 6 relationships, normalized paths,
+stable keys, Snapshot behavior, and status/exit mapping are unchanged.

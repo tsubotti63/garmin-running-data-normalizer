@@ -1,0 +1,44 @@
+{
+  "dataset_count": 17,
+  "doctor_json_sha256": "44dddc4139a4419a015d0ea2df84eed313e0c794b82224f20692f0a7a95ea7b0",
+  "field_count": 212,
+  "fixture": "examples/synthetic/garmin_export",
+  "format": "garmin-running-data-normalizer-v1-4-diagnostics-expected-vector-v1",
+  "generated_path_count": 46,
+  "product_exit_code": 0,
+  "product_version": "1.4.0",
+  "relationship_count": 6,
+  "run_quality_sha256": "85c257cde54d0104f4ca94d4d7beb62be8e0cb03aefa26ca1d2c31fc6ed73185",
+  "run_status": "PASS_WITH_WARNINGS",
+  "source_completeness_sha256": "064c85be97a5c41fa0902fc335546f1473680d4ce1cf45e755fe4a8cde9d0a85",
+  "support_bundle": {
+    "archive_sha256": "a1dedd4c46e19719c142aede7209fdf856de7339d1dea16099b7d44d397cb0d8",
+    "content_sha256": "1976bc4d86a6ef618008947ba34a3bf5a412486d4caae60ef760d8d2a6b1f7dc",
+    "members": {
+      "README.md": {
+        "bytes": 484,
+        "sha256": "ca0fd533c2e626bb36714e0098919d17680b37e827963aafb276b435c13e91d6"
+      },
+      "doctor.json": {
+        "bytes": 710,
+        "sha256": "ff37a4c3995bf631863597078deae9e1b779a882ba1b60874eaa6ae341c2edfe"
+      },
+      "manifest.json": {
+        "bytes": 1133,
+        "sha256": "7c1899331ab83ca7cc7daa26e818290bb3107f1901551efb5c59506be5eedc5e"
+      },
+      "privacy_scan.json": {
+        "bytes": 298,
+        "sha256": "2731b70e0dfb9710644e5960859d564df3b70f6fbfd7d74ba80be6c291002a81"
+      },
+      "run_quality.json": {
+        "bytes": 9840,
+        "sha256": "d31b399b44b3115f8849afa794819ad09d8e39f705f45919dffd6fc30dc909f5"
+      },
+      "source_completeness.json": {
+        "bytes": 7003,
+        "sha256": "a95cac6281ee32678d4058622d4d2f9ac5e201e29f4e490fe8bd1789fe0204e9"
+      }
+    }
+  }
+}

@@ -17,6 +17,13 @@ from .intake.discovery import discover_export
 from .normalizers.activities import normalize_activities
 from .qa import summarize_records
 from .run_all import RunAllError, run_all
+from .diagnostics.doctor import (
+    DoctorError,
+    doctor_input,
+    doctor_run_output,
+    render_doctor_human,
+)
+from .diagnostics.support_bundle import SupportBundleError, build_support_bundle
 from .snapshot import SnapshotLifecycleError
 from .standalone import StandaloneHandoffError, validate_standalone_handoff
 
@@ -260,6 +267,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Validate a completed Run-All output without repository access.",
     )
     handoff.add_argument("--input", required=True, help="Completed Run-All output")
+    doctor = commands.add_parser(
+        "doctor",
+        help="Explain bounded pre-run or completed Run-All evidence without changing it.",
+    )
+    doctor_mode = doctor.add_mutually_exclusive_group(required=True)
+    doctor_mode.add_argument("--input", help="Garmin Export directory to inspect")
+    doctor_mode.add_argument("--run-output", help="Completed Run-All output to inspect")
+    doctor.add_argument(
+        "--format",
+        choices=("human", "json"),
+        default="human",
+        help="Diagnostic presentation format",
+    )
+    support_bundle = commands.add_parser(
+        "support-bundle",
+        help="Generate a deterministic public-safe diagnostic Bundle for Human review.",
+    )
+    support_bundle.add_argument("--run-output", required=True, help="Completed v1.4 Run-All output")
+    support_bundle.add_argument("--output", required=True, help="New Support Bundle ZIP path")
     return parser
 
 
@@ -312,6 +338,14 @@ def main(argv: list[str] | None = None) -> int:
                 raise GoldenPathError("unsupported snapshot command")
         elif args.command == "validate-handoff":
             result = validate_standalone_handoff(args.input)
+        elif args.command == "doctor":
+            result = (
+                doctor_input(args.input)
+                if args.input is not None
+                else doctor_run_output(args.run_output)
+            )
+        elif args.command == "support-bundle":
+            result = build_support_bundle(args.run_output, args.output)
         else:
             raise GoldenPathError("unsupported command")
     except GoldenPathError as exc:
@@ -328,6 +362,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except StandaloneHandoffError as exc:
         print(f"ERROR [HANDOFF_INVALID]: {exc}", file=sys.stderr)
+        return 2
+    except DoctorError as exc:
+        print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)
+        return 2
+    except SupportBundleError as exc:
+        print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)
         return 2
     except Exception:
         if args.command in {"run-all", "snapshot"}:
@@ -363,6 +403,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"relationships: {result['explicit_relationship_count']}")
         print(f"first-read: {result['first_read']}")
         print(f"analysis-entry: {result['analysis_entry_point']}")
+        return 0
+
+    if args.command == "doctor":
+        if args.format == "json":
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+        else:
+            print(render_doctor_human(result))
+        return 0
+
+    if args.command == "support-bundle":
+        print("PASS")
+        print(f"generated: {result['path']}")
+        print(f"members: {result['member_count']}")
+        print(f"digest: {result['archive_sha256']}")
+        print("Human review required before sharing")
         return 0
 
     print("PASS")

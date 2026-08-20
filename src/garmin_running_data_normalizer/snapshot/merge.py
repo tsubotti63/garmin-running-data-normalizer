@@ -12,6 +12,8 @@ from typing import Any
 from .. import __version__
 from ..common.identity import garmin_activity_key, stable_hash
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
+from ..diagnostics.contracts import FAMILY_DATASETS, SOURCE_FAMILY_ORDER
+from ..diagnostics.detector import classify_source_name
 from ..intake.archive import ArchiveLimits
 from .policies import CONTRACT_VERSION, REGISTRY_VERSION
 from .store import SnapshotStoreError, load_manifests, load_store, sha256_file
@@ -1121,6 +1123,24 @@ def build_approved_input(
     )
     try:
         observations_by_dataset: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        dataset_to_family = {
+            dataset: family
+            for family, datasets in FAMILY_DATASETS.items()
+            for dataset in datasets
+        }
+        snapshot_diagnostics = {
+            str(manifest["snapshot_id"]): {
+                "observation_ref": f"snapshot-{acquisition_order_by_snapshot_id[str(manifest['snapshot_id'])]}",
+                "candidate_counts": {family: 0 for family in SOURCE_FAMILY_ORDER},
+                "source_observation_counts": {
+                    family: 0 for family in SOURCE_FAMILY_ORDER
+                },
+                "malformed_counts": {family: 0 for family in SOURCE_FAMILY_ORDER},
+                "fit_source_sha256": [],
+                "unknown_evidence_count": 0,
+            }
+            for manifest in manifests
+        }
         parser_states: Counter[str] = Counter()
         unknown_object_count = 0
         unknown_families: set[str] = set()
@@ -1129,6 +1149,7 @@ def build_approved_input(
         unknown_aliases: list[dict[str, Any]] = []
         unknown_unique: dict[str, dict[str, Any]] = {}
         for processing_index, manifest in enumerate(processing_manifests, start=1):
+            diagnostic = snapshot_diagnostics[str(manifest["snapshot_id"])]
             acquisition_order = acquisition_order_by_snapshot_id[
                 str(manifest["snapshot_id"])
             ]
@@ -1136,8 +1157,15 @@ def build_approved_input(
                 extension = str(source.get("extension", "")).lower()
                 object_kind = source.get("object_kind")
                 logical_name = str(source["relative_path"])
+                detected_kind = "fit" if extension == ".fit" else (
+                    "json" if extension == ".json" else "unknown"
+                )
+                detected_family = classify_source_name(logical_name, detected_kind)
+                if detected_family in diagnostic["candidate_counts"]:
+                    diagnostic["candidate_counts"][detected_family] += 1
                 if extension == ".fit":
                     digest = str(source["sha256"])
+                    diagnostic["fit_source_sha256"].append(digest)
                     fit_unique.setdefault(digest, source)
                     fit_aliases.append(
                         {
@@ -1163,6 +1191,8 @@ def build_approved_input(
                     and source.get("container_relative_path") is not None
                 ):
                     unknown_object_count += 1
+                    if detected_family == "unclassified":
+                        diagnostic["unknown_evidence_count"] += 1
                     unknown_families.add(
                         str(source.get("source_family", "unknown"))
                     )
@@ -1189,6 +1219,8 @@ def build_approved_input(
                 extracted = _dataset_records(logical_name, value)
                 if not extracted:
                     unknown_object_count += 1
+                    if detected_family == "unclassified":
+                        diagnostic["unknown_evidence_count"] += 1
                     unknown_families.add(
                         str(source.get("source_family", "unknown"))
                     )
@@ -1208,6 +1240,11 @@ def build_approved_input(
                     continue
                 parser_states["explicit_value"] += 1
                 for dataset, record_index, record, raw_key in extracted:
+                    diagnostic_family = dataset_to_family.get(dataset)
+                    if diagnostic_family is not None:
+                        diagnostic["source_observation_counts"][diagnostic_family] += 1
+                        if raw_key is None:
+                            diagnostic["malformed_counts"][diagnostic_family] += 1
                     observations_by_dataset[dataset].append(
                         {
                             "dataset": dataset,
@@ -1581,6 +1618,15 @@ def build_approved_input(
             "format": "garmin-running-data-normalizer-snapshot-coverage-v1",
             "snapshot_count": len(manifests),
             "datasets": dataset_summaries,
+            # v1.4 additive diagnostic authority. These are bounded counts and
+            # local FIT evidence bindings only; they never select a canonical
+            # value and are removed from the public Support Bundle projection.
+            "source_completeness_observations": sorted(
+                snapshot_diagnostics.values(),
+                key=lambda item: int(
+                    str(item["observation_ref"]).split("-")[-1]
+                ),
+            ),
             "validation_matrix": _validation_matrix(
                 observations_by_dataset,
                 len(manifests),
@@ -1682,6 +1728,13 @@ def build_approved_input(
                 observations_by_dataset,
                 len(manifests),
             ),
+            "source_completeness_context": {
+                "observation_scope": "REGISTERED_SNAPSHOT_OBSERVATIONS",
+                "observations": sorted(
+                    snapshot_diagnostics.values(),
+                    key=lambda item: int(str(item["observation_ref"]).split("-")[-1]),
+                ),
+            },
             # This is returned for runtime diagnostics only and is not written
             # into the public normalized payload or semantic digest.
             "processing_sequence": processing_labels,

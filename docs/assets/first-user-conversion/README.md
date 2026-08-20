@@ -14,7 +14,7 @@ its outputs. Every asset is code-generated and explicitly labelled
 
 The source Synthetic Run-All completed with `PASS_WITH_WARNINGS`, exit code 0,
 one detected/processed Activity and one Activity record, three warnings, zero
-errors, 17 dataset inventory entries, and 44 generated files. Its deterministic
+errors, 17 dataset inventory entries, and 46 generated files. Its deterministic
 output digest was
 `f67ac0787884b4df8bb25f578525176f64c1a1e0a3a9670df16f9b04403a27bb`.
 A repeated run produced byte-identical output.

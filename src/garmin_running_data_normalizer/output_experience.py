@@ -57,6 +57,8 @@ MANIFEST_OUTPUT_PATHS = (
     "qa/relationship_summary.json",
     "qa/performance_metrics_summary.json",
     "qa/daily_metrics_summary.json",
+    "diagnostics/source_completeness.json",
+    "diagnostics/run_quality.json",
     *DOCUMENT_NAMES,
     *MACHINE_CONTEXT_NAMES,
 )

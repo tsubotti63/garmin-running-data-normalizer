@@ -44,6 +44,9 @@ Select the image to inspect the full-size accessible SVG.
   — move from a private local Export to a completed Run-All handoff.
 - [AI Analysis Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/ai_analysis_quick_start.md)
   — begin bounded descriptive analysis from a reviewed output.
+- [v1.4 Export Evidence and Diagnostics](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/v1_4_diagnostics.md)
+  — interpret a real Run-All result, inspect its diagnostic artifacts, and
+  create a public-safe Support Bundle for Human review.
 - [日本語の短い案内](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/README.ja.md)
 
 Completed the Synthetic Quick Start? Share a public-safe
@@ -56,7 +59,7 @@ environment. Do not include real Garmin data or personal health information.
 The previews below were generated from the tracked Synthetic Run-All fixture
 and a tracked fictional analysis CSV. They contain no personal Garmin data.
 
-[![Synthetic / fictional Run-All preview: PASS_WITH_WARNINGS, one Activity record, three warnings, zero errors, 17 dataset entries, 44 generated files, and the first-read order START_HERE.md, DATASET_INVENTORY.md, then ANALYSIS_HANDOFF.md](https://raw.githubusercontent.com/tsubotti63/garmin-running-data-normalizer/main/docs/assets/first-user-conversion/synthetic-output-preview.svg)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/synthetic-output-preview.svg)
+[![Synthetic / fictional Run-All preview: PASS_WITH_WARNINGS, one Activity record, three warnings, zero errors, 17 dataset entries, 46 generated files, and the first-read order START_HERE.md, DATASET_INVENTORY.md, then ANALYSIS_HANDOFF.md](https://raw.githubusercontent.com/tsubotti63/garmin-running-data-normalizer/main/docs/assets/first-user-conversion/synthetic-output-preview.svg)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/synthetic-output-preview.svg)
 
 [![Synthetic / fictional monthly activity distance: four activities and 37.0 km in 2030-01; four activities and 47.0 km in 2030-02](https://raw.githubusercontent.com/tsubotti63/garmin-running-data-normalizer/main/docs/assets/first-user-conversion/synthetic-monthly-distance.svg)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/synthetic-monthly-distance.svg)
 
@@ -66,6 +69,11 @@ See the
 [asset sources and reproduction notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/README.md).
 
 Current stable release: **v1.3.3** · Python **3.11+** · Apache License 2.0
+
+Implementation candidate: **v1.4.0** (local review only; not tagged, released, or
+published to PyPI). It adds read-only Export diagnostics and a Human-reviewed
+public-safe Support Bundle without changing normalized datasets, stable keys,
+Snapshot semantics, or the `0 / 0 / 3 / 2` Product exit contract.
 
 v1.3.3 is published as the annotated tag, the latest stable GitHub Release, and
 the latest Production PyPI distribution.

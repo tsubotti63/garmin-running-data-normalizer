@@ -26,6 +26,37 @@ from garmin_running_data_normalizer.snapshot.store import (
     load_manifests,
 )
 from garmin_running_data_normalizer.snapshot.policies import public_registry
+from garmin_running_data_normalizer.diagnostics.contracts import SOURCE_FAMILY_ORDER
+from garmin_running_data_normalizer.diagnostics.doctor import DoctorError, doctor_run_output
+from garmin_running_data_normalizer.diagnostics.support_bundle import (
+    SupportBundleError,
+    build_support_bundle,
+)
+
+
+def _rehash_completed_output(output: Path) -> None:
+    manifest_path = output / "run_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for item in manifest["outputs"]:
+        data = (output / item["path"]).read_bytes()
+        item["bytes"] = len(data)
+        item["sha256"] = hashlib.sha256(data).hexdigest()
+    canonical = "\n".join(
+        f"{item['path']}:{item['sha256']}"
+        for item in sorted(manifest["outputs"], key=lambda value: value["path"])
+    )
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    manifest["deterministic_output_digest"] = digest
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    summary_path = output / "run_summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary["deterministic_output_digest"] = digest
+    summary["manifest_sha256"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    summary_path.write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def _tree_hash(root: Path) -> str:
@@ -850,6 +881,130 @@ class SnapshotLifecycleTest(unittest.TestCase):
                 "canonical_completeness_boundary",
                 context["snapshot_lifecycle"],
             )
+
+    def test_source_completeness_preserves_present_then_absent_snapshots(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            first = root / "source-1"
+            second = root / "source-2"
+            _write_snapshot(first, [_activity("A1")])
+            _write_snapshot(second, [_activity("A2")])
+            wellness = first / "DI-Connect-Wellness"
+            wellness.mkdir()
+            (wellness / "synthetic_sleepData.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "calendarDate": "2030-01-01",
+                            "sleepStartTimestampGMT": "2030-01-01T00:00:00Z",
+                            "sleepEndTimestampGMT": "2030-01-01T08:00:00Z",
+                            "sleepTimeSeconds": 27000,
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            self.register(store, first, "S1", 1)
+            self.register(store, second, "S2", 2)
+
+            output = root / "output"
+            run_snapshot_all(store, output)
+            report = json.loads(
+                (output / "diagnostics/source_completeness.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                report["observation_scope"],
+                "REGISTERED_SNAPSHOT_OBSERVATIONS",
+            )
+            sleep = [
+                item
+                for item in report["families"]
+                if item["source_family_id"] == "sleep"
+            ]
+            self.assertEqual(
+                [(item["observation_ref"], item["state"]) for item in sleep],
+                [("snapshot-1", "PRESENT"), ("snapshot-2", "ABSENT")],
+            )
+            self.assertEqual(
+                [item["evidence_references"] for item in sleep],
+                [
+                    [
+                        {
+                            "artifact": "snapshot/snapshot_coverage.json",
+                            "json_pointer": "/source_completeness_observations/0",
+                        }
+                    ],
+                    [
+                        {
+                            "artifact": "snapshot/snapshot_coverage.json",
+                            "json_pointer": "/source_completeness_observations/1",
+                        }
+                    ],
+                ],
+            )
+            self.assertEqual(len(report["families"]), 2 * len(SOURCE_FAMILY_ORDER))
+
+    def test_rehashed_snapshot_completeness_contradiction_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            for day in (1, 2):
+                source = root / f"source-{day}"
+                _write_snapshot(source, [_activity(f"A{day}")])
+                if day == 1:
+                    wellness = source / "DI-Connect-Wellness"
+                    wellness.mkdir()
+                    (wellness / "synthetic_sleepData.json").write_text(
+                        json.dumps(
+                            [
+                                {
+                                    "calendarDate": "2030-01-01",
+                                    "sleepStartTimestampGMT": "2030-01-01T00:00:00Z",
+                                    "sleepEndTimestampGMT": "2030-01-01T08:00:00Z",
+                                    "sleepTimeSeconds": 27000,
+                                }
+                            ]
+                        ),
+                        encoding="utf-8",
+                    )
+                self.register(store, source, f"S{day}", day)
+            output = root / "output"
+            run_snapshot_all(store, output)
+            completeness_path = output / "diagnostics/source_completeness.json"
+            completeness = json.loads(completeness_path.read_text(encoding="utf-8"))
+            sleep = [
+                item for item in completeness["families"]
+                if item["source_family_id"] == "sleep"
+            ]
+            self.assertEqual(
+                [(item["observation_ref"], item["state"]) for item in sleep],
+                [("snapshot-1", "PRESENT"), ("snapshot-2", "ABSENT")],
+            )
+            fields = {
+                "state", "content_validity", "candidate_asset_count",
+                "readable_asset_count", "source_observation_count", "state_counts",
+                "reason_codes", "content_reason_codes", "user_guidance_id",
+            }
+            first_values = json.loads(json.dumps({key: sleep[0][key] for key in fields}))
+            second_values = json.loads(json.dumps({key: sleep[1][key] for key in fields}))
+            sleep[0].update(second_values)
+            sleep[1].update(first_values)
+            completeness_path.write_text(
+                json.dumps(completeness, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            _rehash_completed_output(output)
+            with self.assertRaises(DoctorError):
+                doctor_run_output(output)
+            destination = root / "contradictory.zip"
+            with self.assertRaises(SupportBundleError):
+                build_support_bundle(output, destination)
+            self.assertFalse(destination.exists())
 
     def test_malformed_supported_json_is_extraction_failed_not_deletion(
         self,

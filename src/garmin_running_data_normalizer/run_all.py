@@ -177,6 +177,8 @@ OUTPUT_PATHS = (
     "qa/relationship_summary.json",
     "qa/performance_metrics_summary.json",
     "qa/daily_metrics_summary.json",
+    "diagnostics/source_completeness.json",
+    "diagnostics/run_quality.json",
     "START_HERE.md",
     "DATASET_INVENTORY.md",
     "ANALYSIS_HANDOFF.md",
@@ -255,47 +257,10 @@ def _discover(root: Path) -> list[DiscoveredAsset]:
 
 
 def _asset_family(asset: DiscoveredAsset) -> str:
+    from .diagnostics.detector import classify_source_name
+
     logical_name = asset.member_path or asset.source_path
-    lower_name = logical_name.lower()
-    basename = Path(logical_name).name.lower()
-    if asset.kind == "json" and lower_name.endswith("summarizedactivities.json"):
-        return "activities"
-    if asset.kind == "json" and lower_name.endswith("gear.json"):
-        return "gear"
-    if asset.kind == "json" and lower_name.endswith("personalrecord.json"):
-        return "personal_records"
-    if asset.kind == "json" and basename.startswith("hillscore"):
-        return "hill_score"
-    if asset.kind == "json" and basename.startswith("endurancescore"):
-        return "endurance_score"
-    if asset.kind == "json" and basename.startswith("runracepredictions"):
-        return "race_prediction"
-    if asset.kind == "json" and basename.endswith("sleepdata.json"):
-        return "sleep"
-    if asset.kind == "json" and basename.startswith("udsfile"):
-        return "uds"
-    if asset.kind == "json" and basename.startswith("metricsacutetrainingload"):
-        return "acute_training_load"
-    if asset.kind == "json" and basename.startswith("trainingreadinessdto"):
-        return "training_readiness"
-    if asset.kind == "json" and basename.startswith(
-        ("activityvo2max", "metricsmaxmetdata")
-    ):
-        return "vo2max"
-    if asset.kind == "json" and basename.startswith("traininghistory"):
-        return "training_history"
-    if asset.kind == "json" and basename.endswith(
-        (
-            "userbiometrics.json",
-            "biometrics_latest.json",
-            "userbiometricprofiledata.json",
-            "heartratezones.json",
-        )
-    ):
-        return "lactate_threshold"
-    if asset.kind == "fit":
-        return "fit"
-    return "unclassified"
+    return classify_source_name(logical_name, asset.kind)
 
 
 def _classify_assets(assets: list[DiscoveredAsset]) -> dict[str, list[DiscoveredAsset]]:
@@ -1272,6 +1237,7 @@ def run_all(
             "current_activity_ids",
             "current_gear_keys",
             "current_fit_session_keys",
+            "source_completeness_context",
         }
         if not required_snapshot_context <= set(snapshot_context) or not set(
             snapshot_context
@@ -1293,6 +1259,48 @@ def run_all(
                 ),
             }
         )
+    from .diagnostics.completeness import build_source_completeness
+    from .diagnostics.contracts import SOURCE_FAMILY_ORDER
+    from .diagnostics.run_quality import build_run_quality
+
+    source_completeness = build_source_completeness(
+        product_version=__version__,
+        family_candidate_counts={
+            family: len(families[family]) for family in SOURCE_FAMILY_ORDER
+        },
+        records=records,
+        fit_status=fit_status,
+        performance_audit=performance_audit,
+        unknown_evidence_count=sum(
+            1 for asset in initial_assets if _asset_family(asset) == "unclassified"
+        ),
+        snapshot_context=(
+            snapshot_context.get("source_completeness_context")
+            if snapshot_context is not None
+            else None
+        ),
+        fit_audit=fit_audit,
+    )
+    run_quality = build_run_quality(
+        product_version=__version__,
+        run_all_version=RUN_ALL_VERSION,
+        status=status,
+        warnings=warnings,
+        dataset_qa_entries=qa_entries,
+        relationship_summary=relationship_summary,
+        performance_audit=performance_audit,
+        fit_status=fit_status,
+        source_completeness=source_completeness,
+        authority_payloads=payloads,
+    )
+    payloads.update(
+        {
+            "diagnostics/source_completeness.json": _json_bytes(
+                source_completeness
+            ),
+            "diagnostics/run_quality.json": _json_bytes(run_quality),
+        }
+    )
     generated_paths = list(OUTPUT_PATHS)
     if external_safe_pack:
         safe_pack_path = "analysis/external_safe_handoff.zip"
