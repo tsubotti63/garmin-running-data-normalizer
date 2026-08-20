@@ -1,6 +1,6 @@
 # Known Limitations
 
-These limitations apply to the current stable v1.3.3 release published as the
+These limitations apply to the current stable v1.4.0 release published as the
 latest GitHub Release and Production PyPI distribution. These remain explicit
 Product boundaries.
 
@@ -100,17 +100,17 @@ Product boundaries.
 - Hosted processing, Garmin authentication, Open-Meteo, JMA, Instagram,
   wellness/coaching interpretation, Parquet output, and automatic personal
   analysis are outside the stable scope.
-- Stable v1.3.3 retains `tzdata` as a Windows-only runtime dependency and emits
+- Stable v1.4.0 retains `tzdata` as a Windows-only runtime dependency and emits
   the bounded `TIMEZONE_DATA_UNAVAILABLE` diagnostic if IANA timezone data is
   unavailable in an incomplete environment. Validation covers GitHub Actions
   `windows-latest` and one maintainer-owned physical Windows Production PyPI
   clean install. This does not establish universal Windows compatibility.
 - External-safe output is opt-in, month-granularity, Activities-only, and does
   not automatically upload or provide provider-specific privacy guarantees.
-- Production PyPI `1.3.3` is immutable. Its long description preserves the
+- Production PyPI `1.3.3` remains immutable. Its long description preserves the
   publication-time README snapshot, including pre-publication candidate
-  wording; current repository documentation is the maintained public truth for
-  future package builds.
+  wording. Production PyPI `1.4.0` is the current release artifact; current
+  repository documentation is the maintained public truth for future builds.
 
 The documented CLI and versioned Run-All output contract are stable for `1.x`.
 Other Python modules are usable but are not all promoted to an independently

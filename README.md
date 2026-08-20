@@ -68,18 +68,15 @@ Select either preview to inspect its full-size accessible SVG.
 See the
 [asset sources and reproduction notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/README.md).
 
-Current stable release: **v1.3.3** · Python **3.11+** · Apache License 2.0
+Current stable release: **v1.4.0** · Python **3.11+** · Apache License 2.0
 
-Implementation candidate: **v1.4.0** (local review only; not tagged, released, or
-published to PyPI). It adds read-only Export diagnostics and a Human-reviewed
-public-safe Support Bundle without changing normalized datasets, stable keys,
-Snapshot semantics, or the `0 / 0 / 3 / 2` Product exit contract.
+v1.4.0 adds read-only Export diagnostics and a Human-reviewed public-safe
+Support Bundle without changing normalized datasets, stable keys, Snapshot
+semantics, or the `0 / 0 / 3 / 2` Product exit contract.
 
-v1.3.3 is published as the annotated tag, the latest stable GitHub Release, and
-the latest Production PyPI distribution.
-
-v1.3.3 restores the approved Sleep contract and keeps the v1.3.0 dataset and
-runtime contracts unchanged.
+v1.4.0 is published as the annotated tag, the latest stable GitHub Release, and
+the latest Production PyPI distribution. v1.3.3 remains the historical Sleep
+contract restoration patch release.
 
 - [Install from PyPI](https://pypi.org/project/garmin-running-data-normalizer/)
 - [Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md)
@@ -88,9 +85,9 @@ runtime contracts unchanged.
 - [FAQ](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/faq.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
-- [v1.3.3 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.3.3.md)
-- [Published stable Release v1.3.3](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.3)
-- [Production PyPI v1.3.3](https://pypi.org/project/garmin-running-data-normalizer/1.3.3/)
+- [v1.4.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.4.0.md)
+- [Published stable Release v1.4.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.4.0)
+- [Production PyPI v1.4.0](https://pypi.org/project/garmin-running-data-normalizer/1.4.0/)
 - Project story on Zenn: [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
 
 ## Why this project
@@ -203,7 +200,7 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. The published v1.3.3
+`python -m garmin_running_data_normalizer --version`. The published v1.4.0
 package installs `tzdata` automatically on Windows so Python can resolve the
 existing IANA `Asia/Tokyo` timezone contract. macOS and Linux continue to use
 their system timezone data.

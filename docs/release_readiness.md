@@ -64,7 +64,7 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
-and GitHub Releases remain immutable. v1.3.3 is the current stable release; its
+and GitHub Releases remain immutable. v1.3.3 is the historical patch release; its
 tag, GitHub Release, and Production PyPI publication were recorded only after
 the corresponding external state was observed.
 

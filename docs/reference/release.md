@@ -1,8 +1,11 @@
 # Release Readiness Reference
 
-## Current stable release
+## Historical release reference: v1.3.2
 
-- Version: `1.3.2`
+This page records the v1.3.2 publication snapshot. The current stable release
+is v1.4.0; use the root README and current release notes for current truth.
+
+- Version at this historical snapshot: `1.3.2`
 - Classification: patch release
 - Scope: Snapshot correctness and evidence preservation
 - Product API, dataset count, stable keys, grains, output paths, privacy, and
@@ -16,7 +19,7 @@
 - TestPyPI: Not used for v1.3.2; it was not required by the approved patch
   release contract
 
-## Current facts
+## Historical facts at the v1.3.2 snapshot
 
 - Repository publication: Public
 - Default branch: `main`

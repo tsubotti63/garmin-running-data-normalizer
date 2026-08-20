@@ -4,9 +4,22 @@ This file records factual Garmin Running Data Normalizer product changes. The
 Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
 Platform maintains its own separate changelog.
 
+## v1.4.0 — stable Production Export Evidence and Diagnostics release
+
+Status: published as the annotated tag, the latest stable GitHub Release, and a
+verified Production PyPI distribution on 2026-08-21 JST.
+
+- Adds Export Evidence Doctor, Source Completeness, Run Quality, and the typed
+  public-safe six-member Support Bundle.
+- Preserves the 17-dataset/212-field inventory, 6 explicit relationships, stable
+  keys, Snapshot and Run-All semantics, normalized truth, and the `0 / 0 / 3 / 2`
+  Product exit mapping.
+- Keeps the Support Bundle local-only and Human-reviewed; it never uploads
+  automatically and is distinct from the Activities-only External-safe Pack.
+
 ## v1.3.3 — stable Production Sleep contract restoration patch
 
-Status: published as an annotated tag, the latest stable
+Status: published as an annotated tag,
 [GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.3.3),
 and a verified
 [Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.3.3/)

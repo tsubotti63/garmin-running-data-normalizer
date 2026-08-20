@@ -19,7 +19,7 @@ VERSION_SOURCE = "src/garmin_running_data_normalizer/__init__.py"
 
 
 def _copy_validator_inputs(destination: Path) -> None:
-    for relative in (*current_documents("1.3.3"), VERSION_SOURCE):
+    for relative in (*current_documents("1.4.0"), VERSION_SOURCE):
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / relative, target)
@@ -453,7 +453,7 @@ def test_partial_success_exit_zero_in_current_release_notes_fails(
     tmp_path: Path,
 ) -> None:
     _copy_validator_inputs(tmp_path)
-    release_notes = tmp_path / "docs/release_notes/v1.3.3.md"
+    release_notes = tmp_path / "docs/release_notes/v1.4.0.md"
     release_notes.write_text(
         release_notes.read_text(encoding="utf-8").replace(
             "`PARTIAL_SUCCESS` / exit 3",
