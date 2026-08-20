@@ -13,6 +13,22 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
+## v1.4.0 — implementation candidate (unreleased)
+
+### Added
+
+- Export Evidence Doctor with deterministic pre-run and post-run projections.
+- Source Completeness and Run Quality diagnostic artifacts for completed runs.
+- A typed, public-safe, deterministic six-member Support Bundle that requires
+  Human review and never uploads automatically.
+
+### Compatibility
+
+- The existing 17 datasets, 212 fields, 6 explicit relationships, stable keys,
+  Snapshot behavior, normalized truth, External-safe Pack, and Product exit
+  mapping remain unchanged.
+- This candidate is not tagged, released, or published to Production PyPI.
+
 ## v1.3.3 — stable Production patch release
 
 Published on 2026-08-13 JST as the annotated `v1.3.3` tag, the latest stable

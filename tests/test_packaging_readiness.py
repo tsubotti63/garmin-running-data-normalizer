@@ -12,14 +12,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PackagingReadinessTest(unittest.TestCase):
-    def test_distribution_metadata_matches_stable_identity(self) -> None:
+    def test_distribution_metadata_matches_candidate_identity(self) -> None:
         metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
         project = metadata["project"]
 
         self.assertEqual(project["name"], "garmin-running-data-normalizer")
         self.assertNotIn("version", project)
         self.assertEqual(project["dynamic"], ["version"])
-        self.assertEqual(__version__, "1.3.3")
+        self.assertEqual(__version__, "1.4.0")
         self.assertEqual(
             metadata["tool"]["setuptools"]["dynamic"]["version"],
             {"attr": "garmin_running_data_normalizer.__version__"},

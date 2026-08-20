@@ -46,6 +46,9 @@ def run_snapshot_all(
                 "lineage": build["lineage"],
                 "coverage": build["coverage"],
                 "merge_summary": build["merge_summary"],
+                "source_completeness_context": build[
+                    "source_completeness_context"
+                ],
                 **build["relationship_context"],
             },
         )

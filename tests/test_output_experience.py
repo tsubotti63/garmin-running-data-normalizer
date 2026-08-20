@@ -355,6 +355,8 @@ class OutputExperienceTest(unittest.TestCase):
                 "qa/relationship_summary.json",
                 "qa/performance_metrics_summary.json",
                 "qa/daily_metrics_summary.json",
+                "diagnostics/source_completeness.json",
+                "diagnostics/run_quality.json",
                 "START_HERE.md",
                 "DATASET_INVENTORY.md",
                 "ANALYSIS_HANDOFF.md",

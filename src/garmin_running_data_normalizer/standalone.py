@@ -5,6 +5,29 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from . import __version__
+from .diagnostics.validation import validate_diagnostic_authorities
+from .run_all import OUTPUT_PATHS, SNAPSHOT_LIFECYCLE_PATHS
+
+
+OPTIONAL_OUTPUT_PATH = "analysis/external_safe_handoff.zip"
+
+
+def _generated_path_sets(*, diagnostics_available: bool) -> tuple[tuple[str, ...], ...]:
+    base = [
+        path
+        for path in OUTPUT_PATHS
+        if diagnostics_available or not path.startswith("diagnostics/")
+    ]
+    optional = [*base[:-2], OPTIONAL_OUTPUT_PATH, *base[-2:]]
+    snapshot = [*base[:-2], *SNAPSHOT_LIFECYCLE_PATHS, *base[-2:]]
+    optional_snapshot = [
+        *optional[:-2],
+        *SNAPSHOT_LIFECYCLE_PATHS,
+        *optional[-2:],
+    ]
+    return tuple(tuple(value) for value in (base, optional, snapshot, optional_snapshot))
+
 
 class StandaloneHandoffError(ValueError):
     """Raised when a Run-All directory is not a self-contained safe handoff."""
@@ -101,6 +124,35 @@ def validate_standalone_handoff(root: str | Path) -> dict[str, Any]:
         or manifest.get("run_all_version") != summary.get("run_all_version")
     ):
         raise StandaloneHandoffError("manifest and summary versions do not match")
+    product_version = summary.get("product_version")
+    try:
+        version_parts = tuple(int(part) for part in str(product_version).split(".")[:2])
+    except ValueError as exc:
+        raise StandaloneHandoffError("handoff Product version is invalid") from exc
+    if len(version_parts) != 2 or version_parts[0] != 1:
+        raise StandaloneHandoffError("handoff Product version is not supported")
+    diagnostics_available = version_parts >= (1, 4)
+    if diagnostics_available and product_version != __version__:
+        raise StandaloneHandoffError(
+            "current diagnostic handoff version does not match the installed Product"
+        )
+    if diagnostics_available:
+        completeness = _json_object(
+            output_root, "diagnostics/source_completeness.json"
+        )
+        quality = _json_object(output_root, "diagnostics/run_quality.json")
+        expected_exit = 3 if summary.get("status") == "PARTIAL_SUCCESS" else 0
+        if (
+            completeness.get("product_version") != product_version
+            or quality.get("product_version") != product_version
+            or quality.get("run_status") != summary.get("status")
+            or quality.get("exit_code") != expected_exit
+            or len(quality.get("dataset_summary", [])) != 17
+            or len(quality.get("relationship_summary", [])) != 6
+        ):
+            raise StandaloneHandoffError(
+                "v1.4 diagnostic authorities do not match the completed handoff"
+            )
     if context.get("run_status") != summary.get("status"):
         raise StandaloneHandoffError("analysis context status does not match summary")
     if context.get("product_version") != summary.get("product_version"):
@@ -138,6 +190,20 @@ def validate_standalone_handoff(root: str | Path) -> dict[str, Any]:
         raise StandaloneHandoffError("artifact inventory is missing")
     if [item.get("path") for item in artifacts if isinstance(item, dict)] != generated_paths:
         raise StandaloneHandoffError("artifact inventory does not match generated paths")
+    if tuple(generated_paths) not in _generated_path_sets(
+        diagnostics_available=diagnostics_available
+    ):
+        raise StandaloneHandoffError(
+            "generated paths do not match the version-aware exact set"
+        )
+    actual_paths: set[str] = set()
+    for path in output_root.rglob("*"):
+        if path.is_symlink():
+            raise StandaloneHandoffError("handoff contains a symbolic link")
+        if path.is_file():
+            actual_paths.add(path.relative_to(output_root).as_posix())
+    if actual_paths != set(generated_paths):
+        raise StandaloneHandoffError("handoff contains an undeclared or missing file")
     for required in (
         *required_documents,
         "ANALYSIS_CONTEXT.json",
@@ -154,6 +220,19 @@ def validate_standalone_handoff(root: str | Path) -> dict[str, Any]:
         raise StandaloneHandoffError(
             "deterministic output digest does not match manifest payloads"
         )
+    if diagnostics_available:
+        try:
+            validate_diagnostic_authorities(
+                output_root,
+                manifest=manifest,
+                summary=summary,
+                completeness=completeness,
+                quality=quality,
+            )
+        except ValueError as exc:
+            raise StandaloneHandoffError(
+                "v1.4 diagnostic authorities contradict Product evidence"
+            ) from exc
 
     return {
         "status": "PASS",
@@ -166,6 +245,9 @@ def validate_standalone_handoff(root: str | Path) -> dict[str, Any]:
         "analysis_entry_point": "analysis/activities.csv",
         "repository_required": False,
         "internet_required": False,
+        "diagnostic_contract_availability": (
+            "CURRENT" if diagnostics_available else "LEGACY_NOT_AVAILABLE"
+        ),
     }
 
 

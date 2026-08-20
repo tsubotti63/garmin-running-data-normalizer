@@ -96,14 +96,14 @@ def test_output_preview_uses_actual_synthetic_run_all_evidence(
     assert "1 Activity record" in preview
     assert "3 warnings • 0 errors" in preview
     assert "17 dataset entries" in preview
-    assert "44 generated files" in preview
+    assert "46 generated files" in preview
     assert "START_HERE.md" in preview
     assert "DATASET_INVENTORY.md" in preview
     assert "ANALYSIS_HANDOFF.md" in preview
     root = ET.fromstring(preview)
     description = root.find("{http://www.w3.org/2000/svg}desc")
     assert description is not None
-    assert "44 generated files" in (description.text or "")
+    assert "46 generated files" in (description.text or "")
     assert (
         "first-read order START_HERE.md, DATASET_INVENTORY.md, then "
         "ANALYSIS_HANDOFF.md"

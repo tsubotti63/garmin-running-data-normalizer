@@ -7,6 +7,7 @@
 | Try the product without real Garmin data | [Product Quick Start](product_quick_start.md) |
 | Start from a Garmin Account Export | [Getting Started from Garmin Export](getting_started_from_garmin_export.md) |
 | Start AI-assisted analysis | [AI Analysis Quick Start](ai_analysis_quick_start.md) |
+| Interpret a real Run-All result or prepare support evidence | [v1.4 Export Evidence and Diagnostics](v1_4_diagnostics.md) |
 | Read short answers | [FAQ](faq.md) |
 
 Garmin users can begin with the export guide. Data analysts can begin with the
@@ -21,6 +22,7 @@ and platform material linked below after reviewing the product documentation.
 - [Wellness and Daily Metrics](wellness_metrics.md)
 - [Performance Metrics](performance_metrics.md)
 - [Known Limitations](known_limitations.md)
+- [v1.4 Export Evidence and Diagnostics](v1_4_diagnostics.md)
 
 ## Examples and evidence
 

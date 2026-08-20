@@ -40,6 +40,7 @@ CURRENT_STABLE_DOCUMENTS = (
     "docs/faq.md",
     "docs/known_limitations.md",
 )
+CURRENT_STABLE_VERSION = "1.3.3"
 WINDOWS_SOURCE_CONTROL_COMMANDS = re.compile(
     r"(?im)^\s*git\s+(?:clone|fetch|checkout|pull)\b"
 )
@@ -185,7 +186,7 @@ def validate(root: Path = ROOT) -> list[str]:
     for relative in CURRENT_STABLE_DOCUMENTS:
         text = contents.get(relative, "")
         if current_version is not None:
-            version_pattern = re.escape(current_version)
+            version_pattern = re.escape(CURRENT_STABLE_VERSION)
             if not re.search(
                 rf"(?:(?:current|stable)[^\n]*v?{version_pattern}|"
                 rf"v?{version_pattern}[^\n]*(?:current|stable))",
@@ -193,7 +194,7 @@ def validate(root: Path = ROOT) -> list[str]:
                 re.IGNORECASE,
             ):
                 findings.append(
-                    f"{relative}: current stable v{current_version} is not identified"
+                    f"{relative}: current stable v{CURRENT_STABLE_VERSION} is not identified"
                 )
         if re.search(
             r"(?:patch release is being prepared|unreleased patch|"
@@ -211,6 +212,13 @@ def validate(root: Path = ROOT) -> list[str]:
         if "automatically" not in text or "`tzdata`" not in text:
             findings.append(
                 f"{relative}: current Windows automatic tzdata behavior is missing"
+            )
+
+    if current_version is not None and current_version != CURRENT_STABLE_VERSION:
+        candidate_marker = f"Implementation candidate: **v{current_version}**"
+        if candidate_marker not in contents.get("README.md", ""):
+            findings.append(
+                f"README.md: implementation candidate v{current_version} is not identified"
             )
 
     getting_started = contents.get("docs/getting_started_from_garmin_export.md", "")

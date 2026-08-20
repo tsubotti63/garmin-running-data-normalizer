@@ -36,6 +36,7 @@ CURRENT_DOCUMENTS = (
     CS010_DOCUMENT,
 )
 CURRENT_RELEASE_NOTES_TEMPLATE = "docs/release_notes/v{version}.md"
+CURRENT_STABLE_VERSION = "1.3.3"
 
 STATUS_EXIT_CONTRACT_MARKERS = (
     "| `PASS` | 0 |",
@@ -253,7 +254,7 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
         findings.append(f"{VERSION_SOURCE}: package version is missing or invalid")
         version = None
 
-    documents = current_documents(version)
+    documents = current_documents(CURRENT_STABLE_VERSION)
     contents: dict[str, str] = {}
     for relative in documents:
         path = root / relative
@@ -264,20 +265,20 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
 
     if version is not None:
         required_version_markers = {
-            "README.md": f"Current stable release: **v{version}**",
-            "docs/architecture_overview.md": f"- Applies to: stable v{version}",
-            "docs/product_quick_start.md": f"currently serve stable v{version}",
-            "docs/output_contract.md": f"- Current stable contract: v{version}",
-            "AGENTS.md": f"Stable v{version} maintenance and public-surface alignment",
+            "README.md": f"Current stable release: **v{CURRENT_STABLE_VERSION}**",
+            "docs/architecture_overview.md": f"- Applies to: stable v{CURRENT_STABLE_VERSION}",
+            "docs/product_quick_start.md": f"currently serve stable v{CURRENT_STABLE_VERSION}",
+            "docs/output_contract.md": f"- Current stable contract: v{CURRENT_STABLE_VERSION}",
+            "AGENTS.md": f"Stable v{CURRENT_STABLE_VERSION} maintenance and public-surface alignment",
         }
         for relative, marker in required_version_markers.items():
             if not _contains_whitespace_normalized(contents.get(relative, ""), marker):
                 findings.append(
-                    f"{relative}: current stable marker does not match package v{version}"
+                    f"{relative}: current stable marker does not match published v{CURRENT_STABLE_VERSION}"
                 )
 
     stable_run_all_marker = (
-        f"Sleep Daily and HRV Daily are optional stable v{version} Run-All datasets."
+        f"Sleep Daily and HRV Daily are optional stable v{CURRENT_STABLE_VERSION} Run-All datasets."
         if version is not None
         else "Sleep Daily and HRV Daily are optional stable Run-All datasets."
     )
@@ -367,11 +368,21 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
         ),
     }
     if version is not None:
-        release_notes = CURRENT_RELEASE_NOTES_TEMPLATE.format(version=version)
+        release_notes = CURRENT_RELEASE_NOTES_TEMPLATE.format(version=CURRENT_STABLE_VERSION)
         required_markers[release_notes] = (
-            f"# Garmin Running Data Normalizer v{version}",
+            f"# Garmin Running Data Normalizer v{CURRENT_STABLE_VERSION}",
             "`PARTIAL_SUCCESS` / exit 3",
         )
+        if version != CURRENT_STABLE_VERSION:
+            candidate_markers = {
+                "README.md": f"Implementation candidate: **v{version}**",
+                "docs/output_contract.md": f"- Implementation candidate: v{version} (not published)",
+            }
+            for relative, marker in candidate_markers.items():
+                if not _contains_whitespace_normalized(contents.get(relative, ""), marker):
+                    findings.append(
+                        f"{relative}: implementation candidate marker is missing: {marker}"
+                    )
     for relative, markers in required_markers.items():
         text = contents.get(relative, "")
         for marker in markers:
@@ -509,7 +520,7 @@ def main() -> None:
     result = {
         "status": "PASS" if not findings else "FAIL",
         "product_version": version,
-        "documents_checked": list(current_documents(version)),
+        "documents_checked": list(current_documents(CURRENT_STABLE_VERSION)),
         "findings": findings,
     }
     print(json.dumps(result, indent=2, sort_keys=True))

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="530" viewBox="0 0 1200 530" role="img" aria-labelledby="title desc">
   <title id="title">Synthetic Run-All output preview</title>
-  <desc id="desc">Synthetic and fictional output preview showing PASS_WITH_WARNINGS, 1 Activity record, 3 warnings, 0 errors, 17 dataset inventory entries, 44 generated files, and the first-read order START_HERE.md, DATASET_INVENTORY.md, then ANALYSIS_HANDOFF.md.</desc>
+  <desc id="desc">Synthetic and fictional output preview showing PASS_WITH_WARNINGS, 1 Activity record, 3 warnings, 0 errors, 17 dataset inventory entries, 46 generated files, and the first-read order START_HERE.md, DATASET_INVENTORY.md, then ANALYSIS_HANDOFF.md.</desc>
   <style>
     .bg { fill: #f7fafc; }
     .panel { fill: #ffffff; stroke: #8fa3b8; stroke-width: 2; }
@@ -30,7 +30,7 @@
   <rect x="420" y="170" width="340" height="18" class="accent2"/>
   <text x="444" y="166" class="inverse" font-size="20" font-weight="700">DATASET_INVENTORY.md</text>
   <text x="444" y="235" class="ink" font-size="22" font-weight="700">17 dataset entries</text>
-  <text x="444" y="282" class="muted" font-size="18">44 generated files</text>
+  <text x="444" y="282" class="muted" font-size="18">46 generated files</text>
   <text x="444" y="326" class="muted" font-size="17">grain • stable key • privacy</text>
   <rect x="444" y="350" width="292" height="2" fill="#bcccdc"/>
   <text x="444" y="378" class="muted" font-size="15">human-readable handoff</text>
