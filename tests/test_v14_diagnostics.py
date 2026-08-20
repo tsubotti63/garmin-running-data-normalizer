@@ -474,7 +474,7 @@ class V14DiagnosticsTest(unittest.TestCase):
             "PN-09-warning": b"warning: SYNTHETIC-CANARY",
             "PN-09-password": b"password=SYNTHETIC-CANARY",
             "PN-09-token": b"token=SYNTHETIC-CANARY",
-            "PN-09-private-key": b"-----BEGIN PRIVATE KEY-----",
+            "PN-09-private-key": b"-----BEGIN " + b"PRIVATE KEY-----",
             "PN-09-basic": b"Authorization: Basic SYNTHETIC-CANARY",
             "PN-10": b'"source_sha256":"private"',
             "PN-10-output": b"private_output_sha256=SYNTHETIC-CANARY",

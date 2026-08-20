@@ -19,6 +19,10 @@ SECRET = re.compile(
     rb"xox[baprs]-[A-Za-z0-9-]+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|"
     rb"(?:Cookie|Set-Cookie):"
 )
+SYNTHETIC_TEST_PATH = "tests/test_v14_diagnostics.py"
+SYNTHETIC_PRIVATE_KEY_LINE = (
+    b'"PN-09-private-key": b"-----BEGIN PRIVATE KEY-----",'
+)
 INTERNAL = {
     "private_source_name": re.compile(rb"running[_-]data[_-]platform[_-]garmin[_-]mvp[_-]verified", re.IGNORECASE),
     "task_reference": re.compile((b"codex" + b"-task:"), re.IGNORECASE),
@@ -61,7 +65,35 @@ def git(*args: str, binary: bool = False):
     return subprocess.check_output(["git", *args], cwd=ROOT, text=not binary)
 
 
-def scan(label: str, data: bytes, *, allow_email: bool = False) -> list[str]:
+def _is_synthetic_private_key_marker(
+    data: bytes,
+    match: re.Match[bytes],
+    *,
+    allow_synthetic_canary: bool,
+) -> bool:
+    """Allow only the exact historical synthetic fixture marker.
+
+    The public-history scan must keep rejecting real credential material. The
+    exception is deliberately narrow: it applies only when the caller has
+    already established that the blob is the v1.4 diagnostics test fixture,
+    the match is the exact private-key marker, and the fixture contains that
+    exact canary declaration once.
+    """
+    return (
+        allow_synthetic_canary
+        and match.group(0) == b"-----BEGIN PRIVATE KEY-----"
+        and data.count(match.group(0)) == 1
+        and SYNTHETIC_PRIVATE_KEY_LINE in data
+    )
+
+
+def scan(
+    label: str,
+    data: bytes,
+    *,
+    allow_email: bool = False,
+    allow_synthetic_canary: bool = False,
+) -> list[str]:
     findings = []
     for name, pattern in INTERNAL.items():
         if pattern.search(data):
@@ -70,7 +102,14 @@ def scan(label: str, data: bytes, *, allow_email: bool = False) -> list[str]:
         findings.append(f"{label}: task_or_internal_uuid")
     if HOST_PATH.search(data):
         findings.append(f"{label}: host_absolute_path")
-    if SECRET.search(data):
+    if any(
+        not _is_synthetic_private_key_marker(
+            data,
+            match,
+            allow_synthetic_canary=allow_synthetic_canary,
+        )
+        for match in SECRET.finditer(data)
+    ):
         findings.append(f"{label}: credential_or_token")
     if not allow_email and EMAIL.search(data):
         findings.append(f"{label}: email")
@@ -212,6 +251,12 @@ def main() -> None:
             findings.extend(scan(f"path {commit}:{path}", path.encode("utf-8")))
     findings.extend(validate_commit_identities(identity_records))
 
+    object_paths: dict[str, list[str]] = {}
+    for line in git("rev-list", "--all", "--objects").splitlines():
+        parts = line.split(" ", 1)
+        if len(parts) == 2:
+            object_paths.setdefault(parts[0], []).append(parts[1])
+
     listing = git("cat-file", "--batch-all-objects", "--batch-check=%(objectname) %(objecttype)")
     scanned_objects = 0
     for line in listing.splitlines():
@@ -225,6 +270,14 @@ def main() -> None:
                 f"object {oid} ({object_type})",
                 data,
                 allow_email=object_type in {"commit", "tag"},
+                allow_synthetic_canary=(
+                    object_type == "blob"
+                    and object_paths.get(oid, [])
+                    and all(
+                        path == SYNTHETIC_TEST_PATH
+                        for path in object_paths[oid]
+                    )
+                ),
             )
         )
 
