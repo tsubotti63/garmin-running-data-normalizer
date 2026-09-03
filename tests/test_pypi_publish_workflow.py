@@ -7,12 +7,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "publish-pypi.yml"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 
 class PyPIPublishWorkflowTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.workflow = WORKFLOW.read_text(encoding="utf-8")
+        cls.ci_workflow = CI_WORKFLOW.read_text(encoding="utf-8")
 
     def test_workflow_is_manual_and_build_only_by_default(self) -> None:
         self.assertIn("workflow_dispatch:", self.workflow)
@@ -57,11 +59,42 @@ class PyPIPublishWorkflowTest(unittest.TestCase):
             'if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then',
             self.workflow,
         )
-        self.assertIn('test "$(git rev-parse HEAD)" = "$SOURCE_SHA"', self.workflow)
+        self.assertIn('test "$WORKFLOW_GIT_REF" = "refs/heads/main"', self.workflow)
+        self.assertIn(
+            'test "$WORKFLOW_REF" = '
+            '"tsubotti63/garmin-running-data-normalizer/'
+            '.github/workflows/publish-pypi.yml@refs/heads/main"',
+            self.workflow,
+        )
+        self.assertIn('test "$WORKFLOW_SHA" = "$SOURCE_SHA"', self.workflow)
+        self.assertIn('test "$(git rev-parse HEAD)" = "$WORKFLOW_SHA"', self.workflow)
         self.assertIn("parse_wheel_filename", self.workflow)
         self.assertIn("parse_sdist_filename", self.workflow)
         self.assertIn("python -m twine check --strict dist/*", self.workflow)
         self.assertIn("sha256sum dist/*", self.workflow)
+
+    def test_build_executes_only_the_trusted_dispatch_sha(self) -> None:
+        self.assertIn("ref: ${{ github.sha }}", self.workflow)
+        self.assertNotRegex(
+            self.workflow,
+            re.compile(r"^\s+ref:\s*\$\{\{\s*inputs\.", re.MULTILINE),
+        )
+        self.assertIn("WORKFLOW_GIT_REF: ${{ github.ref }}", self.workflow)
+        self.assertIn("WORKFLOW_REF: ${{ github.workflow_ref }}", self.workflow)
+        self.assertIn("WORKFLOW_SHA: ${{ github.sha }}", self.workflow)
+        dispatch_verification = self.workflow.index("- name: Verify trusted dispatch source")
+        checkout = self.workflow.index("- uses: actions/checkout@")
+        identity_verification = self.workflow.index("- name: Verify checked-out source identity")
+        repository_execution = self.workflow.index("- name: Install validation tooling")
+        self.assertLess(dispatch_verification, checkout)
+        self.assertLess(checkout, identity_verification)
+        self.assertLess(identity_verification, repository_execution)
+
+    def test_ci_declares_least_privilege_permissions(self) -> None:
+        self.assertRegex(
+            self.ci_workflow,
+            re.compile(r"^permissions:\n  contents: read$", re.MULTILINE),
+        )
 
     def test_workflow_uses_oidc_without_repository_credentials(self) -> None:
         self.assertNotIn("secrets.", self.workflow)

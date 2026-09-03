@@ -37,19 +37,31 @@ jobs:
     name: Build and validate exact source
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          ref: ${{ inputs.source_sha }}
-          persist-credentials: false
-      - name: Verify immutable source selection
+      - name: Verify trusted dispatch source
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
+          WORKFLOW_GIT_REF: ${{ github.ref }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          WORKFLOW_SHA: ${{ github.sha }}
         run: |
           if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "source_sha must be a full lowercase 40-character commit SHA" >&2
             exit 1
           fi
-          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$WORKFLOW_GIT_REF" = "refs/heads/main"
+          test "$WORKFLOW_REF" = "tsubotti63/garmin-running-data-normalizer/.github/workflows/publish-pypi.yml@refs/heads/main"
+          test "$WORKFLOW_SHA" = "$SOURCE_SHA"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify checked-out source identity
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          test "$WORKFLOW_SHA" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$WORKFLOW_SHA"
           test -z "$(git status --porcelain)"
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
