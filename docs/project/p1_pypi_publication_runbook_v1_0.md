@@ -45,11 +45,15 @@ The workflow requires:
 3. the selected `testpypi` or `pypi` target; and
 4. an explicit `perform_upload` boolean.
 
-The default is build-only. In build-only mode it checks out the exact SHA,
-verifies the clean source identity, runs all synthetic tests, builds one wheel
-and one source distribution, applies strict Twine checks, confirms the expected
-version, installs both artifacts in isolated environments, records SHA-256
-values, and retains the workflow artifact for one day.
+The default is build-only. In build-only mode `source_sha` is an approval
+assertion, not a checkout selector. Before repository code is checked out or
+executed, the workflow requires the protected `main` dispatch ref, the reviewed
+workflow definition on `main`, and equality between `source_sha` and
+`github.sha`. It then checks out `github.sha`, verifies the clean source
+identity again, runs all synthetic tests, builds one wheel and one source
+distribution, applies strict Twine checks, confirms the expected version,
+installs both artifacts in isolated environments, records SHA-256 values, and
+retains the workflow artifact for one day.
 
 An upload additionally requires all of the following:
 
@@ -142,7 +146,8 @@ version, or artifact hash differs, stop without uploading.
 After this workflow is merged and CI passes, a reversible build-only run may be
 started from the `main` workflow ref with:
 
-- the reviewed source commit SHA;
+- the reviewed source commit SHA, equal to the dispatch-time protected `main`
+  `github.sha`;
 - its expected version;
 - either target label; and
 - `perform_upload=false`.
