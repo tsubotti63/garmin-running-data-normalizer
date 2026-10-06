@@ -34,8 +34,8 @@ on 2026-08-13 JST.
 
 ## v1.3.2 — stable Production patch release
 
-Status: published as an annotated tag, the latest stable GitHub Release, and a
-verified Production PyPI distribution on 2026-08-11 JST.
+Status: published as an annotated tag, the then-latest stable GitHub Release,
+and a verified Production PyPI distribution on 2026-08-11 JST.
 
 ### Fixed
 
@@ -180,7 +180,7 @@ Production PyPI distribution on 2026-08-04.
   including automatic `tzdata` installation, timezone resolution, repeated
   Synthetic Run-All, and deterministic output comparison.
 - Publishes the reviewed source as the immutable annotated `v1.2.1` tag,
-  current stable GitHub Release, verified TestPyPI distribution, and verified
+  then-current stable GitHub Release, verified TestPyPI distribution, and verified
   Production PyPI distribution after their separate Human approval gates.
 - Confirms a clean Production PyPI v1.2.1 installation on one
   maintainer-owned physical Windows environment: `tzdata` was installed
@@ -227,6 +227,9 @@ Production PyPI distribution on 2026-08-04.
 
 ## v1.1.0rc1 — release candidate
 
+The `v1.1.0` tag carries package version `1.1.0rc1`. The first Production PyPI
+distribution was `1.1.1`.
+
 - Adds complete FIT file CRC validation, optional header CRC validation, and
   explicit audit states for CRC, truncation, chained, undefined-message, and
   session/lap-allocation failures.
@@ -269,7 +272,7 @@ Environments, approval variables, and Trusted Publisher configuration are
 authorized. TestPyPI and PyPI uploads remain separate Human Approval
 Boundaries.
 
-## Unreleased — P1 PyPI publish readiness
+## P1 PyPI publish readiness — included in v1.0.1
 
 - Adds a manual-only, build-only-by-default publication workflow for exact
   reviewed source commits and versions.
@@ -282,9 +285,10 @@ Boundaries.
   explicit Product decision packet.
 
 P1 performs no upload, publisher/environment configuration, version change,
-tag, or GitHub Release operation. Its status is `P1_READY_FOR_APPROVAL`.
+tag, or GitHub Release operation. Its status at that time was
+`P1_READY_FOR_APPROVAL`.
 
-## Unreleased — P0 PyPI packaging readiness
+## P0 PyPI packaging readiness — included in v1.0.1
 
 - Adds repeatable wheel and source-distribution builds with strict Twine
   metadata and README rendering checks.

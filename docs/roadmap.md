@@ -32,7 +32,7 @@
   third-party notices.
 - Complete dependency lock review, security/privacy checks, documentation, and
   release-specific review evidence.
-- `v1.0.0` remains the first stable release. `v1.3.2` is the current stable
+- `v1.0.0` remains the first stable release. `v1.4.0` is the current stable
   GitHub Release and Production PyPI version. Any future tag, GitHub Release,
   stable release, or package publication requires its own current review and
   separate Human authorization.
@@ -68,6 +68,25 @@
   Trusted Publishing, and Production PyPI verification gates. The patch
   improves Snapshot correctness and evidence preservation without changing the
   17-dataset contract, stable keys, grains, or privacy boundary.
+- Published patch version `1.3.3` after separate review, tag, GitHub Release,
+  Trusted Publishing, and Production PyPI verification gates. The patch
+  restores observed-stage Sleep duration semantics and separates
+  review-required from excluded evidence without changing the 17-dataset
+  contract.
 - Close additional v1.3 feature work and hand future Integrity / Evidence
   Foundation planning to the v1.4 candidate phase without starting
   implementation.
+
+## Milestone 7 — v1.4 Export Evidence and Diagnostics — complete
+
+- Add the Export Evidence Doctor for bounded pre-run readiness and
+  completed-output checks.
+- Add `diagnostics/source_completeness.json` and `diagnostics/run_quality.json`
+  as read-only projections of existing Run-All evidence.
+- Add a deterministic, six-member public-safe Support Bundle that requires
+  Human review and never uploads automatically.
+- Keep the 17-dataset, 212-field, 6-relationship inventory, stable keys,
+  Snapshot semantics, and the `0 / 0 / 3 / 2` Product exit contract unchanged.
+- Published version `1.4.0` through the merged release pull requests, the
+  annotated tag, the GitHub Release, and Trusted Publishing to Production PyPI
+  with exact-version install verification.

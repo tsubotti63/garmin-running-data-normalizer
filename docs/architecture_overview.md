@@ -3,7 +3,7 @@
 - Applies to: stable v1.4.0
 - Compatibility family: stable 1.x
 - Authority: human-readable architecture overview
-- Last reviewed: 2026-08-13
+- Last reviewed: 2026-10-06
 
 ## Current stable architecture
 
@@ -19,6 +19,7 @@ Local Garmin Account Data Export (read-only)
   -> normalizers and dataset registry
   -> relationship, QA, and schema validation
   -> deterministic local output and provenance
+  -> read-only diagnostics, Doctor review, and optional Support Bundle
   -> optional local Snapshot lifecycle or external-safe Analysis Pack
 ```
 
@@ -93,6 +94,20 @@ reader. `ANALYSIS_CONTEXT.json` and `SCHEMA_CATALOG.json` provide the equivalent
 machine-readable dataset, relationship, type, privacy, and prohibited-operation
 contracts. These generated artifacts project executable authorities; they do
 not redefine normalization semantics.
+
+## Export evidence and diagnostics
+
+Every completed v1.4.0 Run-All output adds
+`diagnostics/source_completeness.json` and `diagnostics/run_quality.json`.
+They are read-only projections of existing Product evidence and do not change
+normalized records, infer missing values, or select a winner. `doctor --input`
+checks bounded pre-run readiness of an extracted Export, and
+`doctor --run-output` explains a completed result without changing it.
+`validate-handoff` checks a completed output without repository access.
+`support-bundle` creates a deterministic, six-member public-safe ZIP that
+excludes raw rows, paths, identifiers, exact timestamps, and coordinates; it
+requires Human review before sharing and is never uploaded automatically. See
+[v1.4 Export Evidence and Diagnostics](v1_4_diagnostics.md).
 
 ## Stable, candidate, and deferred scope
 

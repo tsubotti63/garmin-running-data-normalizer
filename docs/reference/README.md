@@ -6,7 +6,7 @@ not redefine, the Project Charter or Platform Standard.
 - `reuse_matrix.md`: Source-to-Target extraction decisions
 - `migration.md`: extraction and rollback method
 - `privacy.md`: public/private and data-handling controls
-- `license.md`: unresolved license and rights state
+- `license.md`: license and rights record (Apache-2.0)
 - `sample.md`: synthetic fixture policy
 - `release.md`: publication gate state
 - `handoff.md`: public provenance and authority boundary

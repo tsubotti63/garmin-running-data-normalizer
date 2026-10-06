@@ -80,6 +80,18 @@ completed handoff.
 Review warnings and affected families before analysis. See the
 [Output Contract](output_contract.md).
 
+### How can I check a run or prepare a public-safe support report?
+
+Run `doctor --run-output` on a completed output to explain the result without
+changing it, or `doctor --input` on an extracted Export to check bounded
+pre-run readiness. `support-bundle` creates a deterministic, six-member
+public-safe ZIP for Human review and never uploads automatically. Review every
+member before sharing anything, and follow the Issue form rules, which ask you
+not to upload files. For an output that contains `diagnostics/`, use the same
+package version that produced it; see
+[Known Limitations](known_limitations.md#diagnostics-and-handoff-validation)
+and [v1.4 Export Evidence and Diagnostics](v1_4_diagnostics.md).
+
 ## Multiple Exports and Snapshot Accumulation
 
 ### Does one-shot Run-All combine multiple Export downloads?
