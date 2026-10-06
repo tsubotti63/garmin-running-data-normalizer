@@ -73,6 +73,10 @@ python -m venv .venv
 installed and the Windows Python launcher is available, you can use
 `py -3.11 -m venv .venv` instead.
 
+The remaining commands in this guide call the environment's Python directly,
+so activating the environment is not required. Run them from the directory
+that contains `.venv`.
+
 The v1.4.0 release installs `tzdata` automatically on Windows. Confirm both the
 package version and the existing IANA timezone contract with:
 
@@ -93,7 +97,7 @@ Use the compatible one-shot path for your first real Export:
 ### macOS / Linux
 
 ```bash
-python -m garmin_running_data_normalizer run-all \
+.venv/bin/python -m garmin_running_data_normalizer run-all \
   --input /path/to/extracted-garmin-export \
   --output /path/to/new-run-all-output
 ```
@@ -101,7 +105,7 @@ python -m garmin_running_data_normalizer run-all \
 ### Windows PowerShell
 
 ```powershell
-python -m garmin_running_data_normalizer run-all --input "C:\Garmin\Export" --output "C:\Garmin\Output\run-all-01"
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input "C:\Garmin\Export" --output "C:\Garmin\Output\run-all-01"
 ```
 
 Replace both example paths. The input must be a directory containing a
@@ -148,14 +152,14 @@ You can validate a completed handoff later:
 ### macOS / Linux
 
 ```bash
-python -m garmin_running_data_normalizer validate-handoff \
+.venv/bin/python -m garmin_running_data_normalizer validate-handoff \
   --input /path/to/completed-run-all-output
 ```
 
 ### Windows PowerShell
 
 ```powershell
-python -m garmin_running_data_normalizer validate-handoff --input "C:\Garmin\Output\run-all-01"
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer validate-handoff --input "C:\Garmin\Output\run-all-01"
 ```
 
 ## 6. Keep the result private
@@ -194,11 +198,11 @@ canonical cumulative input:
 ### macOS / Linux
 
 ```bash
-python -m garmin_running_data_normalizer snapshot init \
+.venv/bin/python -m garmin_running_data_normalizer snapshot init \
   --store /path/to/private-snapshot-store \
   --account opaque-local-account
 
-python -m garmin_running_data_normalizer snapshot register \
+.venv/bin/python -m garmin_running_data_normalizer snapshot register \
   --store /path/to/private-snapshot-store \
   --input /path/to/complete-garmin-export \
   --label S1 \
@@ -207,10 +211,10 @@ python -m garmin_running_data_normalizer snapshot register \
   --observed-at 2030-01-01T02:00:00+00:00 \
   --confirm-complete
 
-python -m garmin_running_data_normalizer snapshot verify \
+.venv/bin/python -m garmin_running_data_normalizer snapshot verify \
   --store /path/to/private-snapshot-store
 
-python -m garmin_running_data_normalizer snapshot run-all \
+.venv/bin/python -m garmin_running_data_normalizer snapshot run-all \
   --store /path/to/private-snapshot-store \
   --output /path/to/new-snapshot-run-all-output
 ```
@@ -218,10 +222,10 @@ python -m garmin_running_data_normalizer snapshot run-all \
 ### Windows PowerShell
 
 ```powershell
-python -m garmin_running_data_normalizer snapshot init --store "C:\Garmin\SnapshotStore" --account opaque-local-account
-python -m garmin_running_data_normalizer snapshot register --store "C:\Garmin\SnapshotStore" --input "C:\Garmin\Export" --label S1 --requested-at 2030-01-01T00:00:00+00:00 --downloaded-at 2030-01-01T01:00:00+00:00 --observed-at 2030-01-01T02:00:00+00:00 --confirm-complete
-python -m garmin_running_data_normalizer snapshot verify --store "C:\Garmin\SnapshotStore"
-python -m garmin_running_data_normalizer snapshot run-all --store "C:\Garmin\SnapshotStore" --output "C:\Garmin\Output\snapshot-run-all-01"
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot init --store "C:\Garmin\SnapshotStore" --account opaque-local-account
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot register --store "C:\Garmin\SnapshotStore" --input "C:\Garmin\Export" --label S1 --requested-at 2030-01-01T00:00:00+00:00 --downloaded-at 2030-01-01T01:00:00+00:00 --observed-at 2030-01-01T02:00:00+00:00 --confirm-complete
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot verify --store "C:\Garmin\SnapshotStore"
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot run-all --store "C:\Garmin\SnapshotStore" --output "C:\Garmin\Output\snapshot-run-all-01"
 ```
 
 Use one opaque account token per person/account boundary. Repeat only the

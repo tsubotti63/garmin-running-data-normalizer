@@ -95,12 +95,15 @@ workspace, retention, training-use, history, memory, and deletion review.
 
 ## 6. Optional external-safe pack
 
-When limited month-level Activity volume/count context is sufficient, opt in:
+When limited month-level Activity volume/count context is sufficient, opt in.
+These commands use the environment created in
+[Getting Started from a Garmin Account Data Export](getting_started_from_garmin_export.md);
+run them from the directory that contains `.venv`.
 
 ### macOS / Linux
 
 ```bash
-python -m garmin_running_data_normalizer run-all \
+.venv/bin/python -m garmin_running_data_normalizer run-all \
   --input /path/to/extracted-garmin-export \
   --output /path/to/new-run-all-output \
   --external-safe-pack
@@ -109,7 +112,7 @@ python -m garmin_running_data_normalizer run-all \
 ### Windows PowerShell
 
 ```powershell
-python -m garmin_running_data_normalizer run-all --input "C:\Garmin\Export" --output "C:\Garmin\Output\external-safe-01" --external-safe-pack
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input "C:\Garmin\Export" --output "C:\Garmin\Output\external-safe-01" --external-safe-pack
 ```
 
 The stable Snapshot path supports the same option:
@@ -117,7 +120,7 @@ The stable Snapshot path supports the same option:
 ### macOS / Linux
 
 ```bash
-python -m garmin_running_data_normalizer snapshot run-all \
+.venv/bin/python -m garmin_running_data_normalizer snapshot run-all \
   --store /path/to/private-snapshot-store \
   --output /path/to/new-snapshot-run-all-output \
   --external-safe-pack
@@ -126,7 +129,7 @@ python -m garmin_running_data_normalizer snapshot run-all \
 ### Windows PowerShell
 
 ```powershell
-python -m garmin_running_data_normalizer snapshot run-all --store "C:\Garmin\SnapshotStore" --output "C:\Garmin\Output\snapshot-safe-01" --external-safe-pack
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot run-all --store "C:\Garmin\SnapshotStore" --output "C:\Garmin\Output\snapshot-safe-01" --external-safe-pack
 ```
 
 The generated file is:

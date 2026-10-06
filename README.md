@@ -365,6 +365,8 @@ reverse-engineering the data model.
 - `artifact_inventory.json`
 - `run_manifest.json`
 - `run_summary.json`
+- `diagnostics/source_completeness.json` and `diagnostics/run_quality.json`
+  (v1.4.0 read-only diagnostic projections)
 
 The handoff describes dataset roles, grain, stable keys, explicit relationships,
 warnings, missing-value semantics, privacy boundaries, and prohibited
@@ -402,6 +404,10 @@ locally and never uploads it.
 | Training History observations | Limited date, source timestamp, status, and optional sport context | Run-All in v1.3.0 |
 | Health Status | Exact-suffix `healthStatusData.json` long metrics and fixed daily schema with explicit dedupe/review evidence | No; library level only |
 | Analysis Pack | Deterministic allowlist-only ZIP; optional external-safe profile is limited to month-level activity volume/count and removes identifiers, provenance, exact timestamps, and unneeded health/performance detail | Run-All opt-in |
+| Handoff validation | `validate-handoff` checks a completed Run-All output without repository access | Yes |
+| Run-All diagnostics | `diagnostics/source_completeness.json` and `diagnostics/run_quality.json` are read-only projections of existing Run-All evidence | Run-All in v1.4.0 |
+| Export Evidence Doctor | `doctor` explains bounded pre-run (`--input`) or completed-output (`--run-output`) evidence without changing it | Yes, in v1.4.0 |
+| Support Bundle | `support-bundle` creates a deterministic six-member public-safe ZIP that requires Human review and is never uploaded | Yes, in v1.4.0 |
 
 The dataset registry documents stable keys, record grain, merge policy, and
 provenance requirements. See
@@ -540,7 +546,11 @@ Open-Meteo, Parquet, and automatic upload are not
 included. One-shot processing does not combine separate Export
 downloads; retain each Export until the additive Snapshot lifecycle has
 registered and verified it. Missing from a later Export is not a deletion
-instruction. The documented CLI and versioned Run-All output contract are the
+instruction. Local dates and times are computed in the IANA `Asia/Tokyo`
+timezone regardless of location, so outside Japan a record near local midnight
+can fall on a different calendar date; see
+[Local dates and times](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md#local-dates-and-times).
+The documented CLI and versioned Run-All output contract are the
 stable `1.x` interface; other Python modules may evolve compatibly as their
 contracts mature. See
 [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
