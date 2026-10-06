@@ -504,6 +504,150 @@ def test_candidate_marker_follows_package_version(tmp_path: Path) -> None:
     )
 
 
+MAINTAINER_STATE_DOCUMENTS = (
+    "SECURITY.md",
+    "docs/roadmap.md",
+    "docs/release_readiness.md",
+    "docs/migration_notes.md",
+)
+
+
+def _start_implementation_candidate(root: Path, version: str) -> None:
+    version_source = root / VERSION_SOURCE
+    version_source.write_text(
+        version_source.read_text(encoding="utf-8").replace('"1.4.0"', f'"{version}"'),
+        encoding="utf-8",
+    )
+    readme = root / "README.md"
+    readme.write_text(
+        readme.read_text(encoding="utf-8")
+        + f"\nImplementation candidate: **v{version}**\n",
+        encoding="utf-8",
+    )
+    output_contract = root / "docs/output_contract.md"
+    output_contract.write_text(
+        output_contract.read_text(encoding="utf-8")
+        + f"\n- Implementation candidate: v{version} (not published)\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize(
+    ("relative", "current", "stale"),
+    (
+        (
+            "SECURITY.md",
+            "current stable release, v1.4.0",
+            "current stable release, v1.3.3",
+        ),
+        (
+            "docs/roadmap.md",
+            "`v1.4.0` is the current stable",
+            "`v1.3.2` is the current stable",
+        ),
+        (
+            "docs/release_readiness.md",
+            "Current source and package version: `1.4.0`",
+            "Current source and package version: `1.3.3`",
+        ),
+        (
+            "docs/release_readiness.md",
+            "Current Production PyPI version: `1.4.0`",
+            "Current Production PyPI version: `1.3.3`",
+        ),
+        (
+            "docs/release_readiness.md",
+            "Latest GitHub Release: `v1.4.0`",
+            "Latest GitHub Release: `v1.3.3`",
+        ),
+    ),
+)
+def test_stale_maintainer_current_state_fails(
+    tmp_path: Path, relative: str, current: str, stale: str
+) -> None:
+    _copy_validator_inputs(tmp_path)
+    document = tmp_path / relative
+    text = document.read_text(encoding="utf-8")
+    assert current in text
+    document.write_text(text.replace(current, stale), encoding="utf-8")
+
+    _, findings = validate(tmp_path)
+
+    assert f"{relative}: required marker is missing: {current}" in findings
+
+
+def test_missing_current_migration_heading_fails(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    notes = tmp_path / "docs/migration_notes.md"
+    notes.write_text(
+        notes.read_text(encoding="utf-8").replace(
+            "## v1.3.3 to v1.4.0",
+            "## v1.3.3 to v1.4.0 draft",
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert (
+        "docs/migration_notes.md: migration heading is missing: "
+        "## v<previous version> to v1.4.0"
+    ) in findings
+
+
+@pytest.mark.parametrize("previous", ("v1.3.3", "v1.1.0rc1", "v0.1.0-rc.2"))
+def test_current_migration_heading_accepts_any_previous_version(
+    tmp_path: Path, previous: str
+) -> None:
+    _copy_validator_inputs(tmp_path)
+    notes = tmp_path / "docs/migration_notes.md"
+    notes.write_text(
+        notes.read_text(encoding="utf-8").replace(
+            "## v1.3.3 to v1.4.0",
+            f"## {previous} to v1.4.0",
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    assert not any(item.startswith("docs/migration_notes.md:") for item in findings)
+
+
+def test_maintainer_state_follows_candidate_package_version(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    _start_implementation_candidate(tmp_path, "1.4.1")
+    readiness = tmp_path / "docs/release_readiness.md"
+    readiness.write_text(
+        readiness.read_text(encoding="utf-8").replace(
+            "Current source and package version: `1.4.0`",
+            "Current source and package version: `1.4.1`",
+        ),
+        encoding="utf-8",
+    )
+
+    version, findings = validate(tmp_path)
+
+    assert version == "1.4.1"
+    assert not any(
+        item.startswith(f"{relative}:")
+        for relative in MAINTAINER_STATE_DOCUMENTS
+        for item in findings
+    )
+
+
+def test_candidate_source_version_must_be_recorded(tmp_path: Path) -> None:
+    _copy_validator_inputs(tmp_path)
+    _start_implementation_candidate(tmp_path, "1.4.1")
+
+    _, findings = validate(tmp_path)
+
+    assert (
+        "docs/release_readiness.md: required marker is missing: "
+        "Current source and package version: `1.4.1`"
+    ) in findings
+
+
 def test_obsolete_agents_phase_fails(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
     agents = tmp_path / "AGENTS.md"

@@ -34,6 +34,10 @@ CURRENT_DOCUMENTS = (
     "docs/output_contract.md",
     "AGENTS.md",
     CS010_DOCUMENT,
+    "SECURITY.md",
+    "docs/roadmap.md",
+    "docs/release_readiness.md",
+    "docs/migration_notes.md",
 )
 CURRENT_RELEASE_NOTES_TEMPLATE = "docs/release_notes/v{version}.md"
 CURRENT_STABLE_VERSION = "1.4.0"
@@ -373,6 +377,25 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
             f"# Garmin Running Data Normalizer v{CURRENT_STABLE_VERSION}",
             "`PARTIAL_SUCCESS` / exit 3",
         )
+        required_markers["SECURITY.md"] = (
+            f"current stable release, v{CURRENT_STABLE_VERSION}",
+        )
+        required_markers["docs/roadmap.md"] = (
+            f"`v{CURRENT_STABLE_VERSION}` is the current stable",
+        )
+        required_markers["docs/release_readiness.md"] = (
+            f"Current source and package version: `{version}`",
+            f"Current Production PyPI version: `{CURRENT_STABLE_VERSION}`",
+            f"Latest GitHub Release: `v{CURRENT_STABLE_VERSION}`",
+        )
+        migration_heading = re.compile(
+            rf"(?m)^## v[0-9A-Za-z.-]+ to v{re.escape(CURRENT_STABLE_VERSION)}[ \t]*$"
+        )
+        if not migration_heading.search(contents.get("docs/migration_notes.md", "")):
+            findings.append(
+                "docs/migration_notes.md: migration heading is missing: "
+                f"## v<previous version> to v{CURRENT_STABLE_VERSION}"
+            )
         if version != CURRENT_STABLE_VERSION:
             candidate_markers = {
                 "README.md": f"Implementation candidate: **v{version}**",
