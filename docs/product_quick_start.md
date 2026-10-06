@@ -311,22 +311,25 @@ uploads the pack.
 
 ## Run local validation
 
-With the editable package installed, run the same checks used for this Golden
-Path. Use `.venv/bin/python` on macOS/Linux or
-`.\.venv\Scripts\python.exe` on Windows PowerShell if the environment is not
-active:
+The Golden Path comparison above is the user-level reproducibility check. To
+run the repository's full validation gate, which is the same as CI, install the
+test extras into the same environment and follow
+[Contributing: Validation](../CONTRIBUTING.md#validation):
 
 ```bash
-python -m unittest discover -s tests
-python scripts/validate_bootstrap.py
-python scripts/static_policy_scan.py
-python scripts/validate_platform_alignment.py
-python scripts/validate_public_command_examples.py
+.venv/bin/python -m pip install -e '.[test,release]'
 ```
 
-The static policy scan intentionally excludes the local `.venv/` created by the
-setup instructions. It continues to scan the project source, configuration,
-tests, documentation, examples, and other repository-owned content.
+On Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[test,release]"
+```
+
+The static policy scan in that gate intentionally excludes the local `.venv/`
+created by the setup instructions. It continues to scan the project source,
+configuration, tests, documentation, examples, and other repository-owned
+content.
 
 ## Reviewed real-user evidence
 
