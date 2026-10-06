@@ -1,5 +1,19 @@
 # Release Readiness
 
+## v1.4.0 stable release
+
+Version `1.4.0` is published as the Export Evidence and Diagnostics release. It
+adds the Export Evidence Doctor, the read-only
+`diagnostics/source_completeness.json` and `diagnostics/run_quality.json`
+projections, and the Human-reviewed public-safe Support Bundle while keeping
+the 17-dataset/212-field inventory, stable keys, Snapshot semantics, and the
+`0 / 0 / 3 / 2` Product exit contract unchanged.
+
+The release source is `ae9cb28a60c450897284fd1023b1e4e7c02d127e`.
+The annotated `v1.4.0` tag, latest stable GitHub Release, Production PyPI
+publication through Trusted Publishing/OIDC, and the publish workflow's
+exact-version PyPI install verification are complete.
+
 ## v1.3.3 stable patch release
 
 Version `1.3.3` is published as the Sleep contract restoration patch. It keeps
@@ -52,23 +66,39 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Default branch: `main`
 - License: `Apache-2.0`
 - GitHub Actions: Operational
-- Current source and package version: `1.3.3`
-- Current Production PyPI version: `1.3.3`
-- Latest GitHub Release: `v1.3.3`
+- Current source and package version: `1.4.0`
+- Current Production PyPI version: `1.4.0`
+- Latest GitHub Release: `v1.4.0`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
-- TestPyPI `1.3.3`: Not used; not required by the approved patch release
-  contract
-- Production PyPI `1.3.3`: Published and exact-version clean-install verified
+- TestPyPI `1.4.0`: Not used; the publish workflow's TestPyPI jobs were
+  skipped
+- Production PyPI `1.4.0`: Published and exact-version install verified by the
+  publish workflow
 - Trusted Publishing: Configured for protected `testpypi` and `pypi`
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
-and GitHub Releases remain immutable. v1.3.3 is the historical patch release; its
-tag, GitHub Release, and Production PyPI publication were recorded only after
-the corresponding external state was observed.
+and GitHub Releases remain immutable. v1.4.0 is the current stable release and
+v1.3.3 is the historical patch release; their tags, GitHub Releases, and
+Production PyPI publications were recorded only after the corresponding
+external state was observed.
 
 ## Current release assessment
+
+The v1.4.0 release source passed main CI run `32388440076` (Ubuntu `test` and
+`windows-runtime`) and Production publish workflow run `32389085934`. In that
+publish run, the exact-source build and validation, Production PyPI
+publication, and exact-version PyPI install verification succeeded, and the
+TestPyPI jobs were skipped. The SHA-256 checksums recorded by the run match the
+Production PyPI wheel and source distribution, which carry PEP 740 publish
+attestations. A later publish workflow run on 2026-09-03 (`33726686281`,
+source `a97a4ec`) was a build-only validation of the hardened workflow; its
+upload and verification jobs were skipped and it published nothing. Earlier
+tags, Releases, and package artifacts remain immutable and are not renamed or
+reused.
+
+### v1.3.3 release assessment (historical)
 
 The reviewed v1.3.3 source passed 274 pytest tests, 219 unittest checks,
 repository validators, strict wheel and source-distribution metadata checks,
@@ -82,7 +112,7 @@ and are not renamed or reused.
 
 The prior v1.3.0 feature release remains the immutable source of the 17-dataset
 and 212-field Wellness/Metrics contract. The v1.3.1, v1.3.2, and v1.3.3 patches
-do not change that contract.
+and the v1.4.0 release do not change that contract.
 
 Post-publication validation on one maintainer-owned physical Windows
 environment clean-installed Production PyPI v1.2.1, installed `tzdata`

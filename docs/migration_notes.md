@@ -1,5 +1,70 @@
 # Migration Notes
 
+## v1.3.3 to v1.4.0
+
+v1.4.0 adds read-only Export evidence and diagnostics. It does not require data
+migration and does not change normalized output semantics.
+
+| Contract | v1.4.0 position |
+|---|---|
+| CLI and Python imports | Additive `doctor` and `support-bundle` commands |
+| Datasets, schemas, and stable keys | Unchanged; 17 datasets and 212 fields |
+| Output paths | Additive `diagnostics/source_completeness.json` and `diagnostics/run_quality.json`; the synthetic Run-All output grows from 44 to 46 files |
+| Exit codes | Unchanged `0 / 0 / 3 / 2` Product mapping |
+| Snapshot policies | Unchanged |
+| Relationships and privacy boundary | Unchanged; the Support Bundle is local-only and requires Human review |
+
+Upgrade the package in a new or existing Python 3.11+ environment:
+
+```bash
+python -m pip install --upgrade garmin-running-data-normalizer==1.4.0
+python -m garmin_running_data_normalizer --version
+```
+
+Existing v1.3.3 outputs remain valid evidence for their original package
+version. Use a new output directory when rerunning with v1.4.0; deterministic
+output includes exact product-version metadata, so cross-version bytes are not
+expected to be identical. Check an output that contains `diagnostics/` with the
+same package version that produced it, and rerun Run-All after a later upgrade;
+see [Known Limitations](known_limitations.md#diagnostics-and-handoff-validation) and the
+[v1.4 Export Evidence and Diagnostics](v1_4_diagnostics.md) guide.
+
+## v1.3.2 to v1.3.3
+
+v1.3.3 restores the Sleep duration contract. It does not require data
+migration.
+
+| Contract | v1.3.3 position |
+|---|---|
+| CLI and Python imports | Unchanged |
+| Datasets, schemas, and stable keys | Unchanged; 17 datasets, 212 fields, and the `sleep_day` grain |
+| Output paths and exit codes | Unchanged |
+| Sleep duration | `sleep_duration_minutes_ex_awake` sums observed finite deep/light/REM stages; missing stages stay missing, and conflicting direct aliases fail closed |
+| Daily-metric audits | Review-required counts are separated from excluded-record evidence |
+| Snapshot policies, relationships, and privacy boundary | Unchanged |
+
+Upgrade with `python -m pip install --upgrade garmin-running-data-normalizer==1.3.3`.
+Exact output and semantic digests change for inputs whose Sleep duration is
+restored, so rerun into a new output directory instead of comparing bytes with
+v1.3.2 output.
+
+## v1.3.1 to v1.3.2
+
+v1.3.2 is a Snapshot correctness and evidence-preservation patch. It does not
+require data migration.
+
+| Contract | v1.3.2 position |
+|---|---|
+| CLI and Python imports | Unchanged |
+| Datasets, schemas, and stable keys | Unchanged |
+| Output paths and exit codes | Unchanged |
+| Snapshot processing | Snapshot-aware relationship endpoint resolution; exact Sleep duplicates collapse with audit counts; Endurance/UDS observed variants and Lactate candidates are retained in audit evidence; chronology comes from `manifest.export_observed_at` |
+| Relationships and privacy boundary | Contracts unchanged |
+
+Upgrade with `python -m pip install --upgrade garmin-running-data-normalizer==1.3.2`.
+Snapshot-based Run-All results can differ from v1.3.1 where these boundaries
+apply, so rerun into a new output directory.
+
 ## v1.3.0 to v1.3.1
 
 v1.3.1 is a documentation, public-surface, and validation patch. It does not

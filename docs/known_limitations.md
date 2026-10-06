@@ -35,6 +35,14 @@ Product boundaries.
   same-day context comparisons. Garmin-provided daily `calendarDate` labels are
   used as provided and are not shifted.
 
+## Diagnostics and handoff validation
+
+- For a completed output that contains `diagnostics/` (produced by v1.4.0 or
+  later), `validate-handoff`, `doctor --run-output`, and `support-bundle`
+  accept the output only when the installed package version equals the version
+  that produced it. After upgrading the package, rerun Run-All before using
+  these commands on that output, or keep the producing version available.
+
 ## Snapshot lifecycle
 
 - The v1.2.0 workflow stores complete, explicitly confirmed Export

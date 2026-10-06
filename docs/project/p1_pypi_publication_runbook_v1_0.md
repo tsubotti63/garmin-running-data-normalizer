@@ -2,6 +2,19 @@
 
 ## Status and authority
 
+Current state, observed on 2026-10-06:
+
+- Production PyPI versions `1.1.1` through `1.4.0` were published through
+  `publish-pypi.yml` with Trusted Publishing. The current package version is
+  `1.4.0`.
+- The protected `testpypi` and `pypi` GitHub Environments and the
+  target-specific approval variables are configured; both approval variables
+  were `false` on 2026-10-06.
+- Every upload, tag, and GitHub Release still requires a separate Product
+  decision.
+
+P1 intake record from 2026-07-23, kept as historical evidence:
+
 - Status: `P1_READY_FOR_APPROVAL`
 - Distribution: `garmin-running-data-normalizer`
 - Current package version: `1.0.0`

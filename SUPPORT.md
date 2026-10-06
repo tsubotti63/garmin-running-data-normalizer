@@ -7,8 +7,20 @@ Before reporting a problem:
 
 1. check the [FAQ](docs/faq.md);
 2. follow the [Product Quick Start](docs/product_quick_start.md) with the
-   synthetic fixture; and
-3. check [Known Limitations](docs/known_limitations.md).
+   synthetic fixture;
+3. check [Known Limitations](docs/known_limitations.md); and
+4. for a real local run, review the local diagnostics described below.
+
+## Diagnose a run locally
+
+`doctor --input` checks bounded pre-run readiness of an extracted Export, and
+`doctor --run-output` explains a completed Run-All output without changing it.
+`support-bundle` creates a deterministic, six-member public-safe ZIP for Human
+review. These commands run locally and never upload. Review every Support
+Bundle member before sharing anything, describe the problem with public-safe
+values such as the status and exit code, and follow the Issue form rules, which
+ask you not to upload files. See
+[v1.4 Export Evidence and Diagnostics](docs/v1_4_diagnostics.md).
 
 ## What to include
 
