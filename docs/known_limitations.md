@@ -20,6 +20,21 @@ Product boundaries.
   Retain every downloaded Export until the additive Snapshot lifecycle has
   registered and verified it.
 
+## Local dates and times
+
+- Local dates and times derived from UTC or FIT timestamps are computed in the
+  IANA `Asia/Tokyo` timezone, regardless of where an activity took place or
+  where the command runs. No option currently selects another timezone.
+- This applies to Activity `activity_datetime_local` and `activity_date_local`
+  (and therefore the External-safe Pack month), FIT session
+  `start_datetime_local`, Sleep `sleep_start_local` and `sleep_end_local`
+  (and `sleep_day` when the source provides no `calendarDate`), and the dates
+  of FIT-derived HRV values.
+- Outside Japan, a record near local midnight can therefore fall on a different
+  calendar date than the one shown by Garmin, which also affects documented
+  same-day context comparisons. Garmin-provided daily `calendarDate` labels are
+  used as provided and are not shifted.
+
 ## Snapshot lifecycle
 
 - The v1.2.0 workflow stores complete, explicitly confirmed Export

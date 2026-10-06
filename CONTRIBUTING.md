@@ -47,20 +47,27 @@ Pull Request against `main`.
 
 ## Validation
 
-Run the relevant tests and the full public gate before requesting merge:
+Run the same public gate as CI, in the same order, before requesting merge.
+Use `.venv/bin/python` on macOS/Linux or `.\.venv\Scripts\python.exe` on
+Windows PowerShell for these commands unless the environment is activated:
 
 ```bash
-python -m unittest discover -s tests -v
-python -m pytest
 python scripts/validate_bootstrap.py
-python scripts/static_policy_scan.py
 python scripts/validate_platform_alignment.py
-python scripts/validate_schema_contract.py
+python scripts/static_policy_scan.py
 python scripts/validate_public_command_examples.py
+python scripts/validate_public_product_state.py
 python scripts/validate_public_history.py --ci
+python -m pytest
 python -m build
 python -m twine check --strict dist/*
 ```
+
+`python -m pytest` also runs the `unittest`-style tests. When a change affects
+Run-All output, also validate a completed synthetic Run-All output, for example
+`python scripts/validate_schema_contract.py --output workspace/run-all` after
+the synthetic Run-All in the
+[Product Quick Start](docs/product_quick_start.md).
 
 Document which commands passed. Add or update synthetic tests when behavior
 changes. Documentation examples must use placeholders or visibly synthetic

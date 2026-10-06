@@ -19,15 +19,16 @@ Changed contracts:
 
 List the tests and validators run, with results:
 
-- [ ] `python -m unittest discover -s tests -v`
-- [ ] `python -m pytest`
 - [ ] `python scripts/validate_bootstrap.py`
-- [ ] `python scripts/static_policy_scan.py`
 - [ ] `python scripts/validate_platform_alignment.py`
-- [ ] `python scripts/validate_schema_contract.py`
+- [ ] `python scripts/static_policy_scan.py`
+- [ ] `python scripts/validate_public_command_examples.py`
+- [ ] `python scripts/validate_public_product_state.py`
 - [ ] `python scripts/validate_public_history.py --ci`
+- [ ] `python -m pytest`
 - [ ] `python -m build`
 - [ ] `python -m twine check --strict dist/*`
+- [ ] When Run-All output changes: `python scripts/validate_schema_contract.py --output workspace/run-all`
 
 ## Privacy and fixtures
 

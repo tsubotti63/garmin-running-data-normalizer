@@ -126,6 +126,30 @@ Normalize locally
 The package does not send the export to a hosted processing service. Public
 reproduction uses only synthetic fixtures.
 
+## What v1.4.0 adds
+
+The stable v1.4.0 release adds read-only Export evidence and diagnostics
+without changing the 17 normalized datasets, stable keys, Snapshot semantics,
+or the `0 / 0 / 3 / 2` Product exit contract.
+
+- `doctor --input` checks bounded pre-run readiness of an extracted Export, and
+  `doctor --run-output` explains a completed Run-All result without changing
+  it.
+- Every completed Run-All output adds `diagnostics/source_completeness.json`
+  and `diagnostics/run_quality.json`, read-only projections of existing Product
+  evidence.
+- `support-bundle` creates a deterministic, six-member public-safe ZIP for
+  Human review. It never uploads automatically and is not the External-safe
+  Analysis Pack.
+- First-user guidance explains how to read `PASS`, `PASS_WITH_WARNINGS`,
+  `PARTIAL_SUCCESS`, and Fatal outcomes.
+
+Together with the existing `validate-handoff` command (available since
+v1.1.0), these tools check a completed output without repository access. See
+[v1.4 Export Evidence and Diagnostics](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/v1_4_diagnostics.md)
+and the
+[v1.4.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.4.0.md).
+
 ## What v1.3.0 adds
 
 The stable v1.3.0 release expands Run-All from the seven existing normalized
@@ -164,11 +188,12 @@ private records, identifiers, paths, and validation artifacts remain private.
 Source-backed grain is a Product contract, not a Garmin-official semantic
 guarantee.
 
-The reviewed release source passed **199 pytest checks**, **170 unittest
-checks**, **44/44 deterministic cases**, Ubuntu and Windows CI, and build,
-wheel, sdist, installed-package, and clean-install gates. These results apply
-to the reviewed release scope and CI configurations; they do not imply zero
-defects or universal platform compatibility. The six established relationships
+The reviewed v1.3.0 release source passed **199 pytest checks**, **170
+unittest checks**, **44/44 deterministic cases**, Ubuntu and Windows CI, and
+build, wheel, sdist, installed-package, and clean-install gates. These results
+apply to the reviewed v1.3.0 release scope and CI configurations; they are not
+updated for later releases and do not imply zero defects or universal platform
+compatibility. The six established relationships
 remain authoritative, while the new Wellness and Performance datasets are
 context-only and do not define direct Activity joins.
 
@@ -365,6 +390,8 @@ reverse-engineering the data model.
 - `artifact_inventory.json`
 - `run_manifest.json`
 - `run_summary.json`
+- `diagnostics/source_completeness.json` and `diagnostics/run_quality.json`
+  (v1.4.0 read-only diagnostic projections)
 
 The handoff describes dataset roles, grain, stable keys, explicit relationships,
 warnings, missing-value semantics, privacy boundaries, and prohibited
@@ -402,6 +429,10 @@ locally and never uploads it.
 | Training History observations | Limited date, source timestamp, status, and optional sport context | Run-All in v1.3.0 |
 | Health Status | Exact-suffix `healthStatusData.json` long metrics and fixed daily schema with explicit dedupe/review evidence | No; library level only |
 | Analysis Pack | Deterministic allowlist-only ZIP; optional external-safe profile is limited to month-level activity volume/count and removes identifiers, provenance, exact timestamps, and unneeded health/performance detail | Run-All opt-in |
+| Handoff validation | `validate-handoff` checks a completed Run-All output without repository access | Yes |
+| Run-All diagnostics | `diagnostics/source_completeness.json` and `diagnostics/run_quality.json` are read-only projections of existing Run-All evidence | Run-All in v1.4.0 |
+| Export Evidence Doctor | `doctor` explains bounded pre-run (`--input`) or completed-output (`--run-output`) evidence without changing it | Yes, in v1.4.0 |
+| Support Bundle | `support-bundle` creates a deterministic six-member public-safe ZIP that requires Human review and is never uploaded | Yes, in v1.4.0 |
 
 The dataset registry documents stable keys, record grain, merge policy, and
 provenance requirements. See
@@ -505,17 +536,14 @@ value judgment, and final interpretation.
 
 ## Local verification
 
-```bash
-PYTHONPATH=src python3 -m unittest discover -s tests -v
-python3 scripts/validate_bootstrap.py
-python3 scripts/static_policy_scan.py
-python3 scripts/validate_platform_alignment.py
-python3 scripts/validate_public_history.py --ci
-```
+Contributors run the same public gate as CI, in the same order. The exact
+commands are in
+[Contributing: Validation](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/CONTRIBUTING.md#validation).
 
-The public-history command assumes a normal public clone whose `origin/HEAD`
-points to `origin/main`. Only synthetic fixtures may be committed. Real Garmin
-exports and generated personal output belong in ignored local directories.
+The public-history command in that gate assumes a normal public clone whose
+`origin/HEAD` points to `origin/main`. Only synthetic fixtures may be
+committed. Real Garmin exports and generated personal output belong in ignored
+local directories.
 
 ## Activities Golden Path guarantees
 
@@ -540,7 +568,11 @@ Open-Meteo, Parquet, and automatic upload are not
 included. One-shot processing does not combine separate Export
 downloads; retain each Export until the additive Snapshot lifecycle has
 registered and verified it. Missing from a later Export is not a deletion
-instruction. The documented CLI and versioned Run-All output contract are the
+instruction. Local dates and times are computed in the IANA `Asia/Tokyo`
+timezone regardless of location, so outside Japan a record near local midnight
+can fall on a different calendar date; see
+[Local dates and times](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md#local-dates-and-times).
+The documented CLI and versioned Run-All output contract are the
 stable `1.x` interface; other Python modules may evolve compatibly as their
 contracts mature. See
 [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
