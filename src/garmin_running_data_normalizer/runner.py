@@ -11,7 +11,9 @@ from . import __version__
 from .common.time import (
     DEFAULT_TIMEZONE,
     TimezoneDataUnavailableError,
+    TimezoneNameInvalidError,
     require_timezone_data,
+    resolve_timezone_name,
 )
 from .common.private_files import PRIVATE_DIRECTORY_MODE, open_private_file
 from .intake.discovery import discover_export
@@ -77,10 +79,15 @@ def _validate_paths(input_path: str | Path, output_path: str | Path) -> tuple[Pa
     return input_root, output_root
 
 
-def run_activities(input_path: str | Path, output_path: str | Path) -> dict[str, Any]:
+def run_activities(
+    input_path: str | Path,
+    output_path: str | Path,
+    timezone_name: str = DEFAULT_TIMEZONE,
+) -> dict[str, Any]:
     """Run the deterministic, activities-only Golden Path."""
     input_root, output_root = _validate_paths(input_path, output_path)
-    require_timezone_data(DEFAULT_TIMEZONE)
+    timezone_name = resolve_timezone_name(timezone_name)
+    require_timezone_data(timezone_name)
     assets = [
         asset
         for asset in discover_export(input_root)
@@ -90,7 +97,7 @@ def run_activities(input_path: str | Path, output_path: str | Path) -> dict[str,
     if not assets:
         raise GoldenPathError("no supported summarizedActivities.json input was found")
 
-    records = normalize_activities(str(input_root))
+    records = normalize_activities(str(input_root), timezone_name)
     if not records:
         raise GoldenPathError("supported input contained no activity records")
     discovered_sources = {(asset.provenance_path, asset.sha256) for asset in assets}
@@ -129,6 +136,7 @@ def run_activities(input_path: str | Path, output_path: str | Path) -> dict[str,
         "dataset": "activities",
         "record_grain": "activity",
         "stable_key": ["garmin_activity_key"],
+        "local_timezone": timezone_name,
         "deterministic_digest": qa["records_sha256"],
         "input_assets": [
             {
@@ -178,6 +186,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     activities.add_argument("--input", required=True, help="Garmin export directory")
     activities.add_argument("--output", required=True, help="Absent or empty output directory")
+    activities.add_argument(
+        "--timezone",
+        default=DEFAULT_TIMEZONE,
+        help="IANA timezone for local dates and times (default: Asia/Tokyo)",
+    )
     combined = commands.add_parser(
         "run-all",
         help="Run the minimum deterministic multi-family Garmin workflow.",
@@ -188,6 +201,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--external-safe-pack",
         action="store_true",
         help="Add a deterministic, reviewable external-safe Analysis Pack",
+    )
+    combined.add_argument(
+        "--timezone",
+        default=DEFAULT_TIMEZONE,
+        help="IANA timezone for local dates and times (default: Asia/Tokyo)",
     )
     snapshot = commands.add_parser(
         "snapshot",
@@ -265,6 +283,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Add the existing deterministic external-safe Analysis Pack",
     )
+    snapshot_run_all.add_argument(
+        "--timezone",
+        default=DEFAULT_TIMEZONE,
+        help="IANA timezone for local dates and times (default: Asia/Tokyo)",
+    )
     handoff = commands.add_parser(
         "validate-handoff",
         help="Validate a completed Run-All output without repository access.",
@@ -283,6 +306,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="human",
         help="Diagnostic presentation format",
     )
+    doctor.add_argument(
+        "--timezone",
+        default=DEFAULT_TIMEZONE,
+        help="IANA timezone whose data --input checks (default: Asia/Tokyo)",
+    )
     support_bundle = commands.add_parser(
         "support-bundle",
         help="Generate a deterministic public-safe diagnostic Bundle for Human review.",
@@ -296,12 +324,13 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "normalize-activities":
-            result = run_activities(args.input, args.output)
+            result = run_activities(args.input, args.output, args.timezone)
         elif args.command == "run-all":
             result = run_all(
                 args.input,
                 args.output,
                 external_safe_pack=args.external_safe_pack,
+                timezone_name=args.timezone,
             )
         elif args.command == "snapshot":
             from .snapshot import (
@@ -336,6 +365,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.store,
                     args.output,
                     external_safe_pack=args.external_safe_pack,
+                    timezone_name=args.timezone,
                 )
             else:
                 raise GoldenPathError("unsupported snapshot command")
@@ -343,7 +373,7 @@ def main(argv: list[str] | None = None) -> int:
             result = validate_standalone_handoff(args.input)
         elif args.command == "doctor":
             result = (
-                doctor_input(args.input)
+                doctor_input(args.input, timezone_name=args.timezone)
                 if args.input is not None
                 else doctor_run_output(args.run_output)
             )
@@ -354,7 +384,7 @@ def main(argv: list[str] | None = None) -> int:
     except GoldenPathError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
-    except TimezoneDataUnavailableError as exc:
+    except (TimezoneDataUnavailableError, TimezoneNameInvalidError) as exc:
         print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)
         return 2
     except RunAllError as exc:

@@ -460,7 +460,10 @@ def parse_fit_bytes(
     }
 
 
-def parse_fit_export(root: str | Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+def parse_fit_export(
+    root: str | Path,
+    timezone_name: str = "Asia/Tokyo",
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     activities: list[dict[str, Any]] = []
     laps: list[dict[str, Any]] = []
     audit: list[dict[str, Any]] = []
@@ -471,7 +474,12 @@ def parse_fit_export(root: str | Path) -> tuple[list[dict[str, Any]], list[dict[
     for source_sha256, aliases in sorted(aliases_by_sha256.items()):
         asset = min(aliases, key=lambda item: item.provenance_path)
         file_id = f"fit_file:{asset.sha256[:24]}"
-        parsed = parse_fit_bytes(asset.data, file_id=file_id, source_path=asset.provenance_path)
+        parsed = parse_fit_bytes(
+            asset.data,
+            file_id=file_id,
+            source_path=asset.provenance_path,
+            timezone_name=timezone_name,
+        )
         audit.append({
             "fit_file_id": file_id,
             "source_path": asset.provenance_path,

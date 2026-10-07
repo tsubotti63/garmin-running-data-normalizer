@@ -1824,6 +1824,35 @@ def _v1_3_relationship_lines() -> list[str]:
     return lines
 
 
+def _local_timezone(summary: Mapping[str, Any]) -> str | None:
+    value = summary.get("local_timezone")
+    return value if isinstance(value, str) and value else None
+
+
+def _local_timezone_status_lines(summary: Mapping[str, Any]) -> list[str]:
+    local_timezone = _local_timezone(summary)
+    if local_timezone is None:
+        return []
+    return [f"- Local dates and times: {_code(local_timezone)} (IANA timezone)"]
+
+
+def _local_timezone_handoff_lines(summary: Mapping[str, Any]) -> list[str]:
+    local_timezone = _local_timezone(summary)
+    if local_timezone is None:
+        return []
+    return [
+        "## Local Dates and Times",
+        "",
+        "- Local dates and times derived from UTC timestamps use the IANA timezone",
+        f"  {_code(local_timezone)}: Activity and FIT session `*_local` fields, FIT lap",
+        "  `start_time`, Sleep start and end times, HRV dates, and a Sleep day when",
+        "  the source has no `calendarDate`.",
+        "- Garmin-provided `calendarDate` values are kept as reported and are not",
+        "  converted.",
+        "",
+    ]
+
+
 def render_start_here(
     manifest: Mapping[str, Any],
     summary: Mapping[str, Any],
@@ -1850,6 +1879,7 @@ def render_start_here(
         "",
         f"- Status: {_code(summary['status'])}",
         f"- Run-All contract version: {_code(summary['run_all_version'])}",
+        *_local_timezone_status_lines(summary),
         f"- Warning count: {warning_count}",
         f"- Error count: {error_count}",
         "",
@@ -2011,6 +2041,7 @@ def render_analysis_handoff(
         "Use normalized JSON, relationship links, QA, or audit files only when the",
         "question requires them and the local/trusted environment is authorized.",
         "",
+        *_local_timezone_handoff_lines(summary),
         "## Receiving Rules",
         "",
         "1. Separate observed facts, calculations, interpretations, and unknowns.",
@@ -2548,6 +2579,9 @@ def build_analysis_context(
         "warnings": summary.get("warnings", []),
         "candidate_features": candidate_features,
     }
+    local_timezone = _local_timezone(summary)
+    if local_timezone is not None:
+        context["local_timezone"] = local_timezone
     if isinstance(summary.get("snapshot_lifecycle"), Mapping):
         context["snapshot_lifecycle"] = {
             "enabled": True,

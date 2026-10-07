@@ -56,7 +56,11 @@ Lactate Threshold
 ## Stable v1.3 context and observation catalog
 
 `context_only` means that an analysis may compare separately aggregated facts
-for a declared local calendar day. It does not create row identity, authorize a
+for a declared local calendar day. `activity_date_local` uses the run's local
+timezone (`Asia/Tokyo` by default; selectable with `--timezone` starting with
+v1.6.0), while Garmin `calendar_date` values are Garmin's own dates, so
+same-day comparisons align only when that timezone matches where the records
+were made. It does not create row identity, authorize a
 fact-table merge, or establish causality. `not_yet_defined` means that even
 contextual alignment is not a direct relationship contract.
 

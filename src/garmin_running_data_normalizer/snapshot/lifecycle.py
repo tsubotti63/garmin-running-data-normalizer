@@ -4,6 +4,12 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from ..common.time import (
+    DEFAULT_TIMEZONE,
+    TimezoneDataUnavailableError,
+    TimezoneNameInvalidError,
+    resolve_timezone_name,
+)
 from .merge import SnapshotMergeError, build_approved_input
 from .store import (
     SnapshotStoreError,
@@ -23,8 +29,15 @@ def run_snapshot_all(
     *,
     external_safe_pack: bool = False,
     processing_sequence: list[str] | None = None,
+    timezone_name: str = DEFAULT_TIMEZONE,
 ) -> dict[str, Any]:
     """Build an approved cumulative input and run the existing Run-All pipeline."""
+    from ..run_all import RunAllError, run_all
+
+    try:
+        timezone_name = resolve_timezone_name(timezone_name)
+    except (TimezoneDataUnavailableError, TimezoneNameInvalidError) as exc:
+        raise RunAllError(exc.code, exc.safe_message) from exc
     verification = verify_store(store_root)
     if verification["status"] != "PASS":
         raise SnapshotMergeError("snapshot store verification failed")
@@ -36,12 +49,11 @@ def run_snapshot_all(
             build_root,
             processing_sequence=processing_sequence,
         )
-        from ..run_all import run_all
-
         result = run_all(
             build_root / "approved_input",
             output,
             external_safe_pack=external_safe_pack,
+            timezone_name=timezone_name,
             snapshot_context={
                 "lineage": build["lineage"],
                 "coverage": build["coverage"],

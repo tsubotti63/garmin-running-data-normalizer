@@ -160,6 +160,11 @@ def validate_standalone_handoff(root: str | Path) -> dict[str, Any]:
         raise StandaloneHandoffError("analysis context product version does not match summary")
     if context.get("warnings") != summary.get("warnings"):
         raise StandaloneHandoffError("analysis context does not preserve warnings")
+    if (
+        manifest.get("local_timezone") != summary.get("local_timezone")
+        or context.get("local_timezone") != summary.get("local_timezone")
+    ):
+        raise StandaloneHandoffError("local timezone does not match across handoff authorities")
     if context.get("analysis_entry_point") != "analysis/activities.csv":
         raise StandaloneHandoffError("analysis entry point is not declared")
 

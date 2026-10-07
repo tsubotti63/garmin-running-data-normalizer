@@ -22,18 +22,38 @@ Product boundaries.
 
 ## Local dates and times
 
-- Local dates and times derived from UTC or FIT timestamps are computed in the
-  IANA `Asia/Tokyo` timezone, regardless of where an activity took place or
-  where the command runs. No option currently selects another timezone.
+- Local dates and times derived from UTC or FIT timestamps are computed in one
+  IANA timezone for the whole run. The default is `Asia/Tokyo`, regardless of
+  where an activity took place or where the command runs.
+- Starting with v1.6.0, `run-all`, `snapshot run-all`, and
+  `normalize-activities` accept `--timezone` with an IANA timezone name, such
+  as `America/New_York`, and `doctor --input --timezone` checks that
+  timezone's data. The name must match exactly; use the Area/Location form,
+  because legacy aliases such as `Japan` are not available on every system.
+  The timezone is recorded as `local_timezone` in `run_manifest.json`,
+  `run_summary.json`, and `ANALYSIS_CONTEXT.json`. It is not added to the
+  External-safe Pack or the Support Bundle.
 - This applies to Activity `activity_datetime_local` and `activity_date_local`
   (and therefore the External-safe Pack month), FIT session
-  `start_datetime_local`, Sleep `sleep_start_local` and `sleep_end_local`
-  (and `sleep_day` when the source provides no `calendarDate`), and the dates
-  of FIT-derived HRV values.
-- Outside Japan, a record near local midnight can therefore fall on a different
-  calendar date than the one shown by Garmin, which also affects documented
-  same-day context comparisons. Garmin-provided daily `calendarDate` labels are
-  used as provided and are not shifted.
+  `start_datetime_local` and lap `start_time`, Sleep `sleep_start_local` and
+  `sleep_end_local` (and `sleep_day` when the source provides no
+  `calendarDate`), and the dates of FIT-derived HRV values.
+- One timezone applies to every record in a run, so an activity recorded while
+  travelling uses the run's timezone rather than the local time where it took
+  place. Garmin's per-activity `startTimeLocal` is retained as
+  `start_time_local_raw` but is not used.
+- When the run's timezone differs from where the records were made, a record
+  near local midnight can fall on a different calendar date than the one shown
+  by Garmin, which also affects documented same-day context comparisons.
+  Garmin-provided daily `calendarDate` labels are used as provided and are not
+  shifted.
+- A Sleep row without `calendarDate` takes its day from its end time in the
+  run's timezone, so changing the timezone can place it on the same day as
+  another Sleep row. Differing rows for one day stop Run-All with
+  `DAILY_METRICS_CONFLICT`, as for any other daily conflict, so the same Export
+  can complete in one timezone and stop in another. FIT-derived HRV values that
+  share a local date with different values become review rows instead of
+  stopping the run; the timezone can change which values share a date.
 
 ## Diagnostics and handoff validation
 

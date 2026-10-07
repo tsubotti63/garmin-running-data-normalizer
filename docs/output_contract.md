@@ -3,6 +3,7 @@
 ## Status and authority
 
 - Current stable contract: v1.5.0
+- Implementation candidate: v1.6.0 (not published)
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each
@@ -19,6 +20,14 @@ winner, observed variant, candidate, or normalized value. Existing
 
 Both machine authorities record the exact installed `product_version`;
 `ANALYSIS_CONTEXT.json` preserves the same value for standalone handoff.
+
+Starting with v1.6.0, `run_manifest.json`, `run_summary.json`, and
+`ANALYSIS_CONTEXT.json` also record `local_timezone`, the IANA timezone used
+for local dates and times (`Asia/Tokyo` unless `--timezone` selects another).
+`START_HERE.md` and `ANALYSIS_HANDOFF.md` state it, and `validate-handoff`
+requires the three records to agree. The `normalize-activities`
+`run_manifest.json` records the same field. The External-safe Pack and the
+Support Bundle do not include it.
 
 For the released v1.5.0 Sleep contract, `sleep_duration_minutes_ex_awake` is
 an observed-stage sum when any finite deep/light/REM stage exists, with an

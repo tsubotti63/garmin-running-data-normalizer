@@ -70,6 +70,14 @@ See the
 
 Current stable release: **v1.5.0** · Python **3.11+** · Apache License 2.0
 
+Implementation candidate: **v1.6.0** (local review only; not tagged, released, or
+published to PyPI). It adds `--timezone` to `run-all`, `snapshot run-all`,
+`normalize-activities`, and `doctor --input`, so local dates and times can use
+an IANA timezone other than the default `Asia/Tokyo`, and it records that
+timezone in the run manifest, run summary, and analysis context. Without
+`--timezone`, normalized values are unchanged; datasets, fields, stable keys,
+Snapshot rules, and the `0 / 0 / 3 / 2` Product exit contract are unchanged.
+
 v1.5.0 creates new Snapshot Stores and `normalize-activities` output as
 owner-only, reports Snapshot stop conflicts by dataset and type, explains how
 to recover from an interrupted registration lock, skips `Thumbs.db` inside ZIP
@@ -616,6 +624,8 @@ local directories.
   limits.
 - Stable keys, activity record grain, source-relative provenance, hashes, and
   deterministic QA are included in the reviewed output contract.
+- Local dates use `Asia/Tokyo` unless `--timezone` names another IANA timezone
+  (starting with v1.6.0); `run_manifest.json` records it as `local_timezone`.
 - Unsupported or unsafe Golden Path input fails closed with a non-zero exit
   status.
 
@@ -629,8 +639,9 @@ included. One-shot processing does not combine separate Export
 downloads; retain each Export until the additive Snapshot lifecycle has
 registered and verified it. Missing from a later Export is not a deletion
 instruction. Local dates and times are computed in the IANA `Asia/Tokyo`
-timezone regardless of location, so outside Japan a record near local midnight
-can fall on a different calendar date; see
+timezone by default (starting with v1.6.0, `--timezone` selects another IANA
+timezone for a run), so when that timezone differs from where the records were
+made, a record near local midnight can fall on a different calendar date; see
 [Local dates and times](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md#local-dates-and-times).
 The documented CLI and versioned Run-All output contract are the
 stable `1.x` interface; other Python modules may evolve compatibly as their
