@@ -67,6 +67,14 @@ without it is not a completed handoff. Existing v1 paths are preserved; all
 v1.1 paths are additive. With `--external-safe-pack`,
 `analysis/external_safe_handoff.zip` is additionally emitted and listed.
 
+`validate-handoff`, `doctor --run-output`, and `support-bundle` require the
+declared file set exactly. Starting with v1.4.1, they ignore operating-system
+metadata files (`.DS_Store`, `Thumbs.db`, AppleDouble `._*` files, and
+anything under `__MACOSX/`), such as those Finder creates when an output
+folder is opened; any other undeclared file still fails validation. An Export
+folder and Snapshot folder input ignore the same files. Inside a ZIP file,
+`.DS_Store`, AppleDouble `._*` files, and `__MACOSX/` were already skipped.
+
 ## Dataset and FIT behavior
 
 Activities are required. Gear, Personal Records, and FIT are optional. Stable

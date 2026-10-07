@@ -12,13 +12,13 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Iterator
 from zipfile import BadZipFile, ZipFile
 
+from ..common.os_metadata import is_os_metadata_path
 from ..intake.archive import UnsafeArchiveError, read_member, validated_members
 from .policies import CONTRACT_VERSION, REGISTRY_VERSION
 
 
 STORE_FORMAT = "garmin-running-data-normalizer-snapshot-store-v1"
 STORE_FORMAT_VERSION = 1
-IGNORED_NAMES = {".DS_Store", "Thumbs.db"}
 ACCOUNT_STORE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$")
 LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -373,14 +373,6 @@ def _write_registry(root: Path, manifests: list[dict[str, Any]]) -> None:
     _atomic_json(root / "snapshot_family_coverage.json", coverage)
 
 
-def _is_ignored(path: Path) -> bool:
-    return (
-        path.name in IGNORED_NAMES
-        or path.name.startswith("._")
-        or "__MACOSX" in path.parts
-    )
-
-
 def _source_family(relative_path: str) -> str:
     for part in Path(relative_path.replace("!", "/")).parts:
         if part.startswith("DI-Connect-") or part == "DI-GOLF":
@@ -460,9 +452,9 @@ def _scan_source(
     if not files:
         raise SnapshotStoreError("snapshot input contains no files")
     for path in files:
-        if _is_ignored(path):
-            continue
         relative = path.relative_to(source).as_posix()
+        if is_os_metadata_path(relative):
+            continue
         before = (path.stat().st_size, path.stat().st_mtime_ns)
         digest = sha256_file(path)
         after = (path.stat().st_size, path.stat().st_mtime_ns)
