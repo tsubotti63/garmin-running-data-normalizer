@@ -9,9 +9,12 @@ metadata files in Export folders and completed outputs, while keeping the
 17-dataset/212-field inventory, stable keys, Snapshot semantics, and the
 `0 / 0 / 3 / 2` Product exit contract unchanged.
 
-The release source is the `main` commit that merges the v1.4.1 release
-preparation pull request. Its annotated tag, GitHub Release, and publish
-workflow evidence are recorded in this section after publication.
+The release source is `9e3bd6d3d7faa64f6961547756559703158ae0b2` (#49).
+The annotated `v1.4.1` tag (tag object
+`402ec6cbff2af618f2f10233ce5f5cc704da21c6`), the latest stable GitHub Release
+published on 2026-10-07 JST, Production PyPI publication through Trusted
+Publishing/OIDC, and the publish workflow's exact-version PyPI install
+verification are complete.
 
 ## v1.4.0 stable release
 
@@ -84,24 +87,40 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Latest GitHub Release: `v1.4.1`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
-- TestPyPI `1.4.1`: Not used; the patch release publishes directly to
-  Production PyPI through the protected `pypi` Environment
-- Production PyPI `1.4.1`: Published through Trusted Publishing; the publish
-  workflow verifies the exact-version install
+- TestPyPI `1.4.1`: Not used; the publish workflow's TestPyPI jobs were
+  skipped
+- Production PyPI `1.4.1`: Published and exact-version install verified by the
+  publish workflow
 - Trusted Publishing: Configured for protected `testpypi` and `pypi`
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
 and GitHub Releases remain immutable. v1.4.1 is the current stable release;
-v1.4.0 and v1.3.3 are historical releases. The v1.4.0 and v1.3.3 tags, GitHub
-Releases, and Production PyPI publications were recorded only after the
-corresponding external state was observed; the v1.4.1 publication evidence is
-added to this document after it is observed.
+v1.4.0 and v1.3.3 are historical releases. The v1.4.1, v1.4.0, and v1.3.3 tag,
+GitHub Release, and Production PyPI publication evidence was recorded only
+after the corresponding external state was observed.
 
 ## Current release assessment
 
-The v1.4.1 release assessment is recorded here after publication, from the
-release source's main CI run and the Production publish workflow run.
+The v1.4.1 release source passed main CI run `37563843781` (Ubuntu `test` and
+`windows-runtime`) and CodeQL run `37563843505`. A build-only publish workflow
+run (`37563874206`) on the release source passed with every upload job
+skipped. Production publish workflow run `37566440958` then built and
+validated the exact source, published to Production PyPI, and verified the
+exact-version PyPI install; the TestPyPI jobs were skipped. The `pypi`
+Environment deployment was Human-authorized, and the approval was submitted
+through the GitHub API on the Human's instruction.
+
+The SHA-256 checksums recorded by that run match Production PyPI: wheel
+`703926f16e6dde1a6a515b04e44cc6090823dc9fcd0c5d4a8a71e09443564ee5` and source
+distribution `76e04d70421f0dbe9b12a3a451d285de534fe1519ad1401d99e362b95114a428`.
+Each file carries a PEP 740 publish attestation from `publish-pypi.yml` in the
+`pypi` Environment. The build-only run produced different checksums because
+the distributions are not byte-reproducible across runs; only the production
+run's artifacts were published. `PYPI_PUBLISH_APPROVED` was returned to
+`false` after the upload. A clean install from Production PyPI completed the
+Synthetic Run-All (`PASS_WITH_WARNINGS`, exit 0), `validate-handoff`,
+`doctor --run-output`, and `support-bundle`.
 
 ### v1.4.0 release assessment (historical)
 
