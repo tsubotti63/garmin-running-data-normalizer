@@ -9,7 +9,7 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
-from garmin_running_data_normalizer.fit.parser import FIT_EPOCH_OFFSET
+from garmin_running_data_normalizer.fit.parser import FIT_EPOCH_OFFSET, fit_crc16
 from garmin_running_data_normalizer.intake.discovery import DiscoveredAsset
 from garmin_running_data_normalizer.normalizers.daily_metrics import DailyMetricConflictError
 from garmin_running_data_normalizer.normalizers.hrv import HRV_DAILY_FIELDS, normalize_hrv_daily_assets
@@ -35,7 +35,8 @@ def fit_timestamp(value: str) -> int:
 def hrv_fit(*records: tuple[int, int]) -> bytes:
     definition = bytes([0x40, 0x00, 0x00]) + struct.pack("<H", 370) + bytes([2, 1, 2, 0x84, 253, 4, 0x86])
     body = definition + b"".join(bytes([0x00]) + struct.pack("<HI", raw, timestamp) for raw, timestamp in records)
-    return bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", len(body)) + b".FIT" + body
+    payload = bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", len(body)) + b".FIT" + body
+    return payload + struct.pack("<H", fit_crc16(payload))
 
 
 def fit_asset(name: str, data: bytes) -> DiscoveredAsset:
@@ -170,6 +171,22 @@ class RemainingWellnessMetricsTest(unittest.TestCase):
         self.assertEqual(
             result["audit"]["date_basis"],
             "fit_end_jst_date_from_message_370_field_253_timestamp",
+        )
+
+    def test_hrv_daily_excludes_fit_with_invalid_file_crc(self) -> None:
+        valid = hrv_fit((73 * 128, fit_timestamp("2026-01-05T12:00:00Z")))
+        corrupted = hrv_fit((64 * 128, fit_timestamp("2026-01-06T12:00:00Z")))
+        corrupted = corrupted[:-2] + bytes([corrupted[-2] ^ 0xFF, corrupted[-1]])
+        result = normalize_hrv_daily_assets(
+            [fit_asset("valid.fit", valid), fit_asset("corrupted.fit", corrupted)]
+        )
+        self.assertEqual(
+            [(row["calendar_date"], row["hrv_value"]) for row in result["records"]],
+            [("2026-01-05", 73.0)],
+        )
+        self.assertEqual(
+            result["audit"]["parse_status_counts"],
+            {"bad_file_crc": 1, "parsed_fit_hrv": 1},
         )
 
     def test_training_history_is_limited_to_approved_observation_fields(self) -> None:

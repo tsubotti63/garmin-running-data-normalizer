@@ -62,15 +62,47 @@ FIELDS = {
     20: {},
 }
 
+# Names follow the FIT profile `sport` and `sub_sport` types. Codes outside
+# these bounded tables keep the existing fallback: the sport code as text and
+# no sub-sport name.
 SPORT_ENUM = {
+    0: "generic",
     1: "running",
     2: "cycling",
-    10: "strength_training",
+    4: "fitness_equipment",
+    5: "swimming",
+    10: "training",
     11: "walking",
+    12: "cross_country_skiing",
+    15: "rowing",
+    16: "mountaineering",
     17: "hiking",
-    31: "swimming",
+    19: "paddling",
+    31: "rock_climbing",
 }
-SUB_SPORT_ENUM = {6: "treadmill_running", 7: "street", 8: "trail"}
+SUB_SPORT_ENUM = {
+    0: "generic",
+    1: "treadmill",
+    2: "street",
+    3: "trail",
+    4: "track",
+    5: "spin",
+    6: "indoor_cycling",
+    7: "road",
+    8: "mountain",
+    11: "cyclocross",
+    14: "indoor_rowing",
+    15: "elliptical",
+    17: "lap_swimming",
+    18: "open_water",
+    19: "flexibility_training",
+    20: "strength_training",
+    26: "cardio_training",
+    27: "indoor_walking",
+    43: "yoga",
+    45: "indoor_running",
+    46: "gravel_cycling",
+}
 MESSAGE_NAMES = {12: "sport", 18: "session", 19: "lap"}
 
 
@@ -102,6 +134,63 @@ def fit_crc16(data: bytes, initial: int = 0) -> int:
             ^ FIT_CRC_TABLE[(byte >> 4) & 0x0F]
         )
     return crc & 0xFFFF
+
+
+@dataclass(frozen=True)
+class FitContainer:
+    """Outcome of the FIT container checks shared by every FIT reader."""
+
+    status: str | None
+    header_size: int = 0
+    data_size: int = 0
+    header_crc_status: str = "not_checked"
+    file_crc_status: str = "not_checked"
+
+
+def check_fit_container(data: bytes) -> FitContainer:
+    """Check size, header, chaining, and CRCs before any record is decoded.
+
+    ``status`` is ``None`` only for an acceptable container. The session/lap
+    parser and the HRV extractor both call this so they accept the same files.
+    """
+    if len(data) > MAX_FIT_BYTES:
+        return FitContainer("too_large")
+    if len(data) < 12:
+        return FitContainer("too_small")
+    header_size = data[0]
+    if header_size not in (12, 14) or len(data) < header_size or data[8:12] != b".FIT":
+        return FitContainer("bad_header")
+    data_size = struct.unpack_from("<I", data, 4)[0]
+    expected_size = header_size + data_size + 2
+    if len(data) < expected_size:
+        return FitContainer("truncated")
+    if len(data) > expected_size:
+        return FitContainer("unsupported_chained")
+
+    header_crc_status = "not_present"
+    if header_size == 14:
+        expected_header_crc = struct.unpack_from("<H", data, 12)[0]
+        if expected_header_crc:
+            actual_header_crc = fit_crc16(data[:12])
+            if actual_header_crc != expected_header_crc:
+                return FitContainer("bad_header_crc", header_crc_status="invalid")
+            header_crc_status = "valid"
+
+    expected_file_crc = struct.unpack_from("<H", data, header_size + data_size)[0]
+    actual_file_crc = fit_crc16(data[: header_size + data_size])
+    if actual_file_crc != expected_file_crc:
+        return FitContainer(
+            "bad_file_crc",
+            header_crc_status=header_crc_status,
+            file_crc_status="invalid",
+        )
+    return FitContainer(
+        None,
+        header_size=header_size,
+        data_size=data_size,
+        header_crc_status=header_crc_status,
+        file_crc_status="valid",
+    )
 
 
 def _base_result(
@@ -195,48 +284,18 @@ def parse_fit_bytes(
     timezone_name: str = "Asia/Tokyo",
 ) -> dict[str, Any]:
     """Parse bounded FIT session/lap fields without exposing record coordinates."""
-    if len(data) > MAX_FIT_BYTES:
-        return _base_result("too_large", file_id=file_id, source_path=source_path)
-    if len(data) < 12:
-        return _base_result("too_small", file_id=file_id, source_path=source_path)
-    header_size = data[0]
-    if header_size not in (12, 14) or len(data) < header_size or data[8:12] != b".FIT":
-        return _base_result("bad_header", file_id=file_id, source_path=source_path)
-    data_size = struct.unpack_from("<I", data, 4)[0]
-    expected_size = header_size + data_size + 2
-    if len(data) < expected_size:
-        return _base_result("truncated", file_id=file_id, source_path=source_path)
-    if len(data) > expected_size:
+    container = check_fit_container(data)
+    if container.status is not None:
         return _base_result(
-            "unsupported_chained",
+            container.status,
             file_id=file_id,
             source_path=source_path,
+            header_crc_status=container.header_crc_status,
+            file_crc_status=container.file_crc_status,
         )
-
-    header_crc_status = "not_present"
-    if header_size == 14:
-        expected_header_crc = struct.unpack_from("<H", data, 12)[0]
-        if expected_header_crc:
-            actual_header_crc = fit_crc16(data[:12])
-            if actual_header_crc != expected_header_crc:
-                return _base_result(
-                    "bad_header_crc",
-                    file_id=file_id,
-                    source_path=source_path,
-                    header_crc_status="invalid",
-                )
-            header_crc_status = "valid"
-
-    expected_file_crc = struct.unpack_from("<H", data, header_size + data_size)[0]
-    actual_file_crc = fit_crc16(data[: header_size + data_size])
-    if actual_file_crc != expected_file_crc:
-        return _base_result(
-            "bad_file_crc",
-            file_id=file_id,
-            source_path=source_path,
-            header_crc_status=header_crc_status,
-            file_crc_status="invalid",
-        )
+    header_size = container.header_size
+    data_size = container.data_size
+    header_crc_status = container.header_crc_status
 
     position = header_size
     data_end = header_size + data_size
@@ -443,10 +502,6 @@ def parse_fit_export(root: str | Path) -> tuple[list[dict[str, Any]], list[dict[
                 else SPORT_ENUM.get(sport_code, str(sport_code or "unknown"))
             )
             fit_sub_sport = SUB_SPORT_ENUM.get(sub_code)
-            if fit_sub_sport == "trail":
-                fit_sport = "trail_running"
-            elif fit_sub_sport == "treadmill_running":
-                fit_sport = "treadmill_running"
             activities.append({
                 "fit_file_id": file_id,
                 "fit_session_key": fit_session_key,

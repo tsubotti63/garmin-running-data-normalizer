@@ -3,6 +3,7 @@
 ## Status and authority
 
 - Current stable contract: v1.4.0
+- Implementation candidate: v1.4.1 (not published)
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each
@@ -83,6 +84,14 @@ normalized FIT sessions/laps and recorded as
 guessed. Those excluded records never enter the eligible Activity/FIT
 Relationship Coverage population. `fit_file_id` is retained for compatibility;
 `fit_session_key` and `fit_lap_key` are the v1.1 stable keys.
+
+Starting with v1.4.1, FIT session `sport` and `sub_sport` use FIT profile type
+names; for example, a trail run is `running` with `trail`, and a mountain-bike
+ride is `cycling` with `mountain`. A bounded table names common FIT sport and
+sub-sport codes; any other sport code is kept as its numeric text and any other
+sub-sport code as null. The same container checks also gate the FIT-derived
+HRV values used by `hrv_daily`, so a FIT file that fails them contributes no
+HRV value.
 
 FIT protocol invalid sentinels are converted to JSON null before scaling or
 enum projection. The per-file audit, FIT family result, and dataset QA record

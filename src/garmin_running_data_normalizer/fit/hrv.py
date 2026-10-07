@@ -8,7 +8,13 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from ..intake.discovery import discover_export
-from .parser import Definition, FieldDef, FIT_EPOCH_OFFSET, MAX_FIT_BYTES, _read_value
+from .parser import (
+    Definition,
+    FieldDef,
+    FIT_EPOCH_OFFSET,
+    _read_value,
+    check_fit_container,
+)
 
 FIT_HRV_MESSAGE_NUM = 370
 FIT_HRV_VALUE_FIELD_NUM = 1
@@ -54,19 +60,12 @@ def parse_fit_hrv_bytes(
     timezone_name: str = "Asia/Tokyo",
 ) -> dict[str, Any]:
     """Extract the bounded HRV PoC signal from FIT message 370 field 1."""
-    if len(data) > MAX_FIT_BYTES:
-        return _empty_result("too_large", file_id, source_path)
-    if len(data) < 12:
-        return _empty_result("too_small", file_id, source_path)
-    header_size = data[0]
-    if header_size not in (12, 14) or len(data) < header_size or data[8:12] != b".FIT":
-        return _empty_result("bad_header", file_id, source_path)
-    data_size = struct.unpack_from("<I", data, 4)[0]
-    if header_size + data_size > len(data):
-        return _empty_result("truncated", file_id, source_path)
+    container = check_fit_container(data)
+    if container.status is not None:
+        return _empty_result(container.status, file_id, source_path)
 
-    position = header_size
-    data_end = header_size + data_size
+    position = container.header_size
+    data_end = container.header_size + container.data_size
     definitions: dict[int, Definition] = {}
     records: list[dict[str, Any]] = []
     unknown_records = 0
