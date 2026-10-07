@@ -68,23 +68,22 @@ Select either preview to inspect its full-size accessible SVG.
 See the
 [asset sources and reproduction notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/README.md).
 
-Current stable release: **v1.4.0** · Python **3.11+** · Apache License 2.0
+Current stable release: **v1.4.1** · Python **3.11+** · Apache License 2.0
 
-Implementation candidate: **v1.4.1** (local review only; not tagged, released, or
-published to PyPI). It corrects FIT session `sport` and `sub_sport` names to the
-FIT profile, stops FIT-derived HRV from reading files that fail the FIT
-container checks, and ignores operating-system metadata files (`.DS_Store`,
-`Thumbs.db`, AppleDouble `._*` files, and `__MACOSX/`) in Export folders and
-completed outputs, without changing datasets, fields, stable keys, Snapshot
-semantics, or the `0 / 0 / 3 / 2` Product exit contract.
+v1.4.1 corrects FIT session `sport` and `sub_sport` names to the FIT profile,
+stops FIT-derived HRV from reading files that fail the FIT container checks,
+and ignores operating-system metadata files (`.DS_Store`, `Thumbs.db`,
+AppleDouble `._*` files, and `__MACOSX/`) in Export folders and completed
+outputs, without changing datasets, fields, stable keys, Snapshot semantics, or
+the `0 / 0 / 3 / 2` Product exit contract.
 
 v1.4.0 adds read-only Export diagnostics and a Human-reviewed public-safe
 Support Bundle without changing normalized datasets, stable keys, Snapshot
 semantics, or the `0 / 0 / 3 / 2` Product exit contract.
 
-v1.4.0 is published as the annotated tag, the latest stable GitHub Release, and
-the latest Production PyPI distribution. v1.3.3 remains the historical Sleep
-contract restoration patch release.
+v1.4.1 is published as the annotated tag, the latest stable GitHub Release, and
+the latest Production PyPI distribution. v1.4.0 remains the Export Evidence and
+Diagnostics release.
 
 - [Install from PyPI](https://pypi.org/project/garmin-running-data-normalizer/)
 - [Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md)
@@ -93,9 +92,9 @@ contract restoration patch release.
 - [FAQ](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/faq.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
-- [v1.4.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.4.0.md)
-- [Published stable Release v1.4.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.4.0)
-- [Production PyPI v1.4.0](https://pypi.org/project/garmin-running-data-normalizer/1.4.0/)
+- [v1.4.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.4.1.md)
+- [Published stable Release v1.4.1](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.4.1)
+- [Production PyPI v1.4.1](https://pypi.org/project/garmin-running-data-normalizer/1.4.1/)
 - Project story on Zenn: [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
 
 ## Why this project
@@ -133,6 +132,25 @@ Normalize locally
 
 The package does not send the export to a hosted processing service. Public
 reproduction uses only synthetic fixtures.
+
+## What v1.4.1 fixes
+
+The v1.4.1 patch release fixes FIT and metadata-file handling without changing
+the 17 normalized datasets, stable keys, Snapshot semantics, or the
+`0 / 0 / 3 / 2` Product exit contract.
+
+- FIT session `sport` and `sub_sport` use FIT profile names. For example,
+  indoor cycling is `cycling` with `indoor_cycling` rather than
+  `treadmill_running`, and a trail run is `running` with `trail`.
+- FIT-derived HRV is read only from FIT files that pass the same container
+  checks as FIT sessions, including the file CRC.
+- `.DS_Store`, `Thumbs.db`, AppleDouble `._*` files, and `__MACOSX/` are
+  ignored in Export folders and completed outputs, so copies made on macOS no
+  longer fail Run-All or handoff validation.
+
+Rerun Run-All after upgrading. See the
+[v1.4.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.4.1.md)
+and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
 
 ## What v1.4.0 adds
 
@@ -233,7 +251,7 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. The published v1.4.0
+`python -m garmin_running_data_normalizer --version`. The published v1.4.1
 package installs `tzdata` automatically on Windows so Python can resolve the
 existing IANA `Asia/Tokyo` timezone contract. macOS and Linux continue to use
 their system timezone data.

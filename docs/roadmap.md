@@ -32,7 +32,7 @@
   third-party notices.
 - Complete dependency lock review, security/privacy checks, documentation, and
   release-specific review evidence.
-- `v1.0.0` remains the first stable release. `v1.4.0` is the current stable
+- `v1.0.0` remains the first stable release. `v1.4.1` is the current stable
   GitHub Release and Production PyPI version. Any future tag, GitHub Release,
   stable release, or package publication requires its own current review and
   separate Human authorization.
@@ -90,3 +90,6 @@
 - Published version `1.4.0` through the merged release pull requests, the
   annotated tag, the GitHub Release, and Trusted Publishing to Production PyPI
   with exact-version install verification.
+- Published patch version `1.4.1`, which corrects FIT session sport names,
+  checks FIT containers before reading FIT-derived HRV, and ignores
+  operating-system metadata files in Export folders and completed outputs.

@@ -1,5 +1,18 @@
 # Release Readiness
 
+## v1.4.1 stable patch release
+
+Version `1.4.1` is published as the FIT correctness and metadata-file patch
+release. It corrects FIT session sport names to the FIT profile, checks FIT
+containers before reading FIT-derived HRV, and ignores operating-system
+metadata files in Export folders and completed outputs, while keeping the
+17-dataset/212-field inventory, stable keys, Snapshot semantics, and the
+`0 / 0 / 3 / 2` Product exit contract unchanged.
+
+The release source is the `main` commit that merges the v1.4.1 release
+preparation pull request. Its annotated tag, GitHub Release, and publish
+workflow evidence are recorded in this section after publication.
+
 ## v1.4.0 stable release
 
 Version `1.4.0` is published as the Export Evidence and Diagnostics release. It
@@ -10,7 +23,7 @@ the 17-dataset/212-field inventory, stable keys, Snapshot semantics, and the
 `0 / 0 / 3 / 2` Product exit contract unchanged.
 
 The release source is `ae9cb28a60c450897284fd1023b1e4e7c02d127e`.
-The annotated `v1.4.0` tag, latest stable GitHub Release, Production PyPI
+The annotated `v1.4.0` tag, then-latest stable GitHub Release, Production PyPI
 publication through Trusted Publishing/OIDC, and the publish workflow's
 exact-version PyPI install verification are complete.
 
@@ -22,7 +35,7 @@ the compatible `1.x` output contract unchanged while restoring observed-stage
 duration semantics and separating review-required from excluded evidence.
 
 The release source is `cf7e44c18d77adda4c908207361e6f6f5f2b682c`.
-The annotated `v1.3.3` tag, latest stable GitHub Release, Production PyPI
+The annotated `v1.3.3` tag, then-latest stable GitHub Release, Production PyPI
 publication through Trusted Publishing/OIDC, exact-version clean install,
 Synthetic Run-All, and Sleep contract smoke are complete.
 
@@ -35,7 +48,7 @@ candidate preservation, and acquisition/processing-order separation retain
 observed evidence without selecting an unsupported winner.
 
 The release source is `c6f7737aa24d099b30e897cef0840f0189fb1d7b`.
-The annotated `v1.3.2` tag, latest stable GitHub Release, Production PyPI
+The annotated `v1.3.2` tag, then-latest stable GitHub Release, Production PyPI
 publication, and exact-version clean-install smoke test are complete.
 
 ## v1.3.1 stable patch release
@@ -67,24 +80,30 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - License: `Apache-2.0`
 - GitHub Actions: Operational
 - Current source and package version: `1.4.1`
-- Current Production PyPI version: `1.4.0`
-- Latest GitHub Release: `v1.4.0`
+- Current Production PyPI version: `1.4.1`
+- Latest GitHub Release: `v1.4.1`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
-- TestPyPI `1.4.0`: Not used; the publish workflow's TestPyPI jobs were
-  skipped
-- Production PyPI `1.4.0`: Published and exact-version install verified by the
-  publish workflow
+- TestPyPI `1.4.1`: Not used; the patch release publishes directly to
+  Production PyPI through the protected `pypi` Environment
+- Production PyPI `1.4.1`: Published through Trusted Publishing; the publish
+  workflow verifies the exact-version install
 - Trusted Publishing: Configured for protected `testpypi` and `pypi`
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
-and GitHub Releases remain immutable. v1.4.0 is the current stable release and
-v1.3.3 is the historical patch release; their tags, GitHub Releases, and
-Production PyPI publications were recorded only after the corresponding
-external state was observed.
+and GitHub Releases remain immutable. v1.4.1 is the current stable release;
+v1.4.0 and v1.3.3 are historical releases. The v1.4.0 and v1.3.3 tags, GitHub
+Releases, and Production PyPI publications were recorded only after the
+corresponding external state was observed; the v1.4.1 publication evidence is
+added to this document after it is observed.
 
 ## Current release assessment
+
+The v1.4.1 release assessment is recorded here after publication, from the
+release source's main CI run and the Production publish workflow run.
+
+### v1.4.0 release assessment (historical)
 
 The v1.4.0 release source passed main CI run `32388440076` (Ubuntu `test` and
 `windows-runtime`) and Production publish workflow run `32389085934`. In that

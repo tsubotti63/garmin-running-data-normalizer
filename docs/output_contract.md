@@ -2,8 +2,7 @@
 
 ## Status and authority
 
-- Current stable contract: v1.4.0
-- Implementation candidate: v1.4.1 (not published)
+- Current stable contract: v1.4.1
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each
@@ -21,7 +20,7 @@ winner, observed variant, candidate, or normalized value. Existing
 Both machine authorities record the exact installed `product_version`;
 `ANALYSIS_CONTEXT.json` preserves the same value for standalone handoff.
 
-For the released v1.4.0 Sleep contract, `sleep_duration_minutes_ex_awake` is
+For the released v1.4.1 Sleep contract, `sleep_duration_minutes_ex_awake` is
 an observed-stage sum when any finite deep/light/REM stage exists, with an
 approved direct-source fallback only when all stages are absent. Missing stages
 are not zero-filled; awake and window-minus-awake are not used; conflicting

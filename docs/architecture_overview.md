@@ -1,13 +1,13 @@
 # Architecture Overview
 
-- Applies to: stable v1.4.0
+- Applies to: stable v1.4.1
 - Compatibility family: stable 1.x
 - Authority: human-readable architecture overview
-- Last reviewed: 2026-10-06
+- Last reviewed: 2026-10-07
 
 ## Current stable architecture
 
-Garmin Running Data Normalizer is a local-first Python CLI. The stable v1.4.0
+Garmin Running Data Normalizer is a local-first Python CLI. The stable v1.4.1
 release reads a local Garmin Account Data Export, normalizes supported JSON and FIT sources,
 and publishes a deterministic handoff with 17 stable normalized datasets plus
 QA, audit, provenance, schema, and navigation artifacts.
@@ -97,7 +97,7 @@ not redefine normalization semantics.
 
 ## Export evidence and diagnostics
 
-Every completed v1.4.0 Run-All output adds
+Every completed Run-All output from v1.4.0 onward adds
 `diagnostics/source_completeness.json` and `diagnostics/run_quality.json`.
 They are read-only projections of existing Product evidence and do not change
 normalized records, infer missing values, or select a winner. `doctor --input`
@@ -123,10 +123,10 @@ requires Human review before sharing and is never uploaded automatically. See
 
 ## Packaging, release, and CI status
 
-Version 1.4.0 is published as the annotated tag, the
-[latest stable GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.4.0),
+Version 1.4.1 is published as the annotated tag, the
+[latest stable GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.4.1),
 and the
-[latest Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.4.0/).
+[latest Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.4.1/).
 The package is licensed under Apache-2.0 for Python 3.11 or later. Packaging
 metadata derives the version from the package source. CI validates the
 repository on Ubuntu and the installed runtime path on `windows-latest`;
