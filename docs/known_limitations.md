@@ -48,7 +48,11 @@ Product boundaries.
 - The v1.2.0 workflow stores complete, explicitly confirmed Export
   observations in one private local store per opaque account boundary.
 - Canonical merge uses `missing_is_not_delete`; explicit null and empty values
-  preserve the prior explicit value and become review holds.
+  preserve the prior explicit value and become review holds. Daily datasets are
+  the exception: when Exports differ for one daily key, including a null,
+  empty, or missing field, `endurance_score_daily` and `uds_daily` keep
+  observed variants, and the other daily datasets, including `sleep_daily`,
+  stop.
 - Automatic deletion, snapshot/blob deletion, and garbage collection are not
   implemented. Unknown and unsupported inputs are preserved as raw evidence,
   not promoted to normalized public datasets.
@@ -78,6 +82,21 @@ Product boundaries.
   v1.4.1 or earlier. Re-registering such an Export with its original label
   fails, and a new label registers it as an additional Snapshot; do not
   re-register Exports already registered with an earlier version.
+- Starting with v1.5.0, Snapshot Sleep keeps every Sleep field that Run-All
+  reads from a single Export. Earlier versions dropped the direct duration
+  aliases `durationInSeconds` and `sleepDuration`, the snake_case stage fields
+  (`deep_sleep_seconds`, `light_sleep_seconds`, `rem_sleep_seconds`,
+  `awake_sleep_seconds`), and the top-level `overallScore` and `sleepScore`,
+  so `snapshot run-all` could return `null` where Run-All on the same Export
+  returned a value. Sleep rows without these fields build the same Snapshot
+  records as in v1.4.1.
+- Snapshot Sleep stops when Exports differ for one `calendarDate` in a kept
+  field, including a field that is present in one Export and absent in
+  another. Because v1.5.0 keeps more fields, a store that v1.4.1 could build
+  can stop with v1.5.0 when its Exports differ only in the added fields.
+- Snapshot Sleep rows without `calendarDate` remain review holds and are not
+  passed to Run-All, while Run-All on a single Export takes the sleep day from
+  the sleep end time.
 
 ## FIT
 
