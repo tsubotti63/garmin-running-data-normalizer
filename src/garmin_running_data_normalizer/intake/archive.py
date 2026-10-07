@@ -6,6 +6,8 @@ from pathlib import PureWindowsPath
 import stat
 from zipfile import BadZipFile, ZipFile, ZipInfo
 
+from ..common.os_metadata import is_os_metadata_path
+
 
 MAX_ARCHIVE_MEMBERS = 100_000
 
@@ -28,9 +30,7 @@ def is_real_export_file(name: str) -> bool:
         not name
         or path.is_absolute()
         or ".." in path.parts
-        or "__MACOSX" in path.parts
-        or path.name.startswith("._")
-        or path.name == ".DS_Store"
+        or is_os_metadata_path(name)
     )
 
 

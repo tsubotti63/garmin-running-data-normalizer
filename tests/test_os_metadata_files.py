@@ -70,9 +70,13 @@ class OsMetadataFilesTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertFalse(is_os_metadata_path(path))
 
-    def test_zip_member_rule_keeps_the_v1_4_0_snapshot_identity(self) -> None:
-        self.assertTrue(is_real_export_file("Thumbs.db"))
+    def test_zip_member_rule_uses_the_shared_metadata_rule(self) -> None:
+        self.assertTrue(
+            is_real_export_file("DI-Connect-Fitness/synthetic_summarizedActivities.json")
+        )
         for name in (
+            "Thumbs.db",
+            "DI-Connect-Fitness/Thumbs.db",
             ".DS_Store",
             "DI-Connect-Fitness/._synthetic_summarizedActivities.json",
             "__MACOSX/DI-Connect-Fitness/synthetic_summarizedActivities.json",

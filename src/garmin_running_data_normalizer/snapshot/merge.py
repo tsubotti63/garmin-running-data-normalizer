@@ -633,6 +633,18 @@ def _lactate_malformed_conflicts(
     return conflicts
 
 
+def _conflict_count_summary(conflicts: list[dict[str, Any]]) -> str:
+    """Count stop conflicts by dataset and type without dates, keys, or values."""
+    counts = Counter(
+        (str(item.get("dataset", "unknown")), str(item.get("conflict_type", "unknown")))
+        for item in conflicts
+    )
+    return ", ".join(
+        f"{dataset} {conflict_type}={count}"
+        for (dataset, conflict_type), count in sorted(counts.items())
+    )
+
+
 def _canonical_key(dataset: str, values: tuple[Any, ...]) -> str:
     if dataset == "activities":
         return str(values[0])
@@ -1331,7 +1343,10 @@ def build_approved_input(
                 stage / "canonical/review_holds.json",
                 all_holds + candidate_reviews + all_conflicts,
             )
-            raise SnapshotMergeError("canonical merge contains unresolved stop conflicts")
+            raise SnapshotMergeError(
+                "canonical merge contains unresolved stop conflicts: "
+                + _conflict_count_summary(all_conflicts)
+            )
         if not canonical_by_dataset["activities"]:
             raise SnapshotMergeError("canonical input contains no Activities records")
 

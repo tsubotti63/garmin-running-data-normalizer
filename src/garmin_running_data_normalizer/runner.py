@@ -13,6 +13,7 @@ from .common.time import (
     TimezoneDataUnavailableError,
     require_timezone_data,
 )
+from .common.private_files import PRIVATE_DIRECTORY_MODE, open_private_file
 from .intake.discovery import discover_export
 from .normalizers.activities import normalize_activities
 from .qa import summarize_records
@@ -145,14 +146,16 @@ def run_activities(input_path: str | Path, output_path: str | Path) -> dict[str,
         if any(output_root.iterdir()):
             raise GoldenPathError("output directory became non-empty during processing")
     else:
-        output_root.mkdir(parents=True, exist_ok=False)
+        output_root.parent.mkdir(parents=True, exist_ok=True)
+        output_root.mkdir(mode=PRIVATE_DIRECTORY_MODE)
+        output_root.chmod(PRIVATE_DIRECTORY_MODE)
     payloads = {
         "normalized_activities.json": normalized_data,
         "qa_summary.json": qa_data,
         "run_manifest.json": manifest_data,
     }
     for name in OUTPUT_FILES:
-        with (output_root / name).open("xb") as handle:
+        with open_private_file(output_root / name) as handle:
             handle.write(payloads[name])
     return {
         "status": "PASS",

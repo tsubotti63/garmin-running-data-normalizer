@@ -3,6 +3,7 @@
 ## Status and authority
 
 - Current stable contract: v1.4.1
+- Implementation candidate: v1.5.0 (not published)
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each
@@ -71,8 +72,8 @@ declared file set exactly. Starting with v1.4.1, they ignore operating-system
 metadata files (`.DS_Store`, `Thumbs.db`, AppleDouble `._*` files, and
 anything under `__MACOSX/`), such as those Finder creates when an output
 folder is opened; any other undeclared file still fails validation. An Export
-folder and Snapshot folder input ignore the same files. Inside a ZIP file,
-`.DS_Store`, AppleDouble `._*` files, and `__MACOSX/` were already skipped.
+folder, ZIP members, and Snapshot input ignore the same files; ZIP members also
+skip `Thumbs.db` starting with v1.5.0.
 
 ## Dataset and FIT behavior
 

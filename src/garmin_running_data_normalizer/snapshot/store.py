@@ -13,12 +13,18 @@ from typing import Any, Iterator
 from zipfile import BadZipFile, ZipFile
 
 from ..common.os_metadata import is_os_metadata_path
+from ..common.private_files import (
+    PRIVATE_DIRECTORY_MODE,
+    ensure_private_directory,
+    open_private_file,
+)
 from ..intake.archive import UnsafeArchiveError, read_member, validated_members
 from .policies import CONTRACT_VERSION, REGISTRY_VERSION
 
 
 STORE_FORMAT = "garmin-running-data-normalizer-snapshot-store-v1"
 STORE_FORMAT_VERSION = 1
+IMMUTABLE_FILE_MODE = stat.S_IRUSR
 ACCOUNT_STORE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$")
 LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -80,9 +86,9 @@ def _reject_store_symlink_components(root: Path, path: Path) -> None:
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_private_directory(path.parent)
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    with temporary.open("xb") as handle:
+    with open_private_file(temporary) as handle:
         handle.write(data)
         handle.flush()
         os.fsync(handle.fileno())
@@ -186,8 +192,10 @@ def initialize_store(
         }
     if root.exists() and any(root.iterdir()):
         raise SnapshotStoreError("new snapshot store directory must be absent or empty")
+    ensure_private_directory(root)
+    root.chmod(PRIVATE_DIRECTORY_MODE)
     for relative in ("blobs/sha256", "snapshots", "journal"):
-        (root / relative).mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(root / relative)
     metadata = {
         "format": STORE_FORMAT,
         "format_version": STORE_FORMAT_VERSION,
@@ -209,13 +217,31 @@ def initialize_store(
     }
 
 
+def _lock_held_message(lock_path: Path) -> str:
+    holder = "an unknown process"
+    if not lock_path.is_symlink():
+        try:
+            recorded = lock_path.read_text(encoding="ascii").strip()
+        except (OSError, UnicodeError):
+            recorded = ""
+        if recorded.isdigit():
+            holder = f"pid {recorded}"
+    return (
+        "snapshot store is locked by another writer "
+        f"({lock_path.name}, held by {holder}). If no other snapshot command is "
+        "running, delete that lock file and rerun snapshot register with the same "
+        "Export, or another complete Export, to reconcile the interrupted "
+        "registration."
+    )
+
+
 @contextmanager
 def _store_lock(root: Path) -> Iterator[None]:
     lock_path = root / ".single-writer.lock"
     try:
         descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     except FileExistsError as exc:
-        raise SnapshotStoreError("snapshot store is locked by another writer") from exc
+        raise SnapshotStoreError(_lock_held_message(lock_path)) from exc
     try:
         os.write(descriptor, f"{os.getpid()}\n".encode("ascii"))
         os.close(descriptor)
@@ -419,11 +445,11 @@ def _preserve_blob(root: Path, digest: str, source: bytes | Path) -> bool:
         if destination.stat().st_size != size or sha256_file(destination) != digest:
             raise SnapshotStoreError("existing immutable blob failed integrity validation")
         return False
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    ensure_private_directory(destination.parent)
     _reject_store_symlink_components(root, destination)
     temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
     _reject_store_symlink_components(root, temporary)
-    with temporary.open("xb") as handle:
+    with open_private_file(temporary) as handle:
         if isinstance(source, bytes):
             handle.write(source)
         else:
@@ -436,7 +462,7 @@ def _preserve_blob(root: Path, digest: str, source: bytes | Path) -> bool:
         temporary.unlink(missing_ok=True)
         raise SnapshotStoreError("new immutable blob failed integrity validation")
     os.replace(temporary, destination)
-    destination.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
+    destination.chmod(IMMUTABLE_FILE_MODE)
     return True
 
 
@@ -637,8 +663,8 @@ def register_snapshot(
         inventory_path = manifest_path.parent / f"{snapshot_id}.inventory.json"
         _atomic_json(inventory_path, _inventory_document(manifest))
         _atomic_json(manifest_path, manifest)
-        inventory_path.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
-        manifest_path.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
+        inventory_path.chmod(IMMUTABLE_FILE_MODE)
+        manifest_path.chmod(IMMUTABLE_FILE_MODE)
         manifests.append(manifest)
         manifests = sorted(
             manifests,
