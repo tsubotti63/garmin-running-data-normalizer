@@ -45,7 +45,7 @@ def synthetic_fit_session(
     u8_metric = 0xFF if invalid_metrics else 150
     session_record = bytes([0x00]) + b"".join([
         struct.pack("<I", 1_000_000),
-        bytes([0xFF if invalid_sport else 1, 7]),
+        bytes([0xFF if invalid_sport else 1, 2]),
         struct.pack("<II", 3_600_000, 3_500_000), struct.pack("<I", 1_000_000),
         struct.pack("<H", 0xFFFF if invalid_metrics else 600),
         struct.pack("<II", u32_metric, 5_000 if not invalid_metrics else 0xFFFFFFFF),

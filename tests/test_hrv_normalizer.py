@@ -9,8 +9,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from garmin_running_data_normalizer.fit.hrv import parse_fit_hrv_bytes
-from garmin_running_data_normalizer.fit.parser import FIT_EPOCH_OFFSET
+from garmin_running_data_normalizer.fit.parser import FIT_EPOCH_OFFSET, fit_crc16, parse_fit_bytes
 from garmin_running_data_normalizer.normalizers.hrv import normalize_hrv
+from tests.fit_fixture_factory import synthetic_fit
 
 
 def fit_timestamp(value: str) -> int:
@@ -25,7 +26,8 @@ def synthetic_hrv_fit(*records: tuple[int, int]) -> bytes:
         bytes([0x00]) + struct.pack("<HI", raw_value, timestamp)
         for raw_value, timestamp in records
     )
-    return bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", len(body)) + b".FIT" + body
+    payload = bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", len(body)) + b".FIT" + body
+    return payload + struct.pack("<H", fit_crc16(payload))
 
 
 def synthetic_float_hrv_fit(raw_value: float, timestamp: float) -> bytes:
@@ -33,7 +35,8 @@ def synthetic_float_hrv_fit(raw_value: float, timestamp: float) -> bytes:
         [2, 1, 4, 0x88, 253, 4, 0x88]
     )
     body = definition + bytes([0x00]) + struct.pack("<ff", raw_value, timestamp)
-    return bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", len(body)) + b".FIT" + body
+    payload = bytes([12, 0x10]) + struct.pack("<H", 0) + struct.pack("<I", len(body)) + b".FIT" + body
+    return payload + struct.pack("<H", fit_crc16(payload))
 
 
 def health_status_record(date: str, value: object) -> dict[str, object]:
@@ -139,6 +142,39 @@ class HrvNormalizerTest(unittest.TestCase):
         parsed = parse_fit_hrv_bytes(b"not-fit", file_id="fit_file:synthetic", source_path="bad.fit")
         self.assertEqual(parsed["status"], "too_small")
         self.assertEqual(parsed["records"], [])
+
+    def test_fit_hrv_accepts_only_containers_the_session_parser_accepts(self) -> None:
+        valid = synthetic_hrv_fit((64 * 128, fit_timestamp("2026-07-21T22:00:00Z")))
+        cases = {
+            "bad_file_crc": valid[:-2] + bytes([valid[-2] ^ 0xFF, valid[-1]]),
+            "truncated": valid[:-2],
+            "unsupported_chained": valid + valid,
+            "bad_header_crc": synthetic_fit(invalid_header_crc=True),
+        }
+        for status, data in cases.items():
+            with self.subTest(status=status):
+                parsed = parse_fit_hrv_bytes(data, file_id="fit_file:synthetic", source_path="bad.fit")
+                self.assertEqual(parsed["status"], status)
+                self.assertEqual(parsed["records"], [])
+                self.assertEqual(
+                    parse_fit_bytes(data, file_id="fit_file:synthetic", source_path="bad.fit")["status"],
+                    status,
+                )
+
+    def test_fit_with_invalid_file_crc_contributes_no_hrv(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            valid = synthetic_hrv_fit((73 * 128, fit_timestamp("2026-07-21T22:00:00Z")))
+            corrupted = synthetic_hrv_fit((64 * 128, fit_timestamp("2026-07-22T22:00:00Z")))
+            (root / "valid.fit").write_bytes(valid)
+            (root / "corrupted.fit").write_bytes(
+                corrupted[:-2] + bytes([corrupted[-2] ^ 0xFF, corrupted[-1]])
+            )
+            result = normalize_hrv(root)
+            self.assertEqual(
+                [(row["date"], row["fit_hrv_value"]) for row in result["fit_daily"]],
+                [("2026-07-22", 73.0)],
+            )
 
     def test_non_finite_and_unexpected_fit_fields_are_json_safe_holds(self) -> None:
         parsed = parse_fit_hrv_bytes(

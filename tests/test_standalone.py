@@ -287,7 +287,7 @@ class StandaloneHandoffTest(unittest.TestCase):
                 quality_path,
             ):
                 value = json.loads(path.read_text(encoding="utf-8"))
-                value["product_version"] = "1.4.1"
+                value["product_version"] = "1.4.2"
                 path.write_text(
                     json.dumps(value, indent=2, sort_keys=True) + "\n",
                     encoding="utf-8",
