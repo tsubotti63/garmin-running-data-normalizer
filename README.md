@@ -72,8 +72,10 @@ Current stable release: **v1.4.0** · Python **3.11+** · Apache License 2.0
 
 Implementation candidate: **v1.4.1** (local review only; not tagged, released, or
 published to PyPI). It corrects FIT session `sport` and `sub_sport` names to the
-FIT profile and stops FIT-derived HRV from reading files that fail the FIT
-container checks, without changing datasets, fields, stable keys, Snapshot
+FIT profile, stops FIT-derived HRV from reading files that fail the FIT
+container checks, and ignores operating-system metadata files (`.DS_Store`,
+`Thumbs.db`, AppleDouble `._*` files, and `__MACOSX/`) in Export folders and
+completed outputs, without changing datasets, fields, stable keys, Snapshot
 semantics, or the `0 / 0 / 3 / 2` Product exit contract.
 
 v1.4.0 adds read-only Export diagnostics and a Human-reviewed public-safe

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from zipfile import ZipFile
 
+from ..common.os_metadata import is_os_metadata_path
 from .archive import ArchiveLimits, read_member, validated_members
 
 
@@ -40,6 +41,8 @@ def discover_export(root: str | Path, limits: ArchiveLimits = ArchiveLimits()) -
         relative = path.relative_to(base).as_posix()
         if path.is_symlink():
             raise ValueError(f"symbolic-link inputs are not supported: {relative}")
+        if is_os_metadata_path(relative):
+            continue
         suffix = path.suffix.lower()
         if suffix in SUPPORTED_SUFFIXES:
             data = path.read_bytes()

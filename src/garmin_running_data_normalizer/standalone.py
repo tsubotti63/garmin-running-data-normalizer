@@ -6,6 +6,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from . import __version__
+from .common.os_metadata import is_os_metadata_path
 from .diagnostics.validation import validate_diagnostic_authorities
 from .run_all import OUTPUT_PATHS, SNAPSHOT_LIFECYCLE_PATHS
 
@@ -201,7 +202,9 @@ def validate_standalone_handoff(root: str | Path) -> dict[str, Any]:
         if path.is_symlink():
             raise StandaloneHandoffError("handoff contains a symbolic link")
         if path.is_file():
-            actual_paths.add(path.relative_to(output_root).as_posix())
+            relative = path.relative_to(output_root).as_posix()
+            if not is_os_metadata_path(relative):
+                actual_paths.add(relative)
     if actual_paths != set(generated_paths):
         raise StandaloneHandoffError("handoff contains an undeclared or missing file")
     for required in (
