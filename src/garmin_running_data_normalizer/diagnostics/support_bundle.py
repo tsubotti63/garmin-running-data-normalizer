@@ -507,7 +507,7 @@ def _run_quality_projection(quality: dict[str, Any]) -> dict[str, Any]:
         quality.get("format") != "garmin-running-data-normalizer-run-quality-v1"
         or quality.get("schema_version") != "garmin-run-quality:v1"
         or not isinstance(quality.get("product_version"), str)
-        or re.fullmatch(r"1\.4(?:\.\d+)?", quality["product_version"]) is None
+        or re.fullmatch(r"1\.(?:[4-9]|[1-9]\d+)(?:\.\d+)?", quality["product_version"]) is None
         or quality.get("run_all_version") != 1
         or status not in {"PASS", "PASS_WITH_WARNINGS", "PARTIAL_SUCCESS"}
         or quality.get("exit_code") != (3 if status == "PARTIAL_SUCCESS" else 0)

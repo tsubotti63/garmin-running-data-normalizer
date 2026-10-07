@@ -70,6 +70,14 @@ See the
 
 Current stable release: **v1.4.1** · Python **3.11+** · Apache License 2.0
 
+Implementation candidate: **v1.5.0** (local review only; not tagged, released, or
+published to PyPI). It creates new Snapshot Stores and `normalize-activities`
+output as owner-only, reports Snapshot stop conflicts by dataset and type,
+explains how to recover from an interrupted registration lock, and also skips
+`Thumbs.db` inside ZIP files. A ZIP that contains `Thumbs.db` receives a
+different Snapshot content identity; datasets, fields, stable keys, and the
+`0 / 0 / 3 / 2` Product exit contract are unchanged.
+
 v1.4.1 corrects FIT session `sport` and `sub_sport` names to the FIT profile,
 stops FIT-derived HRV from reading files that fail the FIT container checks,
 and ignores operating-system metadata files (`.DS_Store`, `Thumbs.db`,
@@ -368,9 +376,11 @@ garmin-running-data-normalizer snapshot run-all \
 
 Use one opaque account token per person/account boundary. Snapshot Stores and
 their Run-All outputs are private local data: place them outside synchronized
-or shared folders where practical, restrict directory permissions (for example,
-`chmod 700 workspace/snapshot-store` on a single-user Unix-like system), and
-never commit them. Back up a store only after `snapshot verify` reports `PASS`;
+or shared folders where practical and never commit them. Starting with v1.5.0,
+new Snapshot Stores are created owner-only on Unix-like systems; tighten a store
+created by an earlier version with `chmod -R go-rwx workspace/snapshot-store`.
+Windows ignores these permissions, so rely on the folder's access control
+there. Back up a store only after `snapshot verify` reports `PASS`;
 verify it again after restoration. Snapshot and blob deletion, automatic
 garbage collection, and automatic deletion inference are not provided.
 

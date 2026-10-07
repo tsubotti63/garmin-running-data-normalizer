@@ -28,7 +28,7 @@ def _copy_validator_inputs(destination: Path) -> None:
 def test_repository_public_product_state_passes() -> None:
     version, findings = validate(ROOT)
 
-    assert version == "1.4.1"
+    assert version == "1.5.0"
     assert findings == []
 
 
@@ -304,13 +304,13 @@ def test_package_version_drift_fails(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
     version_source = tmp_path / VERSION_SOURCE
     version_source.write_text(
-        version_source.read_text(encoding="utf-8").replace('"1.4.1"', '"1.4.2"'),
+        version_source.read_text(encoding="utf-8").replace('"1.5.0"', '"1.5.1"'),
         encoding="utf-8",
     )
 
     version, findings = validate(tmp_path)
 
-    assert version == "1.4.2"
+    assert version == "1.5.1"
     assert any(
         "implementation candidate marker is missing" in item
         for item in findings
@@ -490,13 +490,13 @@ def test_candidate_marker_follows_package_version(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
     version_source = tmp_path / VERSION_SOURCE
     version_source.write_text(
-        version_source.read_text(encoding="utf-8").replace('"1.4.1"', '"1.4.2"'),
+        version_source.read_text(encoding="utf-8").replace('"1.5.0"', '"1.5.1"'),
         encoding="utf-8",
     )
 
     version, findings = validate(tmp_path)
 
-    assert version == "1.4.2"
+    assert version == "1.5.1"
     assert any(
         "implementation candidate marker is missing"
         in item
@@ -515,7 +515,7 @@ MAINTAINER_STATE_DOCUMENTS = (
 def _start_implementation_candidate(root: Path, version: str) -> None:
     version_source = root / VERSION_SOURCE
     version_source.write_text(
-        version_source.read_text(encoding="utf-8").replace('"1.4.1"', f'"{version}"'),
+        version_source.read_text(encoding="utf-8").replace('"1.5.0"', f'"{version}"'),
         encoding="utf-8",
     )
     readme = root / "README.md"
@@ -547,7 +547,7 @@ def _start_implementation_candidate(root: Path, version: str) -> None:
         ),
         (
             "docs/release_readiness.md",
-            "Current source and package version: `1.4.1`",
+            "Current source and package version: `1.5.0`",
             "Current source and package version: `1.3.3`",
         ),
         (
@@ -616,19 +616,19 @@ def test_current_migration_heading_accepts_any_previous_version(
 
 def test_maintainer_state_follows_candidate_package_version(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
-    _start_implementation_candidate(tmp_path, "1.4.2")
+    _start_implementation_candidate(tmp_path, "1.5.1")
     readiness = tmp_path / "docs/release_readiness.md"
     readiness.write_text(
         readiness.read_text(encoding="utf-8").replace(
-            "Current source and package version: `1.4.1`",
-            "Current source and package version: `1.4.2`",
+            "Current source and package version: `1.5.0`",
+            "Current source and package version: `1.5.1`",
         ),
         encoding="utf-8",
     )
 
     version, findings = validate(tmp_path)
 
-    assert version == "1.4.2"
+    assert version == "1.5.1"
     assert not any(
         item.startswith(f"{relative}:")
         for relative in MAINTAINER_STATE_DOCUMENTS
@@ -638,13 +638,13 @@ def test_maintainer_state_follows_candidate_package_version(tmp_path: Path) -> N
 
 def test_candidate_source_version_must_be_recorded(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
-    _start_implementation_candidate(tmp_path, "1.4.2")
+    _start_implementation_candidate(tmp_path, "1.5.1")
 
     _, findings = validate(tmp_path)
 
     assert (
         "docs/release_readiness.md: required marker is missing: "
-        "Current source and package version: `1.4.2`"
+        "Current source and package version: `1.5.1`"
     ) in findings
 
 
@@ -665,7 +665,7 @@ def test_obsolete_agents_phase_fails(tmp_path: Path) -> None:
 def test_current_cs010_public_case_study_passes() -> None:
     version, findings = validate(ROOT)
 
-    assert version == "1.4.1"
+    assert version == "1.5.0"
     assert not any(CS010_DOCUMENT in item for item in findings)
 
 

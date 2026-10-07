@@ -11,11 +11,10 @@ APPLEDOUBLE_PREFIX = "._"
 def is_os_metadata_path(relative_path: str) -> bool:
     """Return whether a relative path is Finder, AppleDouble, or thumbnail metadata.
 
-    Folder input discovery, Snapshot folder registration, and handoff
-    validation use this rule, so they ignore the same files. ZIP member
-    selection keeps its v1.4.0 rule (``intake.archive.is_real_export_file``),
-    which does not skip ``Thumbs.db``, because Snapshot content identities
-    depend on it.
+    Folder input discovery, ZIP member selection, Snapshot registration, and
+    handoff validation all use this single rule, so they ignore the same
+    files. ZIP members follow it from v1.5.0, which changes the Snapshot
+    content identity of a ZIP that contains ``Thumbs.db``.
     """
     path = PurePosixPath(relative_path.replace("\\", "/"))
     return (

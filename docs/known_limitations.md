@@ -54,6 +54,30 @@ Product boundaries.
   not promoted to normalized public datasets.
 - A Snapshot Store is not a public artifact or a backup service. Back up only
   after integrity verification and verify again after restore.
+- Starting with v1.5.0, new Snapshot Store directories and files are
+  owner-only on Unix-like systems: directories `0700` (including missing parent
+  directories created for a new store), immutable blobs, manifests, and
+  inventories `0400`, and other files `0600`.
+  `normalize-activities` creates a new output directory as `0700` with `0600`
+  files. Existing stores and directories keep their permissions; tighten an
+  older store with `chmod -R go-rwx <store>`. Windows ignores these modes.
+- If `snapshot register` is interrupted, the store can keep
+  `.single-writer.lock` and an incomplete registration journal. `register`
+  then reports the lock and its recorded process ID, and `verify` reports
+  `incomplete_registration_journal_present`. Confirm that no other snapshot
+  command is running, delete `.single-writer.lock`, and rerun
+  `snapshot register` with the same Export, or with another complete Export if
+  the original is no longer available; it reconciles the journal before
+  registering. The lock file is the only store file that may be deleted.
+- When Snapshots disagree for the same stable key, `snapshot build-input` and
+  `snapshot run-all` stop and report counts by dataset and conflict type,
+  without dates, keys, or values. Excluding a Snapshot or choosing a value is
+  not supported.
+- Starting with v1.5.0, `Thumbs.db` inside a ZIP file is not registered, so a
+  ZIP that contains it receives a different Snapshot content identity than in
+  v1.4.1 or earlier. Re-registering such an Export with its original label
+  fails, and a new label registers it as an additional Snapshot; do not
+  re-register Exports already registered with an earlier version.
 
 ## FIT
 

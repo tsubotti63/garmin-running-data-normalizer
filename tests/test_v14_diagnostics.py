@@ -109,7 +109,7 @@ class V14DiagnosticsTest(unittest.TestCase):
             quality = json.loads(
                 (output / "diagnostics/run_quality.json").read_text()
             )
-            self.assertEqual(completeness["product_version"], "1.4.1")
+            self.assertEqual(completeness["product_version"], "1.5.0")
             self.assertEqual(
                 [item["source_family_id"] for item in completeness["families"]],
                 list(SOURCE_FAMILY_ORDER),
@@ -1244,7 +1244,7 @@ class V14DiagnosticsTest(unittest.TestCase):
         )
 
     def test_version_is_v14_candidate(self) -> None:
-        self.assertEqual(__version__, "1.4.1")
+        self.assertEqual(__version__, "1.5.0")
 
 
 if __name__ == "__main__":
