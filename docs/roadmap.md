@@ -32,7 +32,7 @@
   third-party notices.
 - Complete dependency lock review, security/privacy checks, documentation, and
   release-specific review evidence.
-- `v1.0.0` remains the first stable release. `v1.4.1` is the current stable
+- `v1.0.0` remains the first stable release. `v1.5.0` is the current stable
   GitHub Release and Production PyPI version. Any future tag, GitHub Release,
   stable release, or package publication requires its own current review and
   separate Human authorization.
@@ -93,3 +93,17 @@
 - Published patch version `1.4.1`, which corrects FIT session sport names,
   checks FIT containers before reading FIT-derived HRV, and ignores
   operating-system metadata files in Export folders and completed outputs.
+
+## Milestone 8 — v1.5 Snapshot and output hardening — complete
+
+- Create new Snapshot Stores and `normalize-activities` output owner-only on
+  Unix-like systems.
+- Report Snapshot stop conflicts by dataset and conflict type, and document
+  the recovery from an interrupted registration lock.
+- Skip `Thumbs.db` inside ZIP files with the shared operating-system metadata
+  rule.
+- Keep every Sleep field that Run-All reads in Snapshot input.
+- Keep the 17-dataset, 212-field, 6-relationship inventory, stable keys, and
+  the `0 / 0 / 3 / 2` Product exit contract unchanged.
+- Published version `1.5.0` through the merged release pull requests, the
+  annotated tag, the GitHub Release, and Trusted Publishing to Production PyPI.

@@ -2,8 +2,7 @@
 
 ## Status and authority
 
-- Current stable contract: v1.4.1
-- Implementation candidate: v1.5.0 (not published)
+- Current stable contract: v1.5.0
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each
@@ -21,7 +20,7 @@ winner, observed variant, candidate, or normalized value. Existing
 Both machine authorities record the exact installed `product_version`;
 `ANALYSIS_CONTEXT.json` preserves the same value for standalone handoff.
 
-For the released v1.4.1 Sleep contract, `sleep_duration_minutes_ex_awake` is
+For the released v1.5.0 Sleep contract, `sleep_duration_minutes_ex_awake` is
 an observed-stage sum when any finite deep/light/REM stage exists, with an
 approved direct-source fallback only when all stages are absent. Missing stages
 are not zero-filled; awake and window-minus-awake are not used; conflicting
@@ -219,8 +218,12 @@ reports dataset presence patterns, previous-only retention, new and reappeared
 records, changed records/fields, review holds, unsupported objects, pairwise and
 leave-one-out evidence. Missing from a later Export never means delete.
 Explicit null or empty values preserve an earlier explicit value and remain
-reviewable. Automatic deletion and timestamp-only relationship inference are
-both `false`.
+reviewable, except in daily datasets, where a differing record stops the build
+or, for `endurance_score_daily` and `uds_daily`, is kept as observed variants.
+Automatic deletion and timestamp-only relationship inference are
+both `false`. Starting with v1.5.0, the approved input keeps every Sleep source
+field that Run-All reads; Sleep rows without `calendarDate` remain review holds
+(see [Known Limitations](known_limitations.md#snapshot-lifecycle)).
 
 The local Canonical build also records `canonical_merge_manifest.json`,
 `snapshot_delta_report.json`, `presence_pattern_report.json`,
