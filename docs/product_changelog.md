@@ -4,9 +4,25 @@ This file records factual Garmin Running Data Normalizer product changes. The
 Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
 Platform maintains its own separate changelog.
 
-## v1.4.1 — stable Production FIT correctness and metadata-file patch
+## v1.5.0 — stable Production Snapshot and output hardening release
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a
+verified Production PyPI distribution on 2026-10-07 JST.
+
+- Creates new Snapshot Stores and `normalize-activities` output owner-only on
+  Unix-like systems; existing stores keep their permissions.
+- Reports Snapshot stop conflicts by dataset and conflict type, and reports an
+  interrupted-registration lock with its recorded process ID and recovery step.
+- Skips `Thumbs.db` inside ZIP files with the shared operating-system metadata
+  rule; such a ZIP receives a different Snapshot content identity.
+- Keeps every Sleep field that Run-All reads in Snapshot input.
+- Preserves the 17-dataset/212-field inventory, 6 explicit relationships,
+  stable keys, the Snapshot lifecycle contract and policy registry `v1.0`, and
+  the `0 / 0 / 3 / 2` Product exit mapping.
+
+## v1.4.1 — stable Production FIT correctness and metadata-file patch
+
+Status: published as the annotated tag, a stable GitHub Release, and a
 verified Production PyPI distribution on 2026-10-07 JST.
 
 - Corrects FIT session `sport` and `sub_sport` names to the FIT profile; the

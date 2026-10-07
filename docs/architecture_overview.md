@@ -1,13 +1,13 @@
 # Architecture Overview
 
-- Applies to: stable v1.4.1
+- Applies to: stable v1.5.0
 - Compatibility family: stable 1.x
 - Authority: human-readable architecture overview
 - Last reviewed: 2026-10-07
 
 ## Current stable architecture
 
-Garmin Running Data Normalizer is a local-first Python CLI. The stable v1.4.1
+Garmin Running Data Normalizer is a local-first Python CLI. The stable v1.5.0
 release reads a local Garmin Account Data Export, normalizes supported JSON and FIT sources,
 and publishes a deterministic handoff with 17 stable normalized datasets plus
 QA, audit, provenance, schema, and navigation artifacts.
@@ -77,7 +77,8 @@ dataset-specific merge policies either upsert stable daily state, preserve
 source observations, or regenerate FIT-derived output from the cumulative blob
 set. Integrity verification, coverage, lineage, review holds, and canonical
 merge summaries remain auditable. The Snapshot Store is private local data, not
-a public artifact or backup service.
+a public artifact or backup service; starting with v1.5.0, new Stores are
+created owner-only on Unix-like systems.
 
 ## QA, audit, and provenance
 
@@ -123,10 +124,10 @@ requires Human review before sharing and is never uploaded automatically. See
 
 ## Packaging, release, and CI status
 
-Version 1.4.1 is published as the annotated tag, the
-[latest stable GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.4.1),
+Version 1.5.0 is published as the annotated tag, the
+[latest stable GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.5.0),
 and the
-[latest Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.4.1/).
+[latest Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.5.0/).
 The package is licensed under Apache-2.0 for Python 3.11 or later. Packaging
 metadata derives the version from the package source. CI validates the
 repository on Ubuntu and the installed runtime path on `windows-latest`;

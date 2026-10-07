@@ -68,15 +68,15 @@ Select either preview to inspect its full-size accessible SVG.
 See the
 [asset sources and reproduction notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/README.md).
 
-Current stable release: **v1.4.1** · Python **3.11+** · Apache License 2.0
+Current stable release: **v1.5.0** · Python **3.11+** · Apache License 2.0
 
-Implementation candidate: **v1.5.0** (local review only; not tagged, released, or
-published to PyPI). It creates new Snapshot Stores and `normalize-activities`
-output as owner-only, reports Snapshot stop conflicts by dataset and type,
-explains how to recover from an interrupted registration lock, and also skips
-`Thumbs.db` inside ZIP files. A ZIP that contains `Thumbs.db` receives a
-different Snapshot content identity; datasets, fields, stable keys, and the
-`0 / 0 / 3 / 2` Product exit contract are unchanged.
+v1.5.0 creates new Snapshot Stores and `normalize-activities` output as
+owner-only, reports Snapshot stop conflicts by dataset and type, explains how
+to recover from an interrupted registration lock, skips `Thumbs.db` inside ZIP
+files, and keeps every Sleep field that Run-All reads in Snapshot input.
+Datasets, fields, stable keys, and the `0 / 0 / 3 / 2` Product exit contract
+are unchanged; a ZIP that contains `Thumbs.db` receives a different Snapshot
+content identity.
 
 v1.4.1 corrects FIT session `sport` and `sub_sport` names to the FIT profile,
 stops FIT-derived HRV from reading files that fail the FIT container checks,
@@ -89,7 +89,7 @@ v1.4.0 adds read-only Export diagnostics and a Human-reviewed public-safe
 Support Bundle without changing normalized datasets, stable keys, Snapshot
 semantics, or the `0 / 0 / 3 / 2` Product exit contract.
 
-v1.4.1 is published as the annotated tag, the latest stable GitHub Release, and
+v1.5.0 is published as the annotated tag, the latest stable GitHub Release, and
 the latest Production PyPI distribution. v1.4.0 remains the Export Evidence and
 Diagnostics release.
 
@@ -100,9 +100,9 @@ Diagnostics release.
 - [FAQ](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/faq.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
-- [v1.4.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.4.1.md)
-- [Published stable Release v1.4.1](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.4.1)
-- [Production PyPI v1.4.1](https://pypi.org/project/garmin-running-data-normalizer/1.4.1/)
+- [v1.5.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.5.0.md)
+- [Published stable Release v1.5.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.5.0)
+- [Production PyPI v1.5.0](https://pypi.org/project/garmin-running-data-normalizer/1.5.0/)
 - Project story on Zenn: [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
 
 ## Why this project
@@ -140,6 +140,30 @@ Normalize locally
 
 The package does not send the export to a hosted processing service. Public
 reproduction uses only synthetic fixtures.
+
+## What v1.5.0 changes
+
+The v1.5.0 release hardens Snapshot and output handling without changing the
+17 normalized datasets, stable keys, or the `0 / 0 / 3 / 2` Product exit
+contract.
+
+- New Snapshot Stores and `normalize-activities` output are owner-only on
+  Unix-like systems. Stores created by earlier versions keep their
+  permissions; tighten one with `chmod -R go-rwx <store>`.
+- When Snapshots disagree, `snapshot build-input` and `snapshot run-all` report
+  counts by dataset and conflict type.
+- A lock left by an interrupted `snapshot register` is reported with its
+  recorded process ID and the recovery step.
+- `Thumbs.db` inside a ZIP file is skipped like other operating-system metadata
+  files. Such a ZIP receives a different Snapshot content identity, so do not
+  re-register Exports already registered with an earlier version.
+- Snapshot Sleep keeps every Sleep field that Run-All reads, so
+  `snapshot run-all` reports the same Sleep values as Run-All on the same
+  Export. A store whose Exports differ only in the added fields now stops.
+
+Rerun Run-All after upgrading. See the
+[v1.5.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.5.0.md)
+and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
 
 ## What v1.4.1 fixes
 
@@ -259,7 +283,7 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. The published v1.4.1
+`python -m garmin_running_data_normalizer --version`. The published v1.5.0
 package installs `tzdata` automatically on Windows so Python can resolve the
 existing IANA `Asia/Tokyo` timezone contract. macOS and Linux continue to use
 their system timezone data.

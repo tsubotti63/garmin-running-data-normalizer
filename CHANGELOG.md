@@ -13,9 +13,39 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
+## v1.5.0 — stable Production release
+
+Published on 2026-10-07 JST as the annotated `v1.5.0` tag, the latest stable
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.5.0),
+and the verified
+[Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.5.0/).
+
+### Changed
+
+- New Snapshot Stores and `normalize-activities` output are owner-only on
+  Unix-like systems.
+- `Thumbs.db` inside a ZIP file is skipped like other operating-system metadata
+  files; such a ZIP receives a different Snapshot content identity.
+- Snapshot Sleep keeps every Sleep field that Run-All reads.
+
+### Fixed
+
+- `snapshot run-all` no longer returns `null` for Sleep values that Run-All
+  reads from the same Export.
+- Snapshot stop conflicts report counts by dataset and conflict type, and an
+  interrupted-registration lock reports its recovery step.
+
+### Compatibility
+
+- The 17 datasets, 212 fields, 6 explicit relationships, stable keys, output
+  paths, and Product exit mapping remain unchanged; existing Snapshot Stores
+  need no migration.
+- A Store whose Exports differ only in the added Sleep fields can now stop.
+  See the [v1.5.0 Release Notes](docs/release_notes/v1.5.0.md).
+
 ## v1.4.1 — stable Production patch release
 
-Published on 2026-10-07 JST as the annotated `v1.4.1` tag, the latest stable
+Published on 2026-10-07 JST as the annotated `v1.4.1` tag,
 [GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.4.1),
 and the verified
 [Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.4.1/).

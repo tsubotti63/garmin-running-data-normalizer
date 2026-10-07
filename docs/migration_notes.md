@@ -1,5 +1,54 @@
 # Migration Notes
 
+## v1.4.1 to v1.5.0
+
+v1.5.0 does not require data migration. Existing Snapshot Stores load and
+verify as before, and one-shot Run-All output from the same Export changes only
+in `product_version` and the digests that include it. Rerun Run-All after
+upgrading.
+
+| Contract | v1.5.0 position |
+|---|---|
+| CLI and Python imports | Unchanged |
+| Datasets, schemas, and stable keys | Unchanged; 17 datasets and 212 fields |
+| Output paths | Unchanged |
+| Exit codes | Unchanged `0 / 0 / 3 / 2` Product mapping |
+| Snapshot lifecycle contract and policy registry | Unchanged `v1.0`; existing Stores need no migration |
+| Relationships and privacy boundary | Unchanged |
+
+What can change:
+
+- New Snapshot Stores and new `normalize-activities` output directories are
+  owner-only on Unix-like systems. Stores created by earlier versions keep
+  their permissions; tighten one with `chmod -R go-rwx <store>`. Windows
+  ignores these modes, so rely on the folder's access control there.
+- A ZIP that contains `Thumbs.db` receives a different Snapshot content
+  identity when registered with v1.5.0. Do not re-register Exports already
+  registered with an earlier version: the original label fails, and a new
+  label adds another Snapshot.
+- Snapshot Sleep keeps every Sleep field that Run-All reads. A Store whose
+  Exports differ for one `calendarDate` only in the added fields
+  (`durationInSeconds`, `sleepDuration`, the snake_case stage fields,
+  `overallScore`, and `sleepScore`) now stops `snapshot build-input` and
+  `snapshot run-all`, and the error reports
+  `sleep_daily same_stable_key_different_public_value=<count>`.
+- The Snapshot stop-conflict and lock errors keep their previous opening text
+  and add counts or recovery guidance.
+
+Upgrade the package in a new or existing Python 3.11+ environment:
+
+```bash
+python -m pip install --upgrade garmin-running-data-normalizer==1.5.0
+python -m garmin_running_data_normalizer --version
+```
+
+Use a new output directory when rerunning with v1.5.0. An output produced by
+v1.4.0 or v1.4.1 contains `diagnostics/`, so `validate-handoff`,
+`doctor --run-output`, and `support-bundle` from v1.5.0 reject it; rerun
+Run-All instead. See
+[Known Limitations](known_limitations.md#snapshot-lifecycle) and the
+[v1.5.0 Release Notes](release_notes/v1.5.0.md).
+
 ## v1.4.0 to v1.4.1
 
 v1.4.1 is a patch release. It does not require data migration, but Run-All

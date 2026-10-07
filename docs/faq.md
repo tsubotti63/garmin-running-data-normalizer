@@ -1,7 +1,7 @@
 # Frequently Asked Questions
 
 These short answers apply to the current stable Garmin Running Data Normalizer
-`v1.4.1` release and route to the current product authorities. Version `1.4.1`
+`v1.5.0` release and route to the current product authorities. Version `1.5.0`
 is available from the latest GitHub Release and Production PyPI.
 
 ## Getting started
@@ -24,12 +24,12 @@ synthetic data.
 
 ### Which version is stable?
 
-`v1.4.1` is the current stable release. It includes the approved Sleep
+`v1.5.0` is the current stable release. It includes the approved Sleep
 contract while preserving the compatible one-shot workflow, optional Snapshot
 Accumulation, the Windows timezone-data hotfix, and the additive
 Wellness/Metrics datasets documented for v1.3. It is published on
-[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.4.1)
-and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/1.4.1/).
+[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.5.0)
+and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/1.5.0/).
 
 ## Garmin Export and Run-All
 
@@ -141,7 +141,10 @@ zero-defect, or external-adoption claim.
 ### Can I delete old Snapshot blobs?
 
 No supported Snapshot/blob deletion or automatic garbage collection workflow
-is provided. Do not manually edit or delete Store internals. Verify the Store
+is provided. Do not manually edit or delete Store internals; the only
+exception is `.single-writer.lock` after an interrupted `snapshot register`, as
+described in
+[Known Limitations](known_limitations.md#snapshot-lifecycle). Verify the Store
 before backup and again after restore.
 
 ## AI-assisted analysis
@@ -211,7 +214,7 @@ Public-safe Windows reports are welcome through
 ### Was the v1.2.0 Windows timezone-data issue resolved?
 
 Yes. v1.2.1 introduced the conditional Windows `tzdata` dependency, which
-v1.4.1 retains. The current release also provides the bounded
+v1.5.0 retains. The current release also provides the bounded
 `TIMEZONE_DATA_UNAVAILABLE` diagnostic if the configured IANA timezone data is
 still unavailable in a damaged or incomplete environment. Confirm the
 environment with:
@@ -220,9 +223,9 @@ environment with:
 python -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
 ```
 
-For a normal v1.4.1 Production PyPI installation, no separate
+For a normal v1.5.0 Production PyPI installation, no separate
 `pip install tzdata` step is expected. If the check still fails, reinstall
-v1.4.1 in a new environment and include only sanitized environment details in a
+v1.5.0 in a new environment and include only sanitized environment details in a
 support report.
 
 ### Can I attach my Garmin Export to a GitHub Issue?
