@@ -4,9 +4,25 @@ This file records factual Garmin Running Data Normalizer product changes. The
 Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
 Platform maintains its own separate changelog.
 
-## v1.4.0 — stable Production Export Evidence and Diagnostics release
+## v1.4.1 — stable Production FIT correctness and metadata-file patch
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a
+verified Production PyPI distribution on 2026-10-07 JST.
+
+- Corrects FIT session `sport` and `sub_sport` names to the FIT profile; the
+  sub-sport no longer renames the sport.
+- Reads FIT-derived HRV only from FIT files that pass the shared FIT container
+  checks, including the file CRC.
+- Ignores `.DS_Store`, `Thumbs.db`, AppleDouble `._*` files, and `__MACOSX/` in
+  Export folders, Snapshot folder input, and completed-output validation;
+  ZIP member selection and Snapshot content identities are unchanged.
+- Preserves the 17-dataset/212-field inventory, 6 explicit relationships,
+  stable keys, Snapshot semantics, and the `0 / 0 / 3 / 2` Product exit
+  mapping.
+
+## v1.4.0 — stable Production Export Evidence and Diagnostics release
+
+Status: published as the annotated tag, a stable GitHub Release, and a
 verified Production PyPI distribution on 2026-08-21 JST.
 
 - Adds Export Evidence Doctor, Source Completeness, Run Quality, and the typed

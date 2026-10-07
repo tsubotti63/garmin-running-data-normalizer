@@ -1,7 +1,7 @@
 # v1.4 Export Evidence and Diagnostics
 
-Status: published stable v1.4.0 release. The current published stable release
-is v1.4.0.
+Status: published in the stable v1.4.0 release. The current published stable
+release is v1.4.1.
 
 ## First-user journey
 

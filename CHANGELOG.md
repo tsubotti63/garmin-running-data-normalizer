@@ -13,9 +13,33 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
+## v1.4.1 — stable Production patch release
+
+Published on 2026-10-07 JST as the annotated `v1.4.1` tag, the latest stable
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.4.1),
+and the verified
+[Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.4.1/).
+
+### Fixed
+
+- FIT session `sport` and `sub_sport` use FIT profile names, and the
+  sub-sport no longer renames the sport.
+- FIT-derived HRV is read only from FIT files that pass the FIT container
+  checks, including the file CRC.
+- `.DS_Store`, `Thumbs.db`, AppleDouble `._*` files, and `__MACOSX/` no
+  longer break Export folder input or completed-output validation.
+
+### Compatibility
+
+- The 17 datasets, 212 fields, 6 explicit relationships, stable keys,
+  Snapshot semantics, and Product exit mapping remain unchanged.
+- FIT session values, Activity/FIT links, and `hrv_daily` can change for the
+  same Export; rerun Run-All after upgrading. See the
+  [v1.4.1 Release Notes](docs/release_notes/v1.4.1.md).
+
 ## v1.4.0 — stable Production release
 
-Published on 2026-08-21 JST as the annotated `v1.4.0` tag, the latest stable
+Published on 2026-08-21 JST as the annotated `v1.4.0` tag,
 [GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.4.0),
 and the verified
 [Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.4.0/).

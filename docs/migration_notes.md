@@ -1,5 +1,46 @@
 # Migration Notes
 
+## v1.4.0 to v1.4.1
+
+v1.4.1 is a patch release. It does not require data migration, but Run-All
+output from the same Export can change, so rerun Run-All after upgrading.
+
+| Contract | v1.4.1 position |
+|---|---|
+| CLI and Python imports | Unchanged |
+| Datasets, schemas, and stable keys | Unchanged; 17 datasets and 212 fields |
+| Output paths | Unchanged |
+| Exit codes | Unchanged `0 / 0 / 3 / 2` Product mapping |
+| Snapshot policies | Unchanged, including ZIP member selection, content identities, and re-registration |
+| Relationships and privacy boundary | Unchanged |
+
+What can change for the same Export:
+
+- FIT session `sport` and `sub_sport` now use FIT profile names. Sport code 10
+  is `training` rather than `strength_training`; filter strength sessions by
+  `sub_sport` `strength_training`. Sub-sport code 0 is `generic` rather than
+  null.
+- Activity/FIT links can increase where a FIT session's sport was misnamed.
+- `hrv_daily` can lose days from FIT files that fail the container checks, and
+  the HRV audit can report `bad_file_crc`, `bad_header_crc`,
+  `unsupported_chained`, or `truncated`.
+- Operating-system metadata files in an Export folder are ignored, so a run that
+  previously failed or ended as `PARTIAL_SUCCESS` because of AppleDouble files
+  can now complete.
+
+Upgrade the package in a new or existing Python 3.11+ environment:
+
+```bash
+python -m pip install --upgrade garmin-running-data-normalizer==1.4.1
+python -m garmin_running_data_normalizer --version
+```
+
+Use a new output directory when rerunning with v1.4.1. An output produced by
+v1.4.0 contains `diagnostics/`, so `validate-handoff`, `doctor --run-output`,
+and `support-bundle` from v1.4.1 reject it; rerun Run-All instead. See
+[Known Limitations](known_limitations.md#diagnostics-and-handoff-validation)
+and the [v1.4.1 Release Notes](release_notes/v1.4.1.md).
+
 ## v1.3.3 to v1.4.0
 
 v1.4.0 adds read-only Export evidence and diagnostics. It does not require data

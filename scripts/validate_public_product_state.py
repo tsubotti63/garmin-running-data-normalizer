@@ -40,7 +40,7 @@ CURRENT_DOCUMENTS = (
     "docs/migration_notes.md",
 )
 CURRENT_RELEASE_NOTES_TEMPLATE = "docs/release_notes/v{version}.md"
-CURRENT_STABLE_VERSION = "1.4.0"
+CURRENT_STABLE_VERSION = "1.4.1"
 
 STATUS_EXIT_CONTRACT_MARKERS = (
     "| `PASS` | 0 |",
