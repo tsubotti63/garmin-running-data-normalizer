@@ -128,7 +128,9 @@ Product boundaries.
   `avg_stance_time_balance` value as recorded, in percent, and is not
   converted to a left or right side. Garmin's activity export also contains
   running-dynamics values under other names; the product uses the FIT values
-  and does not read those activity-list values.
+  and does not read those activity-list values. `analysis/activities.csv`
+  repeats the session values as `fit_*` columns only for activities with an
+  explicit Activity/FIT link.
 - Chained FIT payloads are rejected rather than merged.
 - Multi-session FIT is normalized only when declared lap counts allocate every
   lap to exactly one session. Allocation conflicts exclude the whole file from

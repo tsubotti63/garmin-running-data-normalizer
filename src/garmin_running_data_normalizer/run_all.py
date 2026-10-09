@@ -133,6 +133,33 @@ ACTIVITIES_CSV_COLUMNS = (
     "training_effect_label",
     "activity_training_load",
     "lap_count",
+    "elapsed_duration_sec",
+    "moving_duration_sec",
+    "fit_avg_vertical_oscillation_mm",
+    "fit_avg_stance_time_ms",
+    "fit_avg_stance_time_percent",
+    "fit_avg_stance_time_balance_percent",
+    "fit_avg_vertical_ratio_percent",
+    "fit_avg_step_length_mm",
+    "fit_total_ascent_m",
+    "fit_total_descent_m",
+)
+# analysis/activities.csv columns converted from Activity millisecond fields.
+ACTIVITIES_CSV_DURATION_COLUMNS = (
+    ("elapsed_duration_sec", "elapsed_duration_ms"),
+    ("moving_duration_sec", "moving_duration_ms"),
+)
+# analysis/activities.csv columns taken from the FIT session that an explicit
+# activity_fit_links row joins to the activity; empty without such a link.
+ACTIVITIES_CSV_FIT_SESSION_COLUMNS = (
+    ("fit_avg_vertical_oscillation_mm", "avg_vertical_oscillation_mm"),
+    ("fit_avg_stance_time_ms", "avg_stance_time_ms"),
+    ("fit_avg_stance_time_percent", "avg_stance_time_percent"),
+    ("fit_avg_stance_time_balance_percent", "avg_stance_time_balance_percent"),
+    ("fit_avg_vertical_ratio_percent", "avg_vertical_ratio_percent"),
+    ("fit_avg_step_length_mm", "avg_step_length_mm"),
+    ("fit_total_ascent_m", "total_ascent"),
+    ("fit_total_descent_m", "total_descent"),
 )
 EXTERNAL_SAFE_CSV_COLUMNS = (
     "activity_month",
@@ -693,12 +720,32 @@ def _validate_provenance(
             raise RunAllError("PROVENANCE_MISMATCH", "FIT audit provenance does not match discovered input")
 
 
-def _activities_csv(records: list[dict[str, Any]]) -> bytes:
+def _seconds_from_milliseconds(value: Any) -> float | None:
+    return float(value) / 1000.0 if isinstance(value, (int, float)) else None
+
+
+def _activities_csv(
+    records: list[dict[str, Any]],
+    fit_links: list[dict[str, Any]],
+    fit_sessions: list[dict[str, Any]],
+) -> bytes:
+    sessions_by_key = {str(session["fit_session_key"]): session for session in fit_sessions}
+    linked_sessions = {
+        str(link["garmin_activity_key"]): sessions_by_key.get(str(link["fit_session_key"]))
+        for link in fit_links
+        if link.get("match_status") == "explicit" and link.get("ambiguous") is False
+    }
     stream = io.StringIO(newline="")
     writer = csv.DictWriter(stream, fieldnames=ACTIVITIES_CSV_COLUMNS, extrasaction="ignore", lineterminator="\n")
     writer.writeheader()
     for record in sorted(records, key=lambda item: (str(item["garmin_activity_key"]), str(item["source_path"]))):
-        writer.writerow(record)
+        row = dict(record)
+        for column, source in ACTIVITIES_CSV_DURATION_COLUMNS:
+            row[column] = _seconds_from_milliseconds(record.get(source))
+        session = linked_sessions.get(str(record["garmin_activity_key"])) or {}
+        for column, source in ACTIVITIES_CSV_FIT_SESSION_COLUMNS:
+            row[column] = session.get(source)
+        writer.writerow(row)
     return stream.getvalue().encode("utf-8")
 
 
@@ -1116,7 +1163,11 @@ def run_all(
             "status": "PASS",
         },
     }
-    csv_data = _activities_csv(records["activities"])
+    csv_data = _activities_csv(
+        records["activities"],
+        records["activity_fit_links"],
+        records["fit_sessions"],
+    )
     performance_csv_data = _performance_metrics_csv(
         records["hill_score_daily"],
         records["endurance_score_daily"],
@@ -1520,6 +1571,8 @@ def run_all(
 
 __all__ = [
     "ACTIVITIES_CSV_COLUMNS",
+    "ACTIVITIES_CSV_DURATION_COLUMNS",
+    "ACTIVITIES_CSV_FIT_SESSION_COLUMNS",
     "DATASET_TABLE",
     "OUTPUT_PATHS",
     "SNAPSHOT_LIFECYCLE_PATHS",
