@@ -116,7 +116,7 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Default branch: `main`
 - License: `Apache-2.0`
 - GitHub Actions: Operational
-- Current source and package version: `1.6.0`
+- Current source and package version: `1.7.0`
 - Current Production PyPI version: `1.6.0`
 - Latest GitHub Release: `v1.6.0`
 - GitHub Release: Public, non-prerelease, and marked latest

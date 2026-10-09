@@ -612,8 +612,10 @@ DATASET_FIELDS = {
         "sport", "sub_sport", "distance_m", "elapsed_time_sec",
         "timer_time_sec", "avg_heart_rate", "max_heart_rate", "avg_cadence",
         "max_cadence", "avg_power", "max_power", "total_ascent",
-        "total_descent", "record_count", "lap_count", "source_path",
-        "source_sha256",
+        "total_descent", "avg_vertical_oscillation_mm", "avg_stance_time_ms",
+        "avg_stance_time_percent", "avg_stance_time_balance_percent",
+        "avg_vertical_ratio_percent", "avg_step_length_mm", "record_count",
+        "lap_count", "source_path", "source_sha256",
     ),
     "fit_laps": (
         "fit_file_id", "fit_session_key", "fit_lap_key", "session_ordinal",
@@ -621,7 +623,10 @@ DATASET_FIELDS = {
         "total_elapsed_time", "total_timer_time", "total_distance", "avg_speed",
         "max_speed", "avg_heart_rate", "max_heart_rate", "avg_cadence",
         "max_cadence", "avg_power", "max_power", "total_ascent",
-        "total_descent", "timestamp", "source_path", "source_sha256",
+        "total_descent", "avg_vertical_oscillation_mm", "avg_stance_time_ms",
+        "avg_stance_time_percent", "avg_stance_time_balance_percent",
+        "avg_vertical_ratio_percent", "avg_step_length_mm", "timestamp",
+        "source_path", "source_sha256",
     ),
     "activity_fit_links": (
         "garmin_activity_key", "fit_session_key", "match_rule", "match_basis",
@@ -703,6 +708,12 @@ DATASET_OPTIONAL_FIELDS = {
             "max_power",
             "total_ascent",
             "total_descent",
+            "avg_vertical_oscillation_mm",
+            "avg_stance_time_ms",
+            "avg_stance_time_percent",
+            "avg_stance_time_balance_percent",
+            "avg_vertical_ratio_percent",
+            "avg_step_length_mm",
             "timestamp",
         }
     ),
@@ -2169,6 +2180,9 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         "sleep_history_factor_percent", "training_readiness_acute_load",
         "training_readiness_hrv_weekly_average", "training_readiness_sleep_score",
         "vo2max", "max_met", "calibrated_data", "hrv_value",
+        "avg_vertical_oscillation_mm", "avg_stance_time_ms",
+        "avg_stance_time_percent", "avg_stance_time_balance_percent",
+        "avg_vertical_ratio_percent", "avg_step_length_mm",
     }
     array_fields = {"match_basis"}
     flexible_identifier_fields = {
@@ -2208,6 +2222,13 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         unit = "second"
     elif field.endswith("_ms"):
         unit = "millisecond"
+    elif field.endswith("_mm"):
+        unit = "millimetre"
+    elif field in {
+        "avg_stance_time_percent", "avg_stance_time_balance_percent",
+        "avg_vertical_ratio_percent",
+    }:
+        unit = "percent"
     elif "heart_rate" in field or field in {"avg_hr", "max_hr"}:
         unit = "beats_per_minute"
     elif "power" in field:
@@ -2280,6 +2301,19 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         "deterministic fallback identifiers are strings. Compare values only "
         "after applying the declared explicit relationship contract."
         if field in flexible_identifier_fields
+        else
+        "Starting with v1.7.0: FIT avg_stance_time_balance as recorded, in "
+        "percent; it is not converted to a left or right side. Missing or "
+        "invalid values are null."
+        if field == "avg_stance_time_balance_percent"
+        else
+        "Starting with v1.7.0: FIT running-dynamics average, scaled as "
+        "defined by the FIT profile. Missing or invalid values are null."
+        if field in {
+            "avg_vertical_oscillation_mm", "avg_stance_time_ms",
+            "avg_stance_time_percent", "avg_vertical_ratio_percent",
+            "avg_step_length_mm",
+        }
         else "Defined by the v1.1 runtime schema; do not infer missing values."
     )
     observation_stable_keys = {

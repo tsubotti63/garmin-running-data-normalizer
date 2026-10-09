@@ -121,6 +121,14 @@ Product boundaries.
 ## FIT
 
 - Only selected Activity session and lap fields are normalized.
+- Starting with v1.7.0, `fit_sessions` and `fit_laps` include six FIT
+  running-dynamics averages (vertical oscillation, stance time, stance time
+  percent, stance time balance, vertical ratio, and step length) in the units
+  defined by the FIT profile. `avg_stance_time_balance_percent` is the FIT
+  `avg_stance_time_balance` value as recorded, in percent, and is not
+  converted to a left or right side. Garmin's activity export also contains
+  running-dynamics values under other names; the product uses the FIT values
+  and does not read those activity-list values.
 - Chained FIT payloads are rejected rather than merged.
 - Multi-session FIT is normalized only when declared lap counts allocate every
   lap to exactly one session. Allocation conflicts exclude the whole file from

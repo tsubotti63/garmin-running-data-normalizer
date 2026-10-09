@@ -45,7 +45,14 @@ FIELDS = {
         18: ("avg_cadence", None), 19: ("max_cadence", None),
         20: ("avg_power", None), 21: ("max_power", None),
         22: ("total_ascent", None), 23: ("total_descent", None),
-        26: ("num_laps", None), 253: ("timestamp", "date_time"),
+        26: ("num_laps", None),
+        89: ("avg_vertical_oscillation_mm", "mm10"),
+        90: ("avg_stance_time_percent", "pct100"),
+        91: ("avg_stance_time_ms", "ms10"),
+        132: ("avg_vertical_ratio_percent", "pct100"),
+        133: ("avg_stance_time_balance_percent", "pct100"),
+        134: ("avg_step_length_mm", "mm10"),
+        253: ("timestamp", "date_time"),
     },
     19: {
         2: ("start_time", "date_time"), 7: ("total_elapsed_time", "sec1000"),
@@ -55,6 +62,12 @@ FIELDS = {
         17: ("avg_cadence", None), 18: ("max_cadence", None),
         19: ("avg_power", None), 20: ("max_power", None),
         21: ("total_ascent", None), 22: ("total_descent", None),
+        77: ("avg_vertical_oscillation_mm", "mm10"),
+        78: ("avg_stance_time_percent", "pct100"),
+        79: ("avg_stance_time_ms", "ms10"),
+        118: ("avg_vertical_ratio_percent", "pct100"),
+        119: ("avg_stance_time_balance_percent", "pct100"),
+        120: ("avg_step_length_mm", "mm10"),
         253: ("timestamp", "date_time"),
     },
     # Record message values are deliberately not emitted: precise coordinates
@@ -234,6 +247,10 @@ def _scale(value: Any, scale: str | None, timezone_name: str) -> Any:
             return float(value) / 100.0
         if scale == "speed":
             return float(value) / 1000.0
+        if scale in {"mm10", "ms10"}:
+            return float(value) / 10.0
+        if scale == "pct100":
+            return float(value) / 100.0
     except (TypeError, ValueError):
         return value
     return value
@@ -530,6 +547,14 @@ def parse_fit_export(
                 "max_power": session.get("max_power"),
                 "total_ascent": session.get("total_ascent"),
                 "total_descent": session.get("total_descent"),
+                "avg_vertical_oscillation_mm": session.get("avg_vertical_oscillation_mm"),
+                "avg_stance_time_ms": session.get("avg_stance_time_ms"),
+                "avg_stance_time_percent": session.get("avg_stance_time_percent"),
+                "avg_stance_time_balance_percent": session.get(
+                    "avg_stance_time_balance_percent"
+                ),
+                "avg_vertical_ratio_percent": session.get("avg_vertical_ratio_percent"),
+                "avg_step_length_mm": session.get("avg_step_length_mm"),
                 "record_count": parsed.get("record_count"),
                 "lap_count": len((parsed.get("laps_by_session") or [])[session_ordinal]),
             })

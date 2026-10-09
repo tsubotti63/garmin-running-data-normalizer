@@ -3,6 +3,7 @@
 ## Status and authority
 
 - Current stable contract: v1.6.0
+- Implementation candidate: v1.7.0 (not published)
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each
@@ -27,6 +28,30 @@ for local dates and times (`Asia/Tokyo` unless `--timezone` selects another).
 requires the three records to agree. The `normalize-activities`
 `run_manifest.json` records the same field. The External-safe Pack and the
 Support Bundle do not include it.
+
+Starting with v1.7.0, `fit_sessions` and `fit_laps` also include six FIT
+running-dynamics averages, read from the FIT session and lap messages and
+scaled as defined by the FIT profile:
+
+| Field | FIT session / lap field | Unit |
+|---|---|---|
+| `avg_vertical_oscillation_mm` | `avg_vertical_oscillation` (89 / 77) | millimetre |
+| `avg_stance_time_ms` | `avg_stance_time` (91 / 79) | millisecond |
+| `avg_stance_time_percent` | `avg_stance_time_percent` (90 / 78) | percent |
+| `avg_stance_time_balance_percent` | `avg_stance_time_balance` (133 / 119) | percent |
+| `avg_vertical_ratio_percent` | `avg_vertical_ratio` (132 / 118) | percent |
+| `avg_step_length_mm` | `avg_step_length` (134 / 120) | millimetre |
+
+`fit_sessions` always contains the six fields, with `null` when the FIT session
+does not record them; `fit_laps` contains them when the FIT lap message defines
+them, like the other lap fields. `avg_stance_time_balance_percent` is the
+recorded FIT value and is not converted to a left or right side. Invalid FIT
+values (`0xFFFF`) become `null` and are counted in the FIT audit
+`invalid_sentinel_count` and `invalid_sentinel_counts`, which do not affect the
+run status. The Run-All field inventory grows from 212 to 224; the 17 datasets,
+stable keys, output paths, and Snapshot rules are unchanged. The External-safe
+Pack, the Support Bundle, and `analysis/activities.csv` do not include these
+fields.
 
 For the released v1.6.0 Sleep contract, `sleep_duration_minutes_ex_awake` is
 an observed-stage sum when any finite deep/light/REM stage exists, with an

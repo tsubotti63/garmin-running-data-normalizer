@@ -70,6 +70,14 @@ See the
 
 Current stable release: **v1.6.0** · Python **3.11+** · Apache License 2.0
 
+Implementation candidate: **v1.7.0** (local review only; not tagged, released, or
+published to PyPI). It adds six FIT running-dynamics averages (vertical
+oscillation, stance time, stance time percent, stance time balance, vertical
+ratio, and step length) to `fit_sessions` and `fit_laps`, in the units defined
+by the FIT profile. Datasets, stable keys, output paths, Snapshot rules, and the
+`0 / 0 / 3 / 2` Product exit contract are unchanged; the field inventory grows
+from 212 to 224.
+
 v1.6.0 adds `--timezone` to `run-all`, `snapshot run-all`,
 `normalize-activities`, and `doctor --input`, so local dates and times can use
 an IANA timezone other than the default `Asia/Tokyo`, and records that
