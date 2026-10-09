@@ -10,9 +10,12 @@ keeping the default `Asia/Tokyo`, the 17-dataset/212-field inventory, stable
 keys, the Snapshot lifecycle contract and policy registry `v1.0`, and the
 `0 / 0 / 3 / 2` Product exit contract unchanged.
 
-The release source is the `main` commit that merges the v1.6.0 release
-preparation pull request. Its annotated tag, GitHub Release, and publish
-workflow evidence are recorded in this section after publication.
+The release source is `877f42289f99acd7eb1fc2adea0379c040cb772e` (#56).
+The annotated `v1.6.0` tag (tag object
+`1bfb75e1b7e3ae94e8742ae8c33ad10e76c2b0df`), the latest stable GitHub Release
+published on 2026-10-09 JST, Production PyPI publication through Trusted
+Publishing/OIDC, and the publish workflow's exact-version PyPI install
+verification are complete.
 
 ## v1.5.0 stable release
 
@@ -118,25 +121,44 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Latest GitHub Release: `v1.6.0`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
-- TestPyPI `1.6.0`: Not used; the release publishes directly to Production
-  PyPI through the protected `pypi` Environment
-- Production PyPI `1.6.0`: Published through Trusted Publishing; the publish
-  workflow verifies the exact-version install
+- TestPyPI `1.6.0`: Not used; the publish workflow's TestPyPI jobs were
+  skipped
+- Production PyPI `1.6.0`: Published and exact-version install verified by the
+  publish workflow
 - Trusted Publishing: Configured for protected `testpypi` and `pypi`
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
 and GitHub Releases remain immutable. v1.6.0 is the current stable release;
-v1.5.0, v1.4.1, v1.4.0, and v1.3.3 are historical releases. The v1.5.0,
-v1.4.1, v1.4.0, and v1.3.3 tag, GitHub Release, and Production PyPI
+v1.5.0, v1.4.1, v1.4.0, and v1.3.3 are historical releases. The v1.6.0,
+v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag, GitHub Release, and Production PyPI
 publication evidence was recorded only after the corresponding external state
-was observed; the v1.6.0 publication evidence is added to this document after
-it is observed.
+was observed.
 
 ## Current release assessment
 
-The v1.6.0 release assessment is recorded here after publication, from the
-release source's main CI run and the Production publish workflow run.
+The v1.6.0 release source passed main CI run `37905835932` (Ubuntu `test` and
+`windows-runtime`) and CodeQL run `37905835352`. A build-only publish workflow
+run (`37912699868`) on the release source passed with every upload job
+skipped. Production publish workflow run `37912868187` then built and
+validated the exact source, published to Production PyPI, and verified the
+exact-version PyPI install; the TestPyPI jobs were skipped. The publication
+sequence ran under one Human approval given after its values were shown. The
+`pypi` Environment deployment was Human-authorized, and the approval was
+submitted through the GitHub API on the Human's instruction.
+
+The SHA-256 checksums recorded by that run match Production PyPI: wheel
+`5aae3599c609a7470b6806320b3b962d34ee1336cc069236f56ec4a67511d8bb` and source
+distribution `fa164c2c11b189b8a743a578641c225c492b671a301762dc9df611a813f1bfc2`.
+Each file carries a PEP 740 publish attestation from `publish-pypi.yml` in the
+`pypi` Environment. The build-only run produced different checksums because
+the distributions are not byte-reproducible across runs; only the production
+run's artifacts were published. `PYPI_PUBLISH_APPROVED` was returned to
+`false` after the upload. A clean install from Production PyPI completed the
+Synthetic Run-All (`PASS_WITH_WARNINGS`, exit 0), `validate-handoff`,
+`doctor --run-output`, and `support-bundle`, recorded `America/New_York` as
+`local_timezone` with `--timezone America/New_York`, and stopped with
+`TIMEZONE_INVALID` (exit 2) without creating output for `asia/tokyo`.
 
 ### v1.5.0 release assessment (historical)
 
