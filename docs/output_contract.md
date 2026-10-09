@@ -50,8 +50,35 @@ values (`0xFFFF`) become `null` and are counted in the FIT audit
 `invalid_sentinel_count` and `invalid_sentinel_counts`, which do not affect the
 run status. The Run-All field inventory grows from 212 to 224; the 17 datasets,
 stable keys, output paths, and Snapshot rules are unchanged. The External-safe
-Pack, the Support Bundle, and `analysis/activities.csv` do not include these
-fields.
+Pack and the Support Bundle do not include these fields.
+
+Starting with v1.7.0, `analysis/activities.csv` also appends ten columns after
+`lap_count`. The table remains a derived projection of `activities`, not a new
+Source of Truth:
+
+| Column | Source | Unit |
+|---|---|---|
+| `elapsed_duration_sec` | `activities.elapsed_duration_ms` / 1000 | second |
+| `moving_duration_sec` | `activities.moving_duration_ms` / 1000 | second |
+| `fit_avg_vertical_oscillation_mm` | `fit_sessions.avg_vertical_oscillation_mm` | millimetre |
+| `fit_avg_stance_time_ms` | `fit_sessions.avg_stance_time_ms` | millisecond |
+| `fit_avg_stance_time_percent` | `fit_sessions.avg_stance_time_percent` | percent |
+| `fit_avg_stance_time_balance_percent` | `fit_sessions.avg_stance_time_balance_percent` | percent |
+| `fit_avg_vertical_ratio_percent` | `fit_sessions.avg_vertical_ratio_percent` | percent |
+| `fit_avg_step_length_mm` | `fit_sessions.avg_step_length_mm` | millimetre |
+| `fit_total_ascent_m` | `fit_sessions.total_ascent` | metre |
+| `fit_total_descent_m` | `fit_sessions.total_descent` | metre |
+
+`duration_sec`, `elapsed_duration_sec`, and `moving_duration_sec` come from
+Garmin's activity `duration`, `elapsedDuration`, and `movingDuration`: the
+recorded activity time, the whole elapsed time including pauses, and the time
+Garmin counted as moving. The `fit_*` columns repeat values from the FIT
+session joined to the activity through an explicit `activity_fit_links` row.
+Links are never inferred from timestamp proximity, and the columns are empty
+when the activity has no explicit link or the FIT value is null. The
+`activities` relationship metadata in `ANALYSIS_CONTEXT.json` and
+`SCHEMA_CATALOG.json` declares these derived and joined columns. The
+External-safe Pack keeps its own columns and does not include them.
 
 For the released v1.6.0 Sleep contract, `sleep_duration_minutes_ex_awake` is
 an observed-stage sum when any finite deep/light/REM stage exists, with an

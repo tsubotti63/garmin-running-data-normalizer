@@ -41,6 +41,8 @@ machine artifacts. It does not replace `run_summary.json`,
    question affects the analysis.
 
 Recommended trusted-local activity entry point: `analysis/activities.csv`.
+Its `fit_*` columns come from the FIT session joined through an explicit
+`activity_fit_links` row and are empty for activities without one.
 Daily Hill/Endurance context: `analysis/performance_metrics_daily.csv`.
 Other daily condition datasets are separate normalized JSON files listed
 in `DATASET_INVENTORY.md`; they are not Activity fact-table joins.

@@ -6,6 +6,8 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from .run_all import (
+    ACTIVITIES_CSV_DURATION_COLUMNS,
+    ACTIVITIES_CSV_FIT_SESSION_COLUMNS,
     DATASET_PATHS,
     DATASET_TABLE,
     OUTPUT_PATHS,
@@ -256,6 +258,24 @@ DATASET_RELATIONSHIP_METADATA = {
             "canonical": False,
             "projection_of": "activities",
             "selection_rule": None,
+            "derived_columns": {
+                "source_dataset": "activities",
+                "rule": "milliseconds divided by 1000",
+                "columns": [
+                    {"column": column, "source_field": source}
+                    for column, source in ACTIVITIES_CSV_DURATION_COLUMNS
+                ],
+            },
+            "joined_columns": {
+                "source_dataset": "fit_sessions",
+                "join_via": "activity_fit_links",
+                "join_rule": "explicit one-to-one links only; never timestamp proximity",
+                "missing_value": "empty when the activity has no explicit link or the FIT value is null",
+                "columns": [
+                    {"column": column, "source_field": source}
+                    for column, source in ACTIVITIES_CSV_FIT_SESSION_COLUMNS
+                ],
+            },
         },
     ),
     "gear": _relationship_metadata(
@@ -1927,6 +1947,8 @@ def render_start_here(
             "   question affects the analysis.",
             "",
             "Recommended trusted-local activity entry point: `analysis/activities.csv`.",
+            "Its `fit_*` columns come from the FIT session joined through an explicit",
+            "`activity_fit_links` row and are empty for activities without one.",
             "Daily Hill/Endurance context: `analysis/performance_metrics_daily.csv`.",
             "Other daily condition datasets are separate normalized JSON files listed",
             "in `DATASET_INVENTORY.md`; they are not Activity fact-table joins.",
@@ -2061,6 +2083,8 @@ def render_analysis_handoff(
         "4. Use only `explicit` relationships for direct joins. A documented",
         "   `context_only` alignment permits comparison, never a fact-table merge.",
         "5. Use `activity_fit_links` for Activity/FIT joins; timestamp-only joins are prohibited.",
+        "   The `fit_*` columns in `analysis/activities.csv` already follow those links",
+        "   and are empty for activities without one.",
         "6. Treat Personal Records with `activity_relationship_status=independent`",
         "   as non-activity records and do not force an activity identity.",
         "7. Preserve and disclose warnings or partial FIT status.",

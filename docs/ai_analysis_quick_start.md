@@ -36,8 +36,11 @@ Read the generated files in this order:
 5. `SCHEMA_CATALOG.json` for field types, units, origins, and sensitivity
 
 Start with `analysis/activities.csv` only when its activity-level columns fit
-the question. Detailed normalized, audit, QA, and manifest files remain
-personal local output and should be added only when required.
+the question. Starting with v1.7.0, it also includes elapsed and moving time
+and, for activities with an explicit FIT link, FIT running dynamics and total
+ascent and descent in `fit_*` columns that are empty without a link. Detailed
+normalized, audit, QA, and manifest files remain personal local output and
+should be added only when required.
 
 ## 3. Ask one descriptive question
 

@@ -25,6 +25,8 @@ question requires them and the local/trusted environment is authorized.
 4. Use only `explicit` relationships for direct joins. A documented
    `context_only` alignment permits comparison, never a fact-table merge.
 5. Use `activity_fit_links` for Activity/FIT joins; timestamp-only joins are prohibited.
+   The `fit_*` columns in `analysis/activities.csv` already follow those links
+   and are empty for activities without one.
 6. Treat Personal Records with `activity_relationship_status=independent`
    as non-activity records and do not force an activity identity.
 7. Preserve and disclose warnings or partial FIT status.
