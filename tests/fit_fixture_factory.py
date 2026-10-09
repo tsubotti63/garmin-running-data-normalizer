@@ -18,6 +18,13 @@ def _record(local: int, values: bytes) -> bytes:
     return bytes([local]) + values
 
 
+# FIT profile field numbers for the running-dynamics averages, in the order of
+# the raw values passed to synthetic_fit(): vertical oscillation, stance time
+# percent, stance time, vertical ratio, stance time balance, and step length.
+SESSION_RUNNING_DYNAMICS_FIELDS = (89, 90, 91, 132, 133, 134)
+LAP_RUNNING_DYNAMICS_FIELDS = (77, 78, 79, 118, 119, 120)
+
+
 def synthetic_fit(
     *,
     sessions: int = 1,
@@ -30,8 +37,14 @@ def synthetic_fit(
     sport: int = 1,
     sub_sport: int = 2,
     declared_laps_per_session: int = 1,
+    session_running_dynamics: tuple[int, int, int, int, int, int] | None = None,
+    lap_running_dynamics: tuple[int, int, int, int, int, int] | None = None,
 ) -> bytes:
-    """Create a visibly synthetic FIT activity without using user data."""
+    """Create a visibly synthetic FIT activity without using user data.
+
+    Running-dynamics tuples hold raw uint16 values (0xFFFF is invalid) and are
+    added only when given, so the default bytes stay unchanged.
+    """
     session_fields = [
         (2, 4, 0x86), (5, 1, 0x00), (6, 1, 0x00),
         (7, 4, 0x86), (8, 4, 0x86), (9, 4, 0x86),
@@ -47,6 +60,18 @@ def synthetic_fit(
         (18, 1, 0x02), (19, 2, 0x84), (20, 2, 0x84),
         (21, 2, 0x84), (22, 2, 0x84),
     ]
+    if session_running_dynamics is not None:
+        session_fields += [(number, 2, 0x84) for number in SESSION_RUNNING_DYNAMICS_FIELDS]
+    if lap_running_dynamics is not None:
+        lap_fields += [(number, 2, 0x84) for number in LAP_RUNNING_DYNAMICS_FIELDS]
+    session_extra = (
+        b"" if session_running_dynamics is None
+        else struct.pack("<HHHHHH", *session_running_dynamics)
+    )
+    lap_extra = (
+        b"" if lap_running_dynamics is None
+        else struct.pack("<HHHHHH", *lap_running_dynamics)
+    )
     u32_metric = 0xFFFFFFFF if invalid_metrics else 3_000
     u16_metric = 0xFFFF if invalid_metrics else 250
     u8_metric = 0xFF if invalid_metrics else 150
@@ -85,6 +110,7 @@ def synthetic_fit(
                             80 if not invalid_metrics else 0xFFFF,
                             declared_laps_per_session,
                         ),
+                        session_extra,
                     ]
                 ),
             )
@@ -118,6 +144,7 @@ def synthetic_fit(
                             100 if not invalid_metrics else 0xFFFF,
                             80 if not invalid_metrics else 0xFFFF,
                         ),
+                        lap_extra,
                     ]
                 ),
             )

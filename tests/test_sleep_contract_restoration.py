@@ -192,7 +192,7 @@ class SleepContractRestorationTest(unittest.TestCase):
 
     def test_schema_and_dataset_invariants_are_unchanged(self) -> None:
         self.assertEqual(len(DATASET_TABLE), 17)
-        self.assertEqual(sum(len(fields) for fields in DATASET_FIELDS.values()), 212)
+        self.assertEqual(sum(len(fields) for fields in DATASET_FIELDS.values()), 224)
         self.assertEqual(SLEEP_DAILY_FIELDS[0], "sleep_day")
         descriptor = _field_descriptor("sleep_daily", "sleep_duration_minutes_ex_awake")
         self.assertEqual(descriptor["origin"], "derived")
