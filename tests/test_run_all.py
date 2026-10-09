@@ -509,8 +509,8 @@ class RunAllTest(unittest.TestCase):
             changing_output = temporary / "changing-output"
             activity_file = next(changing_input.rglob("*summarizedActivities.json"))
 
-            def normalize_then_change(root: str):
-                records = normalize_activities(root)
+            def normalize_then_change(root: str, *args: object):
+                records = normalize_activities(root, *args)
                 activity_file.write_bytes(activity_file.read_bytes() + b" ")
                 return records
 

@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
+from functools import lru_cache
 from typing import Any
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
 
 DEFAULT_TIMEZONE = "Asia/Tokyo"
 TIMEZONE_DATA_ERROR_CODE = "TIMEZONE_DATA_UNAVAILABLE"
+TIMEZONE_INVALID_ERROR_CODE = "TIMEZONE_INVALID"
+# "Factory" is the IANA placeholder for an unset local time, not a location.
+_UNSUPPORTED_TIMEZONE_NAMES = frozenset({"Factory"})
+_TIMEZONE_NAME_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_+\-]*(?:/[A-Za-z0-9_+\-]+)*")
 
 
 class TimezoneDataUnavailableError(RuntimeError):
@@ -23,12 +29,55 @@ class TimezoneDataUnavailableError(RuntimeError):
         super().__init__(self.safe_message)
 
 
+class TimezoneNameInvalidError(ValueError):
+    """Raised when a requested local timezone is not an exact IANA name."""
+
+    code = TIMEZONE_INVALID_ERROR_CODE
+    safe_message = (
+        "--timezone must be an exact IANA timezone name, "
+        "such as Asia/Tokyo or America/New_York."
+    )
+
+    def __init__(self) -> None:
+        super().__init__(self.safe_message)
+
+
 def require_timezone_data(timezone_name: str = DEFAULT_TIMEZONE) -> ZoneInfo:
     """Resolve an IANA timezone or raise a bounded, privacy-safe error."""
     try:
         return ZoneInfo(timezone_name)
     except ZoneInfoNotFoundError as exc:
         raise TimezoneDataUnavailableError(timezone_name) from exc
+    except (ValueError, IsADirectoryError) as exc:
+        raise TimezoneNameInvalidError() from exc
+
+
+@lru_cache(maxsize=1)
+def available_timezone_names() -> frozenset[str]:
+    """Return the IANA timezone names that this environment can resolve."""
+    return frozenset(available_timezones())
+
+
+def resolve_timezone_name(timezone_name: Any) -> str:
+    """Return an exact, resolvable IANA timezone name for local dates and times.
+
+    The name must match an available IANA key exactly, so a case-insensitive
+    file system cannot accept ``asia/tokyo`` on one platform and reject it on
+    another. The returned name is the one recorded in Run-All output.
+    """
+    if (
+        not isinstance(timezone_name, str)
+        or not _TIMEZONE_NAME_PATTERN.fullmatch(timezone_name)
+        or timezone_name in _UNSUPPORTED_TIMEZONE_NAMES
+    ):
+        raise TimezoneNameInvalidError()
+    names = available_timezone_names()
+    if timezone_name not in names:
+        if not names:
+            raise TimezoneDataUnavailableError(timezone_name)
+        raise TimezoneNameInvalidError()
+    require_timezone_data(timezone_name)
+    return timezone_name
 
 
 def unix_ms_to_local_datetime(

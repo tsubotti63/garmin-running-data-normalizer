@@ -3,7 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from ..common.identity import garmin_activity_key
-from ..common.time import unix_ms_to_local_date, unix_ms_to_local_datetime
+from ..common.time import (
+    DEFAULT_TIMEZONE,
+    unix_ms_to_local_date,
+    unix_ms_to_local_datetime,
+)
 from ..intake.discovery import DiscoveredAsset, load_json_assets
 
 
@@ -25,7 +29,11 @@ def _unwrap(value: Any) -> list[dict[str, Any]]:
     return rows
 
 
-def _normalize(row: dict[str, Any], asset: DiscoveredAsset) -> dict[str, Any]:
+def _normalize(
+    row: dict[str, Any],
+    asset: DiscoveredAsset,
+    timezone_name: str = DEFAULT_TIMEZONE,
+) -> dict[str, Any]:
     activity_id = row.get("activityId")
     start_gmt = row.get("startTimeGmt")
     if start_gmt is None:
@@ -43,8 +51,8 @@ def _normalize(row: dict[str, Any], asset: DiscoveredAsset) -> dict[str, Any]:
         "sport_type": row.get("sportType"),
         "start_time_gmt_ms": start_gmt,
         "start_time_local_raw": row.get("startTimeLocal"),
-        "activity_datetime_local": unix_ms_to_local_datetime(start_gmt),
-        "activity_date_local": unix_ms_to_local_date(start_gmt),
+        "activity_datetime_local": unix_ms_to_local_datetime(start_gmt, timezone_name),
+        "activity_date_local": unix_ms_to_local_date(start_gmt, timezone_name),
         "distance_raw_centimeters": distance,
         "distance_m": float(distance) / 100.0 if isinstance(distance, (int, float)) else None,
         "duration_ms": duration,
@@ -65,8 +73,11 @@ def _normalize(row: dict[str, Any], asset: DiscoveredAsset) -> dict[str, Any]:
     }
 
 
-def normalize_activities(root: str) -> list[dict[str, Any]]:
+def normalize_activities(
+    root: str,
+    timezone_name: str = DEFAULT_TIMEZONE,
+) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for payload, asset in load_json_assets(root, filename_suffix="summarizedActivities.json"):
-        records.extend(_normalize(row, asset) for row in _unwrap(payload))
+        records.extend(_normalize(row, asset, timezone_name) for row in _unwrap(payload))
     return sorted(records, key=lambda row: (str(row["garmin_activity_key"]), str(row["source_path"])))

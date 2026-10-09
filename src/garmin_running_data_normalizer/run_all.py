@@ -14,7 +14,9 @@ from . import __version__
 from .common.time import (
     DEFAULT_TIMEZONE,
     TimezoneDataUnavailableError,
+    TimezoneNameInvalidError,
     require_timezone_data,
+    resolve_timezone_name,
 )
 from .fit.parser import parse_fit_export
 from .export.analysis_pack import build_analysis_pack_payloads
@@ -315,6 +317,7 @@ def _normalize_datasets(
     families: dict[str, list[DiscoveredAsset]],
     relationship_context: dict[str, Any] | None = None,
     snapshot_context: dict[str, Any] | None = None,
+    timezone_name: str = DEFAULT_TIMEZONE,
 ) -> tuple[
     dict[str, list[dict[str, Any]]],
     list[dict[str, Any]],
@@ -331,7 +334,7 @@ def _normalize_datasets(
     performance_audit: dict[str, Any] = {}
 
     try:
-        records["activities"] = normalize_activities(str(input_root))
+        records["activities"] = normalize_activities(str(input_root), timezone_name)
     except Exception as exc:
         raise RunAllError("ACTIVITIES_NORMALIZATION_FAILED", "detected Activities input could not be normalized") from exc
     if not records["activities"]:
@@ -354,7 +357,10 @@ def _normalize_datasets(
 
     if families["fit"]:
         try:
-            records["fit_sessions"], records["fit_laps"], base_audit = parse_fit_export(input_root)
+            records["fit_sessions"], records["fit_laps"], base_audit = parse_fit_export(
+                input_root,
+                timezone_name=timezone_name,
+            )
             for item in base_audit:
                 unknown_records = int(item.get("unknown_records", 0) or 0)
                 fit_audit.append(item)
@@ -405,7 +411,10 @@ def _normalize_datasets(
             "race_prediction_daily": normalize_race_prediction(
                 families["race_prediction"]
             ),
-            "sleep_daily": normalize_sleep_daily_assets(families["sleep"]),
+            "sleep_daily": normalize_sleep_daily_assets(
+                families["sleep"],
+                timezone_name=timezone_name,
+            ),
             "uds_daily": normalize_uds(families["uds"]),
             "acute_training_load_daily": normalize_acute_training_load(
                 families["acute_training_load"]
@@ -421,7 +430,10 @@ def _normalize_datasets(
         for dataset_name, result in daily_results.items():
             records[dataset_name] = result.records
             performance_audit[dataset_name] = result.audit
-        hrv_result = normalize_hrv_daily_assets(families["hrv"])
+        hrv_result = normalize_hrv_daily_assets(
+            families["hrv"],
+            timezone_name=timezone_name,
+        )
         records["hrv_daily"] = hrv_result["records"]
         performance_audit["hrv_daily"] = hrv_result["audit"]
     except DailyMetricConflictError as exc:
@@ -1055,12 +1067,14 @@ def run_all(
     *,
     external_safe_pack: bool = False,
     snapshot_context: dict[str, Any] | None = None,
+    timezone_name: str = DEFAULT_TIMEZONE,
 ) -> dict[str, Any]:
     """Compose the existing Garmin normalizers into deterministic Run-All v1."""
     input_root, output_root = _validate_paths(input_path, output_path)
     try:
-        require_timezone_data(DEFAULT_TIMEZONE)
-    except TimezoneDataUnavailableError as exc:
+        timezone_name = resolve_timezone_name(timezone_name)
+        require_timezone_data(timezone_name)
+    except (TimezoneDataUnavailableError, TimezoneNameInvalidError) as exc:
         raise RunAllError(exc.code, exc.safe_message) from exc
     initial_assets = _discover(input_root)
     initial_snapshot = _snapshot(initial_assets)
@@ -1081,6 +1095,7 @@ def run_all(
         families,
         relationship_context=snapshot_context,
         snapshot_context=snapshot_context,
+        timezone_name=timezone_name,
     )
     _validate_provenance(records, fit_audit, families)
     qa_entries = [
@@ -1359,6 +1374,7 @@ def run_all(
         "format": "garmin-running-data-normalizer-run-manifest-v1",
         "product_version": __version__,
         "run_all_version": RUN_ALL_VERSION,
+        "local_timezone": timezone_name,
         "input_assets": [
             {
                 "source_path": asset.provenance_path,
@@ -1387,6 +1403,7 @@ def run_all(
         "format": "garmin-running-data-normalizer-run-summary-v1",
         "product_version": __version__,
         "run_all_version": RUN_ALL_VERSION,
+        "local_timezone": timezone_name,
         "status": status,
         "family_results": family_results,
         "input_asset_count": len(initial_assets),

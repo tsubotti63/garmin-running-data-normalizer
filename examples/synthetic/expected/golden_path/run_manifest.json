@@ -9,6 +9,7 @@
       "source_path": "DI-Connect-Fitness/synthetic_summarizedActivities.json"
     }
   ],
+  "local_timezone": "Asia/Tokyo",
   "outputs": [
     {
       "bytes": 1099,

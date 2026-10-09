@@ -7,7 +7,13 @@ from pathlib import Path
 from typing import Any
 
 from .. import __version__
-from ..common.time import DEFAULT_TIMEZONE, TimezoneDataUnavailableError, require_timezone_data
+from ..common.time import (
+    DEFAULT_TIMEZONE,
+    TimezoneDataUnavailableError,
+    TimezoneNameInvalidError,
+    require_timezone_data,
+    resolve_timezone_name,
+)
 from ..intake.discovery import discover_export
 from ..standalone import StandaloneHandoffError, validate_standalone_handoff
 from .contracts import (
@@ -123,8 +129,17 @@ def _base(
     }
 
 
-def doctor_input(root: str | Path) -> dict[str, Any]:
+def doctor_input(
+    root: str | Path,
+    timezone_name: str = DEFAULT_TIMEZONE,
+) -> dict[str, Any]:
     """Inspect bounded input readiness without normalizing or predicting a run."""
+    try:
+        timezone_name = resolve_timezone_name(timezone_name)
+    except TimezoneNameInvalidError as exc:
+        raise DoctorError(exc.code, exc.safe_message) from exc
+    except TimezoneDataUnavailableError:
+        pass  # Reported below as the bounded timezone-data finding.
     requested = Path(root)
     findings: list[dict[str, Any]] = []
     if requested.is_symlink() or not requested.is_dir():
@@ -141,7 +156,7 @@ def doctor_input(root: str | Path) -> dict[str, Any]:
         )
     else:
         try:
-            require_timezone_data(DEFAULT_TIMEZONE)
+            require_timezone_data(timezone_name)
         except TimezoneDataUnavailableError:
             findings.append(
                 _finding(
