@@ -1,5 +1,21 @@
 # Release Readiness
 
+## v1.7.0 stable release
+
+Version `1.7.0` is published as the FIT running dynamics release. It adds six
+FIT running-dynamics averages (vertical oscillation, stance time, stance time
+percent, stance time balance, vertical ratio, and step length) to
+`fit_sessions` and `fit_laps`, read from the FIT session and lap messages in
+the units defined by the FIT profile, and appends elapsed and moving time and
+the linked FIT session's values to `analysis/activities.csv`, while keeping
+the 17 datasets, stable keys, output paths, the Snapshot lifecycle contract
+and policy registry `v1.0`, and the `0 / 0 / 3 / 2` Product exit contract
+unchanged; the field inventory grows from 212 to 224.
+
+The release source is the `main` commit that merges the v1.7.0 release
+preparation pull request. Its annotated tag, GitHub Release, and publish
+workflow evidence are recorded in this section after publication.
+
 ## v1.6.0 stable release
 
 Version `1.6.0` is published as the local timezone release. It adds
@@ -12,8 +28,8 @@ keys, the Snapshot lifecycle contract and policy registry `v1.0`, and the
 
 The release source is `877f42289f99acd7eb1fc2adea0379c040cb772e` (#56).
 The annotated `v1.6.0` tag (tag object
-`1bfb75e1b7e3ae94e8742ae8c33ad10e76c2b0df`), the latest stable GitHub Release
-published on 2026-10-09 JST, Production PyPI publication through Trusted
+`1bfb75e1b7e3ae94e8742ae8c33ad10e76c2b0df`), the then-latest stable GitHub
+Release published on 2026-10-09 JST, Production PyPI publication through Trusted
 Publishing/OIDC, and the publish workflow's exact-version PyPI install
 verification are complete.
 
@@ -117,25 +133,31 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - License: `Apache-2.0`
 - GitHub Actions: Operational
 - Current source and package version: `1.7.0`
-- Current Production PyPI version: `1.6.0`
-- Latest GitHub Release: `v1.6.0`
+- Current Production PyPI version: `1.7.0`
+- Latest GitHub Release: `v1.7.0`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
-- TestPyPI `1.6.0`: Not used; the publish workflow's TestPyPI jobs were
-  skipped
-- Production PyPI `1.6.0`: Published and exact-version install verified by the
-  publish workflow
+- TestPyPI `1.7.0`: Not used; the release publishes directly to Production
+  PyPI through the protected `pypi` Environment
+- Production PyPI `1.7.0`: Published through Trusted Publishing; the publish
+  workflow verifies the exact-version install
 - Trusted Publishing: Configured for protected `testpypi` and `pypi`
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
-and GitHub Releases remain immutable. v1.6.0 is the current stable release;
-v1.5.0, v1.4.1, v1.4.0, and v1.3.3 are historical releases. The v1.6.0,
-v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag, GitHub Release, and Production PyPI
-publication evidence was recorded only after the corresponding external state
-was observed.
+and GitHub Releases remain immutable. v1.7.0 is the current stable release;
+v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 are historical releases. The
+v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag, GitHub Release, and Production
+PyPI publication evidence was recorded only after the corresponding external
+state was observed; the v1.7.0 publication evidence is added to this document
+after it is observed.
 
 ## Current release assessment
+
+The v1.7.0 release assessment is recorded here after publication, from the
+release source's main CI run and the Production publish workflow run.
+
+### v1.6.0 release assessment (historical)
 
 The v1.6.0 release source passed main CI run `37905835932` (Ubuntu `test` and
 `windows-runtime`) and CodeQL run `37905835352`. A build-only publish workflow

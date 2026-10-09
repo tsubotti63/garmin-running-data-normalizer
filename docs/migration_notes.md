@@ -1,5 +1,47 @@
 # Migration Notes
 
+## v1.6.0 to v1.7.0
+
+v1.7.0 does not require data migration. Existing Snapshot Stores load and
+verify as before. One-shot Run-All from the same Export keeps the existing
+values in every dataset, `fit_sessions` and `fit_laps` gain six FIT
+running-dynamics fields, and `analysis/activities.csv` gains ten columns. Rerun
+Run-All after upgrading.
+
+| Contract | v1.7.0 position |
+|---|---|
+| CLI and Python imports | Unchanged |
+| Datasets, schemas, and stable keys | 17 datasets; 224 fields (six added to each of `fit_sessions` and `fit_laps`, 12 in total); stable keys unchanged |
+| Output paths | Unchanged |
+| Analysis table | `analysis/activities.csv` appends ten columns after `lap_count` |
+| Exit codes | Unchanged `0 / 0 / 3 / 2` Product mapping |
+| Snapshot lifecycle contract and policy registry | Unchanged `v1.0`; existing Stores need no migration |
+| Relationships and privacy boundary | Unchanged; the External-safe Pack and Support Bundle do not include the new fields or columns |
+
+What can change:
+
+- Tools that read `fit_sessions` or `fit_laps` with a closed list of fields
+  must accept the six new fields.
+- `analysis/activities.csv` appends its ten new columns at the end, so readers
+  that use the existing column positions keep working. Tools that check the
+  number of columns or a closed list of columns must accept the new ones.
+- For an Export with FIT files, `records_sha256` values, QA and diagnostic
+  digests, and FIT invalid-sentinel counts change; QA and diagnostic verdicts
+  do not.
+
+Upgrade the package in a new or existing Python 3.11+ environment:
+
+```bash
+python -m pip install --upgrade garmin-running-data-normalizer==1.7.0
+python -m garmin_running_data_normalizer --version
+```
+
+Use a new output directory when rerunning with v1.7.0. An output produced by
+v1.4.0 through v1.6.0 contains `diagnostics/`, so `validate-handoff`,
+`doctor --run-output`, and `support-bundle` from v1.7.0 reject it; rerun
+Run-All instead. See [Known Limitations](known_limitations.md#fit) and the
+[v1.7.0 Release Notes](release_notes/v1.7.0.md).
+
 ## v1.5.0 to v1.6.0
 
 v1.6.0 does not require data migration. Existing Snapshot Stores load and

@@ -1,7 +1,7 @@
 # Frequently Asked Questions
 
 These short answers apply to the current stable Garmin Running Data Normalizer
-`v1.6.0` release and route to the current product authorities. Version `1.6.0`
+`v1.7.0` release and route to the current product authorities. Version `1.7.0`
 is available from the latest GitHub Release and Production PyPI.
 
 ## Getting started
@@ -24,12 +24,12 @@ synthetic data.
 
 ### Which version is stable?
 
-`v1.6.0` is the current stable release. It includes the approved Sleep
+`v1.7.0` is the current stable release. It includes the approved Sleep
 contract while preserving the compatible one-shot workflow, optional Snapshot
 Accumulation, the Windows timezone-data hotfix, and the additive
 Wellness/Metrics datasets documented for v1.3. It is published on
-[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.6.0)
-and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/1.6.0/).
+[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.7.0)
+and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/1.7.0/).
 
 ## Garmin Export and Run-All
 
@@ -214,7 +214,7 @@ Public-safe Windows reports are welcome through
 ### Was the v1.2.0 Windows timezone-data issue resolved?
 
 Yes. v1.2.1 introduced the conditional Windows `tzdata` dependency, which
-v1.6.0 retains. The current release also provides the bounded
+v1.7.0 retains. The current release also provides the bounded
 `TIMEZONE_DATA_UNAVAILABLE` diagnostic if the configured IANA timezone data is
 still unavailable in a damaged or incomplete environment. Confirm the
 environment with:
@@ -225,10 +225,23 @@ python -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
 
 If you pass `--timezone`, check that name instead of `Asia/Tokyo`.
 
-For a normal v1.6.0 Production PyPI installation, no separate
+For a normal v1.7.0 Production PyPI installation, no separate
 `pip install tzdata` step is expected. If the check still fails, reinstall
-v1.6.0 in a new environment and include only sanitized environment details in a
+v1.7.0 in a new environment and include only sanitized environment details in a
 support report.
+
+### Does the product include running dynamics?
+
+Starting with v1.7.0, `fit_sessions` and `fit_laps` include six FIT
+running-dynamics averages: vertical oscillation, stance time, stance time
+percent, stance time balance, vertical ratio, and step length. They come from
+the FIT files in the Export, in the units defined by the FIT profile, and are
+`null` or absent when a FIT file does not record them. `analysis/activities.csv`
+repeats the linked FIT session's values as `fit_*` columns for activities with
+an explicit Activity/FIT link. Running-dynamics values in the Garmin activity
+list are not read. See the
+[Output Contract](output_contract.md) and
+[Known Limitations](known_limitations.md#fit).
 
 ### Why can a date differ by one day from Garmin Connect?
 

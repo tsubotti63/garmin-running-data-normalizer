@@ -3,7 +3,7 @@
 ## Historical release reference: v1.3.2
 
 This page records the v1.3.2 publication snapshot. The current stable release
-is v1.6.0; use the root README and current release notes for current truth.
+is v1.7.0; use the root README and current release notes for current truth.
 
 - Version at this historical snapshot: `1.3.2`
 - Classification: patch release
