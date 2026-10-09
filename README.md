@@ -68,12 +68,11 @@ Select either preview to inspect its full-size accessible SVG.
 See the
 [asset sources and reproduction notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/README.md).
 
-Current stable release: **v1.5.0** · Python **3.11+** · Apache License 2.0
+Current stable release: **v1.6.0** · Python **3.11+** · Apache License 2.0
 
-Implementation candidate: **v1.6.0** (local review only; not tagged, released, or
-published to PyPI). It adds `--timezone` to `run-all`, `snapshot run-all`,
+v1.6.0 adds `--timezone` to `run-all`, `snapshot run-all`,
 `normalize-activities`, and `doctor --input`, so local dates and times can use
-an IANA timezone other than the default `Asia/Tokyo`, and it records that
+an IANA timezone other than the default `Asia/Tokyo`, and records that
 timezone in the run manifest, run summary, and analysis context. Without
 `--timezone`, normalized values are unchanged; datasets, fields, stable keys,
 Snapshot rules, and the `0 / 0 / 3 / 2` Product exit contract are unchanged.
@@ -97,7 +96,7 @@ v1.4.0 adds read-only Export diagnostics and a Human-reviewed public-safe
 Support Bundle without changing normalized datasets, stable keys, Snapshot
 semantics, or the `0 / 0 / 3 / 2` Product exit contract.
 
-v1.5.0 is published as the annotated tag, the latest stable GitHub Release, and
+v1.6.0 is published as the annotated tag, the latest stable GitHub Release, and
 the latest Production PyPI distribution. v1.4.0 remains the Export Evidence and
 Diagnostics release.
 
@@ -108,9 +107,9 @@ Diagnostics release.
 - [FAQ](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/faq.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
-- [v1.5.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.5.0.md)
-- [Published stable Release v1.5.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.5.0)
-- [Production PyPI v1.5.0](https://pypi.org/project/garmin-running-data-normalizer/1.5.0/)
+- [v1.6.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.6.0.md)
+- [Published stable Release v1.6.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.6.0)
+- [Production PyPI v1.6.0](https://pypi.org/project/garmin-running-data-normalizer/1.6.0/)
 - Project story on Zenn: [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
 
 ## Why this project
@@ -148,6 +147,29 @@ Normalize locally
 
 The package does not send the export to a hosted processing service. Public
 reproduction uses only synthetic fixtures.
+
+## What v1.6.0 changes
+
+The v1.6.0 release lets you choose the timezone for local dates and times
+without changing the 17 normalized datasets, stable keys, or the
+`0 / 0 / 3 / 2` Product exit contract.
+
+- `run-all`, `snapshot run-all`, and `normalize-activities` accept
+  `--timezone` with an exact IANA timezone name, such as `America/New_York`.
+  The default remains `Asia/Tokyo`, so normalized values do not change unless
+  you use the option.
+- `doctor --input --timezone` checks that timezone's data.
+- The timezone used is recorded as `local_timezone` in `run_manifest.json`,
+  `run_summary.json`, and `ANALYSIS_CONTEXT.json`, and is stated in
+  `START_HERE.md` and `ANALYSIS_HANDOFF.md`. It is not added to the
+  External-safe Pack or the Support Bundle.
+- A name that is not an exact IANA timezone name stops with
+  `TIMEZONE_INVALID` (exit 2). Use the Area/Location form, because legacy
+  aliases such as `Japan` are not available on every system.
+
+Rerun Run-All after upgrading. See the
+[v1.6.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.6.0.md)
+and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
 
 ## What v1.5.0 changes
 
@@ -291,10 +313,10 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. The published v1.5.0
-package installs `tzdata` automatically on Windows so Python can resolve the
-existing IANA `Asia/Tokyo` timezone contract. macOS and Linux continue to use
-their system timezone data.
+`python -m garmin_running_data_normalizer --version`. The published v1.6.0
+package installs `tzdata` automatically on Windows so Python can resolve IANA
+timezone data (`Asia/Tokyo` by default, or the timezone given with
+`--timezone`). macOS and Linux continue to use their system timezone data.
 
 Maintainers can reproduce the packaging gate without uploading anything:
 

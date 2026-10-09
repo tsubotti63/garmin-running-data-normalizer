@@ -1,7 +1,7 @@
 # Frequently Asked Questions
 
 These short answers apply to the current stable Garmin Running Data Normalizer
-`v1.5.0` release and route to the current product authorities. Version `1.5.0`
+`v1.6.0` release and route to the current product authorities. Version `1.6.0`
 is available from the latest GitHub Release and Production PyPI.
 
 ## Getting started
@@ -24,12 +24,12 @@ synthetic data.
 
 ### Which version is stable?
 
-`v1.5.0` is the current stable release. It includes the approved Sleep
+`v1.6.0` is the current stable release. It includes the approved Sleep
 contract while preserving the compatible one-shot workflow, optional Snapshot
 Accumulation, the Windows timezone-data hotfix, and the additive
 Wellness/Metrics datasets documented for v1.3. It is published on
-[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.5.0)
-and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/1.5.0/).
+[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.6.0)
+and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/1.6.0/).
 
 ## Garmin Export and Run-All
 
@@ -214,7 +214,7 @@ Public-safe Windows reports are welcome through
 ### Was the v1.2.0 Windows timezone-data issue resolved?
 
 Yes. v1.2.1 introduced the conditional Windows `tzdata` dependency, which
-v1.5.0 retains. The current release also provides the bounded
+v1.6.0 retains. The current release also provides the bounded
 `TIMEZONE_DATA_UNAVAILABLE` diagnostic if the configured IANA timezone data is
 still unavailable in a damaged or incomplete environment. Confirm the
 environment with:
@@ -223,10 +223,21 @@ environment with:
 python -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
 ```
 
-For a normal v1.5.0 Production PyPI installation, no separate
+If you pass `--timezone`, check that name instead of `Asia/Tokyo`.
+
+For a normal v1.6.0 Production PyPI installation, no separate
 `pip install tzdata` step is expected. If the check still fails, reinstall
-v1.5.0 in a new environment and include only sanitized environment details in a
+v1.6.0 in a new environment and include only sanitized environment details in a
 support report.
+
+### Why can a date differ by one day from Garmin Connect?
+
+Local dates and times are computed in one IANA timezone for the whole run,
+`Asia/Tokyo` by default. Starting with v1.6.0, pass `--timezone` with an exact
+Area/Location name, such as `America/New_York`, to `run-all`,
+`snapshot run-all`, or `normalize-activities`. Garmin's daily `calendarDate`
+labels are used as provided. See
+[Local dates and times](known_limitations.md#local-dates-and-times).
 
 ### Can I attach my Garmin Export to a GitHub Issue?
 
