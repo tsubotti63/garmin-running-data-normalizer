@@ -4,9 +4,28 @@ This file records factual Garmin Running Data Normalizer product changes. The
 Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
 Platform maintains its own separate changelog.
 
-## v1.5.0 — stable Production Snapshot and output hardening release
+## v1.6.0 — stable Production local timezone release
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a
+verified Production PyPI distribution on 2026-10-09 JST.
+
+- Adds `--timezone` to `run-all`, `snapshot run-all`, and
+  `normalize-activities` to select the IANA timezone for local dates and
+  times, and to `doctor --input` to check that timezone's data; the default
+  remains `Asia/Tokyo`.
+- Records the timezone used as `local_timezone` in the run manifest, run
+  summary, and analysis context, and states it in `START_HERE.md` and
+  `ANALYSIS_HANDOFF.md`; the External-safe Pack and Support Bundle do not
+  include it.
+- Stops with `TIMEZONE_INVALID` (exit 2) for a name that is not an exact IANA
+  timezone name.
+- Preserves the 17-dataset/212-field inventory, 6 explicit relationships,
+  stable keys, the Snapshot lifecycle contract and policy registry `v1.0`, and
+  the `0 / 0 / 3 / 2` Product exit mapping.
+
+## v1.5.0 — stable Production Snapshot and output hardening release
+
+Status: published as the annotated tag, a stable GitHub Release, and a
 verified Production PyPI distribution on 2026-10-07 JST.
 
 - Creates new Snapshot Stores and `normalize-activities` output owner-only on

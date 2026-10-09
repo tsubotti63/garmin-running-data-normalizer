@@ -32,7 +32,7 @@
   third-party notices.
 - Complete dependency lock review, security/privacy checks, documentation, and
   release-specific review evidence.
-- `v1.0.0` remains the first stable release. `v1.5.0` is the current stable
+- `v1.0.0` remains the first stable release. `v1.6.0` is the current stable
   GitHub Release and Production PyPI version. Any future tag, GitHub Release,
   stable release, or package publication requires its own current review and
   separate Human authorization.
@@ -106,4 +106,17 @@
 - Keep the 17-dataset, 212-field, 6-relationship inventory, stable keys, and
   the `0 / 0 / 3 / 2` Product exit contract unchanged.
 - Published version `1.5.0` through the merged release pull requests, the
+  annotated tag, the GitHub Release, and Trusted Publishing to Production PyPI.
+
+## Milestone 9 — v1.6 local timezone — complete
+
+- Add `--timezone` with an exact IANA timezone name to `run-all`,
+  `snapshot run-all`, `normalize-activities`, and `doctor --input`, and keep
+  `Asia/Tokyo` as the default.
+- Record the timezone used as `local_timezone` in the run records and state it
+  in the handoff documents, without adding it to the External-safe Pack or the
+  Support Bundle.
+- Keep the 17-dataset, 212-field, 6-relationship inventory, stable keys,
+  Snapshot rules, and the `0 / 0 / 3 / 2` Product exit contract unchanged.
+- Published version `1.6.0` through the merged release pull requests, the
   annotated tag, the GitHub Release, and Trusted Publishing to Production PyPI.

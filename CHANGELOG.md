@@ -13,9 +13,36 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
+## v1.6.0 — stable Production release
+
+Published on 2026-10-09 JST as the annotated `v1.6.0` tag, the latest stable
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.6.0),
+and the verified
+[Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.6.0/).
+
+### Added
+
+- `--timezone` on `run-all`, `snapshot run-all`, and `normalize-activities`
+  selects the IANA timezone for local dates and times; `doctor --input
+  --timezone` checks that timezone's data. The default remains `Asia/Tokyo`.
+- `local_timezone` in `run_manifest.json`, `run_summary.json`, and
+  `ANALYSIS_CONTEXT.json`, and the timezone lines in `START_HERE.md` and
+  `ANALYSIS_HANDOFF.md`.
+- `TIMEZONE_INVALID` (exit 2) for a name that is not an exact IANA timezone
+  name.
+
+### Compatibility
+
+- Without `--timezone`, normalized values are unchanged. The 17 datasets, 212
+  fields, 6 explicit relationships, stable keys, output paths, Snapshot rules,
+  and Product exit mapping remain unchanged.
+- With `--timezone`, the same Export can stop with `DAILY_METRICS_CONFLICT`
+  when Sleep rows without `calendarDate` fall on the same day. See the
+  [v1.6.0 Release Notes](docs/release_notes/v1.6.0.md).
+
 ## v1.5.0 — stable Production release
 
-Published on 2026-10-07 JST as the annotated `v1.5.0` tag, the latest stable
+Published on 2026-10-07 JST as the annotated `v1.5.0` tag,
 [GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.5.0),
 and the verified
 [Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.5.0/).

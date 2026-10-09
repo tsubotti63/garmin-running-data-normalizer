@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security guidance applies to the current stable release, v1.5.0. Users should
+Security guidance applies to the current stable release, v1.6.0. Users should
 reproduce a report against the latest stable version when it is safe to do so.
 Older releases may not receive a separate fix.
 

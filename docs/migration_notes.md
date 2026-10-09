@@ -1,5 +1,48 @@
 # Migration Notes
 
+## v1.5.0 to v1.6.0
+
+v1.6.0 does not require data migration. Existing Snapshot Stores load and
+verify as before. Without `--timezone`, one-shot Run-All from the same Export
+gives the same normalized datasets, analysis tables, QA, and audit outputs;
+the run records add `local_timezone`. Rerun Run-All after upgrading.
+
+| Contract | v1.6.0 position |
+|---|---|
+| CLI and Python imports | Additive: `--timezone` on `run-all`, `snapshot run-all`, `normalize-activities`, and `doctor --input` |
+| Datasets, schemas, and stable keys | Unchanged; 17 datasets and 212 fields |
+| Output paths | Unchanged |
+| Run records | `run_manifest.json`, `run_summary.json`, and `ANALYSIS_CONTEXT.json` add `local_timezone` |
+| Exit codes | Unchanged `0 / 0 / 3 / 2` Product mapping; `TIMEZONE_INVALID` exits with 2 |
+| Snapshot lifecycle contract and policy registry | Unchanged `v1.0`; existing Stores need no migration |
+| Relationships and privacy boundary | Unchanged; the External-safe Pack and Support Bundle do not include the timezone |
+
+What can change:
+
+- If your records were made outside Japan, pass `--timezone` with an exact
+  Area/Location name, such as `America/New_York`. Dates near local midnight
+  can then differ from v1.5.0 output.
+- With `--timezone`, a Sleep row without `calendarDate` can fall on the same
+  day as another Sleep row and stop Run-All with `DAILY_METRICS_CONFLICT`, and
+  FIT-derived HRV values that share a date become review rows.
+- Tools that read `run_manifest.json`, `run_summary.json`, or
+  `ANALYSIS_CONTEXT.json` with a closed list of fields must accept
+  `local_timezone`.
+
+Upgrade the package in a new or existing Python 3.11+ environment:
+
+```bash
+python -m pip install --upgrade garmin-running-data-normalizer==1.6.0
+python -m garmin_running_data_normalizer --version
+```
+
+Use a new output directory when rerunning with v1.6.0. An output produced by
+v1.4.0 through v1.5.0 contains `diagnostics/`, so `validate-handoff`,
+`doctor --run-output`, and `support-bundle` from v1.6.0 reject it; rerun
+Run-All instead. See
+[Known Limitations](known_limitations.md#local-dates-and-times) and the
+[v1.6.0 Release Notes](release_notes/v1.6.0.md).
+
 ## v1.4.1 to v1.5.0
 
 v1.5.0 does not require data migration. Existing Snapshot Stores load and
