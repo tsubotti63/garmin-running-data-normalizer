@@ -4,7 +4,9 @@ import contextlib
 import http.client
 import io
 import json
+import os
 import socket
+import tempfile
 import threading
 import time
 import unittest
@@ -13,7 +15,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from garmin_running_data_normalizer import __version__
+from garmin_running_data_normalizer.gui.runs import RunManager
 from garmin_running_data_normalizer.gui.server import (
+    API_ROUTES,
     HOST,
     LAUNCH_KEY_HEADER,
     MAX_REQUEST_BYTES,
@@ -22,6 +26,15 @@ from garmin_running_data_normalizer.gui.server import (
     GuiServer,
     serve_until_stopped,
 )
+from tests.test_gui_runs import (
+    PRIVATE_TEXT,
+    SYNTHETIC_EXPORT,
+    child_environment,
+    run_cli,
+    stub_manager,
+    wait_until,
+)
+from tests.test_run_all_progress import tree_bytes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -101,8 +114,8 @@ class GuiServerTestCase(unittest.TestCase):
         if self.idle_timeout is not None:
             self.start_server(self.idle_timeout)
 
-    def start_server(self, idle_timeout: float) -> None:
-        self.server = GuiServer(idle_timeout=idle_timeout)
+    def start_server(self, idle_timeout: float, runs: RunManager | None = None) -> None:
+        self.server = GuiServer(idle_timeout=idle_timeout, runs=runs)
         self.port = self.server.server_port
         self.origin = f"http://{HOST}:{self.port}"
         self.thread = threading.Thread(
@@ -231,10 +244,11 @@ class GuiApiRequestTest(GuiServerTestCase):
             "duplicated": [*self.api_headers(), (LAUNCH_KEY_HEADER, key)],
         }
         for name, headers in cases.items():
-            with self.subTest(name):
-                status, _, body = self.post_api("/api/status", headers)
-                self.assertEqual(status, 403)
-                self.assertEqual(json.loads(body), {"error": "FORBIDDEN"})
+            for path in API_ROUTES:
+                with self.subTest(name, path=path):
+                    status, _, body = self.post_api(path, headers)
+                    self.assertEqual(status, 403)
+                    self.assertEqual(json.loads(body), {"error": "FORBIDDEN"})
 
         status, _, body = self.post_api("/api/status")
         self.assertEqual(status, 200)
@@ -296,7 +310,7 @@ class GuiApiRequestTest(GuiServerTestCase):
         )
 
     def test_api_accepts_only_post(self) -> None:
-        for path in ("/api/status", "/api/heartbeat", "/api/shutdown"):
+        for path in API_ROUTES:
             with self.subTest(path=path):
                 status, headers, body = self.get(
                     path, [self.host_header(), (LAUNCH_KEY_HEADER, self.server.launch_key)]
@@ -530,6 +544,152 @@ class GuiServerLifecycleTest(GuiServerTestCase):
         self.thread.join(timeout=10)
         self.assertFalse(self.thread.is_alive())
         self.assertLess(time.monotonic() - started, 10)
+
+
+class GuiRunApiTest(GuiServerTestCase):
+    idle_timeout = None
+
+    def setUp(self) -> None:
+        super().setUp()
+        environment = patch.dict(os.environ, child_environment())
+        environment.start()
+        self.addCleanup(environment.stop)
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.parent = self.root / "outputs"
+        self.parent.mkdir()
+
+    def call(self, path: str, payload: dict[str, object]) -> tuple[int, dict[str, object]]:
+        body = json.dumps(payload).encode("utf-8")
+        status, _, answer = self.post_api(path, self.api_headers(body), body)
+        return status, json.loads(answer)
+
+    def run_request(self, name: str = "output") -> dict[str, object]:
+        return {
+            "input": str(SYNTHETIC_EXPORT),
+            "output_parent": str(self.parent),
+            "output_name": name,
+            "timezone": "Asia/Tokyo",
+        }
+
+    def wait_for_state(self, states: set[str], timeout: float = 60.0) -> dict[str, object]:
+        result: dict[str, object] = {}
+
+        def reached() -> bool:
+            nonlocal result
+            result = self.call("/api/run/status", {})[1]
+            return result["state"] in states
+
+        self.assertTrue(wait_until(reached, timeout))
+        return result
+
+    def test_folders_are_listed_by_name(self) -> None:
+        self.start_server(600.0)
+        (self.root / "Visible").mkdir()
+        (self.root / "file.txt").write_text("synthetic", encoding="utf-8")
+        status, answer = self.call("/api/folders", {"path": str(self.root)})
+        self.assertEqual(status, 200)
+        self.assertEqual(answer["folders"], ["outputs", "Visible"])
+        status, answer = self.call("/api/folders", {"path": "relative"})
+        self.assertEqual((status, answer), (422, {"error": "PATH_NOT_ABSOLUTE"}))
+
+    def test_the_input_check_returns_codes_only(self) -> None:
+        self.start_server(600.0)
+        status, answer = self.call("/api/check-input", {"input": str(SYNTHETIC_EXPORT)})
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            answer,
+            {
+                "ready": True,
+                "findings": [
+                    {
+                        "code": "RUN_ALL_NOT_EVALUATED",
+                        "severity": "INFO",
+                        "message_id": "INPUT_READY_FOR_BOUNDED_RUN_ALL_ATTEMPT",
+                        "next_action_id": "RUN_ALL",
+                    }
+                ],
+            },
+        )
+        status, answer = self.call("/api/check-input", {"input": str(self.root / "missing")})
+        self.assertEqual(status, 200)
+        self.assertFalse(answer["ready"])
+        self.assertEqual([item["code"] for item in answer["findings"]], ["INPUT_DIRECTORY_INVALID"])
+        self.assertNotIn(str(self.root), json.dumps(answer))
+        for payload, code in (
+            ({"input": "relative"}, "PATH_NOT_ABSOLUTE"),
+            ({"input": str(SYNTHETIC_EXPORT), "timezone": "Not/A_Zone"}, "TIMEZONE_INVALID"),
+            ({"input": str(SYNTHETIC_EXPORT), "timezone": 5}, "TIMEZONE_INVALID"),
+        ):
+            with self.subTest(payload=payload):
+                self.assertEqual(self.call("/api/check-input", payload), (422, {"error": code}))
+
+    def test_a_run_blocks_a_second_run_and_shutdown_until_it_ends(self) -> None:
+        self.start_server(600.0, runs=stub_manager("wait"))
+        status, answer = self.call("/api/run/start", self.run_request())
+        self.assertEqual((status, answer["state"]), (200, "running"))
+        self.assertEqual(self.call("/api/run/start", self.run_request("second")), (409, {"error": "RUN_ACTIVE"}))
+        self.assertEqual(self.call("/api/shutdown", {}), (409, {"error": "RUN_ACTIVE"}))
+        self.wait_for_state({"running"})
+        self.assertTrue(wait_until(lambda: bool(self.call("/api/run/status", {})[1]["progress"])))
+        status, answer = self.call("/api/run/cancel", {})
+        self.assertEqual((status, answer["state"]), (200, "cancelling"))
+        self.assertEqual(self.wait_for_state({"cancelled"})["staging_folders"], [])
+        self.assertEqual(self.call("/api/shutdown", {}), (200, {"status": "stopping"}))
+        self.thread.join(timeout=10)
+        self.assertFalse(self.thread.is_alive())
+
+    def test_run_requests_are_checked_before_a_child_starts(self) -> None:
+        self.start_server(600.0, runs=stub_manager("wait"))
+        for payload, code in (
+            ({**self.run_request(), "output_name": ".hidden"}, "OUTPUT_NAME_INVALID"),
+            ({**self.run_request(), "output_parent": str(self.root / "missing")}, "OUTPUT_PARENT_NOT_FOUND"),
+            ({**self.run_request(), "input": "relative"}, "PATH_NOT_ABSOLUTE"),
+        ):
+            with self.subTest(code=code):
+                self.assertEqual(self.call("/api/run/start", payload), (422, {"error": code}))
+        self.assertEqual(self.call("/api/run/status", {}), (200, {"state": "idle"}))
+
+    def test_the_server_stays_up_while_a_run_is_active(self) -> None:
+        self.start_server(0.4, runs=stub_manager("wait"))
+        self.assertEqual(self.call("/api/run/start", self.run_request())[0], 200)
+        time.sleep(1.5)
+        self.assertTrue(self.thread.is_alive())
+        self.server.runs.cancel()
+        self.thread.join(timeout=30)
+        self.assertFalse(self.thread.is_alive())
+
+    def test_stopping_the_server_cancels_an_active_run(self) -> None:
+        runs = stub_manager("wait")
+        self.start_server(600.0, runs=runs)
+        self.assertEqual(self.call("/api/run/start", self.run_request())[0], 200)
+        self.assertTrue(wait_until(lambda: bool(runs.status()["progress"])))
+        self.server.shutdown()
+        self.thread.join(timeout=30)
+        self.assertFalse(runs.active())
+        self.assertTrue(wait_until(lambda: runs.status()["state"] == "cancelled", 10.0))
+
+    def test_child_messages_and_errors_stay_out_of_answers_and_output(self) -> None:
+        self.start_server(600.0, runs=stub_manager("noise"))
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            self.call("/api/run/start", self.run_request())
+            answer = self.wait_for_state({"failed"})
+        self.assertEqual(answer["error_code"], "RUN_ALL_FAILED")
+        self.assertNotIn(PRIVATE_TEXT, json.dumps(answer))
+        self.assertEqual(stdout.getvalue(), "")
+
+    def test_a_real_run_through_the_api_matches_the_cli(self) -> None:
+        self.start_server(600.0)
+        self.assertEqual(self.call("/api/run/start", self.run_request())[0], 200)
+        answer = self.wait_for_state({"finished", "failed"})
+        self.assertEqual(answer["state"], "finished")
+        self.assertEqual(answer["result"]["status"], "PASS_WITH_WARNINGS")
+        self.assertEqual(answer["result"]["families"]["vo2max"]["status"], "SKIPPED_NOT_PRESENT")
+        cli_output = self.root / "cli-output"
+        self.assertEqual(run_cli("--input", str(SYNTHETIC_EXPORT), "--output", str(cli_output)).returncode, 0)
+        self.assertEqual(tree_bytes(self.parent / "output"), tree_bytes(cli_output))
 
 
 if __name__ == "__main__":
