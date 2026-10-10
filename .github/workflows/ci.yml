@@ -110,7 +110,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Windows Support Bundle failed with exit code $LASTEXITCODE" }
       - name: Verify Windows GUI server
         shell: powershell
-        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_server.py .\tests\test_gui_runs.py .\tests\test_gui_folders.py .\tests\test_gui_package_data.py -q
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_server.py .\tests\test_gui_runs.py .\tests\test_gui_outputs.py .\tests\test_gui_folders.py .\tests\test_gui_package_data.py -q
       - name: Build distributions
         shell: powershell
         run: |

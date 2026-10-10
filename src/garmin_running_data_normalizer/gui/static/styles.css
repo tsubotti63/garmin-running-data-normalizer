@@ -133,6 +133,8 @@ input[type="text"] {
 
 .messages p {
   margin: 0.5rem 0 0;
+  /* Messages can hold long paths, such as the output or Support Bundle path. */
+  overflow-wrap: anywhere;
 }
 
 select,

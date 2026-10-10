@@ -18,12 +18,14 @@ import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
+from pathlib import Path
 from typing import Any
 
 from .. import __version__
 from ..common.time import DEFAULT_TIMEZONE
 from ..diagnostics.doctor import DoctorError, doctor_input
 from .folders import FolderError, list_folders
+from .outputs import OutputActionError, check_output, make_support_bundle, open_output
 from .runs import (
     MAX_TIMEZONE_LENGTH,
     RunActiveError,
@@ -91,6 +93,9 @@ API_ROUTES = {
     "/api/run/start": "_api_run_start",
     "/api/run/status": "_api_run_status",
     "/api/run/cancel": "_api_run_cancel",
+    "/api/check-output": "_api_check_output",
+    "/api/support-bundle": "_api_support_bundle",
+    "/api/open-output": "_api_open_output",
 }
 
 
@@ -364,6 +369,33 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
 
     def _api_run_cancel(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.server.runs.cancel()
+
+    def _finished_output(self) -> Path:
+        # Output actions use only the folder that this server's last run
+        # published; the page never names a path for them.
+        output = self.server.runs.finished_output()
+        if output is None:
+            raise ApiError(HTTPStatus.CONFLICT, "NO_FINISHED_OUTPUT")
+        return output
+
+    def _api_check_output(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return check_output(self._finished_output())
+        except OutputActionError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+
+    def _api_support_bundle(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return make_support_bundle(self._finished_output())
+        except OutputActionError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+
+    def _api_open_output(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            open_output(self._finished_output(), payload.get("target"))
+        except OutputActionError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+        return {"status": "opened"}
 
     def _method_not_allowed(self, allow: str) -> None:
         self._send_json(

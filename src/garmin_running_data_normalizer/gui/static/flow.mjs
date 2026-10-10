@@ -4,6 +4,8 @@
 
 export const ACTIVE_STATES = ["running", "cancelling"];
 export const TERMINAL_STATES = ["finished", "finished_after_cancel", "cancelled", "failed"];
+// States in which the run published a complete output folder.
+export const FINISHED_STATES = ["finished", "finished_after_cancel"];
 export const STALL_SECONDS = 30;
 
 const STAGE_KEYS = {
@@ -25,7 +27,8 @@ const STEP_KEYS = {
   relationships: "step.relationships",
 };
 
-// Codes from the server, the run manager, the folder browser, and Run-All.
+// Codes from the server, the run manager, the folder browser, Run-All, and the
+// actions on a finished output (handoff check, Doctor, Support Bundle, opening).
 export const ERROR_KEYS = {
   PATH_NOT_ABSOLUTE: "error.path_not_absolute",
   PATH_INVALID: "error.request_invalid",
@@ -69,6 +72,26 @@ export const ERROR_KEYS = {
   RUN_ALL_FAILED: "error.internal",
   RUN_START_FAILED: "error.internal",
   RUN_ACTIVE: "error.run_active",
+  OUTPUT_PARENT_NOT_WRITABLE: "error.output_parent_not_writable",
+  NO_FINISHED_OUTPUT: "error.no_finished_output",
+  HANDOFF_INVALID: "error.output_changed",
+  OUTPUT_CHANGED: "error.output_changed",
+  DOCTOR_AUTHORITY_INVALID: "error.output_changed",
+  DOCTOR_UNREGISTERED_DIAGNOSTIC: "error.output_changed",
+  DOCTOR_VERSION_UNSUPPORTED: "error.output_changed",
+  SUPPORT_BUNDLE_AUTHORITY_INVALID: "error.output_changed",
+  OUTPUT_NOT_AVAILABLE: "error.output_not_available",
+  SUPPORT_BUNDLE_PATH_UNSAFE: "error.output_not_available",
+  SUPPORT_BUNDLE_EXISTS: "error.bundle_exists",
+  SUPPORT_BUNDLE_NOT_WRITTEN: "error.bundle_not_written",
+  SUPPORT_BUNDLE_ARCHIVE_VALIDATION_FAILED: "error.bundle_refused",
+  SUPPORT_BUNDLE_MEMBER_SET_INVALID: "error.bundle_refused",
+  SUPPORT_BUNDLE_PRIVACY_SCAN_FAILED: "error.bundle_refused",
+  SUPPORT_BUNDLE_SIZE_LIMIT_EXCEEDED: "error.bundle_refused",
+  SUPPORT_BUNDLE_UNCLASSIFIED_FIELD: "error.bundle_refused",
+  SUPPORT_BUNDLE_UNREGISTERED_DIAGNOSTIC: "error.bundle_refused",
+  OPEN_NOT_AVAILABLE: "error.open_not_available",
+  OPEN_FAILED: "error.open_failed",
 };
 
 // Pre-run Doctor message and next-action identifiers.
@@ -113,6 +136,26 @@ const RESULT_KEYS = {
   PASS: "result.pass",
   PASS_WITH_WARNINGS: "result.pass_with_warnings",
   PARTIAL_SUCCESS: "result.partial_success",
+};
+
+// Post-run Doctor values for a completed run, and the registered warnings.
+export const USABILITY_KEYS = {
+  FULL_WITHIN_DECLARED_CONTRACT: "doctor.usability_full",
+  USABLE_WITH_DISCLOSED_WARNINGS: "doctor.usability_warnings",
+  BOUNDED_WITH_DISCLOSED_EXCLUSIONS: "doctor.usability_bounded",
+};
+export const NEXT_ACTION_KEYS = {
+  OPTIONAL_CONFIRMATION: "doctor.next_optional",
+  REVIEW_WARNING_CODES_AND_AFFECTED_SCOPES: "doctor.next_review_warnings",
+  REVIEW_EXCLUDED_FIT_EVIDENCE: "doctor.next_review_fit",
+};
+export const WARNING_KEYS = {
+  OPTIONAL_FAMILY_NOT_PRESENT: "warning.optional_family_not_present",
+  OPTIONAL_FAMILY_EMPTY: "warning.optional_family_empty",
+  DAILY_METRICS_REVIEW_REQUIRED: "warning.daily_metrics_review",
+  FIT_PARSE_INCOMPLETE: "warning.fit_parse_incomplete",
+  LACTATE_CANDIDATE_AUTHORITY_UNRESOLVED: "warning.lactate_candidates",
+  RELATIONSHIP_UNRESOLVED_VALID_LINK: "warning.relationship_unresolved",
 };
 
 const WINDOWS_RESERVED_NAMES = new Set([
@@ -174,10 +217,6 @@ export function familyRows(result) {
     }));
 }
 
-export function warningCount(result) {
-  return familyRows(result).reduce((sum, row) => sum + row.warnings, 0);
-}
-
 // Messages for the result area of a finished, cancelled, or failed run.
 export function resultMessages(status) {
   const messages = [];
@@ -193,10 +232,7 @@ export function resultMessages(status) {
     messages.push(errorMessage(status.error_code));
     messages.push({ key: "error.code", params: { code: status.error_code ?? "" }, keyParams: {} });
   }
-  if (state === "finished" && status.result) {
-    messages.push({ key: "result.warnings", params: { count: warningCount(status.result) }, keyParams: {} });
-  }
-  if ((state === "finished" || state === "finished_after_cancel") && status.output_path) {
+  if (FINISHED_STATES.includes(state) && status.output_path) {
     messages.push({ key: "result.output", params: { path: status.output_path }, keyParams: {} });
   }
   if (Array.isArray(status?.staging_folders) && status.staging_folders.length > 0) {
@@ -209,9 +245,63 @@ export function resultMessages(status) {
   return messages;
 }
 
+// Messages for the check of a finished output: the handoff counts, what the
+// Doctor says about using the output, and one line per kind of warning.
+export function outputCheckMessages(check) {
+  const handoff = check?.handoff;
+  const doctor = check?.doctor;
+  const messages = [];
+  if (handoff?.status === "PASS") {
+    messages.push({
+      key: "output_check.handoff_pass",
+      params: {
+        datasets: handoff.dataset_count,
+        relationships: handoff.relationship_count,
+        warnings: handoff.warning_count,
+      },
+      keyParams: {},
+    });
+  }
+  messages.push({
+    key: lookup(USABILITY_KEYS, doctor?.usability_scope, "error.unknown"),
+    params: {},
+    keyParams: {},
+  });
+  const next = lookup(NEXT_ACTION_KEYS, doctor?.next_action_id, null);
+  if (next !== null) {
+    messages.push({ key: next, params: {}, keyParams: {} });
+  }
+  const codes = Array.isArray(doctor?.warning_codes) ? doctor.warning_codes : [];
+  for (const code of codes) {
+    messages.push({
+      key: lookup(WARNING_KEYS, code, "warning.other"),
+      params: { code: String(code) },
+      keyParams: {},
+    });
+  }
+  if (doctor?.support_bundle_suggested === true) {
+    messages.push({ key: "output_check.bundle_suggested", params: {}, keyParams: {} });
+  }
+  return messages;
+}
+
+// Room for the hidden names derived from the output name, as on the server.
+export const MAX_OUTPUT_NAME_BYTES = 200;
+
+// The size in UTF-8, or null for a lone surrogate, which the server refuses.
+function utf8Size(text) {
+  try {
+    encodeURIComponent(text);
+  } catch {
+    return null;
+  }
+  return new TextEncoder().encode(text).length;
+}
+
 // Mirrors the server's rule; the server stays the authority.
 export function isValidOutputName(name) {
-  if (typeof name !== "string" || name.length === 0 || name.length > 255) {
+  const size = typeof name === "string" ? utf8Size(name) : null;
+  if (size === null || size === 0 || size > MAX_OUTPUT_NAME_BYTES) {
     return false;
   }
   if (name.startsWith(".") || name.endsWith(".") || name.endsWith(" ")) {
@@ -250,7 +340,7 @@ export function stalledSeconds(status) {
 // Which controls the page enables, from one view of its state.
 export function controls(view) {
   const running = ACTIVE_STATES.includes(view.runState) || view.starting;
-  const busy = running || view.checking;
+  const busy = running || view.checking || view.outputBusy;
   const filled = (value) => typeof value === "string" && value.trim() !== "";
   return {
     form: view.connected && !running,
@@ -264,6 +354,7 @@ export function controls(view) {
       filled(view.timezone) &&
       isValidOutputName(view.outputName),
     cancel: view.connected && view.runState === "running",
-    quit: view.connected && !running,
+    quit: view.connected && !running && !view.outputBusy,
+    outputActions: view.connected && !busy && FINISHED_STATES.includes(view.runState),
   };
 }
