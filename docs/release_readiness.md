@@ -154,6 +154,24 @@ v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag, GitHub Release, and
 Production PyPI publication evidence was recorded only after the corresponding
 external state was observed.
 
+## Windows CI correction
+
+The main CI runs cited below for v1.4.0, v1.4.1, v1.5.0, v1.6.0, and v1.7.0
+reported the `windows-runtime` job as passed, but one test in that job failed
+in each of them. The "Verify Windows Core 4 diagnostics and tracked vector"
+step, added in commit `f4d07ed` (first run on 2026-08-20 UTC), ran
+`tests/test_v14_diagnostics.py` and other commands in one PowerShell script,
+and such a step fails only when its last command fails. The failing test,
+`test_reversed_creation_and_mapping_order_is_deterministic`, rewrote copied
+JSON files with Windows line endings, so the Product correctly rejected the
+changed Run-All manifest; the failure came from the test, not the Product.
+Pull Request #65 made every command in the multi-line Windows steps stop the
+job on failure, with a test that keeps it so; its first commit stopped the
+Windows job at that test (run `38055811063`). It then corrected the test,
+which passed on Windows (run `38056053424`: 57 passed). In the cited runs, the
+other Windows steps show no failed command in their logs. Tags, GitHub
+Releases, Production PyPI files, and release notes are unchanged.
+
 ## Current release assessment
 
 The v1.7.0 release source passed main CI run `38035096711` (Ubuntu `test` and
