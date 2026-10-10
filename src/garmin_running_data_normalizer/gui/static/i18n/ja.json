@@ -1,0 +1,12 @@
+{
+  "app.development": "この画面は開発中です。エクスポートの処理には、今はコマンドラインを使ってください。",
+  "app.title": "Garmin Running Data Normalizer",
+  "app.version": "バージョン {version}",
+  "language.label": "言語",
+  "language.name": "日本語",
+  "quit.button": "終了",
+  "status.connected": "このコンピューターで動いている GUI につながりました。",
+  "status.stopped": "GUI を終了しました。このタブは閉じてかまいません。",
+  "status.unauthorized": "このページからは GUI を使えません。ターミナルに表示されたアドレスを開いてください。",
+  "status.unavailable": "GUI が応答しません。終了している可能性があります。"
+}

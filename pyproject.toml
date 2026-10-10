@@ -37,6 +37,14 @@ garmin-running-data-normalizer = "garmin_running_data_normalizer.runner:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"garmin_running_data_normalizer.gui" = [
+  "static/*.html",
+  "static/*.mjs",
+  "static/*.css",
+  "static/i18n/*.json",
+]
+
 [tool.setuptools.dynamic]
 version = {attr = "garmin_running_data_normalizer.__version__"}
 

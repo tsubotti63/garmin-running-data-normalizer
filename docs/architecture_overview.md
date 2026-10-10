@@ -123,7 +123,7 @@ requires Human review before sharing and is never uploaded automatically. See
   coaching, and medical interpretation are not implemented product features.
 - Planned: a local GUI for v2.0.0, described in
   [v2.0.0 GUI Design](gui_design.md), as a second entry point to the same
-  processing as the CLI. It is not implemented yet.
+  processing as the CLI. It is in development and not available yet.
 
 ## Packaging, release, and CI status
 
