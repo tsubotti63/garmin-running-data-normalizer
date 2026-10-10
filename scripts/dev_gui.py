@@ -7,6 +7,7 @@ candidate. This helper is for development only and is not part of the wheel.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import webbrowser
 from pathlib import Path
@@ -25,7 +26,13 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    sys.path.insert(0, str(ROOT / "src"))
+    source = str(ROOT / "src")
+    sys.path.insert(0, source)
+    # The Run-All child process imports the package too; let it find this
+    # checkout when the package is not installed.
+    os.environ["PYTHONPATH"] = os.pathsep.join(
+        path for path in (source, os.environ.get("PYTHONPATH")) if path
+    )
     from garmin_running_data_normalizer.gui.server import GuiServer, serve_until_stopped
 
     server = GuiServer()

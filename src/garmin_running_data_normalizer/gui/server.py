@@ -47,6 +47,7 @@ REQUEST_TIMEOUT_SECONDS = 30.0
 STATIC_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/app.mjs": ("app.mjs", "text/javascript; charset=utf-8"),
+    "/flow.mjs": ("flow.mjs", "text/javascript; charset=utf-8"),
     "/i18n.mjs": ("i18n.mjs", "text/javascript; charset=utf-8"),
     "/styles.css": ("styles.css", "text/css; charset=utf-8"),
     "/i18n/en.json": ("i18n/en.json", "application/json"),

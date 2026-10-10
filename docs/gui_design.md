@@ -111,7 +111,9 @@ The export folder is checked with the pre-run Doctor. The output is a new folder
 inside a chosen parent folder, with a proposed name, and it is validated by the
 same rules as the CLI (it must not exist yet). The GUI also requires the parent
 folder to exist, so that a mistyped path creates no folders, and the name to be
-one portable folder name that does not start with a dot. Native
+one portable folder name that does not start with a dot. After a successful
+check, the parent defaults to the folder that contains the export, and the
+proposed name is `garmin-run-all-YYYYMMDD-HHMM` in local time. Native
 operating-system dialogs are not used in 2.0.0.
 
 ## Security
@@ -173,6 +175,8 @@ Processing:
   which the browser treats as a new site, so the next launch follows the
   browser setting again. Missing translations fall back to English.
 - Numbers and dates are formatted for the selected language.
+- Timezone suggestions come from the browser's list of IANA names; the server
+  checks the name that is entered.
 - The server returns error codes, and the page turns them into messages in the
   selected language.
 - Tests check that every catalog has the same keys and placeholders and that no
