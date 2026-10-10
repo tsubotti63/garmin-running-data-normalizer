@@ -7,6 +7,10 @@
 - Garmin JSON/FIT normalization using synthetic tests.
 - Stable keys, provenance, dataset policy, deterministic QA, and allowlist-only
   local Analysis Pack generation.
+- The planned v2.0.0 local GUI described in
+  [v2.0.0 GUI Design](../gui_design.md): a page served by the installed package
+  on the loopback address for a browser on the same machine, running the same
+  processing as the CLI.
 - Project documentation, runtime assets, tests, sanitization QA, and Git-ignored
   review evidence.
 
@@ -26,7 +30,10 @@ history.
 
 ## External systems
 
-The implementation performs no network access. Open-Meteo is deferred.
+The implementation performs no outbound network access. The planned v2.0.0 GUI
+listens only on the loopback address `127.0.0.1` so that a browser on the same
+machine can reach it; it sends nothing to other hosts and loads no external
+resources. Open-Meteo is deferred.
 
 ## Rollback
 

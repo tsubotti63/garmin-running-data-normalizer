@@ -137,3 +137,18 @@
   from 212 to 224.
 - Published version `1.7.0` through the merged release pull requests, the
   annotated tag, the GitHub Release, and Trusted Publishing to Production PyPI.
+
+## Milestone 11 — v2.0 local GUI — planned
+
+- Add a local GUI, served by the installed package on `127.0.0.1` for a browser
+  on the same machine, as a second entry point to the same processing as the
+  CLI.
+- Cover the one-shot Run-All workflow: pre-run check, run with progress and
+  cancellation, post-run checks, optional External-safe Pack, and Support
+  Bundle.
+- Provide English and Japanese from message catalogs.
+- Keep the CLI, the Run-All output layout, the 17 datasets, stable keys,
+  Snapshot rules, and the `0 / 0 / 3 / 2` Product exit contract unchanged, with
+  no new runtime dependency and no outbound network access.
+- Publish a release candidate to TestPyPI before the stable release. See the
+  [v2.0.0 GUI Design](gui_design.md).
