@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -480,7 +481,14 @@ def parse_fit_bytes(
 def parse_fit_export(
     root: str | Path,
     timezone_name: str = "Asia/Tokyo",
+    *,
+    progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Parse every FIT file with distinct content once.
+
+    ``progress``, when given, receives ``reading_fit`` events that count the
+    FIT files with distinct content: once before reading, then after each file.
+    """
     activities: list[dict[str, Any]] = []
     laps: list[dict[str, Any]] = []
     audit: list[dict[str, Any]] = []
@@ -488,7 +496,10 @@ def parse_fit_export(
     aliases_by_sha256: dict[str, list[DiscoveredAsset]] = {}
     for asset in fit_assets:
         aliases_by_sha256.setdefault(asset.sha256, []).append(asset)
-    for source_sha256, aliases in sorted(aliases_by_sha256.items()):
+    total = len(aliases_by_sha256)
+    if progress is not None:
+        progress({"stage": "reading_fit", "done": 0, "total": total})
+    for done, (source_sha256, aliases) in enumerate(sorted(aliases_by_sha256.items()), start=1):
         asset = min(aliases, key=lambda item: item.provenance_path)
         file_id = f"fit_file:{asset.sha256[:24]}"
         parsed = parse_fit_bytes(
@@ -514,6 +525,8 @@ def parse_fit_export(
             "invalid_sentinel_count": parsed.get("invalid_sentinel_count", 0),
             "invalid_sentinel_counts": parsed.get("invalid_sentinel_counts", {}),
         })
+        if progress is not None:
+            progress({"stage": "reading_fit", "done": done, "total": total})
         if parsed["status"] != "parsed_activity":
             continue
         sport = parsed.get("sport") or {}
