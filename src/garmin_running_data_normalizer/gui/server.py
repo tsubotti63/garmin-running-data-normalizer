@@ -21,6 +21,16 @@ from importlib.resources import files
 from typing import Any
 
 from .. import __version__
+from ..common.time import DEFAULT_TIMEZONE
+from ..diagnostics.doctor import DoctorError, doctor_input
+from .folders import FolderError, list_folders
+from .runs import (
+    MAX_TIMEZONE_LENGTH,
+    RunActiveError,
+    RunManager,
+    RunRequestError,
+    absolute_path,
+)
 
 
 HOST = "127.0.0.1"
@@ -75,7 +85,21 @@ API_ROUTES = {
     "/api/status": "_api_status",
     "/api/heartbeat": "_api_heartbeat",
     "/api/shutdown": "_api_shutdown",
+    "/api/folders": "_api_folders",
+    "/api/check-input": "_api_check_input",
+    "/api/run/start": "_api_run_start",
+    "/api/run/status": "_api_run_status",
+    "/api/run/cancel": "_api_run_cancel",
 }
+
+
+class ApiError(Exception):
+    """An API answer other than 200, given to the page as a short code."""
+
+    def __init__(self, status: int, code: str) -> None:
+        super().__init__(code)
+        self.status = status
+        self.code = code
 
 
 def load_static_files() -> dict[str, tuple[bytes, str]]:
@@ -103,10 +127,16 @@ class GuiServer(ThreadingHTTPServer):
 
     daemon_threads = True
 
-    def __init__(self, *, idle_timeout: float = IDLE_TIMEOUT_SECONDS) -> None:
+    def __init__(
+        self,
+        *,
+        idle_timeout: float = IDLE_TIMEOUT_SECONDS,
+        runs: RunManager | None = None,
+    ) -> None:
         if idle_timeout <= 0:
             raise ValueError("idle_timeout must be positive")
         self.static_files = load_static_files()
+        self.runs = runs if runs is not None else RunManager()
         self.launch_key = secrets.token_urlsafe(32)
         self.idle_timeout = idle_timeout
         self._last_request = time.monotonic()
@@ -264,6 +294,9 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         self.server.record_request()
         try:
             result = getattr(self, API_ROUTES[self.path])(payload)
+        except ApiError as exc:
+            self._send_json(exc.status, {"error": exc.code})
+            return
         except Exception:
             self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR)
             return
@@ -278,7 +311,58 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         return {"status": "ok"}
 
     def _api_shutdown(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.server.runs.active():
+            raise ApiError(HTTPStatus.CONFLICT, "RUN_ACTIVE")
         return {"status": "stopping"}
+
+    def _api_folders(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return list_folders(payload.get("path"))
+        except FolderError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+
+    def _api_check_input(self, payload: dict[str, Any]) -> dict[str, Any]:
+        timezone_name = payload.get("timezone", DEFAULT_TIMEZONE)
+        if (
+            not isinstance(timezone_name, str)
+            or not timezone_name
+            or len(timezone_name) > MAX_TIMEZONE_LENGTH
+        ):
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "TIMEZONE_INVALID")
+        try:
+            input_path = absolute_path(payload.get("input"), "INPUT_PATH_INVALID")
+            report = doctor_input(input_path, timezone_name=timezone_name)
+        except (RunRequestError, DoctorError) as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+        findings = [
+            {
+                "code": finding["code"],
+                "severity": finding["severity"],
+                "message_id": finding["safe_message_id"],
+                "next_action_id": finding["next_action_id"],
+            }
+            for finding in report["findings"]
+        ]
+        return {
+            "ready": all(finding["severity"] != "ERROR" for finding in findings),
+            "findings": findings,
+        }
+
+    def _api_run_start(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return self.server.runs.start(payload)
+        except RunActiveError as exc:
+            raise ApiError(HTTPStatus.CONFLICT, exc.code) from exc
+        except RunRequestError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+        except OSError as exc:
+            raise ApiError(HTTPStatus.INTERNAL_SERVER_ERROR, "RUN_START_FAILED") from exc
+
+    def _api_run_status(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.server.runs.status()
+
+    def _api_run_cancel(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.server.runs.cancel()
 
     def _method_not_allowed(self, allow: str) -> None:
         self._send_json(
@@ -312,14 +396,17 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
 def serve_until_stopped(server: GuiServer, *, poll_interval: float = 0.5) -> None:
     """Serve until Ctrl+C, /api/shutdown, or idle_timeout without an API request.
 
-    The listening socket is closed before this function returns.
+    The server does not stop for idleness while a run is active, and
+    /api/shutdown is refused then. On Ctrl+C an active run is cancelled
+    first. The listening socket is closed before this function returns.
     """
     finished = threading.Event()
 
     def stop_when_idle() -> None:
         check_interval = min(server.idle_timeout / 4, 5.0)
         while not finished.wait(check_interval):
-            if server.idle_seconds() > server.idle_timeout:
+            # A run keeps the server alive even when no page asks for news.
+            if server.idle_seconds() > server.idle_timeout and not server.runs.active():
                 server.shutdown()
                 return
 
@@ -330,6 +417,7 @@ def serve_until_stopped(server: GuiServer, *, poll_interval: float = 0.5) -> Non
         pass
     finally:
         finished.set()
+        server.runs.stop()
         server.server_close()
 
 

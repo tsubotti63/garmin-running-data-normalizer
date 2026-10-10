@@ -66,10 +66,14 @@ New local output folder (published atomically by Run-All)
   because Windows can map `.js` to `text/plain` through the registry, and
   `nosniff` then blocks the script.
 - Run-All runs in a child process started from an argument list
-  (`sys.executable`, `-m`, an internal GUI module, and the same arguments that
-  the CLI takes) without a shell. The child calls the same `run_all` function
-  as the CLI and reports progress events to the parent. Short operations
-  (Doctor, handoff validation, and Support Bundle) run in the server process.
+  (`sys.executable`, `-P`, `-m`, an internal GUI module, and the same
+  arguments that the CLI takes, with absolute paths) without a shell. `-P`
+  keeps the current folder out of the child's module search path. The child
+  calls the same `run_all` function as the CLI and reports progress events
+  and the outcome as JSON lines; the server accepts only stage names, counts,
+  statuses, and error codes from them, and discards the child's standard
+  error. Short operations (Doctor, handoff validation, and Support Bundle)
+  run in the server process.
 - Progress: `run_all` has an optional keyword-only `progress` callback that the
   CLI never passes. Events carry only a stage (`discovering`, `normalizing`
   with a step such as `activities` or `fit`, `reading_fit`, `verifying_input`,
@@ -79,11 +83,16 @@ New local output folder (published atomically by Run-All)
   without the callback, and the callback must not raise.
 - Cancellation stops the child process and its process group: `SIGINT` on
   POSIX, and `CTRL_BREAK_EVENT` with `CREATE_NEW_PROCESS_GROUP` on Windows,
-  followed by termination after a timeout. Run-All builds its output in memory
-  and publishes it by renaming a hidden staging folder, so a cancelled run
-  leaves no output folder. If a forced stop leaves a hidden staging folder, the
-  GUI reports it and does not delete anything.
-- Only one run at a time. Other browser tabs show the running state.
+  followed by termination after 10 seconds and a kill 5 seconds later.
+  Run-All builds its output in memory and publishes it by renaming a hidden
+  staging folder, so a run cancelled before that leaves no output folder. A
+  cancellation that arrives after the rename is reported as a finished run,
+  because the output was checked to be absent when the run started. If a
+  forced stop leaves a hidden staging folder, the GUI reports it and does not
+  delete anything.
+- Only one run at a time. Other browser tabs show the running state. While a
+  run is active, the Quit button is refused, and `Ctrl+C` cancels the run
+  before the server stops.
 - The server stops on `Ctrl+C`, on the page's Quit button, or after 10 minutes
   without an API request from the page while no run is active. The page sends
   a heartbeat every 30 seconds; the long margin covers browsers that slow the
@@ -95,12 +104,15 @@ Browsers do not reveal local folder paths, so the GUI offers:
 
 - a path field where a folder path can be pasted, and
 - a folder browser served by the GUI server that returns directory names only,
-  starting from the home directory. It never returns file contents.
+  starting from the home directory. It never returns file names or contents,
+  and it leaves out hidden folders, symbolic links, and Windows junctions.
 
 The export folder is checked with the pre-run Doctor. The output is a new folder
 inside a chosen parent folder, with a proposed name, and it is validated by the
-same rules as the CLI (it must not exist yet). Native operating-system dialogs
-are not used in 2.0.0.
+same rules as the CLI (it must not exist yet). The GUI also requires the parent
+folder to exist, so that a mistyped path creates no folders, and the name to be
+one portable folder name that does not start with a dot. Native
+operating-system dialogs are not used in 2.0.0.
 
 ## Security
 
