@@ -40,6 +40,7 @@ and platform material linked below after reviewing the product documentation.
 ## Maintainers and AI collaboration
 
 - [Architecture Overview](architecture_overview.md)
+- [v2.0.0 GUI Design](gui_design.md) — planned local GUI; not implemented yet
 - [`AGENTS.md`](../AGENTS.md) — AI development adapter, not a product guide
 - [AI Collaboration Platform](https://github.com/tsubotti63/ai-collaboration-platform)
 - Embedded `project_os/`, `runtime/`, and `templates/` assets are maintainer-facing

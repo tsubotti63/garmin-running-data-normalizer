@@ -22,6 +22,13 @@ generalization, hosted services, and private Source reproduction are excluded.
 A user can provide a local Garmin export and obtain reproducible normalized
 records and reviewable QA using documented commands and synthetic-tested code.
 
+## Interfaces
+
+The command-line interface is the stable interface. A local GUI is planned for
+v2.0.0 as a second entry point to the same processing: a page served on the
+loopback address for a browser on the same machine, not a hosted service. See
+[v2.0.0 GUI Design](../gui_design.md).
+
 ## Human-owned decisions
 
 OSS license, Source redistribution rights, publication/GitHub authorization,
