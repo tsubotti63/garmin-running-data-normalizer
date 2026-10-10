@@ -73,6 +73,31 @@ class PackagingReadinessTest(unittest.TestCase):
         )
         self.assertEqual(workflow.count("assert s['status'] == 'PASS_WITH_WARNINGS'"), 3)
 
+    def test_windows_ci_steps_stop_at_any_failed_command(self) -> None:
+        # A multi-line PowerShell step fails only on the exit code of its last
+        # command, so every command line needs its own check. Only variable
+        # assignments, comments, and the checks themselves are not commands.
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        job = workflow.split("\n  windows-runtime:\n", 1)[1]
+        check = "if ($LASTEXITCODE -ne 0) { throw "
+        multi_line_steps = 0
+        commands = 0
+        for step in job.split("\n      - ")[1:]:
+            if "\n        run: |\n" not in step:
+                continue
+            multi_line_steps += 1
+            block = step.split("\n        run: |\n", 1)[1].splitlines()
+            lines = [line.strip() for line in block if line.startswith("          ")]
+            for index, line in enumerate(lines):
+                if line.startswith(("$", "#", "if (")):
+                    continue
+                commands += 1
+                with self.subTest(command=line[:80]):
+                    self.assertLess(index + 1, len(lines))
+                    self.assertTrue(lines[index + 1].startswith(check))
+        self.assertGreaterEqual(multi_line_steps, 6)
+        self.assertGreaterEqual(commands, 32)
+
 
 if __name__ == "__main__":
     unittest.main()
