@@ -34,6 +34,7 @@ jobs:
       - run: python scripts/validate_public_product_state.py
       - run: python scripts/validate_public_history.py --ci
       - run: python -m pytest
+      - run: node --test tests/gui_js/*.test.mjs
       - name: Build wheel and source distribution
         run: python -m build
       - name: Validate distribution metadata and README rendering
@@ -45,6 +46,7 @@ jobs:
           /tmp/garmin-normalizer-wheel/bin/python -m pip check
           /tmp/garmin-normalizer-wheel/bin/python -c "import importlib.metadata as m; import garmin_running_data_normalizer as p; assert m.version('garmin-running-data-normalizer') == p.__version__"
           /tmp/garmin-normalizer-wheel/bin/garmin-running-data-normalizer --version
+          /tmp/garmin-normalizer-wheel/bin/python -c "from garmin_running_data_normalizer.gui.server import load_static_files; assert all(body for body, _ in load_static_files().values())"
       - name: Verify isolated source distribution installation
         run: |
           python -m venv /tmp/garmin-normalizer-sdist
@@ -52,6 +54,7 @@ jobs:
           /tmp/garmin-normalizer-sdist/bin/python -m pip check
           /tmp/garmin-normalizer-sdist/bin/python -c "import importlib.metadata as m; import garmin_running_data_normalizer as p; assert m.version('garmin-running-data-normalizer') == p.__version__"
           /tmp/garmin-normalizer-sdist/bin/garmin-running-data-normalizer --version
+          /tmp/garmin-normalizer-sdist/bin/python -c "from garmin_running_data_normalizer.gui.server import load_static_files; assert all(body for body, _ in load_static_files().values())"
   windows-runtime:
     runs-on: windows-latest
     steps:
@@ -91,6 +94,9 @@ jobs:
           .\.venv\Scripts\python.exe -m garmin_running_data_normalizer doctor --run-output .\workspace\windows-run-all-1 --format json
           .\.venv\Scripts\python.exe -m garmin_running_data_normalizer support-bundle --run-output .\workspace\windows-run-all-1 --output .\workspace\windows-support-bundle.zip
           if ($LASTEXITCODE -ne 0) { throw "Windows Support Bundle failed with exit code $LASTEXITCODE" }
+      - name: Verify Windows GUI server
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_server.py .\tests\test_gui_package_data.py -q
       - name: Build distributions
         shell: powershell
         run: |
@@ -105,6 +111,8 @@ jobs:
           .\.wheel-venv\Scripts\python.exe -m pip install $wheel
           .\.wheel-venv\Scripts\python.exe -c "import importlib.metadata as m; from zoneinfo import ZoneInfo; assert m.version('tzdata'); assert str(ZoneInfo('Asia/Tokyo')) == 'Asia/Tokyo'"
           .\.wheel-venv\Scripts\python.exe -m garmin_running_data_normalizer --version
+          .\.wheel-venv\Scripts\python.exe -c "from garmin_running_data_normalizer.gui.server import load_static_files; assert all(body for body, _ in load_static_files().values())"
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel GUI static files are missing" }
           .\.wheel-venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-wheel-run-all
           if ($LASTEXITCODE -ne 0) { throw "isolated wheel Synthetic Run-All failed with exit code $LASTEXITCODE" }
           .\.wheel-venv\Scripts\python.exe -c "import json, pathlib; p=pathlib.Path('workspace/windows-wheel-run-all/run_summary.json'); assert p.is_file(); s=json.loads(p.read_text(encoding='utf-8')); assert s['status'] == 'PASS_WITH_WARNINGS'; assert s['family_results']['activities']['detected_asset_count'] == 1; assert s['family_results']['activities']['processed_asset_count'] == 1"

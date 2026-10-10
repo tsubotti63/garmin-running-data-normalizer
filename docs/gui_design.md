@@ -1,6 +1,7 @@
 # v2.0.0 GUI Design
 
-- Status: planned design; no GUI code exists yet
+- Status: implementation in progress; the command-line interface does not
+  expose the GUI yet
 - Applies to: the v2.0.0 release in preparation; v1.7.0 remains the current
   stable release
 - Authority: maintainer design record agreed by the Human maintainer on
@@ -60,7 +61,10 @@ New local output folder (published atomically by Run-All)
   opened with the default browser.
 - Static files live under `src/garmin_running_data_normalizer/gui/static/` and
   are shipped as package data. No third-party libraries, CDN, web fonts, or
-  build step are used.
+  build step are used. The server answers only the paths in a fixed table,
+  which also fixes the content type of each file. `mimetypes` is not used,
+  because Windows can map `.js` to `text/plain` through the registry, and
+  `nosniff` then blocks the script.
 - Run-All runs in a child process started from an argument list
   (`sys.executable`, `-m`, an internal GUI module, and the same arguments that
   the CLI takes) without a shell. The child calls the same `run_all` function
@@ -77,8 +81,10 @@ New local output folder (published atomically by Run-All)
   leaves no output folder. If a forced stop leaves a hidden staging folder, the
   GUI reports it and does not delete anything.
 - Only one run at a time. Other browser tabs show the running state.
-- The server stops on `Ctrl+C`, on the page's Quit button, or a few minutes
-  after the page has been closed while no run is active.
+- The server stops on `Ctrl+C`, on the page's Quit button, or after 10 minutes
+  without an API request from the page while no run is active. The page sends
+  a heartbeat every 30 seconds; the long margin covers browsers that slow the
+  timers of background tabs to once a minute.
 
 ## Folder selection
 
@@ -97,24 +103,33 @@ are not used in 2.0.0.
 
 Requests:
 
-- The server listens on `127.0.0.1` only, so other machines cannot connect.
+- The server listens on `127.0.0.1` only, so other machines cannot connect. It
+  binds without address reuse, and on Windows for exclusive use, so that no
+  other program can listen on the same port.
 - Other accounts on the same machine can reach `127.0.0.1`, so every API request
-  requires a per-launch secret. The secret is passed in the URL fragment, never
-  in the query string. The page exchanges it once for an `HttpOnly`,
-  `SameSite=Strict` cookie and removes it from the address bar.
+  requires a per-launch secret. The secret is passed in the URL fragment, which
+  browsers do not send to servers, and never in the query string. The page
+  keeps it in memory and in the tab's `sessionStorage`, removes it from the
+  address bar, and sends it in the `X-Launch-Key` header with every API
+  request. The server compares it in constant time.
+- No cookie is used. Browsers send the cookies of `127.0.0.1` to every port on
+  it, including servers that other programs or accounts run.
 - The `Host` header must be `127.0.0.1:<port>`, and the `Origin` header, when
   present, must match the page origin. This rejects DNS rebinding and
   cross-site requests.
-- Requests that change state use `POST` with `Content-Type: application/json`
-  only.
-- Request logging is disabled so that paths and secrets are not written to the
-  terminal.
+- Every API request uses `POST` with `Content-Type: application/json` and a
+  JSON object body of at most 64 KiB. Other methods and content types are
+  rejected.
+- Request logging is disabled, and errors are answered with short JSON codes
+  that do not repeat the request, so that paths and secrets are not written to
+  the terminal.
 
 Response headers:
 
 - `Content-Security-Policy` is sent as an HTTP header: same-origin scripts,
-  styles, and connections only, no inline script, no external resources, and
-  `frame-ancestors 'none'`.
+  styles, connections, and images only, no inline script or style, no external
+  resources, and `frame-ancestors 'none'`, `base-uri 'none'`, and
+  `form-action 'none'`.
 - `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
   `X-Content-Type-Options: nosniff`, and `Cache-Control: no-store`.
 
@@ -139,8 +154,9 @@ Processing:
 - Every visible string comes from a message catalog (`en.json` and `ja.json`);
   page code contains no user-facing text.
 - The language follows the browser setting and can be switched on the page.
-  The choice is remembered in the browser only. Missing translations fall back
-  to English.
+  The choice is kept for the browser tab only. Each launch uses a new port,
+  which the browser treats as a new site, so the next launch follows the
+  browser setting again. Missing translations fall back to English.
 - Numbers and dates are formatted for the selected language.
 - The server returns error codes, and the page turns them into messages in the
   selected language.

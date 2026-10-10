@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n="app.title"></title>
+<link rel="stylesheet" href="/styles.css">
+<script type="module" src="/app.mjs"></script>
+</head>
+<body>
+<main>
+  <header>
+    <h1 data-i18n="app.title"></h1>
+    <p id="product-version" class="version"></p>
+  </header>
+  <p class="notice" data-i18n="app.development"></p>
+  <div class="controls">
+    <label for="language-select" data-i18n="language.label"></label>
+    <select id="language-select"></select>
+    <button type="button" id="quit-button" data-i18n="quit.button" disabled></button>
+  </div>
+  <p id="connection-status" class="status" role="status" aria-live="polite"></p>
+</main>
+</body>
+</html>

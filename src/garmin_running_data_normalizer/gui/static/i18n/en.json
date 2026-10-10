@@ -1,0 +1,12 @@
+{
+  "app.development": "This screen is under development. To process an export, use the command line for now.",
+  "app.title": "Garmin Running Data Normalizer",
+  "app.version": "Version {version}",
+  "language.label": "Language",
+  "language.name": "English",
+  "quit.button": "Quit",
+  "status.connected": "Connected to the GUI running on this computer.",
+  "status.stopped": "The GUI has stopped. You can close this tab.",
+  "status.unauthorized": "This page cannot use the GUI. Open the address shown in the terminal.",
+  "status.unavailable": "The GUI is not responding. It may have stopped."
+}
