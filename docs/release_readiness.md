@@ -12,9 +12,12 @@ the 17 datasets, stable keys, output paths, the Snapshot lifecycle contract
 and policy registry `v1.0`, and the `0 / 0 / 3 / 2` Product exit contract
 unchanged; the field inventory grows from 212 to 224.
 
-The release source is the `main` commit that merges the v1.7.0 release
-preparation pull request. Its annotated tag, GitHub Release, and publish
-workflow evidence are recorded in this section after publication.
+The release source is `221fb297e1615168165ad4434b1b3963b27ec62b` (#60).
+The annotated `v1.7.0` tag (tag object
+`56107ef1db1fd00226eb7ce891e75df8000ffdcd`), the latest stable GitHub Release
+published on 2026-10-10 JST, Production PyPI publication through Trusted
+Publishing/OIDC, and the publish workflow's exact-version PyPI install
+verification are complete.
 
 ## v1.6.0 stable release
 
@@ -137,25 +140,46 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Latest GitHub Release: `v1.7.0`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
-- TestPyPI `1.7.0`: Not used; the release publishes directly to Production
-  PyPI through the protected `pypi` Environment
-- Production PyPI `1.7.0`: Published through Trusted Publishing; the publish
-  workflow verifies the exact-version install
+- TestPyPI `1.7.0`: Not used; the publish workflow's TestPyPI jobs were
+  skipped
+- Production PyPI `1.7.0`: Published and exact-version install verified by the
+  publish workflow
 - Trusted Publishing: Configured for protected `testpypi` and `pypi`
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
 and GitHub Releases remain immutable. v1.7.0 is the current stable release;
 v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 are historical releases. The
-v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag, GitHub Release, and Production
-PyPI publication evidence was recorded only after the corresponding external
-state was observed; the v1.7.0 publication evidence is added to this document
-after it is observed.
+v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag, GitHub Release, and
+Production PyPI publication evidence was recorded only after the corresponding
+external state was observed.
 
 ## Current release assessment
 
-The v1.7.0 release assessment is recorded here after publication, from the
-release source's main CI run and the Production publish workflow run.
+The v1.7.0 release source passed main CI run `38035096711` (Ubuntu `test` and
+`windows-runtime`) and CodeQL run `38035096430`. A build-only publish workflow
+run (`38035574609`) on the release source passed with every upload job
+skipped. Production publish workflow run `38035713879` then built and
+validated the exact source, published to Production PyPI, and verified the
+exact-version PyPI install; the TestPyPI jobs were skipped. The publication
+sequence ran under one Human approval given after its values were shown. The
+`pypi` Environment deployment was Human-authorized, and the approval was
+submitted through the GitHub API on the Human's instruction.
+
+The SHA-256 checksums recorded by that run match Production PyPI: wheel
+`a40664c077409ddaa3301d7985323151d1b25226d05f049ce6a8fb132f4fe765` and source
+distribution `845f6670ae692714404faf9e7d85ec3b877f62efc37a8d4398400e1535cc70fe`.
+Each file carries a PEP 740 publish attestation from `publish-pypi.yml` in the
+`pypi` Environment. The build-only run produced different checksums because
+the distributions are not byte-reproducible across runs; only the production
+run's artifacts were published. `PYPI_PUBLISH_APPROVED` was returned to
+`false` after the upload. A clean install from Production PyPI completed the
+Synthetic Run-All (`PASS_WITH_WARNINGS`, exit 0), `validate-handoff`,
+`doctor --run-output`, and `support-bundle`, and wrote the ten new
+`analysis/activities.csv` columns. With a synthetic FIT file from the test
+fixture factory, it reported the six running-dynamics fields in `fit_sessions`
+and `fit_laps` and repeated the linked session's values in the `fit_*`
+columns.
 
 ### v1.6.0 release assessment (historical)
 
