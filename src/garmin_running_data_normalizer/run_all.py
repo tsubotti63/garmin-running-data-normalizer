@@ -7,6 +7,7 @@ import json
 import shutil
 import tempfile
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -222,6 +223,26 @@ SNAPSHOT_LIFECYCLE_PATHS = (
     "snapshot/snapshot_coverage.json",
     "snapshot/canonical_merge_summary.json",
 )
+# Progress events name a stage and, where useful, a step or counts. They never
+# carry paths, file names, or data values.
+PROGRESS_STAGES = (
+    "discovering",
+    "normalizing",
+    "reading_fit",
+    "verifying_input",
+    "building_output",
+    "writing_output",
+)
+PROGRESS_STEPS = (
+    "activities",
+    "gear",
+    "personal_records",
+    "fit",
+    "performance_metrics",
+    "daily_metrics",
+    "relationships",
+)
+ProgressCallback = Callable[[dict[str, Any]], None]
 INCOMPLETE_FIT_STATUSES = {
     "too_large",
     "too_small",
@@ -242,6 +263,11 @@ class RunAllError(ValueError):
         super().__init__(message)
         self.code = code
         self.safe_message = message
+
+
+def _notify(progress: ProgressCallback | None, stage: str, **details: Any) -> None:
+    if progress is not None:
+        progress({"stage": stage, **details})
 
 
 def _json_bytes(value: Any) -> bytes:
@@ -345,6 +371,7 @@ def _normalize_datasets(
     relationship_context: dict[str, Any] | None = None,
     snapshot_context: dict[str, Any] | None = None,
     timezone_name: str = DEFAULT_TIMEZONE,
+    progress: ProgressCallback | None = None,
 ) -> tuple[
     dict[str, list[dict[str, Any]]],
     list[dict[str, Any]],
@@ -360,6 +387,7 @@ def _normalize_datasets(
     incomplete_fit_count = 0
     performance_audit: dict[str, Any] = {}
 
+    _notify(progress, "normalizing", step="activities")
     try:
         records["activities"] = normalize_activities(str(input_root), timezone_name)
     except Exception as exc:
@@ -368,12 +396,14 @@ def _normalize_datasets(
         raise RunAllError("ACTIVITIES_EMPTY", "Activities input produced no valid records")
 
     if families["gear"]:
+        _notify(progress, "normalizing", step="gear")
         try:
             records["gear"], records["activity_gear"] = normalize_gear(str(input_root))
         except Exception as exc:
             raise RunAllError("GEAR_NORMALIZATION_FAILED", "detected Gear input could not be normalized") from exc
 
     if families["personal_records"]:
+        _notify(progress, "normalizing", step="personal_records")
         try:
             records["personal_records"] = normalize_personal_records(str(input_root))
         except Exception as exc:
@@ -383,10 +413,12 @@ def _normalize_datasets(
             ) from exc
 
     if families["fit"]:
+        _notify(progress, "normalizing", step="fit")
         try:
             records["fit_sessions"], records["fit_laps"], base_audit = parse_fit_export(
                 input_root,
                 timezone_name=timezone_name,
+                progress=progress,
             )
             for item in base_audit:
                 unknown_records = int(item.get("unknown_records", 0) or 0)
@@ -411,6 +443,7 @@ def _normalize_datasets(
         for family in ("hill_score", "endurance_score", "lactate_threshold")
         for asset in families[family]
     ]
+    _notify(progress, "normalizing", step="performance_metrics")
     try:
         hill_result = normalize_hill_score(all_metric_assets)
         endurance_result = normalize_endurance_score(all_metric_assets)
@@ -433,6 +466,7 @@ def _normalize_datasets(
         "lactate_threshold": lactate_candidates,
     }
 
+    _notify(progress, "normalizing", step="daily_metrics")
     try:
         daily_results = {
             "race_prediction_daily": normalize_race_prediction(
@@ -561,6 +595,7 @@ def _normalize_datasets(
                 }
             )
 
+    _notify(progress, "normalizing", step="relationships")
     try:
         relationship_summary = validate_declared_relationships(
             records,
@@ -1115,14 +1150,24 @@ def run_all(
     external_safe_pack: bool = False,
     snapshot_context: dict[str, Any] | None = None,
     timezone_name: str = DEFAULT_TIMEZONE,
+    progress: ProgressCallback | None = None,
 ) -> dict[str, Any]:
-    """Compose the existing Garmin normalizers into deterministic Run-All v1."""
+    """Compose the existing Garmin normalizers into deterministic Run-All v1.
+
+    ``progress``, when given, receives one event dictionary per step: a
+    ``stage`` from PROGRESS_STAGES, a ``step`` from PROGRESS_STEPS while
+    normalizing, and ``done`` and ``total`` while reading FIT files with
+    distinct content. Events never carry paths, names, or data values, and the
+    output is the same with or without the callback. The callback must not
+    raise: an exception it raises may be replaced by a RunAllError code.
+    """
     input_root, output_root = _validate_paths(input_path, output_path)
     try:
         timezone_name = resolve_timezone_name(timezone_name)
         require_timezone_data(timezone_name)
     except (TimezoneDataUnavailableError, TimezoneNameInvalidError) as exc:
         raise RunAllError(exc.code, exc.safe_message) from exc
+    _notify(progress, "discovering")
     initial_assets = _discover(input_root)
     initial_snapshot = _snapshot(initial_assets)
     families = _classify_assets(initial_assets)
@@ -1143,6 +1188,7 @@ def run_all(
         relationship_context=snapshot_context,
         snapshot_context=snapshot_context,
         timezone_name=timezone_name,
+        progress=progress,
     )
     _validate_provenance(records, fit_audit, families)
     qa_entries = [
@@ -1173,9 +1219,11 @@ def run_all(
         records["endurance_score_daily"],
     )
 
+    _notify(progress, "verifying_input")
     final_assets = _discover(input_root)
     if _snapshot(final_assets) != initial_snapshot:
         raise RunAllError("INPUT_CHANGED", "input assets changed during Run-All processing")
+    _notify(progress, "building_output")
 
     family_results, warnings, status = _family_results(
         families,
@@ -1558,6 +1606,7 @@ def run_all(
     manifest["outputs"] = output_entries
     manifest["deterministic_output_digest"] = deterministic_digest
     summary["deterministic_output_digest"] = deterministic_digest
+    _notify(progress, "writing_output")
     _publish_outputs(output_root, payloads, manifest, summary)
     exit_code = 3 if status == "PARTIAL_SUCCESS" else 0
     return {
@@ -1575,6 +1624,9 @@ __all__ = [
     "ACTIVITIES_CSV_FIT_SESSION_COLUMNS",
     "DATASET_TABLE",
     "OUTPUT_PATHS",
+    "PROGRESS_STAGES",
+    "PROGRESS_STEPS",
+    "ProgressCallback",
     "SNAPSHOT_LIFECYCLE_PATHS",
     "RUN_ALL_VERSION",
     "RunAllError",

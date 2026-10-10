@@ -70,10 +70,13 @@ New local output folder (published atomically by Run-All)
   the CLI takes) without a shell. The child calls the same `run_all` function
   as the CLI and reports progress events to the parent. Short operations
   (Doctor, handoff validation, and Support Bundle) run in the server process.
-- Progress: `run_all` gains an optional keyword-only progress callback that the
-  CLI never passes. Events carry only stage identifiers and counts, such as
-  the number of FIT files read out of the total. Output is identical with and
-  without the callback.
+- Progress: `run_all` has an optional keyword-only `progress` callback that the
+  CLI never passes. Events carry only a stage (`discovering`, `normalizing`
+  with a step such as `activities` or `fit`, `reading_fit`, `verifying_input`,
+  `building_output`, and `writing_output`) and counts. `reading_fit` counts the
+  FIT files with distinct content read out of the total, because a file
+  repeated under another name is read once. Output is identical with and
+  without the callback, and the callback must not raise.
 - Cancellation stops the child process and its process group: `SIGINT` on
   POSIX, and `CTRL_BREAK_EVENT` with `CREATE_NEW_PROCESS_GROUP` on Windows,
   followed by termination after a timeout. Run-All builds its output in memory
