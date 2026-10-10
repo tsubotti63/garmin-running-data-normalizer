@@ -4,9 +4,29 @@ This file records factual Garmin Running Data Normalizer product changes. The
 Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
 Platform maintains its own separate changelog.
 
-## v1.6.0 — stable Production local timezone release
+## v1.7.0 — stable Production FIT running dynamics release
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a
+verified Production PyPI distribution on 2026-10-10 JST.
+
+- Adds six FIT running-dynamics averages to `fit_sessions` and `fit_laps`
+  (vertical oscillation, stance time, stance time percent, stance time
+  balance, vertical ratio, and step length), read from the FIT session and lap
+  messages in the units defined by the FIT profile; the stance time balance is
+  kept as recorded.
+- Appends ten columns to `analysis/activities.csv`: elapsed and moving time,
+  and `fit_*` columns from the FIT session joined through an explicit
+  `activity_fit_links` row.
+- Does not read running-dynamics values in the Garmin activity list, and does
+  not add the new values to the External-safe Pack or the Support Bundle.
+- Preserves the 17 datasets, 6 explicit relationships, stable keys, the
+  Snapshot lifecycle contract and policy registry `v1.0`, and the
+  `0 / 0 / 3 / 2` Product exit mapping; the field inventory grows from 212 to
+  224.
+
+## v1.6.0 — stable Production local timezone release
+
+Status: published as the annotated tag, a stable GitHub Release, and a
 verified Production PyPI distribution on 2026-10-09 JST.
 
 - Adds `--timezone` to `run-all`, `snapshot run-all`, and

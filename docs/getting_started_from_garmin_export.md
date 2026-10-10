@@ -1,7 +1,7 @@
 # Getting Started from a Garmin Account Data Export
 
 This guide takes a first-time user from an official Garmin Account Data Export
-to a completed local Run-All handoff. It applies to the current stable v1.6.0
+to a completed local Run-All handoff. It applies to the current stable v1.7.0
 Garmin Running Data Normalizer release published on GitHub and Production PyPI.
 
 Use this guide for a full Garmin Account Data Export. An individual Activity
@@ -55,17 +55,17 @@ baseline from Production PyPI:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install garmin-running-data-normalizer==1.6.0
+.venv/bin/python -m pip install garmin-running-data-normalizer==1.7.0
 .venv/bin/python -m garmin_running_data_normalizer --version
 ```
 
-The version command for this guide should report `1.6.0`.
+The version command for this guide should report `1.7.0`.
 
 ### Windows PowerShell
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer==1.6.0
+.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer==1.7.0
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer --version
 ```
 
@@ -77,7 +77,7 @@ The remaining commands in this guide call the environment's Python directly,
 so activating the environment is not required. Run them from the directory
 that contains `.venv`.
 
-The v1.6.0 release installs `tzdata` automatically on Windows. Confirm both the
+The v1.7.0 release installs `tzdata` automatically on Windows. Confirm both the
 package version and the existing IANA timezone contract with:
 
 ```powershell
@@ -86,8 +86,8 @@ package version and the existing IANA timezone contract with:
 
 Earlier maintainer-owned physical Windows validation from Production PyPI
 confirmed automatic `tzdata` installation and successful `Asia/Tokyo`
-resolution without any manual dependency install. Current v1.6.0 CI covers the
-packaged Windows path and the published v1.6.0 package retains this contract.
+resolution without any manual dependency install. Current v1.7.0 CI covers the
+packaged Windows path and the published v1.7.0 package retains this contract.
 Both remain bounded evidence rather than a universal compatibility claim.
 
 ## 4. Run one-shot normalization first

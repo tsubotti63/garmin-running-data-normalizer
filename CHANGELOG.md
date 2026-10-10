@@ -13,9 +13,36 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
+## v1.7.0 — stable Production release
+
+Published on 2026-10-10 JST as the annotated `v1.7.0` tag, the latest stable
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.7.0),
+and the verified
+[Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.7.0/).
+
+### Added
+
+- Six FIT running-dynamics averages in `fit_sessions` and `fit_laps`:
+  `avg_vertical_oscillation_mm`, `avg_stance_time_ms`,
+  `avg_stance_time_percent`, `avg_stance_time_balance_percent`,
+  `avg_vertical_ratio_percent`, and `avg_step_length_mm`, in the units defined
+  by the FIT profile.
+- Ten columns at the end of `analysis/activities.csv`: elapsed and moving time,
+  and `fit_*` columns with the running dynamics and total ascent and descent
+  of the FIT session joined through an explicit `activity_fit_links` row.
+
+### Compatibility
+
+- The 17 datasets, 6 explicit relationships, stable keys, output paths,
+  Snapshot rules, and Product exit mapping remain unchanged; the field
+  inventory grows from 212 to 224.
+- Tools that read `fit_sessions`, `fit_laps`, or `analysis/activities.csv`
+  with a closed list of fields or columns must accept the new ones. See the
+  [v1.7.0 Release Notes](docs/release_notes/v1.7.0.md).
+
 ## v1.6.0 — stable Production release
 
-Published on 2026-10-09 JST as the annotated `v1.6.0` tag, the latest stable
+Published on 2026-10-09 JST as the annotated `v1.6.0` tag,
 [GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.6.0),
 and the verified
 [Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.6.0/).

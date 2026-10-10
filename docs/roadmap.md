@@ -32,7 +32,7 @@
   third-party notices.
 - Complete dependency lock review, security/privacy checks, documentation, and
   release-specific review evidence.
-- `v1.0.0` remains the first stable release. `v1.6.0` is the current stable
+- `v1.0.0` remains the first stable release. `v1.7.0` is the current stable
   GitHub Release and Production PyPI version. Any future tag, GitHub Release,
   stable release, or package publication requires its own current review and
   separate Human authorization.
@@ -119,4 +119,21 @@
 - Keep the 17-dataset, 212-field, 6-relationship inventory, stable keys,
   Snapshot rules, and the `0 / 0 / 3 / 2` Product exit contract unchanged.
 - Published version `1.6.0` through the merged release pull requests, the
+  annotated tag, the GitHub Release, and Trusted Publishing to Production PyPI.
+
+## Milestone 10 — v1.7 FIT running dynamics — complete
+
+- Add six FIT running-dynamics averages (vertical oscillation, stance time,
+  stance time percent, stance time balance, vertical ratio, and step length) to
+  `fit_sessions` and `fit_laps`, read from the FIT session and lap messages in
+  the units defined by the FIT profile.
+- Add elapsed and moving time and the linked FIT session's running dynamics
+  and total ascent and descent to `analysis/activities.csv`, joined only
+  through explicit Activity/FIT links.
+- Keep the running-dynamics values in the Garmin activity list unread, and keep
+  the new values out of the External-safe Pack and the Support Bundle.
+- Keep the 17 datasets, 6 relationships, stable keys, Snapshot rules, and the
+  `0 / 0 / 3 / 2` Product exit contract unchanged; the field inventory grows
+  from 212 to 224.
+- Published version `1.7.0` through the merged release pull requests, the
   annotated tag, the GitHub Release, and Trusted Publishing to Production PyPI.

@@ -68,17 +68,16 @@ Select either preview to inspect its full-size accessible SVG.
 See the
 [asset sources and reproduction notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/README.md).
 
-Current stable release: **v1.6.0** · Python **3.11+** · Apache License 2.0
+Current stable release: **v1.7.0** · Python **3.11+** · Apache License 2.0
 
-Implementation candidate: **v1.7.0** (local review only; not tagged, released, or
-published to PyPI). It adds six FIT running-dynamics averages (vertical
-oscillation, stance time, stance time percent, stance time balance, vertical
-ratio, and step length) to `fit_sessions` and `fit_laps`, in the units defined
-by the FIT profile. `analysis/activities.csv` also gains elapsed and moving
-time and, for activities with an explicit FIT link, `fit_*` columns with the
-linked FIT session's running dynamics and total ascent and descent. Datasets,
-stable keys, output paths, Snapshot rules, and the `0 / 0 / 3 / 2` Product exit
-contract are unchanged; the field inventory grows from 212 to 224.
+v1.7.0 adds six FIT running-dynamics averages (vertical oscillation, stance
+time, stance time percent, stance time balance, vertical ratio, and step
+length) to `fit_sessions` and `fit_laps`, in the units defined by the FIT
+profile. `analysis/activities.csv` also gains elapsed and moving time and, for
+activities with an explicit FIT link, `fit_*` columns with the linked FIT
+session's running dynamics and total ascent and descent. Datasets, stable keys,
+output paths, Snapshot rules, and the `0 / 0 / 3 / 2` Product exit contract are
+unchanged; the field inventory grows from 212 to 224.
 
 v1.6.0 adds `--timezone` to `run-all`, `snapshot run-all`,
 `normalize-activities`, and `doctor --input`, so local dates and times can use
@@ -106,7 +105,7 @@ v1.4.0 adds read-only Export diagnostics and a Human-reviewed public-safe
 Support Bundle without changing normalized datasets, stable keys, Snapshot
 semantics, or the `0 / 0 / 3 / 2` Product exit contract.
 
-v1.6.0 is published as the annotated tag, the latest stable GitHub Release, and
+v1.7.0 is published as the annotated tag, the latest stable GitHub Release, and
 the latest Production PyPI distribution. v1.4.0 remains the Export Evidence and
 Diagnostics release.
 
@@ -117,9 +116,9 @@ Diagnostics release.
 - [FAQ](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/faq.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
-- [v1.6.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.6.0.md)
-- [Published stable Release v1.6.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.6.0)
-- [Production PyPI v1.6.0](https://pypi.org/project/garmin-running-data-normalizer/1.6.0/)
+- [v1.7.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.7.0.md)
+- [Published stable Release v1.7.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.7.0)
+- [Production PyPI v1.7.0](https://pypi.org/project/garmin-running-data-normalizer/1.7.0/)
 - Project story on Zenn: [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
 
 ## Why this project
@@ -157,6 +156,34 @@ Normalize locally
 
 The package does not send the export to a hosted processing service. Public
 reproduction uses only synthetic fixtures.
+
+## What v1.7.0 changes
+
+The v1.7.0 release adds FIT running dynamics without changing the 17
+normalized datasets, stable keys, or the `0 / 0 / 3 / 2` Product exit
+contract.
+
+- `fit_sessions` and `fit_laps` gain six running-dynamics averages read from
+  the FIT session and lap messages: `avg_vertical_oscillation_mm`,
+  `avg_stance_time_ms`, `avg_stance_time_percent`,
+  `avg_stance_time_balance_percent`, `avg_vertical_ratio_percent`, and
+  `avg_step_length_mm`.
+- Units follow the FIT profile and are part of each field name. The stance
+  time balance is kept as recorded and is not converted to a left or right
+  side.
+- `fit_sessions` always contains the six fields (`null` when the FIT file does
+  not record them); `fit_laps` contains them when the FIT lap message defines
+  them.
+- `analysis/activities.csv` appends ten columns after `lap_count`: elapsed and
+  moving time, and, for activities with an explicit FIT link, `fit_*` columns
+  with the linked FIT session's running dynamics and total ascent and descent.
+  The existing columns keep their positions.
+- The External-safe Pack and the Support Bundle do not include the new values,
+  and running-dynamics values in the Garmin activity list are not read.
+
+Rerun Run-All after upgrading. See the
+[v1.7.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.7.0.md)
+and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
 
 ## What v1.6.0 changes
 
@@ -323,7 +350,7 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. The published v1.6.0
+`python -m garmin_running_data_normalizer --version`. The published v1.7.0
 package installs `tzdata` automatically on Windows so Python can resolve IANA
 timezone data (`Asia/Tokyo` by default, or the timezone given with
 `--timezone`). macOS and Linux continue to use their system timezone data.

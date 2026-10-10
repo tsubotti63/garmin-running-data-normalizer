@@ -19,7 +19,7 @@ VERSION_SOURCE = "src/garmin_running_data_normalizer/__init__.py"
 
 
 def _copy_validator_inputs(destination: Path) -> None:
-    for relative in (*current_documents("1.6.0"), VERSION_SOURCE):
+    for relative in (*current_documents("1.7.0"), VERSION_SOURCE):
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / relative, target)
@@ -453,7 +453,7 @@ def test_partial_success_exit_zero_in_current_release_notes_fails(
     tmp_path: Path,
 ) -> None:
     _copy_validator_inputs(tmp_path)
-    release_notes = tmp_path / "docs/release_notes/v1.6.0.md"
+    release_notes = tmp_path / "docs/release_notes/v1.7.0.md"
     release_notes.write_text(
         release_notes.read_text(encoding="utf-8").replace(
             "`PARTIAL_SUCCESS` / exit 3",
@@ -537,12 +537,12 @@ def _start_implementation_candidate(root: Path, version: str) -> None:
     (
         (
             "SECURITY.md",
-            "current stable release, v1.6.0",
+            "current stable release, v1.7.0",
             "current stable release, v1.3.3",
         ),
         (
             "docs/roadmap.md",
-            "`v1.6.0` is the current stable",
+            "`v1.7.0` is the current stable",
             "`v1.3.2` is the current stable",
         ),
         (
@@ -552,12 +552,12 @@ def _start_implementation_candidate(root: Path, version: str) -> None:
         ),
         (
             "docs/release_readiness.md",
-            "Current Production PyPI version: `1.6.0`",
+            "Current Production PyPI version: `1.7.0`",
             "Current Production PyPI version: `1.3.3`",
         ),
         (
             "docs/release_readiness.md",
-            "Latest GitHub Release: `v1.6.0`",
+            "Latest GitHub Release: `v1.7.0`",
             "Latest GitHub Release: `v1.3.3`",
         ),
     ),
@@ -581,8 +581,8 @@ def test_missing_current_migration_heading_fails(tmp_path: Path) -> None:
     notes = tmp_path / "docs/migration_notes.md"
     notes.write_text(
         notes.read_text(encoding="utf-8").replace(
-            "## v1.5.0 to v1.6.0",
-            "## v1.5.0 to v1.6.0 draft",
+            "## v1.6.0 to v1.7.0",
+            "## v1.6.0 to v1.7.0 draft",
         ),
         encoding="utf-8",
     )
@@ -591,7 +591,7 @@ def test_missing_current_migration_heading_fails(tmp_path: Path) -> None:
 
     assert (
         "docs/migration_notes.md: migration heading is missing: "
-        "## v<previous version> to v1.6.0"
+        "## v<previous version> to v1.7.0"
     ) in findings
 
 
@@ -603,8 +603,8 @@ def test_current_migration_heading_accepts_any_previous_version(
     notes = tmp_path / "docs/migration_notes.md"
     notes.write_text(
         notes.read_text(encoding="utf-8").replace(
-            "## v1.5.0 to v1.6.0",
-            f"## {previous} to v1.6.0",
+            "## v1.6.0 to v1.7.0",
+            f"## {previous} to v1.7.0",
         ),
         encoding="utf-8",
     )

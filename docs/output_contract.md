@@ -2,8 +2,7 @@
 
 ## Status and authority
 
-- Current stable contract: v1.6.0
-- Implementation candidate: v1.7.0 (not published)
+- Current stable contract: v1.7.0
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each
@@ -80,7 +79,7 @@ when the activity has no explicit link or the FIT value is null. The
 `SCHEMA_CATALOG.json` declares these derived and joined columns. The
 External-safe Pack keeps its own columns and does not include them.
 
-For the released v1.6.0 Sleep contract, `sleep_duration_minutes_ex_awake` is
+For the released v1.7.0 Sleep contract, `sleep_duration_minutes_ex_awake` is
 an observed-stage sum when any finite deep/light/REM stage exists, with an
 approved direct-source fallback only when all stages are absent. Missing stages
 are not zero-filled; awake and window-minus-awake are not used; conflicting
@@ -387,5 +386,6 @@ Source Completeness uses exactly `PRESENT`, `EMPTY`, `ABSENT`, `UNREADABLE`,
 `UNSUPPORTED`, and `AMBIGUOUS`; unclassified evidence remains separately
 `UNKNOWN`. Run Quality projects existing manifest, summary, QA, audit, and six
 relationship authorities without selecting values or creating a new Source of
-Truth. The existing 17 datasets, 212 fields, 6 relationships, normalized paths,
-stable keys, Snapshot behavior, and status/exit mapping are unchanged.
+Truth. v1.4.0 left the then 17 datasets, 212 fields, 6 relationships,
+normalized paths, stable keys, Snapshot behavior, and status/exit mapping
+unchanged.
