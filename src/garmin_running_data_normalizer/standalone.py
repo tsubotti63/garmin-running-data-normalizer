@@ -130,7 +130,7 @@ def validate_standalone_handoff(root: str | Path) -> dict[str, Any]:
         version_parts = tuple(int(part) for part in str(product_version).split(".")[:2])
     except ValueError as exc:
         raise StandaloneHandoffError("handoff Product version is invalid") from exc
-    if len(version_parts) != 2 or version_parts[0] != 1:
+    if len(version_parts) != 2 or version_parts[0] < 1:
         raise StandaloneHandoffError("handoff Product version is not supported")
     diagnostics_available = version_parts >= (1, 4)
     if diagnostics_available and product_version != __version__:

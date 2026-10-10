@@ -290,7 +290,7 @@ def doctor_run_output(root: str | Path) -> dict[str, Any]:
     summary = _json_object(output_root, "run_summary.json")
     version = summary.get("product_version")
     parsed_version = _major_minor(version)
-    if parsed_version is None or parsed_version[0] != 1:
+    if parsed_version is None or parsed_version[0] < 1:
         raise DoctorError("DOCTOR_VERSION_UNSUPPORTED", "handoff Product version is not recognized")
     try:
         validate_standalone_handoff(output_root)

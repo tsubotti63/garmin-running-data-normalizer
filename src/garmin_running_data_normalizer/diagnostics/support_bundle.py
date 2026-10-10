@@ -38,6 +38,9 @@ BUNDLE_MEMBERS = (
 MAX_MEMBER_BYTES = 256 * 1024
 MAX_TOTAL_BYTES = 1024 * 1024
 FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
+RUN_QUALITY_PRODUCT_VERSION = re.compile(
+    r"(?P<major>[1-9]\d*)\.(?P<minor>0|[1-9]\d*)(?:\.\d+(?:(?:a|b|rc)\d+)?)?"
+)
 SAFE_FAMILIES = frozenset(
     (*FAMILY_DATASETS, "hrv", "lactate_threshold", "relationships")
 )
@@ -496,6 +499,14 @@ def _aggregate_projection(section: Any) -> dict[str, Any]:
     }
 
 
+def _supported_run_quality_version(value: Any) -> bool:
+    """Accept Product versions that carry v1.4 diagnostics: major 1 or later, from 1.4."""
+    if not isinstance(value, str):
+        return False
+    match = RUN_QUALITY_PRODUCT_VERSION.fullmatch(value)
+    return match is not None and (int(match["major"]), int(match["minor"])) >= (1, 4)
+
+
 def _run_quality_projection(quality: dict[str, Any]) -> dict[str, Any]:
     if set(quality) != RUN_QUALITY_KEYS:
         raise SupportBundleError(
@@ -506,8 +517,7 @@ def _run_quality_projection(quality: dict[str, Any]) -> dict[str, Any]:
     if (
         quality.get("format") != "garmin-running-data-normalizer-run-quality-v1"
         or quality.get("schema_version") != "garmin-run-quality:v1"
-        or not isinstance(quality.get("product_version"), str)
-        or re.fullmatch(r"1\.(?:[4-9]|[1-9]\d+)(?:\.\d+)?", quality["product_version"]) is None
+        or not _supported_run_quality_version(quality.get("product_version"))
         or quality.get("run_all_version") != 1
         or status not in {"PASS", "PASS_WITH_WARNINGS", "PARTIAL_SUCCESS"}
         or quality.get("exit_code") != (3 if status == "PARTIAL_SUCCESS" else 0)
