@@ -1113,6 +1113,7 @@ class V14DiagnosticsTest(unittest.TestCase):
                         json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
                         + "\n",
                         encoding="utf-8",
+                        newline="\n",
                     )
                 else:
                     destination.write_bytes(source.read_bytes())

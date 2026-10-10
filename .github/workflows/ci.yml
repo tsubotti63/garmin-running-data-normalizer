@@ -70,11 +70,17 @@ jobs:
         shell: powershell
         run: |
           python -m venv .venv
+          if ($LASTEXITCODE -ne 0) { throw "editable-install venv creation failed with exit code $LASTEXITCODE" }
           .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw "editable-install pip upgrade failed with exit code $LASTEXITCODE" }
           .\.venv\Scripts\python.exe -m pip install -e ".[test,release]"
+          if ($LASTEXITCODE -ne 0) { throw "editable install failed with exit code $LASTEXITCODE" }
           .\.venv\Scripts\python.exe -c "import importlib.metadata as m; assert m.version('tzdata')"
+          if ($LASTEXITCODE -ne 0) { throw "tzdata check failed with exit code $LASTEXITCODE" }
           .\.venv\Scripts\python.exe -c "from zoneinfo import ZoneInfo; assert str(ZoneInfo('Asia/Tokyo')) == 'Asia/Tokyo'"
+          if ($LASTEXITCODE -ne 0) { throw "Asia/Tokyo check failed with exit code $LASTEXITCODE" }
           .\.venv\Scripts\python.exe -m garmin_running_data_normalizer --version
+          if ($LASTEXITCODE -ne 0) { throw "version check failed with exit code $LASTEXITCODE" }
       - name: Validate public command examples
         shell: powershell
         run: .\.venv\Scripts\python.exe .\scripts\validate_public_command_examples.py
@@ -82,16 +88,24 @@ jobs:
         shell: powershell
         run: |
           .\.venv\Scripts\python.exe -m garmin_running_data_normalizer normalize-activities --input .\examples\synthetic\garmin_export --output .\workspace\windows-golden
+          if ($LASTEXITCODE -ne 0) { throw "Synthetic normalize-activities failed with exit code $LASTEXITCODE" }
           .\.venv\Scripts\python.exe .\scripts\compare_deterministic_outputs.py .\examples\synthetic\expected\golden_path .\workspace\windows-golden
+          if ($LASTEXITCODE -ne 0) { throw "Golden Path comparison failed with exit code $LASTEXITCODE" }
           .\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-run-all-1
+          if ($LASTEXITCODE -ne 0) { throw "first Synthetic Run-All failed with exit code $LASTEXITCODE" }
           .\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-run-all-2
+          if ($LASTEXITCODE -ne 0) { throw "second Synthetic Run-All failed with exit code $LASTEXITCODE" }
           .\.venv\Scripts\python.exe -c "import json, pathlib; s=json.loads(pathlib.Path('workspace/windows-run-all-1/run_summary.json').read_text(encoding='utf-8')); assert s['status'] == 'PASS_WITH_WARNINGS'; assert s['family_results']['activities']['detected_asset_count'] == 1; assert s['family_results']['activities']['processed_asset_count'] == 1"
+          if ($LASTEXITCODE -ne 0) { throw "Synthetic Run-All summary check failed with exit code $LASTEXITCODE" }
           .\.venv\Scripts\python.exe .\scripts\compare_deterministic_outputs.py .\workspace\windows-run-all-1 .\workspace\windows-run-all-2
+          if ($LASTEXITCODE -ne 0) { throw "repeated Run-All comparison failed with exit code $LASTEXITCODE" }
       - name: Verify Windows Core 4 diagnostics and tracked vector
         shell: powershell
         run: |
           .\.venv\Scripts\python.exe -m pytest .\tests\test_v14_diagnostics.py -q
+          if ($LASTEXITCODE -ne 0) { throw "Windows diagnostics tests failed with exit code $LASTEXITCODE" }
           .\.venv\Scripts\python.exe -m garmin_running_data_normalizer doctor --run-output .\workspace\windows-run-all-1 --format json
+          if ($LASTEXITCODE -ne 0) { throw "Windows Doctor failed with exit code $LASTEXITCODE" }
           .\.venv\Scripts\python.exe -m garmin_running_data_normalizer support-bundle --run-output .\workspace\windows-run-all-1 --output .\workspace\windows-support-bundle.zip
           if ($LASTEXITCODE -ne 0) { throw "Windows Support Bundle failed with exit code $LASTEXITCODE" }
       - name: Verify Windows GUI server
@@ -101,30 +115,44 @@ jobs:
         shell: powershell
         run: |
           .\.venv\Scripts\python.exe -m build
+          if ($LASTEXITCODE -ne 0) { throw "distribution build failed with exit code $LASTEXITCODE" }
           .\.venv\Scripts\python.exe -m twine check --strict .\dist\*
+          if ($LASTEXITCODE -ne 0) { throw "distribution metadata check failed with exit code $LASTEXITCODE" }
       - name: Verify isolated wheel installation and Synthetic Run-All
         shell: powershell
         run: |
           python -m venv .wheel-venv
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel venv creation failed with exit code $LASTEXITCODE" }
           .\.wheel-venv\Scripts\python.exe -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel pip upgrade failed with exit code $LASTEXITCODE" }
           $wheel = (Get-ChildItem .\dist\*.whl | Select-Object -First 1).FullName
           .\.wheel-venv\Scripts\python.exe -m pip install $wheel
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel installation failed with exit code $LASTEXITCODE" }
           .\.wheel-venv\Scripts\python.exe -c "import importlib.metadata as m; from zoneinfo import ZoneInfo; assert m.version('tzdata'); assert str(ZoneInfo('Asia/Tokyo')) == 'Asia/Tokyo'"
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel tzdata check failed with exit code $LASTEXITCODE" }
           .\.wheel-venv\Scripts\python.exe -m garmin_running_data_normalizer --version
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel version check failed with exit code $LASTEXITCODE" }
           .\.wheel-venv\Scripts\python.exe -c "from garmin_running_data_normalizer.gui.server import load_static_files; assert all(body for body, _ in load_static_files().values())"
-          if ($LASTEXITCODE -ne 0) { throw "isolated wheel GUI static files are missing" }
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel GUI static file check failed with exit code $LASTEXITCODE" }
           .\.wheel-venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-wheel-run-all
           if ($LASTEXITCODE -ne 0) { throw "isolated wheel Synthetic Run-All failed with exit code $LASTEXITCODE" }
           .\.wheel-venv\Scripts\python.exe -c "import json, pathlib; p=pathlib.Path('workspace/windows-wheel-run-all/run_summary.json'); assert p.is_file(); s=json.loads(p.read_text(encoding='utf-8')); assert s['status'] == 'PASS_WITH_WARNINGS'; assert s['family_results']['activities']['detected_asset_count'] == 1; assert s['family_results']['activities']['processed_asset_count'] == 1"
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel Synthetic Run-All summary check failed with exit code $LASTEXITCODE" }
       - name: Verify isolated source distribution installation and Synthetic Run-All
         shell: powershell
         run: |
           python -m venv .sdist-venv
+          if ($LASTEXITCODE -ne 0) { throw "isolated sdist venv creation failed with exit code $LASTEXITCODE" }
           .\.sdist-venv\Scripts\python.exe -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw "isolated sdist pip upgrade failed with exit code $LASTEXITCODE" }
           $sdist = (Get-ChildItem .\dist\*.tar.gz | Select-Object -First 1).FullName
           .\.sdist-venv\Scripts\python.exe -m pip install $sdist
+          if ($LASTEXITCODE -ne 0) { throw "isolated sdist installation failed with exit code $LASTEXITCODE" }
           .\.sdist-venv\Scripts\python.exe -c "import importlib.metadata as m; from zoneinfo import ZoneInfo; assert m.version('tzdata'); assert str(ZoneInfo('Asia/Tokyo')) == 'Asia/Tokyo'"
+          if ($LASTEXITCODE -ne 0) { throw "isolated sdist tzdata check failed with exit code $LASTEXITCODE" }
           .\.sdist-venv\Scripts\python.exe -m garmin_running_data_normalizer --version
+          if ($LASTEXITCODE -ne 0) { throw "isolated sdist version check failed with exit code $LASTEXITCODE" }
           .\.sdist-venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-sdist-run-all
           if ($LASTEXITCODE -ne 0) { throw "isolated sdist Synthetic Run-All failed with exit code $LASTEXITCODE" }
           .\.sdist-venv\Scripts\python.exe -c "import json, pathlib; p=pathlib.Path('workspace/windows-sdist-run-all/run_summary.json'); assert p.is_file(); s=json.loads(p.read_text(encoding='utf-8')); assert s['status'] == 'PASS_WITH_WARNINGS'; assert s['family_results']['activities']['detected_asset_count'] == 1; assert s['family_results']['activities']['processed_asset_count'] == 1"
+          if ($LASTEXITCODE -ne 0) { throw "isolated sdist Synthetic Run-All summary check failed with exit code $LASTEXITCODE" }
