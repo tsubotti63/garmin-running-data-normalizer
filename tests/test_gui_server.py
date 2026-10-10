@@ -56,6 +56,7 @@ EXPECTED_SECURITY_HEADERS = {
 EXPECTED_CONTENT_TYPES = {
     "/": "text/html; charset=utf-8",
     "/app.mjs": "text/javascript; charset=utf-8",
+    "/flow.mjs": "text/javascript; charset=utf-8",
     "/i18n.mjs": "text/javascript; charset=utf-8",
     "/styles.css": "text/css; charset=utf-8",
     "/i18n/en.json": "application/json",
