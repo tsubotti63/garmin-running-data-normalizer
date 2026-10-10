@@ -181,6 +181,7 @@ class _Run:
         self.cancel_requested = False
         self.reported_cancel = False
         self.staging_folders: list[str] = []
+        self.follower: threading.Thread | None = None
 
     @property
     def active(self) -> bool:
@@ -253,7 +254,8 @@ class RunManager:
             )
             run = _Run(process, output)
             self._run = run
-        threading.Thread(target=self._follow, args=(run,), daemon=True).start()
+        run.follower = threading.Thread(target=self._follow, args=(run,), daemon=True)
+        run.follower.start()
         return self.status()
 
     def status(self) -> dict[str, Any]:
@@ -290,7 +292,7 @@ class RunManager:
         return self.status()
 
     def stop(self) -> None:
-        """Cancel an active run and wait until its child process has ended."""
+        """Cancel an active run and wait until its outcome is recorded."""
         with self._lock:
             run = self._run
         if run is None or not run.active:
@@ -300,6 +302,10 @@ class RunManager:
             run.process.wait(timeout=self._cancel_grace + self._kill_grace + 5)
         except subprocess.TimeoutExpired:
             pass
+        # The follower thread records the outcome after it reads the end of the
+        # child's output, which can come after the process has ended.
+        if run.follower is not None:
+            run.follower.join(timeout=5)
 
     @staticmethod
     def _send_stop(process: subprocess.Popen[bytes]) -> None:

@@ -667,8 +667,10 @@ class GuiRunApiTest(GuiServerTestCase):
         self.assertTrue(wait_until(lambda: bool(runs.status()["progress"])))
         self.server.shutdown()
         self.thread.join(timeout=30)
+        self.assertFalse(self.thread.is_alive())
+        # serve_until_stopped records the cancelled run before it returns.
         self.assertFalse(runs.active())
-        self.assertTrue(wait_until(lambda: runs.status()["state"] == "cancelled", 10.0))
+        self.assertEqual(runs.status()["state"], "cancelled")
 
     def test_child_messages_and_errors_stay_out_of_answers_and_output(self) -> None:
         self.start_server(600.0, runs=stub_manager("noise"))

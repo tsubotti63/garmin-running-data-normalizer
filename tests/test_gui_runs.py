@@ -225,8 +225,27 @@ class RunManagerTest(unittest.TestCase):
         self.start(manager)
         self.wait_for_progress(manager)
         manager.stop()
-        self.assertFalse(manager._run.process.poll() is None)
-        self.assertTrue(wait_until(lambda: manager.status()["state"] == "cancelled", 10.0))
+        # The outcome is recorded by the time stop() returns.
+        self.assertIsNotNone(manager._run.process.poll())
+        self.assertFalse(manager.active())
+        self.assertEqual(manager.status()["state"], "cancelled")
+
+    def test_stop_waits_until_a_slow_outcome_is_recorded(self) -> None:
+        # Windows CI showed that the outcome can be recorded after the child
+        # has ended; stop() must still return with the outcome recorded.
+        manager = stub_manager("wait")
+        record_outcome = manager._finish
+
+        def slow_record(run: Any, returncode: int) -> None:
+            time.sleep(0.5)
+            record_outcome(run, returncode)
+
+        with patch.object(manager, "_finish", slow_record):
+            self.start(manager)
+            self.wait_for_progress(manager)
+            manager.stop()
+            self.assertFalse(manager.active())
+            self.assertEqual(manager.status()["state"], "cancelled")
 
     def test_only_validated_messages_from_the_child_reach_the_status(self) -> None:
         manager = stub_manager("noise")
