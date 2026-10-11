@@ -70,6 +70,14 @@ See the
 
 Current stable release: **v1.7.0** · Python **3.11+** · Apache License 2.0
 
+Implementation candidate: **v1.7.1** (local review only; not tagged, released, or
+published to PyPI). It fixes `snapshot run-all`, which has produced no Hill
+Score, Endurance Score, or VO2Max rows since v1.3.0, because Run-All did not
+recognize the merged files that `snapshot build-input` writes for them. One-shot
+`run-all` output, `snapshot build-input` output, datasets, stable keys, output
+paths, Snapshot rules, and the `0 / 0 / 3 / 2` Product exit contract are
+unchanged.
+
 v1.7.0 adds six FIT running-dynamics averages (vertical oscillation, stance
 time, stance time percent, stance time balance, vertical ratio, and step
 length) to `fit_sessions` and `fit_laps`, in the units defined by the FIT

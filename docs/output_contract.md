@@ -3,6 +3,7 @@
 ## Status and authority
 
 - Current stable contract: v1.7.0
+- Implementation candidate: v1.7.1 (not published)
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each

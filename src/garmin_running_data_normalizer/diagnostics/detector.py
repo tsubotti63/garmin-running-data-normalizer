@@ -4,6 +4,14 @@ from __future__ import annotations
 
 from pathlib import PurePosixPath
 
+# Snapshot build-input writes these merged files. Their names do not start with
+# the Garmin family prefixes, so they are matched exactly.
+_SNAPSHOT_MERGED_NAMES = {
+    "snapshot_hillscore.json": "hill_score",
+    "snapshot_endurancescore.json": "endurance_score",
+    "snapshot_vo2max.json": "vo2max",
+}
+
 
 def classify_source_name(logical_name: str, kind: str) -> str:
     """Return the closed Product source-family ID for one discovered object."""
@@ -15,6 +23,8 @@ def classify_source_name(logical_name: str, kind: str) -> str:
         return "gear"
     if kind == "json" and lower_name.endswith("personalrecord.json"):
         return "personal_records"
+    if kind == "json" and basename in _SNAPSHOT_MERGED_NAMES:
+        return _SNAPSHOT_MERGED_NAMES[basename]
     if kind == "json" and basename.startswith("hillscore"):
         return "hill_score"
     if kind == "json" and basename.startswith("endurancescore"):

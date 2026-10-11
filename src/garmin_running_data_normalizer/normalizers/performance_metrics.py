@@ -114,10 +114,15 @@ def _normalize_daily(
 ) -> DailyNormalizationResult:
     is_hill = dataset == "hill_score_daily"
     prefix = "hillscore" if is_hill else "endurancescore"
+    snapshot_name = f"snapshot_{prefix}.json"
     selected_assets = [
         asset
         for asset in assets
-        if asset.kind == "json" and _basename(asset).startswith(prefix)
+        if asset.kind == "json"
+        and (
+            _basename(asset).startswith(prefix)
+            or _basename(asset) == snapshot_name
+        )
     ]
     accepted: list[dict[str, Any]] = []
     excluded_reasons: Counter[str] = Counter()
