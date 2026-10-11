@@ -30,14 +30,13 @@ from .intake.source import (
     is_zip_input,
 )
 from .normalizers.activities import normalize_activities
-from .normalizers.daily_metrics import DailyMetricConflictError, DailyMetricError
+from .normalizers.daily_metrics import DailyMetricError
 from .normalizers.gear import normalize_gear
 from .normalizers.hrv import normalize_hrv_daily_assets
 from .normalizers.personal_records import normalize_personal_records
 from .normalizers.performance_metrics import (
     ENDURANCE_FIELDS,
     HILL_FIELDS,
-    PerformanceMetricsConflictError,
     PerformanceMetricsError,
     build_performance_metrics_daily_context,
     collect_lactate_threshold_candidates,
@@ -59,7 +58,7 @@ from .relationships import (
 )
 
 
-RUN_ALL_VERSION = 1
+RUN_ALL_VERSION = 2
 DATASET_TABLE = (
     {"name": "activities", "family": "activities", "record_grain": "activity", "stable_key": ("garmin_activity_key",), "required": True},
     {"name": "gear", "family": "gear", "record_grain": "gear", "stable_key": ("gear_key",), "required": False},
@@ -78,6 +77,18 @@ DATASET_TABLE = (
     {"name": "vo2max_daily", "family": "vo2max", "record_grain": "source_observation", "stable_key": ("calendar_date", "vo2max_source_series", "sport", "observation_timestamp"), "required": False},
     {"name": "hrv_daily", "family": "hrv", "record_grain": "calendar_day", "stable_key": ("calendar_date",), "required": False},
     {"name": "training_history_daily", "family": "training_history", "record_grain": "source_observation", "stable_key": ("calendar_date", "observation_timestamp"), "required": False},
+)
+
+# Datasets whose rows are each built from one observation: every row has an
+# empty ``disagreeing_fields``, as every row of every dataset has the field.
+SINGLE_OBSERVATION_DATASETS = (
+    "activities",
+    "gear",
+    "activity_gear",
+    "personal_records",
+    "fit_sessions",
+    "fit_laps",
+    "activity_fit_links",
 )
 
 FAMILY_ORDER = (
@@ -151,6 +162,7 @@ ACTIVITIES_CSV_COLUMNS = (
     "fit_avg_step_length_mm",
     "fit_total_ascent_m",
     "fit_total_descent_m",
+    "disagreeing_fields",
 )
 # analysis/activities.csv columns converted from Activity millisecond fields.
 ACTIVITIES_CSV_DURATION_COLUMNS = (
@@ -494,11 +506,6 @@ def _normalize_datasets(
         hill_result = normalize_hill_score(all_metric_assets)
         endurance_result = normalize_endurance_score(all_metric_assets)
         lactate_candidates = collect_lactate_threshold_candidates(all_metric_assets)
-    except PerformanceMetricsConflictError as exc:
-        raise RunAllError(
-            "PERFORMANCE_METRICS_CONFLICT",
-            "performance metric input contains conflicting values for one stable key",
-        ) from exc
     except PerformanceMetricsError as exc:
         raise RunAllError(
             "PERFORMANCE_METRICS_NORMALIZATION_FAILED",
@@ -543,11 +550,6 @@ def _normalize_datasets(
         )
         records["hrv_daily"] = hrv_result["records"]
         performance_audit["hrv_daily"] = hrv_result["audit"]
-    except DailyMetricConflictError as exc:
-        raise RunAllError(
-            "DAILY_METRICS_CONFLICT",
-            "daily metric input contains conflicting values for one stable key",
-        ) from exc
     except DailyMetricError as exc:
         raise RunAllError(
             "DAILY_METRICS_NORMALIZATION_FAILED",
@@ -680,6 +682,9 @@ def _normalize_datasets(
             "RELATIONSHIP_CONTRACT_FAILED",
             "a declared dataset relationship failed validation",
         ) from exc
+    for name in SINGLE_OBSERVATION_DATASETS:
+        for record in records[name]:
+            record["disagreeing_fields"] = []
 
     return (
         records,
@@ -826,8 +831,14 @@ def _activities_csv(
         session = linked_sessions.get(str(record["garmin_activity_key"])) or {}
         for column, source in ACTIVITIES_CSV_FIT_SESSION_COLUMNS:
             row[column] = session.get(source)
+        row["disagreeing_fields"] = _field_names_cell(record.get("disagreeing_fields"))
         writer.writerow(row)
     return stream.getvalue().encode("utf-8")
+
+
+def _field_names_cell(names: Any) -> str:
+    """Write a list of field names in one CSV cell, separated by ``;``."""
+    return ";".join(str(name) for name in names or ())
 
 
 def _performance_metrics_csv(
@@ -838,11 +849,23 @@ def _performance_metrics_csv(
         "calendar_date",
         *(f"hill_{field}" for field in HILL_FIELDS[1:]),
         *(f"endurance_{field}" for field in ENDURANCE_FIELDS[1:]),
+        "hill_disagreeing_fields",
+        "endurance_disagreeing_fields",
     )
+    disagreeing = {
+        prefix: {
+            str(row["calendar_date"]): _field_names_cell(row.get("disagreeing_fields"))
+            for row in rows
+        }
+        for prefix, rows in (("hill", hill_rows), ("endurance", endurance_rows))
+    }
     stream = io.StringIO(newline="")
     writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
     writer.writeheader()
     for row in build_performance_metrics_daily_context(hill_rows, endurance_rows):
+        date = str(row["calendar_date"])
+        for prefix, by_date in disagreeing.items():
+            row[f"{prefix}_disagreeing_fields"] = by_date.get(date)
         writer.writerow(row)
     return stream.getvalue().encode("utf-8")
 
@@ -1055,17 +1078,18 @@ def _family_results(
                 "message": "optional dataset family produced no normalized records",
             })
         review_item_count = 0
+        disagreement_key_count = 0
         if family in daily_dataset_by_family:
             audit = performance_audit[daily_dataset_by_family[family]]
             review_item_count = int(
                 audit.get("review_required_count", 0)
                 or audit.get("review_item_count", 0)
                 or audit.get("review_key_count", 0)
-                + audit.get("same_day_conflict_count", 0)
                 + audit.get("invalid_value_count", 0)
                 + audit.get("missing_date_count", 0)
                 + audit.get("canonicalization_unresolved_count", 0)
             )
+            disagreement_key_count = int(audit.get("disagreement_key_count", 0))
             if review_item_count:
                 family_warnings += 1
                 warnings.append(
@@ -1074,6 +1098,19 @@ def _family_results(
                         "family": family,
                         "count": review_item_count,
                         "message": "one or more daily metric observations require review",
+                    }
+                )
+            if disagreement_key_count:
+                family_warnings += 1
+                warnings.append(
+                    {
+                        "code": "VALUES_DISAGREE",
+                        "family": family,
+                        "count": disagreement_key_count,
+                        "message": (
+                            "observations of one or more stable keys have different values; "
+                            "those fields are empty and the audit keeps every observed value"
+                        ),
                     }
                 )
         if family == "fit" and incomplete_fit_count:
@@ -1096,6 +1133,7 @@ def _family_results(
             "error_count": 0,
             "review_required_count": review_item_count,
             "review_item_count": review_item_count,
+            "disagreement_key_count": disagreement_key_count,
         }
         if family == "fit":
             results[family]["parse_status_counts"] = {
@@ -1198,7 +1236,7 @@ def run_all(
     timezone_name: str = DEFAULT_TIMEZONE,
     progress: ProgressCallback | None = None,
 ) -> dict[str, Any]:
-    """Compose the existing Garmin normalizers into deterministic Run-All v1.
+    """Compose the existing Garmin normalizers into deterministic Run-All v2.
 
     ``progress``, when given, receives one event dictionary per step: a
     ``stage`` from PROGRESS_STAGES, a ``step`` from PROGRESS_STEPS while

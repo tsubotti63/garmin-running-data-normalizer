@@ -8,7 +8,7 @@ from typing import Any
 from . import __version__
 from .common.os_metadata import is_os_metadata_path
 from .diagnostics.validation import validate_diagnostic_authorities
-from .run_all import OUTPUT_PATHS, SNAPSHOT_LIFECYCLE_PATHS
+from .run_all import OUTPUT_PATHS, RUN_ALL_VERSION, SNAPSHOT_LIFECYCLE_PATHS
 
 
 OPTIONAL_OUTPUT_PATH = "analysis/external_safe_handoff.zip"
@@ -136,6 +136,10 @@ def validate_standalone_handoff(root: str | Path) -> dict[str, Any]:
     if diagnostics_available and product_version != __version__:
         raise StandaloneHandoffError(
             "current diagnostic handoff version does not match the installed Product"
+        )
+    if diagnostics_available and summary.get("run_all_version") != RUN_ALL_VERSION:
+        raise StandaloneHandoffError(
+            "current diagnostic handoff contract version does not match the installed Product"
         )
     if diagnostics_available:
         completeness = _json_object(

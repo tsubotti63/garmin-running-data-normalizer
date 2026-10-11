@@ -175,10 +175,7 @@ def build_run_quality(
             _count(audit.get(key, 0) or 0)
             for key in ("missing_date_count", "missing_required_count")
         )
-        conflicts = sum(
-            _count(audit.get(key, 0) or 0)
-            for key in ("same_day_conflict_count", "divergent_duplicate_count", "conflict_count")
-        )
+        conflicts = _count(audit.get("disagreement_key_count", 0) or 0)
         unresolved = _count(audit.get("canonicalization_unresolved_count", 0) or 0)
         if review:
             review_by_dataset[dataset] = review
@@ -267,7 +264,7 @@ def build_run_quality(
         "relationship_summary": projected_relationships,
         "conflict_summary": _section(
             by_dataset=conflict_by_dataset,
-            reason_counts={"CONFLICT_PRESERVED_NO_WINNER": sum(conflict_by_dataset.values())},
+            reason_counts={"VALUES_DISAGREE": sum(conflict_by_dataset.values())},
             authority_references=authority_refs,
         ),
         "unresolved_summary": _section(

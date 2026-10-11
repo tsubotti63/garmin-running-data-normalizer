@@ -11,7 +11,6 @@ from pathlib import Path
 
 from garmin_running_data_normalizer.fit.parser import FIT_EPOCH_OFFSET, fit_crc16
 from garmin_running_data_normalizer.intake.discovery import DiscoveredAsset
-from garmin_running_data_normalizer.normalizers.daily_metrics import DailyMetricConflictError
 from garmin_running_data_normalizer.normalizers.hrv import HRV_DAILY_FIELDS, normalize_hrv_daily_assets
 from garmin_running_data_normalizer.normalizers.race_prediction import RACE_PREDICTION_FIELDS, normalize_race_prediction
 from garmin_running_data_normalizer.normalizers.sleep import SLEEP_DAILY_FIELDS, normalize_sleep_daily_assets
@@ -47,10 +46,31 @@ class RemainingWellnessMetricsTest(unittest.TestCase):
     def test_race_prediction_allowlist_and_conflict(self) -> None:
         row = {"calendarDate": "2026-01-01", "timestamp": "2026-01-01T06:00:00", "raceTime5K": 1000, "raceTime10K": 2100, "raceTimeHalf": 4700, "raceTimeMarathon": 9900, "deviceId": "private"}
         result = normalize_race_prediction([json_asset("RunRacePredictions_test.json", [row])])
-        self.assertEqual(set(result.records[0]), set(RACE_PREDICTION_FIELDS))
+        self.assertEqual(set(result.records[0]), {*RACE_PREDICTION_FIELDS, "disagreeing_fields"})
         self.assertEqual(result.records[0]["observation_timestamp"], "2026-01-01T06:00:00")
-        with self.assertRaises(DailyMetricConflictError):
-            normalize_race_prediction([json_asset("RunRacePredictions_conflict.json", [row, {**row, "raceTime5K": 1001}])])
+        conflict = normalize_race_prediction([json_asset("RunRacePredictions_conflict.json", [row, {**row, "raceTime5K": 1001}])])
+        [merged] = conflict.records
+        self.assertIsNone(merged["race_time_5k_sec"])
+        self.assertEqual(merged["race_time_10k_sec"], 2100)
+        self.assertEqual(merged["disagreeing_fields"], ["race_time_5k_sec"])
+        self.assertEqual(
+            conflict.audit["disagreements"],
+            [
+                {
+                    "key": {"calendar_date": "2026-01-01", "observation_timestamp": "2026-01-01T06:00:00"},
+                    "observation_count": 2,
+                    "fields": [
+                        {
+                            "field": "race_time_5k_sec",
+                            "values": [
+                                {"value": 1000, "observation_count": 1},
+                                {"value": 1001, "observation_count": 1},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        )
 
     def test_same_day_distinct_observations_are_preserved_and_exact_keys_dedupe(self) -> None:
         first = {"calendarDate": "2026-01-01", "timestamp": "2026-01-01T06:00:00", "raceTime5K": 1000, "raceTime10K": 2100, "raceTimeHalf": 4700, "raceTimeMarathon": 9900}
@@ -68,7 +88,7 @@ class RemainingWellnessMetricsTest(unittest.TestCase):
     def test_sleep_public_contract_and_exact_duplicate_dedupe(self) -> None:
         row = {"calendarDate": "2026-01-02", "sleepStartTimestampGMT": "2026-01-01T14:00:00Z", "sleepEndTimestampGMT": "2026-01-01T22:00:00Z", "sleepTimeSeconds": 27000, "deepSleepSeconds": 3600, "lightSleepSeconds": 18000, "remSleepSeconds": 5400, "awakeSleepSeconds": None, "sleepScores": {"overall": {"value": 80}}, "userProfilePK": "private"}
         result = normalize_sleep_daily_assets([json_asset("synthetic_sleepData.json", [row])])
-        self.assertEqual(set(result.records[0]), set(SLEEP_DAILY_FIELDS))
+        self.assertEqual(set(result.records[0]), {*SLEEP_DAILY_FIELDS, "disagreeing_fields"})
         self.assertIsNone(result.records[0]["sleep_awake_minutes"])
         duplicate = normalize_sleep_daily_assets([json_asset("synthetic_sleepData.json", [row, row])])
         self.assertEqual(len(duplicate.records), 1)
@@ -78,26 +98,26 @@ class RemainingWellnessMetricsTest(unittest.TestCase):
         self.assertEqual(duplicate.audit["duplicate_row_count"], 1)
         self.assertEqual(duplicate.audit["dedupe_method"], "exact_canonical_duplicate_collapsed")
         self.assertEqual(duplicate.audit["review_required_count"], 0)
-        self.assertEqual(duplicate.audit["divergent_duplicate_count"], 0)
+        self.assertEqual(duplicate.audit["disagreement_key_count"], 0)
 
     def test_uds_generation_flags_and_no_private_fields(self) -> None:
         row = {"calendarDate": "2026-01-03", "totalSteps": 0, "totalDistanceMeters": 0, "activeKilocalories": 100, "bmrKilocalories": 1500, "bodyBattery": {"chargedValue": 20, "drainedValue": 10}, "allDayStress": {"aggregatorList": [{"type": "TOTAL", "averageStressLevel": 22, "maxStressLevel": 70, "stressDuration": 100, "restDuration": 200}]}, "bodyBatteryFeedback": {}, "hydration": {"valueInML": 2000}, "userProfilePK": "private"}
         result = normalize_uds([json_asset("UDSFile_test.json", [row])])
-        self.assertEqual(set(result.records[0]), set(UDS_FIELDS))
+        self.assertEqual(set(result.records[0]), {*UDS_FIELDS, "disagreeing_fields"})
         self.assertEqual(result.records[0]["steps"], 0)
         self.assertNotIn("hydration_ml", result.records[0])
 
     def test_acute_load_preserves_source_values_without_recalculation(self) -> None:
         row = {"calendarDate": 1767225600000, "timestamp": 1767229200000, "acwrPercent": 90, "acwrStatus": "SYNTHETIC", "dailyTrainingLoadAcute": 9, "dailyTrainingLoadChronic": 10, "dailyAcuteChronicWorkloadRatio": None}
         result = normalize_acute_training_load([json_asset("MetricsAcuteTrainingLoad_test.json", [row])])
-        self.assertEqual(set(result.records[0]), set(ACUTE_TRAINING_LOAD_FIELDS))
+        self.assertEqual(set(result.records[0]), {*ACUTE_TRAINING_LOAD_FIELDS, "disagreeing_fields"})
         self.assertEqual(result.records[0]["observation_timestamp"], "2026-01-01T01:00:00Z")
         self.assertIsNone(result.records[0]["daily_acute_chronic_workload_ratio"])
 
     def test_training_readiness_hrv_derived_fields_are_source_values(self) -> None:
         row = {"calendarDate": "2026-01-04", "timestamp": "2026-01-04T07:30:00", "score": 50, "level": "SYNTHETIC", "recoveryTime": 2, "acwrFactorPercent": 3, "stressHistoryFactorPercent": 4, "hrvFactorPercent": 5, "sleepHistoryFactorPercent": 6, "acuteLoad": 7, "hrvWeeklyAverage": 8, "validSleep": True, "sleepScore": 9, "inputContext": "excluded"}
         result = normalize_training_readiness([json_asset("TrainingReadinessDTO_test.json", [row])])
-        self.assertEqual(set(result.records[0]), set(TRAINING_READINESS_FIELDS))
+        self.assertEqual(set(result.records[0]), {*TRAINING_READINESS_FIELDS, "disagreeing_fields"})
         self.assertNotIn("input_context", result.records[0])
 
     def test_observation_grain_duplicate_contracts_for_remaining_families(self) -> None:
@@ -130,19 +150,27 @@ class RemainingWellnessMetricsTest(unittest.TestCase):
                 result = normalizer([json_asset(name, [first, distinct, first])])
                 self.assertEqual(len(result.records), 2)
                 self.assertEqual(result.audit["same_value_duplicate_count"], 1)
-                with self.assertRaises(DailyMetricConflictError):
-                    normalizer([json_asset(name, [first, {**first, **conflict_changes}])])
+                self.assertEqual(result.audit["disagreement_key_count"], 0)
+                conflict = normalizer([json_asset(name, [first, {**first, **conflict_changes}])])
+                [merged] = conflict.records
+                [field] = merged["disagreeing_fields"]
+                self.assertIsNone(merged[field])
+                self.assertEqual(conflict.audit["disagreement_key_count"], 1)
+                self.assertEqual(len(conflict.audit["disagreements"][0]["fields"][0]["values"]), 2)
 
-    def test_vo2max_preserves_series_observations_and_stops_same_key_conflict(self) -> None:
+    def test_vo2max_preserves_series_observations_and_empties_same_key_conflict(self) -> None:
         old = {"calendarDate": "2022-01-22", "timestampGmt": "2022-01-22T05:00:00", "activityId": 123, "vo2MaxValue": 60, "sport": "RUNNING", "deviceId": "private"}
         new = {"calendarDate": "2022-01-22", "updateTimestamp": "2022-01-22T06:00:00", "vo2MaxValue": 61, "sport": "RUNNING", "maxMet": 17, "maxMetCategory": "SYNTHETIC", "calibratedData": 1}
         result = normalize_vo2max([json_asset("ActivityVo2Max_test.json", [old]), json_asset("MetricsMaxMetData_test.json", [new])])
         self.assertEqual([row["vo2max_source_series"] for row in result.records], ["activity_vo2max_daily", "performance_metrics_daily"])
-        self.assertTrue(all(set(row) == set(VO2MAX_FIELDS) for row in result.records))
+        self.assertTrue(all(set(row) == {*VO2MAX_FIELDS, "disagreeing_fields"} for row in result.records))
         self.assertEqual(result.records[0]["source_activity_id"], 123)
         self.assertEqual(result.records[0]["observation_timestamp"], "2022-01-22T05:00:00Z")
-        with self.assertRaises(DailyMetricConflictError):
-            normalize_vo2max([json_asset("ActivityVo2Max_test.json", [old, {**old, "vo2MaxValue": 62}])])
+        conflict = normalize_vo2max([json_asset("ActivityVo2Max_test.json", [old, {**old, "vo2MaxValue": 62}])])
+        [merged] = conflict.records
+        self.assertIsNone(merged["vo2max"])
+        self.assertEqual(merged["source_activity_id"], 123)
+        self.assertEqual(merged["disagreeing_fields"], ["vo2max"])
 
     def test_vo2max_stable_key_dimensions_preserve_observations(self) -> None:
         base = {"calendarDate": "2022-01-22", "updateTimestamp": "2022-01-22T06:00:00", "vo2MaxValue": 60, "sport": "RUNNING"}
@@ -164,10 +192,32 @@ class RemainingWellnessMetricsTest(unittest.TestCase):
         timestamp = fit_timestamp("2026-01-05T12:00:00Z")
         result = normalize_hrv_daily_assets([fit_asset("synthetic.fit", hrv_fit((70 * 128, timestamp), (75 * 128, timestamp)))])
         row = result["records"][0]
-        self.assertEqual(set(row), set(HRV_DAILY_FIELDS))
+        self.assertEqual(set(row), {*HRV_DAILY_FIELDS, "disagreeing_fields"})
         self.assertIsNone(row["hrv_value"])
+        self.assertEqual(row["disagreeing_fields"], ["hrv_value"])
+        self.assertEqual(row["dedupe_status"], "same_day_values_disagree")
         self.assertEqual(row["analysis_role"], "analysis_reference_only")
-        self.assertEqual(result["audit"]["same_day_conflict_count"], 1)
+        self.assertEqual(result["audit"]["disagreement_key_count"], 1)
+        self.assertEqual(
+            result["audit"]["disagreements"],
+            [
+                {
+                    "key": {"calendar_date": "2026-01-05"},
+                    "observation_count": 2,
+                    "fields": [
+                        {
+                            "field": "hrv_value",
+                            "values": [
+                                {"value": 70.0, "observation_count": 1},
+                                {"value": 75.0, "observation_count": 1},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        )
+        # Values that disagree are not review items.
+        self.assertNotIn("review_required_count", result["audit"])
         self.assertEqual(
             result["audit"]["date_basis"],
             "fit_end_jst_date_from_message_370_field_253_timestamp",
@@ -192,7 +242,7 @@ class RemainingWellnessMetricsTest(unittest.TestCase):
     def test_training_history_is_limited_to_approved_observation_fields(self) -> None:
         row = {"calendarDate": "2026-01-06", "timestamp": "2026-01-06T08:00:00", "trainingStatus": "PRODUCTIVE", "sport": "RUNNING", "fitnessLevelTrend": "excluded", "weeklyTrainingLoadSum": 100}
         result = normalize_training_history([json_asset("TrainingHistory_test.json", [row])])
-        self.assertEqual(set(result.records[0]), set(TRAINING_HISTORY_FIELDS))
+        self.assertEqual(set(result.records[0]), {*TRAINING_HISTORY_FIELDS, "disagreeing_fields"})
 
     def test_optional_absence_is_empty_without_error(self) -> None:
         self.assertEqual(normalize_race_prediction([]).records, [])
@@ -241,7 +291,8 @@ class RemainingWellnessMetricsTest(unittest.TestCase):
                         encoding="utf-8"
                     )
                 )
-                self.assertEqual(set(rows[0]), set(fields))
+                self.assertEqual(set(rows[0]), {*fields, "disagreeing_fields"})
+                self.assertEqual(rows[0]["disagreeing_fields"], [])
             hrv_rows = json.loads(
                 (output / "normalized" / "hrv_daily.json").read_text(
                     encoding="utf-8"

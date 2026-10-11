@@ -47,9 +47,6 @@ def _total_stress(value: Any) -> dict[str, Any]:
 
 def normalize_uds(
     assets: Iterable[DiscoveredAsset],
-    *,
-    preserve_observed_variants: bool = False,
-    variant_lineage: dict[tuple[str, str], dict[str, Any]] | None = None,
 ) -> DailyMetricResult:
     selected, rows = selected_rows(assets, lambda name: name.startswith("udsfile"))
     accepted = []
@@ -90,8 +87,12 @@ def normalize_uds(
         source_record_count=len(rows),
         accepted=accepted,
         excluded_reasons=excluded,
-        preserve_observed_variants=preserve_observed_variants,
-        variant_lineage=variant_lineage,
+        fields=UDS_FIELDS,
+        # A day's record either has these source groups or not; a record
+        # without one does not disagree with a record that has it.
+        presence_flags=frozenset(
+            {"raw_has_body_battery", "raw_has_all_day_stress", "raw_has_body_battery_feedback"}
+        ),
     )
 
 

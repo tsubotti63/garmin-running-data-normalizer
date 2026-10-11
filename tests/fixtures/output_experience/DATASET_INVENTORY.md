@@ -2,7 +2,7 @@
 
 This document is a deterministic human-readable projection of
 `run_manifest.json`, `run_summary.json`, the dataset registry, and the
-Run-All v1 runtime dataset definitions. The machine-readable artifacts
+Run-All v2 runtime dataset definitions. The machine-readable artifacts
 remain authoritative.
 
 Run status: `PASS`
@@ -41,5 +41,9 @@ Run status: `PASS`
   and `run_summary.json`; an absent optional family is not a claim of no data.
 - Hill and Endurance are standalone daily observations. Their activity
   relationship is `not_yet_defined`; do not join them to activities by date.
+- Every row has `disagreeing_fields`. A field it names had different values
+  in the observations of the row's stable key: the field is empty, and the
+  dataset's audit keeps every observed value. Warning `VALUES_DISAGREE`
+  gives the number of such keys per family.
 - Lactate Threshold remains candidate/audit-only until Product approves a
   machine stable key and the remaining field authority gates.

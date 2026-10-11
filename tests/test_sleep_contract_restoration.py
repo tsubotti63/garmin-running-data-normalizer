@@ -8,10 +8,7 @@ from collections import Counter
 from pathlib import Path
 
 from garmin_running_data_normalizer.intake.discovery import DiscoveredAsset
-from garmin_running_data_normalizer.normalizers.daily_metrics import (
-    DailyMetricConflictError,
-    finalize_daily,
-)
+from garmin_running_data_normalizer.normalizers.daily_metrics import finalize_daily
 from garmin_running_data_normalizer.normalizers.sleep import (
     SLEEP_DAILY_FIELDS,
     normalize_sleep,
@@ -73,7 +70,6 @@ class SleepContractRestorationTest(unittest.TestCase):
                 excluded_reasons=excluded,
                 review_on_any_duplicate=True,
                 duplicate_review_factory=lambda key, _rows: {"day": key, "value": None},
-                signature_factory=lambda row: json.dumps(row, sort_keys=True),
                 strip_internal_fields=lambda row: dict(row),
             )
             return result.audit
@@ -131,8 +127,18 @@ class SleepContractRestorationTest(unittest.TestCase):
         self.assertEqual(self._duration(deepSleepSeconds=0, lightSleepSeconds=3_600, remSleepSeconds=None), 60.0)
         zero = sleep_row(deepSleepSeconds=0, lightSleepSeconds=None, remSleepSeconds=None)
         missing = {key: value for key, value in zero.items() if key != "deepSleepSeconds"}
-        with self.assertRaises(DailyMetricConflictError):
-            normalize_sleep_daily_assets([asset("sleepData.json", [zero, missing])])
+        # Within one Export, a missing value does not disagree with a zero: the
+        # zero is used, and the observation without a value is counted.
+        merged = normalize_sleep_daily_assets([asset("sleepData.json", [zero, missing])])
+        [row] = merged.records
+        self.assertEqual(row["sleep_stage_deep_minutes"], 0.0)
+        self.assertEqual(row["sleep_duration_minutes_ex_awake"], 0.0)
+        self.assertTrue(row["sleep_stage_available_flag"])
+        self.assertEqual(row["disagreeing_fields"], [])
+        self.assertEqual(
+            merged.audit["absent_value_counts"],
+            {"sleep_duration_minutes_ex_awake": 1, "sleep_stage_deep_minutes": 1},
+        )
 
     def test_issue_b_direct_alias_equal_and_conflicting(self) -> None:
         equal = sleep_row(
@@ -146,11 +152,32 @@ class SleepContractRestorationTest(unittest.TestCase):
         )
         result = normalize_sleep_daily_assets([asset("sleepData.json", [equal])])
         self.assertEqual(result.records[0]["sleep_duration_minutes_ex_awake"], 120.0)
-        conflict = dict(equal, durationInSeconds=7_201)
-        with self.assertRaises(DailyMetricConflictError):
-            normalize_sleep_daily_assets([asset("sleepData.json", [conflict])])
+        conflict = dict(equal, durationInSeconds=7_260)
+        disagreeing = normalize_sleep_daily_assets([asset("sleepData.json", [conflict])])
+        [row] = disagreeing.records
+        self.assertIsNone(row["sleep_duration_minutes_ex_awake"])
+        self.assertEqual(row["disagreeing_fields"], ["sleep_duration_minutes_ex_awake"])
+        self.assertEqual(disagreeing.audit["direct_aliases_disagree_count"], 1)
+        self.assertEqual(
+            disagreeing.audit["disagreements"],
+            [
+                {
+                    "key": {"sleep_day": "2026-01-02"},
+                    "observation_count": 1,
+                    "fields": [
+                        {
+                            "field": "sleep_duration_minutes_ex_awake",
+                            "values": [
+                                {"value": 120.0, "observation_count": 1},
+                                {"value": 121.0, "observation_count": 1},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        )
 
-    def test_issue_b_alias_presence_is_duplicate_sensitive(self) -> None:
+    def test_issue_b_absent_and_explicit_null_alias_are_the_same(self) -> None:
         base = sleep_row(
             deepSleepSeconds=None,
             lightSleepSeconds=None,
@@ -160,8 +187,10 @@ class SleepContractRestorationTest(unittest.TestCase):
             with self.subTest(alias=alias):
                 absent = {key: value for key, value in base.items() if key != alias}
                 explicit_null = dict(absent, **{alias: None})
-                with self.assertRaises(DailyMetricConflictError):
-                    normalize_sleep_daily_assets([asset("sleepData.json", [absent, explicit_null])])
+                same = normalize_sleep_daily_assets([asset("sleepData.json", [absent, explicit_null])])
+                self.assertEqual(len(same.records), 1)
+                self.assertEqual(same.records[0]["disagreeing_fields"], [])
+                self.assertEqual(same.audit["dedupe_method"], "exact_canonical_duplicate_collapsed")
                 equal = dict(explicit_null, **{alias: 7_200})
                 duplicate = normalize_sleep_daily_assets([asset("sleepData.json", [equal, equal])])
                 self.assertEqual(duplicate.audit["review_required_count"], 0)
@@ -192,7 +221,7 @@ class SleepContractRestorationTest(unittest.TestCase):
 
     def test_schema_and_dataset_invariants_are_unchanged(self) -> None:
         self.assertEqual(len(DATASET_TABLE), 17)
-        self.assertEqual(sum(len(fields) for fields in DATASET_FIELDS.values()), 224)
+        self.assertEqual(sum(len(fields) for fields in DATASET_FIELDS.values()), 241)
         self.assertEqual(SLEEP_DAILY_FIELDS[0], "sleep_day")
         descriptor = _field_descriptor("sleep_daily", "sleep_duration_minutes_ex_awake")
         self.assertEqual(descriptor["origin"], "derived")

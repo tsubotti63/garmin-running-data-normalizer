@@ -15,10 +15,6 @@ class DailyMetricError(ValueError):
     """Base error for bounded Garmin daily-metric normalization."""
 
 
-class DailyMetricConflictError(DailyMetricError):
-    """Raised when one daily stable key has divergent public state."""
-
-
 @dataclass(frozen=True)
 class DailyMetricResult:
     records: list[dict[str, Any]]
@@ -91,6 +87,94 @@ def variant_fingerprint(value: Any) -> str:
     return hashlib.sha256(stable_json(value).encode("utf-8")).hexdigest()
 
 
+def _value_order(item: tuple[str, list[Any]]) -> tuple[int, float, str]:
+    """Order observed values: numbers by size, then other values by their JSON."""
+    key, (value, _count) = item
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return (0, value, key)
+    return (1, 0, key)
+
+
+@dataclass(frozen=True)
+class MergedObservations:
+    """Observations of one stable key merged into one row.
+
+    ``disagreements`` lists, for each field whose observed values differ, every
+    value and how many observations gave it. ``absent_values`` counts, per
+    field, the observations without a value while another observation had one.
+    """
+
+    row: dict[str, Any]
+    disagreeing_fields: list[str]
+    disagreements: list[dict[str, Any]]
+    absent_values: Counter[str]
+
+
+def merge_observations(
+    rows: list[dict[str, Any]],
+    fields: Iterable[str],
+    *,
+    key_fields: tuple[str, ...],
+    presence_flags: frozenset[str] = frozenset(),
+    recomputed_fields: frozenset[str] = frozenset(),
+    alternatives: list[dict[str, list[Any]]] | None = None,
+) -> MergedObservations:
+    """Merge the observations of one stable key, field by field.
+
+    A null value means that the observation has no value; it is left out of
+    the comparison. A field with one observed value keeps it. A field with
+    several observed values is left empty and listed as disagreeing. A flag in
+    ``presence_flags`` says whether a source group was present, so it is true
+    when any observation had the group. Fields in ``recomputed_fields`` are
+    set afterwards from the merged row and are not compared here.
+    ``alternatives``, one entry per row, give the values that one observation
+    holds for a field when its source fields disagree among themselves.
+    """
+    merged: dict[str, Any] = {}
+    disagreeing: list[str] = []
+    disagreements: list[dict[str, Any]] = []
+    absent: Counter[str] = Counter()
+    for field in fields:
+        if field in key_fields:
+            merged[field] = rows[0].get(field)
+            continue
+        if field in recomputed_fields:
+            merged[field] = None
+            continue
+        if field in presence_flags:
+            merged[field] = any(row.get(field) is True for row in rows)
+            continue
+        counts: dict[str, list[Any]] = {}
+        observed = 0
+        for index, row in enumerate(rows):
+            held = (alternatives[index] if alternatives else {}).get(field)
+            values = [item for item in held if item is not None] if held else [row.get(field)]
+            values = [value for value in values if value is not None]
+            if not values:
+                continue
+            observed += 1
+            # One observation counts once for each value it gives.
+            for value in {stable_json(value): value for value in values}.values():
+                counts.setdefault(stable_json(value), [value, 0])[1] += 1
+        if observed and observed < len(rows):
+            absent[field] += len(rows) - observed
+        if len(counts) > 1:
+            merged[field] = None
+            disagreeing.append(field)
+            disagreements.append(
+                {
+                    "field": field,
+                    "values": [
+                        {"value": value, "observation_count": count}
+                        for _key, (value, count) in sorted(counts.items(), key=_value_order)
+                    ],
+                }
+            )
+        else:
+            merged[field] = next(iter(counts.values()))[0] if counts else None
+    return MergedObservations(merged, disagreeing, disagreements, absent)
+
+
 def finalize_daily(
     *,
     dataset: str,
@@ -99,15 +183,28 @@ def finalize_daily(
     source_record_count: int,
     accepted: list[dict[str, Any]],
     excluded_reasons: Counter[str],
+    fields: tuple[str, ...] | None = None,
     review_on_any_duplicate: bool = False,
     duplicate_review_factory: Callable[[str, list[dict[str, Any]]], dict[str, Any]] | None = None,
-    signature_factory: Callable[[dict[str, Any]], str] | None = None,
     provenance_conflict_predicate: Callable[[list[dict[str, Any]]], bool] | None = None,
     strip_internal_fields: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     dedupe_exact_duplicates: bool = False,
-    preserve_observed_variants: bool = False,
-    variant_lineage: dict[tuple[str, str], dict[str, Any]] | None = None,
+    presence_flags: frozenset[str] = frozenset(),
+    recomputed_fields: frozenset[str] = frozenset(),
+    finalize_merged: Callable[[dict[str, Any], list[str]], None] | None = None,
+    alternatives: Callable[[dict[str, Any]], dict[str, list[Any]]] | None = None,
 ) -> DailyMetricResult:
+    """Keep one row per stable key; values that disagree are left empty.
+
+    ``fields`` are the dataset's public fields, in order and without
+    ``disagreeing_fields``; by default, those of the first row. Each output row
+    lists its disagreeing fields in ``disagreeing_fields``, and the audit keeps
+    every observed value of them. ``finalize_merged`` sets the
+    ``recomputed_fields`` of a merged row from its merged values.
+    ``alternatives`` returns, from an accepted row before its internal fields
+    are stripped, the values that the row holds for a field whose source
+    fields disagree; such a field disagrees even within one observation.
+    """
     if not key_fields:
         raise DailyMetricError("daily metric stable key must not be empty")
     grouped: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
@@ -118,70 +215,79 @@ def finalize_daily(
     review_key_count = 0
     duplicate_group_count = 0
     duplicate_row_count = 0
-    divergent_duplicate_count = 0
-    dedupe_method = "none"
-    observed_variants: list[dict[str, Any]] = []
-    multi_variant_key_count = 0
-    observed_variant_count = 0
+    collapsed_exact = False
+    merged_different = False
+    disagreements: list[dict[str, Any]] = []
+    absent_values: Counter[str] = Counter()
     for key in sorted(grouped):
-        rows = grouped[key]
-        signatures = {
-            (signature_factory(row) if signature_factory else stable_json(row))
-            for row in rows
-        }
+        rows = [
+            strip_internal_fields(row) if strip_internal_fields else dict(row)
+            for row in grouped[key]
+        ]
+        held = [alternatives(row) for row in grouped[key]] if alternatives else []
+        signatures = {stable_json(row) for row in rows}
         same_value_duplicates += len(rows) - len(signatures)
         if len(rows) > 1:
             duplicate_group_count += 1
             duplicate_row_count += len(rows) - 1
         provenance_conflict = bool(
-            provenance_conflict_predicate and len(rows) > 1 and provenance_conflict_predicate(rows)
+            provenance_conflict_predicate
+            and len(rows) > 1
+            and provenance_conflict_predicate(grouped[key])
         )
         if provenance_conflict or (review_on_any_duplicate and len(rows) > 1):
             if duplicate_review_factory is None:
                 raise DailyMetricError("duplicate review factory is required")
-            output.append(duplicate_review_factory(key[0], rows))
+            row = dict(duplicate_review_factory(key[0], grouped[key]))
+            row["disagreeing_fields"] = []
+            output.append(row)
             review_key_count += 1
-            dedupe_method = "review_required"
             continue
-        if len(signatures) > 1:
-            divergent_duplicate_count += 1
-            if not preserve_observed_variants:
-                raise DailyMetricConflictError(
-                    f"{dataset} contains divergent values for one stable key"
-                )
-            multi_variant_key_count += 1
-            observed_variant_count += len(signatures)
-            for signature in sorted(signatures):
-                row = next(item for item in rows if (signature_factory(item) if signature_factory else stable_json(item)) == signature)
-                evidence = {
-                    "canonical_key": {field: value for field, value in zip(key_fields, key)},
-                    "variant_fingerprint": variant_fingerprint(row),
-                    "observed_value": strip_internal_fields(row) if strip_internal_fields else dict(row),
-                    "observation_count": sum(
-                        (signature_factory(item) if signature_factory else stable_json(item)) == signature
-                        for item in rows
-                    ),
-                    "variant_status": "observed_variant",
-                    "canonical_status": "unresolved_multiple_observed_values",
+        if len(signatures) == 1 and not any(held):
+            row = dict(rows[0])
+            row["disagreeing_fields"] = []
+            output.append(row)
+            collapsed_exact = collapsed_exact or len(rows) > 1
+            continue
+        merged_different = merged_different or len(signatures) > 1
+        merged = merge_observations(
+            rows,
+            fields if fields is not None else tuple(rows[0]),
+            key_fields=key_fields,
+            presence_flags=presence_flags,
+            recomputed_fields=recomputed_fields,
+            alternatives=held or None,
+        )
+        if finalize_merged is not None:
+            finalize_merged(merged.row, merged.disagreeing_fields)
+        row = dict(merged.row)
+        row["disagreeing_fields"] = list(merged.disagreeing_fields)
+        output.append(row)
+        absent_values.update(merged.absent_values)
+        if merged.disagreements:
+            disagreements.append(
+                {
+                    "key": {field: value for field, value in zip(key_fields, key)},
+                    "observation_count": len(rows),
+                    "fields": merged.disagreements,
                 }
-                lineage = (variant_lineage or {}).get((key[0], variant_fingerprint(row)))
-                if lineage:
-                    evidence["snapshot_lineage"] = dict(lineage)
-                observed_variants.append(evidence)
-            continue
-        output.append(strip_internal_fields(rows[0]) if strip_internal_fields else rows[0])
-        if len(rows) > 1 and dedupe_exact_duplicates:
-            dedupe_method = "exact_canonical_duplicate_collapsed"
+            )
+    if review_key_count:
+        dedupe_method = "review_required"
+    elif merged_different:
+        dedupe_method = "observations_merged_field_by_field"
+    elif collapsed_exact and dedupe_exact_duplicates:
+        dedupe_method = "exact_canonical_duplicate_collapsed"
+    else:
+        dedupe_method = "none"
     # Exclusions are evidence about records that could not enter the accepted
     # population; they are not themselves review-required observations.  Keep
     # the two counters separate so an excluded-only family remains a clean PASS
     # while its exclusion evidence stays visible in the audit.
-    review_required_count = review_key_count + (
-        multi_variant_key_count if preserve_observed_variants else 0
-    )
+    review_required_count = review_key_count
     review_items = review_required_count
     audit = {
-        "format": "garmin-running-data-normalizer-daily-metric-audit-v1",
+        "format": "garmin-running-data-normalizer-daily-metric-audit-v2",
         "dataset": dataset,
         "status": "PASS_WITH_REVIEW_ITEMS" if review_items else "PASS",
         "detected_asset_count": len(selected_assets),
@@ -191,35 +297,17 @@ def finalize_daily(
         "excluded_reason_counts": dict(sorted(excluded_reasons.items())),
         "same_value_duplicate_count": same_value_duplicates,
         "review_key_count": review_key_count,
+        "disagreement_key_count": len(disagreements),
+        "disagreements": disagreements,
+        "absent_value_counts": dict(sorted(absent_values.items())),
         "stable_key": list(key_fields),
-        "merge_policy": "observation_union_missing_is_not_delete_conflict_fail_closed",
+        "merge_policy": "observation_union_null_is_absent_disagreeing_values_kept_empty",
         "keep_last": False,
         "carry_forward": False,
         "interpolation": False,
         "source_paths_exposed": False,
         "private_identifiers_exposed": False,
     }
-    if preserve_observed_variants:
-        audit.update(
-            {
-                "canonical_key_count": len(grouped),
-                "single_variant_key_count": len(grouped) - multi_variant_key_count,
-                "multi_variant_key_count": multi_variant_key_count,
-                "observed_variant_count": observed_variant_count,
-                "exact_repeat_count": same_value_duplicates,
-                "malformed_count": sum(excluded_reasons.values()),
-                "canonicalization_unresolved_count": multi_variant_key_count,
-                "automatic_winner": False,
-                "observed_variants": sorted(
-                    observed_variants,
-                    key=lambda item: (
-                        stable_json(item["canonical_key"]),
-                        item["variant_fingerprint"],
-                    ),
-                ),
-                "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
-            }
-        )
     if (
         source_record_count
         and (
@@ -234,7 +322,6 @@ def finalize_daily(
                 "duplicate_group_count": duplicate_group_count,
                 "duplicate_row_count": duplicate_row_count,
                 "dedupe_method": dedupe_method,
-                "divergent_duplicate_count": divergent_duplicate_count,
                 "review_required_count": review_required_count,
                 "review_item_count": review_items,
             }
@@ -246,13 +333,14 @@ def finalize_daily(
 
 
 __all__ = [
-    "DailyMetricConflictError",
     "DailyMetricError",
     "DailyMetricResult",
+    "MergedObservations",
     "boolean",
     "finalize_daily",
     "load_rows",
     "logical_basename",
+    "merge_observations",
     "number",
     "selected_rows",
     "stable_json",

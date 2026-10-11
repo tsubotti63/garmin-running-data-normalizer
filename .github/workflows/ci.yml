@@ -114,6 +114,9 @@ jobs:
       - name: Verify Windows Export reading, ZIP input, and v1.7.1 Snapshot Store
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_export_reading.py .\tests\test_zip_input.py .\tests\test_snapshot_store_v1_7_1.py -q
+      - name: Verify Windows values that disagree
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_values_disagree.py -q
       - name: Build distributions
         shell: powershell
         run: |

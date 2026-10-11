@@ -9,10 +9,7 @@ from collections import Counter
 from pathlib import Path
 
 from garmin_running_data_normalizer.intake.discovery import DiscoveredAsset
-from garmin_running_data_normalizer.normalizers.daily_metrics import (
-    DailyMetricConflictError,
-    finalize_daily,
-)
+from garmin_running_data_normalizer.normalizers.daily_metrics import finalize_daily
 from garmin_running_data_normalizer.normalizers.sleep import normalize_sleep_daily_assets
 from garmin_running_data_normalizer.run_all import run_all
 from garmin_running_data_normalizer.snapshot.merge import _merge_dataset
@@ -63,28 +60,44 @@ class SleepDuplicatePolicyTest(unittest.TestCase):
         self.assertEqual(permuted.records, result.records)
         self.assertEqual(permuted.audit["dedupe_method"], "exact_canonical_duplicate_collapsed")
 
-    def test_divergent_score_stage_null_value_and_absent_null_fail_closed(self) -> None:
+    def test_divergent_score_and_stage_are_empty_and_null_or_absent_are_not(self) -> None:
+        base = sleep_row()
         cases = (
-            {"sleepScores": {"overall": {"value": 81}}},
-            {"deepSleepSeconds": 3660},
-            {"sleepScores": None},
-            {"sleepScores": None},
+            ("score", {**base, "sleepScores": {"overall": {"value": 81}}}, ["sleep_score"]),
+            (
+                "stage",
+                {**base, "deepSleepSeconds": 3660},
+                ["sleep_duration_minutes_ex_awake", "sleep_stage_deep_minutes"],
+            ),
+            ("null score", {**base, "sleepScores": None}, []),
+            (
+                "absent score",
+                {key: value for key, value in base.items() if key != "sleepScores"},
+                [],
+            ),
         )
-        for index, change in enumerate(cases):
-            with self.subTest(index=index):
-                base = sleep_row()
-                if index == 3:
-                    other = {key: value for key, value in base.items() if key != "sleepScores"}
-                else:
-                    other = {**base, **change}
-                with self.assertRaises(DailyMetricConflictError):
-                    normalize_sleep_daily_assets([asset("sleepData.json", [base, other])])
+        for name, other, disagreeing in cases:
+            with self.subTest(name=name):
+                result = normalize_sleep_daily_assets([asset("sleepData.json", [base, other])])
+                [row] = result.records
+                self.assertEqual(row["disagreeing_fields"], disagreeing)
+                for field in disagreeing:
+                    self.assertIsNone(row[field])
+                if not disagreeing:
+                    # The observation without a score does not disagree.
+                    self.assertEqual(row["sleep_score"], 80)
+                    self.assertTrue(row["sleep_score_available_flag"])
+                    self.assertEqual(result.audit["absent_value_counts"], {"sleep_score": 1})
+                self.assertEqual(row["sleep_normalization_status"], "available")
 
     def test_zero_is_not_missing_and_missing_endpoints_are_not_inferred(self) -> None:
         zero = sleep_row(deepSleepSeconds=0)
         missing = {key: value for key, value in sleep_row().items() if key != "deepSleepSeconds"}
-        with self.assertRaises(DailyMetricConflictError):
-            normalize_sleep_daily_assets([asset("sleepData.json", [zero, missing])])
+        merged = normalize_sleep_daily_assets([asset("sleepData.json", [zero, missing])])
+        [row] = merged.records
+        self.assertEqual(row["sleep_stage_deep_minutes"], 0.0)
+        self.assertEqual(row["disagreeing_fields"], [])
+        self.assertEqual(merged.audit["absent_value_counts"], {"sleep_stage_deep_minutes": 1})
         missing_endpoints = sleep_row(sleepStartTimestampGMT=None, sleepEndTimestampGMT=None)
         result = normalize_sleep_daily_assets([asset("sleepData.json", [missing_endpoints])])
         self.assertEqual(result.records[0]["sleep_normalization_status"], "needs_review")
@@ -102,11 +115,10 @@ class SleepDuplicatePolicyTest(unittest.TestCase):
             excluded_reasons=Counter(),
             duplicate_review_factory=lambda _key, _rows: review,
             provenance_conflict_predicate=lambda rows: len({r["_provenance"] for r in rows}) > 1,
-            signature_factory=lambda value: json.dumps({"day": value["day"], "value": value["value"]}, sort_keys=True),
             strip_internal_fields=lambda value: {"day": value["day"], "value": value["value"]},
             dedupe_exact_duplicates=True,
         )
-        self.assertEqual(result.records, [review])
+        self.assertEqual(result.records, [{**review, "disagreeing_fields": []}])
         self.assertEqual(result.audit["dedupe_method"], "review_required")
         self.assertEqual(result.audit["review_required_count"], 1)
 
@@ -126,11 +138,10 @@ class SleepDuplicatePolicyTest(unittest.TestCase):
             source_record_count=2,
             accepted=[row, dict(row)],
             excluded_reasons=Counter(),
-            signature_factory=lambda value: json.dumps(value, sort_keys=True),
             strip_internal_fields=lambda value: dict(value),
             dedupe_exact_duplicates=True,
         )
-        self.assertEqual(result.records, [row])
+        self.assertEqual(result.records, [{**row, "disagreeing_fields": []}])
         self.assertEqual(result.records[0]["status"], "needs_review")
         self.assertEqual(result.audit["review_required_count"], 0)
 

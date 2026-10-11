@@ -123,9 +123,10 @@ class AnalysisTableColumnsTest(unittest.TestCase):
             header, rows = read_rows(output / "analysis/activities.csv")
             self.assertEqual(
                 header,
-                [*BASE_COLUMNS, *DURATION_COLUMNS, *FIT_COLUMNS],
+                [*BASE_COLUMNS, *DURATION_COLUMNS, *FIT_COLUMNS, "disagreeing_fields"],
             )
             self.assertEqual(tuple(header), ACTIVITIES_CSV_COLUMNS)
+            self.assertEqual({row["disagreeing_fields"] for row in rows.values()}, {""})
 
             activities = {
                 item["garmin_activity_key"]: item

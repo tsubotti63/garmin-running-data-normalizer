@@ -56,6 +56,7 @@ def normalize_acute_training_load(
         source_record_count=len(rows),
         accepted=accepted,
         excluded_reasons=excluded,
+        fields=ACUTE_TRAINING_LOAD_FIELDS,
     )
     result.audit["observation_timestamp_semantics_counts"] = dict(
         sorted(timestamp_semantics.items())

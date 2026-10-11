@@ -44,9 +44,13 @@ question requires them and the local/trusted environment is authorized.
 13. VO2Max source series are retained explicitly. Do not overwrite one series
     with another or infer equivalence across device generations.
 14. HRV is `analysis_reference_only`, not a daily source of truth. A null HRV
-    value with a review status must remain unresolved.
+    value must remain unresolved.
 15. Approximate generation ranges (2015-2021 and 2022+) are descriptive
     source context only; they do not authorize automatic field equivalence.
+16. A field named in a row's `disagreeing_fields` had different values in the
+    observations of that row's stable key. It is empty, and the dataset's
+    audit keeps every observed value. Do not fill it or choose one of the
+    values; report the warning `VALUES_DISAGREE` with the analysis.
 
 ## v1.3 Context and Observation Relationships
 

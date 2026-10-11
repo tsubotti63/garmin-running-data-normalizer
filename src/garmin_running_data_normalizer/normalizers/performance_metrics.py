@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import hashlib
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import PurePosixPath
@@ -9,6 +8,7 @@ from typing import Any, Iterable
 
 from ..common.time import daily_calendar_date
 from ..intake.discovery import DiscoveredAsset
+from .daily_metrics import merge_observations
 
 
 HILL_FIELDS = (
@@ -37,10 +37,6 @@ LACTATE_FIELDS = (
 
 class PerformanceMetricsError(ValueError):
     """Base error for bounded performance-metric normalization."""
-
-
-class PerformanceMetricsConflictError(PerformanceMetricsError):
-    """Raised when one daily key has more than one public value."""
 
 
 @dataclass(frozen=True)
@@ -101,16 +97,10 @@ def _stable_row(value: dict[str, Any]) -> str:
     )
 
 
-def _variant_fingerprint(value: dict[str, Any]) -> str:
-    return hashlib.sha256(_stable_row(value).encode("utf-8")).hexdigest()
-
-
 def _normalize_daily(
     assets: Iterable[DiscoveredAsset],
     *,
     dataset: str,
-    preserve_observed_variants: bool = False,
-    variant_lineage: dict[tuple[str, str], dict[str, Any]] | None = None,
 ) -> DailyNormalizationResult:
     is_hill = dataset == "hill_score_daily"
     prefix = "hillscore" if is_hill else "endurancescore"
@@ -180,63 +170,51 @@ def _normalize_daily(
                     }
                 )
 
-    by_date: dict[str, set[str]] = defaultdict(set)
-    row_by_signature: dict[str, dict[str, Any]] = {}
+    fields = HILL_FIELDS if is_hill else ENDURANCE_FIELDS
     rows_by_date: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in accepted:
-        signature = _stable_row(row)
-        by_date[row["calendar_date"]].add(signature)
-        row_by_signature[signature] = row
         rows_by_date[row["calendar_date"]].append(row)
-    conflicts = [key for key, values in by_date.items() if len(values) > 1]
-    if conflicts and not preserve_observed_variants:
-        raise PerformanceMetricsConflictError(
-            f"{dataset} contains divergent values for one calendar date"
-        )
-    normalized = [
-        row_by_signature[next(iter(by_date[key]))]
-        for key in sorted(by_date)
-        if len(by_date[key]) == 1 or not preserve_observed_variants
-    ]
-    duplicate_count = sum(
-        len(rows_by_date[key]) - len(by_date[key]) for key in rows_by_date
-    )
-    observed_variants: list[dict[str, Any]] = []
-    if preserve_observed_variants:
-        for calendar_date in sorted(conflicts):
-            signatures = sorted(by_date[calendar_date])
-            for signature in signatures:
-                row = row_by_signature[signature]
-                fingerprint = _variant_fingerprint(row)
-                evidence = {
-                    "canonical_key": {"calendar_date": calendar_date},
-                    "variant_fingerprint": fingerprint,
-                    "observed_value": dict(row),
-                    "observation_count": sum(
-                        _stable_row(item) == signature
-                        for item in rows_by_date[calendar_date]
-                    ),
-                    "variant_status": "observed_variant",
-                    "canonical_status": "unresolved_multiple_observed_values",
+    normalized: list[dict[str, Any]] = []
+    duplicate_count = 0
+    disagreements: list[dict[str, Any]] = []
+    absent_values: Counter[str] = Counter()
+    for calendar_date in sorted(rows_by_date):
+        rows = rows_by_date[calendar_date]
+        signatures = {_stable_row(row) for row in rows}
+        duplicate_count += len(rows) - len(signatures)
+        if len(signatures) == 1:
+            row = dict(rows[0])
+            row["disagreeing_fields"] = []
+            normalized.append(row)
+            continue
+        merged = merge_observations(rows, fields, key_fields=("calendar_date",))
+        row = dict(merged.row)
+        row["disagreeing_fields"] = list(merged.disagreeing_fields)
+        normalized.append(row)
+        absent_values.update(merged.absent_values)
+        if merged.disagreements:
+            disagreements.append(
+                {
+                    "key": {"calendar_date": calendar_date},
+                    "observation_count": len(rows),
+                    "fields": merged.disagreements,
                 }
-                lineage = (variant_lineage or {}).get((calendar_date, fingerprint))
-                if lineage:
-                    evidence["snapshot_lineage"] = dict(lineage)
-                observed_variants.append(evidence)
-    review_required_count = len(conflicts)
+            )
     audit = {
-        "format": "garmin-running-data-normalizer-performance-daily-audit-v1",
+        "format": "garmin-running-data-normalizer-performance-daily-audit-v2",
         "dataset": dataset,
-        "status": "PASS_WITH_REVIEW_ITEMS" if review_required_count else "PASS",
+        "status": "PASS",
         "detected_asset_count": len(selected_assets),
         "source_record_count": source_record_count,
         "accepted_record_count": len(normalized),
         "excluded_record_count": sum(excluded_reasons.values()),
         "excluded_reason_counts": dict(sorted(excluded_reasons.items())),
         "same_value_duplicate_count": duplicate_count,
-        "divergent_duplicate_key_count": 0,
+        "disagreement_key_count": len(disagreements),
+        "disagreements": disagreements,
+        "absent_value_counts": dict(sorted(absent_values.items())),
         "stable_key": ["calendar_date"],
-        "merge_policy": "daily_state_upsert_missing_is_not_delete_conflict_fail_closed",
+        "merge_policy": "daily_state_null_is_absent_disagreeing_values_kept_empty",
         "keep_last": False,
         "excluded_private_field_presence_counts": dict(
             sorted(excluded_private_fields.items())
@@ -244,29 +222,11 @@ def _normalize_daily(
         "source_paths_exposed": False,
         "source_hashes_exposed": False,
     }
-    if preserve_observed_variants:
+    if excluded_reasons:
         audit.update(
             {
-                "status": "PASS_WITH_REVIEW_ITEMS" if conflicts else "PASS",
-                "canonical_key_count": len(by_date),
-                "single_variant_key_count": len(by_date) - len(conflicts),
-                "multi_variant_key_count": len(conflicts),
-                "observed_variant_count": sum(len(values) for values in by_date.values()),
-                "exact_repeat_count": sum(
-                    len(rows_by_date[key]) - len(by_date[key]) for key in rows_by_date
-                ),
-                "malformed_count": sum(excluded_reasons.values()),
-                "canonicalization_unresolved_count": len(conflicts),
-                "automatic_winner": False,
-                "observed_variants": observed_variants,
-                "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
-            }
-        )
-    if excluded_reasons or review_required_count:
-        audit.update(
-            {
-                "review_required_count": review_required_count,
-                "review_item_count": review_required_count,
+                "review_required_count": 0,
+                "review_item_count": 0,
             }
         )
     return DailyNormalizationResult(normalized, audit)
@@ -280,16 +240,8 @@ def normalize_hill_score(
 
 def normalize_endurance_score(
     assets: Iterable[DiscoveredAsset],
-    *,
-    preserve_observed_variants: bool = False,
-    variant_lineage: dict[tuple[str, str], dict[str, Any]] | None = None,
 ) -> DailyNormalizationResult:
-    return _normalize_daily(
-        assets,
-        dataset="endurance_score_daily",
-        preserve_observed_variants=preserve_observed_variants,
-        variant_lineage=variant_lineage,
-    )
+    return _normalize_daily(assets, dataset="endurance_score_daily")
 
 
 def _optional_number(value: Any, review_counts: Counter[str], field: str) -> int | float | None:
@@ -445,7 +397,6 @@ __all__ = [
     "ENDURANCE_FIELDS",
     "HILL_FIELDS",
     "LACTATE_FIELDS",
-    "PerformanceMetricsConflictError",
     "PerformanceMetricsError",
     "build_performance_metrics_daily_context",
     "collect_lactate_threshold_candidates",

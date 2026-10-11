@@ -100,6 +100,7 @@ def normalize_vo2max(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
         source_record_count=len(rows),
         accepted=accepted,
         excluded_reasons=excluded,
+        fields=VO2MAX_FIELDS,
     )
     result.audit["observation_timestamp_semantics_counts"] = dict(
         sorted(timestamp_semantics.items())
