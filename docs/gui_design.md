@@ -217,7 +217,8 @@ Processing:
   key is unused.
 - CLI output and the generated Run-All documents stay in English, so the output
   contract does not change.
-- The GUI guide is written in English and Japanese.
+- The GUI guide is written in English and Japanese:
+  [GUI Guide](gui_guide.md) and [GUI の手引き](gui_guide.ja.md).
 
 ## Accessibility
 
