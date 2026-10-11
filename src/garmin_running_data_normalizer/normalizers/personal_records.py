@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Iterable
 
 from ..common.identity import stable_hash
-from ..intake.discovery import load_json_assets
+from ..intake.discovery import DiscoveredAsset, load_json_assets
 
 
 def _personal_record_key(
@@ -27,9 +27,16 @@ def _personal_record_key(
     return raw_record_id
 
 
-def normalize_personal_records(root: str) -> list[dict[str, Any]]:
+def normalize_personal_records(
+    root: str,
+    *,
+    assets: Iterable[DiscoveredAsset] | None = None,
+) -> list[dict[str, Any]]:
+    """Normalize Personal Records; ``assets`` are the Export's files from an open reading."""
     records: list[dict[str, Any]] = []
-    for payload, asset in load_json_assets(root, filename_suffix="personalRecord.json"):
+    for payload, asset in load_json_assets(
+        root, filename_suffix="personalRecord.json", assets=assets
+    ):
         containers = payload if isinstance(payload, list) else [payload]
         for container in containers:
             if not isinstance(container, dict):

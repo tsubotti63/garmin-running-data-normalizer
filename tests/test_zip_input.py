@@ -20,7 +20,7 @@ from garmin_running_data_normalizer import runner
 from garmin_running_data_normalizer.diagnostics.doctor import doctor_input
 from garmin_running_data_normalizer.intake import source as source_module
 from garmin_running_data_normalizer.intake.archive import ArchiveLimits, UnsafeArchiveError
-from garmin_running_data_normalizer.intake.discovery import discover_export
+from garmin_running_data_normalizer.intake.discovery import discover_export, read_export
 from garmin_running_data_normalizer.intake.source import (
     CorruptArchiveError,
     ExportSource,
@@ -358,15 +358,9 @@ class ZipInputFormsTest(unittest.TestCase):
 
         with mock.patch.object(ExportSource, "_read_member", record_whole_read):
             register(store, self.forms["ZIP file"])
-        # Only the ZIP files inside the Export are read whole, to open them;
-        # every other file is copied to the store in parts.
-        self.assertEqual(
-            sorted(whole),
-            [
-                "DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip",
-                "DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part2.zip",
-            ],
-        )
+        # Nothing is read whole: files are hashed and copied to the store in
+        # parts, and ZIP files inside the Export are copied, not read in memory.
+        self.assertEqual(whole, [])
         self.assertEqual(verify_store(store)["status"], "PASS")
 
 
@@ -620,8 +614,8 @@ class ZipLimitsTest(unittest.TestCase):
                     self.assertEqual(asset_rows(folder, limits), asset_rows(folder))
             small = ArchiveLimits(max_export_read_files=1)
             with mock.patch(
-                "garmin_running_data_normalizer.run_all.discover_export",
-                side_effect=lambda path: discover_export(path, small),
+                "garmin_running_data_normalizer.run_all.read_export",
+                side_effect=lambda path: read_export(path, small),
             ):
                 with self.assertRaises(RunAllError) as raised:
                     run_all(archive, root / "output")
@@ -637,8 +631,8 @@ class ZipLimitsTest(unittest.TestCase):
             )
             self.assertFalse((root / "output").exists())
             with mock.patch(
-                "garmin_running_data_normalizer.diagnostics.doctor.discover_export",
-                side_effect=lambda path: discover_export(path, small),
+                "garmin_running_data_normalizer.diagnostics.doctor.read_export",
+                side_effect=lambda path: read_export(path, small),
             ):
                 report = doctor_input(archive)
             self.assertEqual(
@@ -667,7 +661,7 @@ class ZipLimitsTest(unittest.TestCase):
 
 
 class NestedZipCopyTest(unittest.TestCase):
-    """A large ZIP file inside an Export ZIP file is read from a private temporary copy."""
+    """A ZIP file inside an Export ZIP file is read from a private temporary copy."""
 
     def setUp(self) -> None:
         self._directory = tempfile.TemporaryDirectory()
@@ -676,7 +670,6 @@ class NestedZipCopyTest(unittest.TestCase):
         self.archive = zip_export(self.folder, self.root / "export.zip")
         self.temporary = self.root / "temporary"
         self.temporary.mkdir()
-        self.copy_limits = ArchiveLimits(max_nested_in_memory_bytes=1)
 
     def tearDown(self) -> None:
         self._directory.cleanup()
@@ -694,7 +687,7 @@ class NestedZipCopyTest(unittest.TestCase):
         with mock.patch.object(tempfile, "tempdir", str(self.temporary)), mock.patch.object(
             source_module.shutil, "copyfileobj", record_copy
         ):
-            self.assertEqual(asset_rows(self.archive, self.copy_limits), expected)
+            self.assertEqual(asset_rows(self.archive), expected)
         self.assertEqual(len(folders), 2)
         self.assertTrue(all(name.startswith("garmin-export-zip-") for name, _mode in folders))
         if os.name == "posix":
@@ -710,26 +703,23 @@ class NestedZipCopyTest(unittest.TestCase):
         damaged_archive = zip_export(damaged, self.root / "damaged.zip")
         with mock.patch.object(tempfile, "tempdir", str(self.temporary)):
             with self.assertRaises(zipfile.BadZipFile):
-                discover_export(damaged_archive, self.copy_limits)
+                discover_export(damaged_archive)
             self.assertEqual(list(self.temporary.iterdir()), [])
             with mock.patch(
                 "garmin_running_data_normalizer.intake.discovery.read_member",
                 side_effect=KeyboardInterrupt,
             ):
                 with self.assertRaises(KeyboardInterrupt):
-                    discover_export(self.archive, self.copy_limits)
+                    discover_export(self.archive)
             self.assertEqual(list(self.temporary.iterdir()), [])
 
-    def test_snapshot_registration_reads_large_nested_zip_files_from_a_copy(self) -> None:
+    def test_snapshot_registration_reads_nested_zip_files_from_a_copy(self) -> None:
         folder_store = self.root / "folder-store"
         initialize_store(folder_store, "synthetic-account-boundary")
         register(folder_store, self.folder)
         store = self.root / "store"
         initialize_store(store, "synthetic-account-boundary")
-        with mock.patch.object(tempfile, "tempdir", str(self.temporary)), mock.patch(
-            "garmin_running_data_normalizer.snapshot.store.ExportSource",
-            side_effect=lambda path: ExportSource(path, self.copy_limits),
-        ):
+        with mock.patch.object(tempfile, "tempdir", str(self.temporary)):
             register(store, self.archive)
         self.assertEqual(list(self.temporary.iterdir()), [])
         self.assertEqual(

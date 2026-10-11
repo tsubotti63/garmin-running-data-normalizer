@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from pathlib import PureWindowsPath
@@ -23,14 +24,12 @@ class ArchiveLimits:
     max_member_bytes: int = 128 * 1024 * 1024
     max_total_bytes: int = 2 * 1024 * 1024 * 1024
     max_compression_ratio: float = 200.0
-    # The files read from an Export given as a ZIP file are held in memory.
-    # These bound them in total, until reading no longer needs the whole
-    # Export in memory; an extracted folder has no such bound.
-    max_export_read_bytes: int = 2 * 1024 * 1024 * 1024
-    max_export_read_files: int = 400_000
-    # A ZIP file inside the Export ZIP up to this size is opened in memory;
-    # a larger one is copied to a private temporary folder first.
-    max_nested_in_memory_bytes: int = 128 * 1024 * 1024
+    # Totals for one reading of an Export given as a ZIP file. Files are read
+    # one at a time, so these bound how long a reading takes and how much it
+    # copies to the temporary folder, not memory. An extracted folder is
+    # already on disk and has no such totals.
+    max_export_read_bytes: int = 64 * 1024 * 1024 * 1024
+    max_export_read_files: int = 4_000_000
 
 
 def is_real_export_file(name: str) -> bool:
@@ -114,6 +113,26 @@ def validated_members(
     return accepted
 
 
+def digest_member(
+    archive: ZipFile, info: ZipInfo, limits: ArchiveLimits = ArchiveLimits()
+) -> tuple[str, int]:
+    """Return a member's SHA-256 digest and size, reading it in parts.
+
+    The checks are those of ``read_member``, without holding the member.
+    """
+    if info.file_size > limits.max_member_bytes:
+        raise UnsafeArchiveError("archive member exceeds size limit")
+    digest = hashlib.sha256()
+    size = 0
+    with archive.open(info, "r") as handle:
+        while size <= limits.max_member_bytes and (chunk := handle.read(1024 * 1024)):
+            digest.update(chunk)
+            size += len(chunk)
+    if size != info.file_size or size > limits.max_member_bytes:
+        raise UnsafeArchiveError("archive member size changed or exceeded limit while reading")
+    return digest.hexdigest(), size
+
+
 def read_member(archive: ZipFile, info: ZipInfo, limits: ArchiveLimits = ArchiveLimits()) -> bytes:
     if info.file_size > limits.max_member_bytes:
         raise UnsafeArchiveError("archive member exceeds size limit")
@@ -130,6 +149,7 @@ __all__ = [
     "MAX_ARCHIVE_MEMBERS",
     "UnsafeArchiveError",
     "check_member_size",
+    "digest_member",
     "is_real_export_file",
     "is_safe_export_member",
     "read_member",

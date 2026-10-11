@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import struct
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -483,16 +483,23 @@ def parse_fit_export(
     timezone_name: str = "Asia/Tokyo",
     *,
     progress: Callable[[dict[str, Any]], None] | None = None,
+    assets: Iterable[DiscoveredAsset] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """Parse every FIT file with distinct content once.
 
     ``progress``, when given, receives ``reading_fit`` events that count the
     FIT files with distinct content: once before reading, then after each file.
+    ``assets``, when given, are the Export's files from an open reading; the
+    Export at ``root`` is not read again.
     """
     activities: list[dict[str, Any]] = []
     laps: list[dict[str, Any]] = []
     audit: list[dict[str, Any]] = []
-    fit_assets = [asset for asset in discover_export(root) if asset.kind == "fit"]
+    fit_assets = [
+        asset
+        for asset in (discover_export(root) if assets is None else assets)
+        if asset.kind == "fit"
+    ]
     aliases_by_sha256: dict[str, list[DiscoveredAsset]] = {}
     for asset in fit_assets:
         aliases_by_sha256.setdefault(asset.sha256, []).append(asset)

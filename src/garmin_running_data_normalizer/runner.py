@@ -16,8 +16,13 @@ from .common.time import (
     resolve_timezone_name,
 )
 from .common.private_files import PRIVATE_DIRECTORY_MODE, open_private_file
-from .intake.discovery import discover_export
-from .intake.source import CorruptArchiveError, ExportTooLargeError, is_zip_input
+from .intake.discovery import InputChangedError, read_export
+from .intake.source import (
+    CorruptArchiveError,
+    ExportTooLargeError,
+    TempSpaceError,
+    is_zip_input,
+)
 from .normalizers.activities import normalize_activities
 from .qa import summarize_records
 from .run_all import RunAllError, run_all
@@ -89,16 +94,19 @@ def run_activities(
     input_root, output_root = _validate_paths(input_path, output_path)
     timezone_name = resolve_timezone_name(timezone_name)
     require_timezone_data(timezone_name)
-    assets = [
-        asset
-        for asset in discover_export(input_root)
-        if asset.kind == "json"
-        and (asset.member_path or asset.source_path).endswith("summarizedActivities.json")
-    ]
-    if not assets:
-        raise GoldenPathError("no supported summarizedActivities.json input was found")
-
-    records = normalize_activities(str(input_root), timezone_name)
+    with read_export(input_root) as reading:
+        assets = [
+            asset
+            for asset in reading.assets
+            if asset.kind == "json"
+            and (asset.member_path or asset.source_path).endswith("summarizedActivities.json")
+        ]
+        if not assets:
+            raise GoldenPathError("no supported summarizedActivities.json input was found")
+        try:
+            records = normalize_activities(str(input_root), timezone_name, assets=assets)
+        except InputChangedError as exc:
+            raise GoldenPathError("input changed or provenance diverged during processing") from exc
     if not records:
         raise GoldenPathError("supported input contained no activity records")
     discovered_sources = {(asset.provenance_path, asset.sha256) for asset in assets}
@@ -412,6 +420,13 @@ def main(argv: list[str] | None = None) -> int:
         print(
             "ERROR [INPUT_TOO_LARGE]: the Export ZIP file is too large to read directly; "
             "extract it and use the folder",
+            file=sys.stderr,
+        )
+        return 2
+    except TempSpaceError:
+        print(
+            "ERROR [TEMP_SPACE_INSUFFICIENT]: the temporary folder does not have enough free "
+            "space to read the Export ZIP file; free some space, or extract it and use the folder",
             file=sys.stderr,
         )
         return 2

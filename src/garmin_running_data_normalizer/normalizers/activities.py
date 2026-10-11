@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Iterable
 
 from ..common.identity import garmin_activity_key
 from ..common.time import (
@@ -76,8 +76,13 @@ def _normalize(
 def normalize_activities(
     root: str,
     timezone_name: str = DEFAULT_TIMEZONE,
+    *,
+    assets: Iterable[DiscoveredAsset] | None = None,
 ) -> list[dict[str, Any]]:
+    """Normalize the Activities; ``assets`` are the Export's files from an open reading."""
     records: list[dict[str, Any]] = []
-    for payload, asset in load_json_assets(root, filename_suffix="summarizedActivities.json"):
+    for payload, asset in load_json_assets(
+        root, filename_suffix="summarizedActivities.json", assets=assets
+    ):
         records.extend(_normalize(row, asset, timezone_name) for row in _unwrap(payload))
     return sorted(records, key=lambda row: (str(row["garmin_activity_key"]), str(row["source_path"])))

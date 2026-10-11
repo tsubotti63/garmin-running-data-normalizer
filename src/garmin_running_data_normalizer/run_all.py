@@ -7,7 +7,8 @@ import json
 import shutil
 import tempfile
 from collections import Counter, defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -21,8 +22,13 @@ from .common.time import (
 )
 from .fit.parser import parse_fit_export
 from .export.analysis_pack import build_analysis_pack_payloads
-from .intake.discovery import DiscoveredAsset, discover_export
-from .intake.source import CorruptArchiveError, ExportTooLargeError, is_zip_input
+from .intake.discovery import DiscoveredAsset, ExportReading, read_export
+from .intake.source import (
+    CorruptArchiveError,
+    ExportTooLargeError,
+    TempSpaceError,
+    is_zip_input,
+)
 from .normalizers.activities import normalize_activities
 from .normalizers.daily_metrics import DailyMetricConflictError, DailyMetricError
 from .normalizers.gear import normalize_gear
@@ -305,18 +311,42 @@ def _validate_paths(input_path: str | Path, output_path: str | Path) -> tuple[Pa
     return input_root, output_root
 
 
-def _discover(root: Path) -> list[DiscoveredAsset]:
-    try:
-        return discover_export(root)
-    except CorruptArchiveError as exc:
-        raise RunAllError("INPUT_ZIP_CORRUPT", "the Export ZIP file is damaged or incomplete") from exc
-    except ExportTooLargeError as exc:
-        raise RunAllError(
+def _input_error(exc: Exception) -> RunAllError:
+    if isinstance(exc, CorruptArchiveError):
+        return RunAllError("INPUT_ZIP_CORRUPT", "the Export ZIP file is damaged or incomplete")
+    if isinstance(exc, ExportTooLargeError):
+        return RunAllError(
             "INPUT_TOO_LARGE",
             "the Export ZIP file is too large to read directly; extract it and use the folder",
-        ) from exc
+        )
+    if isinstance(exc, TempSpaceError):
+        return RunAllError(
+            "TEMP_SPACE_INSUFFICIENT",
+            "the temporary folder does not have enough free space to read the Export ZIP file; "
+            "free some space, or extract it and use the folder",
+        )
+    return RunAllError("INPUT_DISCOVERY_FAILED", "input discovery or archive safety validation failed")
+
+
+@contextmanager
+def _read_input(root: Path) -> Iterator[ExportReading]:
+    """Open the input for the run: each file is read once for its digest,
+    and again, one at a time, when a normalizer uses it."""
+    with ExitStack() as stack:
+        try:
+            reading = stack.enter_context(read_export(root))
+        except Exception as exc:
+            raise _input_error(exc) from exc
+        yield reading
+
+
+def _input_snapshot(root: Path) -> tuple[tuple[str, int, str], ...]:
+    """Read the input again, for its digests only."""
+    try:
+        with read_export(root) as reading:
+            return _snapshot(reading.assets)
     except Exception as exc:
-        raise RunAllError("INPUT_DISCOVERY_FAILED", "input discovery or archive safety validation failed") from exc
+        raise _input_error(exc) from exc
 
 
 def _asset_family(asset: DiscoveredAsset) -> str:
@@ -376,6 +406,7 @@ def _validate_dataset_table() -> None:
 def _normalize_datasets(
     input_root: Path,
     families: dict[str, list[DiscoveredAsset]],
+    assets: list[DiscoveredAsset],
     relationship_context: dict[str, Any] | None = None,
     snapshot_context: dict[str, Any] | None = None,
     timezone_name: str = DEFAULT_TIMEZONE,
@@ -397,7 +428,9 @@ def _normalize_datasets(
 
     _notify(progress, "normalizing", step="activities")
     try:
-        records["activities"] = normalize_activities(str(input_root), timezone_name)
+        records["activities"] = normalize_activities(
+            str(input_root), timezone_name, assets=assets
+        )
     except Exception as exc:
         raise RunAllError("ACTIVITIES_NORMALIZATION_FAILED", "detected Activities input could not be normalized") from exc
     if not records["activities"]:
@@ -406,14 +439,18 @@ def _normalize_datasets(
     if families["gear"]:
         _notify(progress, "normalizing", step="gear")
         try:
-            records["gear"], records["activity_gear"] = normalize_gear(str(input_root))
+            records["gear"], records["activity_gear"] = normalize_gear(
+                str(input_root), assets=assets
+            )
         except Exception as exc:
             raise RunAllError("GEAR_NORMALIZATION_FAILED", "detected Gear input could not be normalized") from exc
 
     if families["personal_records"]:
         _notify(progress, "normalizing", step="personal_records")
         try:
-            records["personal_records"] = normalize_personal_records(str(input_root))
+            records["personal_records"] = normalize_personal_records(
+                str(input_root), assets=assets
+            )
         except Exception as exc:
             raise RunAllError(
                 "PERSONAL_RECORDS_NORMALIZATION_FAILED",
@@ -427,6 +464,7 @@ def _normalize_datasets(
                 input_root,
                 timezone_name=timezone_name,
                 progress=progress,
+                assets=assets,
             )
             for item in base_audit:
                 unknown_records = int(item.get("unknown_records", 0) or 0)
@@ -1176,28 +1214,38 @@ def run_all(
     except (TimezoneDataUnavailableError, TimezoneNameInvalidError) as exc:
         raise RunAllError(exc.code, exc.safe_message) from exc
     _notify(progress, "discovering")
-    initial_assets = _discover(input_root)
-    initial_snapshot = _snapshot(initial_assets)
-    families = _classify_assets(initial_assets)
-    if not families["activities"]:
-        raise RunAllError("ACTIVITIES_NOT_FOUND", "required Activities input was not found")
-    _validate_dataset_table()
+    with _read_input(input_root) as reading:
+        initial_assets = reading.assets
+        initial_snapshot = _snapshot(initial_assets)
+        families = _classify_assets(initial_assets)
+        if not families["activities"]:
+            raise RunAllError("ACTIVITIES_NOT_FOUND", "required Activities input was not found")
+        _validate_dataset_table()
 
-    (
-        records,
-        fit_audit,
-        fit_status,
-        activity_fit_audit,
-        relationship_summary,
-        performance_audit,
-    ) = _normalize_datasets(
-        input_root,
-        families,
-        relationship_context=snapshot_context,
-        snapshot_context=snapshot_context,
-        timezone_name=timezone_name,
-        progress=progress,
-    )
+        try:
+            (
+                records,
+                fit_audit,
+                fit_status,
+                activity_fit_audit,
+                relationship_summary,
+                performance_audit,
+            ) = _normalize_datasets(
+                input_root,
+                families,
+                initial_assets,
+                relationship_context=snapshot_context,
+                snapshot_context=snapshot_context,
+                timezone_name=timezone_name,
+                progress=progress,
+            )
+        except RunAllError as exc:
+            # A file that changed while it was read stops the run as a changed
+            # input, whichever normalizer met it.
+            if reading.changed:
+                raise RunAllError("INPUT_CHANGED", "input assets changed during Run-All processing") from exc
+            raise
+        changed_while_reading = reading.changed
     _validate_provenance(records, fit_audit, families)
     qa_entries = [
         _dataset_qa(dataset, records[str(dataset["name"])], len(families[str(dataset["family"])]))
@@ -1228,8 +1276,7 @@ def run_all(
     )
 
     _notify(progress, "verifying_input")
-    final_assets = _discover(input_root)
-    if _snapshot(final_assets) != initial_snapshot:
+    if changed_while_reading or _input_snapshot(input_root) != initial_snapshot:
         raise RunAllError("INPUT_CHANGED", "input assets changed during Run-All processing")
     _notify(progress, "building_output")
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Iterable
 
 from ..common.identity import stable_hash
 from ..intake.discovery import DiscoveredAsset, load_json_assets
@@ -14,10 +14,15 @@ def _containers(value: Any) -> list[dict[str, Any]]:
     return []
 
 
-def normalize_gear(root: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def normalize_gear(
+    root: str,
+    *,
+    assets: Iterable[DiscoveredAsset] | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Normalize Gear and its links; ``assets`` are the Export's files from an open reading."""
     gear: list[dict[str, Any]] = []
     links: list[dict[str, Any]] = []
-    for payload, asset in load_json_assets(root, filename_suffix="gear.json"):
+    for payload, asset in load_json_assets(root, filename_suffix="gear.json", assets=assets):
         for container in _containers(payload):
             for row in container.get("gearDTOS", []) or []:
                 if not isinstance(row, dict):

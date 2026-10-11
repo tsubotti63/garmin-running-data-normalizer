@@ -53,6 +53,7 @@ export const ERROR_KEYS = {
   INPUT_DISCOVERY_FAILED: "error.input_unreadable",
   INPUT_ZIP_CORRUPT: "error.zip_corrupt",
   INPUT_TOO_LARGE: "error.input_too_large",
+  TEMP_SPACE_INSUFFICIENT: "error.temp_space_insufficient",
   DIVERGENT_DUPLICATE: "error.data_conflict",
   DAILY_METRICS_CONFLICT: "error.data_conflict",
   PERFORMANCE_METRICS_CONFLICT: "error.data_conflict",
@@ -117,6 +118,7 @@ const ERROR_NEXT_KEYS = {
   input_unreadable: "next.extract_again",
   zip_corrupt: "next.download_again",
   input_too_large: "next.extract_and_choose_folder",
+  temp_space_insufficient: "next.free_temp_space",
   data_conflict: "next.report_code",
   conversion_failed: "next.report_code",
   publish_failed: "next.check_space_and_path",
@@ -142,6 +144,7 @@ export const FINDING_KEYS = {
   INPUT_COULD_NOT_BE_SAFELY_DISCOVERED: "finding.input_unreadable",
   INPUT_ZIP_DAMAGED_OR_INCOMPLETE: "finding.zip_corrupt",
   INPUT_ZIP_TOO_LARGE_TO_READ_DIRECTLY: "finding.zip_too_large",
+  TEMP_FOLDER_SPACE_INSUFFICIENT: "finding.temp_space_insufficient",
   REQUIRED_ACTIVITIES_SOURCE_NOT_OBSERVED: "finding.activities_missing",
   INPUT_READY_FOR_BOUNDED_RUN_ALL_ATTEMPT: "finding.ready",
 };
@@ -151,6 +154,7 @@ export const ACTION_KEYS = {
   OBTAIN_COMPLETE_READABLE_EXPORT: "action.get_new_export",
   DOWNLOAD_EXPORT_AGAIN: "action.download_again",
   EXTRACT_EXPORT_AND_SELECT_FOLDER: "action.extract_and_choose_folder",
+  FREE_TEMP_SPACE_OR_SELECT_EXTRACTED_FOLDER: "action.free_temp_space",
   SELECT_EXPORT_WITH_ACTIVITIES: "action.select_export_with_activities",
   RUN_ALL: "action.run_all",
 };

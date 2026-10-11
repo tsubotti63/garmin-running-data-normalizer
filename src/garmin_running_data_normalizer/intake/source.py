@@ -7,11 +7,16 @@ Export are left out of the paths: while everything sits inside one folder that
 is not part of the Export's own layout (as when an extracted folder is
 compressed again, or when a folder above it is selected), the root moves into
 that folder, in a ZIP file and in a folder alike and at any depth.
+
+Files are read one at a time and are not kept. A ZIP file inside an Export ZIP
+file is copied, when it is first used, to a private temporary folder, and stays
+open until the Export is closed; a ZIP file inside a folder is opened in place.
 """
 
 from __future__ import annotations
 
-import io
+import errno
+import hashlib
 import shutil
 import tempfile
 import zlib
@@ -36,13 +41,22 @@ _LAYOUT_FOLDER_PREFIX = "di-connect-"
 # Python errors that mean that bytes in a ZIP file are damaged or incomplete.
 _DAMAGED_ZIP_ERRORS = (BadZipFile, EOFError, zlib.error)
 
+# Free space to leave in the temporary folder beyond the copies themselves.
+_TEMPORARY_SPACE_MARGIN = 64 * 1024 * 1024
+_CHUNK_BYTES = 1024 * 1024
+
 
 class CorruptArchiveError(ValueError):
     """Raised when the Export ZIP file is damaged or incomplete."""
 
 
 class ExportTooLargeError(UnsafeArchiveError):
-    """Raised when an Export ZIP file holds more than one run reads from it."""
+    """Raised when an Export ZIP file holds more than one reading of it may read."""
+
+
+class TempSpaceError(Exception):
+    """Raised when the temporary folder cannot hold the copies of the ZIP
+    files inside an Export ZIP file."""
 
 
 def is_zip_input(path: Path) -> bool:
@@ -53,6 +67,11 @@ def is_zip_input(path: Path) -> bool:
 def _is_layout_folder(name: str) -> bool:
     lower = name.lower()
     return lower in _LAYOUT_FOLDERS or lower.startswith(_LAYOUT_FOLDER_PREFIX)
+
+
+def _is_disk_full(error: OSError) -> bool:
+    # ERROR_HANDLE_DISK_FULL and ERROR_DISK_FULL on Windows.
+    return error.errno == errno.ENOSPC or getattr(error, "winerror", None) in (39, 112)
 
 
 @dataclass(frozen=True)
@@ -79,7 +98,9 @@ class ExportSource:
         if not self.is_zip and not self.root.is_dir():
             raise FileNotFoundError("Garmin Export folder or ZIP file does not exist")
         self._archive: ZipFile | None = None
+        self._nested: dict[str, ZipFile] = {}
         self._temporary: tempfile.TemporaryDirectory[str] | None = None
+        self._space_checked = False
         self._files: list[ExportFile] = []
         self._read_files = 0
         self._read_bytes = 0
@@ -100,6 +121,11 @@ class ExportSource:
         self.close()
 
     def close(self) -> None:
+        # Close every open ZIP file before removing the temporary folder:
+        # Windows cannot remove a folder that holds an open file.
+        nested, self._nested = self._nested, {}
+        for archive in nested.values():
+            archive.close()
         if self._archive is not None:
             self._archive.close()
             self._archive = None
@@ -166,7 +192,7 @@ class ExportSource:
         return sorted(files, key=lambda item: Path(item.relative_path))
 
     def count_read(self, size: int) -> None:
-        """Count one file read into memory; enforce the limits for a ZIP input."""
+        """Count one file read from the Export; enforce the totals for a ZIP input."""
         self._read_files += 1
         self._read_bytes += size
         if not self.is_zip:
@@ -186,6 +212,27 @@ class ExportSource:
             return data
         check_member_size(item.member, self.limits.max_member_bytes, self.limits)
         return self._read_member(item.member, self.limits.max_member_bytes)
+
+    def digest(self, item: ExportFile) -> tuple[str, int]:
+        """Return one Export file's SHA-256 digest and size, reading it in parts.
+
+        The checks are those of ``read``, without holding the file.
+        """
+        maximum = self.limits.max_member_bytes
+        if item.member is not None:
+            check_member_size(item.member, maximum, self.limits)
+        digest = hashlib.sha256()
+        size = 0
+        with self.open_stream(item) as handle:
+            while size <= maximum and (chunk := handle.read(_CHUNK_BYTES)):
+                digest.update(chunk)
+                size += len(chunk)
+        if item.member is None:
+            if size > maximum:
+                raise ValueError(f"input file exceeds size limit: {item.relative_path}")
+        elif size != item.member.file_size or size > maximum:
+            raise CorruptArchiveError("the Export ZIP file is damaged or incomplete")
+        return digest.hexdigest(), size
 
     def _read_member(self, info: ZipInfo, max_bytes: int) -> bytes:
         assert self._archive is not None
@@ -213,34 +260,50 @@ class ExportSource:
         except _DAMAGED_ZIP_ERRORS as exc:
             raise CorruptArchiveError("the Export ZIP file is damaged or incomplete") from exc
 
-    @contextmanager
-    def open_archive(self, item: ExportFile) -> Iterator[ZipFile]:
-        """Open a ZIP file found in the Export, one level deep."""
-        if item.member is None:
-            assert item.path is not None
-            with ZipFile(item.path, "r") as archive:
-                yield archive
-            return
+    def archive(self, item: ExportFile) -> ZipFile:
+        """Return a ZIP file found in the Export, opened once until the Export is closed."""
+        archive = self._nested.get(item.relative_path)
+        if archive is None:
+            if item.member is None:
+                assert item.path is not None
+                archive = ZipFile(item.path, "r")
+            else:
+                archive = ZipFile(self._copy(item), "r")
+            self._nested[item.relative_path] = archive
+        return archive
+
+    def _copy(self, item: ExportFile) -> Path:
+        """Copy a ZIP file inside the Export ZIP file to the private temporary folder."""
         info = item.member
+        assert info is not None
         check_member_size(info, self.limits.max_total_bytes, self.limits)
-        if info.file_size <= self.limits.max_nested_in_memory_bytes:
-            data = self._read_member(info, self.limits.max_nested_in_memory_bytes)
-            with ZipFile(io.BytesIO(data), "r") as archive:
-                yield archive
-            return
+        if not self._space_checked:
+            # Before the first copy, check that every ZIP file inside the
+            # Export ZIP file fits, so that a run does not stop halfway.
+            needed = sum(entry.size for entry in self._files if entry.suffix == ".zip")
+            free = shutil.disk_usage(tempfile.gettempdir()).free
+            if free < needed + _TEMPORARY_SPACE_MARGIN:
+                raise TempSpaceError("the temporary folder does not have enough free space")
+            self._space_checked = True
         if self._temporary is None:
             self._temporary = tempfile.TemporaryDirectory(prefix="garmin-export-zip-")
         self._copies += 1
         copy = Path(self._temporary.name) / f"nested-{self._copies}.zip"
         try:
             with self.open_stream(item) as source, copy.open("xb") as target:
-                shutil.copyfileobj(source, target, 1024 * 1024)
-            if copy.stat().st_size != info.file_size:
-                raise CorruptArchiveError("the Export ZIP file is damaged or incomplete")
-            with ZipFile(copy, "r") as archive:
-                yield archive
-        finally:
+                shutil.copyfileobj(source, target, _CHUNK_BYTES)
+        except OSError as exc:
             copy.unlink(missing_ok=True)
+            if _is_disk_full(exc):
+                raise TempSpaceError("the temporary folder ran out of free space") from exc
+            raise
+        except BaseException:
+            copy.unlink(missing_ok=True)
+            raise
+        if copy.stat().st_size != info.file_size:
+            copy.unlink(missing_ok=True)
+            raise CorruptArchiveError("the Export ZIP file is damaged or incomplete")
+        return copy
 
 
 __all__ = [
@@ -248,5 +311,6 @@ __all__ = [
     "ExportFile",
     "ExportSource",
     "ExportTooLargeError",
+    "TempSpaceError",
     "is_zip_input",
 ]
