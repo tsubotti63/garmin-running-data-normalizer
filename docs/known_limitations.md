@@ -1,6 +1,6 @@
 # Known Limitations
 
-These limitations apply to the current stable v1.7.0 release published as the
+These limitations apply to the current stable v1.7.1 release published as the
 latest GitHub Release and Production PyPI distribution. These remain explicit
 Product boundaries.
 
@@ -93,10 +93,21 @@ Product boundaries.
   `snapshot register` with the same Export, or with another complete Export if
   the original is no longer available; it reconciles the journal before
   registering. The lock file is the only store file that may be deleted.
-- When Snapshots disagree for the same stable key, `snapshot build-input` and
+- When Snapshots disagree for the same stable key in a daily dataset other
+  than `endurance_score_daily` and `uds_daily`, `snapshot build-input` and
   `snapshot run-all` stop and report counts by dataset and conflict type,
-  without dates, keys, or values. Excluding a Snapshot or choosing a value is
-  not supported.
+  without dates, keys, or values. Activities, Gear, `activity_gear` links, and
+  Personal Records do not stop: each field takes the latest explicit value in
+  Snapshot acquisition order (by `export_observed_at`), so one record can
+  combine fields from different Snapshots, and an explicit null or empty value
+  does not replace an earlier explicit value. Excluding a Snapshot or choosing
+  a value is not supported.
+- From v1.3.0 through v1.7.0, `snapshot run-all` produced no
+  `hill_score_daily`, `endurance_score_daily`, or `vo2max_daily` rows, with no
+  warning, because Run-All did not recognize the merged files that
+  `snapshot build-input` writes for them; the three families reported
+  `SKIPPED_NOT_PRESENT`. v1.7.1 reads them. Rerun `snapshot run-all` with
+  v1.7.1 or later to obtain the rows; the Snapshot Store needs no migration.
 - Starting with v1.5.0, `Thumbs.db` inside a ZIP file is not registered, so a
   ZIP that contains it receives a different Snapshot content identity than in
   v1.4.1 or earlier. Re-registering such an Export with its original label
@@ -196,7 +207,7 @@ Product boundaries.
 - Hosted processing, Garmin authentication, Open-Meteo, JMA, Instagram,
   wellness/coaching interpretation, Parquet output, and automatic personal
   analysis are outside the stable scope.
-- Stable v1.7.0 retains `tzdata` as a Windows-only runtime dependency and emits
+- Stable v1.7.1 retains `tzdata` as a Windows-only runtime dependency and emits
   the bounded `TIMEZONE_DATA_UNAVAILABLE` diagnostic if IANA timezone data is
   unavailable in an incomplete environment. Validation covers GitHub Actions
   `windows-latest` and one maintainer-owned physical Windows Production PyPI
@@ -205,8 +216,8 @@ Product boundaries.
   not automatically upload or provide provider-specific privacy guarantees.
 - Production PyPI `1.3.3` remains immutable. Its long description preserves the
   publication-time README snapshot, including pre-publication candidate
-  wording. Production PyPI `1.4.0`, `1.4.1`, `1.5.0`, and `1.6.0` also
-  remain immutable, and `1.7.0` is the current release artifact; current
+  wording. Production PyPI `1.4.0`, `1.4.1`, `1.5.0`, `1.6.0`, and `1.7.0`
+  also remain immutable, and `1.7.1` is the current release artifact; current
   repository documentation is the maintained public truth for future builds.
 
 The documented CLI and versioned Run-All output contract are stable for `1.x`.
@@ -226,3 +237,37 @@ stable third-party API contract.
   not identity and never authorizes latest-wins behavior.
 - Power conflicts remain review evidence and are not averaged, converted, or
   silently resolved.
+
+## Current behavior described differently elsewhere
+
+These points describe v1.7.1 behavior. Some other documents still describe
+them differently; they are planned to be corrected in v2.0.0.
+
+- HRV: when FIT files give different HRV values for one date, `hrv_daily`
+  keeps the date with `hrv_value` set to `null`, and the differing values are
+  not kept in the output; the HRV audit keeps only counts.
+  `diagnostics/run_quality.json` counts these dates under the reason
+  `CONFLICT_PRESERVED_NO_WINNER`, although the values are not preserved.
+- Relationships: a Personal Record, an `activity_gear` link, or a FIT lap whose
+  valid link points to a record that is not in the output is removed from the
+  normalized output. Only counts and the `RELATIONSHIP_UNRESOLVED_VALID_LINK`
+  warning remain, and the removed rows are not identified. This includes an
+  `activity_gear` link to missing Gear, which
+  [Dataset Relationships](dataset_relationships.md) lists as failing closed.
+- Sleep: two Sleep rows for one sleep day with different values stop Run-All
+  with `DAILY_METRICS_CONFLICT`; [Wellness Metrics](wellness_metrics.md)
+  describes them as reviewable.
+- Identifiers: relationship checks compare identifiers after trimming spaces
+  and leading zeros, and `normalized/activity_gear.json` writes digit-only
+  `gear_key` and `activity_id` text as integers;
+  [Output Contract](output_contract.md) says identity is not coerced.
+- Excluded daily rows: rows excluded from a daily dataset are counted in its
+  audit and in the `excluded` section of `diagnostics/run_quality.json`, but
+  they raise no warning; [Output Contract](output_contract.md) mentions
+  warning counts.
+- Endurance Score in Snapshots: Endurance Score values that differ across
+  Snapshots are kept as observed variants instead of stopping, as described
+  under [Snapshot lifecycle](#snapshot-lifecycle);
+  [Performance Metrics](performance_metrics.md) describes only the stop.
+- The HRV audit `date_basis` value names JST even when `--timezone` selects
+  another timezone; the HRV date itself uses the selected timezone.

@@ -32,7 +32,7 @@
   third-party notices.
 - Complete dependency lock review, security/privacy checks, documentation, and
   release-specific review evidence.
-- `v1.0.0` remains the first stable release. `v1.7.0` is the current stable
+- `v1.0.0` remains the first stable release. `v1.7.1` is the current stable
   GitHub Release and Production PyPI version. Any future tag, GitHub Release,
   stable release, or package publication requires its own current review and
   separate Human authorization.
@@ -137,6 +137,9 @@
   from 212 to 224.
 - Published version `1.7.0` through the merged release pull requests, the
   annotated tag, the GitHub Release, and Trusted Publishing to Production PyPI.
+- Published patch version `1.7.1`, which makes `snapshot run-all` normalize
+  the Hill Score, Endurance Score, and VO2Max rows that `snapshot build-input`
+  merges.
 
 ## Milestone 11 — v2.0 local GUI — planned
 

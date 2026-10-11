@@ -1,5 +1,47 @@
 # Migration Notes
 
+## v1.7.0 to v1.7.1
+
+v1.7.1 does not require data migration. Existing Snapshot Stores load and
+verify as before. Rerun `snapshot run-all` to obtain the Hill Score,
+Endurance Score, and VO2Max rows that v1.3.0 through v1.7.0 left out of its
+output.
+
+| Contract | v1.7.1 position |
+|---|---|
+| CLI and Python imports | Unchanged; `run_all` and `parse_fit_export` also accept an optional keyword-only progress callback |
+| Datasets, schemas, and stable keys | Unchanged: 17 datasets and 224 fields |
+| Output paths | Unchanged |
+| Exit codes | Unchanged `0 / 0 / 3 / 2` Product mapping |
+| Snapshot lifecycle contract and policy registry | Unchanged `v1.0`; existing Stores need no migration |
+| Relationships and privacy boundary | Unchanged |
+
+What can change:
+
+- `snapshot run-all` output gains the merged Hill Score, Endurance Score, and
+  VO2Max rows. The `hill_score`, `endurance_score`, and `vo2max` families
+  report `PROCESSED` instead of `SKIPPED_NOT_PRESENT`, `run_manifest.json`
+  lists the merged files under these families instead of `unclassified`, and
+  the record counts and run-level digests change with the new rows.
+- A Support Bundle made from such an output carries the new
+  `run_quality.json` counts. `diagnostics/source_completeness.json` and the
+  `doctor --run-output` findings are unchanged.
+- One-shot `run-all` output from the same Export is unchanged apart from
+  `product_version` `1.7.1` and the digests that include it.
+
+Upgrade the package in a new or existing Python 3.11+ environment:
+
+```bash
+python -m pip install --upgrade garmin-running-data-normalizer==1.7.1
+python -m garmin_running_data_normalizer --version
+```
+
+Use a new output directory when rerunning with v1.7.1. An output produced by
+v1.4.0 through v1.7.0 contains `diagnostics/`, so `validate-handoff`,
+`doctor --run-output`, and `support-bundle` from v1.7.1 reject it; rerun
+Run-All instead. See [Known Limitations](known_limitations.md#snapshot-lifecycle)
+and the [v1.7.1 Release Notes](release_notes/v1.7.1.md).
+
 ## v1.6.0 to v1.7.0
 
 v1.7.0 does not require data migration. Existing Snapshot Stores load and

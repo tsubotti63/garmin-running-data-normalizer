@@ -13,9 +13,40 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
+## v1.7.1 — stable Production release
+
+Published on 2026-10-11 JST as the annotated `v1.7.1` tag, the latest stable
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.7.1),
+and the verified
+[Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.7.1/).
+
+### Fixed
+
+- `snapshot run-all` now normalizes the Hill Score, Endurance Score, and VO2Max
+  rows that `snapshot build-input` merges into `snapshot_HillScore.json`,
+  `snapshot_EnduranceScore.json`, and `snapshot_vo2max.json`. From v1.3.0
+  through v1.7.0, Run-All did not recognize those files, so the three datasets
+  were always empty in `snapshot run-all` output, with no warning.
+
+### Also included
+
+- Internal changes toward v2.0.0 that add no user-facing feature: an optional
+  keyword-only progress callback for `run_all` and `parse_fit_export`; version
+  checks in `validate-handoff`, `doctor --run-output`, and `support-bundle`
+  that accept Product major version 1 and later; and an internal `gui`
+  package with its page files, which is in development and has no command.
+
+### Compatibility
+
+- One-shot `run-all` output, the 17 datasets, 224 fields, 6 explicit
+  relationships, stable keys, output paths, Snapshot rules, the Snapshot Store
+  format, and the Product exit mapping remain unchanged. Rerun
+  `snapshot run-all` to obtain the missing rows; see the
+  [v1.7.1 Release Notes](docs/release_notes/v1.7.1.md).
+
 ## v1.7.0 — stable Production release
 
-Published on 2026-10-10 JST as the annotated `v1.7.0` tag, the latest stable
+Published on 2026-10-10 JST as the annotated `v1.7.0` tag,
 [GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.7.0),
 and the verified
 [Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/1.7.0/).
