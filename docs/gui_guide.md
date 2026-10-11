@@ -5,6 +5,10 @@
 > for the v2.0.0 release candidate on TestPyPI. Until then, use the command
 > line as described in
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
+>
+> The page described here is being rebuilt as one page with Snapshots and ZIP
+> input, following the revised [v2.0.0 GUI Design](gui_design.md). This guide
+> will be rewritten with it.
 
 [日本語](gui_guide.ja.md)
 
