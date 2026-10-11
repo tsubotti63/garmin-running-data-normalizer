@@ -19,14 +19,14 @@ personal data.
 - Fail closed on unknown archive members, unsafe paths, or unexpected schemas.
 - Open-Meteo is opt-in until coordinate disclosure and API-use policy are
   documented; raw responses are local/generated data and not committed.
-- Temporary copies stay private and short-lived. A ZIP file inside an Export
-  ZIP file that is too large to open in memory, and the input that
-  `snapshot run-all` builds from the store, are written to a new folder in the
-  operating system's temporary location (readable only by the user on macOS
-  and Linux, and in the user's `%TEMP%` on Windows) whose name starts with
-  `garmin-`. They are deleted when the command ends, including when it fails
-  or is cancelled. A process that is forced to stop, or a power loss, can
-  leave them behind; they contain personal data.
+- Temporary copies stay private and short-lived. Every ZIP file inside an
+  Export ZIP file, and the input that `snapshot run-all` builds from the
+  store, are written to a new folder in the operating system's temporary
+  location (readable only by the user on macOS and Linux, and in the user's
+  `%TEMP%` on Windows) whose name starts with `garmin-`. They are deleted when
+  the command ends, including when it fails or is cancelled. A process that is
+  forced to stop, or a power loss, can leave them behind; they contain
+  personal data.
 
 ## Scanning
 

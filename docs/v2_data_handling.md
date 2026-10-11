@@ -283,7 +283,14 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     v1.7.1.
   - Every member is checked, including members that are not read: a path
     outside the folder, a link, or encryption stops the run.
-  - The size limits apply only to what is read into memory or opened:
+  - Files are read one at a time, in a folder and in a ZIP file alike. Each
+    file is read once at the start of a run for its size and digest, again
+    when a normalizer uses it, and once more at the end to check that the
+    input did not change; a file whose content differs from the first reading
+    stops the run with `INPUT_CHANGED`. Memory use therefore follows the size
+    of the output, that is, the normalized records and the files written, not
+    the size of the Export.
+  - The size limits apply only to what is read or opened:
     - a JSON or FIT file: at most 128 MiB;
     - a ZIP file inside the Export: at most 100,000 files and 2 GiB read from
       it, and, inside an Export ZIP file, at most 2 GiB itself;
@@ -291,17 +298,22 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
 
     Members that are not read do not count, in a ZIP file and in a folder
     alike. `snapshot register` reads every member of a ZIP file inside the
-    Export, and copies the other files to the store without reading them into
-    memory. A member that is read and exceeds one of these limits stops the
+    Export. A member that is read and exceeds one of these limits stops the
     run as unsafe input (`INPUT_DISCOVERY_FAILED` in `run-all`), as in v1.7.1.
-  - From an Export ZIP file, at most 2 GiB and 400,000 files in total are read
-    into memory; beyond that, the run stops with `INPUT_TOO_LARGE`, and the
-    extracted folder can be used instead. A folder has no such limit. A later
-    stage A pull request revises reading so that the whole Export does not
-    have to be held in memory, and raises these limits.
-  - A ZIP file inside the Export ZIP file is opened in memory up to 128 MiB; a
-    larger one is copied to a private temporary folder, read, and deleted (see
-    [Security and Privacy Boundary](security_and_privacy_boundary.md)).
+  - From an Export ZIP file, one reading reads at most 64 GiB and 4,000,000
+    files in total; beyond that, the run stops with `INPUT_TOO_LARGE`, and the
+    extracted folder can be used instead. These totals are far above what an
+    Export holds. They bound how long a reading of a damaged or malicious ZIP
+    file takes and how much it copies to the temporary folder, not memory. A
+    folder is already on disk and has no such totals.
+  - Every ZIP file inside an Export ZIP file is copied, when it is first used,
+    to a private temporary folder, stays there until the run ends, and is then
+    deleted (see [Security and Privacy Boundary](security_and_privacy_boundary.md)).
+    Before the first copy, the free space of the temporary folder is checked
+    against the size of all these ZIP files. When it is too small, or runs out
+    while copying, the run stops with `TEMP_SPACE_INSUFFICIENT`; the next step
+    is to free some space or to use the extracted folder. A ZIP file inside a
+    folder is read where it is.
   - An Export ZIP file that cannot be opened, ends early, or has a member that
     fails its CRC check stops the run with `INPUT_ZIP_CORRUPT`. A damaged ZIP
     file inside the Export still stops the run with `INPUT_DISCOVERY_FAILED`
@@ -322,6 +334,8 @@ The run stops with exit 2 and publishes no output for:
 - Mixed Exports or accounts (`INPUT_MULTIPLE_EXPORTS`).
 - An Export that changes during the run (`INPUT_CHANGED`).
 - The output: it already exists, it cannot be written, or its path is too long.
+- The temporary folder: not enough free space to read an Export ZIP file
+  (`TEMP_SPACE_INSUFFICIENT`).
 - The Snapshot Store: locked by an interrupted registration
   (`SNAPSHOT_STORE_LOCKED`, provisional) or failing verification.
 - Internal checks that data cannot trigger.
@@ -343,8 +357,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `RECORDS_NOT_IN_LATEST_SNAPSHOT`, `INPUT_DUPLICATE_SOURCES`,
   `DATA_FILE_LEFT_OUT`, `DATA_ROW_LEFT_OUT`, `DATA_VALUE_INVALID`, and
   `DATA_TEXT_REPAIRED`. `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them.
-- New error codes: `INPUT_ZIP_CORRUPT` and `INPUT_TOO_LARGE` (stage A1), and
-  `INPUT_MULTIPLE_EXPORTS` and `SNAPSHOT_STORE_LOCKED` (provisional names).
+- New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
+  `TEMP_SPACE_INSUFFICIENT` (stage A1), and `INPUT_MULTIPLE_EXPORTS` and
+  `SNAPSHOT_STORE_LOCKED` (provisional names).
 - Warnings carry codes and counts only: no paths, values, or identifiers.
   Snapshots are named by import number. User labels for Snapshots appear only in
   local output and never in the Support Bundle or the External-safe Pack.
@@ -397,8 +412,13 @@ Every stop has a specific code; errors that v1.7.1 reports only as
 - Outputs: `run_all_version` 2, the new fields and audit sections, and the new
   warning codes. Rerun Run-All; earlier outputs are not converted.
 - Snapshots: existing stores need no migration; rerun `snapshot run-all`.
-- Input: the downloaded Export ZIP file can be used directly. A folder that
-  holds only one folder outside the Export's layout is read from that folder.
+- Input: the downloaded Export ZIP file can be used directly. Folders around
+  the Export, in a ZIP file or a folder, are left out of the recorded paths.
 - CLI: the pre-run checks that the GUI performed in v1.7.1 apply to the CLI,
   errors report what happened and the next step, and `Ctrl+C` reports the
   cancellation.
+- Python API: `DiscoveredAsset` is a plain class instead of a frozen
+  dataclass. Its fields, its constructor, and the content that
+  `discover_export` returns are unchanged, but dataclass equality, hashing,
+  `dataclasses.asdict`, and immutability no longer apply. `read_export` lists
+  an Export's files without keeping their content.

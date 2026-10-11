@@ -509,8 +509,8 @@ class RunAllTest(unittest.TestCase):
             changing_output = temporary / "changing-output"
             activity_file = next(changing_input.rglob("*summarizedActivities.json"))
 
-            def normalize_then_change(root: str, *args: object):
-                records = normalize_activities(root, *args)
+            def normalize_then_change(root: str, *args: object, **kwargs: object):
+                records = normalize_activities(root, *args, **kwargs)
                 activity_file.write_bytes(activity_file.read_bytes() + b" ")
                 return records
 
@@ -652,7 +652,7 @@ class RunAllTest(unittest.TestCase):
             stdout = StringIO()
             stderr = StringIO()
             with mock.patch(
-                "garmin_running_data_normalizer.run_all.discover_export",
+                "garmin_running_data_normalizer.run_all.read_export",
                 side_effect=UnsafeArchiveError("archive member count exceeds configured limit"),
             ):
                 with redirect_stdout(stdout), redirect_stderr(stderr):

@@ -14,8 +14,13 @@ from ..common.time import (
     require_timezone_data,
     resolve_timezone_name,
 )
-from ..intake.discovery import discover_export
-from ..intake.source import CorruptArchiveError, ExportTooLargeError, is_zip_input
+from ..intake.discovery import read_export
+from ..intake.source import (
+    CorruptArchiveError,
+    ExportTooLargeError,
+    TempSpaceError,
+    is_zip_input,
+)
 from ..standalone import StandaloneHandoffError, validate_standalone_handoff
 from .contracts import (
     DOCTOR_FORMAT,
@@ -171,7 +176,10 @@ def doctor_input(
                 )
             )
         try:
-            assets = discover_export(requested)
+            # Every file is read for its digest, as at the start of a run,
+            # without keeping its content.
+            with read_export(requested) as reading:
+                assets = reading.assets
         except CorruptArchiveError:
             findings.append(
                 _finding(
@@ -192,6 +200,18 @@ def doctor_input(
                     actionability="ACTION_REQUIRED",
                     safe_message_id="INPUT_ZIP_TOO_LARGE_TO_READ_DIRECTLY",
                     next_action_id="EXTRACT_EXPORT_AND_SELECT_FOLDER",
+                    authority_reference="product:intake-discovery",
+                    evidence_reference="diagnostic:source-discovery",
+                )
+            )
+        except TempSpaceError:
+            findings.append(
+                _finding(
+                    "TEMP_SPACE_INSUFFICIENT",
+                    severity="ERROR",
+                    actionability="ACTION_REQUIRED",
+                    safe_message_id="TEMP_FOLDER_SPACE_INSUFFICIENT",
+                    next_action_id="FREE_TEMP_SPACE_OR_SELECT_EXTRACTED_FOLDER",
                     authority_reference="product:intake-discovery",
                     evidence_reference="diagnostic:source-discovery",
                 )

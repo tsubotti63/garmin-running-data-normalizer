@@ -5,24 +5,26 @@ import json
 import os
 import re
 import stat
+import zlib
 from collections import Counter
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO, Callable, ContextManager, Iterator
-from zipfile import BadZipFile
+from zipfile import BadZipFile, ZipFile, ZipInfo
 
 from ..common.private_files import (
     PRIVATE_DIRECTORY_MODE,
     ensure_private_directory,
     open_private_file,
 )
-from ..intake.archive import UnsafeArchiveError, read_member, validated_members
+from ..intake.archive import UnsafeArchiveError, digest_member, validated_members
 from ..intake.source import (
     CorruptArchiveError,
     ExportSource,
     ExportTooLargeError,
+    TempSpaceError,
     is_zip_input,
 )
 from .policies import CONTRACT_VERSION, REGISTRY_VERSION
@@ -445,21 +447,16 @@ def _validate_inventory_object(row: dict[str, Any]) -> tuple[str, int, str]:
 
 @dataclass(frozen=True)
 class _StreamedFile:
-    """A file of an Export ZIP file, copied to its blob without holding it in memory."""
+    """A file of the snapshot input, copied to its blob without holding it in memory."""
 
     open: Callable[[], ContextManager[BinaryIO]]
     size: int
 
 
-def _preserve_blob(root: Path, digest: str, source: bytes | Path | _StreamedFile) -> bool:
+def _preserve_blob(root: Path, digest: str, source: Path | _StreamedFile) -> bool:
     destination = root / _blob_relative_path(digest)
     _reject_store_symlink_components(root, destination)
-    if isinstance(source, bytes):
-        size = len(source)
-    elif isinstance(source, _StreamedFile):
-        size = source.size
-    else:
-        size = source.stat().st_size
+    size = source.size if isinstance(source, _StreamedFile) else source.stat().st_size
     if destination.exists():
         if destination.stat().st_size != size or sha256_file(destination) != digest:
             raise SnapshotStoreError("existing immutable blob failed integrity validation")
@@ -469,13 +466,10 @@ def _preserve_blob(root: Path, digest: str, source: bytes | Path | _StreamedFile
     temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
     _reject_store_symlink_components(root, temporary)
     with open_private_file(temporary) as handle:
-        if isinstance(source, bytes):
-            handle.write(source)
-        else:
-            opened = source.open() if isinstance(source, _StreamedFile) else source.open("rb")
-            with opened as input_handle:
-                while chunk := input_handle.read(1024 * 1024):
-                    handle.write(chunk)
+        opened = source.open() if isinstance(source, _StreamedFile) else source.open("rb")
+        with opened as input_handle:
+            while chunk := input_handle.read(1024 * 1024):
+                handle.write(chunk)
         handle.flush()
         os.fsync(handle.fileno())
     if sha256_file(temporary) != digest:
@@ -484,6 +478,16 @@ def _preserve_blob(root: Path, digest: str, source: bytes | Path | _StreamedFile
     os.replace(temporary, destination)
     destination.chmod(IMMUTABLE_FILE_MODE)
     return True
+
+
+@contextmanager
+def _open_member(archive: ZipFile, info: ZipInfo) -> Iterator[BinaryIO]:
+    """Open a member of a ZIP file inside the snapshot input, to copy it."""
+    try:
+        with archive.open(info, "r") as handle:
+            yield handle
+    except (BadZipFile, EOFError, zlib.error) as exc:
+        raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc
 
 
 @contextmanager
@@ -503,9 +507,9 @@ def _open_snapshot_input(source: Path) -> Iterator[ExportSource]:
 def _scan_source(
     source: Path,
     export: ExportSource,
-) -> tuple[list[dict[str, Any]], dict[str, bytes | Path | _StreamedFile]]:
+) -> tuple[list[dict[str, Any]], dict[str, Path | _StreamedFile]]:
     inventory: list[dict[str, Any]] = []
-    payloads: dict[str, bytes | Path | _StreamedFile] = {}
+    payloads: dict[str, Path | _StreamedFile] = {}
     files = export.files()
     if not files:
         raise SnapshotStoreError("snapshot input contains no files")
@@ -530,6 +534,9 @@ def _scan_source(
                     byte_count += len(chunk)
             if byte_count != item.size:
                 raise CorruptArchiveError("the Export ZIP file is damaged or incomplete")
+            # Every file of an Export ZIP file counts against the totals for
+            # one reading of it; a folder has no totals.
+            export.count_read(byte_count)
             digest = hasher.hexdigest()
             payloads.setdefault(
                 digest,
@@ -550,28 +557,35 @@ def _scan_source(
         if item.suffix != ".zip":
             continue
         try:
-            with export.open_archive(item) as archive:
-                for info in validated_members(archive):
-                    member_data = read_member(archive, info)
-                    export.count_read(len(member_data))
-                    member_digest = _sha256_bytes(member_data)
-                    payloads.setdefault(member_digest, member_data)
-                    logical_path = f"{relative}!{info.filename}"
-                    inventory.append(
-                        {
-                            "object_kind": "archive_member",
-                            "relative_path": logical_path,
-                            "container_relative_path": relative,
-                            "archive_member_path": info.filename,
-                            "sha256": member_digest,
-                            "bytes": len(member_data),
-                            "source_family": _source_family(logical_path),
-                            "extension": Path(info.filename).suffix.lower(),
-                            "blob_relative_path": _blob_relative_path(member_digest),
-                            "parser_state": "parser_unsupported",
-                        }
-                    )
-        except (CorruptArchiveError, ExportTooLargeError):
+            # Members are hashed now and copied to the store later, in parts
+            # both times, from the ZIP file that the input keeps open.
+            archive = export.archive(item)
+            for info in validated_members(archive):
+                member_digest, member_bytes = digest_member(archive, info)
+                export.count_read(member_bytes)
+                payloads.setdefault(
+                    member_digest,
+                    _StreamedFile(
+                        lambda archive=archive, info=info: _open_member(archive, info),
+                        member_bytes,
+                    ),
+                )
+                logical_path = f"{relative}!{info.filename}"
+                inventory.append(
+                    {
+                        "object_kind": "archive_member",
+                        "relative_path": logical_path,
+                        "container_relative_path": relative,
+                        "archive_member_path": info.filename,
+                        "sha256": member_digest,
+                        "bytes": member_bytes,
+                        "source_family": _source_family(logical_path),
+                        "extension": Path(info.filename).suffix.lower(),
+                        "blob_relative_path": _blob_relative_path(member_digest),
+                        "parser_state": "parser_unsupported",
+                    }
+                )
+        except (CorruptArchiveError, ExportTooLargeError, TempSpaceError):
             raise
         except (BadZipFile, OSError, UnsafeArchiveError) as exc:
             raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc

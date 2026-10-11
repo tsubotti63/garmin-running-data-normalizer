@@ -188,10 +188,10 @@ A ZIP file is read directly:
 - The central directory and the CRC of every member that is read are checked,
   so an incomplete or damaged download stops the run with a code instead of
   relying on the user's confirmation.
-- Reading is revised so that a large Export does not have to fit in memory at
-  once.
+- Files are read one at a time, so that a large Export does not have to fit
+  in memory at once.
 - The values of the limits, the folder that serves as the root, and the
-  temporary copies of large nested ZIP files are in
+  temporary copies of nested ZIP files are in
   [v2.0.0 Data Handling](v2_data_handling.md#an-export-given-as-a-zip-file).
 
 An extracted folder is read as in v1.x, except that folders around the Export
