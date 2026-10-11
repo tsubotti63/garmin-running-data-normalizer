@@ -2,8 +2,7 @@
 
 ## Status and authority
 
-- Current stable contract: v1.7.0
-- Implementation candidate: v1.7.1 (not published)
+- Current stable contract: v1.7.1
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each
@@ -80,7 +79,7 @@ when the activity has no explicit link or the FIT value is null. The
 `SCHEMA_CATALOG.json` declares these derived and joined columns. The
 External-safe Pack keeps its own columns and does not include them.
 
-For the released v1.7.0 Sleep contract, `sleep_duration_minutes_ex_awake` is
+For the released v1.7.1 Sleep contract, `sleep_duration_minutes_ex_awake` is
 an observed-stage sum when any finite deep/light/REM stage exists, with an
 approved direct-source fallback only when all stages are absent. Missing stages
 are not zero-filled; awake and window-minus-awake are not used; conflicting

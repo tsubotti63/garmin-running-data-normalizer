@@ -68,15 +68,14 @@ Select either preview to inspect its full-size accessible SVG.
 See the
 [asset sources and reproduction notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/README.md).
 
-Current stable release: **v1.7.0** · Python **3.11+** · Apache License 2.0
+Current stable release: **v1.7.1** · Python **3.11+** · Apache License 2.0
 
-Implementation candidate: **v1.7.1** (local review only; not tagged, released, or
-published to PyPI). It fixes `snapshot run-all`, which has produced no Hill
-Score, Endurance Score, or VO2Max rows since v1.3.0, because Run-All did not
-recognize the merged files that `snapshot build-input` writes for them. One-shot
-`run-all` output, `snapshot build-input` output, datasets, stable keys, output
-paths, Snapshot rules, and the `0 / 0 / 3 / 2` Product exit contract are
-unchanged.
+v1.7.1 fixes `snapshot run-all`, which had produced no Hill Score, Endurance
+Score, or VO2Max rows since v1.3.0, because Run-All did not recognize the
+merged files that `snapshot build-input` writes for them. One-shot `run-all`
+output, datasets, stable keys, output paths, Snapshot rules, and the
+`0 / 0 / 3 / 2` Product exit contract are unchanged. The package also
+includes internal changes toward v2.0.0 that add no user-facing feature.
 
 v1.7.0 adds six FIT running-dynamics averages (vertical oscillation, stance
 time, stance time percent, stance time balance, vertical ratio, and step
@@ -113,7 +112,7 @@ v1.4.0 adds read-only Export diagnostics and a Human-reviewed public-safe
 Support Bundle without changing normalized datasets, stable keys, Snapshot
 semantics, or the `0 / 0 / 3 / 2` Product exit contract.
 
-v1.7.0 is published as the annotated tag, the latest stable GitHub Release, and
+v1.7.1 is published as the annotated tag, the latest stable GitHub Release, and
 the latest Production PyPI distribution. v1.4.0 remains the Export Evidence and
 Diagnostics release.
 
@@ -124,9 +123,9 @@ Diagnostics release.
 - [FAQ](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/faq.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
-- [v1.7.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.7.0.md)
-- [Published stable Release v1.7.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.7.0)
-- [Production PyPI v1.7.0](https://pypi.org/project/garmin-running-data-normalizer/1.7.0/)
+- [v1.7.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.7.1.md)
+- [Published stable Release v1.7.1](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.7.1)
+- [Production PyPI v1.7.1](https://pypi.org/project/garmin-running-data-normalizer/1.7.1/)
 - Project story on Zenn: [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
 
 ## Why this project
@@ -164,6 +163,27 @@ Normalize locally
 
 The package does not send the export to a hosted processing service. Public
 reproduction uses only synthetic fixtures.
+
+## What v1.7.1 changes
+
+The v1.7.1 release fixes Snapshot Run-All without changing the 17 normalized
+datasets, stable keys, or the `0 / 0 / 3 / 2` Product exit contract.
+
+- `snapshot run-all` now normalizes the Hill Score, Endurance Score, and
+  VO2Max rows that `snapshot build-input` merges. From v1.3.0 through v1.7.0,
+  those three datasets were always empty in `snapshot run-all` output, with no
+  warning.
+- One-shot `run-all` output from the same Export is unchanged apart from
+  `product_version`.
+- Existing Snapshot Stores need no migration. Rerun `snapshot run-all` to
+  obtain the missing rows.
+- The package also contains internal changes toward v2.0.0 that add no
+  user-facing feature, including an internal GUI package that is in
+  development and has no command.
+
+See the
+[v1.7.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.7.1.md)
+and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
 
 ## What v1.7.0 changes
 
@@ -358,7 +378,7 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. The published v1.7.0
+`python -m garmin_running_data_normalizer --version`. The published v1.7.1
 package installs `tzdata` automatically on Windows so Python can resolve IANA
 timezone data (`Asia/Tokyo` by default, or the timezone given with
 `--timezone`). macOS and Linux continue to use their system timezone data.

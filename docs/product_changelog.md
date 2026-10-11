@@ -4,9 +4,25 @@ This file records factual Garmin Running Data Normalizer product changes. The
 Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
 Platform maintains its own separate changelog.
 
-## v1.7.0 — stable Production FIT running dynamics release
+## v1.7.1 — stable Production Snapshot metrics fix release
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a
+verified Production PyPI distribution on 2026-10-11 JST.
+
+- Fixes `snapshot run-all`, which from v1.3.0 through v1.7.0 produced no Hill
+  Score, Endurance Score, or VO2Max rows, with no warning, because Run-All did
+  not recognize the merged files that `snapshot build-input` writes for them.
+- Includes internal changes toward v2.0.0 that add no user-facing feature: an
+  optional progress callback for `run_all` and `parse_fit_export`, version
+  checks that accept Product major version 1 and later, and an internal `gui`
+  package that is in development and has no command.
+- Preserves one-shot `run-all` output, the 17 datasets, 224 fields, 6 explicit
+  relationships, stable keys, the Snapshot lifecycle contract and policy
+  registry `v1.0`, and the `0 / 0 / 3 / 2` Product exit mapping.
+
+## v1.7.0 — stable Production FIT running dynamics release
+
+Status: published as the annotated tag, a stable GitHub Release, and a
 verified Production PyPI distribution on 2026-10-10 JST.
 
 - Adds six FIT running-dynamics averages to `fit_sessions` and `fit_laps`

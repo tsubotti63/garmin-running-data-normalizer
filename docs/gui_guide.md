@@ -1,7 +1,7 @@
 # GUI Guide
 
 > **In development for v2.0.0.** The GUI is not part of the current stable
-> release, v1.7.0, and the `gui` command is not available yet. It is planned
+> release, v1.7.1, and the `gui` command is not available yet. It is planned
 > for the v2.0.0 release candidate on TestPyPI. Until then, use the command
 > line as described in
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md).

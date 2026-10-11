@@ -2,7 +2,7 @@
 
 - Status: implementation in progress; the command-line interface does not
   expose the GUI yet
-- Applies to: the v2.0.0 release in preparation; v1.7.0 remains the current
+- Applies to: the v2.0.0 release in preparation; v1.7.1 remains the current
   stable release
 - Authority: maintainer design record agreed by the Human maintainer on
   2026-10-10. Product contracts, tests, and the stable release remain the
@@ -260,7 +260,7 @@ alone, and reduced motion.
   version, including pre-release versions such as `2.0.0rc1`.
 - `run_all_version` stays 1 because the output layout does not change.
 - Documents that describe the stable 1.x family are updated at release
-  preparation, together with migration notes for v1.7.0 to v2.0.0.
+  preparation, together with migration notes for v1.7.1 to v2.0.0.
 
 ## Testing
 

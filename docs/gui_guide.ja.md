@@ -1,6 +1,6 @@
 # GUI の手引き
 
-> **v2.0.0 に向けて開発中です。** GUI は、今の安定版 v1.7.0 には入っていません。
+> **v2.0.0 に向けて開発中です。** GUI は、今の安定版 v1.7.1 には入っていません。
 > `gui` のコマンドも、まだ使えません。v2.0.0 の試しの版（TestPyPI の
 > release candidate）から使えるようにする予定です。それまでは、
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md)

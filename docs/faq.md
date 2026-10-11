@@ -1,7 +1,7 @@
 # Frequently Asked Questions
 
 These short answers apply to the current stable Garmin Running Data Normalizer
-`v1.7.0` release and route to the current product authorities. Version `1.7.0`
+`v1.7.1` release and route to the current product authorities. Version `1.7.1`
 is available from the latest GitHub Release and Production PyPI.
 
 ## Getting started
@@ -24,12 +24,12 @@ synthetic data.
 
 ### Which version is stable?
 
-`v1.7.0` is the current stable release. It includes the approved Sleep
+`v1.7.1` is the current stable release. It includes the approved Sleep
 contract while preserving the compatible one-shot workflow, optional Snapshot
 Accumulation, the Windows timezone-data hotfix, and the additive
 Wellness/Metrics datasets documented for v1.3. It is published on
-[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.7.0)
-and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/1.7.0/).
+[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.7.1)
+and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/1.7.1/).
 
 ## Garmin Export and Run-All
 
@@ -214,7 +214,7 @@ Public-safe Windows reports are welcome through
 ### Was the v1.2.0 Windows timezone-data issue resolved?
 
 Yes. v1.2.1 introduced the conditional Windows `tzdata` dependency, which
-v1.7.0 retains. The current release also provides the bounded
+v1.7.1 retains. The current release also provides the bounded
 `TIMEZONE_DATA_UNAVAILABLE` diagnostic if the configured IANA timezone data is
 still unavailable in a damaged or incomplete environment. Confirm the
 environment with:
@@ -225,9 +225,9 @@ python -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
 
 If you pass `--timezone`, check that name instead of `Asia/Tokyo`.
 
-For a normal v1.7.0 Production PyPI installation, no separate
+For a normal v1.7.1 Production PyPI installation, no separate
 `pip install tzdata` step is expected. If the check still fails, reinstall
-v1.7.0 in a new environment and include only sanitized environment details in a
+v1.7.1 in a new environment and include only sanitized environment details in a
 support report.
 
 ### Does the product include running dynamics?
@@ -242,6 +242,15 @@ an explicit Activity/FIT link. Running-dynamics values in the Garmin activity
 list are not read. See the
 [Output Contract](output_contract.md) and
 [Known Limitations](known_limitations.md#fit).
+
+### Why does my Snapshot output have no Hill Score, Endurance Score, or VO2Max rows?
+
+Versions 1.3.0 through 1.7.0 left these three datasets empty in
+`snapshot run-all` output, with no warning, because Run-All did not recognize
+the merged files that `snapshot build-input` writes for them. v1.7.1 fixes
+this. Upgrade and rerun `snapshot run-all` into a new output directory; the
+Snapshot Store needs no migration. One-shot `run-all` was not affected. See
+the [v1.7.1 Release Notes](release_notes/v1.7.1.md).
 
 ### Why can a date differ by one day from Garmin Connect?
 
