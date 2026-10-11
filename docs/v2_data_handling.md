@@ -157,7 +157,8 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     (`FIT_PARSE_INCOMPLETE`).
   - If no Activities record remains, the run stops as an input that is not an
     Export.
-  - A damaged Export ZIP file stops the run (`INPUT_ZIP_CORRUPT`, provisional).
+  - A damaged Export ZIP file stops the run (`INPUT_ZIP_CORRUPT`); see
+    [An Export given as a ZIP file](#an-export-given-as-a-zip-file).
 
 ### Rows and values with problems
 
@@ -252,6 +253,61 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
   - Unknown FIT messages and developer fields are counted in the FIT audit as
     not read, and they do not make a FIT file incomplete.
 
+### An Export given as a ZIP file
+
+- v1.7.1: only an extracted folder is accepted. A ZIP file inside the folder is
+  read one level deep, and every member counts against the archive limits,
+  including members that are not read.
+- v2.0.0 (stage A1):
+  - `run-all`, `doctor --input`, `snapshot register`, and
+    `normalize-activities` accept the downloaded Export ZIP file as well as the
+    extracted folder. A file whose name ends in `.zip`, in any letter case, is
+    a ZIP file; a folder with such a name is a folder. `INPUT_NOT_DIRECTORY`
+    keeps its name and now means that the input is neither a folder nor a ZIP
+    file; stage A5 reviews the name.
+  - The Export's own files decide the result, not the form in which the
+    Export is given: a run of the same Export gives the same outputs, the same
+    recorded paths, and the same Snapshot content identity from a ZIP file as
+    from a folder, however deeply it is wrapped in other folders. Only the
+    limits on reading from a ZIP file, below, differ between the forms.
+  - A ZIP file is read as the folder extracted from it: the same files at the
+    same paths. ZIP files inside it are read one level deep and recorded as
+    `inner.zip!member`, as in a folder; a ZIP file inside those is not read.
+  - Folders around the Export are left out of the paths. While everything in
+    the ZIP file, or in the selected folder, is inside one folder that is not
+    part of the Export's own layout (`DI_CONNECT`, `DI-GOLF`, or a name that
+    starts with `DI-Connect-`, in any letter case), the root moves into that
+    folder, at any depth. Operating-system metadata such as `__MACOSX` and
+    `.DS_Store` is ignored. v1.7.1 kept the names of such folders in the
+    recorded paths, so for a folder given this way, the output changes from
+    v1.7.1.
+  - Every member is checked, including members that are not read: a path
+    outside the folder, a link, or encryption stops the run.
+  - The size limits apply only to what is read into memory or opened:
+    - a JSON or FIT file: at most 128 MiB;
+    - a ZIP file inside the Export: at most 100,000 files and 2 GiB read from
+      it, and, inside an Export ZIP file, at most 2 GiB itself;
+    - a compressed member that is read: a compression ratio of at most 200.
+
+    Members that are not read do not count, in a ZIP file and in a folder
+    alike. `snapshot register` reads every member of a ZIP file inside the
+    Export, and copies the other files to the store without reading them into
+    memory. A member that is read and exceeds one of these limits stops the
+    run as unsafe input (`INPUT_DISCOVERY_FAILED` in `run-all`), as in v1.7.1.
+  - From an Export ZIP file, at most 2 GiB and 400,000 files in total are read
+    into memory; beyond that, the run stops with `INPUT_TOO_LARGE`, and the
+    extracted folder can be used instead. A folder has no such limit. A later
+    stage A pull request revises reading so that the whole Export does not
+    have to be held in memory, and raises these limits.
+  - A ZIP file inside the Export ZIP file is opened in memory up to 128 MiB; a
+    larger one is copied to a private temporary folder, read, and deleted (see
+    [Security and Privacy Boundary](security_and_privacy_boundary.md)).
+  - An Export ZIP file that cannot be opened, ends early, or has a member that
+    fails its CRC check stops the run with `INPUT_ZIP_CORRUPT`. A damaged ZIP
+    file inside the Export still stops the run with `INPUT_DISCOVERY_FAILED`
+    until stage A3 leaves it out with a reason.
+  - The Snapshot Store format does not change.
+
 ### Stops that remain
 
 The run stops with exit 2 and publishes no output for:
@@ -259,7 +315,8 @@ The run stops with exit 2 and publishes no output for:
 - Safety: unsafe ZIP members (paths outside the folder, links, or encryption),
   symbolic links in the input, a damaged Export ZIP file
   (`INPUT_ZIP_CORRUPT`), and exceeded limits on the size, number, or
-  compression ratio of the members that are read.
+  compression ratio of the members that are read, including the limits for the
+  whole Export ZIP file (`INPUT_TOO_LARGE`).
 - An input that is not an Export: no Activities (`ACTIVITIES_NOT_FOUND`) or no
   Activities records (`ACTIVITIES_EMPTY`).
 - Mixed Exports or accounts (`INPUT_MULTIPLE_EXPORTS`).
@@ -286,8 +343,8 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `RECORDS_NOT_IN_LATEST_SNAPSHOT`, `INPUT_DUPLICATE_SOURCES`,
   `DATA_FILE_LEFT_OUT`, `DATA_ROW_LEFT_OUT`, `DATA_VALUE_INVALID`, and
   `DATA_TEXT_REPAIRED`. `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them.
-- New error codes (provisional names): `INPUT_ZIP_CORRUPT`,
-  `INPUT_MULTIPLE_EXPORTS`, and `SNAPSHOT_STORE_LOCKED`.
+- New error codes: `INPUT_ZIP_CORRUPT` and `INPUT_TOO_LARGE` (stage A1), and
+  `INPUT_MULTIPLE_EXPORTS` and `SNAPSHOT_STORE_LOCKED` (provisional names).
 - Warnings carry codes and counts only: no paths, values, or identifiers.
   Snapshots are named by import number. User labels for Snapshots appear only in
   local output and never in the Support Bundle or the External-safe Pack.
@@ -311,11 +368,19 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   longer stops for problems in the data. Sleep rows without `calendarDate` take
   the sleep day from the end time, as in one-shot runs, instead of being held
   back.
-- Registering the same Export as a ZIP file or as its extracted folder should
-  give the same content identity; stage A1 checks this.
-- A test keeps a store in the v1.7.1 format as a fixed synthetic fixture. Every
-  stage A pull request checks that it loads without migration and that every
-  Snapshot is used.
+- Registering the same Export as a ZIP file or as its extracted folder gives
+  the same content identity, however deeply it is wrapped in other folders; a
+  test checks this from stage A1 on.
+- A Snapshot that v1.7.1 registered from a folder inside such wrapping folders
+  keeps their names in its paths, so registering the same Export again gives a
+  different content identity, and the store holds a second Snapshot with the
+  same files. The normalized datasets stay the same, because the records are
+  the same, but the Snapshot lineage and the summaries count two Snapshots.
+  Stage A3 recognizes the same Export by the content of its files rather than
+  by its paths, so that such a Snapshot is not counted as a second Export.
+- A test keeps a store in the v1.7.1 format as a fixed synthetic fixture, with
+  the script that made it. Every stage A pull request checks that it loads
+  without migration and that every Snapshot is used.
 
 ## Golden outputs and tests
 
@@ -332,7 +397,8 @@ Every stop has a specific code; errors that v1.7.1 reports only as
 - Outputs: `run_all_version` 2, the new fields and audit sections, and the new
   warning codes. Rerun Run-All; earlier outputs are not converted.
 - Snapshots: existing stores need no migration; rerun `snapshot run-all`.
-- Input: the downloaded Export ZIP file can be used directly.
+- Input: the downloaded Export ZIP file can be used directly. A folder that
+  holds only one folder outside the Export's layout is read from that folder.
 - CLI: the pre-run checks that the GUI performed in v1.7.1 apply to the CLI,
   errors report what happened and the next step, and `Ctrl+C` reports the
   cancellation.

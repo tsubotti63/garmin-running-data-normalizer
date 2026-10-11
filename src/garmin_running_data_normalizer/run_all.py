@@ -22,6 +22,7 @@ from .common.time import (
 from .fit.parser import parse_fit_export
 from .export.analysis_pack import build_analysis_pack_payloads
 from .intake.discovery import DiscoveredAsset, discover_export
+from .intake.source import CorruptArchiveError, ExportTooLargeError, is_zip_input
 from .normalizers.activities import normalize_activities
 from .normalizers.daily_metrics import DailyMetricConflictError, DailyMetricError
 from .normalizers.gear import normalize_gear
@@ -290,10 +291,10 @@ def _validate_paths(input_path: str | Path, output_path: str | Path) -> tuple[Pa
     requested_input = Path(input_path)
     requested_output = Path(output_path)
     if requested_input.is_symlink():
-        raise RunAllError("INPUT_SYMLINK", "input directory must not be a symbolic link")
+        raise RunAllError("INPUT_SYMLINK", "input must not be a symbolic link")
     input_root = requested_input.resolve()
-    if not input_root.is_dir():
-        raise RunAllError("INPUT_NOT_DIRECTORY", "input directory does not exist")
+    if not input_root.is_dir() and not is_zip_input(input_root):
+        raise RunAllError("INPUT_NOT_DIRECTORY", "input must be an existing folder or ZIP file")
     if requested_output.is_symlink():
         raise RunAllError("OUTPUT_SYMLINK", "output directory must not be a symbolic link")
     output_root = requested_output.resolve()
@@ -307,6 +308,13 @@ def _validate_paths(input_path: str | Path, output_path: str | Path) -> tuple[Pa
 def _discover(root: Path) -> list[DiscoveredAsset]:
     try:
         return discover_export(root)
+    except CorruptArchiveError as exc:
+        raise RunAllError("INPUT_ZIP_CORRUPT", "the Export ZIP file is damaged or incomplete") from exc
+    except ExportTooLargeError as exc:
+        raise RunAllError(
+            "INPUT_TOO_LARGE",
+            "the Export ZIP file is too large to read directly; extract it and use the folder",
+        ) from exc
     except Exception as exc:
         raise RunAllError("INPUT_DISCOVERY_FAILED", "input discovery or archive safety validation failed") from exc
 

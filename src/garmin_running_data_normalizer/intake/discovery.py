@@ -5,10 +5,9 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from zipfile import ZipFile
 
-from ..common.os_metadata import is_os_metadata_path
 from .archive import ArchiveLimits, read_member, validated_members
+from .source import ExportSource
 
 
 SUPPORTED_SUFFIXES = {".json", ".fit"}
@@ -33,32 +32,40 @@ def _digest(data: bytes) -> str:
 
 
 def discover_export(root: str | Path, limits: ArchiveLimits = ArchiveLimits()) -> list[DiscoveredAsset]:
-    base = Path(root).resolve()
-    if not base.is_dir():
-        raise FileNotFoundError(f"Garmin export directory does not exist: {root}")
+    """Read the JSON and FIT files of an Export folder or Export ZIP file.
+
+    ZIP files in the Export are read one level deep; within them, only JSON
+    and FIT members are read, and only those members count against the limits.
+    """
     assets: list[DiscoveredAsset] = []
-    for path in sorted(candidate for candidate in base.rglob("*") if candidate.is_file()):
-        relative = path.relative_to(base).as_posix()
-        if path.is_symlink():
-            raise ValueError(f"symbolic-link inputs are not supported: {relative}")
-        if is_os_metadata_path(relative):
-            continue
-        suffix = path.suffix.lower()
-        if suffix in SUPPORTED_SUFFIXES:
-            data = path.read_bytes()
-            if len(data) > limits.max_member_bytes:
-                raise ValueError(f"input file exceeds size limit: {relative}")
-            assets.append(DiscoveredAsset(suffix[1:], relative, None, len(data), _digest(data), data))
-        elif suffix == ".zip":
-            with ZipFile(path, "r") as archive:
-                for info in validated_members(archive, limits):
-                    member_suffix = Path(info.filename).suffix.lower()
-                    if member_suffix not in SUPPORTED_SUFFIXES:
-                        continue
-                    data = read_member(archive, info, limits)
-                    assets.append(
-                        DiscoveredAsset(member_suffix[1:], relative, info.filename, len(data), _digest(data), data)
-                    )
+    with ExportSource(root, limits) as source:
+        for item in source.files():
+            if item.suffix in SUPPORTED_SUFFIXES:
+                data = source.read(item)
+                source.count_read(len(data))
+                assets.append(
+                    DiscoveredAsset(item.suffix[1:], item.relative_path, None, len(data), _digest(data), data)
+                )
+            elif item.suffix == ".zip":
+                with source.open_archive(item) as archive:
+                    for info in validated_members(
+                        archive,
+                        limits,
+                        reads=lambda member: Path(member.filename).suffix.lower() in SUPPORTED_SUFFIXES,
+                    ):
+                        member_suffix = Path(info.filename).suffix.lower()
+                        data = read_member(archive, info, limits)
+                        source.count_read(len(data))
+                        assets.append(
+                            DiscoveredAsset(
+                                member_suffix[1:],
+                                item.relative_path,
+                                info.filename,
+                                len(data),
+                                _digest(data),
+                                data,
+                            )
+                        )
     return sorted(assets, key=lambda item: item.provenance_path)
 
 

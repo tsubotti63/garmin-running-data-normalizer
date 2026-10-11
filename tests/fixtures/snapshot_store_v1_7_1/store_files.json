@@ -1,0 +1,177 @@
+{
+  "description": "The files of a Snapshot Store that garmin-running-data-normalizer 1.7.1 wrote from synthetic Exports; see README.md.",
+  "entries": [
+    {
+      "mode": "0700",
+      "path": "blobs"
+    },
+    {
+      "mode": "0700",
+      "path": "blobs/sha256"
+    },
+    {
+      "mode": "0700",
+      "path": "blobs/sha256/18"
+    },
+    {
+      "mode": "0400",
+      "path": "blobs/sha256/18/18c4f85a180cf29ddc1f8e3a3143ff54d643d1c306dbe610f4f70482632071d4",
+      "text": "synthetic\n"
+    },
+    {
+      "mode": "0700",
+      "path": "blobs/sha256/40"
+    },
+    {
+      "mode": "0400",
+      "path": "blobs/sha256/40/4010905b6e078e34390d95d749f783f178a74c16a7fbe21f26d904e64cd93610",
+      "text": "[{\"calendarDate\": \"2030-01-02\", \"sleepEndTimestampGMT\": \"2030-01-01T22:00:00Z\", \"sleepStartTimestampGMT\": \"2030-01-01T14:00:00Z\", \"sleepTimeSeconds\": 27002}]\n"
+    },
+    {
+      "mode": "0700",
+      "path": "blobs/sha256/7a"
+    },
+    {
+      "mode": "0400",
+      "path": "blobs/sha256/7a/7afdf11ffa35ff6b9fc659cd2608d54fb6ec97a6ecdd57b0ed13ef6f909ace40",
+      "text": "{\"gearActivityDTOs\": {\"SYNTHETIC-GEAR-1\": [{\"activityId\": \"SYNTHETIC-A1\"}]}, \"gearDTOS\": [{\"displayName\": \"Synthetic Shoe\", \"gearPk\": \"SYNTHETIC-GEAR-1\"}]}\n"
+    },
+    {
+      "mode": "0700",
+      "path": "blobs/sha256/7c"
+    },
+    {
+      "base64": "DiAAALwAAAAuRklUl6RAAAASABICBIYFAQAGAQAHBIYIBIYJBIYLAoQOBIYPBIYQAQIRAQISAQITAQIUAoQVAoQWAoQXAoQaAoRBAAATAA4CBIYHBIYIBIYJBIYNBIYOBIYPAQIQAQIRAQISAQITAoQUAoQVAoQWAoQAQEIPAAECgO42AOBnNQBAQg8AWAK4CwAAiBMAAJa0Ul/6AJABZABQAAEAAUBCDwCA7jYA4Gc1AEBCDwC4CwAAiBMAAJa0Ul/6AJABZABQAKVI",
+      "mode": "0400",
+      "path": "blobs/sha256/7c/7ce53d5096be2bc48c2a19b03deb29fd3c67d5caf32614fa3bb9ca6f13c61877"
+    },
+    {
+      "mode": "0700",
+      "path": "blobs/sha256/8c"
+    },
+    {
+      "mode": "0400",
+      "path": "blobs/sha256/8c/8ce3607dff6de164806e88dcdf280a47b7f6f2f3d4cc9369b20872d14eecb8cc",
+      "text": "[{\"summarizedActivitiesExport\": [{\"activityId\": \"SYNTHETIC-A1\", \"activityType\": \"running\", \"distance\": 500000, \"duration\": 1800000, \"name\": \"Synthetic A1\", \"sportType\": \"running\", \"startTimeGmt\": 1893456000000, \"startTimeLocal\": \"2030-01-01T09:00:00\", \"synthetic\": true}, {\"activityId\": \"SYNTHETIC-A2\", \"activityType\": \"running\", \"distance\": 500000, \"duration\": 1800000, \"name\": \"Synthetic A2 before\", \"sportType\": \"running\", \"startTimeGmt\": 1893456000000, \"startTimeLocal\": \"2030-01-01T09:00:00\", \"synthetic\": true}]}]\n"
+    },
+    {
+      "mode": "0700",
+      "path": "blobs/sha256/9c"
+    },
+    {
+      "mode": "0400",
+      "path": "blobs/sha256/9c/9cc2f840e74259ea47f32af8b95751810fa6751ac350bd428a33ab4f52f4b490",
+      "text": "[{\"summarizedActivitiesExport\": [{\"activityId\": \"SYNTHETIC-A2\", \"activityType\": \"running\", \"distance\": 500000, \"duration\": 1800000, \"name\": \"Synthetic A2 after\", \"sportType\": \"running\", \"startTimeGmt\": 1893456000000, \"startTimeLocal\": \"2030-01-01T09:00:00\", \"synthetic\": true}, {\"activityId\": \"SYNTHETIC-A3\", \"activityType\": \"running\", \"distance\": 500000, \"duration\": 1800000, \"name\": \"Synthetic A3\", \"sportType\": \"running\", \"startTimeGmt\": 1893542400000, \"startTimeLocal\": \"2030-01-02T09:00:00\", \"synthetic\": true}]}]\n"
+    },
+    {
+      "mode": "0700",
+      "path": "blobs/sha256/a5"
+    },
+    {
+      "mode": "0400",
+      "path": "blobs/sha256/a5/a52a224cdff12c9cf0a990836928ae45e8341d39278ef89cd6d6bf22a622a887",
+      "text": "[{\"calendarDate\": \"2030-01-02\", \"enduranceScore\": 82, \"hillScoreClassificationId\": 4, \"hillScoreFeedbackPhraseId\": 12, \"overallScore\": 72, \"strengthScore\": 62}, {\"calendarDate\": \"2030-01-03\", \"enduranceScore\": 83, \"hillScoreClassificationId\": 4, \"hillScoreFeedbackPhraseId\": 12, \"overallScore\": 73, \"strengthScore\": 63}]\n"
+    },
+    {
+      "mode": "0700",
+      "path": "blobs/sha256/e3"
+    },
+    {
+      "mode": "0400",
+      "path": "blobs/sha256/e3/e3df27cdca41c2233334fd677591aa75eb74402a49553b0a2966ffb9131d586b",
+      "text": "{\"personalRecords\": [{\"activityId\": \"SYNTHETIC-A1\", \"personalRecordId\": \"SYNTHETIC-PR-1\", \"personalRecordType\": \"synthetic_best\"}]}\n"
+    },
+    {
+      "mode": "0700",
+      "path": "blobs/sha256/ea"
+    },
+    {
+      "base64": "UEsDBBQAAAAAAAAANGTSN6rlzAAAAMwAAAAXAAAAc3ludGhldGljLXNlc3Npb24tMS5maXQOIAAAvAAAAC5GSVSXpEAAABIAEgIEhgUBAAYBAAcEhggEhgkEhgsChA4Ehg8EhhABAhEBAhIBAhMBAhQChBUChBYChBcChBoChEEAABMADgIEhgcEhggEhgkEhg0Ehg4Ehg8BAhABAhEBAhIBAhMChBQChBUChBYChABAQg8AAQKA7jYA4Gc1AEBCDwBYArgLAACIEwAAlrRSX/oAkAFkAFAAAQABQEIPAIDuNgDgZzUAQEIPALgLAACIEwAAlrRSX/oAkAFkAFAApUhQSwECFAMUAAAAAAAAADRk0jeq5cwAAADMAAAAFwAAAAAAAAAAAAAAgAEAAAAAc3ludGhldGljLXNlc3Npb24tMS5maXRQSwUGAAAAAAEAAQBFAAAAAQEAAAAA",
+      "mode": "0400",
+      "path": "blobs/sha256/ea/ea105c335db4e701c780bcf766e48f53a8ba4bb098ff9e5f55384771391a3547"
+    },
+    {
+      "mode": "0700",
+      "path": "blobs/sha256/f7"
+    },
+    {
+      "mode": "0400",
+      "path": "blobs/sha256/f7/f7baffac685fd5c197ce310c80dc20eac8347574649a795175835c52bed4a6be",
+      "text": "{\"gearActivityDTOs\": {\"SYNTHETIC-GEAR-1\": [{\"activityId\": \"SYNTHETIC-A3\"}]}, \"gearDTOS\": [{\"displayName\": \"Synthetic Shoe\", \"gearPk\": \"SYNTHETIC-GEAR-1\"}]}\n"
+    },
+    {
+      "mode": "0700",
+      "path": "blobs/sha256/fb"
+    },
+    {
+      "mode": "0400",
+      "path": "blobs/sha256/fb/fb3d936dc6adb406a4e76a7819bb4ea7e2a73b902bbc039791ca1495b5177b11",
+      "text": "[{\"calendarDate\": \"2030-01-02\", \"sleepEndTimestampGMT\": \"2030-01-01T22:00:00Z\", \"sleepStartTimestampGMT\": \"2030-01-01T14:00:00Z\", \"sleepTimeSeconds\": 27002}, {\"calendarDate\": \"2030-01-03\", \"sleepEndTimestampGMT\": \"2030-01-02T22:00:00Z\", \"sleepStartTimestampGMT\": \"2030-01-02T14:00:00Z\", \"sleepTimeSeconds\": 27003}]\n"
+    },
+    {
+      "mode": "0700",
+      "path": "blobs/sha256/fc"
+    },
+    {
+      "mode": "0400",
+      "path": "blobs/sha256/fc/fcba56c6eb5eadc39ce54cdb17185b059c8f9f86f92ced4603fecdb7c6aef84c",
+      "text": "[{\"calendarDate\": \"2030-01-02\", \"enduranceScore\": 82, \"hillScoreClassificationId\": 4, \"hillScoreFeedbackPhraseId\": 12, \"overallScore\": 72, \"strengthScore\": 62}]\n"
+    },
+    {
+      "mode": "0700",
+      "path": "journal"
+    },
+    {
+      "mode": "0600",
+      "path": "registry.json",
+      "text": "{\n  \"contract_version\": \"garmin_public_snapshot_lifecycle:v1.0\",\n  \"format\": \"garmin-running-data-normalizer-snapshot-registry-v1\",\n  \"snapshots\": [\n    {\n      \"archive_member_count\": 1,\n      \"export_completion_confirmed\": true,\n      \"export_downloaded_at\": \"2030-01-01T01:00:00+00:00\",\n      \"export_observed_at\": \"2030-01-01T02:00:00+00:00\",\n      \"export_requested_at\": \"2030-01-01T00:00:00+00:00\",\n      \"file_count\": 7,\n      \"inventory_sha256\": \"3e9590b90d6a5601facc95b688744a3cce41d16a259d211ffcb4d307641a0bff\",\n      \"logical_order\": 1,\n      \"manifest_sha256\": \"269b3bbc1e34b5ee82e923362cb3fd9226683c908d3c9557357f272ae3a90b5c\",\n      \"registered_at\": \"2030-01-20T00:00:00+00:00\",\n      \"snapshot_content_id\": \"content:efcd525248cae2dd7ca72c0f12db9c8b8f0ef9401056b54272039361cd2123ff\",\n      \"snapshot_id\": \"snapshot-0de807914a1711e7697c8c7bf631bf06c1595414ce68807682db2385416a50b8\",\n      \"snapshot_label\": \"S1\",\n      \"total_bytes\": 1689\n    },\n    {\n      \"archive_member_count\": 1,\n      \"export_completion_confirmed\": true,\n      \"export_downloaded_at\": \"2030-01-02T01:00:00+00:00\",\n      \"export_observed_at\": \"2030-01-02T02:00:00+00:00\",\n      \"export_requested_at\": \"2030-01-02T00:00:00+00:00\",\n      \"file_count\": 7,\n      \"inventory_sha256\": \"4494524d1262a448751d3e0a7cf13d0bf276e23a4bd04abd7c4305d9db675aee\",\n      \"logical_order\": 2,\n      \"manifest_sha256\": \"92b6d92507903fd4e09765d388bce1b007a30b8a02a5a227fd83aaf0095175ce\",\n      \"registered_at\": \"2030-01-20T00:00:00+00:00\",\n      \"snapshot_content_id\": \"content:0d02f86be40a123fc948527c65608cd0a278735288cca742c87694ed928dab02\",\n      \"snapshot_id\": \"snapshot-72ce3afa5d846f42769b50fc9a8bea5a3b7592efbecbe91cefdd78ef5d326893\",\n      \"snapshot_label\": \"S2\",\n      \"total_bytes\": 2005\n    }\n  ]\n}\n"
+    },
+    {
+      "mode": "0600",
+      "path": "snapshot_family_coverage.json",
+      "text": "{\n  \"contract_version\": \"garmin_public_snapshot_lifecycle:v1.0\",\n  \"families\": {\n    \"DI-Connect-Fitness\": {\n      \"object_count\": 6,\n      \"presence_pattern\": \"11\",\n      \"snapshot_presence\": [\n        1,\n        2\n      ]\n    },\n    \"DI-Connect-Metrics\": {\n      \"object_count\": 2,\n      \"presence_pattern\": \"11\",\n      \"snapshot_presence\": [\n        1,\n        2\n      ]\n    },\n    \"DI-Connect-Uploaded-Files\": {\n      \"object_count\": 4,\n      \"presence_pattern\": \"11\",\n      \"snapshot_presence\": [\n        1,\n        2\n      ]\n    },\n    \"DI-Connect-Wellness\": {\n      \"object_count\": 2,\n      \"presence_pattern\": \"11\",\n      \"snapshot_presence\": [\n        1,\n        2\n      ]\n    },\n    \"unknown\": {\n      \"object_count\": 2,\n      \"presence_pattern\": \"11\",\n      \"snapshot_presence\": [\n        1,\n        2\n      ]\n    }\n  },\n  \"format\": \"garmin-running-data-normalizer-snapshot-family-coverage-v1\",\n  \"snapshot_count\": 2\n}\n"
+    },
+    {
+      "mode": "0600",
+      "path": "snapshot_registry.json",
+      "text": "{\n  \"contract_version\": \"garmin_public_snapshot_lifecycle:v1.0\",\n  \"format\": \"garmin-running-data-normalizer-snapshot-registry-v1\",\n  \"snapshots\": [\n    {\n      \"archive_member_count\": 1,\n      \"export_completion_confirmed\": true,\n      \"export_downloaded_at\": \"2030-01-01T01:00:00+00:00\",\n      \"export_observed_at\": \"2030-01-01T02:00:00+00:00\",\n      \"export_requested_at\": \"2030-01-01T00:00:00+00:00\",\n      \"file_count\": 7,\n      \"inventory_sha256\": \"3e9590b90d6a5601facc95b688744a3cce41d16a259d211ffcb4d307641a0bff\",\n      \"logical_order\": 1,\n      \"manifest_sha256\": \"269b3bbc1e34b5ee82e923362cb3fd9226683c908d3c9557357f272ae3a90b5c\",\n      \"registered_at\": \"2030-01-20T00:00:00+00:00\",\n      \"snapshot_content_id\": \"content:efcd525248cae2dd7ca72c0f12db9c8b8f0ef9401056b54272039361cd2123ff\",\n      \"snapshot_id\": \"snapshot-0de807914a1711e7697c8c7bf631bf06c1595414ce68807682db2385416a50b8\",\n      \"snapshot_label\": \"S1\",\n      \"total_bytes\": 1689\n    },\n    {\n      \"archive_member_count\": 1,\n      \"export_completion_confirmed\": true,\n      \"export_downloaded_at\": \"2030-01-02T01:00:00+00:00\",\n      \"export_observed_at\": \"2030-01-02T02:00:00+00:00\",\n      \"export_requested_at\": \"2030-01-02T00:00:00+00:00\",\n      \"file_count\": 7,\n      \"inventory_sha256\": \"4494524d1262a448751d3e0a7cf13d0bf276e23a4bd04abd7c4305d9db675aee\",\n      \"logical_order\": 2,\n      \"manifest_sha256\": \"92b6d92507903fd4e09765d388bce1b007a30b8a02a5a227fd83aaf0095175ce\",\n      \"registered_at\": \"2030-01-20T00:00:00+00:00\",\n      \"snapshot_content_id\": \"content:0d02f86be40a123fc948527c65608cd0a278735288cca742c87694ed928dab02\",\n      \"snapshot_id\": \"snapshot-72ce3afa5d846f42769b50fc9a8bea5a3b7592efbecbe91cefdd78ef5d326893\",\n      \"snapshot_label\": \"S2\",\n      \"total_bytes\": 2005\n    }\n  ]\n}\n"
+    },
+    {
+      "mode": "0700",
+      "path": "snapshots"
+    },
+    {
+      "mode": "0700",
+      "path": "snapshots/snapshot-0de807914a1711e7697c8c7bf631bf06c1595414ce68807682db2385416a50b8"
+    },
+    {
+      "mode": "0400",
+      "path": "snapshots/snapshot-0de807914a1711e7697c8c7bf631bf06c1595414ce68807682db2385416a50b8/manifest.json",
+      "text": "{\n  \"account_store_id\": \"synthetic-account-boundary\",\n  \"archive_member_count\": 1,\n  \"automatic_deletion\": false,\n  \"contract_version\": \"garmin_public_snapshot_lifecycle:v1.0\",\n  \"export_completion_confirmed\": true,\n  \"export_downloaded_at\": \"2030-01-01T01:00:00+00:00\",\n  \"export_observed_at\": \"2030-01-01T02:00:00+00:00\",\n  \"export_requested_at\": \"2030-01-01T00:00:00+00:00\",\n  \"family_counts\": {\n    \"DI-Connect-Fitness\": 3,\n    \"DI-Connect-Metrics\": 1,\n    \"DI-Connect-Uploaded-Files\": 2,\n    \"DI-Connect-Wellness\": 1,\n    \"unknown\": 1\n  },\n  \"file_count\": 7,\n  \"format\": \"garmin-running-data-normalizer-snapshot-manifest-v1\",\n  \"immutable\": true,\n  \"objects\": [\n    {\n      \"blob_relative_path\": \"blobs/sha256/7a/7afdf11ffa35ff6b9fc659cd2608d54fb6ec97a6ecdd57b0ed13ef6f909ace40\",\n      \"bytes\": 156,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Fitness/synthetic_gear.json\",\n      \"sha256\": \"7afdf11ffa35ff6b9fc659cd2608d54fb6ec97a6ecdd57b0ed13ef6f909ace40\",\n      \"source_family\": \"DI-Connect-Fitness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/e3/e3df27cdca41c2233334fd677591aa75eb74402a49553b0a2966ffb9131d586b\",\n      \"bytes\": 132,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Fitness/synthetic_personalRecord.json\",\n      \"sha256\": \"e3df27cdca41c2233334fd677591aa75eb74402a49553b0a2966ffb9131d586b\",\n      \"source_family\": \"DI-Connect-Fitness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/8c/8ce3607dff6de164806e88dcdf280a47b7f6f2f3d4cc9369b20872d14eecb8cc\",\n      \"bytes\": 520,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Fitness/synthetic_summarizedActivities.json\",\n      \"sha256\": \"8ce3607dff6de164806e88dcdf280a47b7f6f2f3d4cc9369b20872d14eecb8cc\",\n      \"source_family\": \"DI-Connect-Fitness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/fc/fcba56c6eb5eadc39ce54cdb17185b059c8f9f86f92ced4603fecdb7c6aef84c\",\n      \"bytes\": 161,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Metrics/HillScore_synthetic.json\",\n      \"sha256\": \"fcba56c6eb5eadc39ce54cdb17185b059c8f9f86f92ced4603fecdb7c6aef84c\",\n      \"source_family\": \"DI-Connect-Metrics\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/ea/ea105c335db4e701c780bcf766e48f53a8ba4bb098ff9e5f55384771391a3547\",\n      \"bytes\": 348,\n      \"container_relative_path\": null,\n      \"extension\": \".zip\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip\",\n      \"sha256\": \"ea105c335db4e701c780bcf766e48f53a8ba4bb098ff9e5f55384771391a3547\",\n      \"source_family\": \"DI-Connect-Uploaded-Files\"\n    },\n    {\n      \"archive_member_path\": \"synthetic-session-1.fit\",\n      \"blob_relative_path\": \"blobs/sha256/7c/7ce53d5096be2bc48c2a19b03deb29fd3c67d5caf32614fa3bb9ca6f13c61877\",\n      \"bytes\": 204,\n      \"container_relative_path\": \"DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip\",\n      \"extension\": \".fit\",\n      \"object_kind\": \"archive_member\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip!synthetic-session-1.fit\",\n      \"sha256\": \"7ce53d5096be2bc48c2a19b03deb29fd3c67d5caf32614fa3bb9ca6f13c61877\",\n      \"source_family\": \"DI-Connect-Uploaded-Files\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/40/4010905b6e078e34390d95d749f783f178a74c16a7fbe21f26d904e64cd93610\",\n      \"bytes\": 158,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Wellness/synthetic_sleepData.json\",\n      \"sha256\": \"4010905b6e078e34390d95d749f783f178a74c16a7fbe21f26d904e64cd93610\",\n      \"source_family\": \"DI-Connect-Wellness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/18/18c4f85a180cf29ddc1f8e3a3143ff54d643d1c306dbe610f4f70482632071d4\",\n      \"bytes\": 10,\n      \"container_relative_path\": null,\n      \"extension\": \".txt\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"synthetic-readme.txt\",\n      \"sha256\": \"18c4f85a180cf29ddc1f8e3a3143ff54d643d1c306dbe610f4f70482632071d4\",\n      \"source_family\": \"unknown\"\n    }\n  ],\n  \"policy_registry_version\": \"garmin_public_snapshot_dataset_merge_policies:v1.0\",\n  \"registered_at\": \"2030-01-20T00:00:00+00:00\",\n  \"snapshot_content_id\": \"content:efcd525248cae2dd7ca72c0f12db9c8b8f0ef9401056b54272039361cd2123ff\",\n  \"snapshot_id\": \"snapshot-0de807914a1711e7697c8c7bf631bf06c1595414ce68807682db2385416a50b8\",\n  \"snapshot_label\": \"S1\",\n  \"total_bytes\": 1689\n}\n"
+    },
+    {
+      "mode": "0400",
+      "path": "snapshots/snapshot-0de807914a1711e7697c8c7bf631bf06c1595414ce68807682db2385416a50b8/snapshot-0de807914a1711e7697c8c7bf631bf06c1595414ce68807682db2385416a50b8.inventory.json",
+      "text": "{\n  \"contract_version\": \"garmin_public_snapshot_lifecycle:v1.0\",\n  \"format\": \"garmin-running-data-normalizer-snapshot-inventory-v1\",\n  \"objects\": [\n    {\n      \"blob_relative_path\": \"blobs/sha256/7a/7afdf11ffa35ff6b9fc659cd2608d54fb6ec97a6ecdd57b0ed13ef6f909ace40\",\n      \"bytes\": 156,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Fitness/synthetic_gear.json\",\n      \"sha256\": \"7afdf11ffa35ff6b9fc659cd2608d54fb6ec97a6ecdd57b0ed13ef6f909ace40\",\n      \"source_family\": \"DI-Connect-Fitness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/e3/e3df27cdca41c2233334fd677591aa75eb74402a49553b0a2966ffb9131d586b\",\n      \"bytes\": 132,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Fitness/synthetic_personalRecord.json\",\n      \"sha256\": \"e3df27cdca41c2233334fd677591aa75eb74402a49553b0a2966ffb9131d586b\",\n      \"source_family\": \"DI-Connect-Fitness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/8c/8ce3607dff6de164806e88dcdf280a47b7f6f2f3d4cc9369b20872d14eecb8cc\",\n      \"bytes\": 520,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Fitness/synthetic_summarizedActivities.json\",\n      \"sha256\": \"8ce3607dff6de164806e88dcdf280a47b7f6f2f3d4cc9369b20872d14eecb8cc\",\n      \"source_family\": \"DI-Connect-Fitness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/fc/fcba56c6eb5eadc39ce54cdb17185b059c8f9f86f92ced4603fecdb7c6aef84c\",\n      \"bytes\": 161,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Metrics/HillScore_synthetic.json\",\n      \"sha256\": \"fcba56c6eb5eadc39ce54cdb17185b059c8f9f86f92ced4603fecdb7c6aef84c\",\n      \"source_family\": \"DI-Connect-Metrics\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/ea/ea105c335db4e701c780bcf766e48f53a8ba4bb098ff9e5f55384771391a3547\",\n      \"bytes\": 348,\n      \"container_relative_path\": null,\n      \"extension\": \".zip\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip\",\n      \"sha256\": \"ea105c335db4e701c780bcf766e48f53a8ba4bb098ff9e5f55384771391a3547\",\n      \"source_family\": \"DI-Connect-Uploaded-Files\"\n    },\n    {\n      \"archive_member_path\": \"synthetic-session-1.fit\",\n      \"blob_relative_path\": \"blobs/sha256/7c/7ce53d5096be2bc48c2a19b03deb29fd3c67d5caf32614fa3bb9ca6f13c61877\",\n      \"bytes\": 204,\n      \"container_relative_path\": \"DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip\",\n      \"extension\": \".fit\",\n      \"object_kind\": \"archive_member\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip!synthetic-session-1.fit\",\n      \"sha256\": \"7ce53d5096be2bc48c2a19b03deb29fd3c67d5caf32614fa3bb9ca6f13c61877\",\n      \"source_family\": \"DI-Connect-Uploaded-Files\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/40/4010905b6e078e34390d95d749f783f178a74c16a7fbe21f26d904e64cd93610\",\n      \"bytes\": 158,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Wellness/synthetic_sleepData.json\",\n      \"sha256\": \"4010905b6e078e34390d95d749f783f178a74c16a7fbe21f26d904e64cd93610\",\n      \"source_family\": \"DI-Connect-Wellness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/18/18c4f85a180cf29ddc1f8e3a3143ff54d643d1c306dbe610f4f70482632071d4\",\n      \"bytes\": 10,\n      \"container_relative_path\": null,\n      \"extension\": \".txt\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"synthetic-readme.txt\",\n      \"sha256\": \"18c4f85a180cf29ddc1f8e3a3143ff54d643d1c306dbe610f4f70482632071d4\",\n      \"source_family\": \"unknown\"\n    }\n  ],\n  \"snapshot_id\": \"snapshot-0de807914a1711e7697c8c7bf631bf06c1595414ce68807682db2385416a50b8\"\n}\n"
+    },
+    {
+      "mode": "0700",
+      "path": "snapshots/snapshot-72ce3afa5d846f42769b50fc9a8bea5a3b7592efbecbe91cefdd78ef5d326893"
+    },
+    {
+      "mode": "0400",
+      "path": "snapshots/snapshot-72ce3afa5d846f42769b50fc9a8bea5a3b7592efbecbe91cefdd78ef5d326893/manifest.json",
+      "text": "{\n  \"account_store_id\": \"synthetic-account-boundary\",\n  \"archive_member_count\": 1,\n  \"automatic_deletion\": false,\n  \"contract_version\": \"garmin_public_snapshot_lifecycle:v1.0\",\n  \"export_completion_confirmed\": true,\n  \"export_downloaded_at\": \"2030-01-02T01:00:00+00:00\",\n  \"export_observed_at\": \"2030-01-02T02:00:00+00:00\",\n  \"export_requested_at\": \"2030-01-02T00:00:00+00:00\",\n  \"family_counts\": {\n    \"DI-Connect-Fitness\": 3,\n    \"DI-Connect-Metrics\": 1,\n    \"DI-Connect-Uploaded-Files\": 2,\n    \"DI-Connect-Wellness\": 1,\n    \"unknown\": 1\n  },\n  \"file_count\": 7,\n  \"format\": \"garmin-running-data-normalizer-snapshot-manifest-v1\",\n  \"immutable\": true,\n  \"objects\": [\n    {\n      \"blob_relative_path\": \"blobs/sha256/f7/f7baffac685fd5c197ce310c80dc20eac8347574649a795175835c52bed4a6be\",\n      \"bytes\": 156,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Fitness/synthetic_gear.json\",\n      \"sha256\": \"f7baffac685fd5c197ce310c80dc20eac8347574649a795175835c52bed4a6be\",\n      \"source_family\": \"DI-Connect-Fitness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/e3/e3df27cdca41c2233334fd677591aa75eb74402a49553b0a2966ffb9131d586b\",\n      \"bytes\": 132,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Fitness/synthetic_personalRecord.json\",\n      \"sha256\": \"e3df27cdca41c2233334fd677591aa75eb74402a49553b0a2966ffb9131d586b\",\n      \"source_family\": \"DI-Connect-Fitness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/9c/9cc2f840e74259ea47f32af8b95751810fa6751ac350bd428a33ab4f52f4b490\",\n      \"bytes\": 519,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Fitness/synthetic_summarizedActivities.json\",\n      \"sha256\": \"9cc2f840e74259ea47f32af8b95751810fa6751ac350bd428a33ab4f52f4b490\",\n      \"source_family\": \"DI-Connect-Fitness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/a5/a52a224cdff12c9cf0a990836928ae45e8341d39278ef89cd6d6bf22a622a887\",\n      \"bytes\": 321,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Metrics/HillScore_synthetic.json\",\n      \"sha256\": \"a52a224cdff12c9cf0a990836928ae45e8341d39278ef89cd6d6bf22a622a887\",\n      \"source_family\": \"DI-Connect-Metrics\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/ea/ea105c335db4e701c780bcf766e48f53a8ba4bb098ff9e5f55384771391a3547\",\n      \"bytes\": 348,\n      \"container_relative_path\": null,\n      \"extension\": \".zip\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip\",\n      \"sha256\": \"ea105c335db4e701c780bcf766e48f53a8ba4bb098ff9e5f55384771391a3547\",\n      \"source_family\": \"DI-Connect-Uploaded-Files\"\n    },\n    {\n      \"archive_member_path\": \"synthetic-session-1.fit\",\n      \"blob_relative_path\": \"blobs/sha256/7c/7ce53d5096be2bc48c2a19b03deb29fd3c67d5caf32614fa3bb9ca6f13c61877\",\n      \"bytes\": 204,\n      \"container_relative_path\": \"DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip\",\n      \"extension\": \".fit\",\n      \"object_kind\": \"archive_member\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip!synthetic-session-1.fit\",\n      \"sha256\": \"7ce53d5096be2bc48c2a19b03deb29fd3c67d5caf32614fa3bb9ca6f13c61877\",\n      \"source_family\": \"DI-Connect-Uploaded-Files\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/fb/fb3d936dc6adb406a4e76a7819bb4ea7e2a73b902bbc039791ca1495b5177b11\",\n      \"bytes\": 315,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Wellness/synthetic_sleepData.json\",\n      \"sha256\": \"fb3d936dc6adb406a4e76a7819bb4ea7e2a73b902bbc039791ca1495b5177b11\",\n      \"source_family\": \"DI-Connect-Wellness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/18/18c4f85a180cf29ddc1f8e3a3143ff54d643d1c306dbe610f4f70482632071d4\",\n      \"bytes\": 10,\n      \"container_relative_path\": null,\n      \"extension\": \".txt\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"synthetic-readme.txt\",\n      \"sha256\": \"18c4f85a180cf29ddc1f8e3a3143ff54d643d1c306dbe610f4f70482632071d4\",\n      \"source_family\": \"unknown\"\n    }\n  ],\n  \"policy_registry_version\": \"garmin_public_snapshot_dataset_merge_policies:v1.0\",\n  \"registered_at\": \"2030-01-20T00:00:00+00:00\",\n  \"snapshot_content_id\": \"content:0d02f86be40a123fc948527c65608cd0a278735288cca742c87694ed928dab02\",\n  \"snapshot_id\": \"snapshot-72ce3afa5d846f42769b50fc9a8bea5a3b7592efbecbe91cefdd78ef5d326893\",\n  \"snapshot_label\": \"S2\",\n  \"total_bytes\": 2005\n}\n"
+    },
+    {
+      "mode": "0400",
+      "path": "snapshots/snapshot-72ce3afa5d846f42769b50fc9a8bea5a3b7592efbecbe91cefdd78ef5d326893/snapshot-72ce3afa5d846f42769b50fc9a8bea5a3b7592efbecbe91cefdd78ef5d326893.inventory.json",
+      "text": "{\n  \"contract_version\": \"garmin_public_snapshot_lifecycle:v1.0\",\n  \"format\": \"garmin-running-data-normalizer-snapshot-inventory-v1\",\n  \"objects\": [\n    {\n      \"blob_relative_path\": \"blobs/sha256/f7/f7baffac685fd5c197ce310c80dc20eac8347574649a795175835c52bed4a6be\",\n      \"bytes\": 156,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Fitness/synthetic_gear.json\",\n      \"sha256\": \"f7baffac685fd5c197ce310c80dc20eac8347574649a795175835c52bed4a6be\",\n      \"source_family\": \"DI-Connect-Fitness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/e3/e3df27cdca41c2233334fd677591aa75eb74402a49553b0a2966ffb9131d586b\",\n      \"bytes\": 132,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Fitness/synthetic_personalRecord.json\",\n      \"sha256\": \"e3df27cdca41c2233334fd677591aa75eb74402a49553b0a2966ffb9131d586b\",\n      \"source_family\": \"DI-Connect-Fitness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/9c/9cc2f840e74259ea47f32af8b95751810fa6751ac350bd428a33ab4f52f4b490\",\n      \"bytes\": 519,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Fitness/synthetic_summarizedActivities.json\",\n      \"sha256\": \"9cc2f840e74259ea47f32af8b95751810fa6751ac350bd428a33ab4f52f4b490\",\n      \"source_family\": \"DI-Connect-Fitness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/a5/a52a224cdff12c9cf0a990836928ae45e8341d39278ef89cd6d6bf22a622a887\",\n      \"bytes\": 321,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Metrics/HillScore_synthetic.json\",\n      \"sha256\": \"a52a224cdff12c9cf0a990836928ae45e8341d39278ef89cd6d6bf22a622a887\",\n      \"source_family\": \"DI-Connect-Metrics\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/ea/ea105c335db4e701c780bcf766e48f53a8ba4bb098ff9e5f55384771391a3547\",\n      \"bytes\": 348,\n      \"container_relative_path\": null,\n      \"extension\": \".zip\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip\",\n      \"sha256\": \"ea105c335db4e701c780bcf766e48f53a8ba4bb098ff9e5f55384771391a3547\",\n      \"source_family\": \"DI-Connect-Uploaded-Files\"\n    },\n    {\n      \"archive_member_path\": \"synthetic-session-1.fit\",\n      \"blob_relative_path\": \"blobs/sha256/7c/7ce53d5096be2bc48c2a19b03deb29fd3c67d5caf32614fa3bb9ca6f13c61877\",\n      \"bytes\": 204,\n      \"container_relative_path\": \"DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip\",\n      \"extension\": \".fit\",\n      \"object_kind\": \"archive_member\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip!synthetic-session-1.fit\",\n      \"sha256\": \"7ce53d5096be2bc48c2a19b03deb29fd3c67d5caf32614fa3bb9ca6f13c61877\",\n      \"source_family\": \"DI-Connect-Uploaded-Files\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/fb/fb3d936dc6adb406a4e76a7819bb4ea7e2a73b902bbc039791ca1495b5177b11\",\n      \"bytes\": 315,\n      \"container_relative_path\": null,\n      \"extension\": \".json\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"DI_CONNECT/DI-Connect-Wellness/synthetic_sleepData.json\",\n      \"sha256\": \"fb3d936dc6adb406a4e76a7819bb4ea7e2a73b902bbc039791ca1495b5177b11\",\n      \"source_family\": \"DI-Connect-Wellness\"\n    },\n    {\n      \"blob_relative_path\": \"blobs/sha256/18/18c4f85a180cf29ddc1f8e3a3143ff54d643d1c306dbe610f4f70482632071d4\",\n      \"bytes\": 10,\n      \"container_relative_path\": null,\n      \"extension\": \".txt\",\n      \"object_kind\": \"file\",\n      \"parser_state\": \"parser_unsupported\",\n      \"relative_path\": \"synthetic-readme.txt\",\n      \"sha256\": \"18c4f85a180cf29ddc1f8e3a3143ff54d643d1c306dbe610f4f70482632071d4\",\n      \"source_family\": \"unknown\"\n    }\n  ],\n  \"snapshot_id\": \"snapshot-72ce3afa5d846f42769b50fc9a8bea5a3b7592efbecbe91cefdd78ef5d326893\"\n}\n"
+    },
+    {
+      "mode": "0600",
+      "path": "store.json",
+      "text": "{\n  \"account_store_id\": \"synthetic-account-boundary\",\n  \"automatic_deletion\": false,\n  \"contract_version\": \"garmin_public_snapshot_lifecycle:v1.0\",\n  \"created_at_utc\": \"2030-01-20T00:00:00+00:00\",\n  \"format\": \"garmin-running-data-normalizer-snapshot-store-v1\",\n  \"format_version\": 1,\n  \"garbage_collection\": false,\n  \"policy_registry_version\": \"garmin_public_snapshot_dataset_merge_policies:v1.0\",\n  \"single_writer\": true\n}\n"
+    }
+  ]
+}

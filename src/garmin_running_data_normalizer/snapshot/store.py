@@ -6,19 +6,25 @@ import os
 import re
 import stat
 from collections import Counter
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterator
-from zipfile import BadZipFile, ZipFile
+from typing import Any, BinaryIO, Callable, ContextManager, Iterator
+from zipfile import BadZipFile
 
-from ..common.os_metadata import is_os_metadata_path
 from ..common.private_files import (
     PRIVATE_DIRECTORY_MODE,
     ensure_private_directory,
     open_private_file,
 )
 from ..intake.archive import UnsafeArchiveError, read_member, validated_members
+from ..intake.source import (
+    CorruptArchiveError,
+    ExportSource,
+    ExportTooLargeError,
+    is_zip_input,
+)
 from .policies import CONTRACT_VERSION, REGISTRY_VERSION
 
 
@@ -437,10 +443,23 @@ def _validate_inventory_object(row: dict[str, Any]) -> tuple[str, int, str]:
     return digest, byte_count, blob_relative_path
 
 
-def _preserve_blob(root: Path, digest: str, source: bytes | Path) -> bool:
+@dataclass(frozen=True)
+class _StreamedFile:
+    """A file of an Export ZIP file, copied to its blob without holding it in memory."""
+
+    open: Callable[[], ContextManager[BinaryIO]]
+    size: int
+
+
+def _preserve_blob(root: Path, digest: str, source: bytes | Path | _StreamedFile) -> bool:
     destination = root / _blob_relative_path(digest)
     _reject_store_symlink_components(root, destination)
-    size = len(source) if isinstance(source, bytes) else source.stat().st_size
+    if isinstance(source, bytes):
+        size = len(source)
+    elif isinstance(source, _StreamedFile):
+        size = source.size
+    else:
+        size = source.stat().st_size
     if destination.exists():
         if destination.stat().st_size != size or sha256_file(destination) != digest:
             raise SnapshotStoreError("existing immutable blob failed integrity validation")
@@ -453,7 +472,8 @@ def _preserve_blob(root: Path, digest: str, source: bytes | Path) -> bool:
         if isinstance(source, bytes):
             handle.write(source)
         else:
-            with source.open("rb") as input_handle:
+            opened = source.open() if isinstance(source, _StreamedFile) else source.open("rb")
+            with opened as input_handle:
                 while chunk := input_handle.read(1024 * 1024):
                     handle.write(chunk)
         handle.flush()
@@ -466,45 +486,74 @@ def _preserve_blob(root: Path, digest: str, source: bytes | Path) -> bool:
     return True
 
 
+@contextmanager
+def _open_snapshot_input(source: Path) -> Iterator[ExportSource]:
+    if not is_zip_input(source):
+        for path in source.rglob("*"):
+            if path.is_symlink():
+                raise SnapshotStoreError("symbolic links are prohibited in snapshot input")
+    with ExitStack() as stack:
+        try:
+            export = stack.enter_context(ExportSource(source))
+        except UnsafeArchiveError as exc:
+            raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc
+        yield export
+
+
 def _scan_source(
     source: Path,
-) -> tuple[list[dict[str, Any]], dict[str, bytes | Path]]:
+    export: ExportSource,
+) -> tuple[list[dict[str, Any]], dict[str, bytes | Path | _StreamedFile]]:
     inventory: list[dict[str, Any]] = []
-    payloads: dict[str, bytes | Path] = {}
-    for path in source.rglob("*"):
-        if path.is_symlink():
-            raise SnapshotStoreError("symbolic links are prohibited in snapshot input")
-    files = sorted(path for path in source.rglob("*") if path.is_file())
+    payloads: dict[str, bytes | Path | _StreamedFile] = {}
+    files = export.files()
     if not files:
         raise SnapshotStoreError("snapshot input contains no files")
-    for path in files:
-        relative = path.relative_to(source).as_posix()
-        if is_os_metadata_path(relative):
-            continue
-        before = (path.stat().st_size, path.stat().st_mtime_ns)
-        digest = sha256_file(path)
-        after = (path.stat().st_size, path.stat().st_mtime_ns)
-        if before != after:
-            raise SnapshotStoreError("snapshot input changed during completeness scan")
-        payloads.setdefault(digest, path)
+    archive_before = (source.stat().st_size, source.stat().st_mtime_ns) if export.is_zip else None
+    for item in files:
+        relative = item.relative_path
+        if item.path is not None:
+            path = item.path
+            before = (path.stat().st_size, path.stat().st_mtime_ns)
+            digest = sha256_file(path)
+            after = (path.stat().st_size, path.stat().st_mtime_ns)
+            if before != after:
+                raise SnapshotStoreError("snapshot input changed during completeness scan")
+            byte_count = before[0]
+            payloads.setdefault(digest, path)
+        else:
+            hasher = hashlib.sha256()
+            byte_count = 0
+            with export.open_stream(item) as handle:
+                while chunk := handle.read(1024 * 1024):
+                    hasher.update(chunk)
+                    byte_count += len(chunk)
+            if byte_count != item.size:
+                raise CorruptArchiveError("the Export ZIP file is damaged or incomplete")
+            digest = hasher.hexdigest()
+            payloads.setdefault(
+                digest,
+                _StreamedFile(lambda item=item: export.open_stream(item), item.size),
+            )
         row = {
             "object_kind": "file",
             "relative_path": relative,
             "container_relative_path": None,
             "sha256": digest,
-            "bytes": before[0],
+            "bytes": byte_count,
             "source_family": _source_family(relative),
-            "extension": path.suffix.lower(),
+            "extension": item.suffix,
             "blob_relative_path": _blob_relative_path(digest),
             "parser_state": "parser_unsupported",
         }
         inventory.append(row)
-        if path.suffix.lower() != ".zip":
+        if item.suffix != ".zip":
             continue
         try:
-            with ZipFile(path, "r") as archive:
+            with export.open_archive(item) as archive:
                 for info in validated_members(archive):
                     member_data = read_member(archive, info)
+                    export.count_read(len(member_data))
                     member_digest = _sha256_bytes(member_data)
                     payloads.setdefault(member_digest, member_data)
                     logical_path = f"{relative}!{info.filename}"
@@ -522,8 +571,15 @@ def _scan_source(
                             "parser_state": "parser_unsupported",
                         }
                     )
+        except (CorruptArchiveError, ExportTooLargeError):
+            raise
         except (BadZipFile, OSError, UnsafeArchiveError) as exc:
             raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc
+    if archive_before is not None and archive_before != (
+        source.stat().st_size,
+        source.stat().st_mtime_ns,
+    ):
+        raise SnapshotStoreError("snapshot input changed during completeness scan")
     if not inventory:
         raise SnapshotStoreError("snapshot input contains no accepted files")
     return inventory, payloads
@@ -562,8 +618,8 @@ def register_snapshot(
     if requested_source.is_symlink():
         raise SnapshotStoreError("snapshot input must not be a symbolic link")
     source = requested_source.resolve()
-    if not source.is_dir():
-        raise SnapshotStoreError("snapshot input directory does not exist")
+    if not source.is_dir() and not is_zip_input(source):
+        raise SnapshotStoreError("snapshot input must be an existing folder or ZIP file")
     if source == root or root in source.parents or source in root.parents:
         raise SnapshotStoreError("snapshot input and snapshot store must be separate")
     label = _validate_label(snapshot_label)
@@ -573,9 +629,11 @@ def register_snapshot(
     if not (_logical_time(requested_at) <= _logical_time(downloaded_at) <= _logical_time(observed_at)):
         raise SnapshotStoreError("snapshot timestamps must be requested <= downloaded <= observed")
 
-    with _store_lock(root):
+    # The input stays open until its files are copied to the store.
+    with _store_lock(root), ExitStack() as stack:
         recovery_status = _recover_journal(root)
-        inventory, payloads = _scan_source(source)
+        export = stack.enter_context(_open_snapshot_input(source))
+        inventory, payloads = _scan_source(source, export)
         content_id = _inventory_content_id(inventory)
         snapshot_digest = _sha256_bytes(
             _stable_json_bytes(
