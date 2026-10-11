@@ -236,7 +236,7 @@ adds `-2`, `-3`, and so on.
 ## Data handling in 2.0.0
 
 These rules apply to the CLI and the GUI. The exact lists and output shapes are
-designed in stage A, within these rules.
+in [v2.0.0 Data Handling](v2_data_handling.md), which stage A follows.
 
 | Result | Status | Exit |
 |---|---|---|
