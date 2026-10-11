@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import errno
 import json
+import ntpath
 import os
 import re
 import signal
@@ -22,7 +23,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import IO, Any
 
-from ..run_all import PROGRESS_STAGES, PROGRESS_STEPS
+from ..run_all import OUTPUT_PATHS, PROGRESS_STAGES, PROGRESS_STEPS
 from .run_worker import FAMILY_COUNT_FIELDS
 
 WORKER_MODULE = "garmin_running_data_normalizer.gui.run_worker"
@@ -47,6 +48,12 @@ INVALID_NAME_CHARACTERS = frozenset('<>:"/\\|?*')
 # file by 29. Many file systems allow 255 bytes in one name, so 200 bytes leave
 # room on every system.
 MAX_OUTPUT_NAME_BYTES = 200
+# Without long paths, Windows limits a file path to 259 characters and a folder
+# path to 247, which leaves room for an 8.3 name. Both count UTF-16 units.
+WINDOWS_MAX_FILE_PATH = 260
+WINDOWS_MAX_FOLDER_PATH = 248
+# Run-All's staging folder is ".<name>.run-all-" and 8 random characters.
+STAGING_SUFFIX_LENGTH = len(".run-all-") + 8
 
 
 class RunRequestError(ValueError):
@@ -72,6 +79,50 @@ def absolute_path(value: Any, code: str) -> Path:
     if not path.is_absolute():
         raise RunRequestError("PATH_NOT_ABSOLUTE")
     return path
+
+
+def _long_paths_enabled() -> bool:
+    """Return whether Windows accepts long paths; assume not when unknown."""
+    try:
+        import winreg
+
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\FileSystem"
+        ) as key:
+            value, _ = winreg.QueryValueEx(key, "LongPathsEnabled")
+    except (ImportError, OSError):
+        return False
+    return value == 1
+
+
+def _utf16_length(text: str) -> int:
+    return len(text.encode("utf-16-le", "surrogatepass")) // 2
+
+
+def windows_paths_too_long(parent: str, name: str) -> bool:
+    """Return whether Run-All's deepest paths for this output exceed MAX_PATH.
+
+    The paths are those inside the staging folder, which is longer than the
+    output folder; the write check and the Support Bundle's temporary file are
+    shorter. ``parent`` is measured in its absolute Windows form.
+    """
+    base = ntpath.abspath(parent)
+    if base.startswith("\\\\?\\"):
+        return False  # Such paths have no MAX_PATH limit.
+    staging = _utf16_length(ntpath.join(base, f".{name}")) + STAGING_SUFFIX_LENGTH
+    longest_file = max(len(path) for path in OUTPUT_PATHS)
+    longest_folder = max(len(path.rsplit("/", 1)[0]) for path in OUTPUT_PATHS if "/" in path)
+    return (
+        staging + 1 + longest_file >= WINDOWS_MAX_FILE_PATH
+        or staging + 1 + longest_folder >= WINDOWS_MAX_FOLDER_PATH
+    )
+
+
+def output_path_too_long(parent: Path, name: str) -> bool:
+    """Return whether this output cannot be written on this Windows system."""
+    if os.name != "nt" or _long_paths_enabled():
+        return False
+    return windows_paths_too_long(str(parent), name)
 
 
 def _utf8_size(text: str) -> int | None:
@@ -259,6 +310,8 @@ class RunManager:
             raise RunRequestError("OUTPUT_SYMLINK")
         if output.exists():
             raise RunRequestError("OUTPUT_EXISTS")
+        if output_path_too_long(parent, name):
+            raise RunRequestError("OUTPUT_PATH_TOO_LONG")
         # Run-All writes to the parent only at the end, by creating a staging
         # folder there; try the same now instead of failing after a long run.
         try:
@@ -426,6 +479,10 @@ __all__ = [
     "RunActiveError",
     "RunManager",
     "RunRequestError",
+    "WINDOWS_MAX_FILE_PATH",
+    "WINDOWS_MAX_FOLDER_PATH",
     "absolute_path",
+    "output_path_too_long",
     "validate_output_name",
+    "windows_paths_too_long",
 ]

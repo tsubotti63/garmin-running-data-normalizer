@@ -66,6 +66,22 @@ class GuiGuideTest(unittest.TestCase):
         assert entry is not None
         self.assertIn("in development and not available yet", " ".join(entry.group(0).split()))
 
+    def test_the_exit_3_result_reads_the_same_on_the_page_and_in_the_guides(self) -> None:
+        # PARTIAL_SUCCESS is a finished run: the activities are complete, and
+        # the FIT files that could not be read completely are left out.
+        phrases = {"en": ("activities are complete", "left out"), "ja": ("アクティビティは使えます", "除いています")}
+        for language, path in GUIDES.items():
+            row = next(
+                line
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if line.startswith("| `PARTIAL_SUCCESS` |")
+            )
+            message = catalog(language)["result.partial_success"]
+            for phrase in phrases[language]:
+                with self.subTest(language=language, phrase=phrase):
+                    self.assertIn(phrase, row)
+                    self.assertIn(phrase, message)
+
     def test_guides_describe_the_same_sections_and_codes(self) -> None:
         english = GUIDES["en"].read_text(encoding="utf-8")
         japanese = GUIDES["ja"].read_text(encoding="utf-8")
