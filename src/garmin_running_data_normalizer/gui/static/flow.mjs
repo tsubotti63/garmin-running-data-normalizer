@@ -94,6 +94,41 @@ export const ERROR_KEYS = {
   OPEN_FAILED: "error.open_failed",
 };
 
+// The next step after each error message, by the message key without
+// "error.". An error always shows what happened, the next step, and its code.
+const ERROR_NEXT_KEYS = {
+  path_not_absolute: "next.enter_full_path",
+  request_invalid: "next.check_entries",
+  folder_not_found: "next.check_path",
+  not_a_folder: "next.choose_folder",
+  folder_not_readable: "next.allow_access",
+  symlink: "next.choose_real_folder",
+  output_parent_not_found: "next.choose_existing_parent",
+  output_name_invalid: "next.follow_name_rules",
+  output_exists: "next.choose_another_name",
+  output_inside_input: "next.choose_outside_export",
+  timezone_invalid: "next.use_timezone_name",
+  timezone_data_unavailable: "next.reinstall_package",
+  activities_not_found: "next.choose_export_folder",
+  input_changed: "next.run_again_unchanged",
+  input_unreadable: "next.extract_again",
+  data_conflict: "next.report_code",
+  conversion_failed: "next.report_code",
+  publish_failed: "next.check_space_and_path",
+  internal: "next.report_code",
+  run_active: "next.wait_or_cancel",
+  output_parent_not_writable: "next.choose_writable_folder",
+  no_finished_output: "next.run_first",
+  output_changed: "next.report_if_unchanged",
+  output_not_available: "next.check_output_location",
+  bundle_exists: "next.move_bundle",
+  bundle_not_written: "next.check_bundle_location",
+  bundle_refused: "next.report_code",
+  open_not_available: "next.open_manually",
+  open_failed: "next.open_manually",
+  unknown: "next.reload_page",
+};
+
 // Pre-run Doctor message and next-action identifiers.
 export const FINDING_KEYS = {
   INPUT_DIRECTORY_MUST_BE_LOCAL_DIRECTORY: "finding.input_directory",
@@ -171,8 +206,34 @@ function lookup(table, name, fallback) {
 
 // A message is a key, its plain parameters, and parameters that are message
 // keys themselves; the page translates both.
-export function errorMessage(code) {
-  return { key: lookup(ERROR_KEYS, code, "error.unknown"), params: {}, keyParams: {} };
+function nextStep(step) {
+  return { key: "next.label", params: {}, keyParams: { step } };
+}
+
+// What happened, what to do next, and the code to quote when asking for help.
+export function errorMessages(code) {
+  const key = lookup(ERROR_KEYS, code, "error.unknown");
+  const messages = [
+    { key, params: {}, keyParams: {} },
+    nextStep(lookup(ERROR_NEXT_KEYS, key.slice("error.".length), "next.reload_page")),
+  ];
+  if (typeof code === "string" && code !== "") {
+    messages.push({ key: "error.code", params: { code }, keyParams: {} });
+  }
+  return messages;
+}
+
+// Losing the server is a problem with a next step; the other connection
+// states are a short line in the footer.
+export function connectionMessages(key) {
+  const line = { key, params: {}, keyParams: {} };
+  if (key === "status.unavailable") {
+    return { status: [], problem: [line, nextStep("next.restart_gui")] };
+  }
+  if (key === "status.unauthorized") {
+    return { status: [], problem: [line, nextStep("next.open_terminal_address")] };
+  }
+  return { status: key === null ? [] : [line], problem: [] };
 }
 
 export function progressMessage(progress) {
@@ -197,11 +258,16 @@ export function progressMessage(progress) {
   return { key: STAGE_KEYS[stage], params: {}, keyParams: {} };
 }
 
+// A pre-run finding, and what to do next when the check names an action.
 export function findingMessages(finding) {
-  return {
-    message: lookup(FINDING_KEYS, finding?.message_id, "error.unknown"),
-    action: lookup(ACTION_KEYS, finding?.next_action_id, null),
-  };
+  const messages = [
+    { key: lookup(FINDING_KEYS, finding?.message_id, "error.unknown"), params: {}, keyParams: {} },
+  ];
+  const action = lookup(ACTION_KEYS, finding?.next_action_id, null);
+  if (action !== null) {
+    messages.push(nextStep(action));
+  }
+  return messages;
 }
 
 export function familyRows(result) {
@@ -227,10 +293,10 @@ export function resultMessages(status) {
     messages.push({ key: "result.finished_after_cancel", params: {}, keyParams: {} });
   } else if (state === "cancelled") {
     messages.push({ key: "result.cancelled", params: {}, keyParams: {} });
+    messages.push(nextStep("next.start_again"));
   } else if (state === "failed") {
     messages.push({ key: "result.failed", params: {}, keyParams: {} });
-    messages.push(errorMessage(status.error_code));
-    messages.push({ key: "error.code", params: { code: status.error_code ?? "" }, keyParams: {} });
+    messages.push(...errorMessages(status.error_code));
   }
   if (FINISHED_STATES.includes(state) && status.output_path) {
     messages.push({ key: "result.output", params: { path: status.output_path }, keyParams: {} });
@@ -241,6 +307,7 @@ export function resultMessages(status) {
       params: { names: status.staging_folders.join(", ") },
       keyParams: {},
     });
+    messages.push(nextStep("next.delete_staging"));
   }
   return messages;
 }
@@ -269,7 +336,7 @@ export function outputCheckMessages(check) {
   });
   const next = lookup(NEXT_ACTION_KEYS, doctor?.next_action_id, null);
   if (next !== null) {
-    messages.push({ key: next, params: {}, keyParams: {} });
+    messages.push(nextStep(next));
   }
   const codes = Array.isArray(doctor?.warning_codes) ? doctor.warning_codes : [];
   for (const code of codes) {
@@ -321,6 +388,17 @@ export function defaultOutputName(date) {
   );
 }
 
+// After a run, propose a name for the next one. Within the same minute the
+// default name is the one just used, so a number is added: -2, -3, and so on.
+export function nextOutputName(used, date) {
+  const base = defaultOutputName(date);
+  if (used !== base && !used.startsWith(`${base}-`)) {
+    return base;
+  }
+  const number = used === base ? 1 : Number(used.slice(base.length + 1));
+  return `${base}-${Number.isInteger(number) && number >= 1 ? number + 1 : 2}`;
+}
+
 export function formatElapsed(seconds) {
   const total = Math.max(0, Math.floor(Number(seconds) || 0));
   const hours = Math.floor(total / 3600);
@@ -335,6 +413,36 @@ export function stalledSeconds(status) {
     return null;
   }
   return Math.floor(seconds);
+}
+
+// What the hidden live region says during and at the end of a run. Counts and
+// seconds change every second, so the page speaks only when the id changes:
+// at a new stage or step, when a run stalls or is being cancelled, and at the
+// end.
+export function announcement(status) {
+  const state = status?.state;
+  if (state === "running") {
+    const stalled = stalledSeconds(status);
+    if (stalled !== null) {
+      return { id: "stalled", message: { key: "run.stalled", params: { seconds: stalled }, keyParams: {} } };
+    }
+    const progress = progressMessage(status.progress);
+    return { id: `progress:${progress.key}:${progress.keyParams.step ?? ""}`, message: progress };
+  }
+  if (state === "cancelling") {
+    return { id: "cancelling", message: { key: "run.cancelling", params: {}, keyParams: {} } };
+  }
+  if (TERMINAL_STATES.includes(state)) {
+    return { id: `end:${state}`, message: resultMessages(status)[0] };
+  }
+  return null;
+}
+
+// The end of a run moves focus to the result heading only from where the run
+// left it: nowhere, or the run section (its heading, Start, or Cancel). A
+// keyboard user who has moved on stays there; the announcer still speaks.
+export function shouldFocusResult(active, body, runSection) {
+  return active === null || active === body || runSection.contains(active);
 }
 
 // Which controls the page enables, from one view of its state.

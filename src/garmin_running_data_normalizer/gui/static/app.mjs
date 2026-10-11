@@ -8,13 +8,17 @@ import {
   ACTIVE_STATES,
   FINISHED_STATES,
   TERMINAL_STATES,
+  announcement,
+  connectionMessages,
   controls,
   defaultOutputName,
-  errorMessage,
+  errorMessages,
   familyRows,
   findingMessages,
   formatElapsed,
+  nextOutputName,
   outputCheckMessages,
+  shouldFocusResult,
   progressMessage,
   resultMessages,
   stalledSeconds,
@@ -32,8 +36,10 @@ const byId = (id) => document.getElementById(id);
 const ui = {
   version: byId("product-version"),
   connection: byId("connection-status"),
+  connectionProblem: byId("connection-problem"),
   language: byId("language-select"),
   quit: byId("quit-button"),
+  inputHeading: byId("input-heading"),
   inputPath: byId("input-path"),
   inputBrowse: byId("input-browse"),
   check: byId("check-button"),
@@ -54,17 +60,23 @@ const ui = {
   safePack: byId("safe-pack"),
   start: byId("start-button"),
   cancel: byId("cancel-button"),
+  runHeading: byId("run-heading"),
+  runSection: byId("run-heading").closest("section"),
   runStatus: byId("run-status"),
+  runProgress: byId("run-progress"),
   runElapsed: byId("run-elapsed"),
+  runAnnouncer: byId("run-announcer"),
   resultHeading: byId("result-heading"),
   runResult: byId("run-result"),
   familyTable: byId("family-table"),
   familyRows: byId("family-rows"),
   outputActions: byId("output-actions"),
+  outputCheckHeading: byId("output-check-heading"),
   outputCheck: byId("output-check"),
   openFolder: byId("open-folder-button"),
   openStartHere: byId("open-start-here-button"),
   openResult: byId("open-result"),
+  bundleHeading: byId("bundle-heading"),
   bundle: byId("bundle-button"),
   bundleResult: byId("bundle-result"),
 };
@@ -82,6 +94,8 @@ const state = {
   check: null,
   starting: false,
   run: { state: "idle" },
+  // The id of what the hidden live region said last; see announcement().
+  announced: null,
   runError: null,
   quitKey: null,
   browser: null,
@@ -118,15 +132,17 @@ function describe(message) {
   return t(message.key, params);
 }
 
-function codeLines(code) {
-  const lines = [describe(errorMessage(code))];
-  if (typeof code === "string" && code !== "") {
-    lines.push(t("error.code", { code }));
-  }
-  return lines;
+function errorLines(code) {
+  return errorMessages(code).map(describe);
 }
 
+// The page renders every second during a run. Rebuilding a live region
+// makes screen readers repeat it, so text changes only when it differs.
 function replaceLines(container, lines) {
+  const current = Array.from(container.children, (line) => line.textContent);
+  if (current.length === lines.length && current.every((text, index) => text === lines[index])) {
+    return;
+  }
   container.replaceChildren(
     ...lines.map((text) => {
       const line = document.createElement("p");
@@ -134,6 +150,23 @@ function replaceLines(container, lines) {
       return line;
     }),
   );
+}
+
+function setText(element, text) {
+  if (element.textContent !== text) {
+    element.textContent = text;
+  }
+}
+
+// A focused button that becomes disabled loses focus in some browsers and
+// keeps it in others. After an action, give focus back to the button, or to a
+// heading while the button stays disabled, unless the user has moved on.
+function returnFocus(button, fallback) {
+  const active = document.activeElement;
+  if (active !== null && active !== document.body && active !== button) {
+    return;
+  }
+  (button.disabled ? fallback : button).focus();
 }
 
 function readStorage(name) {
@@ -225,12 +258,11 @@ function renderCheck() {
   if (state.checking) {
     lines.push(t("check.running"));
   } else if (state.check?.error !== undefined) {
-    lines.push(...codeLines(state.check.error));
+    lines.push(...errorLines(state.check.error));
   } else if (state.check) {
     lines.push(t(state.check.ready ? "check.ready" : "check.not_ready"));
     for (const finding of state.check.findings) {
-      const { message, action } = findingMessages(finding);
-      lines.push(action ? `${t(message)} ${t(action)}` : t(message));
+      lines.push(...findingMessages(finding).map(describe));
     }
   }
   replaceLines(ui.checkResult, lines);
@@ -249,13 +281,13 @@ function renderBrowser() {
   if (browser.loading) {
     message = t("browser.loading");
   } else if (browser.error !== null) {
-    message = codeLines(browser.error).join(" ");
+    message = errorLines(browser.error).join(" ");
   } else if (browser.folders.length === 0) {
     message = t("browser.empty");
   } else if (browser.truncated) {
     message = t("browser.truncated", { count: formatNumber(browser.folders.length) });
   }
-  ui.browserMessage.textContent = message;
+  setText(ui.browserMessage, message);
 }
 
 function childPath(parent, name) {
@@ -303,21 +335,30 @@ function renderRun() {
   const run = state.run;
   const lines = [];
   if (state.runError !== null) {
-    lines.push(...codeLines(state.runError));
+    lines.push(...errorLines(state.runError));
   }
   if (state.quitKey !== null) {
     lines.push(t(state.quitKey));
   }
+  replaceLines(ui.runStatus, lines);
+  // Progress changes every second, so it stays out of live regions; the
+  // hidden announcer speaks only when the stage changes.
+  const progress = [];
   if (run.state === "running") {
-    lines.push(describe(progressMessage(run.progress)));
+    progress.push(describe(progressMessage(run.progress)));
     const stalled = stalledSeconds(run);
     if (stalled !== null) {
-      lines.push(t("run.stalled", { seconds: formatNumber(stalled) }));
+      progress.push(t("run.stalled", { seconds: formatNumber(stalled) }));
     }
   } else if (run.state === "cancelling") {
-    lines.push(t("run.cancelling"));
+    progress.push(t("run.cancelling"));
   }
-  replaceLines(ui.runStatus, lines);
+  replaceLines(ui.runProgress, progress);
+  const spoken = announcement(run);
+  if (spoken !== null && spoken.id !== state.announced) {
+    state.announced = spoken.id;
+    ui.runAnnouncer.textContent = describe(spoken.message);
+  }
   const shown = ACTIVE_STATES.includes(run.state) || TERMINAL_STATES.includes(run.state);
   ui.runElapsed.textContent = shown
     ? t("run.elapsed", { time: formatElapsed(run.elapsed_seconds) })
@@ -345,14 +386,14 @@ function renderOutput() {
   if (output.checking) {
     checkLines.push(t("output_check.running"));
   } else if (output.checkError !== null) {
-    checkLines.push(...codeLines(output.checkError));
+    checkLines.push(...errorLines(output.checkError));
   } else if (output.check !== null) {
     checkLines.push(...outputCheckMessages(output.check).map(describe));
   }
   replaceLines(ui.outputCheck, checkLines);
   const openLines = [];
   if (output.openError !== null) {
-    openLines.push(...codeLines(output.openError));
+    openLines.push(...errorLines(output.openError));
   } else if (output.opened) {
     openLines.push(t("open.requested"));
   }
@@ -361,7 +402,7 @@ function renderOutput() {
   if (output.bundling) {
     bundleLines.push(t("bundle.creating"));
   } else if (output.bundleError !== null) {
-    bundleLines.push(...codeLines(output.bundleError));
+    bundleLines.push(...errorLines(output.bundleError));
   } else if (output.bundle !== null) {
     bundleLines.push(
       t("bundle.created", {
@@ -411,7 +452,10 @@ function render() {
   }
   ui.version.textContent =
     state.productVersion === null ? "" : t("app.version", { version: state.productVersion });
-  ui.connection.textContent = state.connectionKey === null ? "" : t(state.connectionKey);
+  const connection = connectionMessages(state.connectionKey);
+  setText(ui.connection, connection.status.map(describe).join(" "));
+  ui.connectionProblem.hidden = connection.problem.length === 0;
+  replaceLines(ui.connectionProblem, connection.problem.map(describe));
   for (const option of ui.language.options) {
     option.textContent = translate(state.catalogs, option.value, "language.name");
   }
@@ -447,13 +491,15 @@ function stopPolling() {
 }
 
 async function pollRun() {
+  let ended = false;
   try {
     state.run = await callApi("/api/run/status");
     if (TERMINAL_STATES.includes(state.run.state)) {
       stopPolling();
+      ended = true;
       if (FINISHED_STATES.includes(state.run.state) && state.output === null) {
-        // The name is taken now; propose a new one for the next run.
-        ui.outputName.value = defaultOutputName(new Date());
+        // The name is taken now; propose another one for the next run.
+        ui.outputName.value = nextOutputName(ui.outputName.value.trim(), new Date());
         checkOutput();
       }
     }
@@ -461,6 +507,9 @@ async function pollRun() {
     connectionFailure(error);
   }
   render();
+  if (ended && shouldFocusResult(document.activeElement, document.body, ui.runSection)) {
+    ui.resultHeading.focus();
+  }
 }
 
 function startPolling() {
@@ -515,6 +564,7 @@ async function openOutput(target) {
   } finally {
     output.opening = false;
     render();
+    returnFocus(target === "folder" ? ui.openFolder : ui.openStartHere, ui.outputCheckHeading);
   }
 }
 
@@ -535,6 +585,7 @@ async function makeBundle() {
   } finally {
     output.bundling = false;
     render();
+    returnFocus(ui.bundle, ui.bundleHeading);
   }
 }
 
@@ -573,6 +624,7 @@ async function runCheck() {
   } finally {
     state.checking = false;
     render();
+    returnFocus(ui.check, ui.inputHeading);
   }
 }
 
@@ -583,6 +635,7 @@ async function startRun() {
   // The previous result would read as the answer to this attempt.
   state.run = { state: "idle" };
   state.output = null;
+  state.announced = null;
   render();
   try {
     state.run = await callApi("/api/run/start", {
@@ -600,6 +653,7 @@ async function startRun() {
   } finally {
     state.starting = false;
     render();
+    returnFocus(ui.start, ui.runHeading);
   }
 }
 
@@ -615,6 +669,7 @@ async function cancelRun() {
     }
   }
   render();
+  returnFocus(ui.cancel, ui.runHeading);
 }
 
 async function quit() {
@@ -784,6 +839,8 @@ async function start() {
     state.connectionKey = "status.connected";
     startHeartbeat();
     state.run = await callApi("/api/run/status");
+    // Speak only about changes that happen while the page is open.
+    state.announced = announcement(state.run)?.id ?? null;
     if (ACTIVE_STATES.includes(state.run.state)) {
       startPolling();
     } else if (FINISHED_STATES.includes(state.run.state)) {

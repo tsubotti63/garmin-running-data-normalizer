@@ -15,9 +15,10 @@
   </header>
   <p class="notice" data-i18n="app.development"></p>
   <p class="notice" data-i18n="app.privacy"></p>
+  <div id="connection-problem" class="notice messages" role="alert" hidden></div>
 
   <section aria-labelledby="input-heading">
-    <h2 id="input-heading" data-i18n="input.heading"></h2>
+    <h2 id="input-heading" data-i18n="input.heading" tabindex="-1"></h2>
     <p class="help" data-i18n="input.help"></p>
     <label for="input-path" data-i18n="input.label"></label>
     <div class="path-row">
@@ -65,15 +66,17 @@
   </section>
 
   <section aria-labelledby="run-heading">
-    <h2 id="run-heading" data-i18n="run.heading"></h2>
+    <h2 id="run-heading" data-i18n="run.heading" tabindex="-1"></h2>
     <div class="button-row">
       <button type="button" id="start-button" class="primary" data-i18n="run.start" disabled></button>
       <button type="button" id="cancel-button" data-i18n="run.cancel" disabled></button>
     </div>
     <div id="run-status" class="messages" role="status" aria-live="polite"></div>
+    <div id="run-progress" class="messages"></div>
     <p id="run-elapsed" class="help"></p>
-    <h3 id="result-heading" data-i18n="result.heading" hidden></h3>
-    <div id="run-result" class="messages" role="status" aria-live="polite"></div>
+    <p id="run-announcer" class="visually-hidden" role="status" aria-live="polite"></p>
+    <h3 id="result-heading" data-i18n="result.heading" tabindex="-1" hidden></h3>
+    <div id="run-result" class="messages"></div>
     <table id="family-table" hidden>
       <caption data-i18n="result.caption"></caption>
       <thead>
@@ -87,14 +90,14 @@
       <tbody id="family-rows"></tbody>
     </table>
     <div id="output-actions" hidden>
-      <h3 data-i18n="output_check.heading"></h3>
+      <h3 id="output-check-heading" data-i18n="output_check.heading" tabindex="-1"></h3>
       <div id="output-check" class="messages" role="status" aria-live="polite"></div>
       <div class="button-row">
         <button type="button" id="open-folder-button" data-i18n="open.folder" disabled></button>
         <button type="button" id="open-start-here-button" data-i18n="open.start_here" disabled></button>
       </div>
       <div id="open-result" class="messages" role="status" aria-live="polite"></div>
-      <h3 data-i18n="bundle.heading"></h3>
+      <h3 id="bundle-heading" data-i18n="bundle.heading" tabindex="-1"></h3>
       <p class="help" data-i18n="bundle.help"></p>
       <p class="help" data-i18n="bundle.review_help"></p>
       <div class="button-row">
