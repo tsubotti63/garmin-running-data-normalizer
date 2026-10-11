@@ -3,20 +3,28 @@ import { test } from "node:test";
 
 import {
   ACTIVE_STATES,
+  ERROR_KEYS,
   FINISHED_STATES,
   TERMINAL_STATES,
+  announcement,
+  connectionMessages,
   controls,
   defaultOutputName,
-  errorMessage,
+  errorMessages,
   familyRows,
   findingMessages,
   formatElapsed,
   isValidOutputName,
+  nextOutputName,
   outputCheckMessages,
+  shouldFocusResult,
   progressMessage,
   resultMessages,
   stalledSeconds,
 } from "../../src/garmin_running_data_normalizer/gui/static/flow.mjs";
+
+// A message as [key, params, keyParams], for compact comparisons.
+const shape = (message) => [message.key, message.params, message.keyParams];
 
 const READY = {
   connected: true,
@@ -121,6 +129,16 @@ test("the proposed output name uses the local date and time", () => {
   assert.equal(defaultOutputName(new Date(2026, 0, 2, 23, 59)), "garmin-run-all-20260102-2359");
 });
 
+test("the name proposed after a run differs from the one just used", () => {
+  const sameMinute = new Date(2026, 9, 11, 10, 32, 50);
+  const nextMinute = new Date(2026, 9, 11, 10, 33);
+  assert.equal(nextOutputName("garmin-run-all-20261011-1032", nextMinute), "garmin-run-all-20261011-1033");
+  assert.equal(nextOutputName("garmin-run-all-20261011-1032", sameMinute), "garmin-run-all-20261011-1032-2");
+  assert.equal(nextOutputName("garmin-run-all-20261011-1032-2", sameMinute), "garmin-run-all-20261011-1032-3");
+  assert.equal(nextOutputName("garmin-run-all-20261011-1032-x", sameMinute), "garmin-run-all-20261011-1032-2");
+  assert.equal(nextOutputName("My output", sameMinute), "garmin-run-all-20261011-1032");
+});
+
 test("elapsed time is shown in minutes and seconds, then hours", () => {
   assert.equal(formatElapsed(0), "0:00");
   assert.equal(formatElapsed(65.9), "1:05");
@@ -158,20 +176,68 @@ test("progress events become messages", () => {
   assert.equal(progressMessage({ stage: "toString" }).key, "progress.starting");
 });
 
-test("error codes become messages and unknown codes fall back", () => {
-  assert.equal(errorMessage("OUTPUT_EXISTS").key, "error.output_exists");
-  assert.equal(errorMessage("RUN_ALL_FAILED").key, "error.internal");
-  for (const code of ["NOT_A_CODE", null, undefined, "__proto__", "toString"]) {
-    assert.equal(errorMessage(code).key, "error.unknown");
+test("an error shows what happened, the next step, and its code", () => {
+  assert.deepEqual(errorMessages("OUTPUT_EXISTS").map(shape), [
+    ["error.output_exists", {}, {}],
+    ["next.label", {}, { step: "next.choose_another_name" }],
+    ["error.code", { code: "OUTPUT_EXISTS" }, {}],
+  ]);
+  assert.deepEqual(errorMessages("RUN_ALL_FAILED").map(shape), [
+    ["error.internal", {}, {}],
+    ["next.label", {}, { step: "next.report_code" }],
+    ["error.code", { code: "RUN_ALL_FAILED" }, {}],
+  ]);
+  for (const code of ["NOT_A_CODE", "__proto__", "toString"]) {
+    assert.deepEqual(errorMessages(code).map(shape), [
+      ["error.unknown", {}, {}],
+      ["next.label", {}, { step: "next.reload_page" }],
+      ["error.code", { code }, {}],
+    ]);
+  }
+  for (const code of [null, undefined, ""]) {
+    assert.deepEqual(errorMessages(code).map((message) => message.key), ["error.unknown", "next.label"]);
   }
 });
 
-test("pre-run findings become a message and a next action", () => {
+test("every known error code has its own next step and shows its code", () => {
+  for (const code of Object.keys(ERROR_KEYS)) {
+    const [what, next, quoted] = errorMessages(code);
+    assert.equal(what.key, ERROR_KEYS[code], code);
+    assert.equal(next.key, "next.label", code);
+    assert.match(next.keyParams.step, /^next\./, code);
+    assert.notEqual(next.keyParams.step, "next.reload_page", code);
+    assert.deepEqual(shape(quoted), ["error.code", { code }, {}], code);
+  }
+});
+
+test("pre-run findings show the finding and then the next step", () => {
   assert.deepEqual(
-    findingMessages({ message_id: "REQUIRED_ACTIVITIES_SOURCE_NOT_OBSERVED", next_action_id: "SELECT_EXPORT_WITH_ACTIVITIES" }),
-    { message: "finding.activities_missing", action: "action.select_export_with_activities" },
+    findingMessages({
+      message_id: "REQUIRED_ACTIVITIES_SOURCE_NOT_OBSERVED",
+      next_action_id: "SELECT_EXPORT_WITH_ACTIVITIES",
+    }).map(shape),
+    [
+      ["finding.activities_missing", {}, {}],
+      ["next.label", {}, { step: "action.select_export_with_activities" }],
+    ],
   );
-  assert.deepEqual(findingMessages({}), { message: "error.unknown", action: null });
+  assert.deepEqual(findingMessages({}).map(shape), [["error.unknown", {}, {}]]);
+});
+
+test("losing the server is a problem with a next step", () => {
+  assert.deepEqual(connectionMessages("status.unavailable").status, []);
+  assert.deepEqual(connectionMessages("status.unavailable").problem.map(shape), [
+    ["status.unavailable", {}, {}],
+    ["next.label", {}, { step: "next.restart_gui" }],
+  ]);
+  assert.deepEqual(connectionMessages("status.unauthorized").problem.map(shape), [
+    ["status.unauthorized", {}, {}],
+    ["next.label", {}, { step: "next.open_terminal_address" }],
+  ]);
+  for (const key of ["status.connected", "status.stopped"]) {
+    assert.deepEqual(connectionMessages(key), { status: [{ key, params: {}, keyParams: {} }], problem: [] });
+  }
+  assert.deepEqual(connectionMessages(null), { status: [], problem: [] });
 });
 
 const FINISHED = {
@@ -212,20 +278,21 @@ test("result messages describe each way a run can end", () => {
     ["result.finished_after_cancel", "result.output"],
   );
   assert.deepEqual(
-    resultMessages({ state: "cancelled", staging_folders: [".output.run-all-1"] })
-      .map((message) => [message.key, message.params]),
+    resultMessages({ state: "cancelled", staging_folders: [".output.run-all-1"] }).map(shape),
     [
-      ["result.cancelled", {}],
-      ["result.staging_left", { names: ".output.run-all-1" }],
+      ["result.cancelled", {}, {}],
+      ["next.label", {}, { step: "next.start_again" }],
+      ["result.staging_left", { names: ".output.run-all-1" }, {}],
+      ["next.label", {}, { step: "next.delete_staging" }],
     ],
   );
   assert.deepEqual(
-    resultMessages({ state: "failed", error_code: "INPUT_CHANGED", staging_folders: [] })
-      .map((message) => [message.key, message.params]),
+    resultMessages({ state: "failed", error_code: "INPUT_CHANGED", staging_folders: [] }).map(shape),
     [
-      ["result.failed", {}],
-      ["error.input_changed", {}],
-      ["error.code", { code: "INPUT_CHANGED" }],
+      ["result.failed", {}, {}],
+      ["error.input_changed", {}, {}],
+      ["next.label", {}, { step: "next.run_again_unchanged" }],
+      ["error.code", { code: "INPUT_CHANGED" }, {}],
     ],
   );
   assert.deepEqual(resultMessages({ state: "running" }), []);
@@ -244,14 +311,14 @@ const CHECKED = {
 
 test("the output check shows the returned counts and one line per kind of warning", () => {
   assert.deepEqual(
-    outputCheckMessages(CHECKED).map((message) => [message.key, message.params]),
+    outputCheckMessages(CHECKED).map(shape),
     [
-      ["output_check.handoff_pass", { datasets: 17, relationships: 6, warnings: 3 }],
-      ["doctor.usability_warnings", {}],
-      ["doctor.next_review_warnings", {}],
-      ["warning.fit_parse_incomplete", { code: "FIT_PARSE_INCOMPLETE" }],
-      ["warning.optional_family_not_present", { code: "OPTIONAL_FAMILY_NOT_PRESENT" }],
-      ["output_check.bundle_suggested", {}],
+      ["output_check.handoff_pass", { datasets: 17, relationships: 6, warnings: 3 }, {}],
+      ["doctor.usability_warnings", {}, {}],
+      ["next.label", {}, { step: "doctor.next_review_warnings" }],
+      ["warning.fit_parse_incomplete", { code: "FIT_PARSE_INCOMPLETE" }, {}],
+      ["warning.optional_family_not_present", { code: "OPTIONAL_FAMILY_NOT_PRESENT" }, {}],
+      ["output_check.bundle_suggested", {}, {}],
     ],
   );
   const counts = outputCheckMessages({ ...CHECKED, handoff: { ...CHECKED.handoff, dataset_count: 5 } });
@@ -270,8 +337,11 @@ test("a clean output check has no warning lines and no bundle suggestion", () =>
     },
   };
   assert.deepEqual(
-    outputCheckMessages(clean).map((message) => message.key),
-    ["output_check.handoff_pass", "doctor.usability_full", "doctor.next_optional"],
+    outputCheckMessages(clean).map(shape).slice(1),
+    [
+      ["doctor.usability_full", {}, {}],
+      ["next.label", {}, { step: "doctor.next_optional" }],
+    ],
   );
 });
 
@@ -294,9 +364,48 @@ test("unknown output check values fall back without failing", () => {
 });
 
 test("output action codes have their own messages", () => {
-  assert.equal(errorMessage("OUTPUT_PARENT_NOT_WRITABLE").key, "error.output_parent_not_writable");
-  assert.equal(errorMessage("HANDOFF_INVALID").key, "error.output_changed");
-  assert.equal(errorMessage("SUPPORT_BUNDLE_EXISTS").key, "error.bundle_exists");
-  assert.equal(errorMessage("SUPPORT_BUNDLE_PRIVACY_SCAN_FAILED").key, "error.bundle_refused");
-  assert.equal(errorMessage("OPEN_FAILED").key, "error.open_failed");
+  assert.equal(errorMessages("OUTPUT_PARENT_NOT_WRITABLE")[0].key, "error.output_parent_not_writable");
+  assert.equal(errorMessages("HANDOFF_INVALID")[0].key, "error.output_changed");
+  assert.equal(errorMessages("SUPPORT_BUNDLE_EXISTS")[0].key, "error.bundle_exists");
+  assert.equal(errorMessages("SUPPORT_BUNDLE_PRIVACY_SCAN_FAILED")[0].key, "error.bundle_refused");
+  assert.equal(errorMessages("OPEN_FAILED")[0].key, "error.open_failed");
+  assert.equal(errorMessages("PUBLISH_FAILED")[0].key, "error.unknown");
+  assert.equal(errorMessages("OUTPUT_PUBLISH_FAILED")[1].keyParams.step, "next.check_space_and_path");
+});
+
+test("the announcer speaks at a new stage, a stall, a cancellation, and the end", () => {
+  const reading = (done, seconds = 1) => ({
+    state: "running",
+    progress: { stage: "reading_fit", done, total: 9 },
+    seconds_since_progress: seconds,
+  });
+  assert.equal(announcement(reading(1)).id, announcement(reading(2)).id);
+  assert.deepEqual(announcement(reading(1)).message.params, { done: 1, total: 9 });
+  const building = announcement({ state: "running", progress: { stage: "building_output" } });
+  assert.notEqual(building.id, announcement(reading(1)).id);
+  const fit = announcement({ state: "running", progress: { stage: "normalizing", step: "fit" } });
+  const gear = announcement({ state: "running", progress: { stage: "normalizing", step: "gear" } });
+  assert.notEqual(fit.id, gear.id);
+  assert.equal(announcement(reading(3, 31)).id, "stalled");
+  assert.equal(announcement(reading(3, 45)).id, "stalled");
+  assert.deepEqual(shape(announcement(reading(3, 31)).message), ["run.stalled", { seconds: 31 }, {}]);
+  assert.equal(announcement({ state: "cancelling" }).id, "cancelling");
+  assert.deepEqual(shape(announcement(FINISHED).message), ["result.pass_with_warnings", {}, {}]);
+  assert.equal(announcement(FINISHED).id, "end:finished");
+  assert.equal(announcement({ state: "failed", error_code: "INPUT_CHANGED" }).message.key, "result.failed");
+  assert.equal(announcement({ state: "idle" }), null);
+  assert.equal(announcement(undefined), null);
+});
+
+test("the end of a run moves focus only from where the run left it", () => {
+  const body = { name: "body" };
+  const start = { name: "start" };
+  const cancel = { name: "cancel" };
+  const heading = { name: "run heading" };
+  const language = { name: "language" };
+  const runSection = { contains: (element) => [start, cancel, heading].includes(element) };
+  for (const active of [null, body, start, cancel, heading]) {
+    assert.equal(shouldFocusResult(active, body, runSection), true, active?.name ?? "null");
+  }
+  assert.equal(shouldFocusResult(language, body, runSection), false);
 });

@@ -154,6 +154,13 @@ class GuiMessageCoverageTest(unittest.TestCase):
         # Exactly the codes that can occur: none without a message, none stale.
         self.assertEqual(sorted(codes), sorted(flow_table("ERROR_KEYS")))
 
+    def test_every_error_message_has_a_next_step(self) -> None:
+        messages = {key.removeprefix("error.") for key in flow_table("ERROR_KEYS").values()}
+        next_steps = flow_table("ERROR_NEXT_KEYS")
+        # Exactly the messages in use, and the fallback for unknown codes.
+        self.assertEqual(sorted(next_steps), sorted(messages | {"unknown"}))
+        self.assertTrue(all(step.startswith("next.") for step in next_steps.values()))
+
     def test_output_actions_pass_on_codes_from_doctor_and_the_bundle_only(self) -> None:
         # The test above collects the codes of these two errors; any other
         # error passed on as it is would need its codes collected as well.

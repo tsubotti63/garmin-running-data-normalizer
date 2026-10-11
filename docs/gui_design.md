@@ -120,7 +120,8 @@ what Run-All does when it publishes, so that a parent that cannot be written is
 reported at once instead of after the run. `os.access` is not used, because it
 can report a read-only or protected location as writable. After a successful
 check, the parent defaults to the folder that contains the export, and the
-proposed name is `garmin-run-all-YYYYMMDD-HHMM` in local time. Native
+proposed name is `garmin-run-all-YYYYMMDD-HHMM` in local time. After a run in
+the same minute, the next proposal adds `-2`, `-3`, and so on. Native
 operating-system dialogs are not used in 2.0.0.
 
 ## After a run
@@ -210,7 +211,8 @@ Processing:
 - Timezone suggestions come from the browser's list of IANA names; the server
   checks the name that is entered.
 - The server returns error codes, and the page turns them into messages in the
-  selected language.
+  selected language. Every error shows what happened, the next step, and the
+  code to quote in a support request.
 - Tests check that every catalog has the same keys and placeholders and that no
   key is unused.
 - CLI output and the generated Run-All documents stay in English, so the output
@@ -219,9 +221,21 @@ Processing:
 
 ## Accessibility
 
-The GUI supports keyboard operation, accessible names for controls, progress
-announced in a live region, WCAG 2.1 AA contrast, no information conveyed by
-color alone, and reduced motion. Tests check names, roles, and contrast.
+The GUI supports keyboard operation, accessible names for controls, WCAG 2.1
+AA contrast in the light and dark themes, no information conveyed by color
+alone, and reduced motion.
+
+- Progress counts change every second, so they stay out of live regions. A
+  hidden live region speaks when the stage changes, when a run stalls or is
+  being cancelled, and when it ends. Live regions change only when their text
+  changes, so that screen readers do not repeat them.
+- When a run ends, focus moves to the result heading. When a button that had
+  focus stays disabled after its action, focus moves to the nearest heading.
+- Losing the server is shown as an alert at the top of the page.
+- Tests check labels, button names, heading order, live regions, focus
+  targets, and the contrast of the stylesheet's colors. Keyboard-only use and
+  a screen reader (VoiceOver on macOS) are checked by hand in stage 4; a
+  scripted browser test is not part of CI in 2.0.0.
 
 ## Repository constraints
 
