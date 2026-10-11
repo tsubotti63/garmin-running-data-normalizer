@@ -17,6 +17,7 @@ from .common.time import (
 )
 from .common.private_files import PRIVATE_DIRECTORY_MODE, open_private_file
 from .intake.discovery import discover_export
+from .intake.source import CorruptArchiveError, ExportTooLargeError, is_zip_input
 from .normalizers.activities import normalize_activities
 from .qa import summarize_records
 from .run_all import RunAllError, run_all
@@ -62,10 +63,10 @@ def _validate_paths(input_path: str | Path, output_path: str | Path) -> tuple[Pa
     requested_input = Path(input_path)
     requested_output = Path(output_path)
     if requested_input.is_symlink():
-        raise GoldenPathError("input directory must not be a symbolic link")
+        raise GoldenPathError("input must not be a symbolic link")
     input_root = requested_input.resolve()
-    if not input_root.is_dir():
-        raise GoldenPathError("input directory does not exist")
+    if not input_root.is_dir() and not is_zip_input(input_root):
+        raise GoldenPathError("input must be an existing folder or ZIP file")
     if requested_output.is_symlink():
         raise GoldenPathError("output directory must not be a symbolic link")
     output_root = requested_output.resolve()
@@ -184,7 +185,7 @@ def build_parser() -> argparse.ArgumentParser:
         "normalize-activities",
         help="Normalize Garmin summarized activities with deterministic QA.",
     )
-    activities.add_argument("--input", required=True, help="Garmin export directory")
+    activities.add_argument("--input", required=True, help="Garmin Export folder or ZIP file")
     activities.add_argument("--output", required=True, help="Absent or empty output directory")
     activities.add_argument(
         "--timezone",
@@ -195,7 +196,7 @@ def build_parser() -> argparse.ArgumentParser:
         "run-all",
         help="Run the minimum deterministic multi-family Garmin workflow.",
     )
-    combined.add_argument("--input", required=True, help="Garmin export directory")
+    combined.add_argument("--input", required=True, help="Garmin Export folder or ZIP file")
     combined.add_argument("--output", required=True, help="New output directory")
     combined.add_argument(
         "--external-safe-pack",
@@ -231,7 +232,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Register a complete immutable Garmin Export observation.",
     )
     snapshot_register.add_argument("--store", required=True)
-    snapshot_register.add_argument("--input", required=True)
+    snapshot_register.add_argument("--input", required=True, help="Garmin Export folder or ZIP file")
     snapshot_register.add_argument("--label", required=True)
     snapshot_register.add_argument(
         "--requested-at",
@@ -298,7 +299,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explain bounded pre-run or completed Run-All evidence without changing it.",
     )
     doctor_mode = doctor.add_mutually_exclusive_group(required=True)
-    doctor_mode.add_argument("--input", help="Garmin Export directory to inspect")
+    doctor_mode.add_argument("--input", help="Garmin Export folder or ZIP file to inspect")
     doctor_mode.add_argument("--run-output", help="Completed Run-All output to inspect")
     doctor.add_argument(
         "--format",
@@ -401,6 +402,18 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except SupportBundleError as exc:
         print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)
+        return 2
+    # The same codes as Run-All, for the commands that read an Export ZIP file
+    # without Run-All (normalize-activities and snapshot register).
+    except CorruptArchiveError:
+        print("ERROR [INPUT_ZIP_CORRUPT]: the Export ZIP file is damaged or incomplete", file=sys.stderr)
+        return 2
+    except ExportTooLargeError:
+        print(
+            "ERROR [INPUT_TOO_LARGE]: the Export ZIP file is too large to read directly; "
+            "extract it and use the folder",
+            file=sys.stderr,
+        )
         return 2
     except Exception:
         if args.command in {"run-all", "snapshot"}:

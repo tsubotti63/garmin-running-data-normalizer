@@ -190,9 +190,13 @@ A ZIP file is read directly:
   relying on the user's confirmation.
 - Reading is revised so that a large Export does not have to fit in memory at
   once.
+- The values of the limits, the folder that serves as the root, and the
+  temporary copies of large nested ZIP files are in
+  [v2.0.0 Data Handling](v2_data_handling.md#an-export-given-as-a-zip-file).
 
-An extracted folder is read as in v1.x, and the user confirms that the Export
-was extracted completely.
+An extracted folder is read as in v1.x, except that folders around the Export
+are left out of the paths as for a ZIP file, and the user confirms that the
+Export was extracted completely.
 
 ## Output
 

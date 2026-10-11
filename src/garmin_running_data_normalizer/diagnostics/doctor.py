@@ -15,6 +15,7 @@ from ..common.time import (
     resolve_timezone_name,
 )
 from ..intake.discovery import discover_export
+from ..intake.source import CorruptArchiveError, ExportTooLargeError, is_zip_input
 from ..standalone import StandaloneHandoffError, validate_standalone_handoff
 from .contracts import (
     DOCTOR_FORMAT,
@@ -142,7 +143,7 @@ def doctor_input(
         pass  # Reported below as the bounded timezone-data finding.
     requested = Path(root)
     findings: list[dict[str, Any]] = []
-    if requested.is_symlink() or not requested.is_dir():
+    if requested.is_symlink() or not (requested.is_dir() or is_zip_input(requested)):
         findings.append(
             _finding(
                 "INPUT_DIRECTORY_INVALID",
@@ -171,6 +172,30 @@ def doctor_input(
             )
         try:
             assets = discover_export(requested)
+        except CorruptArchiveError:
+            findings.append(
+                _finding(
+                    "INPUT_ZIP_CORRUPT",
+                    severity="ERROR",
+                    actionability="ACTION_REQUIRED",
+                    safe_message_id="INPUT_ZIP_DAMAGED_OR_INCOMPLETE",
+                    next_action_id="DOWNLOAD_EXPORT_AGAIN",
+                    authority_reference="product:intake-discovery",
+                    evidence_reference="diagnostic:source-discovery",
+                )
+            )
+        except ExportTooLargeError:
+            findings.append(
+                _finding(
+                    "INPUT_TOO_LARGE",
+                    severity="ERROR",
+                    actionability="ACTION_REQUIRED",
+                    safe_message_id="INPUT_ZIP_TOO_LARGE_TO_READ_DIRECTLY",
+                    next_action_id="EXTRACT_EXPORT_AND_SELECT_FOLDER",
+                    authority_reference="product:intake-discovery",
+                    evidence_reference="diagnostic:source-discovery",
+                )
+            )
         except Exception:
             findings.append(
                 _finding(
