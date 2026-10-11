@@ -15,6 +15,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from garmin_running_data_normalizer import __version__
+from garmin_running_data_normalizer.gui import outputs
 from garmin_running_data_normalizer.gui.runs import RunManager
 from garmin_running_data_normalizer.gui.server import (
     API_ROUTES,
@@ -682,6 +683,73 @@ class GuiRunApiTest(GuiServerTestCase):
         self.assertEqual(answer["error_code"], "RUN_ALL_FAILED")
         self.assertNotIn(PRIVATE_TEXT, json.dumps(answer))
         self.assertEqual(stdout.getvalue(), "")
+
+    def test_output_actions_need_a_finished_run(self) -> None:
+        self.start_server(600.0, runs=stub_manager("wait"))
+        routes = ("/api/check-output", "/api/support-bundle", "/api/open-output")
+        for route in routes:
+            with self.subTest(route=route, state="idle"):
+                self.assertEqual(self.call(route, {"target": "folder"}), (409, {"error": "NO_FINISHED_OUTPUT"}))
+        self.assertEqual(self.call("/api/run/start", self.run_request())[0], 200)
+        for route in routes:
+            with self.subTest(route=route, state="running"):
+                self.assertEqual(self.call(route, {"target": "folder"}), (409, {"error": "NO_FINISHED_OUTPUT"}))
+        self.call("/api/run/cancel", {})
+        self.wait_for_state({"cancelled"})
+        for route in routes:
+            with self.subTest(route=route, state="cancelled"):
+                self.assertEqual(self.call(route, {"target": "folder"}), (409, {"error": "NO_FINISHED_OUTPUT"}))
+        self.assertEqual(list(self.parent.iterdir()), [])
+
+    def test_output_actions_report_an_incomplete_output_by_code(self) -> None:
+        # The stub publishes an empty folder, as a run whose cancellation came
+        # too late would leave a folder that this server did not check.
+        self.start_server(600.0, runs=stub_manager("publish-then-wait"))
+        self.assertEqual(self.call("/api/run/start", self.run_request())[0], 200)
+        self.assertTrue(wait_until(lambda: (self.parent / "output").is_dir()))
+        self.call("/api/run/cancel", {})
+        self.wait_for_state({"finished_after_cancel"})
+        self.assertEqual(self.call("/api/check-output", {}), (422, {"error": "HANDOFF_INVALID"}))
+        self.assertEqual(
+            self.call("/api/support-bundle", {}),
+            (422, {"error": "SUPPORT_BUNDLE_AUTHORITY_INVALID"}),
+        )
+        with patch.object(outputs, "_launch") as launch:
+            self.assertEqual(self.call("/api/open-output", {"target": "folder"}), (200, {"status": "opened"}))
+            self.assertEqual(
+                self.call("/api/open-output", {"target": "start_here"}),
+                (422, {"error": "OUTPUT_NOT_AVAILABLE"}),
+            )
+            for payload in ({}, {"target": "x"}, {"target": str(self.root)}, {"path": str(self.root)}):
+                with self.subTest(payload=payload):
+                    self.assertEqual(self.call("/api/open-output", payload), (422, {"error": "REQUEST_INVALID"}))
+        launch.assert_called_once_with(self.parent / "output", folder=True)
+        self.assertEqual(sorted(path.name for path in self.parent.iterdir()), ["output"])
+
+    def test_a_real_run_can_be_checked_bundled_and_opened(self) -> None:
+        self.start_server(600.0)
+        self.assertEqual(self.call("/api/run/start", self.run_request())[0], 200)
+        self.assertEqual(self.wait_for_state({"finished", "failed"})["state"], "finished")
+        output = self.parent / "output"
+        status, answer = self.call("/api/check-output", {})
+        self.assertEqual(status, 200)
+        self.assertEqual(answer, outputs.check_output(output))
+        self.assertEqual(answer["doctor"]["usability_scope"], "USABLE_WITH_DISCLOSED_WARNINGS")
+        self.assertNotIn(str(SYNTHETIC_EXPORT), json.dumps(answer))
+        self.assertNotIn(str(self.root), json.dumps(answer))
+        bundle = self.parent / "output-support-bundle.zip"
+        self.assertEqual(
+            self.call("/api/support-bundle", {}),
+            (200, {"path": str(bundle), "member_count": 6, "human_review_required": True}),
+        )
+        self.assertTrue(bundle.is_file())
+        self.assertEqual(self.call("/api/support-bundle", {}), (422, {"error": "SUPPORT_BUNDLE_EXISTS"}))
+        with patch.object(outputs, "_launch") as launch:
+            self.assertEqual(
+                self.call("/api/open-output", {"target": "start_here"}),
+                (200, {"status": "opened"}),
+            )
+        launch.assert_called_once_with(output / "START_HERE.md", folder=False)
 
     def test_a_real_run_through_the_api_matches_the_cli(self) -> None:
         self.start_server(600.0)

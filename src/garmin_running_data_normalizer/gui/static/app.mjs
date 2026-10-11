@@ -6,6 +6,7 @@
 import { DEFAULT_LANGUAGE, chooseLanguage, translate } from "./i18n.mjs";
 import {
   ACTIVE_STATES,
+  FINISHED_STATES,
   TERMINAL_STATES,
   controls,
   defaultOutputName,
@@ -13,6 +14,7 @@ import {
   familyRows,
   findingMessages,
   formatElapsed,
+  outputCheckMessages,
   progressMessage,
   resultMessages,
   stalledSeconds,
@@ -58,6 +60,13 @@ const ui = {
   runResult: byId("run-result"),
   familyTable: byId("family-table"),
   familyRows: byId("family-rows"),
+  outputActions: byId("output-actions"),
+  outputCheck: byId("output-check"),
+  openFolder: byId("open-folder-button"),
+  openStartHere: byId("open-start-here-button"),
+  openResult: byId("open-result"),
+  bundle: byId("bundle-button"),
+  bundleResult: byId("bundle-result"),
 };
 
 const state = {
@@ -76,6 +85,8 @@ const state = {
   runError: null,
   quitKey: null,
   browser: null,
+  // The check of the finished run's output and the actions on it.
+  output: null,
 };
 
 class ApiError extends Error {
@@ -319,12 +330,59 @@ function renderRun() {
   ui.familyRows.replaceChildren(...rows.map(familyRow));
 }
 
+function outputBusy() {
+  const output = state.output;
+  return output !== null && (output.checking || output.opening || output.bundling);
+}
+
+function renderOutput() {
+  const output = state.output;
+  ui.outputActions.hidden = output === null || !FINISHED_STATES.includes(state.run.state);
+  if (ui.outputActions.hidden) {
+    return;
+  }
+  const checkLines = [];
+  if (output.checking) {
+    checkLines.push(t("output_check.running"));
+  } else if (output.checkError !== null) {
+    checkLines.push(...codeLines(output.checkError));
+  } else if (output.check !== null) {
+    checkLines.push(...outputCheckMessages(output.check).map(describe));
+  }
+  replaceLines(ui.outputCheck, checkLines);
+  const openLines = [];
+  if (output.openError !== null) {
+    openLines.push(...codeLines(output.openError));
+  } else if (output.opened) {
+    openLines.push(t("open.requested"));
+  }
+  replaceLines(ui.openResult, openLines);
+  const bundleLines = [];
+  if (output.bundling) {
+    bundleLines.push(t("bundle.creating"));
+  } else if (output.bundleError !== null) {
+    bundleLines.push(...codeLines(output.bundleError));
+  } else if (output.bundle !== null) {
+    bundleLines.push(
+      t("bundle.created", {
+        count: formatNumber(output.bundle.member_count),
+        path: output.bundle.path,
+      }),
+    );
+    if (output.bundle.human_review_required === true) {
+      bundleLines.push(t("bundle.review"));
+    }
+  }
+  replaceLines(ui.bundleResult, bundleLines);
+}
+
 function renderControls() {
   const enabled = controls({
     connected: state.connected,
     runState: state.run.state,
     starting: state.starting,
     checking: state.checking,
+    outputBusy: outputBusy(),
     checkedReady: isCheckCurrent() && state.check.ready === true,
     inputPath: ui.inputPath.value,
     outputParent: ui.outputParent.value,
@@ -340,6 +398,10 @@ function renderControls() {
   ui.start.disabled = !enabled.start;
   ui.cancel.disabled = !enabled.cancel;
   ui.quit.disabled = !enabled.quit;
+  ui.openFolder.disabled = !enabled.outputActions;
+  ui.openStartHere.disabled = !enabled.outputActions;
+  // The bundle's name is fixed, so a second one would be refused.
+  ui.bundle.disabled = !enabled.outputActions || state.output?.bundle != null;
 }
 
 function render() {
@@ -357,6 +419,7 @@ function render() {
   renderCheck();
   renderBrowser();
   renderRun();
+  renderOutput();
   renderControls();
 }
 
@@ -388,9 +451,10 @@ async function pollRun() {
     state.run = await callApi("/api/run/status");
     if (TERMINAL_STATES.includes(state.run.state)) {
       stopPolling();
-      if (state.run.state !== "cancelled" && state.run.state !== "failed") {
+      if (FINISHED_STATES.includes(state.run.state) && state.output === null) {
         // The name is taken now; propose a new one for the next run.
         ui.outputName.value = defaultOutputName(new Date());
+        checkOutput();
       }
     }
   } catch (error) {
@@ -402,6 +466,76 @@ async function pollRun() {
 function startPolling() {
   stopPolling();
   state.pollTimer = window.setInterval(pollRun, POLL_INTERVAL_MS);
+}
+
+// Check the finished output as the CLI's validate-handoff and doctor
+// --run-output would; the server knows which folder the run published.
+async function checkOutput() {
+  const output = {
+    checking: true,
+    check: null,
+    checkError: null,
+    opening: false,
+    opened: false,
+    openError: null,
+    bundling: false,
+    bundle: null,
+    bundleError: null,
+  };
+  state.output = output;
+  render();
+  try {
+    output.check = await callApi("/api/check-output");
+  } catch (error) {
+    if (!connectionFailure(error)) {
+      output.checkError = error.code;
+    }
+  } finally {
+    output.checking = false;
+    render();
+  }
+}
+
+async function openOutput(target) {
+  const output = state.output;
+  if (output === null) {
+    return;
+  }
+  output.opening = true;
+  output.opened = false;
+  output.openError = null;
+  render();
+  try {
+    await callApi("/api/open-output", { target });
+    output.opened = true;
+  } catch (error) {
+    if (!connectionFailure(error)) {
+      output.openError = error.code;
+    }
+  } finally {
+    output.opening = false;
+    render();
+  }
+}
+
+async function makeBundle() {
+  const output = state.output;
+  if (output === null) {
+    return;
+  }
+  output.bundling = true;
+  output.bundleError = null;
+  render();
+  try {
+    output.bundle = await callApi("/api/support-bundle");
+  } catch (error) {
+    if (!connectionFailure(error)) {
+      output.bundleError = error.code;
+    }
+  } finally {
+    output.bundling = false;
+    render();
+  }
 }
 
 async function suggestOutputParent(inputPath) {
@@ -448,6 +582,7 @@ async function startRun() {
   state.quitKey = null;
   // The previous result would read as the answer to this attempt.
   state.run = { state: "idle" };
+  state.output = null;
   render();
   try {
     state.run = await callApi("/api/run/start", {
@@ -610,6 +745,9 @@ function connect() {
   ui.check.addEventListener("click", runCheck);
   ui.start.addEventListener("click", startRun);
   ui.cancel.addEventListener("click", cancelRun);
+  ui.openFolder.addEventListener("click", () => openOutput("folder"));
+  ui.openStartHere.addEventListener("click", () => openOutput("start_here"));
+  ui.bundle.addEventListener("click", makeBundle);
   ui.inputBrowse.addEventListener("click", () => openBrowser("input", ui.inputBrowse));
   ui.outputBrowse.addEventListener("click", () => openBrowser("output", ui.outputBrowse));
   ui.browserUp.addEventListener("click", () => loadFolder(state.browser?.parent));
@@ -648,6 +786,8 @@ async function start() {
     state.run = await callApi("/api/run/status");
     if (ACTIVE_STATES.includes(state.run.state)) {
       startPolling();
+    } else if (FINISHED_STATES.includes(state.run.state)) {
+      checkOutput();
     }
   } catch (error) {
     connectionFailure(error);

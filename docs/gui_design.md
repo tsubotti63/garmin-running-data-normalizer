@@ -107,14 +107,44 @@ Browsers do not reveal local folder paths, so the GUI offers:
   starting from the home directory. It never returns file names or contents,
   and it leaves out hidden folders, symbolic links, and Windows junctions.
 
-The export folder is checked with the pre-run Doctor. The output is a new folder
-inside a chosen parent folder, with a proposed name, and it is validated by the
-same rules as the CLI (it must not exist yet). The GUI also requires the parent
-folder to exist, so that a mistyped path creates no folders, and the name to be
-one portable folder name that does not start with a dot. After a successful
+The export folder is checked with the pre-run Doctor. The output is a new
+folder inside a chosen parent folder, with a proposed name, and it is validated
+by the same rules as the CLI (it must not exist yet). The GUI also requires the
+parent folder to exist, so that a mistyped path creates no folders, and the
+name to be one portable folder name that does not start with a dot. The name
+has at most 200 bytes in UTF-8, so that the hidden names derived from it
+(Run-All's staging folder and the Support Bundle's temporary file) stay within
+the 255 bytes that many file systems allow for one name. Before a run starts,
+the server creates and removes an empty hidden folder in the parent, which is
+what Run-All does when it publishes, so that a parent that cannot be written is
+reported at once instead of after the run. `os.access` is not used, because it
+can report a read-only or protected location as writable. After a successful
 check, the parent defaults to the folder that contains the export, and the
 proposed name is `garmin-run-all-YYYYMMDD-HHMM` in local time. Native
 operating-system dialogs are not used in 2.0.0.
+
+## After a run
+
+The page works only with the output that the server's last run published: a
+finished run, or a run whose cancellation arrived after Run-All published the
+output. The page never names a path for these actions. Earlier outputs are
+still checked with the CLI.
+
+- The output is checked as `validate-handoff` and `doctor --run-output` check
+  it. The page shows the counts from the output (datasets, links between
+  datasets, and warnings), what the Doctor says about using the output, the
+  next action, and one line for each registered warning code. A folder that
+  changed after the run is reported by code.
+- The Support Bundle is written next to the output as
+  `<output name>-support-bundle.zip`, because inside the output it would
+  contradict the manifest. An existing file is never replaced. The page
+  explains the six members, that nothing is uploaded, and that the bundle needs
+  review before it is shared.
+- The page can show the output folder or open its `START_HERE.md` with the
+  default application. The server checks that neither was replaced by a link
+  or a junction and passes an absolute path without a shell: `open -R` for the
+  folder and `open` for the file on macOS, `os.startfile` with the `explore`
+  and `open` verbs on Windows, and `xdg-open` elsewhere.
 
 ## Security
 
@@ -155,6 +185,8 @@ Processing:
 - Child processes are started from an argument list without a shell.
 - The folder browser returns directory names only.
 - Output folders go through the same checks as the CLI.
+- Output actions use only the last published output; the page can open only
+  that folder and its `START_HERE.md`.
 
 ## Privacy
 
@@ -215,7 +247,8 @@ color alone, and reduced motion. Tests check names, roles, and contrast.
 ## Testing
 
 - Python tests cover the server request checks (secret, `Host`, `Origin`,
-  method, content type, and response headers), the API, byte-identical output
+  method, content type, and response headers), the API (with the operating
+  system's opener replaced for the open actions), byte-identical output
   between the GUI path and the CLI on the synthetic Export (with and without
   the External-safe Pack and the timezone option, and with and without the
   progress callback), catalog

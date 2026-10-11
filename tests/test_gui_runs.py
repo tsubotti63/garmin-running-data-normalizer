@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import json
 import os
 import subprocess
@@ -15,10 +16,13 @@ from unittest.mock import patch
 # Import the diagnostics package before the standalone module: importing
 # standalone first meets a circular import when this file runs on its own.
 from garmin_running_data_normalizer import diagnostics  # noqa: F401
+from garmin_running_data_normalizer.gui.outputs import make_support_bundle, support_bundle_path
 from garmin_running_data_normalizer.gui.runs import (
+    MAX_OUTPUT_NAME_BYTES,
     RunActiveError,
     RunManager,
     RunRequestError,
+    validate_output_name,
 )
 from garmin_running_data_normalizer.standalone import validate_standalone_handoff
 from tests.fit_fixture_factory import synthetic_fit
@@ -173,14 +177,17 @@ class RunManagerTest(unittest.TestCase):
 
     def test_a_signal_cancels_the_run(self) -> None:
         manager = stub_manager("wait", cancel_grace=60.0)
+        self.assertIsNone(manager.finished_output())
         self.start(manager)
         self.wait_for_progress(manager)
+        self.assertIsNone(manager.finished_output())
         self.assertEqual(manager.cancel()["state"], "cancelling")
         status = self.wait_for_end(manager, timeout=30.0)
         self.assertEqual(status["state"], "cancelled")
         self.assertEqual(manager._run.process.returncode, 130)
         self.assertFalse((self.parent / "output").exists())
         self.assertEqual(status["staging_folders"], [])
+        self.assertIsNone(manager.finished_output())
 
     def test_a_run_that_ignores_the_signal_is_terminated(self) -> None:
         manager = stub_manager("ignore", cancel_grace=0.5, kill_grace=10.0)
@@ -199,6 +206,7 @@ class RunManagerTest(unittest.TestCase):
         status = self.wait_for_end(manager)
         self.assertEqual(status["state"], "finished_after_cancel")
         self.assertTrue((self.parent / "output").is_dir())
+        self.assertEqual(manager.finished_output(), self.parent / "output")
 
     def test_a_staging_folder_left_by_a_forced_stop_is_reported_and_kept(self) -> None:
         manager = stub_manager("stage-then-ignore", cancel_grace=0.3)
@@ -256,6 +264,7 @@ class RunManagerTest(unittest.TestCase):
         self.assertEqual(status["progress"], {"stage": "normalizing", "step": "activities"})
         self.assertIsNone(status["result"])
         self.assertNotIn(PRIVATE_TEXT, json.dumps(status))
+        self.assertIsNone(manager.finished_output())
 
     def test_requests_are_checked_before_a_child_starts(self) -> None:
         manager = stub_manager("wait")
@@ -270,7 +279,8 @@ class RunManagerTest(unittest.TestCase):
             (request(SYNTHETIC_EXPORT, self.parent, external_safe_pack="yes"), "REQUEST_INVALID"),
         ]
         for name in ("", ".", "..", ".hidden", "a/b", "a\\b", "CON", "con.txt", "Nul",
-                     "name.", "name ", "a:b", "a*b", "a?b", 'a"b', "a<b", "a|b", "tab\tname", "x" * 256):
+                     "name.", "name ", "a:b", "a*b", "a?b", 'a"b', "a<b", "a|b", "tab\tname", "x" * 256,
+                     "x" * 201, "あ" * 67, "\ud800", "a\udc80b"):
             cases.append((request(SYNTHETIC_EXPORT, self.parent, name), "OUTPUT_NAME_INVALID"))
         if hasattr(os, "symlink") and os.name != "nt":
             (self.parent / "link").symlink_to(self.root)
@@ -286,6 +296,90 @@ class RunManagerTest(unittest.TestCase):
             sorted(["existing", *(["link"] if (self.parent / "link").is_symlink() else [])]),
         )
 
+    def test_output_names_are_limited_to_200_bytes_in_utf8(self) -> None:
+        self.assertEqual(MAX_OUTPUT_NAME_BYTES, 200)
+        for name in ("x" * 200, "あ" * 66, "\U0001f3c3" * 50, "a" * 197 + "あ"):
+            with self.subTest(size=len(name.encode("utf-8"))):
+                self.assertEqual(validate_output_name(name), name)
+        for name in ("x" * 201, "あ" * 67, "\U0001f3c3" * 51, "a" * 198 + "あ"):
+            with self.subTest(size=len(name.encode("utf-8"))):
+                with self.assertRaises(RunRequestError) as caught:
+                    validate_output_name(name)
+                self.assertEqual(caught.exception.code, "OUTPUT_NAME_INVALID")
+
+    def test_the_longest_names_work_through_run_all_and_the_support_bundle(self) -> None:
+        names = ["あ" * 66]
+        if os.name != "nt":
+            # Without long paths enabled, Windows limits a whole path to 260
+            # characters, which a 200-character name nearly fills.
+            names.append("a" * 200)
+        for name in names:
+            with self.subTest(size=len(name.encode("utf-8"))):
+                manager = RunManager()
+                self.start(manager, name)
+                self.assertEqual(self.wait_for_end(manager)["state"], "finished")
+                make_support_bundle(self.parent / name)
+                self.assertTrue(support_bundle_path(self.parent / name).is_file())
+        self.assertEqual(
+            [path.name for path in self.parent.iterdir() if path.name.startswith(".")], []
+        )
+
+    def test_a_name_too_long_for_the_location_is_reported_as_a_name_problem(self) -> None:
+        manager = stub_manager("wait")
+        with patch(
+            "garmin_running_data_normalizer.gui.runs.tempfile.mkdtemp",
+            side_effect=OSError(errno.ENAMETOOLONG, "File name too long"),
+        ):
+            with self.assertRaises(RunRequestError) as caught:
+                manager.start(request(SYNTHETIC_EXPORT, self.parent))
+        self.assertEqual(caught.exception.code, "OUTPUT_NAME_INVALID")
+        self.assertEqual(manager.status(), {"state": "idle"})
+
+    def test_a_parent_that_refuses_the_write_check_is_reported(self) -> None:
+        # Permission bits do not always stop writes on Windows, so the check
+        # itself is made to fail here; the next test uses real permissions.
+        manager = stub_manager("wait")
+        with patch(
+            "garmin_running_data_normalizer.gui.runs.tempfile.mkdtemp",
+            side_effect=PermissionError("denied"),
+        ):
+            with self.assertRaises(RunRequestError) as caught:
+                manager.start(request(SYNTHETIC_EXPORT, self.parent))
+        self.assertEqual(caught.exception.code, "OUTPUT_PARENT_NOT_WRITABLE")
+        self.assertEqual(manager.status(), {"state": "idle"})
+
+    @unittest.skipIf(
+        os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+        "permission bits do not stop this user here",
+    )
+    def test_a_parent_without_write_permission_is_refused(self) -> None:
+        manager = stub_manager("wait")
+        self.parent.chmod(0o500)
+        self.addCleanup(self.parent.chmod, 0o700)
+        with self.assertRaises(RunRequestError) as caught:
+            manager.start(request(SYNTHETIC_EXPORT, self.parent))
+        self.assertEqual(caught.exception.code, "OUTPUT_PARENT_NOT_WRITABLE")
+        self.assertEqual(manager.status(), {"state": "idle"})
+        self.assertEqual(list(self.parent.iterdir()), [])
+
+    def test_the_write_check_leaves_nothing_behind(self) -> None:
+        manager = stub_manager("wait")
+        self.start(manager)
+        self.assertEqual(list(self.parent.iterdir()), [])
+        manager.cancel()
+        self.wait_for_end(manager)
+
+    def test_a_write_check_folder_that_cannot_be_removed_does_not_stop_the_run(self) -> None:
+        manager = stub_manager("wait")
+        with patch("garmin_running_data_normalizer.gui.runs.os.rmdir", side_effect=PermissionError("busy")):
+            self.start(manager)
+        left = [path.name for path in self.parent.iterdir()]
+        self.assertEqual(len(left), 1)
+        self.assertTrue(left[0].startswith(".output.write-check-"))
+        # A leftover check folder is not reported as a Run-All staging folder.
+        manager.cancel()
+        self.assertEqual(self.wait_for_end(manager)["staging_folders"], [])
+
     def test_the_real_worker_runs_through_the_manager(self) -> None:
         manager = RunManager()
         self.start(manager)
@@ -293,6 +387,7 @@ class RunManagerTest(unittest.TestCase):
         self.assertEqual(status["state"], "finished")
         self.assertEqual(status["result"]["status"], "PASS_WITH_WARNINGS")
         self.assertEqual(status["output_path"], str(self.parent / "output"))
+        self.assertEqual(manager.finished_output(), self.parent / "output")
         cli_output = self.root / "cli-output"
         self.assertEqual(run_cli("--input", str(SYNTHETIC_EXPORT), "--output", str(cli_output)).returncode, 0)
         self.assertEqual(tree_bytes(self.parent / "output"), tree_bytes(cli_output))

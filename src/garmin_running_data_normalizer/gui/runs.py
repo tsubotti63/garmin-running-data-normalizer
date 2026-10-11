@@ -8,12 +8,14 @@ Windows, then terminates and finally kills the child if it does not stop.
 """
 from __future__ import annotations
 
+import errno
 import json
 import os
 import re
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Iterator
@@ -29,6 +31,8 @@ KILL_GRACE_SECONDS = 5.0
 MAX_MESSAGE_BYTES = 64 * 1024
 MAX_TIMEZONE_LENGTH = 64
 RUN_STATUSES = ("PASS", "PASS_WITH_WARNINGS", "PARTIAL_SUCCESS")
+# States whose output folder is complete: Run-All published it.
+FINISHED_STATES = ("finished", "finished_after_cancel")
 CODE = re.compile(r"[A-Z0-9_]{1,64}")
 FAMILY_NAME = re.compile(r"[a-z0-9_]{1,40}")
 FAMILY_STATUS = re.compile(r"[A-Z_]{1,40}")
@@ -38,6 +42,11 @@ WINDOWS_RESERVED_NAMES = frozenset(
     | {f"LPT{number}" for number in range(1, 10)}
 )
 INVALID_NAME_CHARACTERS = frozenset('<>:"/\\|?*')
+# Hidden names derived from the output name are longer: Run-All's staging
+# folder by 18 bytes, the write check by 22, and the Support Bundle's temporary
+# file by 29. Many file systems allow 255 bytes in one name, so 200 bytes leave
+# room on every system.
+MAX_OUTPUT_NAME_BYTES = 200
 
 
 class RunRequestError(ValueError):
@@ -65,12 +74,20 @@ def absolute_path(value: Any, code: str) -> Path:
     return path
 
 
+def _utf8_size(text: str) -> int | None:
+    """Return the size of ``text`` in UTF-8, or None if it holds a lone surrogate."""
+    try:
+        return len(text.encode("utf-8"))
+    except UnicodeEncodeError:
+        return None
+
+
 def validate_output_name(name: Any) -> str:
     """Accept one portable folder name that cannot be taken for a staging folder."""
+    size = _utf8_size(name) if isinstance(name, str) else None
     if (
-        not isinstance(name, str)
-        or not name
-        or len(name) > 255
+        size is None
+        or not 0 < size <= MAX_OUTPUT_NAME_BYTES
         or name.startswith(".")
         or name.endswith((".", " "))
         or any(character in INVALID_NAME_CHARACTERS or ord(character) < 32 for character in name)
@@ -209,6 +226,14 @@ class RunManager:
         with self._lock:
             return self._run is not None and self._run.active
 
+    def finished_output(self) -> Path | None:
+        """Return the output folder of the last run if that run published it."""
+        with self._lock:
+            run = self._run
+            if run is None or run.state not in FINISHED_STATES:
+                return None
+            return run.output
+
     def start(self, request: dict[str, Any]) -> dict[str, Any]:
         input_path = absolute_path(request.get("input"), "INPUT_PATH_INVALID")
         parent = absolute_path(request.get("output_parent"), "OUTPUT_PARENT_INVALID")
@@ -234,6 +259,19 @@ class RunManager:
             raise RunRequestError("OUTPUT_SYMLINK")
         if output.exists():
             raise RunRequestError("OUTPUT_EXISTS")
+        # Run-All writes to the parent only at the end, by creating a staging
+        # folder there; try the same now instead of failing after a long run.
+        try:
+            probe = tempfile.mkdtemp(prefix=f".{name}.write-check-", dir=parent)
+        except OSError as exc:
+            if exc.errno == errno.ENAMETOOLONG:
+                # A shorter name fixes this; the parent may well be writable.
+                raise RunRequestError("OUTPUT_NAME_INVALID") from exc
+            raise RunRequestError("OUTPUT_PARENT_NOT_WRITABLE") from exc
+        try:
+            os.rmdir(probe)
+        except OSError:
+            pass  # At most an empty folder whose name starts with a dot remains.
         command = [
             *self._prefix,
             f"--input={input_path}",
@@ -381,7 +419,9 @@ class RunManager:
 
 __all__ = [
     "CANCEL_GRACE_SECONDS",
+    "FINISHED_STATES",
     "KILL_GRACE_SECONDS",
+    "MAX_OUTPUT_NAME_BYTES",
     "MAX_TIMEZONE_LENGTH",
     "RunActiveError",
     "RunManager",

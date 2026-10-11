@@ -11,7 +11,13 @@ from pathlib import Path
 # Import the diagnostics package before modules that import standalone:
 # the other order meets a circular import when this file runs on its own.
 from garmin_running_data_normalizer import diagnostics  # noqa: F401
+from garmin_running_data_normalizer.diagnostics import doctor
+from garmin_running_data_normalizer.diagnostics.contracts import (
+    SAFE_WARNING_CODES,
+    interpretation_for_status,
+)
 from garmin_running_data_normalizer.diagnostics.doctor import doctor_input
+from garmin_running_data_normalizer.gui.runs import RUN_STATUSES
 from garmin_running_data_normalizer.gui.server import LANGUAGES, STATIC_FILES
 from garmin_running_data_normalizer.run_all import PROGRESS_STAGES, PROGRESS_STEPS, run_all
 
@@ -141,9 +147,22 @@ class GuiMessageCoverageTest(unittest.TestCase):
             | codes_in("gui/folders.py", r'FolderError\("([A-Z_]+)"\)')
             | codes_in("gui/server.py", r'ApiError\(HTTPStatus\.[A-Z_]+, "([A-Z_]+)"\)')
             | codes_in("gui/run_worker.py", r'"code": "([A-Z_]+)"')
+            | codes_in("gui/outputs.py", r'OutputActionError\("([A-Z_]+)"\)')
+            | codes_in("diagnostics/doctor.py", r'DoctorError\(\s*"([A-Z_]+)"')
+            | codes_in("diagnostics/support_bundle.py", r'SupportBundleError\(\s*"([A-Z_]+)"')
         )
         # Exactly the codes that can occur: none without a message, none stale.
         self.assertEqual(sorted(codes), sorted(flow_table("ERROR_KEYS")))
+
+    def test_output_actions_pass_on_codes_from_doctor_and_the_bundle_only(self) -> None:
+        # The test above collects the codes of these two errors; any other
+        # error passed on as it is would need its codes collected as well.
+        source = (SOURCE / "gui/outputs.py").read_text(encoding="utf-8")
+        self.assertEqual(
+            re.findall(r"except (\w+) as exc:\n\s+raise OutputActionError\(exc\.code\)", source),
+            ["DoctorError", "SupportBundleError"],
+        )
+        self.assertEqual(source.count("OutputActionError(exc.code)"), 2)
 
     def test_every_progress_stage_and_step_has_a_message(self) -> None:
         self.assertEqual(set(flow_table("STAGE_KEYS")), set(PROGRESS_STAGES))
@@ -159,6 +178,23 @@ class GuiMessageCoverageTest(unittest.TestCase):
             set(re.findall(r'next_action_id="([A-Z_]+)"', source)),
             set(flow_table("ACTION_KEYS")),
         )
+
+    def test_every_post_run_doctor_value_has_a_message(self) -> None:
+        self.assertEqual(
+            {interpretation_for_status(status)["usability_scope"] for status in RUN_STATUSES},
+            set(flow_table("USABILITY_KEYS")),
+        )
+        source = inspect.getsource(doctor._base)
+        next_actions = dict(
+            re.findall(
+                r'product_status == "([A-Z_]+)":.*?doctor_next_action_id = "([A-Z_]+)"',
+                source,
+                re.DOTALL,
+            )
+        )
+        self.assertEqual(set(next_actions), set(RUN_STATUSES))
+        self.assertEqual(set(next_actions.values()), set(flow_table("NEXT_ACTION_KEYS")))
+        self.assertEqual(set(SAFE_WARNING_CODES), set(flow_table("WARNING_KEYS")))
 
     def test_every_family_and_family_status_has_a_name(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
