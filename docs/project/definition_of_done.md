@@ -6,7 +6,10 @@ Required Platform-aligned structure exists; the bounded Garmin core is
 importable; all created directories have a responsibility README or substantive
 artifact; production imports remain Target-local or standard library. The
 planned v2.0.0 GUI adds no Python dependency; it uses a web browser on the same
-machine, and the CLI does not require a browser.
+machine, and the CLI does not require a browser. The GUI is complete only when a
+person who has not seen it before can select an Export and finish a
+normalization without instructions, checked by hand before the stable
+release.
 
 ## Operational complete
 

@@ -25,9 +25,9 @@ records and reviewable QA using documented commands and synthetic-tested code.
 ## Interfaces
 
 The command-line interface is the stable interface. A local GUI is planned for
-v2.0.0 as a second entry point to the same processing: a page served on the
-loopback address for a browser on the same machine, not a hosted service. See
-[v2.0.0 GUI Design](../gui_design.md).
+v2.0.0 as a second entry point to the same processing, including Snapshots and
+ZIP input: a page served on the loopback address for a browser on the same
+machine, not a hosted service. See [v2.0.0 GUI Design](../gui_design.md).
 
 ## Human-owned decisions
 

@@ -145,13 +145,18 @@
 
 - Add a local GUI, served by the installed package on `127.0.0.1` for a browser
   on the same machine, as a second entry point to the same processing as the
-  CLI.
-- Cover the one-shot Run-All workflow: pre-run check, run with progress and
-  cancellation, post-run checks, optional External-safe Pack, and Support
-  Bundle.
+  CLI: one page that covers selecting an Export, Snapshots, the output, the
+  run, the output check, and the Support Bundle.
+- Accept the downloaded Export ZIP file as well as the extracted folder, in the
+  CLI and the GUI.
+- Stop the whole run only for safety reasons, for a folder that is not an
+  Export, and for mixed Exports or accounts; leave out or keep problem files
+  and rows, keep every value that disagrees, and report them, in the CLI and
+  the GUI alike. This changes the output and exit contracts; the
+  `0 / 0 / 3 / 2` mapping of statuses to exit codes stays.
 - Provide English and Japanese from message catalogs.
-- Keep the CLI, the Run-All output layout, the 17 datasets, stable keys,
-  Snapshot rules, and the `0 / 0 / 3 / 2` Product exit contract unchanged, with
-  no new runtime dependency and no outbound network access.
+- Keep the 17 datasets and stable keys, read existing Snapshot Stores without
+  migration, and add no new runtime dependency and no outbound network
+  access.
 - Publish a release candidate to TestPyPI before the stable release. See the
   [v2.0.0 GUI Design](gui_design.md).

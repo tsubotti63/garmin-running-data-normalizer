@@ -1,48 +1,111 @@
 # v2.0.0 GUI Design
 
-- Status: implementation in progress; the command-line interface does not
-  expose the GUI yet
+- Status: design revised on 2026-10-11; implementation in progress; the
+  command-line interface does not expose the GUI yet
 - Applies to: the v2.0.0 release in preparation; v1.7.1 remains the current
   stable release
 - Authority: maintainer design record agreed by the Human maintainer on
-  2026-10-10. Product contracts, tests, and the stable release remain the
-  behavior authority; this document does not change any existing CLI or output
-  contract.
+  2026-10-10 and revised by the Human maintainer's decisions of 2026-10-11.
+  Product contracts, tests, and the stable release remain the behavior
+  authority until v2.0.0 changes them as described in
+  [Data handling in 2.0.0](#data-handling-in-200).
 
 ## Purpose
 
 Version 2.0.0 adds a local graphical interface so that people who are not
-comfortable with a terminal can run the one-shot Run-All on a local Garmin
-Account Data Export, check the result, and prepare a Support Bundle. The
-command-line interface stays the stable interface and the reference
+comfortable with a terminal can normalize a local Garmin Account Data Export,
+keep each Export as a Snapshot, check the result, and prepare a Support Bundle.
+The command-line interface stays the stable interface and the reference
 implementation; the GUI is a second entry point to the same processing.
 
-The major version marks the addition of the GUI. This design does not change
-the CLI commands and options, the Run-All output layout (`run_all_version` 1),
-the 17 datasets, stable keys, the `0 / 0 / 3 / 2` Product exit mapping, or the
-Snapshot lifecycle contract.
+Version 2.0.0 also changes how the processing treats problems in the data, so
+that one problem does not stop the whole run and no value is dropped or chosen
+silently. These changes apply to the CLI and the GUI alike, and they change the
+output and exit contracts.
+
+## Principles
+
+1. The CLI and the GUI behave the same. For the same input and options, they
+   produce the same output, stop in the same cases, and report the same
+   warnings.
+2. Problems in the data do not stop the whole run. The run leaves out only the
+   file or row that has the problem, or keeps it as it is, finishes, and reports
+   what it did in warnings and in the output's records. Records that appear
+   twice are merged into one, with a record of where they appeared. No value is
+   dropped or chosen silently. A run stops only for safety reasons, for a
+   folder that is not an Export, and when the input mixes Exports or accounts.
+3. Snapshots are the default. Every registered Snapshot is used in every
+   Snapshot run, and a Snapshot cannot be left out. The user can choose the
+   Snapshot Store and can also normalize one Export without Snapshots.
+4. An Export can be selected as the downloaded ZIP file or as the extracted
+   folder, in the CLI and in the GUI.
+5. The GUI is for desktop and laptop computers. It is one page that does not
+   switch screens and does not use a step-by-step wizard. It offers every
+   function in this design, and controls that cannot be used yet are shown
+   disabled.
 
 ## Decisions
 
 | Topic | Decision |
 |---|---|
-| Architecture | A browser page served by the installed package on the loopback address `127.0.0.1`. Processing runs in the local Python with the same functions as the CLI, and results are written directly to a new local folder. |
-| Scope of 2.0.0 | The one-shot Run-All workflow: pre-run Doctor check, run, post-run handoff validation and Doctor review, optional External-safe Pack, timezone choice, and Support Bundle. |
-| CLI | Kept unchanged; `gui` is the only new command. For the same input and options, the GUI and the CLI produce byte-identical output. |
+| Architecture | A browser page served by the installed package on the loopback address `127.0.0.1`. Processing runs in the local Python with the same functions as the CLI, and results are written directly to local folders. |
+| Scope of 2.0.0 | The single-page GUI with Snapshots and ZIP input, and the data-handling and CLI changes in this document. |
+| CLI | `gui` is the new command. `run-all`, `doctor --input`, and `snapshot register` also accept a ZIP file. Errors, pre-run checks, warning totals, and cancellation are aligned with the GUI. |
 | Languages | English and Japanese at first, from message catalogs; more languages can be added as catalogs. CLI messages and generated output stay in English. |
-| Dependencies | No new runtime dependency. The GUI uses the standard library, its own static files, and a web browser on the same machine. |
+| Dependencies | No new runtime dependency. The GUI uses the standard library, its own static files, a web browser on the same machine, and the operating system's own file dialog. |
 | Code origin | The GUI is written for this repository under Apache-2.0. No code is copied from the private predecessor project. |
 | Pre-release | A release candidate is published to TestPyPI before the stable 2.0.0. |
-| Version timing | `main` keeps the 1.7 version until the release candidate (stage 5), and the `gui` command is not exposed until then, so that an urgent 1.7.x fix can still be released from `main`. After the release candidate, 1.7.x fixes wait for 2.0.0. |
+| Version timing | `main` keeps a 1.7 version until the release candidate, and the `gui` command is not exposed until then. A 1.7.x fix can be released from `main` only until the first stage A change is merged. After that, an urgent 1.7.x fix would require changing the main-only guard in `publish-pypi.yml`, which needs its own plan and review. |
 
 ## Out of scope for 2.0.0
 
-- Snapshot lifecycle screens (considered for a later 2.x release)
-- Passing a ZIP file instead of the extracted folder (the CLI does not support
-  it either)
+- Leaving out individual Snapshots
 - Viewing or analyzing the normalized data
 - A hosted or no-install web version
 - Any outbound network feature, including weather enrichment and Garmin sign-in
+- Phones and tablets
+
+## Page
+
+The page has four areas, in order: 1 Export, 2 Snapshots, 3 Output, and
+4 Normalize. Screen texts and layout details are settled in stage B with screen
+mockups that the Human maintainer reviews.
+
+- 1 Export: a downloaded ZIP file or an extracted folder. For a folder, the user
+  confirms that the Export was extracted completely; for a ZIP file, the checks
+  in [Selecting an Export](#selecting-an-export) replace that confirmation.
+- 2 Snapshots: create or choose the Snapshot Store, and choose how to
+  normalize: import this Export and normalize it together with the existing
+  Snapshots (recommended), normalize this Export only without Snapshots, or
+  normalize the existing Snapshots again without importing.
+- 3 Output: the parent folder, the output name, the timezone, and the optional
+  External-safe Pack.
+- 4 Normalize: the main button, progress, cancellation, the result table, the
+  output check, and the Support Bundle.
+
+Progress through the areas:
+
+- On the first launch, the user confirms areas 2 and 3 one at a time with a
+  button that accepts their settings.
+- On later launches, areas 2 and 3 are confirmed automatically while they keep
+  their defaults. An area whose settings change becomes the current step again
+  and must be confirmed before the run can start.
+
+Colors have five meanings across the page: blue is the current step or a
+running task, green is done or confirmed, yellow is a warning, red is a problem
+to fix, and gray is absent or not yet. Only red fills a table row; yellow and
+blue rows use a bar at the left edge, an icon, and words. Color is never the
+only signal.
+
+Explanations open from an information button (ⓘ) for the External-safe Pack
+contents, the timezone, how to normalize, the Snapshot Store, and the output
+check and Support Bundle. Before the External-safe Pack or the Support Bundle is
+created, the page shows the name and location of the file that will be
+created.
+
+Provisional until stage B: the label of the main button and the names of the new
+error codes `INPUT_ZIP_CORRUPT`, `INPUT_MULTIPLE_EXPORTS`, and
+`SNAPSHOT_STORE_LOCKED`.
 
 ## Architecture
 
@@ -52,8 +115,9 @@ Browser on the same machine
   -> JSON API on the same origin
 Local GUI server (standard library, started by the gui command)
   -> pre-run check, post-run checks, Support Bundle (same functions as the CLI)
-  -> child process for Run-All (same run_all function as the CLI)
-New local output folder (published atomically by Run-All)
+  -> child process for each run (same functions as the CLI)
+  -> the operating system's own file dialog, on request
+Local Snapshot Store and new output folders
 ```
 
 - Server: `http.server.ThreadingHTTPServer` bound to `127.0.0.1` with a port
@@ -65,90 +129,176 @@ New local output folder (published atomically by Run-All)
   which also fixes the content type of each file. `mimetypes` is not used,
   because Windows can map `.js` to `text/plain` through the registry, and
   `nosniff` then blocks the script.
-- Run-All runs in a child process started from an argument list
-  (`sys.executable`, `-P`, `-m`, an internal GUI module, and the same
-  arguments that the CLI takes, with absolute paths) without a shell. `-P`
-  keeps the current folder out of the child's module search path. The child
-  calls the same `run_all` function as the CLI and reports progress events
-  and the outcome as JSON lines; the server accepts only stage names, counts,
-  statuses, and error codes from them, and discards the child's standard
-  error. Short operations (Doctor, handoff validation, and Support Bundle)
-  run in the server process.
+- Runs (`run-all`, `snapshot register`, and `snapshot run-all`) run in a child
+  process started from an argument list (`sys.executable`, `-P`, `-m`, an
+  internal GUI module, and the same arguments that the CLI takes, with absolute
+  paths) without a shell. `-P` keeps the current folder out of the child's
+  module search path. The child calls the same functions as the CLI and reports
+  progress events and the outcome as JSON lines; the server accepts only stage
+  names, counts, statuses, and error codes from them, and discards the child's
+  standard error. Short operations (Doctor, handoff validation, and Support
+  Bundle) run in the server process.
 - Progress: `run_all` has an optional keyword-only `progress` callback that the
   CLI never passes. Events carry only a stage (`discovering`, `normalizing`
   with a step such as `activities` or `fit`, `reading_fit`, `verifying_input`,
   `building_output`, and `writing_output`) and counts. `reading_fit` counts the
   FIT files with distinct content read out of the total, because a file
   repeated under another name is read once. Output is identical with and
-  without the callback, and the callback must not raise.
+  without the callback, and the callback must not raise. Snapshot runs add
+  their stages in stage B.
 - Cancellation stops the child process and its process group: `SIGINT` on
   POSIX, and `CTRL_BREAK_EVENT` with `CREATE_NEW_PROCESS_GROUP` on Windows,
   followed by termination after 10 seconds and a kill 5 seconds later.
   Run-All builds its output in memory and publishes it by renaming a hidden
   staging folder, so a run cancelled before that leaves no output folder. A
   cancellation that arrives after the rename is reported as a finished run,
-  because the output was checked to be absent when the run started. If a
-  forced stop leaves a hidden staging folder, the GUI reports it and does not
-  delete anything.
+  with its result. If a forced stop leaves a hidden staging folder, the GUI
+  reports the one that this run created and does not delete anything.
 - Only one run at a time. Other browser tabs show the running state. While a
   run is active, the Quit button is refused, and `Ctrl+C` cancels the run
-  before the server stops.
+  before the server stops and reports the outcome in the terminal.
 - The server stops on `Ctrl+C`, on the page's Quit button, or after 10 minutes
   without an API request from the page while no run is active. The page sends
   a heartbeat every 30 seconds; the long margin covers browsers that slow the
   timers of background tabs to once a minute.
 
-## Folder selection
+## Selecting an Export
 
-Browsers do not reveal local folder paths, so the GUI offers:
+The page offers the operating system's own dialog to choose a folder or a ZIP
+file, and a path field where a path can be pasted.
 
-- a path field where a folder path can be pasted, and
-- a folder browser served by the GUI server that returns directory names only,
-  starting from the home directory. It never returns file names or contents,
-  and it leaves out hidden folders, symbolic links, and Windows junctions.
+- The dialog is opened with fixed scripts: `osascript` on macOS, PowerShell on
+  Windows, and `zenity` or `kdialog` on Linux. When none is available, the page
+  offers its own list of folder and ZIP file names, which leaves out hidden
+  items, symbolic links, and Windows junctions.
+- The scripts are fixed strings that never contain user input or paths. The
+  returned path is validated as an absolute path. A dialog opens only for an
+  API request with the launch key, only one dialog is open at a time, and a
+  dialog that is not answered within a time limit counts as no selection.
 
-The export folder is checked with the pre-run Doctor. The output is a new
-folder inside a chosen parent folder, with a proposed name, and it is validated
-by the same rules as the CLI (it must not exist yet). The GUI also requires the
-parent folder to exist, so that a mistyped path creates no folders, and the
-name to be one portable folder name that does not start with a dot. The name
-has at most 200 bytes in UTF-8, so that the hidden names derived from it
-(Run-All's staging folder and the Support Bundle's temporary file) stay within
-the 255 bytes that many file systems allow for one name. Before a run starts,
-the server creates and removes an empty hidden folder in the parent, which is
+A ZIP file is read directly:
+
+- ZIP files inside the Export ZIP are read one level deep. A ZIP file inside
+  such a nested ZIP is not read and is recorded.
+- Limits on the uncompressed size and the number of files apply to each nested
+  ZIP and to the whole Export, against ZIP bombs. They apply to the members
+  that are read; members that are not read are recorded, not rejected.
+- Nested members get the same checks as the outer ZIP: no paths outside the
+  folder, no links, and no encryption.
+- The central directory and the CRC of every member that is read are checked,
+  so an incomplete or damaged download stops the run with a code instead of
+  relying on the user's confirmation.
+- Reading is revised so that a large Export does not have to fit in memory at
+  once.
+
+An extracted folder is read as in v1.x, and the user confirms that the Export
+was extracted completely.
+
+## Output
+
+The output is a new folder inside a chosen parent folder, with a proposed name.
+The parent folder must exist, so that a mistyped path creates no folders, and
+the name must be one portable folder name that does not start with a dot and
+has at most 200 bytes in UTF-8, so that the hidden names derived from it stay
+within the 255 bytes that many file systems allow for one name. Before a run
+starts, an empty hidden folder is created and removed in the parent, which is
 what Run-All does when it publishes, so that a parent that cannot be written is
 reported at once instead of after the run. `os.access` is not used, because it
 can report a read-only or protected location as writable. On Windows without
-long paths, the server also refuses a run whose deepest paths inside the
-staging folder would reach the limit of 260 characters for a file or 248 for a
-folder (`OUTPUT_PATH_TOO_LONG`), instead of failing at the end of the run.
-After a successful check, the parent defaults to the folder that contains the
-export, and the proposed name is `garmin-run-all-YYYYMMDD-HHMM` in local time.
-After a run in the same minute, the next proposal adds `-2`, `-3`, and so on.
-Native operating-system dialogs are not used in 2.0.0.
+long paths, a run whose deepest paths inside the staging folder would reach the
+limit of 260 characters for a file or 248 for a folder is refused before it
+starts (`OUTPUT_PATH_TOO_LONG`). These checks move to shared code in stage A, so
+that the CLI applies them too. After the Export is checked, the parent defaults
+to the folder that contains the Export, and the proposed name is
+`garmin-run-all-YYYYMMDD-HHMM` in local time; a second run in the same minute
+adds `-2`, `-3`, and so on.
 
 ## After a run
 
-The page works only with the output that the server's last run published: a
-finished run, or a run whose cancellation arrived after Run-All published the
-output. The page never names a path for these actions. Earlier outputs are
-still checked with the CLI.
-
 - The output is checked as `validate-handoff` and `doctor --run-output` check
   it. The page shows the counts from the output (datasets, links between
-  datasets, and warnings), what the Doctor says about using the output, the
-  next action, and one line for each registered warning code. A folder that
-  changed after the run is reported by code.
-- The Support Bundle is written next to the output as
+  datasets, and warnings, with the total and the counts per family, and the
+  warnings that belong to no family on a separate line), what the Doctor says
+  about using the output, the next action, and one line for each registered
+  warning code. A folder that changed after the run is reported by code. An
+  earlier output can also be selected for the check.
+- The Support Bundle is written by default next to the output as
   `<output name>-support-bundle.zip`, because inside the output it would
-  contradict the manifest. An existing file is never replaced. The page
-  explains the six members, that nothing is uploaded, and that the bundle needs
-  review before it is shared.
+  contradict the manifest; the user can choose another location. An existing
+  file is never replaced. The page explains the six members, that nothing is
+  uploaded, and that the bundle needs review before it is shared.
 - The page can show the output folder or open its `START_HERE.md` with the
   default application. The server checks that neither was replaced by a link
   or a junction and passes an absolute path without a shell: `open -R` for the
   folder and `open` for the file on macOS, `os.startfile` with the `explore`
   and `open` verbs on Windows, and `xdg-open` elsewhere.
+
+## Data handling in 2.0.0
+
+These rules apply to the CLI and the GUI. The exact lists and output shapes are
+designed in stage A, within these rules.
+
+| Result | Status | Exit |
+|---|---|---|
+| Finished; nothing left out and no warning | `PASS` | 0 |
+| Finished; every value kept, with warnings | `PASS_WITH_WARNINGS` | 0 |
+| Finished after leaving out part of the input (a file or rows) | `PARTIAL_SUCCESS` | 3 |
+| Stopped | Fatal error | 2 |
+
+Many cases that stop with exit 2 in v1.x finish with exit 0 or 3 in v2.0.0.
+
+- Values that disagree: normalized datasets keep one row per stable key. When
+  the sources, within one Export or across Snapshots, give different values for
+  the same key, the row stays, its value is empty and marked, and every
+  observed value is kept in the dataset's audit record together with the
+  Snapshots that gave it. No value is chosen. In v1.x, differing Endurance Score
+  and UDS values across Snapshots remove the row; v2.0.0 keeps it.
+- Duplicates: records that appear more than once with the same values, for
+  example the same Export given twice or a ZIP file together with its extracted
+  folder, are merged into one, and where they appeared is recorded.
+- Mixed input: an input that mixes different Exports or accounts stops the run
+  (`INPUT_MULTIPLE_EXPORTS`). When the mix cannot be ruled out with confidence,
+  the run stops. A mixed output is never produced silently.
+- Problems in the data: a file that cannot be read, a value of an unexpected
+  type, or a row without an identity is left out, or kept with its raw value,
+  and is reported in warnings and records.
+- Values that v1.x drops silently are kept or reported: conflicting HRV values;
+  Personal Records, activity-gear links, and FIT laps whose linked record is
+  missing; and files that the product does not read, which are recorded.
+- Stops that v1.x reports without an error code, such as a truncated emoji
+  character or an extreme timestamp, get a code and do not stop the run when
+  they are problems in the data.
+- Runs still stop for: unsafe ZIP members (paths outside the folder, links, or
+  encryption), a damaged ZIP file (`INPUT_ZIP_CORRUPT`), exceeded limits, an
+  Export that changes during the run, an output that cannot be written or
+  already exists, a Snapshot Store left locked by an interrupted registration
+  (`SNAPSHOT_STORE_LOCKED`) or failing verification, and an Export without
+  Activities.
+- Existing Snapshot Stores are read without migration. If the store format must
+  change, the change is an automatic migration that keeps the original data
+  intact.
+- Warnings and other reported names identify Snapshots by their import order:
+  first, second, and so on. The labels that users give to Snapshots appear only
+  in local output, never in the Support Bundle or the External-safe Pack.
+- The documents that currently describe some behavior differently (see the
+  last section of [Known Limitations](known_limitations.md)) are corrected
+  together with these changes.
+
+## CLI changes
+
+- `gui` starts the GUI; it is exposed in stage D.
+- `run-all`, `doctor --input`, and `snapshot register` accept a ZIP file.
+- Warnings about values that disagree name the Snapshots by import order.
+- The pre-run checks that only the GUI performs in v1.7.1 (output name, an
+  existing parent folder, the write check, and the Windows path length) apply
+  to the CLI. Relative paths and `~` stay accepted by the CLI as a difference
+  in how input is given.
+- Errors report the same content in the CLI and the GUI: what happened, the
+  next step, and the code.
+- `Ctrl+C` reports the cancellation and anything left behind instead of a
+  Python traceback.
+- Warning totals report the total and the counts per family, with the warnings
+  that belong to no family on a separate line.
 
 ## Security
 
@@ -186,11 +336,12 @@ Response headers:
 
 Processing:
 
-- Child processes are started from an argument list without a shell.
-- The folder browser returns directory names only.
+- Child processes and file dialogs are started from argument lists without a
+  shell, with fixed scripts.
+- ZIP files are read with the limits and checks in
+  [Selecting an Export](#selecting-an-export).
 - Output folders go through the same checks as the CLI.
-- Output actions use only the last published output; the page can open only
-  that folder and its `START_HERE.md`.
+- The page can open only an output folder and its `START_HERE.md`.
 
 ## Privacy
 
@@ -198,9 +349,11 @@ Processing:
   telemetry.
 - Local paths are shown only to the local user. The server does not log
   requests, paths, or secrets, and errors are returned as codes.
-- The page explains that Run-All output is personal data, that the
-  External-safe Pack is opt-in and still needs human review before it is
-  shared, and what the Support Bundle contains.
+- The page explains that Run-All output and the Snapshot Store contain personal
+  data, that the External-safe Pack is opt-in and still needs human review
+  before it is shared, and what the Support Bundle contains.
+- Snapshot labels given by users stay out of the Support Bundle and the
+  External-safe Pack.
 
 ## Internationalization
 
@@ -216,10 +369,13 @@ Processing:
 - The server returns error codes, and the page turns them into messages in the
   selected language. Every error shows what happened, the next step, and the
   code to quote in a support request.
+- The Japanese catalog uses these terms: 正規化, 取り込む, 既存のスナップショット,
+  正規化のしかた, 問い合わせ用ファイル (the English term Support Bundle appears
+  only inside its explanation), 目印のファイル (`.single-writer.lock`), 出力の確認
+  and 確認済み, このアプリ, and バージョン. It does not use 貯めた, 道具, or 版.
 - Tests check that every catalog has the same keys and placeholders and that no
   key is unused.
-- CLI output and the generated Run-All documents stay in English, so the output
-  contract does not change.
+- CLI output and the generated Run-All documents stay in English.
 - The GUI guide is written in English and Japanese:
   [GUI Guide](gui_guide.md) and [GUI の手引き](gui_guide.ja.md).
 
@@ -238,7 +394,7 @@ alone, and reduced motion.
 - Losing the server is shown as an alert at the top of the page.
 - Tests check labels, button names, heading order, live regions, focus
   targets, and the contrast of the stylesheet's colors. Keyboard-only use and
-  a screen reader (VoiceOver on macOS) are checked by hand in stage 4; a
+  a screen reader (VoiceOver on macOS) are checked by hand in stage C; a
   scripted browser test is not part of CI in 2.0.0.
 
 ## Repository constraints
@@ -247,38 +403,47 @@ alone, and reduced motion.
   HTML, JavaScript, CSS, and message catalogs. GUI files must not contain the
   terms that the scan bans in production code, host-path-shaped examples (use
   `/path/to/...` instead), literal secret assignments, or email addresses.
-- `pyproject.toml` gains package-data settings for the static files, and the CI
-  wheel and source-distribution installation checks verify that the GUI files
-  are installed.
+- `pyproject.toml` ships the static files as package data, and the CI wheel and
+  source-distribution installation checks verify that the GUI files are
+  installed.
 
 ## Compatibility and versioning
 
-- `validate-handoff`, `doctor --run-output`, and `support-bundle` currently
-  accept only 1.x output versions. They will accept major version 1 and later.
-  Outputs produced before 1.4 keep the current legacy handling, and outputs
-  with diagnostics are accepted only when they were produced by the installed
-  version, including pre-release versions such as `2.0.0rc1`.
-- `run_all_version` stays 1 because the output layout does not change.
-- Documents that describe the stable 1.x family are updated at release
-  preparation, together with migration notes for v1.7.1 to v2.0.0.
+- v2.0.0 changes the output and exit contracts as described in
+  [Data handling in 2.0.0](#data-handling-in-200). The migration notes for
+  v1.7.1 to v2.0.0 list every change.
+- `validate-handoff`, `doctor --run-output`, and `support-bundle` accept
+  Product major version 1 and later, as released in v1.7.1. Outputs that
+  contain `diagnostics/` are accepted only when they were produced by the
+  installed version, including pre-release versions such as `2.0.0rc1`.
+- `run_all_version` becomes 2 if the output layout changes; stage A decides.
+- Existing Snapshot Stores are read without migration, or with an automatic
+  migration that keeps the original data intact.
 
 ## Testing
 
 - Python tests cover the server request checks (secret, `Host`, `Origin`,
   method, content type, and response headers), the API (with the operating
-  system's opener replaced for the open actions), byte-identical output
-  between the GUI path and the CLI on the synthetic Export (with and without
-  the External-safe Pack and the timezone option, and with and without the
-  progress callback), catalog
-  completeness, package data, and the absence of outbound connections, with
-  non-loopback network access blocked during the tests.
+  system's opener and file dialog replaced), byte-identical output between the
+  GUI path and the CLI on synthetic Exports (with and without the External-safe
+  Pack, the timezone option, Snapshots, and ZIP input, and with and without
+  the progress callback), catalog completeness, package data, and the absence
+  of outbound connections, with non-loopback network access blocked during the
+  tests.
 - JavaScript unit tests run with `node --test` for page logic that does not
   touch the DOM, in CI with the runner's preinstalled Node.
 - The Windows CI job starts the server, runs the synthetic Export, and checks
   cancellation.
-- Manual checks cover macOS (Chrome and Safari) and Windows (Edge and Chrome),
-  including the release candidate on a physical Windows machine. Linux is
-  covered by CI only.
+- At the end of stage A, the CLI changes are checked on their own with the
+  synthetic golden outputs and a draft of the migration notes, before the GUI
+  work of stage B.
+- Each stage B pull request checks the screen texts and the points where a user
+  may hesitate, not only the layout.
+- Manual checks in stage C cover macOS (Chrome and Safari) and Windows (Edge
+  and Chrome), including the release candidate on a physical Windows machine,
+  and a person who has not seen the GUI before, who must be able to select an
+  Export and finish a normalization without instructions. Linux is covered by
+  CI only.
 - The maintainer compares GUI and CLI output on a real Export by counts and
   identity only, as for earlier releases.
 
@@ -286,18 +451,17 @@ alone, and reduced motion.
 
 | Stage | Content |
 |---|---|
-| 0 | This design and the related boundary, charter, Definition of Done, and roadmap updates (documentation only) |
-| 1 | Server security, an empty page, language switching, package data, and version checks for any major version; the GUI is not exposed |
-| 2 | Run-All workflow: folders, pre-run check, run, progress, cancellation, and result; GUI and CLI output parity |
-| 3 | Post-run checks and Support Bundle from the page, failure screens, accessibility, and English and Japanese guides |
-| 4 | Verification on Windows, macOS, and browsers, and the maintainer real-data check |
-| 5 | Release candidate on TestPyPI with the `gui` command exposed |
-| 6 | Stable 2.0.0 release |
+| 0–4a (done) | The first GUI, for the one-shot Run-All (pull requests #62 to #72); its code is included, without a command, in v1.7.1 |
+| 0 (revision) | This revision of the design and the related documents (documentation only) |
+| A | The data-handling and CLI changes, in several pull requests, each planned and reviewed |
+| A checkpoint | CLI-only verification with synthetic golden outputs and a draft of the migration notes |
+| B | The single-page GUI, in several pull requests, each checked for screen texts and points of hesitation |
+| C | Verification on Windows (including a physical machine), macOS, and browsers; the maintainer real-data check; and a first-time user who finishes a normalization without instructions |
+| D | Release candidate on TestPyPI with the `gui` command exposed |
+| E | Stable 2.0.0 release |
 
 Installing the release candidate from TestPyPI uses Production PyPI as an
 extra index for dependencies, such as `tzdata` on Windows, that TestPyPI may
 not provide.
 
-Each stage is reviewed before it is merged, and dates are not fixed. Exact
-screen texts, the granularity of progress events, and whether to add a scripted
-browser test to CI are settled in stages 1 to 3.
+Each stage is reviewed before it is merged, and dates are not fixed.

@@ -3,14 +3,16 @@
 ## Autonomous scope
 
 - Garmin export discovery and read-only intake.
-- Safe ZIP member filtering and bounded reads.
+- Safe ZIP member filtering and bounded reads, including one level of ZIP
+  files nested in an Export ZIP.
 - Garmin JSON/FIT normalization using synthetic tests.
 - Stable keys, provenance, dataset policy, deterministic QA, and allowlist-only
   local Analysis Pack generation.
 - The planned v2.0.0 local GUI described in
   [v2.0.0 GUI Design](../gui_design.md): a page served by the installed package
   on the loopback address for a browser on the same machine, running the same
-  processing as the CLI.
+  processing as the CLI and opening the operating system's own file dialog on
+  request.
 - Project documentation, runtime assets, tests, sanitization QA, and Git-ignored
   review evidence.
 

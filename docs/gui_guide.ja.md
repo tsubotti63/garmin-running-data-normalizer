@@ -5,6 +5,10 @@
 > release candidate）から使えるようにする予定です。それまでは、
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md)
 > のとおりに、コマンドラインを使ってください。
+>
+> ここで説明している画面は、見直した [v2.0.0 GUI Design](gui_design.md) に
+> 合わせて、スナップショットと ZIP を扱う 1 枚のページに作り直します。この
+> 手引きも、それに合わせて書き直します。
 
 [English](gui_guide.md)
 
