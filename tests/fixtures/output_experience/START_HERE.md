@@ -7,7 +7,7 @@ machine artifacts. It does not replace `run_summary.json`,
 ## Run Status
 
 - Status: `PASS`
-- Run-All contract version: `1`
+- Run-All contract version: `2`
 - Warning count: 0
 - Error count: 0
 
@@ -46,6 +46,11 @@ Its `fit_*` columns come from the FIT session joined through an explicit
 Daily Hill/Endurance context: `analysis/performance_metrics_daily.csv`.
 Other daily condition datasets are separate normalized JSON files listed
 in `DATASET_INVENTORY.md`; they are not Activity fact-table joins.
+
+A field named in a row's `disagreeing_fields` had different values in the
+observations of that row's stable key. It is empty, and the dataset's audit
+keeps every observed value; warning `VALUES_DISAGREE` gives the number of
+such keys. The CSV files write the names separated by `;`.
 
 ### Available Analysis Files
 

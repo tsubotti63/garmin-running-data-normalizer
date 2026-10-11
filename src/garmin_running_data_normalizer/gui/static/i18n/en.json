@@ -201,5 +201,6 @@
   "warning.optional_family_empty": "Some optional data was in the export but produced no records ({code}).",
   "warning.optional_family_not_present": "Some optional data was not in the export, so its tables are empty ({code}).",
   "warning.other": "Another warning ({code}).",
-  "warning.relationship_unresolved": "Some links between datasets point to records that are not in the output. Nothing was guessed ({code})."
+  "warning.relationship_unresolved": "Some links between datasets point to records that are not in the output. Nothing was guessed ({code}).",
+  "warning.values_disagree": "Some records have values that disagree. Those fields are left empty, and every value is kept in the audit files. None was chosen ({code})."
 }

@@ -52,6 +52,7 @@ def normalize_training_history(
         source_record_count=len(rows),
         accepted=accepted,
         excluded_reasons=excluded,
+        fields=TRAINING_HISTORY_FIELDS,
     )
     result.audit["observation_timestamp_semantics_counts"] = dict(
         sorted(timestamp_semantics.items())

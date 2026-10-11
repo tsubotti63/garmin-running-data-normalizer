@@ -307,10 +307,39 @@ class RunAllTimezoneTest(unittest.TestCase):
                 sorted(row["sleep_day"] for row in load(root / "sleep-tokyo/normalized/sleep_daily.json")),
                 ["2024-01-01", "2024-01-02"],
             )
-            with self.assertRaises(RunAllError) as raised:
-                run_all(export, root / "sleep-new-york", timezone_name=NEW_YORK)
-            self.assertEqual(raised.exception.code, "DAILY_METRICS_CONFLICT")
-            self.assertFalse((root / "sleep-new-york").exists())
+            self.assertEqual(
+                [
+                    row["disagreeing_fields"]
+                    for row in load(root / "sleep-tokyo/normalized/sleep_daily.json")
+                ],
+                [[], []],
+            )
+            # In New York both rows fall on one day: the day's row is kept, and
+            # the fields whose values differ are empty.
+            run_all(export, root / "sleep-new-york", timezone_name=NEW_YORK)
+            [new_york_row] = load(root / "sleep-new-york/normalized/sleep_daily.json")
+            self.assertEqual(new_york_row["sleep_day"], "2024-01-01")
+            self.assertEqual(
+                new_york_row["disagreeing_fields"],
+                [
+                    "sleep_start_local",
+                    "sleep_end_local",
+                    "sleep_window_minutes_including_awake",
+                    "sleep_duration_minutes_ex_awake",
+                ],
+            )
+            self.assertIsNone(new_york_row["sleep_duration_minutes_ex_awake"])
+            self.assertEqual(new_york_row["sleep_limitation_type"], "values_disagree")
+            summary = load(root / "sleep-new-york/run_summary.json")
+            self.assertEqual(summary["status"], "PASS_WITH_WARNINGS")
+            self.assertEqual(
+                [
+                    (warning["family"], warning["count"])
+                    for warning in summary["warnings"]
+                    if warning["code"] == "VALUES_DISAGREE"
+                ],
+                [("sleep", 1)],
+            )
 
             hrv_export = write_export(
                 root / "hrv-export", [activity_row(1, EVENING_IN_NEW_YORK)], hrv_fit=hrv
@@ -324,13 +353,8 @@ class RunAllTimezoneTest(unittest.TestCase):
                     for row in load(output / "normalized/hrv_daily.json")
                 }
             self.assertEqual(sorted(statuses["Asia/Tokyo"]), ["2024-01-01", "2024-01-02"])
-            self.assertNotIn(
-                "review_required_same_day_differing_values", statuses["Asia/Tokyo"].values()
-            )
-            self.assertEqual(
-                statuses[NEW_YORK],
-                {"2024-01-01": "review_required_same_day_differing_values"},
-            )
+            self.assertNotIn("same_day_values_disagree", statuses["Asia/Tokyo"].values())
+            self.assertEqual(statuses[NEW_YORK], {"2024-01-01": "same_day_values_disagree"})
 
     def test_fit_times_follow_the_timezone_and_links_do_not_change(self) -> None:
         fit_start = epoch_ms(FIT_SESSION_START)

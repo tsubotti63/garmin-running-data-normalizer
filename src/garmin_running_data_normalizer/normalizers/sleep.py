@@ -9,12 +9,10 @@ from zoneinfo import ZoneInfo
 from ..common.time import daily_calendar_date
 from ..intake.discovery import DiscoveredAsset, load_json_assets
 from .daily_metrics import (
-    DailyMetricConflictError,
     DailyMetricResult,
     finalize_daily,
     load_rows,
     logical_basename,
-    stable_json,
 )
 
 MAX_SAFE_INTEGER = (1 << 53) - 1
@@ -69,13 +67,15 @@ def _first_number(row: dict[str, Any], *names: str) -> int | float | None:
 
 def _sleep_duration_seconds(
     row: dict[str, Any],
-) -> tuple[int | float | None, str]:
-    """Return the approved observed-stage/direct-fallback duration contract.
+) -> tuple[int | float | None, str, list[int | float]]:
+    """Return the observed-stage/direct-fallback duration, its source, and
+    the direct values when they disagree.
 
     Stage values have precedence whenever at least one finite stage is present.
     Missing stages are not replaced with zero.  Direct aliases are considered as
     an allowlist: equal finite candidates collapse deterministically, while
-    differing candidates fail closed instead of using first-wins.
+    differing candidates leave the duration empty and are returned, so that
+    the duration is reported as a disagreement instead of using first-wins.
     """
     stages = [
         _first_number(row, *aliases)
@@ -83,7 +83,7 @@ def _sleep_duration_seconds(
     ]
     observed_stages = [value for value in stages if value is not None]
     if observed_stages:
-        return sum(observed_stages), "stage_derived"
+        return sum(observed_stages), "stage_derived", []
 
     direct_candidates = [
         (name, _number(row.get(name)))
@@ -94,13 +94,10 @@ def _sleep_duration_seconds(
     ]
     distinct_values = {value for _name, value in finite_candidates}
     if len(distinct_values) > 1:
-        names = ", ".join(name for name, _value in finite_candidates)
-        raise DailyMetricConflictError(
-            "sleep_daily direct duration aliases disagree: " + names
-        )
+        return None, "direct_aliases_disagree", [value for _name, value in finite_candidates]
     if finite_candidates:
-        return finite_candidates[0][1], "direct_fallback"
-    return None, "null_fallback"
+        return finite_candidates[0][1], "direct_fallback", []
+    return None, "null_fallback", []
 
 
 def _timestamps(value: Any, timezone_name: str) -> tuple[str | None, str | None]:
@@ -147,7 +144,7 @@ def _normalize_record(
     rem_seconds = _first_number(row, "remSleepSeconds", "rem_sleep_seconds")
     awake_seconds = _first_number(row, "awakeSleepSeconds", "awake_sleep_seconds")
     stages = [deep_seconds, light_seconds, rem_seconds]
-    total_seconds, _duration_source = _sleep_duration_seconds(row)
+    total_seconds, _duration_source, _disagreeing = _sleep_duration_seconds(row)
 
     window_minutes = None
     if start_gmt and end_gmt:
@@ -262,35 +259,64 @@ SLEEP_DAILY_FIELDS = (
     "sleep_source_available_for_analysis_flag",
 )
 
-# Presence is part of the duplicate contract even though raw provenance is not.
-# Missing and explicit null are therefore not silently treated as equal.
-_SLEEP_PRESENCE_GROUPS = (
-    ("calendarDate",),
-    ("sleepStartTimestampGMT",),
-    ("sleepEndTimestampGMT",),
-    ("sleepTimeSeconds", "totalSleepSeconds", "durationInSeconds", "sleepDuration"),
-    ("deepSleepSeconds", "deep_sleep_seconds"),
-    ("lightSleepSeconds", "light_sleep_seconds"),
-    ("remSleepSeconds", "rem_sleep_seconds"),
-    ("awakeSleepSeconds", "awake_sleep_seconds"),
-    ("sleepScores", "overallScore", "sleepScore"),
+_SLEEP_STAGE_FIELDS = (
+    "sleep_stage_deep_minutes",
+    "sleep_stage_light_minutes",
+    "sleep_stage_rem_minutes",
+)
+_SLEEP_INTERVAL_FIELDS = (
+    "sleep_start_local",
+    "sleep_end_local",
+    "sleep_window_minutes_including_awake",
+)
+# Set from the merged row, not compared: the flags say whether the merged row
+# has the values, and the status describes its sleep interval.
+_SLEEP_RECOMPUTED_FIELDS = frozenset(
+    {
+        "sleep_stage_available_flag",
+        "sleep_score_available_flag",
+        "sleep_normalization_status",
+        "sleep_limitation_type",
+        "sleep_reason_code",
+        "sleep_source_available_for_analysis_flag",
+    }
 )
 
 
-def _sleep_presence_signature(raw: dict[str, Any]) -> tuple[tuple[str, bool], ...]:
-    return tuple(
-        (group[0], any(field in raw for field in group))
-        for group in _SLEEP_PRESENCE_GROUPS
-    )
+def _sleep_status(
+    start_local: str | None,
+    end_local: str | None,
+    window_minutes: int | float | None,
+) -> tuple[str, str, str, bool]:
+    if start_local is None or end_local is None:
+        return "needs_review", "missing_start_or_end", "missing_start_or_end_no_inference", False
+    if window_minutes is None or window_minutes <= 0:
+        return "needs_review", "invalid_sleep_window", "invalid_sleep_window_no_inference", False
+    return "available", "none", "sleep_source_available", True
 
 
-def _sleep_duplicate_signature(row: dict[str, Any]) -> str:
-    return stable_json(
-        {
-            "public": {field: row.get(field) for field in SLEEP_DAILY_FIELDS},
-            "presence": row.get("_sleep_presence_signature"),
-        }
-    )
+def _finalize_merged_sleep(row: dict[str, Any], disagreeing: list[str]) -> None:
+    row["sleep_stage_available_flag"] = any(row[field] is not None for field in _SLEEP_STAGE_FIELDS)
+    row["sleep_score_available_flag"] = row["sleep_score"] is not None
+    if any(field in disagreeing for field in _SLEEP_INTERVAL_FIELDS):
+        status = ("needs_review", "values_disagree", "sleep_interval_values_disagree_no_selection", False)
+    else:
+        status = _sleep_status(
+            row["sleep_start_local"],
+            row["sleep_end_local"],
+            row["sleep_window_minutes_including_awake"],
+        )
+    (
+        row["sleep_normalization_status"],
+        row["sleep_limitation_type"],
+        row["sleep_reason_code"],
+        row["sleep_source_available_for_analysis_flag"],
+    ) = status
+
+
+def _sleep_alternatives(row: dict[str, Any]) -> dict[str, list[Any]]:
+    disagreeing = row.get("_sleep_duration_alternatives") or []
+    return {"sleep_duration_minutes_ex_awake": disagreeing} if disagreeing else {}
 
 
 def _strip_sleep_internal_fields(row: dict[str, Any]) -> dict[str, Any]:
@@ -351,25 +377,14 @@ def normalize_sleep_daily_assets(
             window_minutes = (
                 datetime.fromisoformat(end_local) - datetime.fromisoformat(start_local)
             ).total_seconds() / 60.0
-        status = "available"
-        limitation = "none"
-        reason = "sleep_source_available"
-        available = True
-        if start_local is None or end_local is None:
-            status = "needs_review"
-            limitation = "missing_start_or_end"
-            reason = "missing_start_or_end_no_inference"
-            available = False
-        elif window_minutes is None or window_minutes <= 0:
-            status = "needs_review"
-            limitation = "invalid_sleep_window"
-            reason = "invalid_sleep_window_no_inference"
-            available = False
+        status, limitation, reason, available = _sleep_status(
+            start_local, end_local, window_minutes
+        )
         deep = _first_number(raw, "deepSleepSeconds", "deep_sleep_seconds")
         light = _first_number(raw, "lightSleepSeconds", "light_sleep_seconds")
         rem = _first_number(raw, "remSleepSeconds", "rem_sleep_seconds")
         awake = _first_number(raw, "awakeSleepSeconds", "awake_sleep_seconds")
-        duration, duration_source = _sleep_duration_seconds(raw)
+        duration, duration_source, disagreeing = _sleep_duration_seconds(raw)
         duration_source_counts[duration_source] += 1
         score = _sleep_score(raw)
         accepted.append(
@@ -391,7 +406,7 @@ def normalize_sleep_daily_assets(
                 "sleep_reason_code": reason,
                 "sleep_source_available_for_analysis_flag": available,
                 "_sleep_duration_source": duration_source,
-                "_sleep_presence_signature": _sleep_presence_signature(raw),
+                "_sleep_duration_alternatives": [value / 60.0 for value in disagreeing],
             }
         )
     result = finalize_daily(
@@ -401,11 +416,14 @@ def normalize_sleep_daily_assets(
         source_record_count=len(source_rows),
         accepted=accepted,
         excluded_reasons=excluded,
+        fields=SLEEP_DAILY_FIELDS,
         review_on_any_duplicate=False,
         duplicate_review_factory=_public_sleep_review_row,
-        signature_factory=_sleep_duplicate_signature,
         strip_internal_fields=_strip_sleep_internal_fields,
         dedupe_exact_duplicates=True,
+        recomputed_fields=_SLEEP_RECOMPUTED_FIELDS,
+        finalize_merged=_finalize_merged_sleep,
+        alternatives=_sleep_alternatives,
     )
     result.audit["sleep_duration_source_counts"] = dict(
         sorted(duration_source_counts.items())
@@ -413,6 +431,7 @@ def normalize_sleep_daily_assets(
     result.audit["stage_derived_count"] = duration_source_counts["stage_derived"]
     result.audit["direct_fallback_count"] = duration_source_counts["direct_fallback"]
     result.audit["null_fallback_count"] = duration_source_counts["null_fallback"]
+    result.audit["direct_aliases_disagree_count"] = duration_source_counts["direct_aliases_disagree"]
     return result
 
 

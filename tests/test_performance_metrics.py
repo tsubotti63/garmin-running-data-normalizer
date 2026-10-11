@@ -6,7 +6,6 @@ import unittest
 
 from garmin_running_data_normalizer.intake.discovery import DiscoveredAsset
 from garmin_running_data_normalizer.normalizers.performance_metrics import (
-    PerformanceMetricsConflictError,
     build_performance_metrics_daily_context,
     collect_lactate_threshold_candidates,
     normalize_endurance_score,
@@ -47,7 +46,7 @@ class HillScoreContractTest(unittest.TestCase):
                 self.assertEqual(len(result.records), accepted)
                 self.assertEqual(result.audit["excluded_record_count"], excluded)
                 self.assertTrue(
-                    all(set(item) == {"calendar_date", "overall_score", "strength_score", "endurance_score", "classification_id", "feedback_phrase_id"} for item in result.records)
+                    all(set(item) == {"calendar_date", "overall_score", "strength_score", "endurance_score", "classification_id", "feedback_phrase_id", "disagreeing_fields"} for item in result.records)
                 )
 
     def test_h12_same_value_duplicates_collapse_without_keep_last(self) -> None:
@@ -60,13 +59,61 @@ class HillScoreContractTest(unittest.TestCase):
         self.assertEqual(result.audit["same_value_duplicate_count"], 1)
         self.assertFalse(result.audit["keep_last"])
 
-    def test_h13_divergent_daily_value_fails_closed(self) -> None:
+    def test_h13_divergent_daily_value_is_left_empty_and_kept_in_the_audit(self) -> None:
         rows = [
-            {"calendarDate": "2026-02-02", "overallScore": 70},
-            {"calendarDate": "2026-02-02", "overallScore": 71},
+            {"calendarDate": "2026-02-02", "overallScore": 1000, "strengthScore": 60},
+            {"calendarDate": "2026-02-02", "overallScore": 71, "strengthScore": 60},
+            {"calendarDate": "2026-02-02", "overallScore": 71, "strengthScore": 60},
         ]
-        with self.assertRaises(PerformanceMetricsConflictError):
-            normalize_hill_score([_asset("HillScore_conflict.json", rows)])
+        result = normalize_hill_score([_asset("HillScore_conflict.json", rows)])
+        self.assertEqual(
+            result.records,
+            [
+                {
+                    "calendar_date": "2026-02-02",
+                    "overall_score": None,
+                    "strength_score": 60,
+                    "endurance_score": None,
+                    "classification_id": None,
+                    "feedback_phrase_id": None,
+                    "disagreeing_fields": ["overall_score"],
+                }
+            ],
+        )
+        self.assertEqual(result.audit["disagreement_key_count"], 1)
+        self.assertEqual(
+            result.audit["disagreements"],
+            [
+                {
+                    "key": {"calendar_date": "2026-02-02"},
+                    "observation_count": 3,
+                    "fields": [
+                        {
+                            "field": "overall_score",
+                            "values": [
+                                {"value": 71, "observation_count": 2},
+                                {"value": 1000, "observation_count": 1},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        )
+        self.assertEqual(result.audit["same_value_duplicate_count"], 1)
+
+    def test_h13b_a_value_missing_from_one_observation_is_not_a_disagreement(self) -> None:
+        rows = [
+            {"calendarDate": "2026-02-02", "overallScore": 70, "strengthScore": None},
+            {"calendarDate": "2026-02-02", "overallScore": 70, "strengthScore": 60},
+        ]
+        result = normalize_hill_score([_asset("HillScore_absent.json", rows)])
+        self.assertEqual(len(result.records), 1)
+        self.assertEqual(result.records[0]["overall_score"], 70)
+        self.assertEqual(result.records[0]["strength_score"], 60)
+        self.assertEqual(result.records[0]["disagreeing_fields"], [])
+        self.assertEqual(result.audit["disagreement_key_count"], 0)
+        self.assertEqual(result.audit["disagreements"], [])
+        self.assertEqual(result.audit["absent_value_counts"], {"strength_score": 1})
 
     def test_h14_nonmatching_json_is_not_promoted(self) -> None:
         result = normalize_hill_score(
@@ -115,7 +162,7 @@ class EnduranceScoreContractTest(unittest.TestCase):
                 self.assertEqual(len(result.records), accepted)
                 self.assertEqual(result.audit["excluded_record_count"], excluded)
                 self.assertTrue(
-                    all(set(item) == {"calendar_date", "overall_score", "classification", "feedback_phrase"} for item in result.records)
+                    all(set(item) == {"calendar_date", "overall_score", "classification", "feedback_phrase", "disagreeing_fields"} for item in result.records)
                 )
 
     def test_e12_same_value_duplicates_collapse_without_keep_last(self) -> None:
@@ -127,13 +174,36 @@ class EnduranceScoreContractTest(unittest.TestCase):
         self.assertEqual(len(result.records), 1)
         self.assertEqual(result.audit["same_value_duplicate_count"], 1)
 
-    def test_e13_divergent_daily_value_fails_closed(self) -> None:
+    def test_e13_divergent_daily_value_is_left_empty_and_kept_in_the_audit(self) -> None:
         rows = [
-            {"calendarDate": "2026-03-11", "overallScore": 80},
-            {"calendarDate": "2026-03-11", "overallScore": 81},
+            {"calendarDate": "2026-03-11", "overallScore": 80, "classification": 3},
+            {"calendarDate": "2026-03-11", "overallScore": 81.5, "classification": 3},
         ]
-        with self.assertRaises(PerformanceMetricsConflictError):
-            normalize_endurance_score([_asset("EnduranceScore_conflict.json", rows)])
+        result = normalize_endurance_score([_asset("EnduranceScore_conflict.json", rows)])
+        self.assertEqual(
+            result.records,
+            [
+                {
+                    "calendar_date": "2026-03-11",
+                    "overall_score": None,
+                    "classification": 3,
+                    "feedback_phrase": None,
+                    "disagreeing_fields": ["overall_score"],
+                }
+            ],
+        )
+        self.assertEqual(
+            result.audit["disagreements"][0]["fields"],
+            [
+                {
+                    "field": "overall_score",
+                    "values": [
+                        {"value": 80, "observation_count": 1},
+                        {"value": 81.5, "observation_count": 1},
+                    ],
+                }
+            ],
+        )
 
     def test_e14_nonmatching_json_is_not_promoted(self) -> None:
         result = normalize_endurance_score(

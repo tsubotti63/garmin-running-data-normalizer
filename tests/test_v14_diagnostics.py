@@ -894,7 +894,9 @@ class V14DiagnosticsTest(unittest.TestCase):
                 ("extra_dataset", lambda value: value["dataset_summary"].append(copy.deepcopy(value["dataset_summary"][0]))),
                 ("seventh_relationship", lambda value: value["relationship_summary"].append(copy.deepcopy(value["relationship_summary"][0]))),
                 ("status_exit", lambda value: value.__setitem__("exit_code", 2)),
-                ("schema", lambda value: value.__setitem__("schema_version", "garmin-run-quality:v2")),
+                ("schema", lambda value: value.__setitem__("schema_version", "garmin-run-quality:v1")),
+                ("format", lambda value: value.__setitem__("format", "garmin-running-data-normalizer-run-quality-v1")),
+                ("run_all_version", lambda value: value.__setitem__("run_all_version", 1)),
                 ("version", lambda value: value.__setitem__("product_version", "1.3.3")),
             )
             for name, mutate in mutations:

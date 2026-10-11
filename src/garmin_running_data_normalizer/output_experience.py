@@ -609,16 +609,19 @@ DATASET_FIELDS = {
         "avg_power", "max_power", "avg_run_cadence", "training_effect_label",
         "activity_training_load", "lap_count", "source_path", "source_sha256",
         "source_confidence",
+        "disagreeing_fields",
     ),
     "gear": (
         "gear_key", "uuid", "display_name", "custom_make_model", "gear_type",
         "date_begin", "date_end", "maximum_meters", "source_path",
         "source_sha256",
+        "disagreeing_fields",
     ),
     "activity_gear": (
         "gear_key", "activity_id", "garmin_activity_key",
         "activity_relationship_status", "gear_relationship_status",
         "source_path", "source_sha256",
+        "disagreeing_fields",
     ),
     "personal_records": (
         "personal_record_id", "activity_id", "personal_record_type", "value",
@@ -626,6 +629,7 @@ DATASET_FIELDS = {
         "source_record_index", "garmin_activity_key",
         "activity_relationship_status", "activity_relationship_reason",
         "source_path", "source_sha256", "source_confidence",
+        "disagreeing_fields",
     ),
     "fit_sessions": (
         "fit_file_id", "fit_session_key", "session_ordinal", "start_datetime_local",
@@ -636,6 +640,7 @@ DATASET_FIELDS = {
         "avg_stance_time_percent", "avg_stance_time_balance_percent",
         "avg_vertical_ratio_percent", "avg_step_length_mm", "record_count",
         "lap_count", "source_path", "source_sha256",
+        "disagreeing_fields",
     ),
     "fit_laps": (
         "fit_file_id", "fit_session_key", "fit_lap_key", "session_ordinal",
@@ -647,6 +652,7 @@ DATASET_FIELDS = {
         "avg_stance_time_percent", "avg_stance_time_balance_percent",
         "avg_vertical_ratio_percent", "avg_step_length_mm", "timestamp",
         "source_path", "source_sha256",
+        "disagreeing_fields",
     ),
     "activity_fit_links": (
         "garmin_activity_key", "fit_session_key", "match_rule", "match_basis",
@@ -655,17 +661,21 @@ DATASET_FIELDS = {
         "duration_delta_seconds", "activity_source_path",
         "activity_source_sha256", "fit_source_path", "fit_source_sha256",
         "source_path", "source_sha256",
+        "disagreeing_fields",
     ),
     "hill_score_daily": (
         "calendar_date", "overall_score", "strength_score", "endurance_score",
         "classification_id", "feedback_phrase_id",
+        "disagreeing_fields",
     ),
     "endurance_score_daily": (
         "calendar_date", "overall_score", "classification", "feedback_phrase",
+        "disagreeing_fields",
     ),
     "race_prediction_daily": (
         "calendar_date", "observation_timestamp", "race_time_5k_sec", "race_time_10k_sec",
         "race_time_half_sec", "race_time_marathon_sec",
+        "disagreeing_fields",
     ),
     "sleep_daily": (
         "sleep_day", "sleep_start_local", "sleep_end_local",
@@ -675,6 +685,7 @@ DATASET_FIELDS = {
         "sleep_stage_available_flag", "sleep_score_available_flag",
         "sleep_normalization_status", "sleep_limitation_type", "sleep_reason_code",
         "sleep_source_available_for_analysis_flag",
+        "disagreeing_fields",
     ),
     "uds_daily": (
         "calendar_date", "steps", "distance_meters", "active_calories",
@@ -683,11 +694,13 @@ DATASET_FIELDS = {
         "stress_total_maxStressLevel", "stress_total_stressDuration",
         "stress_total_restDuration", "raw_has_body_battery",
         "raw_has_all_day_stress", "raw_has_body_battery_feedback",
+        "disagreeing_fields",
     ),
     "acute_training_load_daily": (
         "calendar_date", "observation_timestamp", "acwr_percent", "acwr_status",
         "daily_training_load_acute", "daily_training_load_chronic",
         "daily_acute_chronic_workload_ratio",
+        "disagreeing_fields",
     ),
     "training_readiness_daily": (
         "calendar_date", "observation_timestamp", "training_readiness_score", "training_readiness_level",
@@ -696,18 +709,22 @@ DATASET_FIELDS = {
         "sleep_history_factor_percent", "training_readiness_acute_load",
         "training_readiness_hrv_weekly_average", "training_readiness_valid_sleep",
         "training_readiness_sleep_score",
+        "disagreeing_fields",
     ),
     "vo2max_daily": (
         "calendar_date", "observation_timestamp", "vo2max", "vo2max_source_series", "sport",
         "source_activity_id",
         "source_confidence", "max_met", "max_met_category", "calibrated_data",
+        "disagreeing_fields",
     ),
     "hrv_daily": (
         "calendar_date", "hrv_value", "semantics_status", "analysis_role",
         "record_count_for_date", "source_file_count_for_date", "dedupe_status",
+        "disagreeing_fields",
     ),
     "training_history_daily": (
         "calendar_date", "observation_timestamp", "training_status", "sport",
+        "disagreeing_fields",
     ),
 }
 
@@ -747,9 +764,10 @@ DATASET_NONNULL_FIELDS = {
             "source_path",
             "source_sha256",
             "source_confidence",
+            "disagreeing_fields",
         }
     ),
-    "gear": frozenset({"gear_key", "source_path", "source_sha256"}),
+    "gear": frozenset({"gear_key", "source_path", "source_sha256", "disagreeing_fields"}),
     "activity_gear": frozenset(DATASET_FIELDS["activity_gear"]),
     "personal_records": frozenset(
         {
@@ -761,6 +779,7 @@ DATASET_NONNULL_FIELDS = {
             "source_path",
             "source_sha256",
             "source_confidence",
+            "disagreeing_fields",
         }
     ),
     "fit_sessions": frozenset(
@@ -772,6 +791,7 @@ DATASET_NONNULL_FIELDS = {
             "lap_count",
             "source_path",
             "source_sha256",
+            "disagreeing_fields",
         }
     ),
     "fit_laps": frozenset(
@@ -784,6 +804,7 @@ DATASET_NONNULL_FIELDS = {
             "lap_index",
             "source_path",
             "source_sha256",
+            "disagreeing_fields",
         }
     ),
     "activity_fit_links": frozenset(
@@ -794,35 +815,45 @@ DATASET_NONNULL_FIELDS = {
             "duration_delta_seconds",
         }
     ),
-    "hill_score_daily": frozenset({"calendar_date", "overall_score"}),
-    "endurance_score_daily": frozenset({"calendar_date", "overall_score"}),
-    "race_prediction_daily": frozenset(DATASET_FIELDS["race_prediction_daily"]),
+    "hill_score_daily": frozenset({"calendar_date", "disagreeing_fields"}),
+    "endurance_score_daily": frozenset({"calendar_date", "disagreeing_fields"}),
+    "race_prediction_daily": frozenset(
+        {"calendar_date", "observation_timestamp", "disagreeing_fields"}
+    ),
     "sleep_daily": frozenset(
         {
             "sleep_day", "sleep_stage_available_flag", "sleep_score_available_flag",
             "sleep_normalization_status", "sleep_limitation_type", "sleep_reason_code",
-            "sleep_source_available_for_analysis_flag",
+            "sleep_source_available_for_analysis_flag", "disagreeing_fields",
         }
     ),
     "uds_daily": frozenset(
         {
             "calendar_date", "raw_has_body_battery", "raw_has_all_day_stress",
-            "raw_has_body_battery_feedback",
+            "raw_has_body_battery_feedback", "disagreeing_fields",
         }
     ),
-    "acute_training_load_daily": frozenset({"calendar_date", "observation_timestamp"}),
-    "training_readiness_daily": frozenset({"calendar_date", "observation_timestamp"}),
+    "acute_training_load_daily": frozenset(
+        {"calendar_date", "observation_timestamp", "disagreeing_fields"}
+    ),
+    "training_readiness_daily": frozenset(
+        {"calendar_date", "observation_timestamp", "disagreeing_fields"}
+    ),
     "vo2max_daily": frozenset(
-        {"calendar_date", "observation_timestamp", "vo2max", "vo2max_source_series", "sport"}
+        {
+            "calendar_date", "observation_timestamp", "vo2max_source_series", "sport",
+            "disagreeing_fields",
+        }
     ),
     "hrv_daily": frozenset(
         {
             "calendar_date", "semantics_status", "analysis_role",
             "record_count_for_date", "source_file_count_for_date", "dedupe_status",
+            "disagreeing_fields",
         }
     ),
     "training_history_daily": frozenset(
-        {"calendar_date", "observation_timestamp", "training_status"}
+        {"calendar_date", "observation_timestamp", "disagreeing_fields"}
     ),
 }
 
@@ -1145,7 +1176,7 @@ def validate_registry_alignment(registry: Mapping[str, Any]) -> None:
         registry_by_name[name] = item
     expected_names = [item["name"] for item in _runtime_datasets()]
     if set(registry_by_name) != set(expected_names):
-        raise OutputExperienceError("dataset registry names do not match Run-All v1")
+        raise OutputExperienceError(f"dataset registry names do not match Run-All v{RUN_ALL_VERSION}")
     for expected in _runtime_datasets():
         actual = registry_by_name[expected["name"]]
         if str(actual.get("record_grain")) != expected["record_grain"]:
@@ -1208,7 +1239,7 @@ def _validate_projection_inputs(
         ),
     )
     if set(output_paths) not in allowed_output_sets:
-        raise OutputExperienceError("run manifest output paths do not match Run-All v1")
+        raise OutputExperienceError(f"run manifest output paths do not match Run-All v{RUN_ALL_VERSION}")
 
     generated_paths = summary_object.get("generated_paths")
     if not isinstance(generated_paths, list):
@@ -1237,7 +1268,7 @@ def _validate_projection_inputs(
         snapshot_generated_paths,
         optional_snapshot_generated_paths,
     ):
-        raise OutputExperienceError("run summary generated paths do not match Run-All v1")
+        raise OutputExperienceError(f"run summary generated paths do not match Run-All v{RUN_ALL_VERSION}")
 
     raw_manifest_datasets = manifest_object.get("datasets")
     if not isinstance(raw_manifest_datasets, list):
@@ -1252,7 +1283,7 @@ def _validate_projection_inputs(
 
     expected_names = [item["name"] for item in _runtime_datasets()]
     if set(manifest_by_name) != set(expected_names):
-        raise OutputExperienceError("run manifest datasets do not match Run-All v1")
+        raise OutputExperienceError(f"run manifest datasets do not match Run-All v{RUN_ALL_VERSION}")
     family_record_counts: dict[str, int] = {}
     for expected in _runtime_datasets():
         actual = manifest_by_name[expected["name"]]
@@ -1274,7 +1305,7 @@ def _validate_projection_inputs(
     family_results = _mapping(raw_family_results, "run summary family results")
     expected_families = list(dict.fromkeys(item["family"] for item in _runtime_datasets()))
     if set(family_results) != set(expected_families):
-        raise OutputExperienceError("run summary families do not match Run-All v1")
+        raise OutputExperienceError(f"run summary families do not match Run-All v{RUN_ALL_VERSION}")
     normalized_family_results: dict[str, Mapping[str, Any]] = {}
     total_family_warnings = 0
     total_family_errors = 0
@@ -1378,6 +1409,13 @@ def _validate_projection_inputs(
                         )
                 if review_item_count:
                     expected_warning_count += 1
+
+        disagreement_key_count = _non_negative_integer(
+            result.get("disagreement_key_count", 0),
+            f"{family} disagreement key count",
+        )
+        if disagreement_key_count:
+            expected_warning_count += 1
 
         if status != expected_status:
             raise OutputExperienceError(
@@ -1734,7 +1772,7 @@ def render_dataset_inventory(
         "",
         "This document is a deterministic human-readable projection of",
         "`run_manifest.json`, `run_summary.json`, the dataset registry, and the",
-        "Run-All v1 runtime dataset definitions. The machine-readable artifacts",
+        f"Run-All v{RUN_ALL_VERSION} runtime dataset definitions. The machine-readable artifacts",
         "remain authoritative.",
         "",
         f"Run status: {_code(summary['status'])}",
@@ -1787,6 +1825,10 @@ def render_dataset_inventory(
             "  and `run_summary.json`; an absent optional family is not a claim of no data.",
             "- Hill and Endurance are standalone daily observations. Their activity",
             "  relationship is `not_yet_defined`; do not join them to activities by date.",
+            "- Every row has `disagreeing_fields`. A field it names had different values",
+            "  in the observations of the row's stable key: the field is empty, and the",
+            "  dataset's audit keeps every observed value. Warning `VALUES_DISAGREE`",
+            "  gives the number of such keys per family.",
             "- Lactate Threshold remains candidate/audit-only until Product approves a",
             "  machine stable key and the remaining field authority gates.",
             "",
@@ -1953,6 +1995,11 @@ def render_start_here(
             "Other daily condition datasets are separate normalized JSON files listed",
             "in `DATASET_INVENTORY.md`; they are not Activity fact-table joins.",
             "",
+            "A field named in a row's `disagreeing_fields` had different values in the",
+            "observations of that row's stable key. It is empty, and the dataset's audit",
+            "keeps every observed value; warning `VALUES_DISAGREE` gives the number of",
+            "such keys. The CSV files write the names separated by `;`.",
+            "",
         ]
     )
     if variant_guidance:
@@ -2046,7 +2093,7 @@ def render_analysis_handoff(
     )
     variant_rule_lines = (
         [
-            "16. Multiple observed Endurance or UDS values for one stable key are",
+            "17. Multiple observed Endurance or UDS values for one stable key are",
             "    preserved in the corresponding audit evidence. Do not choose a winner",
             "    without source-backed authority; use single-variant days for ordinary",
             "    single-value analysis and review multi-variant days separately.",
@@ -2102,9 +2149,13 @@ def render_analysis_handoff(
         "13. VO2Max source series are retained explicitly. Do not overwrite one series",
         "    with another or infer equivalence across device generations.",
         "14. HRV is `analysis_reference_only`, not a daily source of truth. A null HRV",
-        "    value with a review status must remain unresolved.",
+        "    value must remain unresolved.",
         "15. Approximate generation ranges (2015-2021 and 2022+) are descriptive",
         "    source context only; they do not authorize automatic field equivalence.",
+        "16. A field named in a row's `disagreeing_fields` had different values in the",
+        "    observations of that row's stable key. It is empty, and the dataset's",
+        "    audit keeps every observed value. Do not fill it or choose one of the",
+        "    values; report the warning `VALUES_DISAGREE` with the analysis.",
         *variant_rule_lines,
         "",
         *_v1_3_relationship_lines(),
@@ -2164,6 +2215,23 @@ def render_analysis_handoff(
 
 
 def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
+    if field == "disagreeing_fields":
+        return {
+            "logical_type": "array[string]",
+            "required": True,
+            "nullable": False,
+            "unit_or_domain": "field_names_of_this_dataset",
+            "semantic_role": "attribute",
+            "origin": "derived",
+            "privacy_sensitivity": "public_safe",
+            "notes": (
+                "Starting with v2.0.0: the fields of this row whose values differ "
+                "between the observations of its stable key, in field order. Those "
+                "fields are null, and the dataset's audit keeps every observed value "
+                "with the number of observations that gave it. Empty when the "
+                "observations agree."
+            ),
+        }
     boolean_fields = {
         "memo_present", "current", "confirmed", "ambiguous",
         "sleep_stage_available_flag", "sleep_score_available_flag",
@@ -2305,16 +2373,16 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
     notes = (
         "Observed non-null deep/light/REM stage minutes are summed when any "
         "finite stage is present. When all stages are absent, the approved "
-        "direct source aliases are used only when they agree; otherwise the "
-        "value remains null or the row fails closed. Missing stages are never "
+        "direct source aliases are used when they agree; when they differ, the "
+        "value is null and listed in disagreeing_fields. Missing stages are never "
         "filled with zero, awake time and window-minus-awake are never used, "
         "and available-only Sleep rows may be used as context."
         if dataset == "sleep_daily" and field == "sleep_duration_minutes_ex_awake"
         else
-        "FIT-derived HRV is analysis_reference_only. Same-date differing values remain unresolved, and this dataset is not a daily source of truth."
+        "FIT-derived HRV is analysis_reference_only. When the values for one date differ, hrv_value is null and listed in disagreeing_fields, and the audit keeps every value; this dataset is not a daily source of truth."
         if dataset == "hrv_daily"
         else
-        "Source-provided metric observation. Missing values are preserved and labels, units, daily canonical rows, and activity relationships are not inferred."
+        "Source-provided metric observation. Missing values are preserved and labels, units, daily canonical rows, and activity relationships are not inferred. A value that differs between the observations of one stable key is null and listed in disagreeing_fields."
         if dataset in {
             "hill_score_daily", "endurance_score_daily", "race_prediction_daily",
             "sleep_daily", "uds_daily", "acute_training_load_daily",

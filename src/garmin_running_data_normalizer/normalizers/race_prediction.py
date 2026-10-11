@@ -58,6 +58,7 @@ def normalize_race_prediction(
         source_record_count=len(rows),
         accepted=accepted,
         excluded_reasons=excluded,
+        fields=RACE_PREDICTION_FIELDS,
     )
     result.audit["observation_timestamp_semantics_counts"] = dict(
         sorted(timestamp_semantics.items())

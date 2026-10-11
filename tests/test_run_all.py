@@ -385,6 +385,7 @@ class RunAllTest(unittest.TestCase):
                     "endurance_score",
                     "classification_id",
                     "feedback_phrase_id",
+                    "disagreeing_fields",
                 },
             )
             self.assertEqual(
@@ -394,6 +395,7 @@ class RunAllTest(unittest.TestCase):
                     "overall_score",
                     "classification",
                     "feedback_phrase",
+                    "disagreeing_fields",
                 },
             )
             serialized = json.dumps({"hill": hill, "endurance": endurance})
@@ -415,10 +417,18 @@ class RunAllTest(unittest.TestCase):
             self.assertFalse(lactate["latest_wins"])
             self.assertFalse(lactate["inference_performed"])
             self.assertNotIn("PRIVATE-ACCOUNT", json.dumps(lactate))
-            self.assertTrue(
-                (output / "analysis/performance_metrics_daily.csv").read_text(
-                    encoding="utf-8"
-                ).startswith("calendar_date,hill_")
+            self.assertEqual(
+                (output / "analysis/performance_metrics_daily.csv")
+                .read_text(encoding="utf-8")
+                .splitlines(),
+                [
+                    "calendar_date,hill_overall_score,hill_strength_score,"
+                    "hill_endurance_score,hill_classification_id,"
+                    "hill_feedback_phrase_id,endurance_overall_score,"
+                    "endurance_classification,endurance_feedback_phrase,"
+                    "hill_disagreeing_fields,endurance_disagreeing_fields",
+                    "2030-01-01,80,70,90,4,12,6100,5,19,,",
+                ],
             )
             context = json.loads(
                 (output / "ANALYSIS_CONTEXT.json").read_text(encoding="utf-8")

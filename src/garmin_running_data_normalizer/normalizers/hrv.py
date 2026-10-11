@@ -187,44 +187,64 @@ def normalize_hrv_daily_assets(
                 by_date[str(date)].append((value, asset.sha256))
 
     records: list[dict[str, Any]] = []
-    conflict_count = 0
+    disagreement_key_count = 0
     duplicate_count = 0
+    disagreements: list[dict[str, Any]] = []
     for date in sorted(by_date):
         observations = by_date[date]
-        values = {value for value, _source in observations}
-        duplicate_count += len(observations) - len(values)
-        conflict = len(values) > 1
+        value_counts = Counter(value for value, _source in observations)
+        duplicate_count += len(observations) - len(value_counts)
+        conflict = len(value_counts) > 1
         if conflict:
-            conflict_count += 1
+            # Every value is kept in the audit; the day's value is left empty.
+            disagreement_key_count += 1
+            disagreements.append(
+                {
+                    "key": {"calendar_date": date},
+                    "observation_count": len(observations),
+                    "fields": [
+                        {
+                            "field": "hrv_value",
+                            "values": [
+                                {"value": value, "observation_count": count}
+                                for value, count in sorted(value_counts.items())
+                            ],
+                        }
+                    ],
+                }
+            )
         records.append(
             {
                 "calendar_date": date,
-                "hrv_value": None if conflict else next(iter(values)),
+                "hrv_value": None if conflict else next(iter(value_counts)),
                 "semantics_status": "semantics_approved_analysis_reference",
                 "analysis_role": "analysis_reference_only",
                 "record_count_for_date": len(observations),
                 "source_file_count_for_date": len({source for _value, source in observations}),
                 "dedupe_status": (
-                    "review_required_same_day_differing_values"
+                    "same_day_values_disagree"
                     if conflict
                     else "same_date_same_value_deduped"
                     if len(observations) > 1
                     else "single_observation"
                 ),
+                "disagreeing_fields": ["hrv_value"] if conflict else [],
             }
         )
-    review_count = conflict_count + invalid_value_count + missing_date_count
+    # Values that disagree are reported as disagreements, not as review items.
+    review_count = invalid_value_count + missing_date_count
     result = {
         "records": records,
         "audit": {
-            "format": "garmin-running-data-normalizer-hrv-daily-audit-v1",
+            "format": "garmin-running-data-normalizer-hrv-daily-audit-v2",
             "dataset": "hrv_daily",
             "status": "PASS_WITH_REVIEW_ITEMS" if review_count else "PASS",
             "detected_asset_count": len(fit_assets),
             "source_record_count": source_record_count,
             "accepted_record_count": len(records),
             "same_value_duplicate_count": duplicate_count,
-            "same_day_conflict_count": conflict_count,
+            "disagreement_key_count": disagreement_key_count,
+            "disagreements": disagreements,
             "invalid_value_count": invalid_value_count,
             "missing_date_count": missing_date_count,
             "parse_status_counts": dict(sorted(parse_status_counts.items())),

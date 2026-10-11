@@ -20,10 +20,13 @@ from .contracts import (
     FAMILY_DATASETS,
     RELATIONSHIP_ORDER,
     RUN_QUALITY_AUTHORITY_PATHS,
+    RUN_QUALITY_FORMAT,
+    RUN_QUALITY_SCHEMA_VERSION,
     SAFE_WARNING_CODES,
     validate_state_validity,
 )
 from .doctor import DoctorError, doctor_run_output
+from ..run_all import RUN_ALL_VERSION
 
 
 BUNDLE_FORMAT = "garmin-running-data-normalizer-support-bundle-v1"
@@ -74,7 +77,7 @@ SAFE_AGGREGATE_REASON_CODES = frozenset(
         "REVIEW_REQUIRED",
         "EXCLUDED_BY_EXISTING_AUTHORITY",
         "OBSERVED_REQUIRED_VALUE_MISSING",
-        "CONFLICT_PRESERVED_NO_WINNER",
+        "VALUES_DISAGREE",
         "UNRESOLVED_NO_INFERENCE",
     }
 )
@@ -515,10 +518,10 @@ def _run_quality_projection(quality: dict[str, Any]) -> dict[str, Any]:
         )
     status = quality.get("run_status")
     if (
-        quality.get("format") != "garmin-running-data-normalizer-run-quality-v1"
-        or quality.get("schema_version") != "garmin-run-quality:v1"
+        quality.get("format") != RUN_QUALITY_FORMAT
+        or quality.get("schema_version") != RUN_QUALITY_SCHEMA_VERSION
         or not _supported_run_quality_version(quality.get("product_version"))
-        or quality.get("run_all_version") != 1
+        or quality.get("run_all_version") != RUN_ALL_VERSION
         or status not in {"PASS", "PASS_WITH_WARNINGS", "PARTIAL_SUCCESS"}
         or quality.get("exit_code") != (3 if status == "PARTIAL_SUCCESS" else 0)
         or quality.get("completion_state") != "COMPLETED"
@@ -711,7 +714,7 @@ def _run_quality_projection(quality: dict[str, Any]) -> dict[str, Any]:
     if quality.get("authority_references") != sorted(AUTHORITY_PATHS):
         raise SupportBundleError("SUPPORT_BUNDLE_AUTHORITY_INVALID", "Run Quality authority catalog is invalid")
     return {
-        "format": "garmin-running-data-normalizer-support-run-quality-v1",
+        "format": "garmin-running-data-normalizer-support-run-quality-v2",
         "schema_version": quality["schema_version"],
         "product_version": quality["product_version"],
         "run_status": quality["run_status"],

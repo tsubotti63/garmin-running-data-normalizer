@@ -26,6 +26,7 @@ from garmin_running_data_normalizer.run_all import (
     DATASET_PATHS,
     DATASET_TABLE,
     OUTPUT_PATHS,
+    RUN_ALL_VERSION,
 )
 
 
@@ -56,7 +57,7 @@ def synthetic_projection_input() -> tuple[dict, dict, dict]:
     manifest = {
         "format": "garmin-running-data-normalizer-run-manifest-v1",
         "product_version": "1.3.2",
-        "run_all_version": 1,
+        "run_all_version": RUN_ALL_VERSION,
         "input_assets": [
             {
                 "source_path": "private/SYNTHETIC-ACTIVITY.json",
@@ -81,7 +82,7 @@ def synthetic_projection_input() -> tuple[dict, dict, dict]:
     summary = {
         "format": "garmin-running-data-normalizer-run-summary-v1",
         "product_version": "1.3.2",
-        "run_all_version": 1,
+        "run_all_version": RUN_ALL_VERSION,
         "status": "PASS",
         "family_results": {
             "activities": {
@@ -509,12 +510,12 @@ class OutputExperienceTest(unittest.TestCase):
 
         manifest, summary, relationship_summary = synthetic_projection_input()
         summary["generated_paths"] = [*summary["generated_paths"], "START_HERE.md"]
-        with self.assertRaisesRegex(OutputExperienceError, "do not match Run-All v1"):
+        with self.assertRaisesRegex(OutputExperienceError, f"do not match Run-All v{RUN_ALL_VERSION}"):
             render_output_experience_documents(manifest, summary, self.registry, relationship_summary)
 
         manifest, summary, relationship_summary = synthetic_projection_input()
         manifest["outputs"].append({"path": "extra.json"})
-        with self.assertRaisesRegex(OutputExperienceError, "do not match Run-All v1"):
+        with self.assertRaisesRegex(OutputExperienceError, f"do not match Run-All v{RUN_ALL_VERSION}"):
             render_output_experience_documents(manifest, summary, self.registry, relationship_summary)
 
     def test_projection_rejects_incomplete_or_unfinished_runs(self) -> None:

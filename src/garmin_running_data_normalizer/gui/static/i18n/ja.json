@@ -201,5 +201,6 @@
   "warning.optional_family_empty": "エクスポートにはあったものの、記録が 1 件もできなかった種類のデータがあります（{code}）。",
   "warning.optional_family_not_present": "エクスポートに入っていない種類のデータがあり、その表は空です（{code}）。",
   "warning.other": "ほかの警告があります（{code}）。",
-  "warning.relationship_unresolved": "データどうしのつながりの中に、相手の記録が出力に無いものがあります。相手を推測で補っていません（{code}）。"
+  "warning.relationship_unresolved": "データどうしのつながりの中に、相手の記録が出力に無いものがあります。相手を推測で補っていません（{code}）。",
+  "warning.values_disagree": "同じ記録に、食い違う値があります。その項目は空欄にし、どの値も監査の記録（audit）に残しています。どれか 1 つに決めていません（{code}）。"
 }

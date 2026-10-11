@@ -7,8 +7,8 @@ from typing import Any
 
 COMPLETENESS_FORMAT = "garmin-running-data-normalizer-source-completeness-v1"
 COMPLETENESS_SCHEMA_VERSION = "garmin-source-completeness:v1"
-RUN_QUALITY_FORMAT = "garmin-running-data-normalizer-run-quality-v1"
-RUN_QUALITY_SCHEMA_VERSION = "garmin-run-quality:v1"
+RUN_QUALITY_FORMAT = "garmin-running-data-normalizer-run-quality-v2"
+RUN_QUALITY_SCHEMA_VERSION = "garmin-run-quality:v2"
 DOCTOR_FORMAT = "garmin-running-data-normalizer-doctor-v1"
 DOCTOR_SCHEMA_VERSION = "garmin-export-evidence-doctor:v1"
 
@@ -132,6 +132,7 @@ SAFE_WARNING_CODES = frozenset(
         "OPTIONAL_FAMILY_NOT_PRESENT",
         "OPTIONAL_FAMILY_EMPTY",
         "DAILY_METRICS_REVIEW_REQUIRED",
+        "VALUES_DISAGREE",
         "FIT_PARSE_INCOMPLETE",
         "LACTATE_CANDIDATE_AUTHORITY_UNRESOLVED",
         "RELATIONSHIP_UNRESOLVED_VALID_LINK",

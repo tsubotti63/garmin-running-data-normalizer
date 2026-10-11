@@ -10,11 +10,9 @@ from pathlib import Path
 
 from garmin_running_data_normalizer.intake.discovery import DiscoveredAsset
 from garmin_running_data_normalizer.normalizers.performance_metrics import (
-    PerformanceMetricsConflictError,
     normalize_endurance_score,
 )
 from garmin_running_data_normalizer.normalizers.uds import normalize_uds
-from garmin_running_data_normalizer.normalizers.daily_metrics import DailyMetricConflictError
 from garmin_running_data_normalizer.snapshot.merge import _merge_dataset
 from garmin_running_data_normalizer.run_all import run_all
 
@@ -65,44 +63,84 @@ def _snapshot_observations(dataset: str, values: list[int]) -> list[dict[str, ob
     return rows
 
 
-class PreserveObservedVariantsTest(unittest.TestCase):
-    def test_endurance_v2_preserves_values_without_a_winner(self) -> None:
+class OneExportDisagreementTest(unittest.TestCase):
+    """Within one Export, values that disagree are left empty and kept in the audit."""
+
+    def test_endurance_values_that_disagree_have_no_winner(self) -> None:
         rows = [
             {"calendarDate": "2030-01-01", "overallScore": 70},
             {"calendarDate": "2030-01-01", "overallScore": 71},
         ]
-        with self.assertRaises(PerformanceMetricsConflictError):
-            normalize_endurance_score([_asset("EnduranceScore_same_export.json", rows)])
-        result = normalize_endurance_score(
-            [_asset("EnduranceScore_snapshot_variants.json", rows)],
-            preserve_observed_variants=True,
-        )
-        self.assertEqual(result.records, [])
-        self.assertEqual(result.audit["multi_variant_key_count"], 1)
-        self.assertEqual(result.audit["observed_variant_count"], 2)
-        self.assertEqual(result.audit["canonicalization_unresolved_count"], 1)
-        self.assertFalse(result.audit["automatic_winner"])
+        result = normalize_endurance_score([_asset("EnduranceScore_same_export.json", rows)])
+        self.assertEqual(len(result.records), 1)
+        self.assertIsNone(result.records[0]["overall_score"])
+        self.assertEqual(result.records[0]["disagreeing_fields"], ["overall_score"])
         self.assertEqual(
-            {item["observed_value"]["overall_score"] for item in result.audit["observed_variants"]},
-            {70, 71},
+            [item["value"] for item in result.audit["disagreements"][0]["fields"][0]["values"]],
+            [70, 71],
         )
 
-    def test_uds_v2_preserves_values_and_exact_repeats(self) -> None:
+    def test_uds_values_that_disagree_are_empty_and_agreeing_values_stay(self) -> None:
         rows = [_uds_row("2030-01-01", 100), _uds_row("2030-01-01", 100), _uds_row("2030-01-01", 110)]
-        result = normalize_uds(
-            [_asset("UDSFile_snapshot_variants.json", rows)],
-            preserve_observed_variants=True,
+        result = normalize_uds([_asset("UDSFile_same_export.json", rows)])
+        [row] = result.records
+        self.assertEqual(
+            row["disagreeing_fields"], ["steps", "distance_meters", "active_calories"]
         )
-        self.assertEqual(result.records, [])
-        self.assertEqual(result.audit["multi_variant_key_count"], 1)
-        self.assertEqual(result.audit["observed_variant_count"], 2)
-        self.assertEqual(result.audit["exact_repeat_count"], 1)
-        self.assertFalse(result.audit["automatic_winner"])
+        self.assertIsNone(row["steps"])
+        self.assertEqual(row["bmr_calories"], 1500)
+        self.assertEqual(result.audit["disagreement_key_count"], 1)
+        self.assertEqual(result.audit["same_value_duplicate_count"], 1)
+        self.assertEqual(
+            result.audit["disagreements"][0]["fields"][0],
+            {
+                "field": "steps",
+                "values": [
+                    {"value": 100, "observation_count": 2},
+                    {"value": 110, "observation_count": 1},
+                ],
+            },
+        )
 
-    def test_uds_same_export_divergence_remains_malformed(self) -> None:
-        rows = [_uds_row("2030-01-01", 100), _uds_row("2030-01-01", 110)]
-        with self.assertRaises(DailyMetricConflictError):
-            normalize_uds([_asset("UDSFile_same_export.json", rows)])
+    def test_missing_and_null_are_absent_and_zero_is_a_value(self) -> None:
+        null_row = _uds_row("2030-01-01", 100)
+        null_row["totalSteps"] = None
+        missing_row = _uds_row("2030-01-01", 100)
+        del missing_row["totalSteps"]
+        zero_row = _uds_row("2030-01-01", 0)
+        result = normalize_uds(
+            [_asset("UDSFile_presence.json", [null_row, missing_row, zero_row])]
+        )
+        [row] = result.records
+        # Only one observation has a step count, so it is used; the other two
+        # observations have none and are counted.
+        self.assertEqual(row["steps"], 0)
+        self.assertEqual(result.audit["absent_value_counts"]["steps"], 2)
+        self.assertEqual(row["disagreeing_fields"], ["distance_meters", "active_calories"])
+        self.assertIsNone(row["distance_meters"])
+
+    def test_presence_flags_are_true_when_any_observation_has_the_group(self) -> None:
+        with_battery = _uds_row("2030-01-01", 100)
+        with_battery["bodyBattery"] = {"chargedValue": 40}
+        without_battery = _uds_row("2030-01-01", 100)
+        result = normalize_uds(
+            [_asset("UDSFile_presence_flags.json", [with_battery, without_battery])]
+        )
+        [row] = result.records
+        self.assertTrue(row["raw_has_body_battery"])
+        self.assertEqual(row["bb_charged_value"], 40)
+        self.assertEqual(row["disagreeing_fields"], [])
+        self.assertEqual(result.audit["absent_value_counts"], {"bb_charged_value": 1})
+
+    def test_malformed_key_is_excluded_and_never_promoted(self) -> None:
+        result = normalize_uds([_asset("UDSFile_malformed.json", [{"totalSteps": 100}])])
+        self.assertEqual(result.records, [])
+        self.assertEqual(result.audit["excluded_record_count"], 1)
+        self.assertEqual(result.audit["disagreement_key_count"], 0)
+
+
+class PreserveObservedVariantsTest(unittest.TestCase):
+    """Across Snapshots, the v1.7.1 behavior stays until stage A2b."""
 
     def test_single_snapshot_and_reappearing_key_have_no_winner(self) -> None:
         single = _merge_dataset(
@@ -118,38 +156,6 @@ class PreserveObservedVariantsTest(unittest.TestCase):
         self.assertEqual(merged[0], [])
         self.assertEqual(merged[5]["multi_variant_key_count"], 1)
         self.assertEqual(merged[5]["exact_repeat_count"], 1)
-
-    def test_missing_null_and_zero_are_observed_not_invented(self) -> None:
-        null_row = _uds_row("2030-01-01", 100)
-        null_row["totalSteps"] = None
-        missing_row = _uds_row("2030-01-01", 100)
-        del missing_row["totalSteps"]
-        zero_row = _uds_row("2030-01-01", 0)
-        result = normalize_uds(
-            [_asset("UDSFile_presence_variants.json", [null_row, missing_row, zero_row])],
-            preserve_observed_variants=True,
-        )
-        self.assertEqual(result.records, [])
-        self.assertEqual(result.audit["multi_variant_key_count"], 1)
-        self.assertEqual(result.audit["canonicalization_unresolved_count"], 1)
-        self.assertFalse(result.audit["automatic_winner"])
-        observed = result.audit["observed_variants"]
-        # The UDS parser gives absent and explicit null the same public null
-        # projection; the non-null zero remains a distinct observed variant.
-        self.assertEqual(len(observed), 2)
-        self.assertEqual(
-            {item["observed_value"].get("steps") for item in observed},
-            {None, 0},
-        )
-
-    def test_malformed_key_is_excluded_and_never_promoted(self) -> None:
-        result = normalize_uds(
-            [_asset("UDSFile_malformed.json", [{"totalSteps": 100}])],
-            preserve_observed_variants=True,
-        )
-        self.assertEqual(result.records, [])
-        self.assertEqual(result.audit["malformed_count"], 1)
-        self.assertEqual(result.audit["canonicalization_unresolved_count"], 0)
 
     def test_four_snapshot_24_orders_have_identical_variant_semantics(self) -> None:
         for dataset, values in (

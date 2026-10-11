@@ -74,18 +74,59 @@ Each item gives the v1.7.1 behavior and the v2.0.0 behavior.
   differing Endurance Score and UDS values across Snapshots are kept in the
   audit record and the row is removed; HRV sets the value to null and keeps
   only counts.
-- v2.0.0:
+- v2.0.0 (stage A2a for one-shot runs; Snapshot runs follow in stage A2b, and
+  Activities, Gear, `activity_gear`, and Personal Records in stage A3):
   - The normalized row stays, one per stable key. Each value field that differs
     between the observations is empty, and the row's `disagreeing_fields` lists
     those fields. Fields that agree keep their value.
   - The dataset's audit record lists, for each disagreeing key and field, every
     observed value, how many observations gave it, and, in Snapshot runs, the
     Snapshots that gave it by import number.
-  - Warning `VALUES_DISAGREE` (provisional) per family, with the number of keys.
-    Status `PASS_WITH_WARNINGS`.
+  - Warning `VALUES_DISAGREE` per family, with the number of keys. Status
+    `PASS_WITH_WARNINGS`. Stage A2a settles the name.
   - Observation-grain datasets (Race Prediction, Acute Training Load, Training
     Readiness, VO2Max, and Training History) keep one row per observation; a
     disagreement is two observations with the same full stable key.
+  - Within one Export, a null or missing value is absent: the field takes the
+    value of the observations that have one, and the audit record counts the
+    observations without one in `absent_value_counts`. Only two different
+    values are a disagreement, so a Sleep row whose source field is missing and
+    one where it is null no longer differ. Across Snapshots, an explicit null in
+    a later Snapshot means that the value was removed (see
+    [Changes across Snapshots](#changes-across-snapshots)). The two rules
+    differ because a later Export reflects the user's own edits in Garmin
+    Connect, so the order of Snapshots means something, while the observations
+    inside one Export have no order: a null there says only that this
+    observation has no value.
+  - Each field is compared on its normalized value, including a field computed
+    from others, such as the Sleep duration from the stage minutes. When every
+    observation gives the same computed value, it stays, even if the fields it
+    comes from disagree: for deep 60 and light 120 minutes against deep 90 and
+    light 90 minutes, the stage minutes are empty and the duration of 180
+    minutes stays. Every observation shows that value, so none is chosen, and
+    an empty field means unknown, not zero. When the computed values differ,
+    the field is empty and listed like any other.
+  - Flags and statuses describe the merged row. A UDS `raw_has_*` flag is true
+    when any observation had that source group. The Sleep flags follow the
+    merged values, and a Sleep row whose start, end, or window disagrees has
+    the status `needs_review`, the limitation `values_disagree`, and the reason
+    `sleep_interval_values_disagree_no_selection`.
+  - The audit record's `disagreements` section has one entry per key with the
+    `key`, its `observation_count`, and its `fields`; each field lists its
+    `values`, each with the `value` and the `observation_count` of the
+    observations that gave it, numbers by size and other values by their JSON
+    text. `disagreement_key_count` counts the keys, in the audit record and in
+    the run summary's family results.
+  - Run Quality counts the keys in `conflict_summary` with the reason
+    `VALUES_DISAGREE`, which replaces `CONFLICT_PRESERVED_NO_WINNER`. A
+    disagreement is not a review item, so `DAILY_METRICS_REVIEW_REQUIRED` no
+    longer counts it.
+  - The Support Bundle and the External-safe Pack carry counts only; the
+    observed values stay in the audit records of the local output.
+  - `DAILY_METRICS_CONFLICT` and `PERFORMANCE_METRICS_CONFLICT` are removed.
+    HRV rows whose values disagree have the `dedupe_status`
+    `same_day_values_disagree` instead of
+    `review_required_same_day_differing_values`.
 
 ### Changes across Snapshots
 
@@ -223,14 +264,17 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
 - v2.0.0:
   - When several source names are present with different values, the field is a
     disagreement. When they agree, or only one is present, it is used. A name
-    whose value is null counts as absent.
+    whose value is null counts as absent. Stage A2a applies this to the direct
+    Sleep duration fields, which stopped the run in v1.7.1; the audit record
+    counts such rows in `direct_aliases_disagree_count`. Stage A4 applies it to
+    the other fields.
   - Filled values are marked in the row: `sleep_day_source`,
     `sleep_duration_source`, and `start_time_source`.
   - HRV values that disagree follow
     [Values that disagree](#values-that-disagree): the values are kept in the
-    audit record. Run Quality names the reason after the rule instead of
-    `CONFLICT_PRESERVED_NO_WINNER`, and the HRV `date_basis` names the timezone
-    that was used.
+    audit record, and Run Quality names the reason `VALUES_DISAGREE` instead of
+    `CONFLICT_PRESERVED_NO_WINNER` (stage A2a). The HRV `date_basis` names the
+    timezone that was used.
   - An unknown FIT sub-sport keeps its number in `sub_sport_code`; `sub_sport`
     stays empty.
   - The External-safe Pack leaves the month empty for an Activity without a
@@ -345,18 +389,41 @@ Every stop has a specific code; errors that v1.7.1 reports only as
 
 ## Output shape
 
-- `run_all_version` becomes 2.
+- `run_all_version` becomes 2 (stage A2a).
 - Normalized datasets gain `disagreeing_fields` (a list of field names, empty
   when the row has no disagreement; written with `;` between names in CSV
   projections). Sleep gains `sleep_day_source` and `sleep_duration_source`,
   Activities gain `start_time_source`, and FIT sessions gain `sub_sport_code`.
   The relationship status fields gain the value `unresolved`.
+- Stage A2a adds `disagreeing_fields` to every row of the 17 datasets: the
+  Schema Catalog declares it as a list of strings that is always present and
+  never null, and the field count goes from 224 to 241.
+  `analysis/activities.csv` gains the last column `disagreeing_fields`, and
+  `analysis/performance_metrics_daily.csv` the last columns
+  `hill_disagreeing_fields` and `endurance_disagreeing_fields`.
+- A field that a disagreement can leave empty is nullable in the Schema
+  Catalog. v1.7.1 declared these non-null: the Hill and Endurance
+  `overall_score`, the four Race Prediction times, `vo2max`, and
+  `training_status`.
+- `normalize-activities` (the Golden Path) keeps the v1 shape: its output has
+  no `disagreeing_fields`, which only Run-All adds.
+- Run Quality's format and schema version become v2
+  (`garmin-running-data-normalizer-run-quality-v2`, `garmin-run-quality:v2`),
+  and so does the Support Bundle's copy of it, because the closed list of
+  reasons changes (stage A2a). Source Completeness and Doctor keep v1.
+- The daily audit records become v2 (`daily-metric-audit-v2`,
+  `performance-daily-audit-v2`, and `hrv-daily-audit-v2`) with
+  `disagreement_key_count`, `disagreements`, and `absent_value_counts`;
+  `divergent_duplicate_count`, the Hill and Endurance
+  `divergent_duplicate_key_count`, and the HRV `same_day_conflict_count` are
+  removed (stage A2a).
 - Audit records gain sections for disagreements, updates, left-out items by
   reason, merged duplicates, and source fields that were not read.
-- New warning codes (provisional names): `VALUES_DISAGREE`, `VALUES_UPDATED`,
-  `RECORDS_NOT_IN_LATEST_SNAPSHOT`, `INPUT_DUPLICATE_SOURCES`,
-  `DATA_FILE_LEFT_OUT`, `DATA_ROW_LEFT_OUT`, `DATA_VALUE_INVALID`, and
-  `DATA_TEXT_REPAIRED`. `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them.
+- New warning codes: `VALUES_DISAGREE` (stage A2a), and, with provisional
+  names, `VALUES_UPDATED`, `RECORDS_NOT_IN_LATEST_SNAPSHOT`,
+  `INPUT_DUPLICATE_SOURCES`, `DATA_FILE_LEFT_OUT`, `DATA_ROW_LEFT_OUT`,
+  `DATA_VALUE_INVALID`, and `DATA_TEXT_REPAIRED`.
+  `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), and `INPUT_MULTIPLE_EXPORTS` and
   `SNAPSHOT_STORE_LOCKED` (provisional names).
@@ -368,7 +435,8 @@ Every stop has a specific code; errors that v1.7.1 reports only as
 ## Checks of earlier outputs
 
 - `validate-handoff`, `doctor --run-output`, and `support-bundle` accept an
-  output with `run_all_version` 2 when the installed version produced it.
+  output with `run_all_version` 2 when the installed version produced it
+  (stage A2a).
 - An output that contains `diagnostics/` and was produced by another version,
   including every v1.x output from v1.4.0 on, is rejected as in v1.x; rerun
   Run-All. Outputs produced before v1.4 keep the legacy handling.
@@ -410,7 +478,13 @@ Every stop has a specific code; errors that v1.7.1 reports only as
 - Exit codes: runs that stopped with exit 2 for problems in the data now finish
   with exit 3 or 0, and the warnings say what was left out or kept.
 - Outputs: `run_all_version` 2, the new fields and audit sections, and the new
-  warning codes. Rerun Run-All; earlier outputs are not converted.
+  warning codes. Rerun Run-All; earlier outputs are not converted. Renamed in
+  stage A2a: the HRV `dedupe_status` `review_required_same_day_differing_values`
+  becomes `same_day_values_disagree`, the Run Quality reason
+  `CONFLICT_PRESERVED_NO_WINNER` becomes `VALUES_DISAGREE` in Run Quality v2,
+  and the daily audit counters `divergent_duplicate_count`,
+  `divergent_duplicate_key_count`, and `same_day_conflict_count` give way to
+  `disagreement_key_count`.
 - Snapshots: existing stores need no migration; rerun `snapshot run-all`.
 - Input: the downloaded Export ZIP file can be used directly. Folders around
   the Export, in a ZIP file or a folder, are left out of the recorded paths.
@@ -421,4 +495,15 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   dataclass. Its fields, its constructor, and the content that
   `discover_export` returns are unchanged, but dataclass equality, hashing,
   `dataclasses.asdict`, and immutability no longer apply. `read_export` lists
-  an Export's files without keeping their content.
+  an Export's files without keeping their content. The daily normalizers no
+  longer raise `DailyMetricConflictError` or `PerformanceMetricsConflictError`,
+  which are removed; their rows carry `disagreeing_fields`; and
+  `normalize_uds`, `normalize_endurance_score`, and `finalize_daily` lose the
+  keyword arguments `preserve_observed_variants` and `variant_lineage`, which
+  no command used, and `finalize_daily` loses `signature_factory`.
+- Schema: the fields that a disagreement can leave empty are nullable (the
+  Hill and Endurance `overall_score`, the four Race Prediction times,
+  `vo2max`, and `training_status`), every dataset gains `disagreeing_fields`
+  (224 to 241 fields), and readers of `analysis/activities.csv` and
+  `analysis/performance_metrics_daily.csv` that rely on the column count see
+  the new last columns.
