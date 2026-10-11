@@ -69,7 +69,8 @@ you start.
 
 On Windows, keep the location and the name short. Unless long paths are
 enabled, Windows limits a whole path to 260 characters, and the files inside
-the output add about 40 characters to the path of the output folder.
+the output add about 40 characters to the path of the output folder. If the
+paths would be too long, the GUI says so before the run starts.
 
 The output folder appears only when the run finishes. Until then, Run-All
 works in a hidden working folder next to it.
@@ -145,6 +146,7 @@ the code when you ask for help. Do not attach your Export or output.
 | `OUTPUT_EXISTS` | A folder with this name already exists. | Choose another name. |
 | `OUTPUT_NAME_INVALID` | The name cannot be used, or the path is too long. | Follow the name rules, or use a shorter name. |
 | `OUTPUT_PARENT_NOT_WRITABLE` | The output location cannot be written. | Choose another folder, or check its permissions. |
+| `OUTPUT_PATH_TOO_LONG` | The output's paths would be too long for Windows. | Choose a location closer to the top of the drive, or a shorter name. |
 | `INPUT_CHANGED` | Files in the Export changed during the run. | Run again when no other program is changing the folder. |
 | `OUTPUT_PUBLISH_FAILED` | The output folder could not be written. | Check the free space and the permissions. On Windows, use a shorter location and name. |
 | `HANDOFF_INVALID` | The output folder does not match what the run wrote. | If you did not change it, report the code. |

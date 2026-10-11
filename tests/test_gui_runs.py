@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import errno
 import json
 import os
@@ -10,20 +11,27 @@ import time
 import unittest
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
 # Import the diagnostics package before the standalone module: importing
 # standalone first meets a circular import when this file runs on its own.
 from garmin_running_data_normalizer import diagnostics  # noqa: F401
+from garmin_running_data_normalizer.gui import runs
 from garmin_running_data_normalizer.gui.outputs import make_support_bundle, support_bundle_path
 from garmin_running_data_normalizer.gui.runs import (
     MAX_OUTPUT_NAME_BYTES,
+    WINDOWS_MAX_FILE_PATH,
+    WINDOWS_MAX_FOLDER_PATH,
     RunActiveError,
     RunManager,
     RunRequestError,
+    output_path_too_long,
     validate_output_name,
+    windows_paths_too_long,
 )
+from garmin_running_data_normalizer.run_all import OUTPUT_PATHS, run_all
 from garmin_running_data_normalizer.standalone import validate_standalone_handoff
 from tests.fit_fixture_factory import synthetic_fit
 from tests.test_run_all_progress import export_with_fit, tree_bytes
@@ -426,6 +434,104 @@ class RunManagerTest(unittest.TestCase):
         self.assertEqual(
             [path.name for path in self.parent.iterdir() if path.name.startswith(".")], []
         )
+
+
+def windows_parent(length: int) -> str:
+    """Return an absolute Windows folder path of exactly ``length`` characters."""
+    return "C:\\" + "p" * (length - 3)
+
+
+class WindowsPathTest(unittest.TestCase):
+    """Run-All's deepest paths are checked against MAX_PATH before a run starts."""
+
+    def test_the_longest_file_path_must_stay_under_260(self) -> None:
+        longest_file = max(len(path) for path in OUTPUT_PATHS)
+        name = "output"
+        # parent + "\\." + name + ".run-all-" + 8 characters + "\\" + file
+        fixed = 2 + len(name) + 17 + 1 + longest_file
+        fits = windows_parent(WINDOWS_MAX_FILE_PATH - 1 - fixed)
+        self.assertFalse(windows_paths_too_long(fits, name))
+        self.assertTrue(windows_paths_too_long(fits + "p", name))
+
+    def test_the_deepest_folder_path_must_stay_under_248(self) -> None:
+        # With today's outputs the file limit is reached first, so a long
+        # folder with a short file shows the folder limit.
+        paths = ("f" * 100 + "/x.json",)
+        name = "output"
+        fixed = 2 + len(name) + 17 + 1 + 100
+        fits = windows_parent(WINDOWS_MAX_FOLDER_PATH - 1 - fixed)
+        with patch.object(runs, "OUTPUT_PATHS", paths):
+            self.assertFalse(windows_paths_too_long(fits, name))
+            self.assertTrue(windows_paths_too_long(fits + "p", name))
+
+    def test_lengths_count_utf16_units_and_skip_extended_paths(self) -> None:
+        longest_file = max(len(path) for path in OUTPUT_PATHS)
+        fixed = 2 + 2 + 17 + 1 + longest_file  # one runner emoji is 2 units
+        fits = windows_parent(WINDOWS_MAX_FILE_PATH - 1 - fixed)
+        self.assertFalse(windows_paths_too_long(fits, "\U0001f3c3"))
+        self.assertTrue(windows_paths_too_long(fits + "p", "\U0001f3c3"))
+        self.assertFalse(windows_paths_too_long("\\\\?\\" + windows_parent(400), "output"))
+
+    def test_the_paths_match_a_real_output_with_the_external_safe_pack(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "output"
+            run_all(SYNTHETIC_EXPORT, output, external_safe_pack=True)
+            written = [path.relative_to(output).as_posix() for path in output.rglob("*") if path.is_file()]
+        folders = [path.rsplit("/", 1)[0] for path in written if "/" in path]
+        self.assertEqual(max(map(len, written)), max(len(path) for path in OUTPUT_PATHS))
+        self.assertLessEqual(
+            max(map(len, folders)),
+            max(len(path.rsplit("/", 1)[0]) for path in OUTPUT_PATHS if "/" in path),
+        )
+
+    def test_the_check_applies_only_on_windows_without_long_paths(self) -> None:
+        long_parent = Path(tempfile.gettempdir()) / ("p" * 250)
+        with (
+            patch.object(runs, "os", SimpleNamespace(name="nt")),
+            patch.object(runs, "_long_paths_enabled", return_value=False),
+        ):
+            self.assertTrue(output_path_too_long(long_parent, "output"))
+            self.assertFalse(output_path_too_long(Path(tempfile.gettempdir()), "output"))
+        with (
+            patch.object(runs, "os", SimpleNamespace(name="nt")),
+            patch.object(runs, "_long_paths_enabled", return_value=True),
+        ):
+            self.assertFalse(output_path_too_long(long_parent, "output"))
+        with patch.object(runs, "os", SimpleNamespace(name="posix")):
+            self.assertFalse(output_path_too_long(long_parent, "output"))
+
+    def test_the_long_paths_setting_is_read_from_the_registry(self) -> None:
+        def fake_winreg(value: object) -> SimpleNamespace:
+            def query(key: object, name: str) -> tuple[object, int]:
+                if isinstance(value, Exception):
+                    raise value
+                return value, 4
+
+            return SimpleNamespace(
+                HKEY_LOCAL_MACHINE=object(),
+                OpenKey=lambda root, subkey: contextlib.nullcontext(object()),
+                QueryValueEx=query,
+            )
+
+        for value, expected in ((1, True), (0, False), (FileNotFoundError("no value"), False)):
+            with self.subTest(value=value):
+                with patch.dict(sys.modules, {"winreg": fake_winreg(value)}):
+                    self.assertIs(runs._long_paths_enabled(), expected)
+        # Without the registry module, the check assumes long paths are off.
+        with patch.dict(sys.modules, {"winreg": None}):
+            self.assertFalse(runs._long_paths_enabled())
+
+    def test_a_run_whose_paths_are_too_long_is_refused_before_anything_is_written(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            manager = stub_manager("wait")
+            self.addCleanup(manager.stop)
+            with patch.object(runs, "output_path_too_long", return_value=True):
+                with self.assertRaises(RunRequestError) as caught:
+                    manager.start(request(SYNTHETIC_EXPORT, parent))
+            self.assertEqual(caught.exception.code, "OUTPUT_PATH_TOO_LONG")
+            self.assertEqual(manager.status(), {"state": "idle"})
+            self.assertEqual(list(parent.iterdir()), [])
 
 
 if __name__ == "__main__":

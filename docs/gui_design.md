@@ -118,11 +118,14 @@ the 255 bytes that many file systems allow for one name. Before a run starts,
 the server creates and removes an empty hidden folder in the parent, which is
 what Run-All does when it publishes, so that a parent that cannot be written is
 reported at once instead of after the run. `os.access` is not used, because it
-can report a read-only or protected location as writable. After a successful
-check, the parent defaults to the folder that contains the export, and the
-proposed name is `garmin-run-all-YYYYMMDD-HHMM` in local time. After a run in
-the same minute, the next proposal adds `-2`, `-3`, and so on. Native
-operating-system dialogs are not used in 2.0.0.
+can report a read-only or protected location as writable. On Windows without
+long paths, the server also refuses a run whose deepest paths inside the
+staging folder would reach the limit of 260 characters for a file or 248 for a
+folder (`OUTPUT_PATH_TOO_LONG`), instead of failing at the end of the run.
+After a successful check, the parent defaults to the folder that contains the
+export, and the proposed name is `garmin-run-all-YYYYMMDD-HHMM` in local time.
+After a run in the same minute, the next proposal adds `-2`, `-3`, and so on.
+Native operating-system dialogs are not used in 2.0.0.
 
 ## After a run
 
