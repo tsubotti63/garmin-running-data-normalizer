@@ -11,9 +11,12 @@ registry `v1.0`, and the `0 / 0 / 3 / 2` Product exit contract unchanged. It
 also contains internal changes toward v2.0.0 that add no user-facing
 feature, including an internal GUI package that has no command.
 
-The release source is the `main` commit that merges the v1.7.1 release
-preparation pull request. Its annotated tag, GitHub Release, and publish
-workflow evidence are recorded in this section after publication.
+The release source is `94f91fd4ac026eb8583f116df839849989f7320b` (#74).
+The annotated `v1.7.1` tag (tag object
+`e4d026de8ac67c992c3059cd1faa3a18f58f9da9`), the latest stable GitHub Release
+published on 2026-10-11 JST, Production PyPI publication through Trusted
+Publishing/OIDC, and the publish workflow's exact-version PyPI install
+verification are complete.
 
 ## v1.7.0 stable release
 
@@ -155,20 +158,19 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Latest GitHub Release: `v1.7.1`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
-- TestPyPI `1.7.1`: Not used; the release publishes directly to Production
-  PyPI through the protected `pypi` Environment
-- Production PyPI `1.7.1`: Published through Trusted Publishing; the publish
-  workflow verifies the exact-version install
+- TestPyPI `1.7.1`: Not used; the publish workflow's TestPyPI jobs were
+  skipped
+- Production PyPI `1.7.1`: Published and exact-version install verified by the
+  publish workflow
 - Trusted Publishing: Configured for protected `testpypi` and `pypi`
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
 and GitHub Releases remain immutable. v1.7.1 is the current stable release;
 v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 are historical releases.
-The v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag, GitHub Release,
-and Production PyPI publication evidence was recorded only after the
-corresponding external state was observed; the v1.7.1 publication evidence is
-added to this document after it is observed.
+The v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag, GitHub
+Release, and Production PyPI publication evidence was recorded only after the
+corresponding external state was observed.
 
 ## Windows CI correction
 
@@ -190,8 +192,31 @@ Releases, Production PyPI files, and release notes are unchanged.
 
 ## Current release assessment
 
-The v1.7.1 release assessment is recorded here after publication, from the
-release source's main CI run and the Production publish workflow run.
+The v1.7.1 release source passed main CI run `38125071544` (Ubuntu `test` and
+`windows-runtime`) and CodeQL run `38125071252`. A build-only publish workflow
+run (`38125143577`) on the release source passed with every upload job
+skipped. Production publish workflow run `38125322756` then built and
+validated the exact source, published to Production PyPI, and verified the
+exact-version PyPI install; the TestPyPI jobs were skipped. The tag, the
+GitHub Release, and the Production publication ran under one Human approval
+given after their values were shown. The `pypi` Environment deployment was
+Human-authorized, and the approval was submitted through the GitHub API on
+the Human's instruction.
+
+The SHA-256 checksums recorded by that run match Production PyPI: wheel
+`dc5733e3b9089b416687d70e8993cd3a2750b480910ca463411d970ce51c7f95` and source
+distribution `62573b038c27373e1629645bef5afaf3098b3b2cc8ff9939fdf28df078a96962`.
+Each file carries a PEP 740 publish attestation from `publish-pypi.yml` in the
+`pypi` Environment. The build-only run produced different checksums because
+the distributions are not byte-reproducible across runs; only the production
+run's artifacts were published. `PYPI_PUBLISH_APPROVED` was returned to
+`false` after the upload. A clean install from Production PyPI completed the
+Synthetic Run-All (`PASS_WITH_WARNINGS`, exit 0), `validate-handoff`,
+`doctor --run-output`, and `support-bundle`, and its `--help` lists no `gui`
+command. With a synthetic two-Snapshot store built with the test helpers,
+its `snapshot run-all` wrote Hill Score, Endurance Score, and VO2Max rows.
+
+### v1.7.0 release assessment (historical)
 
 The v1.7.0 release source passed main CI run `38035096711` (Ubuntu `test` and
 `windows-runtime`) and CodeQL run `38035096430`. A build-only publish workflow
