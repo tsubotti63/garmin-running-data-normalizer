@@ -15,7 +15,8 @@ from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..diagnostics.contracts import FAMILY_DATASETS, SOURCE_FAMILY_ORDER
 from ..diagnostics.detector import classify_source_name
 from ..intake.archive import ArchiveLimits
-from .policies import CONTRACT_VERSION, REGISTRY_VERSION
+from ..normalizers.daily_metrics import SNAPSHOT_NUMBERS_FIELD
+from .policies import CONTRACT_VERSION, MERGE_RULES, MERGE_RULES_VERSION, REGISTRY_VERSION
 from .store import SnapshotStoreError, load_manifests, load_store, sha256_file
 from .store import verify_store
 
@@ -37,21 +38,12 @@ DATASET_ORDER = (
     "training_history_daily",
     "lactate_threshold_candidates",
 )
-DAILY_FAIL_CLOSED_DATASETS = {
-    "hill_score_daily",
-    "endurance_score_daily",
-    "race_prediction_daily",
-    "sleep_daily",
-    "uds_daily",
-    "acute_training_load_daily",
-    "training_readiness_daily",
-    "vo2max_daily",
-    "training_history_daily",
-}
-PRESERVE_OBSERVED_VARIANT_DATASETS = {
-    "endurance_score_daily",
-    "uds_daily",
-}
+# Daily datasets (merge rules v2.0): every distinct record of a key goes to
+# Run-All with the import numbers of the Snapshots that gave it, and Run-All
+# compares their normalized values as it does within one Export. Daily values
+# are computed by Garmin, not edited by the user, so no Snapshot's value
+# replaces another's.
+DAILY_DATASETS = frozenset(MERGE_RULES["daily_datasets"]["datasets"])
 SOURCE_OBSERVATION_DATASETS = {
     "race_prediction_daily",
     "acute_training_load_daily",
@@ -364,6 +356,14 @@ def _daily_raw_key(
         record.get("calendarDate") or record.get("date")
     )
     if calendar_date in (None, ""):
+        if dataset == "sleep_daily":
+            # As in a one-shot run, Run-All takes the sleep day from the end
+            # time, which also identifies the same sleep across Snapshots.
+            end, _ = normalize_observation_timestamp(
+                record.get("sleepEndTimestampGMT"),
+                naive_timezone_semantics="UTC_SOURCE_FIELD",
+            )
+            return None if end is None else ("sleep_end", end)
         return None
     if dataset not in SOURCE_OBSERVATION_DATASETS:
         return (calendar_date,)
@@ -700,17 +700,18 @@ def _merge_dataset(
     changed = 0
     updated_fields = 0
     state_counts: Counter[str] = Counter()
-    observed_variants: list[dict[str, Any]] = []
-    single_variant_key_count = 0
-    multi_variant_key_count = 0
-    observed_variant_count = 0
     exact_repeat_count = 0
+    daily = dataset in DAILY_DATASETS
     for key in sorted(groups):
         group = groups[key]
         by_snapshot: dict[int, list[dict[str, Any]]] = defaultdict(list)
         for observation in group:
             by_snapshot[int(observation["logical_order"])].append(observation)
-        for logical_order, rows in by_snapshot.items():
+        # Daily records are compared in Run-All. Other records whose order
+        # cannot be told apart, within one Snapshot or in two Snapshots observed
+        # at the same time, still stop until stage A3, as repeated records do in
+        # a one-shot run.
+        for logical_order, rows in ([] if daily else by_snapshot.items()):
             signatures = {_stable_json(item["record"]) for item in rows}
             if len(signatures) > 1:
                 conflicts.append(
@@ -727,7 +728,7 @@ def _merge_dataset(
             by_observed_at[str(observation["export_observed_at"])].add(
                 _stable_json(observation["record"])
             )
-        for observed_at, signatures in by_observed_at.items():
+        for observed_at, signatures in ([] if daily else by_observed_at.items()):
             if len(signatures) > 1 and len(
                 {
                     item["snapshot_id"]
@@ -757,43 +758,7 @@ def _merge_dataset(
             ),
         )
         distinct_signatures = {_stable_json(item["record"]) for item in ordered}
-        if dataset in DAILY_FAIL_CLOSED_DATASETS and len(distinct_signatures) > 1:
-            if dataset in PRESERVE_OBSERVED_VARIANT_DATASETS:
-                multi_variant_key_count += 1
-                observed_variant_count += len(distinct_signatures)
-                exact_repeat_count += len(ordered) - len(distinct_signatures)
-                by_signature: dict[str, list[dict[str, Any]]] = defaultdict(list)
-                for observation in ordered:
-                    by_signature[_stable_json(observation["record"])].append(observation)
-                for signature in sorted(by_signature):
-                    variant_rows = by_signature[signature]
-                    observed_variants.append(
-                        {
-                            "canonical_key": key,
-                            "variant_fingerprint": _sha256_value(variant_rows[0]["record"]),
-                            "observed_value": variant_rows[0]["record"],
-                            "observation_count": len(variant_rows),
-                            "snapshot_orders": sorted(
-                                {int(item["logical_order"]) for item in variant_rows}
-                            ),
-                            "variant_status": "observed_variant",
-                            "canonical_status": "unresolved_multiple_observed_values",
-                        }
-                    )
-                continue
-            conflicts.append(
-                {
-                    "severity": "stop",
-                    "conflict_type": "same_stable_key_different_public_value",
-                    "dataset": dataset,
-                    "canonical_key": key,
-                }
-            )
-            continue
-        if len(distinct_signatures) == 1:
-            single_variant_key_count += 1
-            exact_repeat_count += len(ordered) - 1
-            observed_variant_count += 1
+        exact_repeat_count += len(ordered) - len(distinct_signatures)
         bits = "".join(
             "1" if logical_order in by_snapshot else "0"
             for logical_order in range(1, snapshot_count + 1)
@@ -820,6 +785,46 @@ def _merge_dataset(
                 state_counts[_value_state(value)] += 1
         if len(distinct_signatures) > 1:
             changed += 1
+        if daily:
+            # Each distinct record is kept once, with the import number of each
+            # Snapshot occurrence; nothing is chosen here.
+            by_signature: dict[str, list[dict[str, Any]]] = defaultdict(list)
+            for observation in ordered:
+                by_signature[_stable_json(observation["record"])].append(observation)
+            for signature in sorted(by_signature):
+                rows = by_signature[signature]
+                canonical.append(
+                    {
+                        "canonical_key": key,
+                        "raw_record": rows[0]["record"],
+                        "snapshot_numbers": sorted(
+                            int(item["logical_order"]) for item in rows
+                        ),
+                        "presence_pattern": bits,
+                        "source_snapshot_count": len(
+                            {int(item["logical_order"]) for item in rows}
+                        ),
+                        "source_observation_count": len(rows),
+                    }
+                )
+                for index, observation in enumerate(rows):
+                    provenance.append(
+                        {
+                            "dataset": dataset,
+                            "canonical_key": key,
+                            "snapshot_id": observation["snapshot_id"],
+                            "logical_order": observation["logical_order"],
+                            "source_relative_path": observation["source_relative_path"],
+                            "source_record_index": observation["source_record_index"],
+                            "source_object_sha256": observation["source_object_sha256"],
+                            "record_sha256": _sha256_value(observation["record"]),
+                            "field_presence": sorted(observation["record"]),
+                            "merge_disposition": (
+                                "observation_kept" if index == 0 else "exact_duplicate"
+                            ),
+                        }
+                    )
+            continue
         for observation in ordered:
             for field in sorted(observation["record"]):
                 value = observation["record"][field]
@@ -905,7 +910,7 @@ def _merge_dataset(
 
     summary = {
         "source_observation_count": len(observations),
-        "canonical_record_count": len(canonical),
+        "canonical_record_count": len({item["canonical_key"] for item in canonical}),
         "null_key_hold_count": sum(
             item["dataset"] == dataset and item["hold_type"] == "null_stable_key"
             for item in holds
@@ -920,24 +925,12 @@ def _merge_dataset(
         "automatic_deletion": False,
         "inference_performed": False,
     }
-    if dataset in PRESERVE_OBSERVED_VARIANT_DATASETS:
+    if daily:
         summary.update(
             {
-                "single_variant_key_count": single_variant_key_count,
-                "multi_variant_key_count": multi_variant_key_count,
-                "observed_variant_count": observed_variant_count,
+                "distinct_record_count": len(canonical),
                 "exact_repeat_count": exact_repeat_count,
-                "malformed_count": summary["null_key_hold_count"],
-                "canonicalization_unresolved_count": multi_variant_key_count,
                 "automatic_winner": False,
-                "observed_variants": sorted(
-                    observed_variants,
-                    key=lambda item: (
-                        str(item["canonical_key"]),
-                        str(item["variant_fingerprint"]),
-                    ),
-                ),
-                "variant_policy": "preserve_observed_variants_fail_closed_canonicalization",
             }
         )
     elif dataset == "lactate_threshold_candidates":
@@ -946,6 +939,17 @@ def _merge_dataset(
         # accounting as well for direct merge QA and permutation tests.
         summary["exact_repeat_count"] = exact_repeat_count
     return canonical, provenance, field_provenance, holds, conflicts, summary
+
+
+def _materialized_record(item: dict[str, Any]) -> dict[str, Any]:
+    """Return a canonical record as written for Run-All.
+
+    A daily record carries the import numbers of the Snapshots that gave it.
+    """
+    numbers = item.get("snapshot_numbers")
+    if numbers is None:
+        return item["raw_record"]
+    return {**item["raw_record"], SNAPSHOT_NUMBERS_FIELD: numbers}
 
 
 def _validation_matrix(
@@ -1388,13 +1392,13 @@ def build_approved_input(
                 [{"personalRecords": personal_rows}],
             )
         hill_rows = [
-            item["raw_record"]
+            _materialized_record(item)
             for item in canonical_by_dataset["hill_score_daily"]
         ]
         if hill_rows:
             _write_json(metrics / "snapshot_HillScore.json", hill_rows)
         endurance_rows = [
-            item["raw_record"]
+            _materialized_record(item)
             for item in canonical_by_dataset["endurance_score_daily"]
         ]
         if endurance_rows:
@@ -1415,7 +1419,7 @@ def build_approved_input(
             "training_history_daily": (metrics, "TrainingHistory_snapshot.json"),
         }
         for dataset, (directory, filename) in daily_materialization.items():
-            rows = [item["raw_record"] for item in canonical_by_dataset[dataset]]
+            rows = [_materialized_record(item) for item in canonical_by_dataset[dataset]]
             if rows:
                 _write_json(directory / filename, rows)
         lactate_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -1511,19 +1515,23 @@ def build_approved_input(
                     "canonical_key": item["canonical_key"],
                     "raw_record_sha256": _sha256_value(item["raw_record"]),
                     "presence_pattern": item["presence_pattern"],
+                    **(
+                        {"snapshot_numbers": item["snapshot_numbers"]}
+                        if "snapshot_numbers" in item
+                        else {}
+                    ),
                 }
                 for item in rows
             ]
-            + [
-                {
-                    "variant_fingerprint": item["variant_fingerprint"],
-                    "canonical_key": item["canonical_key"],
-                    "snapshot_orders": item["snapshot_orders"],
-                }
-                for item in dataset_summaries[dataset].get("observed_variants", [])
-            ]
             for dataset, rows in canonical_by_dataset.items()
         }
+        # The Snapshots that contained each FIT file, one number per
+        # occurrence, so that HRV can name the Snapshots behind its values.
+        fit_snapshot_numbers: dict[str, list[int]] = defaultdict(list)
+        for alias in fit_aliases:
+            fit_snapshot_numbers[str(alias["fit_blob_sha256"])].append(
+                int(alias["acquisition_order"])
+            )
         build_hash = _sha256_value(
             {
                 "account_store_id": store_metadata["account_store_id"],
@@ -1531,6 +1539,7 @@ def build_approved_input(
                     manifest["snapshot_content_id"] for manifest in manifests
                 ],
                 "policy_registry_version": REGISTRY_VERSION,
+                "merge_rules_version": MERGE_RULES_VERSION,
                 "parser_version": __version__,
                 "schema_version": SCHEMA_VERSION,
                 "canonical_records": canonical_records,
@@ -1541,6 +1550,7 @@ def build_approved_input(
             "format": "garmin-running-data-normalizer-snapshot-lineage-v1",
             "contract_version": CONTRACT_VERSION,
             "policy_registry_version": REGISTRY_VERSION,
+            "merge_rules_version": MERGE_RULES_VERSION,
             "parser_version": __version__,
             "schema_version": SCHEMA_VERSION,
             "account_store_id": store_metadata["account_store_id"],
@@ -1598,6 +1608,7 @@ def build_approved_input(
                 "last": manifests[-1]["export_observed_at"],
             },
             "policy_registry_version": REGISTRY_VERSION,
+            "merge_rules_version": MERGE_RULES_VERSION,
             "parser_version": __version__,
             "schema_version": SCHEMA_VERSION,
             "fit": {
@@ -1663,6 +1674,7 @@ def build_approved_input(
             "format": "garmin-running-data-normalizer-approved-input-manifest-v1",
             "contract_version": CONTRACT_VERSION,
             "policy_registry_version": REGISTRY_VERSION,
+            "merge_rules_version": MERGE_RULES_VERSION,
             "parser_version": __version__,
             "schema_version": SCHEMA_VERSION,
             "snapshot_count": len(manifests),
@@ -1679,6 +1691,7 @@ def build_approved_input(
             "format": BUILD_FORMAT,
             "contract_version": CONTRACT_VERSION,
             "policy_registry_version": REGISTRY_VERSION,
+            "merge_rules_version": MERGE_RULES_VERSION,
             "parser_version": __version__,
             "schema_version": SCHEMA_VERSION,
             "snapshot_count": len(manifests),
@@ -1745,6 +1758,12 @@ def build_approved_input(
                 observations_by_dataset,
                 len(manifests),
             ),
+            # Runtime only, like relationship_context: never written to an
+            # output.
+            "fit_snapshot_numbers": {
+                digest: sorted(numbers)
+                for digest, numbers in sorted(fit_snapshot_numbers.items())
+            },
             "source_completeness_context": {
                 "observation_scope": "REGISTERED_SNAPSHOT_OBSERVATIONS",
                 "observations": sorted(

@@ -603,7 +603,7 @@ class SnapshotLifecycleTest(unittest.TestCase):
                 policy["machine_stable_key_status"], "PRODUCT_DECISION_REQUIRED"
             )
 
-    def test_performance_metric_same_day_conflict_fails_closed(self) -> None:
+    def test_performance_metric_values_that_differ_across_snapshots_are_kept(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             store = root / "store"
@@ -630,14 +630,47 @@ class SnapshotLifecycleTest(unittest.TestCase):
                 )
                 self.register(store, source, f"S{day}", day)
 
-            with self.assertRaisesRegex(
-                SnapshotMergeError,
-                "canonical merge contains unresolved stop conflicts",
-            ):
-                build_approved_input(store, root / "build")
-            self.assertFalse((root / "build").exists())
+            result = run_snapshot_all(store, root / "output")
 
-    def test_remaining_daily_metrics_are_retained_and_conflicts_fail_closed(self) -> None:
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(result["status"], "PASS_WITH_WARNINGS")
+            [hill] = json.loads(
+                (root / "output/normalized/hill_score_daily.json").read_text(encoding="utf-8")
+            )
+            self.assertIsNone(hill["overall_score"])
+            self.assertEqual(hill["strength_score"], 60)
+            self.assertEqual(hill["disagreeing_fields"], ["overall_score"])
+            audit = json.loads(
+                (root / "output/audit/hill_score_daily.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                audit["disagreements"],
+                [
+                    {
+                        "key": {"calendar_date": "2030-01-01"},
+                        "observation_count": 2,
+                        "fields": [
+                            {
+                                "field": "overall_score",
+                                "values": [
+                                    {"value": 71, "observation_count": 1, "snapshots": [1]},
+                                    {"value": 99, "observation_count": 1, "snapshots": [2]},
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            )
+            summary = json.loads((root / "output/run_summary.json").read_text(encoding="utf-8"))
+            self.assertIn(
+                ("VALUES_DISAGREE", "hill_score", 1),
+                [
+                    (item["code"], item.get("family"), item.get("count"))
+                    for item in summary["warnings"]
+                ],
+            )
+
+    def test_remaining_daily_metrics_are_retained_and_values_that_differ_are_kept(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             store = root / "store"
@@ -675,21 +708,50 @@ class SnapshotLifecycleTest(unittest.TestCase):
 
             conflict_store = root / "conflict-store"
             initialize_store(conflict_store, "synthetic-account-boundary")
-            for day, value in ((1, 1000), (2, 1001)):
+            for day, value in ((1, 1000), (2, 1001), (3, 1000)):
                 source = root / f"conflict-{day}"
                 _write_snapshot(source, [_activity(f"C{day}")])
                 metrics = source / "DI-Connect-Metrics"
                 metrics.mkdir()
                 (metrics / f"RunRacePredictions_{day}.json").write_text(
-                    json.dumps([{"calendarDate": "2030-02-01", "timestamp": "2030-02-01T06:00:00", "raceTime5K": value}]),
+                    json.dumps(
+                        [
+                            {
+                                "calendarDate": "2030-02-01",
+                                "timestamp": "2030-02-01T06:00:00",
+                                "raceTime5K": value,
+                                "raceTime10K": 2100,
+                                "raceTimeHalf": 4700,
+                                "raceTimeMarathon": 9900,
+                            }
+                        ]
+                    ),
                     encoding="utf-8",
                 )
                 self.register(conflict_store, source, f"C{day}", day)
-            with self.assertRaisesRegex(
-                SnapshotMergeError,
-                "canonical merge contains unresolved stop conflicts",
-            ):
-                build_approved_input(conflict_store, root / "conflict-build")
+            result = run_snapshot_all(conflict_store, root / "conflict-output")
+            self.assertEqual(result["exit_code"], 0)
+            [race] = json.loads(
+                (root / "conflict-output/normalized/race_prediction_daily.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertIsNone(race["race_time_5k_sec"])
+            self.assertEqual(race["race_time_10k_sec"], 2100)
+            self.assertEqual(race["disagreeing_fields"], ["race_time_5k_sec"])
+            audit = json.loads(
+                (root / "conflict-output/audit/race_prediction_daily.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                audit["disagreements"][0]["fields"][0]["values"],
+                [
+                    {"value": 1000, "observation_count": 2, "snapshots": [1, 3]},
+                    {"value": 1001, "observation_count": 1, "snapshots": [2]},
+                ],
+            )
+            self.assertEqual(audit["disagreements"][0]["observation_count"], 3)
 
     def test_source_observation_union_preserves_same_day_distinct_timestamps(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -5,7 +5,13 @@ from typing import Iterable
 
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..intake.discovery import DiscoveredAsset
-from .daily_metrics import DailyMetricResult, finalize_daily, selected_rows, text
+from .daily_metrics import (
+    DailyMetricResult,
+    finalize_daily,
+    selected_rows,
+    snapshot_numbers,
+    text,
+)
 
 
 TRAINING_HISTORY_FIELDS = (
@@ -39,6 +45,7 @@ def normalize_training_history(
         else:
             accepted.append(
                 {
+                    "_snapshot_numbers": snapshot_numbers(raw),
                     "calendar_date": date,
                     "observation_timestamp": timestamp,
                     "training_status": status,

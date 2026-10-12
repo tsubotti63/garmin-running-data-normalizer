@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
-import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,8 +12,13 @@ from garmin_running_data_normalizer.normalizers.performance_metrics import (
     normalize_endurance_score,
 )
 from garmin_running_data_normalizer.normalizers.uds import normalize_uds
+from garmin_running_data_normalizer.snapshot import (
+    initialize_store,
+    register_snapshot,
+    run_snapshot_all,
+)
 from garmin_running_data_normalizer.snapshot.merge import _merge_dataset
-from garmin_running_data_normalizer.run_all import run_all
+from tests.test_snapshot_lifecycle import _activity, _write_snapshot
 
 
 def _asset(name: str, value: object) -> DiscoveredAsset:
@@ -139,25 +143,35 @@ class OneExportDisagreementTest(unittest.TestCase):
         self.assertEqual(result.audit["disagreement_key_count"], 0)
 
 
-class PreserveObservedVariantsTest(unittest.TestCase):
-    """Across Snapshots, the v1.7.1 behavior stays until stage A2b."""
+class SnapshotDailyMergeTest(unittest.TestCase):
+    """Across Snapshots, every distinct daily record is kept with its Snapshots."""
 
-    def test_single_snapshot_and_reappearing_key_have_no_winner(self) -> None:
+    def test_single_snapshot_and_reappearing_value_have_no_winner(self) -> None:
         single = _merge_dataset(
             "endurance_score_daily",
             _snapshot_observations("endurance_score_daily", [70]),
             1,
         )
         self.assertEqual(single[0][0]["raw_record"]["overallScore"], 70)
-        self.assertEqual(single[5]["multi_variant_key_count"], 0)
+        self.assertEqual(single[0][0]["snapshot_numbers"], [1])
+        self.assertEqual(single[5]["distinct_record_count"], 1)
 
         rows = _snapshot_observations("endurance_score_daily", [70, 71, 70])
-        merged = _merge_dataset("endurance_score_daily", rows, 3)
-        self.assertEqual(merged[0], [])
-        self.assertEqual(merged[5]["multi_variant_key_count"], 1)
-        self.assertEqual(merged[5]["exact_repeat_count"], 1)
+        canonical, _, _, _, conflicts, summary = _merge_dataset("endurance_score_daily", rows, 3)
+        self.assertEqual(conflicts, [])
+        self.assertEqual(
+            sorted(
+                (item["raw_record"]["overallScore"], item["snapshot_numbers"])
+                for item in canonical
+            ),
+            [(70, [1, 3]), (71, [2])],
+        )
+        self.assertEqual(summary["canonical_record_count"], 1)
+        self.assertEqual(summary["distinct_record_count"], 2)
+        self.assertEqual(summary["exact_repeat_count"], 1)
+        self.assertFalse(summary["automatic_winner"])
 
-    def test_four_snapshot_24_orders_have_identical_variant_semantics(self) -> None:
+    def test_four_snapshot_24_orders_give_the_same_records(self) -> None:
         for dataset, values in (
             ("endurance_score_daily", [70, 71, 72, 70]),
             ("uds_daily", [100, 100, 110, 120]),
@@ -166,85 +180,77 @@ class PreserveObservedVariantsTest(unittest.TestCase):
             for order in itertools.permutations(range(4)):
                 observations = [_snapshot_observations(dataset, values)[index] for index in order]
                 canonical, _, _, _, conflicts, summary = _merge_dataset(dataset, observations, 4)
-                self.assertEqual(canonical, [])
                 self.assertEqual(conflicts, [])
-                semantic = {
-                    "variants": summary["observed_variants"],
-                    "multi_variant_key_count": summary["multi_variant_key_count"],
-                    "observed_variant_count": summary["observed_variant_count"],
-                    "exact_repeat_count": summary["exact_repeat_count"],
-                    "canonicalization_unresolved_count": summary["canonicalization_unresolved_count"],
-                }
+                semantic = {"canonical": canonical, "summary": summary}
                 digests.add(hashlib.sha256(json.dumps(semantic, sort_keys=True).encode()).hexdigest())
             self.assertEqual(len(digests), 1, dataset)
 
-    def test_variant_lineage_is_snapshot_order_safe_and_public_safe(self) -> None:
+    def test_merge_summary_holds_counts_and_no_values(self) -> None:
         _, _, _, _, _, summary = _merge_dataset(
             "endurance_score_daily", _snapshot_observations("endurance_score_daily", [70, 71, 72, 73]), 4
         )
-        for item in summary["observed_variants"]:
-            self.assertEqual(item["snapshot_orders"], sorted(item["snapshot_orders"]))
-            self.assertNotIn("snapshot_id", item)
-            self.assertNotIn("source_relative_path", item)
-            self.assertNotIn("source_object_sha256", item)
-            self.assertNotIn("deviceId", item["observed_value"])
+        serialized = json.dumps(summary)
+        for private in ("overallScore", "private-", "synthetic.json", "object-"):
+            self.assertNotIn(private, serialized)
+        self.assertNotIn("observed_variants", summary)
 
-    def test_snapshot_run_all_is_non_fatal_and_handoff_explains_variants(self) -> None:
+    def test_snapshot_run_all_keeps_endurance_and_uds_days(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            input_root = root / "input"
-            shutil.copytree(Path("examples/synthetic/garmin_export"), input_root)
-            context = {
-                "lineage": {"snapshot_count": 4, "canonical_build_sha256": "synthetic-build"},
-                "coverage": {"snapshot_count": 4},
-                "merge_summary": {
-                    "snapshot_count": 4,
-                    "datasets": {
-                        "endurance_score_daily": {
-                            "canonical_record_count": 2,
-                            "single_variant_key_count": 2,
-                            "multi_variant_key_count": 1,
-                            "observed_variant_count": 2,
-                            "exact_repeat_count": 1,
-                            "canonicalization_unresolved_count": 1,
-                            "observed_variants": [
-                                {
-                                    "canonical_key": "synthetic-endurance",
-                                    "variant_fingerprint": "a",
-                                    "observed_value": {"calendarDate": "2030-01-01", "overallScore": 70},
-                                    "observation_count": 1,
-                                    "snapshot_orders": [1],
-                                    "variant_status": "observed_variant",
-                                    "canonical_status": "unresolved_multiple_observed_values",
-                                },
-                                {
-                                    "canonical_key": "synthetic-endurance",
-                                    "variant_fingerprint": "b",
-                                    "observed_value": {"calendarDate": "2030-01-01", "overallScore": 71},
-                                    "observation_count": 1,
-                                    "snapshot_orders": [2],
-                                    "variant_status": "observed_variant",
-                                    "canonical_status": "unresolved_multiple_observed_values",
-                                },
-                            ],
-                        },
-                        "uds_daily": {
-                            "canonical_record_count": 2,
-                            "single_variant_key_count": 2,
-                            "multi_variant_key_count": 1,
-                            "observed_variant_count": 2,
-                            "exact_repeat_count": 0,
-                            "canonicalization_unresolved_count": 1,
-                            "observed_variants": [],
-                        },
-                    },
-                },
-            }
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            for day, (score, steps) in enumerate(((70, 100), (71, 100), (70, 110)), start=1):
+                source = root / f"source-{day}"
+                _write_snapshot(source, [_activity(f"A{day}")])
+                metrics = source / "DI-Connect-Metrics"
+                metrics.mkdir()
+                (metrics / "EnduranceScore_synthetic.json").write_text(
+                    json.dumps([{"calendarDate": "2030-01-01", "overallScore": score}]),
+                    encoding="utf-8",
+                )
+                aggregator = source / "DI-Connect-Aggregator"
+                aggregator.mkdir()
+                (aggregator / "UDSFile_synthetic.json").write_text(
+                    json.dumps([_uds_row("2030-01-01", steps)]),
+                    encoding="utf-8",
+                )
+                register_snapshot(
+                    store,
+                    source,
+                    snapshot_label=f"S{day}",
+                    export_requested_at=f"2030-01-0{day}T00:00:00+00:00",
+                    export_downloaded_at=f"2030-01-0{day}T01:00:00+00:00",
+                    export_observed_at=f"2030-01-0{day}T02:00:00+00:00",
+                    confirm_complete=True,
+                )
             output = root / "output"
-            result = run_all(input_root, output, snapshot_context=context)
+            result = run_snapshot_all(store, output)
             self.assertEqual(result["exit_code"], 0)
             self.assertEqual(result["status"], "PASS_WITH_WARNINGS")
-            audit = json.loads((output / "audit/endurance_score_daily.json").read_text())
-            self.assertEqual(audit["canonicalization_unresolved_count"], 1)
-            self.assertFalse(audit["automatic_winner"])
-            self.assertIn("preserved observed variants", (output / "START_HERE.md").read_text())
+            [endurance] = json.loads((output / "normalized/endurance_score_daily.json").read_text())
+            self.assertIsNone(endurance["overall_score"])
+            [uds] = json.loads((output / "normalized/uds_daily.json").read_text())
+            self.assertEqual(uds["disagreeing_fields"], ["steps", "distance_meters", "active_calories"])
+            self.assertEqual(uds["bmr_calories"], 1500)
+            uds_audit = json.loads((output / "audit/uds_daily.json").read_text())
+            self.assertEqual(
+                [
+                    (item["value"], item["observation_count"], item["snapshots"])
+                    for item in uds_audit["disagreements"][0]["fields"][0]["values"]
+                ],
+                [(100, 2, [1, 2]), (110, 1, [3])],
+            )
+            summary = json.loads((output / "run_summary.json").read_text())
+            self.assertEqual(
+                sorted(
+                    item["family"]
+                    for item in summary["warnings"]
+                    if item["code"] == "VALUES_DISAGREE"
+                ),
+                ["endurance_score", "uds"],
+            )
+            self.assertNotIn(
+                "DAILY_METRICS_REVIEW_REQUIRED", {item["code"] for item in summary["warnings"]}
+            )
+            self.assertNotIn("observed variants", (output / "START_HERE.md").read_text())
+            self.assertNotIn("observed_variants", (output / "run_summary.json").read_text())

@@ -195,7 +195,7 @@
   "step.relationships": "データどうしのつながり",
   "timezone.help": "既定は Asia/Tokyo です。Europe/London のような IANA の名前で入れてください。",
   "timezone.label": "日時に使うタイムゾーン",
-  "warning.daily_metrics_review": "確かめが必要な日ごとの指標の値があります。同じ日に違う値が 2 つある、日付が無い、などです（{code}）。",
+  "warning.daily_metrics_review": "確かめが必要な日ごとの指標の値があります。日付が無い、などです（{code}）。",
   "warning.fit_parse_incomplete": "最後まで読めなかった FIT ファイルがあります。その分は除き、推測で補っていません（{code}）。",
   "warning.lactate_candidates": "乳酸閾値の候補が複数あります。すべて残し、どれか 1 つに決めていません（{code}）。",
   "warning.optional_family_empty": "エクスポートにはあったものの、記録が 1 件もできなかった種類のデータがあります（{code}）。",

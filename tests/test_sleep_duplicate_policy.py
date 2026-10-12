@@ -177,14 +177,17 @@ class SleepDuplicatePolicyTest(unittest.TestCase):
         self.assertEqual(first[0][0]["raw_record"], record)
         self.assertEqual(first[5]["presence_pattern_counts"], second[5]["presence_pattern_counts"])
 
-    def test_snapshot_divergent_value_fails_closed(self) -> None:
+    def test_snapshot_divergent_values_are_kept_with_their_snapshots(self) -> None:
         observations = [
             self._snapshot_observation("s1", 1, {"calendarDate": "2026-01-02", "sleepTimeSeconds": 27000}),
             self._snapshot_observation("s2", 2, {"calendarDate": "2026-01-02", "sleepTimeSeconds": 27060}),
         ]
         result = _merge_dataset("sleep_daily", observations, 4)
-        self.assertTrue(any(item["conflict_type"] == "same_stable_key_different_public_value" for item in result[4]))
-        self.assertEqual(result[0], [])
+        self.assertEqual(result[4], [])
+        self.assertEqual(
+            [(item["raw_record"]["sleepTimeSeconds"], item["snapshot_numbers"]) for item in result[0]],
+            [(27000, [1]), (27060, [2])],
+        )
 
     def test_run_all_exact_sleep_duplicates_do_not_stop(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

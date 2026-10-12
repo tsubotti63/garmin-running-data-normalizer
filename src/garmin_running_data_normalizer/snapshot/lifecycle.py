@@ -61,6 +61,7 @@ def run_snapshot_all(
                 "source_completeness_context": build[
                     "source_completeness_context"
                 ],
+                "fit_snapshot_numbers": build["fit_snapshot_numbers"],
                 **build["relationship_context"],
             },
         )

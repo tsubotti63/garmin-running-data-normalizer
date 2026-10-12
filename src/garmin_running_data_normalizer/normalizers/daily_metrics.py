@@ -87,9 +87,37 @@ def variant_fingerprint(value: Any) -> str:
     return hashlib.sha256(stable_json(value).encode("utf-8")).hexdigest()
 
 
+# A Snapshot build writes each distinct daily record once, with the import
+# numbers of the Snapshots that gave it under this name (one number for each
+# time a Snapshot gave it). An Export's own records never carry it.
+SNAPSHOT_NUMBERS_FIELD = "garminRunningDataNormalizerSnapshotNumbers"
+
+
+def snapshot_numbers(raw: dict[str, Any]) -> list[int] | None:
+    """Return the Snapshot import numbers of a record from a Snapshot build."""
+    value = raw.get(SNAPSHOT_NUMBERS_FIELD)
+    if (
+        not isinstance(value, list)
+        or not value
+        or not all(isinstance(item, int) and not isinstance(item, bool) and item > 0 for item in value)
+    ):
+        return None
+    return sorted(value)
+
+
+def public_fields(row: dict[str, Any]) -> dict[str, Any]:
+    """Return a row without its internal fields, whose names start with ``_``."""
+    return {field: value for field, value in row.items() if not field.startswith("_")}
+
+
+def observation_weight(numbers: list[int] | None) -> int:
+    """Count the observations behind one row: one, or one per Snapshot occurrence."""
+    return len(numbers) if numbers else 1
+
+
 def _value_order(item: tuple[str, list[Any]]) -> tuple[int, float, str]:
     """Order observed values: numbers by size, then other values by their JSON."""
-    key, (value, _count) = item
+    key, (value, *_counts) = item
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return (0, value, key)
     return (1, 0, key)
@@ -100,8 +128,9 @@ class MergedObservations:
     """Observations of one stable key merged into one row.
 
     ``disagreements`` lists, for each field whose observed values differ, every
-    value and how many observations gave it. ``absent_values`` counts, per
-    field, the observations without a value while another observation had one.
+    value and how many observations gave it, and, in a Snapshot run, the import
+    numbers of the Snapshots that gave it. ``absent_values`` counts, per field,
+    the observations without a value while another observation had one.
     """
 
     row: dict[str, Any]
@@ -118,6 +147,7 @@ def merge_observations(
     presence_flags: frozenset[str] = frozenset(),
     recomputed_fields: frozenset[str] = frozenset(),
     alternatives: list[dict[str, list[Any]]] | None = None,
+    snapshots: list[list[int] | None] | None = None,
 ) -> MergedObservations:
     """Merge the observations of one stable key, field by field.
 
@@ -129,6 +159,8 @@ def merge_observations(
     set afterwards from the merged row and are not compared here.
     ``alternatives``, one entry per row, give the values that one observation
     holds for a field when its source fields disagree among themselves.
+    ``snapshots``, one entry per row in a Snapshot run, give the import numbers
+    of the Snapshots that gave the row; the row then counts once for each.
     """
     merged: dict[str, Any] = {}
     disagreeing: list[str] = []
@@ -146,18 +178,24 @@ def merge_observations(
             continue
         counts: dict[str, list[Any]] = {}
         observed = 0
+        total = 0
         for index, row in enumerate(rows):
+            numbers = snapshots[index] if snapshots else None
+            weight = observation_weight(numbers)
+            total += weight
             held = (alternatives[index] if alternatives else {}).get(field)
             values = [item for item in held if item is not None] if held else [row.get(field)]
             values = [value for value in values if value is not None]
             if not values:
                 continue
-            observed += 1
+            observed += weight
             # One observation counts once for each value it gives.
             for value in {stable_json(value): value for value in values}.values():
-                counts.setdefault(stable_json(value), [value, 0])[1] += 1
-        if observed and observed < len(rows):
-            absent[field] += len(rows) - observed
+                entry = counts.setdefault(stable_json(value), [value, 0, set()])
+                entry[1] += weight
+                entry[2].update(numbers or ())
+        if observed and observed < total:
+            absent[field] += total - observed
         if len(counts) > 1:
             merged[field] = None
             disagreeing.append(field)
@@ -165,8 +203,14 @@ def merge_observations(
                 {
                     "field": field,
                     "values": [
-                        {"value": value, "observation_count": count}
-                        for _key, (value, count) in sorted(counts.items(), key=_value_order)
+                        {
+                            "value": value,
+                            "observation_count": count,
+                            **({"snapshots": sorted(numbers)} if snapshots else {}),
+                        }
+                        for _key, (value, count, numbers) in sorted(
+                            counts.items(), key=_value_order
+                        )
                     ],
                 }
             )
@@ -204,6 +248,8 @@ def finalize_daily(
     ``alternatives`` returns, from an accepted row before its internal fields
     are stripped, the values that the row holds for a field whose source
     fields disagree; such a field disagrees even within one observation.
+    An accepted row from a Snapshot build carries the Snapshot import numbers
+    in ``_snapshot_numbers``; internal fields never reach the output.
     """
     if not key_fields:
         raise DailyMetricError("daily metric stable key must not be empty")
@@ -221,10 +267,11 @@ def finalize_daily(
     absent_values: Counter[str] = Counter()
     for key in sorted(grouped):
         rows = [
-            strip_internal_fields(row) if strip_internal_fields else dict(row)
+            public_fields(strip_internal_fields(row) if strip_internal_fields else row)
             for row in grouped[key]
         ]
         held = [alternatives(row) for row in grouped[key]] if alternatives else []
+        numbers = [row.get("_snapshot_numbers") for row in grouped[key]]
         signatures = {stable_json(row) for row in rows}
         same_value_duplicates += len(rows) - len(signatures)
         if len(rows) > 1:
@@ -257,6 +304,7 @@ def finalize_daily(
             presence_flags=presence_flags,
             recomputed_fields=recomputed_fields,
             alternatives=held or None,
+            snapshots=numbers if any(numbers) else None,
         )
         if finalize_merged is not None:
             finalize_merged(merged.row, merged.disagreeing_fields)
@@ -268,7 +316,7 @@ def finalize_daily(
             disagreements.append(
                 {
                     "key": {field: value for field, value in zip(key_fields, key)},
-                    "observation_count": len(rows),
+                    "observation_count": sum(observation_weight(item) for item in numbers),
                     "fields": merged.disagreements,
                 }
             )
@@ -336,13 +384,17 @@ __all__ = [
     "DailyMetricError",
     "DailyMetricResult",
     "MergedObservations",
+    "SNAPSHOT_NUMBERS_FIELD",
     "boolean",
     "finalize_daily",
     "load_rows",
     "logical_basename",
     "merge_observations",
     "number",
+    "observation_weight",
+    "public_fields",
     "selected_rows",
+    "snapshot_numbers",
     "stable_json",
     "text",
     "variant_fingerprint",

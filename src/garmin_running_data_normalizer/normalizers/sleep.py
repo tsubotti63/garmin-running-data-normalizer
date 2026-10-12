@@ -13,6 +13,7 @@ from .daily_metrics import (
     finalize_daily,
     load_rows,
     logical_basename,
+    snapshot_numbers,
 )
 
 MAX_SAFE_INTEGER = (1 << 53) - 1
@@ -389,6 +390,7 @@ def normalize_sleep_daily_assets(
         score = _sleep_score(raw)
         accepted.append(
             {
+                "_snapshot_numbers": snapshot_numbers(raw),
                 "sleep_day": sleep_day,
                 "sleep_start_local": start_local,
                 "sleep_end_local": end_local,

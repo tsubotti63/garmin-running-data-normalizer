@@ -5,7 +5,13 @@ from typing import Iterable
 
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..intake.discovery import DiscoveredAsset
-from .daily_metrics import DailyMetricResult, finalize_daily, number, selected_rows
+from .daily_metrics import (
+    DailyMetricResult,
+    finalize_daily,
+    number,
+    selected_rows,
+    snapshot_numbers,
+)
 
 
 RACE_PREDICTION_FIELDS = (
@@ -46,6 +52,7 @@ def normalize_race_prediction(
         else:
             accepted.append(
                 {
+                    "_snapshot_numbers": snapshot_numbers(raw),
                     "calendar_date": date,
                     "observation_timestamp": timestamp,
                     **values,
