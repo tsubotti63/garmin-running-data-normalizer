@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from collections import Counter, defaultdict
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -157,8 +158,18 @@ HRV_DAILY_FIELDS = (
 
 
 def normalize_hrv_daily_assets(
-    assets: list[DiscoveredAsset], timezone_name: str = "Asia/Tokyo"
+    assets: list[DiscoveredAsset],
+    timezone_name: str = "Asia/Tokyo",
+    *,
+    snapshot_numbers: Mapping[str, list[int]] | None = None,
 ) -> dict[str, Any]:
+    """Normalize FIT-derived HRV by date; values that disagree are left empty.
+
+    ``snapshot_numbers``, in a Snapshot run, maps the SHA-256 digest of each FIT
+    file to the import numbers of the Snapshots that contained it. The audit
+    record then counts each Snapshot occurrence and names the Snapshots that
+    gave each value.
+    """
     fit_assets = [asset for asset in assets if asset.kind == "fit"]
     by_date: dict[str, list[tuple[int | float, str]]] = defaultdict(list)
     parse_status_counts: Counter[str] = Counter()
@@ -198,16 +209,30 @@ def normalize_hrv_daily_assets(
         if conflict:
             # Every value is kept in the audit; the day's value is left empty.
             disagreement_key_count += 1
+            weighted: dict[int | float, list[Any]] = {}
+            for value, source in observations:
+                numbers = (snapshot_numbers or {}).get(source) or []
+                entry = weighted.setdefault(value, [0, set()])
+                entry[0] += len(numbers) or 1
+                entry[1].update(numbers)
             disagreements.append(
                 {
                     "key": {"calendar_date": date},
-                    "observation_count": len(observations),
+                    "observation_count": sum(count for count, _numbers in weighted.values()),
                     "fields": [
                         {
                             "field": "hrv_value",
                             "values": [
-                                {"value": value, "observation_count": count}
-                                for value, count in sorted(value_counts.items())
+                                {
+                                    "value": value,
+                                    "observation_count": count,
+                                    **(
+                                        {"snapshots": sorted(numbers)}
+                                        if snapshot_numbers is not None
+                                        else {}
+                                    ),
+                                }
+                                for value, (count, numbers) in sorted(weighted.items())
                             ],
                         }
                     ],

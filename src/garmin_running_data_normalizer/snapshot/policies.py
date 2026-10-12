@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 
+# A Snapshot Store records these two versions and is read only with the same
+# ones. The store keeps them unchanged, so that it stays readable without
+# migration, also by earlier releases that use the same versions. The policy
+# registry below is the record of the v1.0 rules; the merge rules of later
+# releases have their own version (MERGE_RULES_VERSION).
 REGISTRY_VERSION = "garmin_public_snapshot_dataset_merge_policies:v1.0"
 CONTRACT_VERSION = "garmin_public_snapshot_lifecycle:v1.0"
 
@@ -243,6 +249,55 @@ PUBLIC_POLICY_ORDER = (
 FUTURE_READY_DATASETS = ("health_status",)
 
 
+# The rules for merging the registered Snapshots into one Run-All input. A build
+# records this version in its lineage, manifests, and digest; a store never
+# records it. For the daily datasets, these rules replace the merge fields of
+# the v1.0 policy registry; the other datasets follow that registry until
+# stages A2b-2 and A3.
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.0"
+MERGE_RULES: dict[str, Any] = {
+    "merge_rules_version": MERGE_RULES_VERSION,
+    "store_policy_registry_version": REGISTRY_VERSION,
+    "store_contract_version": CONTRACT_VERSION,
+    "daily_datasets": {
+        "datasets": [
+            "hill_score_daily",
+            "endurance_score_daily",
+            "race_prediction_daily",
+            "sleep_daily",
+            "uds_daily",
+            "acute_training_load_daily",
+            "training_readiness_daily",
+            "vo2max_daily",
+            "training_history_daily",
+        ],
+        "merge_mode": "every_distinct_record_compared_in_run_all",
+        "conflict_policy": "disagreement_kept_empty_values_audited",
+        "within_snapshot_conflict_policy": "disagreement_kept_empty_values_audited",
+        "same_observation_time_conflict_policy": "disagreement_kept_empty_values_audited",
+        "explicit_null_policy": "absent_counted_not_disagreement",
+        "explicit_empty_policy": "absent_counted_not_disagreement",
+        "snapshot_reference": "import_number",
+        "keep_last": False,
+        "automatic_winner": False,
+    },
+    "dataset_rules": {
+        "sleep_daily": {
+            "missing_calendar_date_policy": "sleep_day_from_end_time_as_one_shot",
+        },
+        "hrv_daily": {
+            "snapshot_reference": "import_numbers_of_the_snapshots_holding_the_fit_file",
+        },
+    },
+    "other_datasets_follow": REGISTRY_VERSION,
+}
+
+
+def merge_rules() -> dict[str, Any]:
+    """Return the Snapshot merge rules as a JSON-serializable object."""
+    return copy.deepcopy(MERGE_RULES)
+
+
 def public_registry() -> dict[str, Any]:
     """Return the frozen public policy registry as a JSON-serializable object."""
     return {
@@ -266,8 +321,11 @@ __all__ = [
     "CONTRACT_VERSION",
     "DEFAULTS",
     "FUTURE_READY_DATASETS",
+    "MERGE_RULES",
+    "MERGE_RULES_VERSION",
     "POLICIES",
     "PUBLIC_POLICY_ORDER",
     "REGISTRY_VERSION",
+    "merge_rules",
     "public_registry",
 ]

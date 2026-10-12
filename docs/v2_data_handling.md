@@ -74,14 +74,18 @@ Each item gives the v1.7.1 behavior and the v2.0.0 behavior.
   differing Endurance Score and UDS values across Snapshots are kept in the
   audit record and the row is removed; HRV sets the value to null and keeps
   only counts.
-- v2.0.0 (stage A2a for one-shot runs; Snapshot runs follow in stage A2b, and
-  Activities, Gear, `activity_gear`, and Personal Records in stage A3):
+- v2.0.0 (stage A2a for one-shot runs and stage A2b-1 for daily datasets in
+  Snapshot runs; Activities, Gear, `activity_gear`, and Personal Records follow
+  in stages A2b-2 and A3):
   - The normalized row stays, one per stable key. Each value field that differs
     between the observations is empty, and the row's `disagreeing_fields` lists
     those fields. Fields that agree keep their value.
   - The dataset's audit record lists, for each disagreeing key and field, every
     observed value, how many observations gave it, and, in Snapshot runs, the
-    Snapshots that gave it by import number.
+    Snapshots that gave it by import number. In a Snapshot run, each time a
+    Snapshot gives a value counts as one observation, and `snapshots` lists the
+    import numbers, for example `{"value": 80, "observation_count": 2,
+    "snapshots": [1, 3]}`; user labels never appear there.
   - Warning `VALUES_DISAGREE` per family, with the number of keys. Status
     `PASS_WITH_WARNINGS`. Stage A2a settles the name.
   - Observation-grain datasets (Race Prediction, Acute Training Load, Training
@@ -91,13 +95,23 @@ Each item gives the v1.7.1 behavior and the v2.0.0 behavior.
     value of the observations that have one, and the audit record counts the
     observations without one in `absent_value_counts`. Only two different
     values are a disagreement, so a Sleep row whose source field is missing and
-    one where it is null no longer differ. Across Snapshots, an explicit null in
-    a later Snapshot means that the value was removed (see
-    [Changes across Snapshots](#changes-across-snapshots)). The two rules
-    differ because a later Export reflects the user's own edits in Garmin
-    Connect, so the order of Snapshots means something, while the observations
-    inside one Export have no order: a null there says only that this
-    observation has no value.
+    one where it is null no longer differ.
+  - Daily datasets apply the same rule across Snapshots (stage A2b-1): all the
+    Snapshots' observations of a key are compared together, whatever their
+    order, so a value that a later Snapshot leaves null or leaves out stays,
+    and the audit record counts the observation without it. In Activities,
+    Gear, `activity_gear`, and Personal Records, an explicit null in a later
+    Snapshot means instead that the value was removed (see
+    [Changes across Snapshots](#changes-across-snapshots)). The rules differ
+    because those records reflect the user's own edits in Garmin Connect, so
+    the order of Snapshots means something, while daily values are computed by
+    Garmin and the product cannot tell which of two is right: a null says only
+    that this observation has no value.
+  - As a consequence, a daily value or record that the user deleted in Garmin
+    Connect stays in the normalized output from the earlier Snapshot: the
+    deletion is not shown, because the product cannot tell a deletion from a
+    value that Garmin left out of one Export. The earlier value and the
+    Snapshots that gave it are kept in the audit record.
   - Each field is compared on its normalized value, including a field computed
     from others, such as the Sleep duration from the stage minutes. When every
     observation gives the same computed value, it stays, even if the fields it
@@ -450,7 +464,32 @@ Every stop has a specific code; errors that v1.7.1 reports only as
 - Snapshot runs follow the one-shot rules in this document; a Snapshot build no
   longer stops for problems in the data. Sleep rows without `calendarDate` take
   the sleep day from the end time, as in one-shot runs, instead of being held
-  back.
+  back (stage A2b-1); the end time identifies the same sleep across Snapshots,
+  and a row with neither is still held back until stage A3.
+- Stage A2b-1 removes the stops for daily datasets: values that differ across
+  Snapshots, within one Snapshot, or between two Snapshots observed at the same
+  time follow [Values that disagree](#values-that-disagree), with the Snapshot
+  import numbers. Endurance Score and UDS no longer remove the day, and
+  `snapshot/canonical_merge_summary.json` and `run_summary.json` no longer hold
+  the observed values (`observed_variants`); the values stay only in the audit
+  records. The same Activity twice with different values in one Snapshot, or
+  in two Snapshots observed at the same time, still stops until stage A3, as a
+  repeated Activity does in a one-shot run; so do a malformed Lactate
+  Threshold candidate and a JSON file that cannot be read.
+- Two versions with different roles: the store records
+  `policy_registry_version` and `contract_version`, which stay at v1.0, so that
+  a store stays readable without migration, also by v1.7.1. The v1.0 policy
+  registry (`config/garmin_snapshot_dataset_merge_policies_v1.json`) stays
+  unchanged as the record of the v1.0 rules. The rules for merging the
+  Snapshots into one Run-All input have their own version and file from stage
+  A2b-1: `garmin_snapshot_merge_rules:v2.0` in
+  `config/garmin_snapshot_merge_rules_v2.json`. For the daily datasets they
+  replace the merge fields of the v1.0 registry; the other datasets follow the
+  v1.0 registry until stages A2b-2 and A3. A build records
+  `merge_rules_version` in `snapshot/snapshot_lineage.json`, the approved input
+  manifest, the merge summary, and the build digest; a store never records it.
+  v1.7.1 still reads a store that v2.0.0 registered to, and builds it with the
+  v1.7.1 rules.
 - Registering the same Export as a ZIP file or as its extracted folder gives
   the same content identity, however deeply it is wrapped in other folders; a
   test checks this from stage A1 on.
@@ -486,6 +525,14 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `divergent_duplicate_key_count`, and `same_day_conflict_count` give way to
   `disagreement_key_count`.
 - Snapshots: existing stores need no migration; rerun `snapshot run-all`.
+  Daily values that differ across Snapshots no longer stop the build, the
+  Endurance Score and UDS days that v1.7.1 removed come back with the
+  differing fields empty, and the merge summaries no longer hold observed
+  values or count review holds for null daily fields, so the explicit null
+  reviews and review holds that `START_HERE.md` reports can be lower; the
+  audit records count such fields in `absent_value_counts`. The merge rules
+  v2.0 are published in `config/garmin_snapshot_merge_rules_v2.json`; the
+  v1.0 policy registry does not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around
   the Export, in a ZIP file or a folder, are left out of the recorded paths.
 - CLI: the pre-run checks that the GUI performed in v1.7.1 apply to the CLI,

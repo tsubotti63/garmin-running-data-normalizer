@@ -5,7 +5,14 @@ from typing import Iterable
 
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..intake.discovery import DiscoveredAsset
-from .daily_metrics import DailyMetricResult, finalize_daily, number, selected_rows, text
+from .daily_metrics import (
+    DailyMetricResult,
+    finalize_daily,
+    number,
+    selected_rows,
+    snapshot_numbers,
+    text,
+)
 
 
 ACUTE_TRAINING_LOAD_FIELDS = (
@@ -40,6 +47,7 @@ def normalize_acute_training_load(
             continue
         accepted.append(
             {
+                "_snapshot_numbers": snapshot_numbers(raw),
                 "calendar_date": date,
                 "observation_timestamp": timestamp,
                 "acwr_percent": number(raw.get("acwrPercent")),

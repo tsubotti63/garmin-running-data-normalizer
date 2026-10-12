@@ -195,7 +195,7 @@
   "step.relationships": "links between datasets",
   "timezone.help": "The default is Asia/Tokyo. Use an IANA name such as Europe/London.",
   "timezone.label": "Timezone for local dates and times",
-  "warning.daily_metrics_review": "Some daily metric values need review, such as two different values for the same day or a value without a date ({code}).",
+  "warning.daily_metrics_review": "Some daily metric values need review, such as a value without a date ({code}).",
   "warning.fit_parse_incomplete": "Some FIT files could not be read completely. They were left out, and nothing was guessed ({code}).",
   "warning.lactate_candidates": "There is more than one candidate for the lactate threshold. All are kept, and none was chosen ({code}).",
   "warning.optional_family_empty": "Some optional data was in the export but produced no records ({code}).",

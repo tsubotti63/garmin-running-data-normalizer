@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from garmin_running_data_normalizer.normalizers.daily_metrics import SNAPSHOT_NUMBERS_FIELD
 from garmin_running_data_normalizer.run_all import run_all
 from garmin_running_data_normalizer.snapshot import (
     build_approved_input,
@@ -12,7 +13,6 @@ from garmin_running_data_normalizer.snapshot import (
     register_snapshot,
     run_snapshot_all,
 )
-from garmin_running_data_normalizer.snapshot.merge import SnapshotMergeError
 from tests.test_snapshot_lifecycle import _activity, _write_snapshot
 
 ACCOUNT = "synthetic-account-boundary"
@@ -96,22 +96,34 @@ class SnapshotSleepFieldTest(unittest.TestCase):
             build_approved_input(store, root / "build")
 
             rows = json.loads((root / "build" / SNAPSHOT_SLEEP_INPUT).read_text(encoding="utf-8"))
+            # Each record carries the import numbers of the Snapshots that gave it.
             expected = [
-                {field: row[field] for field in V1_4_SNAPSHOT_SLEEP_FIELDS if field in row}
-                for row in (first_day, second_day)
+                {
+                    **{field: row[field] for field in V1_4_SNAPSHOT_SLEEP_FIELDS if field in row},
+                    SNAPSHOT_NUMBERS_FIELD: numbers,
+                }
+                for row, numbers in ((first_day, [1, 2]), (second_day, [2]))
             ]
             self.assertEqual(by_calendar_date(rows), expected)
 
-    def test_added_sleep_field_difference_stops_with_counts(self) -> None:
+    def test_sleep_values_that_differ_across_snapshots_are_kept_with_their_snapshots(self) -> None:
         cases = {
-            "value differs": ({"overallScore": 80}, {"overallScore": 81}),
-            "field appears": ({}, {"overallScore": 80}),
+            "value differs": (
+                {"overallScore": 80},
+                {"overallScore": 81},
+                {"sleep_score": [(80, [1]), (81, [2])]},
+            ),
+            "field appears": ({}, {"overallScore": 80}, {}),
             "snake_case stage differs": (
                 {"deep_sleep_seconds": 3600},
                 {"deep_sleep_seconds": 3660},
+                {
+                    "sleep_duration_minutes_ex_awake": [(60.0, [1]), (61.0, [2])],
+                    "sleep_stage_deep_minutes": [(60.0, [1]), (61.0, [2])],
+                },
             ),
         }
-        for name, (first_fields, second_fields) in cases.items():
+        for name, (first_fields, second_fields, expected) in cases.items():
             with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 store = root / "store"
@@ -120,15 +132,30 @@ class SnapshotSleepFieldTest(unittest.TestCase):
                     rows = [sleep_row(2, sleepTimeSeconds=27000, **fields)]
                     register(store, write_sleep_export(root, f"source-{day}", rows), f"S{day}", day)
 
-                with self.assertRaises(SnapshotMergeError) as context:
-                    build_approved_input(store, root / "build")
+                result = run_snapshot_all(store, root / "output")
 
-                self.assertEqual(
-                    str(context.exception),
-                    "canonical merge contains unresolved stop conflicts: "
-                    "sleep_daily same_stable_key_different_public_value=1",
+                self.assertEqual(result["exit_code"], 0)
+                [row] = json.loads(
+                    (root / "output/normalized/sleep_daily.json").read_text(encoding="utf-8")
                 )
-                self.assertFalse((root / "build").exists())
+                self.assertEqual(row["disagreeing_fields"], sorted(expected))
+                for field in expected:
+                    self.assertIsNone(row[field])
+                audit = json.loads(
+                    (root / "output/audit/sleep_daily.json").read_text(encoding="utf-8")
+                )
+                fields = {
+                    item["field"]: [
+                        (value["value"], value["snapshots"]) for value in item["values"]
+                    ]
+                    for entry in audit["disagreements"]
+                    for item in entry["fields"]
+                }
+                self.assertEqual(fields, expected)
+                if not expected:
+                    # The Snapshot without a score does not disagree.
+                    self.assertEqual(row["sleep_score"], 80)
+                    self.assertEqual(audit["absent_value_counts"], {"sleep_score": 1})
 
     def test_snapshot_sleep_matches_single_export_run_all(self) -> None:
         rows = [

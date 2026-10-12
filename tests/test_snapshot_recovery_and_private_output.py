@@ -136,31 +136,21 @@ class PrivateOutputPermissionTest(unittest.TestCase):
 
 class SnapshotRecoveryMessageTest(unittest.TestCase):
     def test_stop_conflict_error_reports_counts_without_private_values(self) -> None:
+        # One Snapshot holds the same Activity twice with different names; until
+        # stage A3 this still stops, as repeated Activities do in a one-shot run.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             store = root / "store"
             initialize_store(store, ACCOUNT)
-            for day, score in ((1, 71), (2, 99)):
-                source = root / f"source-{day}"
-                _write_snapshot(source, [_activity(f"A{day}")])
-                metrics = source / "DI-Connect-Metrics"
-                metrics.mkdir()
-                (metrics / f"HillScore_conflict_{day}.json").write_text(
-                    json.dumps(
-                        [
-                            {
-                                "calendarDate": "2030-01-01",
-                                "overallScore": score,
-                                "strengthScore": 60,
-                                "enduranceScore": 80,
-                                "hillScoreClassificationId": 4,
-                                "hillScoreFeedbackPhraseId": 12,
-                            }
-                        ]
-                    ),
-                    encoding="utf-8",
-                )
-                register(store, source, f"S{day}", day)
+            source = root / "source-1"
+            _write_snapshot(
+                source,
+                [
+                    _activity("A1", name="PRIVATE-NAME-ONE"),
+                    _activity("A1", name="PRIVATE-NAME-TWO"),
+                ],
+            )
+            register(store, source, "S1", 1)
 
             with self.assertRaises(SnapshotMergeError) as context:
                 build_approved_input(store, root / "build")
@@ -169,8 +159,8 @@ class SnapshotRecoveryMessageTest(unittest.TestCase):
             self.assertTrue(
                 message.startswith("canonical merge contains unresolved stop conflicts: ")
             )
-            self.assertIn("hill_score_daily same_stable_key_different_public_value=1", message)
-            for private in ("2030-01-01", "71", "99", "canonical_key", str(root)):
+            self.assertIn("activities divergent_duplicate_within_snapshot=1", message)
+            for private in ("PRIVATE-NAME", "A1", "canonical_key", str(root)):
                 self.assertNotIn(private, message)
             self.assertFalse((root / "build").exists())
 

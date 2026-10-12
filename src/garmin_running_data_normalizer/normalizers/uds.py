@@ -5,7 +5,13 @@ from typing import Any, Iterable
 
 from ..common.time import daily_calendar_date
 from ..intake.discovery import DiscoveredAsset
-from .daily_metrics import DailyMetricResult, finalize_daily, number, selected_rows
+from .daily_metrics import (
+    DailyMetricResult,
+    finalize_daily,
+    number,
+    selected_rows,
+    snapshot_numbers,
+)
 
 
 UDS_FIELDS = (
@@ -61,6 +67,7 @@ def normalize_uds(
         total = _total_stress(stress)
         accepted.append(
             {
+                "_snapshot_numbers": snapshot_numbers(raw),
                 "calendar_date": date,
                 "steps": number(raw.get("totalSteps") if "totalSteps" in raw else raw.get("steps")),
                 "distance_meters": number(raw.get("totalDistanceMeters") if "totalDistanceMeters" in raw else raw.get("distanceMeters")),

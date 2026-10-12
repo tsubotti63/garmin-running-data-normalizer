@@ -146,7 +146,7 @@ class SnapshotMetricFamiliesTest(unittest.TestCase):
             )
             self.assertEqual(len(read_rows(root / "snapshot", "vo2max_daily")), 4)
 
-    def test_endurance_variants_stay_out_of_normalized_rows(self) -> None:
+    def test_endurance_values_that_differ_keep_their_day_empty(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             first = write_metric_export(root, "source-1", 1)
@@ -172,26 +172,35 @@ class SnapshotMetricFamiliesTest(unittest.TestCase):
             summary = run_snapshot_all(store, root / "snapshot")
 
             self.assertEqual(summary["status"], "PASS_WITH_WARNINGS")
-            self.assertEqual(
-                [
-                    row["calendar_date"]
-                    for row in read_rows(root / "snapshot", "endurance_score_daily")
-                ],
-                ["2030-01-02"],
-            )
+            # The day whose values differ stays, with the differing field empty.
+            rows = {
+                row["calendar_date"]: row
+                for row in read_rows(root / "snapshot", "endurance_score_daily")
+            }
+            self.assertEqual(sorted(rows), ["2030-01-01", "2030-01-02"])
+            self.assertIsNone(rows["2030-01-01"]["overall_score"])
+            self.assertEqual(rows["2030-01-01"]["disagreeing_fields"], ["overall_score"])
+            self.assertEqual(rows["2030-01-01"]["classification"], 5)
             audit = json.loads(
                 (root / "snapshot/audit/endurance_score_daily.json").read_text(
                     encoding="utf-8"
                 )
             )
-            self.assertEqual(audit["multi_variant_key_count"], 1)
+            self.assertEqual(audit["disagreement_key_count"], 1)
             self.assertEqual(
-                sorted(
-                    variant["observed_value"]["overallScore"]
-                    for variant in audit["observed_variants"]
-                ),
-                [5999, 6001],
+                [
+                    (value["value"], value["snapshots"])
+                    for value in audit["disagreements"][0]["fields"][0]["values"]
+                ],
+                [(5999, [2]), (6001, [1])],
             )
+            self.assertNotIn("observed_variants", audit)
+            merge_summary = json.loads(
+                (root / "snapshot/snapshot/canonical_merge_summary.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertNotIn("observed_variants", merge_summary["datasets"]["endurance_score_daily"])
 
     def test_detector_matches_only_the_merged_names(self) -> None:
         cases = (

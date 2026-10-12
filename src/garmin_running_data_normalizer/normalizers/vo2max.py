@@ -5,7 +5,15 @@ from typing import Iterable
 
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..intake.discovery import DiscoveredAsset
-from .daily_metrics import DailyMetricResult, finalize_daily, load_rows, number, selected_rows, text
+from .daily_metrics import (
+    DailyMetricResult,
+    finalize_daily,
+    load_rows,
+    number,
+    selected_rows,
+    snapshot_numbers,
+    text,
+)
 
 
 VO2MAX_FIELDS = (
@@ -76,6 +84,7 @@ def normalize_vo2max(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
                 continue
             accepted.append(
                 {
+                    "_snapshot_numbers": snapshot_numbers(raw),
                     "calendar_date": date,
                     "observation_timestamp": timestamp,
                     "vo2max": value,

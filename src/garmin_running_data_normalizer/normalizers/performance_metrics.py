@@ -8,7 +8,12 @@ from typing import Any, Iterable
 
 from ..common.time import daily_calendar_date
 from ..intake.discovery import DiscoveredAsset
-from .daily_metrics import merge_observations
+from .daily_metrics import (
+    merge_observations,
+    observation_weight,
+    public_fields,
+    snapshot_numbers,
+)
 
 
 HILL_FIELDS = (
@@ -144,6 +149,7 @@ def _normalize_daily(
                     continue
                 accepted.append(
                     {
+                        "_snapshot_numbers": snapshot_numbers(raw),
                         "calendar_date": calendar_date,
                         "overall_score": overall,
                         "strength_score": _number(raw.get("strengthScore"), integer=True),
@@ -163,6 +169,7 @@ def _normalize_daily(
                     continue
                 accepted.append(
                     {
+                        "_snapshot_numbers": snapshot_numbers(raw),
                         "calendar_date": calendar_date,
                         "overall_score": overall,
                         "classification": _number(raw.get("classification"), integer=False),
@@ -179,7 +186,8 @@ def _normalize_daily(
     disagreements: list[dict[str, Any]] = []
     absent_values: Counter[str] = Counter()
     for calendar_date in sorted(rows_by_date):
-        rows = rows_by_date[calendar_date]
+        numbers = [row.get("_snapshot_numbers") for row in rows_by_date[calendar_date]]
+        rows = [public_fields(row) for row in rows_by_date[calendar_date]]
         signatures = {_stable_row(row) for row in rows}
         duplicate_count += len(rows) - len(signatures)
         if len(signatures) == 1:
@@ -187,7 +195,12 @@ def _normalize_daily(
             row["disagreeing_fields"] = []
             normalized.append(row)
             continue
-        merged = merge_observations(rows, fields, key_fields=("calendar_date",))
+        merged = merge_observations(
+            rows,
+            fields,
+            key_fields=("calendar_date",),
+            snapshots=numbers if any(numbers) else None,
+        )
         row = dict(merged.row)
         row["disagreeing_fields"] = list(merged.disagreeing_fields)
         normalized.append(row)
@@ -196,7 +209,7 @@ def _normalize_daily(
             disagreements.append(
                 {
                     "key": {"calendar_date": calendar_date},
-                    "observation_count": len(rows),
+                    "observation_count": sum(observation_weight(item) for item in numbers),
                     "fields": merged.disagreements,
                 }
             )

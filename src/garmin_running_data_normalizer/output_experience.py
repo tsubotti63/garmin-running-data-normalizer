@@ -1720,7 +1720,8 @@ def _snapshot_lifecycle_lines(summary: Mapping[str, Any]) -> list[str]:
         f"{lifecycle.get('canonical_completeness_boundary', 'not supplied')}",
         "- Automatic deletion: No",
         "- Inference performed: No",
-        f"- Policy: `{lifecycle.get('policy_registry_version', 'unknown')}`",
+        f"- Store policy: `{lifecycle.get('policy_registry_version', 'unknown')}`",
+        f"- Merge rules: `{lifecycle.get('merge_rules_version', 'unknown')}`",
         f"- Parser: `{lifecycle.get('parser_version', 'unknown')}`",
         f"- Schema: `{lifecycle.get('schema_version', 'unknown')}`",
         "- Lifecycle evidence: `snapshot/snapshot_lineage.json`,",
@@ -1743,20 +1744,6 @@ def _snapshot_lifecycle_lines(summary: Mapping[str, Any]) -> list[str]:
         )
     lines.append("")
     return lines
-
-
-def _has_observed_variant_evidence(summary: Mapping[str, Any]) -> bool:
-    lifecycle = summary.get("snapshot_lifecycle")
-    if not isinstance(lifecycle, Mapping):
-        return False
-    datasets = lifecycle.get("datasets")
-    if not isinstance(datasets, Mapping):
-        return False
-    return any(
-        isinstance(datasets.get(name), Mapping)
-        and bool(datasets[name].get("observed_variants"))
-        for name in ("endurance_score_daily", "uds_daily")
-    )
 
 
 def render_dataset_inventory(
@@ -1940,7 +1927,6 @@ def render_start_here(
     audit_paths = sorted(path for path in generated_paths if path.startswith("audit/"))
     warning_count = _non_negative_integer(summary.get("warning_count"), "warning count")
     error_count = _non_negative_integer(summary.get("error_count"), "error count")
-    variant_guidance = _has_observed_variant_evidence(summary)
     lines = [
         "# Start Here",
         "",
@@ -2002,16 +1988,6 @@ def render_start_here(
             "",
         ]
     )
-    if variant_guidance:
-        lines.extend(
-            [
-                "When Endurance or UDS audit reports multiple observed values for one",
-                "stable key, no value is automatically newer or more correct. Use the",
-                "preserved observed variants for review or sensitivity analysis; a single",
-                "canonical daily value is not selected without source-backed authority.",
-                "",
-            ]
-        )
     lines.extend(_path_list("Available Analysis Files", analysis_paths))
     lines.extend(_path_list("QA Evidence", qa_paths))
     lines.extend(_path_list("Audit Evidence", audit_paths))
@@ -2091,16 +2067,6 @@ def render_analysis_handoff(
         ]
         or ["- None"]
     )
-    variant_rule_lines = (
-        [
-            "17. Multiple observed Endurance or UDS values for one stable key are",
-            "    preserved in the corresponding audit evidence. Do not choose a winner",
-            "    without source-backed authority; use single-variant days for ordinary",
-            "    single-value analysis and review multi-variant days separately.",
-        ]
-        if _has_observed_variant_evidence(summary)
-        else []
-    )
     lines = [
         "# Analysis Handoff",
         "",
@@ -2156,7 +2122,6 @@ def render_analysis_handoff(
         "    observations of that row's stable key. It is empty, and the dataset's",
         "    audit keeps every observed value. Do not fill it or choose one of the",
         "    values; report the warning `VALUES_DISAGREE` with the analysis.",
-        *variant_rule_lines,
         "",
         *_v1_3_relationship_lines(),
         *_relationship_coverage_lines(relationship_summary),
