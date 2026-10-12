@@ -490,8 +490,40 @@ class SnapshotLifecycleTest(unittest.TestCase):
             )[0]["summarizedActivitiesExport"]
             by_id = {row["activityId"]: row for row in merged}
             self.assertEqual(set(by_id), {"A1", "A2", "A3", "A4"})
-            self.assertEqual(by_id["A1"]["description"], "first")
+            # Merge rules v2.1: the explicit empty value of the latest Snapshot
+            # that contains the field means that the value was removed.
+            self.assertEqual(by_id["A1"]["description"], "")
             self.assertEqual(by_id["A1"]["name"], "updated")
+            self.assertIsNone(by_id["A3"]["first_observation_null"])
+            self.assertEqual(
+                first["record_changes"]["activities"]["updates"],
+                [
+                    {
+                        "key": {"garmin_activity_key": "garmin_activity:A1"},
+                        "fields": [
+                            {
+                                "field": "description",
+                                # Null and "" are one empty value; the entry
+                                # shows the value of its latest Snapshot.
+                                "values": [
+                                    {"value": "first", "snapshots": [1]},
+                                    {"value": "", "snapshots": [2, 4]},
+                                ],
+                            },
+                            {
+                                "field": "name",
+                                "values": [
+                                    {"value": "Synthetic A1", "snapshots": [1]},
+                                    {"value": "updated", "snapshots": [2, 3, 4]},
+                                ],
+                            },
+                        ],
+                    }
+                ],
+            )
+            self.assertEqual(
+                first["record_changes"]["activities"]["not_in_latest_snapshot"], []
+            )
 
             summary = first["merge_summary"]
             activities = summary["datasets"]["activities"]
@@ -505,22 +537,15 @@ class SnapshotLifecycleTest(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
-            self.assertTrue(
-                any(item["hold_type"] == "explicit_null_preserved_previous" for item in holds)
+            # Explicit empty values are updates, not review holds; a record
+            # without a stable key is still held.
+            self.assertEqual(
+                {item["hold_type"] for item in holds},
+                {"null_stable_key"},
             )
-            self.assertTrue(
-                any(item["hold_type"] == "explicit_empty_preserved_previous" for item in holds)
-            )
-            self.assertTrue(
-                any(
-                    item["hold_type"] == "explicit_null_review_required"
-                    and item["prior_explicit_value_preserved"] is False
-                    for item in holds
-                )
-            )
-            self.assertTrue(
-                any(item["hold_type"] == "null_stable_key" for item in holds)
-            )
+            self.assertEqual(summary["explicit_null_review_count"], 0)
+            self.assertEqual(summary["explicit_empty_review_count"], 0)
+            self.assertEqual(activities["updated_record_count"], 1)
             self.assertEqual(
                 set(first["coverage"]["field_state_counts"]),
                 {

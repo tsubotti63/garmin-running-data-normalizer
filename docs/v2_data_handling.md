@@ -75,17 +75,21 @@ Each item gives the v1.7.1 behavior and the v2.0.0 behavior.
   audit record and the row is removed; HRV sets the value to null and keeps
   only counts.
 - v2.0.0 (stage A2a for one-shot runs and stage A2b-1 for daily datasets in
-  Snapshot runs; Activities, Gear, `activity_gear`, and Personal Records follow
-  in stages A2b-2 and A3):
+  Snapshot runs; Activities, Gear, `activity_gear`, and Personal Records
+  follow in stage A3 within one Export or Snapshot, and their values across
+  Snapshots are updates, see
+  [Changes across Snapshots](#changes-across-snapshots)):
   - The normalized row stays, one per stable key. Each value field that differs
     between the observations is empty, and the row's `disagreeing_fields` lists
     those fields. Fields that agree keep their value.
   - The dataset's audit record lists, for each disagreeing key and field, every
     observed value, how many observations gave it, and, in Snapshot runs, the
-    Snapshots that gave it by import number. In a Snapshot run, each time a
-    Snapshot gives a value counts as one observation, and `snapshots` lists the
-    import numbers, for example `{"value": 80, "observation_count": 2,
-    "snapshots": [1, 3]}`; user labels never appear there.
+    Snapshots that gave it by number. In a Snapshot run, each time a Snapshot
+    gives a value counts as one observation, and `snapshots` lists the
+    Snapshot numbers, for example `{"value": 80, "observation_count": 2,
+    "snapshots": [1, 3]}`; user labels never appear there. Snapshots are
+    numbered in the order of their Exports' observation times (see
+    [Changes across Snapshots](#changes-across-snapshots)).
   - Warning `VALUES_DISAGREE` per family, with the number of keys. Status
     `PASS_WITH_WARNINGS`. Stage A2a settles the name.
   - Observation-grain datasets (Race Prediction, Acute Training Load, Training
@@ -150,21 +154,88 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
   empty value keeps the earlier value; a record missing from a later Export is
   kept; the per-field record is deleted after `snapshot run-all`, and no
   warning is given.
-- v2.0.0:
-  - Each field takes its value from the latest Snapshot, in import order, that
-    contains the field.
-  - An explicit null or empty value in a later Snapshot means that the value was
-    removed, so the field becomes empty.
+- v2.0.0 (stage A2b-2, merge rules v2.1):
+  - Snapshots are ordered, and numbered from 1, by the observation times of
+    their Exports (`export_observed_at`), not by the order of registration.
+    The numbers are given again in every run, so an older Export registered
+    later changes the numbers after it: after Exports from January and March,
+    an Export from February registered later becomes Snapshot 2, and the March
+    Export becomes Snapshot 3. This applies to the daily datasets as well.
+  - Each top-level field takes its value from the latest Snapshot that
+    contains the field. A nested object or list is one value and is replaced
+    whole.
+  - An explicit empty value in a later Snapshot, that is null, an empty
+    string, an empty list `[]`, or an empty object `{}`, means that the value
+    was removed: the field takes that empty value.
   - A field that a later Snapshot does not contain at all was not observed in
     that Snapshot, so the earlier value stays.
   - A record that a later Snapshot does not contain stays, and the audit record
-    keeps the import number of the last Snapshot that contained it.
-  - Every earlier value is kept in the dataset's audit record with the Snapshot
-    that gave it. Warning `VALUES_UPDATED` (provisional) reports how many
-    records changed, and `RECORDS_NOT_IN_LATEST_SNAPSHOT` (provisional) how many
-    records the latest Snapshot does not contain. Status `PASS_WITH_WARNINGS`.
-  - Within one Snapshot, two different values for one record are a
-    disagreement.
+    keeps the number of the last Snapshot that contained it. As a consequence,
+    when Garmin gives a Personal Record a new `personalRecordId` each time it
+    is improved, the earlier record stays, with the values of the last
+    Snapshot that contained it, `current` included.
+  - An `activity_gear` link that the latest Snapshot does not contain is
+    removed from the normalized dataset when the latest Snapshot has Gear
+    links, that is a Gear file with the `gearActivityDTOs` object, even an
+    empty one, and contains both the link's Activity and its Gear: the
+    Activity's Gear was changed or removed, for example from shoe A to shoe
+    B, and keeping the earlier link would count the Activity for both shoes.
+    The audit record keeps the removed link with the last Snapshot that
+    contained it. When the latest Snapshot has no Gear file, a Gear file
+    without `gearActivityDTOs`, or lacks the Activity or the Gear, for
+    example because the Gear was deleted, the product cannot tell a change
+    from a record that the Export left out, so the link stays like any other
+    record that the latest Snapshot does not contain.
+  - A record with a removed value is normalized as a one-shot run normalizes
+    the same row: a removed start time of an Activity leaves its local date
+    and time empty. Until stage A3, a removed value that the normalized
+    dataset does not accept stops the run as it does in a one-shot run: an
+    empty string for a number, an empty list or object for a single value
+    (`OUTPUT_EXPERIENCE_FAILED`), or a null Activity of a Personal Record
+    (`RELATIONSHIP_CONTRACT_FAILED`), all with exit 2. From stage A3, such a
+    row is left out and counted by reason (exit 3).
+  - Every earlier value is kept in the dataset's audit record:
+    `audit/activities.json`, `audit/gear.json`, `audit/activity_gear.json`,
+    and `audit/personal_records.json` (format
+    `garmin-running-data-normalizer-dataset-audit-v1`). `updates` lists each
+    record whose values changed, by its `key` as the normalized dataset names
+    it, with each changed field, its `values` in Snapshot order, and the
+    `snapshots` that gave each value, for example `name` "Morning run" in
+    Snapshot 1, then "Morning run 10k" in Snapshots 2 to 4. A removed value is
+    listed as the empty value that removed it. Fields keep their names in the
+    Export, because the earlier values are what the Export said: the Export's
+    `description`, for example, is the normalized `memo_text_raw`.
+    `not_in_latest_snapshot` lists the records kept although the latest
+    Snapshot does not contain them, with their `last_seen_snapshot`, and
+    `removed_links` (in `activity_gear` only) the removed links.
+  - Every run writes these four audit records. A one-shot run reads one
+    Export, so its records have the `observation_scope`
+    `ONE_EXPORT_OBSERVATION`, the `record_count` of the normalized dataset,
+    zero counts, and empty lists, and the same Export always gives the same
+    bytes. Snapshot runs have `REGISTERED_SNAPSHOT_OBSERVATIONS`.
+  - Warning `VALUES_UPDATED` gives, per family, the number of records whose
+    values changed: a field that changed from one value to another, from a
+    value to an empty value, or from an empty value to a value counts, and a
+    field that only appears in or disappears from a Snapshot does not.
+    Values that differ only in how they are written are the same value: every
+    empty value (null, `""`, `[]`, or `{}`) is one empty value, and numbers
+    are compared by their value, so `1000` and `1000.0` are the same, also
+    inside lists and objects; a boolean is not a number. Such a difference
+    neither counts nor starts a new entry in the audit record's `values`, an
+    entry shows the value of its latest Snapshot, and the normalized dataset
+    keeps the latest Snapshot's value as it was written.
+    An `activity_gear` link removed as above counts for the Gear family.
+    Warning `RECORDS_NOT_IN_LATEST_SNAPSHOT` gives, per family, the number of
+    records kept although the latest Snapshot does not contain them. The run
+    summary's family results carry the two counts as `updated_record_count`
+    and `not_in_latest_snapshot_count`. Status `PASS_WITH_WARNINGS` (exit 0).
+    Stage A2b-2 settles both names.
+  - Run Quality binds the four audit records by digest, as it does the daily
+    audit records. Their values stay in the local output: the Support Bundle,
+    the External-safe Pack, and the merge summaries carry counts only.
+  - Within one Snapshot, or in two Snapshots observed at the same time, two
+    different values for one record still stop the build until stage A3,
+    which makes them a disagreement.
 
 ### Duplicates
 
@@ -433,16 +504,21 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   removed (stage A2a).
 - Audit records gain sections for disagreements, updates, left-out items by
   reason, merged duplicates, and source fields that were not read.
-- New warning codes: `VALUES_DISAGREE` (stage A2a), and, with provisional
-  names, `VALUES_UPDATED`, `RECORDS_NOT_IN_LATEST_SNAPSHOT`,
-  `INPUT_DUPLICATE_SOURCES`, `DATA_FILE_LEFT_OUT`, `DATA_ROW_LEFT_OUT`,
+- Stage A2b-2 adds the audit records `audit/activities.json`,
+  `audit/gear.json`, `audit/activity_gear.json`, and
+  `audit/personal_records.json` to every run, so the synthetic Run-All output
+  grows from 46 to 50 files, and Run Quality's authority evidence and the
+  Support Bundle's copy of Run Quality name them.
+- New warning codes: `VALUES_DISAGREE` (stage A2a), `VALUES_UPDATED` and
+  `RECORDS_NOT_IN_LATEST_SNAPSHOT` (stage A2b-2), and, with provisional
+  names, `INPUT_DUPLICATE_SOURCES`, `DATA_FILE_LEFT_OUT`, `DATA_ROW_LEFT_OUT`,
   `DATA_VALUE_INVALID`, and `DATA_TEXT_REPAIRED`.
   `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), and `INPUT_MULTIPLE_EXPORTS` and
   `SNAPSHOT_STORE_LOCKED` (provisional names).
 - Warnings carry codes and counts only: no paths, values, or identifiers.
-  Snapshots are named by import number. User labels for Snapshots appear only in
+  Snapshots are named by number. User labels for Snapshots appear only in
   local output and never in the Support Bundle or the External-safe Pack.
 - The External-safe Pack keeps its columns.
 
@@ -469,23 +545,33 @@ Every stop has a specific code; errors that v1.7.1 reports only as
 - Stage A2b-1 removes the stops for daily datasets: values that differ across
   Snapshots, within one Snapshot, or between two Snapshots observed at the same
   time follow [Values that disagree](#values-that-disagree), with the Snapshot
-  import numbers. Endurance Score and UDS no longer remove the day, and
+  numbers. Endurance Score and UDS no longer remove the day, and
   `snapshot/canonical_merge_summary.json` and `run_summary.json` no longer hold
   the observed values (`observed_variants`); the values stay only in the audit
   records. The same Activity twice with different values in one Snapshot, or
   in two Snapshots observed at the same time, still stops until stage A3, as a
   repeated Activity does in a one-shot run; so do a malformed Lactate
   Threshold candidate and a JSON file that cannot be read.
+- Stage A2b-2 makes an explicit empty value in Activities, Gear,
+  `activity_gear`, and Personal Records an update instead of a review hold, so
+  the merge summaries no longer count review holds such as
+  `explicit_null_preserved_previous` for these datasets, and the explicit null
+  and empty reviews and review holds that `START_HERE.md` reports can be
+  lower. Their dataset entries in the merge summaries gain
+  `updated_record_count`, and `activity_gear` gains `removed_link_count`;
+  `START_HERE.md` shows both totals under "Snapshot Accumulation".
 - Two versions with different roles: the store records
   `policy_registry_version` and `contract_version`, which stay at v1.0, so that
   a store stays readable without migration, also by v1.7.1. The v1.0 policy
   registry (`config/garmin_snapshot_dataset_merge_policies_v1.json`) stays
   unchanged as the record of the v1.0 rules. The rules for merging the
   Snapshots into one Run-All input have their own version and file from stage
-  A2b-1: `garmin_snapshot_merge_rules:v2.0` in
-  `config/garmin_snapshot_merge_rules_v2.json`. For the daily datasets they
+  A2b-1: `garmin_snapshot_merge_rules:v2.0` for the daily datasets, and
+  `garmin_snapshot_merge_rules:v2.1` from stage A2b-2, which adds the rules
+  for Activities, Gear, `activity_gear`, and Personal Records, in
+  `config/garmin_snapshot_merge_rules_v2.json`. For these datasets they
   replace the merge fields of the v1.0 registry; the other datasets follow the
-  v1.0 registry until stages A2b-2 and A3. A build records
+  v1.0 registry until stage A3. A build records
   `merge_rules_version` in `snapshot/snapshot_lineage.json`, the approved input
   manifest, the merge summary, and the build digest; a store never records it.
   v1.7.1 still reads a store that v2.0.0 registered to, and builds it with the
@@ -516,8 +602,10 @@ Every stop has a specific code; errors that v1.7.1 reports only as
 
 - Exit codes: runs that stopped with exit 2 for problems in the data now finish
   with exit 3 or 0, and the warnings say what was left out or kept.
-- Outputs: `run_all_version` 2, the new fields and audit sections, and the new
-  warning codes. Rerun Run-All; earlier outputs are not converted. Renamed in
+- Outputs: `run_all_version` 2, the new fields, audit records, and audit
+  sections, and the new warning codes. The synthetic Run-All output grows from
+  46 to 50 files with the audit records of Activities, Gear, `activity_gear`,
+  and Personal Records. Rerun Run-All; earlier outputs are not converted. Renamed in
   stage A2a: the HRV `dedupe_status` `review_required_same_day_differing_values`
   becomes `same_day_values_disagree`, the Run Quality reason
   `CONFLICT_PRESERVED_NO_WINNER` becomes `VALUES_DISAGREE` in Run Quality v2,
@@ -530,9 +618,15 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   differing fields empty, and the merge summaries no longer hold observed
   values or count review holds for null daily fields, so the explicit null
   reviews and review holds that `START_HERE.md` reports can be lower; the
-  audit records count such fields in `absent_value_counts`. The merge rules
-  v2.0 are published in `config/garmin_snapshot_merge_rules_v2.json`; the
-  v1.0 policy registry does not change.
+  audit records count such fields in `absent_value_counts`. In Activities,
+  Gear, `activity_gear`, and Personal Records, an explicit empty value in a
+  later Snapshot now removes the earlier value instead of keeping it, every
+  earlier value is kept in the new audit records, and an `activity_gear` link
+  is removed when the latest Snapshot shows its Activity and Gear without it.
+  Snapshots are numbered in the order of their Exports' observation times.
+  The merge rules v2.1 are published in
+  `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
+  not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around
   the Export, in a ZIP file or a folder, are left out of the recorded paths.
 - CLI: the pre-run checks that the GUI performed in v1.7.1 apply to the CLI,

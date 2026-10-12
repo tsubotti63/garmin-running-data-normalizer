@@ -251,10 +251,12 @@ FUTURE_READY_DATASETS = ("health_status",)
 
 # The rules for merging the registered Snapshots into one Run-All input. A build
 # records this version in its lineage, manifests, and digest; a store never
-# records it. For the daily datasets, these rules replace the merge fields of
-# the v1.0 policy registry; the other datasets follow that registry until
-# stages A2b-2 and A3.
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.0"
+# records it. For the daily datasets (v2.0) and for Activities, Gear,
+# activity_gear, and Personal Records (v2.1), these rules replace the merge
+# fields of the v1.0 policy registry; the other datasets follow that registry
+# until stage A3. Snapshots are numbered from 1 in the order of their Export
+# observation times, and the numbers are given again in every build.
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.1"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -277,16 +279,45 @@ MERGE_RULES: dict[str, Any] = {
         "same_observation_time_conflict_policy": "disagreement_kept_empty_values_audited",
         "explicit_null_policy": "absent_counted_not_disagreement",
         "explicit_empty_policy": "absent_counted_not_disagreement",
-        "snapshot_reference": "import_number",
+        "snapshot_reference": "snapshot_number_in_export_observed_order",
         "keep_last": False,
         "automatic_winner": False,
+    },
+    "entity_datasets": {
+        "datasets": [
+            "activities",
+            "gear",
+            "activity_gear",
+            "personal_records",
+        ],
+        "merge_mode": "latest_snapshot_containing_the_field",
+        "snapshot_order": "export_observed_at",
+        "field_unit": "top_level_field_replaced_whole",
+        "explicit_null_policy": "value_removed_field_empty",
+        "explicit_empty_policy": "value_removed_field_empty",
+        "explicit_empty_values": ["null", "empty_string", "empty_list", "empty_object"],
+        "absent_field_policy": "not_observed_earlier_value_kept",
+        "absent_record_policy": "kept_last_seen_snapshot_audited",
+        "earlier_values": "kept_in_dataset_audit_with_snapshot_numbers",
+        "update_comparison": "empty_values_alike_numbers_by_value_booleans_apart",
+        "conflict_policy": "deterministic_if_ordered_else_stop",
+        "snapshot_reference": "snapshot_number_in_export_observed_order",
+        "automatic_deletion": False,
     },
     "dataset_rules": {
         "sleep_daily": {
             "missing_calendar_date_policy": "sleep_day_from_end_time_as_one_shot",
         },
         "hrv_daily": {
-            "snapshot_reference": "import_numbers_of_the_snapshots_holding_the_fit_file",
+            "snapshot_reference": "snapshot_numbers_of_the_snapshots_holding_the_fit_file",
+        },
+        "activity_gear": {
+            "absent_link_policy": "removed_and_audited_when_the_latest_snapshot_shows_the_change",
+            "absent_link_removal_requires": [
+                "gear_links_object_in_the_latest_snapshot",
+                "gear_in_the_latest_snapshot",
+                "activity_in_the_latest_snapshot",
+            ],
         },
     },
     "other_datasets_follow": REGISTRY_VERSION,

@@ -49,7 +49,7 @@ def _observation(
 
 
 def _merge(observations: list[dict[str, object]]) -> tuple[list[dict], dict, list[dict]]:
-    canonical, _provenance, _field_provenance, holds, conflicts, summary = _merge_dataset(
+    canonical, _provenance, _field_provenance, holds, conflicts, summary, _ = _merge_dataset(
         "lactate_threshold_candidates", observations, 4
     )
     return canonical, summary, holds + conflicts

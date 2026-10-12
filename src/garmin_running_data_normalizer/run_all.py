@@ -79,6 +79,13 @@ DATASET_TABLE = (
     {"name": "training_history_daily", "family": "training_history", "record_grain": "source_observation", "stable_key": ("calendar_date", "observation_timestamp"), "required": False},
 )
 
+# Datasets whose audit record keeps, in a Snapshot run, every value that a
+# later Snapshot changed, with the Snapshots that gave it, and the records that
+# the latest Snapshot does not contain. A one-shot run reads one Export, so
+# these lists are empty and the record has counts only.
+RECORD_AUDIT_DATASETS = ("activities", "gear", "activity_gear", "personal_records")
+RECORD_AUDIT_FORMAT = "garmin-running-data-normalizer-dataset-audit-v1"
+
 # Datasets whose rows are each built from one observation: every row has an
 # empty ``disagreeing_fields``, as every row of every dataset has the field.
 SINGLE_OBSERVATION_DATASETS = (
@@ -207,6 +214,10 @@ OUTPUT_PATHS = (
     "normalized/vo2max_daily.json",
     "normalized/hrv_daily.json",
     "normalized/training_history_daily.json",
+    "audit/activities.json",
+    "audit/gear.json",
+    "audit/activity_gear.json",
+    "audit/personal_records.json",
     "audit/fit_audit.json",
     "audit/activity_fit_linkage.json",
     "audit/hill_score_daily.json",
@@ -672,6 +683,51 @@ def _normalize_datasets(
     )
 
 
+def _record_audits(
+    records: dict[str, list[dict[str, Any]]],
+    snapshot_context: dict[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    """Return the audit records of Activities, Gear, activity_gear, and Personal Records.
+
+    In a Snapshot run, ``updates`` lists, for each record whose values changed
+    in a later Snapshot, each changed field with its values in Snapshot order
+    and the Snapshots that gave each value; ``not_in_latest_snapshot`` lists
+    the records kept although the latest Snapshot does not contain them, and
+    ``removed_links`` the activity_gear links left out because the latest
+    Snapshot has Gear links and their Activity and Gear, but not them.
+    """
+    changes = (
+        snapshot_context.get("record_changes") or {}
+        if snapshot_context is not None
+        else {}
+    )
+    audits: dict[str, dict[str, Any]] = {}
+    for name in RECORD_AUDIT_DATASETS:
+        change = changes.get(name, {})
+        updates = list(change.get("updates", []))
+        not_in_latest = list(change.get("not_in_latest_snapshot", []))
+        audit = {
+            "format": RECORD_AUDIT_FORMAT,
+            "dataset": name,
+            "observation_scope": (
+                "REGISTERED_SNAPSHOT_OBSERVATIONS"
+                if snapshot_context is not None
+                else "ONE_EXPORT_OBSERVATION"
+            ),
+            "record_count": len(records[name]),
+            "updated_record_count": len(updates),
+            "updates": updates,
+            "not_in_latest_snapshot_count": len(not_in_latest),
+            "not_in_latest_snapshot": not_in_latest,
+        }
+        if name == "activity_gear":
+            removed = list(change.get("removed_links", []))
+            audit["removed_link_count"] = len(removed)
+            audit["removed_links"] = removed
+        audits[name] = audit
+    return audits
+
+
 def _canonical_key(record: dict[str, Any], fields: tuple[str, ...]) -> tuple[str, ...] | None:
     values = [record.get(field) for field in fields]
     if any(value in (None, "") for value in values):
@@ -956,9 +1012,16 @@ def _family_results(
     fit_status: dict[str, Any],
     performance_audit: dict[str, Any],
     relationship_summary: dict[str, Any],
+    record_audits: dict[str, dict[str, Any]],
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]], str]:
     warnings: list[dict[str, Any]] = []
     results: dict[str, dict[str, Any]] = {}
+    # A link removed in a later Snapshot counts as an update of the Gear family.
+    record_audit_datasets = {
+        "activities": ("activities",),
+        "gear": ("gear", "activity_gear"),
+        "personal_records": ("personal_records",),
+    }
     family_record_counts = {
         "activities": len(records["activities"]),
         "gear": len(records["gear"]) + len(records["activity_gear"]),
@@ -1067,6 +1130,43 @@ def _family_results(
                         ),
                     }
                 )
+        updated_record_count = sum(
+            int(record_audits[name]["updated_record_count"])
+            + int(record_audits[name].get("removed_link_count", 0))
+            for name in record_audit_datasets.get(family, ())
+        )
+        not_in_latest_snapshot_count = sum(
+            int(record_audits[name]["not_in_latest_snapshot_count"])
+            for name in record_audit_datasets.get(family, ())
+        )
+        if updated_record_count:
+            family_warnings += 1
+            warnings.append(
+                {
+                    "code": "VALUES_UPDATED",
+                    "family": family,
+                    "count": updated_record_count,
+                    "message": (
+                        "a later Snapshot changed values of one or more records; "
+                        "the normalized datasets hold the latest values and the "
+                        "audit keeps the earlier ones"
+                    ),
+                }
+            )
+        if not_in_latest_snapshot_count:
+            family_warnings += 1
+            warnings.append(
+                {
+                    "code": "RECORDS_NOT_IN_LATEST_SNAPSHOT",
+                    "family": family,
+                    "count": not_in_latest_snapshot_count,
+                    "message": (
+                        "the latest Snapshot does not contain one or more records; "
+                        "they are kept, and the audit names the last Snapshot "
+                        "that contained each"
+                    ),
+                }
+            )
         if family == "fit" and incomplete_fit_count:
             status = "PARTIAL"
             skipped = incomplete_fit_count
@@ -1088,6 +1188,8 @@ def _family_results(
             "review_required_count": review_item_count,
             "review_item_count": review_item_count,
             "disagreement_key_count": disagreement_key_count,
+            "updated_record_count": updated_record_count,
+            "not_in_latest_snapshot_count": not_in_latest_snapshot_count,
         }
         if family == "fit":
             results[family]["parse_status_counts"] = {
@@ -1272,12 +1374,14 @@ def run_all(
         raise RunAllError("INPUT_CHANGED", "input assets changed during Run-All processing")
     _notify(progress, "building_output")
 
+    record_audits = _record_audits(records, snapshot_context)
     family_results, warnings, status = _family_results(
         families,
         records,
         fit_status,
         performance_audit,
         relationship_summary,
+        record_audits,
     )
     performance_summary = {
         "format": "garmin-running-data-normalizer-performance-metrics-summary-v1",
@@ -1369,6 +1473,10 @@ def run_all(
     }
     payloads = {
         **{DATASET_PATHS[name]: _json_bytes(value) for name, value in records.items()},
+        **{
+            f"audit/{name}.json": _json_bytes(record_audits[name])
+            for name in RECORD_AUDIT_DATASETS
+        },
         "audit/fit_audit.json": _json_bytes(fit_audit),
         "audit/activity_fit_linkage.json": _json_bytes(activity_fit_audit),
         "audit/hill_score_daily.json": _json_bytes(
@@ -1399,6 +1507,7 @@ def run_all(
             "current_fit_session_keys",
             "source_completeness_context",
             "fit_snapshot_numbers",
+            "record_changes",
         }
         if not required_snapshot_context <= set(snapshot_context) or not set(
             snapshot_context

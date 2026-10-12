@@ -45,5 +45,9 @@ Run status: `PASS`
   in the observations of the row's stable key: the field is empty, and the
   dataset's audit keeps every observed value. Warning `VALUES_DISAGREE`
   gives the number of such keys per family.
+- In a Snapshot run, Activities, Gear, `activity_gear`, and Personal Records
+  hold the latest Snapshot's values, and their audits keep every earlier
+  value. Warnings `VALUES_UPDATED` and `RECORDS_NOT_IN_LATEST_SNAPSHOT`
+  give the numbers of records per family.
 - Lactate Threshold remains candidate/audit-only until Product approves a
   machine stable key and the remaining field authority gates.

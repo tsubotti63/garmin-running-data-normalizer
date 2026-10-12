@@ -51,6 +51,11 @@ question requires them and the local/trusted environment is authorized.
     observations of that row's stable key. It is empty, and the dataset's
     audit keeps every observed value. Do not fill it or choose one of the
     values; report the warning `VALUES_DISAGREE` with the analysis.
+17. In a Snapshot run, Activities, Gear, `activity_gear`, and Personal Records
+    hold the latest Snapshot's values, and a record that the latest Snapshot
+    does not contain is kept. Do not treat an earlier value in their audits
+    as current; report the warnings `VALUES_UPDATED` and
+    `RECORDS_NOT_IN_LATEST_SNAPSHOT` with the analysis.
 
 ## v1.3 Context and Observation Relationships
 

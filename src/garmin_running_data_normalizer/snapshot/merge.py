@@ -39,11 +39,17 @@ DATASET_ORDER = (
     "lactate_threshold_candidates",
 )
 # Daily datasets (merge rules v2.0): every distinct record of a key goes to
-# Run-All with the import numbers of the Snapshots that gave it, and Run-All
-# compares their normalized values as it does within one Export. Daily values
-# are computed by Garmin, not edited by the user, so no Snapshot's value
-# replaces another's.
+# Run-All with the numbers of the Snapshots that gave it, and Run-All compares
+# their normalized values as it does within one Export. Daily values are
+# computed by Garmin, not edited by the user, so no Snapshot's value replaces
+# another's. Snapshots are numbered from 1 in the order of their Export
+# observation times.
 DAILY_DATASETS = frozenset(MERGE_RULES["daily_datasets"]["datasets"])
+# Activities, Gear, activity_gear, and Personal Records (merge rules v2.1)
+# reflect the user's own edits in Garmin Connect, so each field takes the value
+# of the latest Snapshot that contains it, and every earlier value is kept for
+# the dataset's audit record.
+ENTITY_DATASETS = frozenset(MERGE_RULES["entity_datasets"]["datasets"])
 SOURCE_OBSERVATION_DATASETS = {
     "race_prediction_daily",
     "acute_training_load_daily",
@@ -560,6 +566,31 @@ def _value_state(value: Any) -> str:
     return "explicit_value"
 
 
+def _comparable(value: Any) -> Any:
+    """Return the form in which a later Snapshot's value is compared.
+
+    Values that differ only in how they are written are one value: every
+    empty value (null, "", [], or {}) is the same empty value, and numbers are
+    compared by their value, so 1000 and 1000.0 are the same, also inside
+    lists and objects. A boolean is not a number.
+    """
+    if _value_state(value) != "explicit_value":
+        return ["empty"]
+    if isinstance(value, bool):
+        return ["boolean", value]
+    if isinstance(value, (int, float)):
+        if isinstance(value, float) and value.is_integer():
+            value = int(value)
+        return ["number", value]
+    if isinstance(value, str):
+        return ["text", value]
+    if isinstance(value, list):
+        return ["list", [_comparable(item) for item in value]]
+    if isinstance(value, dict):
+        return ["object", {str(key): _comparable(item) for key, item in value.items()}]
+    return ["other", value]
+
+
 def _lactate_power_conflicts(
     observations: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -659,10 +690,43 @@ def _reappeared(bits: str) -> bool:
     return first >= 0 and last > first and "0" in bits[first:last]
 
 
+def _audit_key(dataset: str, raw_key: tuple[Any, ...]) -> dict[str, Any]:
+    """Return a record's stable key as its normalized dataset names it."""
+    if dataset == "activities":
+        return {"garmin_activity_key": raw_key[0]}
+    if dataset == "gear":
+        return {"gear_key": raw_key[0]}
+    if dataset == "activity_gear":
+        gear_key = raw_key[0]
+        return {
+            "gear_key": int(gear_key) if str(gear_key).isdigit() else gear_key,
+            "activity_id": raw_key[1],
+        }
+    return {"personal_record_id": raw_key[0]}
+
+
+def _link_removed(
+    raw_key: tuple[Any, ...],
+    latest_endpoints: tuple[set[str], set[str]] | None,
+) -> bool:
+    """Whether the latest Snapshot shows an Activity and a Gear without their link.
+
+    A link that the latest Snapshot does not contain was removed when that
+    Snapshot contains both its Gear and its Activity. Otherwise its absence
+    may come from records that the Export left out, so the link stays.
+    """
+    if latest_endpoints is None:
+        return False
+    gear_keys, activity_ids = latest_endpoints
+    return str(raw_key[0]) in gear_keys and str(raw_key[1]) in activity_ids
+
+
 def _merge_dataset(
     dataset: str,
     observations: list[dict[str, Any]],
     snapshot_count: int,
+    *,
+    latest_state: dict[str, list[str]] | None = None,
 ) -> tuple[
     list[dict[str, Any]],
     list[dict[str, Any]],
@@ -670,7 +734,19 @@ def _merge_dataset(
     list[dict[str, Any]],
     list[dict[str, Any]],
     dict[str, Any],
+    dict[str, list[dict[str, Any]]] | None,
 ]:
+    """Merge one dataset's observations from every registered Snapshot.
+
+    The last item returned is, for Activities, Gear, activity_gear, and
+    Personal Records, the record of their changes for the dataset's audit
+    record: values that changed, with the Snapshots that gave each value,
+    records that the latest Snapshot does not contain, and removed links.
+    ``latest_state`` gives the latest Snapshot's Activities and Gear for
+    activity_gear, only when the latest Snapshot holds Gear links (the
+    ``gearActivityDTOs`` object, even an empty one); without it, no link is
+    removed.
+    """
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     holds: list[dict[str, Any]] = []
     conflicts: list[dict[str, Any]] = []
@@ -702,6 +778,20 @@ def _merge_dataset(
     state_counts: Counter[str] = Counter()
     exact_repeat_count = 0
     daily = dataset in DAILY_DATASETS
+    entity = dataset in ENTITY_DATASETS
+    record_audit: dict[str, list[dict[str, Any]]] | None = (
+        {"updates": [], "not_in_latest_snapshot": [], "removed_links": []}
+        if entity
+        else None
+    )
+    latest_endpoints = (
+        (
+            set(latest_state["current_gear_keys"]),
+            set(latest_state["current_activity_ids"]),
+        )
+        if latest_state is not None
+        else None
+    )
     for key in sorted(groups):
         group = groups[key]
         by_snapshot: dict[int, list[dict[str, Any]]] = defaultdict(list)
@@ -765,7 +855,12 @@ def _merge_dataset(
         )
         pattern_counts[bits] += 1
         state_counts["record_absent"] += bits.count("0")
-        if bits.endswith("0") and "1" in bits:
+        removed = (
+            dataset == "activity_gear"
+            and bits.endswith("0")
+            and _link_removed(ordered[0]["raw_key"], latest_endpoints)
+        )
+        if bits.endswith("0") and "1" in bits and not removed:
             previous_only += 1
         if bits.endswith("1") and "1" not in bits[:-1]:
             new += 1
@@ -825,11 +920,64 @@ def _merge_dataset(
                         }
                     )
             continue
+        if removed:
+            # The link is left out of the normalized dataset; the audit record
+            # keeps it with the last Snapshot that contained it.
+            record_audit["removed_links"].append(
+                {
+                    "key": _audit_key(dataset, ordered[0]["raw_key"]),
+                    "last_seen_snapshot": max(by_snapshot),
+                }
+            )
+            for observation in ordered:
+                provenance.append(
+                    {
+                        "dataset": dataset,
+                        "canonical_key": key,
+                        "snapshot_id": observation["snapshot_id"],
+                        "logical_order": observation["logical_order"],
+                        "source_relative_path": observation["source_relative_path"],
+                        "source_record_index": observation["source_record_index"],
+                        "source_object_sha256": observation["source_object_sha256"],
+                        "record_sha256": _sha256_value(observation["record"]),
+                        "field_presence": sorted(observation["record"]),
+                        "merge_disposition": "link_removed",
+                    }
+                )
+            continue
+        # The values of each field, in Snapshot order, with the Snapshots that
+        # gave each value; a field that a Snapshot does not contain has no
+        # entry for it. Values that differ only in form share an entry, which
+        # shows the value of its latest Snapshot.
+        history: dict[str, list[dict[str, Any]]] = {}
+        forms: dict[str, list[str]] = {}
         for observation in ordered:
+            number = int(observation["logical_order"])
             for field in sorted(observation["record"]):
                 value = observation["record"][field]
-                state = _value_state(value)
-                if state in {"explicit_null", "explicit_empty"}:
+                if entity:
+                    # An explicit null or empty value in a later Snapshot
+                    # means that the value was removed, so it replaces the
+                    # earlier value like any other value.
+                    form = _stable_json(_comparable(value))
+                    runs = history.setdefault(field, [])
+                    run_forms = forms.setdefault(field, [])
+                    if run_forms and run_forms[-1] == form:
+                        runs[-1]["value"] = value
+                        if number not in runs[-1]["snapshots"]:
+                            runs[-1]["snapshots"].append(number)
+                    else:
+                        if run_forms:
+                            updated_fields += 1
+                        runs.append({"value": value, "snapshots": [number]})
+                        run_forms.append(form)
+                    merged[field] = value
+                    selected[field] = observation
+                    continue
+                if (state := _value_state(value)) in {
+                    "explicit_null",
+                    "explicit_empty",
+                }:
                     preserves_previous = (
                         field in merged
                         and _value_state(merged[field]) == "explicit_value"
@@ -857,6 +1005,21 @@ def _merge_dataset(
                     updated_fields += 1
                 merged[field] = value
                 selected[field] = observation
+        if record_audit is not None:
+            audit_key = _audit_key(dataset, ordered[0]["raw_key"])
+            changed_fields = [
+                {"field": field, "values": runs}
+                for field, runs in sorted(history.items())
+                if len(runs) > 1
+            ]
+            if changed_fields:
+                record_audit["updates"].append(
+                    {"key": audit_key, "fields": changed_fields}
+                )
+            if bits.endswith("0"):
+                record_audit["not_in_latest_snapshot"].append(
+                    {"key": audit_key, "last_seen_snapshot": max(by_snapshot)}
+                )
         canonical.append(
             {
                 "canonical_key": key,
@@ -938,7 +1101,16 @@ def _merge_dataset(
         # but the primitive merge summary must expose deterministic repeat
         # accounting as well for direct merge QA and permutation tests.
         summary["exact_repeat_count"] = exact_repeat_count
-    return canonical, provenance, field_provenance, holds, conflicts, summary
+    if record_audit is not None:
+        for entries in record_audit.values():
+            entries.sort(key=lambda item: _stable_json(item["key"]))
+        # Counts only: the values stay in the dataset's audit record.
+        summary["updated_record_count"] = len(record_audit["updates"])
+        if dataset == "activity_gear":
+            summary["removed_link_count"] = len(record_audit["removed_links"])
+        else:
+            del record_audit["removed_links"]
+    return canonical, provenance, field_provenance, holds, conflicts, summary, record_audit
 
 
 def _materialized_record(item: dict[str, Any]) -> dict[str, Any]:
@@ -1166,6 +1338,9 @@ def build_approved_input(
         fit_unique: dict[str, dict[str, Any]] = {}
         unknown_aliases: list[dict[str, Any]] = []
         unknown_unique: dict[str, dict[str, Any]] = {}
+        # The Snapshots, by number, that hold Gear links: a Gear file with the
+        # gearActivityDTOs object, even an empty one.
+        link_snapshots: set[int] = set()
         for processing_index, manifest in enumerate(processing_manifests, start=1):
             diagnostic = snapshot_diagnostics[str(manifest["snapshot_id"])]
             acquisition_order = acquisition_order_by_snapshot_id[
@@ -1234,6 +1409,11 @@ def build_approved_input(
                     parser_states["extraction_failed"] += 1
                     verification_failures.append("supported_json_extraction_failed")
                     continue
+                if logical_name.lower().endswith("gear.json") and any(
+                    isinstance(container.get("gearActivityDTOs"), dict)
+                    for container in _containers(value)
+                ):
+                    link_snapshots.add(acquisition_order)
                 extracted = _dataset_records(logical_name, value)
                 if not extracted:
                     unknown_object_count += 1
@@ -1292,6 +1472,11 @@ def build_approved_input(
             observations_by_dataset.get("lactate_threshold_candidates", [])
         )
         dataset_summaries: dict[str, Any] = {}
+        latest_state = _latest_relationship_state(
+            observations_by_dataset,
+            len(manifests),
+        )
+        record_changes: dict[str, dict[str, list[dict[str, Any]]]] = {}
         for dataset in DATASET_ORDER:
             (
                 canonical,
@@ -1300,10 +1485,16 @@ def build_approved_input(
                 holds,
                 conflicts,
                 summary,
+                record_audit,
             ) = _merge_dataset(
                 dataset,
                 observations_by_dataset.get(dataset, []),
                 len(manifests),
+                latest_state=(
+                    latest_state
+                    if dataset == "activity_gear" and len(manifests) in link_snapshots
+                    else None
+                ),
             )
             canonical_by_dataset[dataset] = canonical
             all_provenance.extend(provenance)
@@ -1311,6 +1502,8 @@ def build_approved_input(
             all_holds.extend(holds)
             all_conflicts.extend(conflicts)
             dataset_summaries[dataset] = summary
+            if record_audit is not None:
+                record_changes[dataset] = record_audit
         lactate_summary = dataset_summaries["lactate_threshold_candidates"]
         lactate_observations = observations_by_dataset.get(
             "lactate_threshold_candidates", []
@@ -1754,16 +1947,16 @@ def build_approved_input(
             "lineage": lineage,
             "coverage": coverage,
             "merge_summary": aggregate_summary,
-            "relationship_context": _latest_relationship_state(
-                observations_by_dataset,
-                len(manifests),
-            ),
+            "relationship_context": latest_state,
             # Runtime only, like relationship_context: never written to an
             # output.
             "fit_snapshot_numbers": {
                 digest: sorted(numbers)
                 for digest, numbers in sorted(fit_snapshot_numbers.items())
             },
+            # Runtime only: Run-All writes these changes, with their values,
+            # to the dataset audit records of the local output.
+            "record_changes": record_changes,
             "source_completeness_context": {
                 "observation_scope": "REGISTERED_SNAPSHOT_OBSERVATIONS",
                 "observations": sorted(

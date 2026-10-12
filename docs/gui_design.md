@@ -281,9 +281,11 @@ Many cases that stop with exit 2 in v1.x finish with exit 0 or 3 in v2.0.0.
 - Existing Snapshot Stores are read without migration. If the store format must
   change, the change is an automatic migration that keeps the original data
   intact.
-- Warnings and other reported names identify Snapshots by their import order:
-  first, second, and so on. The labels that users give to Snapshots appear only
-  in local output, never in the Support Bundle or the External-safe Pack.
+- Warnings and other reported names identify Snapshots by number, 1, 2, and so
+  on, in the order of their Exports' observation times (stage A2b-2; see
+  [v2.0.0 Data Handling](v2_data_handling.md#changes-across-snapshots)). The
+  labels that users give to Snapshots appear only in local output, never in
+  the Support Bundle or the External-safe Pack.
 - The documents that currently describe some behavior differently (see the
   last section of [Known Limitations](known_limitations.md)) are corrected
   together with these changes.
@@ -292,7 +294,7 @@ Many cases that stop with exit 2 in v1.x finish with exit 0 or 3 in v2.0.0.
 
 - `gui` starts the GUI; it is exposed in stage D.
 - `run-all`, `doctor --input`, and `snapshot register` accept a ZIP file.
-- Warnings about values that disagree name the Snapshots by import order.
+- Warnings about values that disagree name the Snapshots by number.
 - The pre-run checks that only the GUI performs in v1.7.1 (output name, an
   existing parent folder, the write check, and the Windows path length) apply
   to the CLI. Relative paths and `~` stay accepted by the CLI as a difference

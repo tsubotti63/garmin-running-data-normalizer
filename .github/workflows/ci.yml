@@ -117,6 +117,9 @@ jobs:
       - name: Verify Windows values that disagree
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_values_disagree.py .\tests\test_snapshot_values_disagree.py -q
+      - name: Verify Windows Snapshot record updates
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_snapshot_record_updates.py -q
       - name: Build distributions
         shell: powershell
         run: |

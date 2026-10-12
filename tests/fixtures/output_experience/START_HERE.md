@@ -52,6 +52,17 @@ observations of that row's stable key. It is empty, and the dataset's audit
 keeps every observed value; warning `VALUES_DISAGREE` gives the number of
 such keys. The CSV files write the names separated by `;`.
 
+In a Snapshot run, each field of Activities, Gear, `activity_gear`, and
+Personal Records holds the value of the latest Snapshot that contains it;
+an empty value there means that the value was removed, and an
+`activity_gear` link is removed when the latest Snapshot shows its
+Activity and Gear without it. Their audits keep every earlier value and
+removed link with the Snapshots that gave it, numbered in the order of the
+Exports' observation times. Warning `VALUES_UPDATED` gives the number of
+records whose values changed and links removed, and
+`RECORDS_NOT_IN_LATEST_SNAPSHOT` the number of records kept although the
+latest Snapshot does not contain them.
+
 ### Available Analysis Files
 
 - `analysis/activities.csv`
@@ -66,13 +77,17 @@ such keys. The CSV files write the names separated by `;`.
 
 ### Audit Evidence
 
+- `audit/activities.json`
 - `audit/activity_fit_linkage.json`
+- `audit/activity_gear.json`
 - `audit/acute_training_load_daily.json`
 - `audit/endurance_score_daily.json`
 - `audit/fit_audit.json`
+- `audit/gear.json`
 - `audit/hill_score_daily.json`
 - `audit/hrv_daily.json`
 - `audit/lactate_threshold_candidates.json`
+- `audit/personal_records.json`
 - `audit/race_prediction_daily.json`
 - `audit/sleep_daily.json`
 - `audit/training_history_daily.json`

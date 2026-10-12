@@ -40,6 +40,10 @@ MACHINE_CONTEXT_NAMES = (
 )
 MANIFEST_OUTPUT_PATHS = (
     *DATASET_PATHS.values(),
+    "audit/activities.json",
+    "audit/gear.json",
+    "audit/activity_gear.json",
+    "audit/personal_records.json",
     "audit/fit_audit.json",
     "audit/activity_fit_linkage.json",
     "audit/hill_score_daily.json",
@@ -1416,6 +1420,9 @@ def _validate_projection_inputs(
         )
         if disagreement_key_count:
             expected_warning_count += 1
+        for field in ("updated_record_count", "not_in_latest_snapshot_count"):
+            if _non_negative_integer(result.get(field, 0), f"{family} {field}"):
+                expected_warning_count += 1
 
         if status != expected_status:
             raise OutputExperienceError(
@@ -1692,6 +1699,8 @@ def _snapshot_lifecycle_lines(summary: Mapping[str, Any]) -> list[str]:
             "reappeared_record_count",
             "changed_record_count",
             "updated_field_count",
+            "updated_record_count",
+            "removed_link_count",
         )
     }
     lines = [
@@ -1708,6 +1717,8 @@ def _snapshot_lifecycle_lines(summary: Mapping[str, Any]) -> list[str]:
         f"- Reappeared records: {totals['reappeared_record_count']}",
         f"- Changed records: {totals['changed_record_count']}",
         f"- Updated fields: {totals['updated_field_count']}",
+        f"- Records with updated values: {totals['updated_record_count']}",
+        f"- Removed Gear links: {totals['removed_link_count']}",
         f"- Explicit null reviews: {lifecycle.get('explicit_null_review_count', 0)}",
         f"- Explicit empty reviews: {lifecycle.get('explicit_empty_review_count', 0)}",
         f"- Review holds: {lifecycle.get('review_hold_count', 0)}",
@@ -1816,6 +1827,10 @@ def render_dataset_inventory(
             "  in the observations of the row's stable key: the field is empty, and the",
             "  dataset's audit keeps every observed value. Warning `VALUES_DISAGREE`",
             "  gives the number of such keys per family.",
+            "- In a Snapshot run, Activities, Gear, `activity_gear`, and Personal Records",
+            "  hold the latest Snapshot's values, and their audits keep every earlier",
+            "  value. Warnings `VALUES_UPDATED` and `RECORDS_NOT_IN_LATEST_SNAPSHOT`",
+            "  give the numbers of records per family.",
             "- Lactate Threshold remains candidate/audit-only until Product approves a",
             "  machine stable key and the remaining field authority gates.",
             "",
@@ -1986,6 +2001,17 @@ def render_start_here(
             "keeps every observed value; warning `VALUES_DISAGREE` gives the number of",
             "such keys. The CSV files write the names separated by `;`.",
             "",
+            "In a Snapshot run, each field of Activities, Gear, `activity_gear`, and",
+            "Personal Records holds the value of the latest Snapshot that contains it;",
+            "an empty value there means that the value was removed, and an",
+            "`activity_gear` link is removed when the latest Snapshot shows its",
+            "Activity and Gear without it. Their audits keep every earlier value and",
+            "removed link with the Snapshots that gave it, numbered in the order of the",
+            "Exports' observation times. Warning `VALUES_UPDATED` gives the number of",
+            "records whose values changed and links removed, and",
+            "`RECORDS_NOT_IN_LATEST_SNAPSHOT` the number of records kept although the",
+            "latest Snapshot does not contain them.",
+            "",
         ]
     )
     lines.extend(_path_list("Available Analysis Files", analysis_paths))
@@ -2122,6 +2148,11 @@ def render_analysis_handoff(
         "    observations of that row's stable key. It is empty, and the dataset's",
         "    audit keeps every observed value. Do not fill it or choose one of the",
         "    values; report the warning `VALUES_DISAGREE` with the analysis.",
+        "17. In a Snapshot run, Activities, Gear, `activity_gear`, and Personal Records",
+        "    hold the latest Snapshot's values, and a record that the latest Snapshot",
+        "    does not contain is kept. Do not treat an earlier value in their audits",
+        "    as current; report the warnings `VALUES_UPDATED` and",
+        "    `RECORDS_NOT_IN_LATEST_SNAPSHOT` with the analysis.",
         "",
         *_v1_3_relationship_lines(),
         *_relationship_coverage_lines(relationship_summary),
