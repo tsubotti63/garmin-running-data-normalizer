@@ -19,10 +19,17 @@ from ..common.private_files import (
     ensure_private_directory,
     open_private_file,
 )
-from ..intake.archive import UnsafeArchiveError, digest_member, validated_members
+from ..intake.accounts import account_values, names_account
+from ..intake.archive import ArchiveLimits, UnsafeArchiveError, digest_member, validated_members
+from ..intake.roots import (
+    OTHER_ACCOUNT_MESSAGE,
+    ExportView,
+    MixedExportsError,
+    OpenedExport,
+    open_export,
+)
 from ..intake.source import (
     CorruptArchiveError,
-    ExportSource,
     ExportTooLargeError,
     TempSpaceError,
     is_zip_input,
@@ -491,31 +498,55 @@ def _open_member(archive: ZipFile, info: ZipInfo) -> Iterator[BinaryIO]:
 
 
 @contextmanager
-def _open_snapshot_input(source: Path) -> Iterator[ExportSource]:
+def _open_snapshot_input(source: Path) -> Iterator[OpenedExport]:
+    """Open the input and choose its Export, as a run does.
+
+    Raises ``MixedExportsError`` when the input holds different Exports.
+    """
     if not is_zip_input(source):
         for path in source.rglob("*"):
             if path.is_symlink():
                 raise SnapshotStoreError("symbolic links are prohibited in snapshot input")
     with ExitStack() as stack:
         try:
-            export = stack.enter_context(ExportSource(source))
-        except UnsafeArchiveError as exc:
+            opened = stack.enter_context(open_export(source))
+        except (BadZipFile, OSError, UnsafeArchiveError) as exc:
             raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc
-        yield export
+        yield opened
 
 
 def _scan_source(
     source: Path,
-    export: ExportSource,
-) -> tuple[list[dict[str, Any]], dict[str, Path | _StreamedFile]]:
+    export: ExportView,
+) -> tuple[list[dict[str, Any]], dict[str, Path | _StreamedFile], set[str]]:
+    """List the Export's files and archive members, and the accounts its records name.
+
+    The accounts are compared during registration only and never stored.
+    """
     inventory: list[dict[str, Any]] = []
     payloads: dict[str, Path | _StreamedFile] = {}
+    accounts: set[str] = set()
     files = export.files()
     if not files:
         raise SnapshotStoreError("snapshot input contains no files")
-    archive_before = (source.stat().st_size, source.stat().st_mtime_ns) if export.is_zip else None
+    archive_before = (
+        (source.stat().st_size, source.stat().st_mtime_ns) if is_zip_input(source) else None
+    )
     for item in files:
         relative = item.relative_path
+        if (
+            item.suffix == ".json"
+            and names_account(relative)
+            and item.size <= export.limits.max_member_bytes
+        ):
+            # Read within the limits of a run; a file beyond them is left to
+            # the run, which reports it, and is not compared here.
+            try:
+                data = export.read(item)
+            except UnsafeArchiveError:
+                data = None
+            if data is not None:
+                accounts |= account_values([(relative, data)])
         if item.path is not None:
             path = item.path
             before = (path.stat().st_size, path.stat().st_mtime_ns)
@@ -596,7 +627,32 @@ def _scan_source(
         raise SnapshotStoreError("snapshot input changed during completeness scan")
     if not inventory:
         raise SnapshotStoreError("snapshot input contains no accepted files")
-    return inventory, payloads
+    return inventory, payloads, accounts
+
+
+def content_multiset(objects: list[dict[str, Any]]) -> list[tuple[str, int]]:
+    """The content of a Snapshot, whatever the paths: its files and members as
+    (SHA-256, bytes), with repeats."""
+    return sorted((str(row["sha256"]), int(row["bytes"])) for row in objects)
+
+
+def _snapshot_accounts(root: Path, manifest: dict[str, Any]) -> set[str]:
+    """Read again, from the store, the accounts that a Snapshot's records name."""
+    files: list[tuple[str, bytes]] = []
+    for row in manifest.get("objects", []):
+        relative = str(row.get("relative_path", ""))
+        if (
+            str(row.get("extension", "")).lower() != ".json"
+            or not names_account(relative)
+            or int(row["bytes"]) > ArchiveLimits().max_member_bytes
+        ):
+            continue
+        blob = root / str(row["blob_relative_path"])
+        data = blob.read_bytes()
+        if len(data) != row["bytes"] or _sha256_bytes(data) != row["sha256"]:
+            raise SnapshotStoreError("immutable snapshot blob failed verification")
+        files.append((relative, data))
+    return account_values(files)
 
 
 def _inventory_content_id(inventory: list[dict[str, Any]]) -> str:
@@ -646,8 +702,39 @@ def register_snapshot(
     # The input stays open until its files are copied to the store.
     with _store_lock(root), ExitStack() as stack:
         recovery_status = _recover_journal(root)
-        export = stack.enter_context(_open_snapshot_input(source))
-        inventory, payloads = _scan_source(source, export)
+        opened = stack.enter_context(_open_snapshot_input(source))
+        inventory, payloads, accounts = _scan_source(source, opened.source)
+        if len(accounts) > 1:
+            raise MixedExportsError()
+        input_notes: dict[str, int] = {}
+        if opened.same_export_count:
+            input_notes["same_export_count"] = opened.same_export_count
+        if opened.outside_files:
+            input_notes["files_not_registered_count"] = len(opened.outside_files)
+        manifests = load_manifests(root)
+        # The same Export registered again, under any path, label, or time, is
+        # not a new Snapshot (stage A3a).
+        target = content_multiset(inventory)
+        for index, existing in enumerate(manifests, start=1):
+            if content_multiset(list(existing.get("objects", []))) == target:
+                _write_registry(root, manifests)
+                return {
+                    "status": "PASS",
+                    "snapshot_id": existing["snapshot_id"],
+                    "registration_was_idempotent": True,
+                    "same_content_as": {
+                        "snapshot_label": existing["snapshot_label"],
+                        "logical_order": index,
+                    },
+                    "snapshot_count": len(manifests),
+                    "logical_order": index,
+                    "recovery_status": recovery_status,
+                    **input_notes,
+                }
+        if accounts and manifests:
+            latest_accounts = _snapshot_accounts(root, manifests[-1])
+            if latest_accounts and latest_accounts != accounts:
+                raise MixedExportsError(OTHER_ACCOUNT_MESSAGE)
         content_id = _inventory_content_id(inventory)
         snapshot_digest = _sha256_bytes(
             _stable_json_bytes(
@@ -660,7 +747,6 @@ def register_snapshot(
         )
         snapshot_id = f"snapshot-{snapshot_digest}"
         manifest_path = root / "snapshots" / snapshot_id / "manifest.json"
-        manifests = load_manifests(root)
         if any(
             item["snapshot_label"] == label and item["snapshot_id"] != snapshot_id
             for item in manifests
@@ -756,6 +842,7 @@ def register_snapshot(
             "blob_added_count": added,
             "blob_reused_count": reused,
             "recovery_status": recovery_status,
+            **input_notes,
         }
 
 
@@ -898,6 +985,7 @@ def verify_store(store_root: str | Path) -> dict[str, Any]:
 
 __all__ = [
     "SnapshotStoreError",
+    "content_multiset",
     "initialize_store",
     "load_manifests",
     "load_store",

@@ -449,8 +449,14 @@ class SnapshotLifecycleTest(unittest.TestCase):
             idempotent = self.register(store, snapshots[2], "S2", 2)
             self.assertTrue(idempotent["registration_was_idempotent"])
             self.assertEqual(idempotent["snapshot_count"], 4)
-            with self.assertRaises(SnapshotLifecycleError):
-                self.register(store, snapshots[2], "S2-renamed", 2)
+            # The same Export under another label is the Snapshot already
+            # registered, not an error (stage A3a).
+            renamed = self.register(store, snapshots[2], "S2-renamed", 2)
+            self.assertTrue(renamed["registration_was_idempotent"])
+            self.assertEqual(
+                renamed["same_content_as"], {"snapshot_label": "S2", "logical_order": 2}
+            )
+            self.assertEqual(renamed["snapshot_count"], 4)
             duplicate_label_source = root / "duplicate-label-source"
             _write_snapshot(duplicate_label_source, [_activity("A5")])
             with self.assertRaises(SnapshotLifecycleError):

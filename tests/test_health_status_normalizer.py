@@ -162,7 +162,12 @@ class HealthStatusNormalizerTest(unittest.TestCase):
                 first["daily"][0]["health_status_daily_record_key"],
                 second["daily"][0]["health_status_daily_record_key"],
             )
-            self.assertIn("!DI-Connect-Wellness/", first["daily"][0]["source_path"])
+            # An Export ZIP file in a folder is read as when it is selected
+            # directly: paths are counted from the Export inside it (stage A3a).
+            self.assertEqual(
+                first["daily"][0]["source_path"],
+                "DI-Connect-Wellness/synthetic_healthStatusData.json",
+            )
 
 
 if __name__ == "__main__":

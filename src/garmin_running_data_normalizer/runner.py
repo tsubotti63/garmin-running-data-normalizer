@@ -16,7 +16,9 @@ from .common.time import (
     resolve_timezone_name,
 )
 from .common.private_files import PRIVATE_DIRECTORY_MODE, open_private_file
+from .intake.accounts import asset_accounts
 from .intake.discovery import InputChangedError, read_export
+from .intake.roots import MixedExportsError
 from .intake.source import (
     CorruptArchiveError,
     ExportTooLargeError,
@@ -104,6 +106,8 @@ def run_activities(
         if not assets:
             raise GoldenPathError("no supported summarizedActivities.json input was found")
         try:
+            if len(asset_accounts(assets)) > 1:
+                raise MixedExportsError()
             records = normalize_activities(str(input_root), timezone_name, assets=assets)
         except InputChangedError as exc:
             raise GoldenPathError("input changed or provenance diverged during processing") from exc
@@ -411,8 +415,12 @@ def main(argv: list[str] | None = None) -> int:
     except SupportBundleError as exc:
         print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)
         return 2
-    # The same codes as Run-All, for the commands that read an Export ZIP file
-    # without Run-All (normalize-activities and snapshot register).
+    # The same codes as Run-All, for the commands that read an Export without
+    # Run-All (normalize-activities and snapshot register) and for a Snapshot
+    # Store that holds the Exports of more than one account.
+    except MixedExportsError as exc:
+        print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)
+        return 2
     except CorruptArchiveError:
         print("ERROR [INPUT_ZIP_CORRUPT]: the Export ZIP file is damaged or incomplete", file=sys.stderr)
         return 2

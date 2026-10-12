@@ -1447,6 +1447,10 @@ def _validate_projection_inputs(
         summary_object.get("candidate_warning_count", 0),
         "candidate warning count",
     )
+    input_warning_count = _non_negative_integer(
+        summary_object.get("input_warning_count", 0),
+        "input warning count",
+    )
     summary_error_count = _non_negative_integer(
         summary_object.get("error_count"), "error count"
     )
@@ -1457,7 +1461,10 @@ def _validate_projection_inputs(
     if not isinstance(errors, list) or len(errors) != summary_error_count:
         raise OutputExperienceError("error list does not match error count")
     if summary_warning_count != (
-        total_family_warnings + relationship_warning_count + candidate_warning_count
+        total_family_warnings
+        + relationship_warning_count
+        + candidate_warning_count
+        + input_warning_count
     ):
         raise OutputExperienceError(
             "summary warning count does not match family warning counts"
@@ -1707,6 +1714,14 @@ def _snapshot_lifecycle_lines(summary: Mapping[str, Any]) -> list[str]:
         "## Snapshot Accumulation",
         "",
         f"- Snapshots used: {lifecycle.get('snapshot_count')}",
+        *(
+            [
+                "- Snapshots with the same content as an earlier one, counted once: "
+                f"{lifecycle['same_content_snapshot_count']}"
+            ]
+            if lifecycle.get("same_content_snapshot_count")
+            else []
+        ),
         f"- Snapshot labels: {', '.join(str(value) for value in labels) or 'not supplied'}",
         "- Observed range: "
         f"{observed_range.get('first', 'unknown')} to "
@@ -1928,6 +1943,19 @@ def _local_timezone_handoff_lines(summary: Mapping[str, Any]) -> list[str]:
     ]
 
 
+def _files_not_read_lines(manifest: Mapping[str, Any]) -> list[str]:
+    """Count the files that the run did not read, as listed in the manifest."""
+    files = manifest.get("files_not_read", [])
+    if not isinstance(files, list):
+        raise OutputExperienceError("files not read must be a list")
+    if not files:
+        return []
+    return [
+        f"- Files not read: {len(files)}, such as files outside the Export; "
+        "`run_manifest.json` lists them with the reason"
+    ]
+
+
 def render_start_here(
     manifest: Mapping[str, Any],
     summary: Mapping[str, Any],
@@ -1956,6 +1984,7 @@ def render_start_here(
         *_local_timezone_status_lines(summary),
         f"- Warning count: {warning_count}",
         f"- Error count: {error_count}",
+        *_files_not_read_lines(manifest),
         "",
         "## Dataset Families",
         "",

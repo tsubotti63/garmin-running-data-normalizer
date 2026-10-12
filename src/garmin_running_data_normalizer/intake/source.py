@@ -64,7 +64,8 @@ def is_zip_input(path: Path) -> bool:
     return path.is_file() and path.suffix.lower() == ".zip"
 
 
-def _is_layout_folder(name: str) -> bool:
+def is_layout_folder(name: str) -> bool:
+    """Return whether a folder name belongs to the Export's own layout."""
     lower = name.lower()
     return lower in _LAYOUT_FOLDERS or lower.startswith(_LAYOUT_FOLDER_PREFIX)
 
@@ -99,6 +100,7 @@ class ExportSource:
             raise FileNotFoundError("Garmin Export folder or ZIP file does not exist")
         self._archive: ZipFile | None = None
         self._nested: dict[str, ZipFile] = {}
+        self._local: dict[str, Path] = {}
         self._temporary: tempfile.TemporaryDirectory[str] | None = None
         self._space_checked = False
         self._files: list[ExportFile] = []
@@ -146,7 +148,7 @@ class ExportSource:
                 len(children) == 1
                 and children[0].is_dir()
                 and not children[0].is_symlink()
-                and not _is_layout_folder(children[0].name)
+                and not is_layout_folder(children[0].name)
             ):
                 break
             base = children[0]
@@ -176,7 +178,7 @@ class ExportSource:
         prefix_parts = 0
         while names and all(len(parts) > prefix_parts + 1 for parts in names):
             tops = {parts[prefix_parts] for parts in names}
-            if len(tops) != 1 or _is_layout_folder(next(iter(tops))):
+            if len(tops) != 1 or is_layout_folder(next(iter(tops))):
                 break
             prefix_parts += 1
         files = [
@@ -264,13 +266,25 @@ class ExportSource:
         """Return a ZIP file found in the Export, opened once until the Export is closed."""
         archive = self._nested.get(item.relative_path)
         if archive is None:
-            if item.member is None:
-                assert item.path is not None
-                archive = ZipFile(item.path, "r")
-            else:
-                archive = ZipFile(self._copy(item), "r")
+            archive = ZipFile(self.local_path(item), "r")
             self._nested[item.relative_path] = archive
         return archive
+
+    def local_path(self, item: ExportFile) -> Path:
+        """Return a path on disk for one Export file.
+
+        A file of a folder is used in place; a member of an Export ZIP file is
+        copied once to the private temporary folder, which stays until the
+        Export is closed.
+        """
+        if item.member is None:
+            assert item.path is not None
+            return item.path
+        path = self._local.get(item.relative_path)
+        if path is None:
+            path = self._copy(item)
+            self._local[item.relative_path] = path
+        return path
 
     def _copy(self, item: ExportFile) -> Path:
         """Copy a ZIP file inside the Export ZIP file to the private temporary folder."""
@@ -312,5 +326,6 @@ __all__ = [
     "ExportSource",
     "ExportTooLargeError",
     "TempSpaceError",
+    "is_layout_folder",
     "is_zip_input",
 ]

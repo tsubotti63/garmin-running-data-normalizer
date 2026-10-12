@@ -135,8 +135,13 @@ class HrvNormalizerTest(unittest.TestCase):
             (root / "unrelated.json").write_text("{}", encoding="utf-8")
             second = normalize_hrv(root)
             self.assertEqual(first["fit_daily"][0]["fit_file_id"], second["fit_daily"][0]["fit_file_id"])
-            self.assertIn("!DI-Connect-Metrics/", first["fit_daily"][0]["source_path"])
-            self.assertIn("!DI-Connect-Wellness/", first["health_status_json_reference"][0]["source_path"])
+            # An Export ZIP file in a folder is read as when it is selected
+            # directly: paths are counted from the Export inside it (stage A3a).
+            self.assertEqual(first["fit_daily"][0]["source_path"], "DI-Connect-Metrics/synthetic.fit")
+            self.assertEqual(
+                first["health_status_json_reference"][0]["source_path"],
+                "DI-Connect-Wellness/synthetic_healthStatusData.json",
+            )
 
     def test_bad_fit_is_audited_without_false_hrv(self) -> None:
         parsed = parse_fit_hrv_bytes(b"not-fit", file_id="fit_file:synthetic", source_path="bad.fit")

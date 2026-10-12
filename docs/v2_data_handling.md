@@ -246,10 +246,14 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
 - v2.0.0:
   - Records with the same stable key and the same values are merged into one
     row, and the audit record counts how often they appeared.
-  - When whole files repeat, as when an Export is given twice or together with
-    its extracted copy, warning `INPUT_DUPLICATE_SOURCES` (provisional) is given
-    once per run. Status `PASS_WITH_WARNINGS`. Repeated records inside one file
-    are counted without a warning.
+  - When the input holds the same Export more than once, as when an Export is
+    given twice or together with its extracted copy, it is read once, and
+    warning `INPUT_DUPLICATE_SOURCES` is given once per run with the number of
+    copies not read (stage A3a, which settles the name; see
+    [Mixed input](#mixed-input)). Status `PASS_WITH_WARNINGS`. Repeated records
+    inside one file are counted without a warning, and so are files with the
+    same content at different places in one Export, such as several files
+    that hold an empty list: they are not a repeated Export.
   - Identifiers written in two ways, such as `" 123"` and `123`, are the same
     identifier, as in v1.7.1.
 
@@ -258,15 +262,57 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
 - v1.7.1: a parent folder with several Exports passes the pre-run check and
   stops with `RELATIONSHIP_CONTRACT_FAILED`, which the GUI reports as an
   internal check.
-- v2.0.0:
-  - An input holds one Export. Several Exports with the same content are
-    duplicates (above).
-  - Several Exports with different content, or records from different accounts,
-    stop the run with `INPUT_MULTIPLE_EXPORTS` (provisional). When the product
-    cannot rule out a mix, it stops.
-  - The pre-run check reports the same result as the run.
-  - Stage A3 settles the evidence used to tell Exports and accounts apart. Any
-    account evidence stays inside the run and is never written to an output.
+- v1.7.1 and stage A1 also produce one output from two Exports that share no
+  Activity, as when the Exports of two accounts sit in one folder, and leave
+  out the uploaded FIT files of an Export ZIP file that sits in the selected
+  folder.
+- v2.0.0 (stage A3a):
+  - An input holds one Export. An Export's root is the folder that holds its
+    own layout folders (`DI_CONNECT`, `DI-GOLF`, or a name that starts with
+    `DI-Connect-`, in any letter case), or a ZIP file in the input that holds
+    them. An input with no root or with one root holds one Export.
+  - Several roots hold the same Export when they hold the same files: the same
+    paths and sizes, counted from each root, including the files that are not
+    read, and the same content for the files that are read. Operating-system
+    metadata, such as `.DS_Store`, is left out, as when the files are read.
+    The Export is then read once, from the first root in path order, with
+    warning `INPUT_DUPLICATE_SOURCES` (see [Duplicates](#duplicates)).
+  - Roots that differ in any file, including a root that holds only part of
+    another, are different Exports: the run stops with
+    `INPUT_MULTIPLE_EXPORTS` (exit 2) and publishes nothing, and the next step
+    is to select one Export, or to register each Export as a Snapshot. Stage
+    A3a settles the name.
+  - The records of one Export name one account: Activities in
+    `userProfileId`, and Gear, Hill Score, and the other daily metrics in
+    `userProfilePk` or `userProfilePK`. Only these files are used, because
+    other files of an Export, such as those about connections, groups, or
+    challenges, name other people's accounts. Values are compared as numbers,
+    so `" 123"` and `123` are one account. Records that name two or more
+    accounts stop the run with `INPUT_MULTIPLE_EXPORTS`; an Export whose
+    records name no account is not stopped for that reason. The accounts are
+    compared within the run only and never appear in an output, a Snapshot
+    Store, a warning, an error message, the GUI, or a log.
+  - A root is read as if it were given alone: the paths of its files are
+    counted from the root, so an Export gives the same outputs however it is
+    given. An Export ZIP file in the selected folder is read as when it is
+    selected directly, with the ZIP files inside it.
+  - Files inside a root are part of that Export and are read, as before: a FIT
+    file placed next to `DI_CONNECT` in the selected Export folder is read. A
+    FIT file names no account, so such a file of someone else cannot be told
+    apart.
+  - When the input has a root, the JSON, FIT, and ZIP files outside every root
+    are not read, because they may belong to someone else. `run_manifest.json`
+    lists them under `files_not_read` with the reason `outside_export_root`,
+    and `START_HERE.md` gives their number; the status does not change. Their
+    names never reach the Support Bundle or the External-safe Pack. An input
+    without a root is read as before.
+  - The pre-run check (`doctor --input`, which the GUI uses) reports the same
+    result as the run: `INPUT_MULTIPLE_EXPORTS` as an error, and
+    `INPUT_DUPLICATE_SOURCES` as a warning that does not block the run.
+  - `normalize-activities` and `snapshot register` choose the Export in the
+    same way; see [Snapshot Stores](#snapshot-stores) for registration.
+  - Warnings and errors name no folder or file. The accounts are compared
+    again for each run, which reads the account files once more.
 
 ### Files that cannot be read
 
@@ -402,6 +448,8 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
   - A ZIP file is read as the folder extracted from it: the same files at the
     same paths. ZIP files inside it are read one level deep and recorded as
     `inner.zip!member`, as in a folder; a ZIP file inside those is not read.
+    From stage A3a, an Export ZIP file in the selected folder is read as when
+    it is selected directly (see [Mixed input](#mixed-input)).
   - Folders around the Export are left out of the paths. While everything in
     the ZIP file, or in the selected folder, is inside one folder that is not
     part of the Export's own layout (`DI_CONNECT`, `DI-GOLF`, or a name that
@@ -446,7 +494,7 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
   - An Export ZIP file that cannot be opened, ends early, or has a member that
     fails its CRC check stops the run with `INPUT_ZIP_CORRUPT`. A damaged ZIP
     file inside the Export still stops the run with `INPUT_DISCOVERY_FAILED`
-    until stage A3 leaves it out with a reason.
+    until stage A3c leaves it out with a reason.
   - The Snapshot Store format does not change.
 
 ### Stops that remain
@@ -510,13 +558,17 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   grows from 46 to 50 files, and Run Quality's authority evidence and the
   Support Bundle's copy of Run Quality name them.
 - New warning codes: `VALUES_DISAGREE` (stage A2a), `VALUES_UPDATED` and
-  `RECORDS_NOT_IN_LATEST_SNAPSHOT` (stage A2b-2), and, with provisional
-  names, `INPUT_DUPLICATE_SOURCES`, `DATA_FILE_LEFT_OUT`, `DATA_ROW_LEFT_OUT`,
-  `DATA_VALUE_INVALID`, and `DATA_TEXT_REPAIRED`.
+  `RECORDS_NOT_IN_LATEST_SNAPSHOT` (stage A2b-2), `INPUT_DUPLICATE_SOURCES`
+  (stage A3a), and, with provisional names, `DATA_FILE_LEFT_OUT`,
+  `DATA_ROW_LEFT_OUT`, `DATA_VALUE_INVALID`, and `DATA_TEXT_REPAIRED`.
+- Stage A3a adds `files_not_read` to `run_manifest.json` and
+  `input_warning_count` to `run_summary.json`, each only when there is
+  something to report, so the outputs of an input with one Export and no files
+  outside it do not change.
   `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
-  `TEMP_SPACE_INSUFFICIENT` (stage A1), and `INPUT_MULTIPLE_EXPORTS` and
-  `SNAPSHOT_STORE_LOCKED` (provisional names).
+  `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
+  and `SNAPSHOT_STORE_LOCKED` (provisional name).
 - Warnings carry codes and counts only: no paths, values, or identifiers.
   Snapshots are named by number. User labels for Snapshots appear only in
   local output and never in the Support Bundle or the External-safe Pack.
@@ -566,9 +618,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   registry (`config/garmin_snapshot_dataset_merge_policies_v1.json`) stays
   unchanged as the record of the v1.0 rules. The rules for merging the
   Snapshots into one Run-All input have their own version and file from stage
-  A2b-1: `garmin_snapshot_merge_rules:v2.0` for the daily datasets, and
+  A2b-1: `garmin_snapshot_merge_rules:v2.0` for the daily datasets,
   `garmin_snapshot_merge_rules:v2.1` from stage A2b-2, which adds the rules
-  for Activities, Gear, `activity_gear`, and Personal Records, in
+  for Activities, Gear, `activity_gear`, and Personal Records, and
+  `garmin_snapshot_merge_rules:v2.2` from stage A3a, which adds the rules for
+  Snapshots with the same content and for accounts, in
   `config/garmin_snapshot_merge_rules_v2.json`. For these datasets they
   replace the merge fields of the v1.0 registry; the other datasets follow the
   v1.0 registry until stage A3. A build records
@@ -580,12 +634,41 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   the same content identity, however deeply it is wrapped in other folders; a
   test checks this from stage A1 on.
 - A Snapshot that v1.7.1 registered from a folder inside such wrapping folders
-  keeps their names in its paths, so registering the same Export again gives a
-  different content identity, and the store holds a second Snapshot with the
-  same files. The normalized datasets stay the same, because the records are
-  the same, but the Snapshot lineage and the summaries count two Snapshots.
-  Stage A3 recognizes the same Export by the content of its files rather than
-  by its paths, so that such a Snapshot is not counted as a second Export.
+  keeps their names in its paths, so its content identity differs from the
+  same Export registered again. Up to stage A2b-2, the store then held a
+  second Snapshot with the same files, and the Snapshot lineage and the
+  summaries counted two Snapshots.
+- Stage A3a recognizes the same Export by the content of its files rather than
+  by their paths: the SHA-256 digests and sizes of its files and archive
+  members, with repeats.
+  - `snapshot register` does not register an Export that the store already
+    holds, whatever its paths, wrapping folders, label, or times: it reports
+    the Snapshot that holds it in `same_content_as`, with its label and
+    number, and exits 0.
+  - A build counts Snapshots with the same content once and uses the earliest
+    observed one, so that an Export registered again later never becomes the
+    latest Snapshot. `snapshot/snapshot_lineage.json` gives their number and
+    labels (`same_content_snapshot_count` and `same_content_snapshots`), the
+    merge summary their number, and `START_HERE.md` their number under
+    "Snapshot Accumulation".
+- Stage A3a: `snapshot register` chooses the Export in its input as a run does
+  (see [Mixed input](#mixed-input)). It refuses different Exports or accounts
+  with `INPUT_MULTIPLE_EXPORTS`, registers the same Export given twice once
+  (`same_export_count` in its result), and does not register the files
+  outside the Export (`files_not_registered_count`).
+- A store holds the Exports of one account. `snapshot register` compares the
+  accounts that the new Export's records name with those of the latest
+  Snapshot, read again from the store, and refuses another account with
+  `INPUT_MULTIPLE_EXPORTS`; the store never records the accounts. A store that
+  already holds the Exports of two accounts, as one registered before stage
+  A3a could, stops the build with the same code. The CLI names the next step
+  for each case: to register the Export into a store for its account, or to
+  create a new store for each account. The GUI gains Snapshots, and these
+  texts, in stage B.
+- To compare the accounts, `snapshot register` reads the files whose records
+  name their account within the limits of a run (a JSON file of at most
+  128 MiB, and the compression ratio of a ZIP member); a file beyond them is
+  not compared, and the run reports it.
 - A test keeps a store in the v1.7.1 format as a fixed synthetic fixture, with
   the script that made it. Every stage A pull request checks that it loads
   without migration and that every Snapshot is used.
@@ -624,11 +707,22 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   earlier value is kept in the new audit records, and an `activity_gear` link
   is removed when the latest Snapshot shows its Activity and Gear without it.
   Snapshots are numbered in the order of their Exports' observation times.
-  The merge rules v2.1 are published in
+  Registering an Export that the store already holds reports the Snapshot
+  that holds it instead of adding one, a build counts Snapshots with the same
+  content once, and a store that holds the Exports of two accounts stops the
+  build. The merge rules v2.2 are published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around
   the Export, in a ZIP file or a folder, are left out of the recorded paths.
+  An input that holds different Exports, or the records of more than one
+  account, stops with `INPUT_MULTIPLE_EXPORTS`; v1.7.1 stopped with
+  `RELATIONSHIP_CONTRACT_FAILED` when the Exports shared Activities and
+  otherwise produced one output from both. The same Export given twice is
+  read once, with warning `INPUT_DUPLICATE_SOURCES`. An Export ZIP file in the
+  selected folder is read as when it is selected directly, with its uploaded
+  FIT files and with paths counted from the Export inside it, and files
+  outside the Export are listed instead of read.
 - CLI: the pre-run checks that the GUI performed in v1.7.1 apply to the CLI,
   errors report what happened and the next step, and `Ctrl+C` reports the
   cancellation.

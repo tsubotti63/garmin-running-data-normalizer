@@ -14,10 +14,12 @@ from ..common.identity import garmin_activity_key, stable_hash
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..diagnostics.contracts import FAMILY_DATASETS, SOURCE_FAMILY_ORDER
 from ..diagnostics.detector import classify_source_name
+from ..intake.accounts import names_account, payload_accounts
 from ..intake.archive import ArchiveLimits
+from ..intake.roots import MIXED_STORE_MESSAGE, MixedExportsError
 from ..normalizers.daily_metrics import SNAPSHOT_NUMBERS_FIELD
 from .policies import CONTRACT_VERSION, MERGE_RULES, MERGE_RULES_VERSION, REGISTRY_VERSION
-from .store import SnapshotStoreError, load_manifests, load_store, sha256_file
+from .store import SnapshotStoreError, content_multiset, load_manifests, load_store, sha256_file
 from .store import verify_store
 
 
@@ -1270,25 +1272,38 @@ def build_approved_input(
         raise SnapshotMergeError("snapshot store verification failed")
     store, store_metadata = load_store(store_root)
     verification_failures: list[str] = []
-    manifests = load_manifests(store)
-    if not manifests:
+    registered = load_manifests(store)
+    if not registered:
         raise SnapshotMergeError("snapshot store has no registered snapshots")
+    # Snapshots with the same content are one Export, registered more than
+    # once; the earliest observed one is used (merge rules v2.2), so that an
+    # Export registered again later never becomes the latest Snapshot.
+    manifests: list[dict[str, Any]] = []
+    same_content: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    first_by_content: dict[tuple[tuple[str, int], ...], dict[str, Any]] = {}
+    for manifest in registered:
+        content = tuple(content_multiset(list(manifest.get("objects", []))))
+        if content in first_by_content:
+            same_content.append((manifest, first_by_content[content]))
+        else:
+            first_by_content[content] = manifest
+            manifests.append(manifest)
     acquisition_order_by_snapshot_id = {
         str(manifest["snapshot_id"]): index
         for index, manifest in enumerate(manifests, start=1)
     }
     manifests_by_label = {
-        str(manifest["snapshot_label"]): manifest for manifest in manifests
+        str(manifest["snapshot_label"]): manifest for manifest in registered
     }
     manifests_by_id = {
-        str(manifest["snapshot_id"]): manifest for manifest in manifests
+        str(manifest["snapshot_id"]): manifest for manifest in registered
     }
     if processing_sequence is None:
         processing_manifests = list(manifests)
         processing_labels = [str(item["snapshot_label"]) for item in manifests]
     else:
         sequence = [str(item) for item in processing_sequence]
-        if len(sequence) != len(manifests) or len(set(sequence)) != len(sequence):
+        if len(sequence) != len(registered) or len(set(sequence)) != len(sequence):
             raise SnapshotMergeError(
                 "processing_sequence must contain each registered snapshot exactly once"
             )
@@ -1300,6 +1315,11 @@ def build_approved_input(
             raise SnapshotMergeError(
                 "processing_sequence must use registered snapshot labels or IDs"
             )
+        processing_manifests = [
+            item
+            for item in processing_manifests
+            if str(item["snapshot_id"]) in acquisition_order_by_snapshot_id
+        ]
         processing_labels = [str(item["snapshot_label"]) for item in processing_manifests]
     requested_output = Path(output_root)
     if requested_output.is_symlink():
@@ -1341,6 +1361,9 @@ def build_approved_input(
         # The Snapshots, by number, that hold Gear links: a Gear file with the
         # gearActivityDTOs object, even an empty one.
         link_snapshots: set[int] = set()
+        # The accounts that the records name, compared here only and never
+        # written: a store holds the Exports of one account.
+        accounts: set[str] = set()
         for processing_index, manifest in enumerate(processing_manifests, start=1):
             diagnostic = snapshot_diagnostics[str(manifest["snapshot_id"])]
             acquisition_order = acquisition_order_by_snapshot_id[
@@ -1409,6 +1432,8 @@ def build_approved_input(
                     parser_states["extraction_failed"] += 1
                     verification_failures.append("supported_json_extraction_failed")
                     continue
+                if names_account(logical_name):
+                    accounts |= payload_accounts(value)
                 if logical_name.lower().endswith("gear.json") and any(
                     isinstance(container.get("gearActivityDTOs"), dict)
                     for container in _containers(value)
@@ -1460,6 +1485,8 @@ def build_approved_input(
                     )
         if verification_failures:
             raise SnapshotMergeError("supported source extraction failed")
+        if len(accounts) > 1:
+            raise MixedExportsError(MIXED_STORE_MESSAGE)
 
         canonical_by_dataset: dict[str, list[dict[str, Any]]] = {}
         all_provenance: list[dict[str, Any]] = []
@@ -1750,6 +1777,22 @@ def build_approved_input(
             "snapshot_count": len(manifests),
             "chronology_authority": "manifest.export_observed_at",
             "processing_sequence": "runtime-only; never authoritative",
+            **(
+                {
+                    "same_content_snapshot_count": len(same_content),
+                    "same_content_snapshots": [
+                        {
+                            "snapshot_label": manifest["snapshot_label"],
+                            "same_as_snapshot_number": acquisition_order_by_snapshot_id[
+                                str(first["snapshot_id"])
+                            ],
+                        }
+                        for manifest, first in same_content
+                    ],
+                }
+                if same_content
+                else {}
+            ),
             "snapshots": [
                 {
                     "snapshot_id": manifest["snapshot_id"],
@@ -1800,6 +1843,11 @@ def build_approved_input(
                 "first": manifests[0]["export_observed_at"],
                 "last": manifests[-1]["export_observed_at"],
             },
+            **(
+                {"same_content_snapshot_count": len(same_content)}
+                if same_content
+                else {}
+            ),
             "policy_registry_version": REGISTRY_VERSION,
             "merge_rules_version": MERGE_RULES_VERSION,
             "parser_version": __version__,

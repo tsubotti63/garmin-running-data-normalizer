@@ -103,9 +103,9 @@ check and Support Bundle. Before the External-safe Pack or the Support Bundle is
 created, the page shows the name and location of the file that will be
 created.
 
-Provisional until stage B: the label of the main button and the names of the new
-error codes `INPUT_ZIP_CORRUPT`, `INPUT_MULTIPLE_EXPORTS`, and
-`SNAPSHOT_STORE_LOCKED`.
+Provisional until stage B: the label of the main button and the name of the new
+error code `SNAPSHOT_STORE_LOCKED`. Stage A settled `INPUT_ZIP_CORRUPT` (stage
+A1a) and `INPUT_MULTIPLE_EXPORTS` (stage A3a).
 
 ## Architecture
 

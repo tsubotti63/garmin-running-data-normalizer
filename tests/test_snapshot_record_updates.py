@@ -22,6 +22,7 @@ from garmin_running_data_normalizer.snapshot import (
     register_snapshot,
     run_snapshot_all,
 )
+from garmin_running_data_normalizer.snapshot.policies import MERGE_RULES_VERSION
 from garmin_running_data_normalizer.standalone import validate_standalone_handoff
 from tests.test_snapshot_lifecycle import _activity, _write_snapshot
 
@@ -206,7 +207,7 @@ class SnapshotRecordUpdatesTest(unittest.TestCase):
             self.assertEqual(family["updated_record_count"], 1)
             self.assertEqual(family["not_in_latest_snapshot_count"], 1)
             merge_summary = load(output / "snapshot/canonical_merge_summary.json")
-            self.assertEqual(merge_summary["merge_rules_version"], "garmin_snapshot_merge_rules:v2.1")
+            self.assertEqual(merge_summary["merge_rules_version"], MERGE_RULES_VERSION)
             self.assertEqual(merge_summary["datasets"]["activities"]["updated_record_count"], 1)
             self.assertEqual(merge_summary["explicit_null_review_count"], 0)
             # The output stays valid for the checks of completed outputs.
