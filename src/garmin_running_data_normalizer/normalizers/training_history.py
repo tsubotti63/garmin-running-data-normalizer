@@ -7,6 +7,7 @@ from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..intake.discovery import DiscoveredAsset
 from .daily_metrics import (
     DailyMetricResult,
+    copies_within_snapshots,
     finalize_daily,
     selected_rows,
     snapshot_numbers,
@@ -34,7 +35,8 @@ def normalize_training_history(
     for raw in rows:
         date = daily_calendar_date(raw.get("calendarDate"))
         timestamp, semantics = normalize_observation_timestamp(raw.get("timestamp"))
-        timestamp_semantics[semantics] += 1
+        # Copies within one Snapshot count as in a one-shot run (stage A3b).
+        timestamp_semantics[semantics] += 1 + copies_within_snapshots(snapshot_numbers(raw))
         status = text(raw.get("trainingStatus"))
         if date is None:
             excluded["missing_or_invalid_calendar_date"] += 1

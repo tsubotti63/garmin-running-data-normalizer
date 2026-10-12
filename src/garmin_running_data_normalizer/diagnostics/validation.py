@@ -433,6 +433,10 @@ def validate_diagnostic_authorities(
         fit_status=_fit_status(fit_audit),
         source_completeness=completeness,
         authority_payloads=authority_payloads,
+        record_audits={
+            name: _json(root, f"audit/{name}.json")
+            for name in ("activities", "gear", "activity_gear", "personal_records")
+        },
     )
     if quality != expected:
         raise ValueError("Run Quality contradicts QA or audit authority")

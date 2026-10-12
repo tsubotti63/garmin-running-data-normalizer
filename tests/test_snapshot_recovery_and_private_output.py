@@ -136,19 +136,26 @@ class PrivateOutputPermissionTest(unittest.TestCase):
 
 class SnapshotRecoveryMessageTest(unittest.TestCase):
     def test_stop_conflict_error_reports_counts_without_private_values(self) -> None:
-        # One Snapshot holds the same Activity twice with different names; until
-        # stage A3 this still stops, as repeated Activities do in a one-shot run.
+        # A lactate threshold candidate with a value of the wrong type still
+        # stops the build; two values for one Activity no longer do (stage A3b).
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             store = root / "store"
             initialize_store(store, ACCOUNT)
             source = root / "source-1"
-            _write_snapshot(
-                source,
-                [
-                    _activity("A1", name="PRIVATE-NAME-ONE"),
-                    _activity("A1", name="PRIVATE-NAME-TWO"),
-                ],
+            _write_snapshot(source, [_activity("A1", name="PRIVATE-NAME-ONE")])
+            wellness = source / "DI-Connect-Wellness"
+            wellness.mkdir()
+            (wellness / "synthetic_userBioMetrics.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "lactateThresholdSpeed": "PRIVATE-SPEED",
+                            "metaData": {"calendarDate": "2030-01-01", "sequence": 1},
+                        }
+                    ]
+                ),
+                encoding="utf-8",
             )
             register(store, source, "S1", 1)
 
@@ -159,8 +166,8 @@ class SnapshotRecoveryMessageTest(unittest.TestCase):
             self.assertTrue(
                 message.startswith("canonical merge contains unresolved stop conflicts: ")
             )
-            self.assertIn("activities divergent_duplicate_within_snapshot=1", message)
-            for private in ("PRIVATE-NAME", "A1", "canonical_key", str(root)):
+            self.assertIn("lactate_threshold_candidates lactate_malformed_candidate=1", message)
+            for private in ("PRIVATE-NAME", "PRIVATE-SPEED", "A1", "canonical_key", str(root)):
                 self.assertNotIn(private, message)
             self.assertFalse((root / "build").exists())
 

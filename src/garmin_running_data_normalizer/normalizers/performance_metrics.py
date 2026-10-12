@@ -9,6 +9,7 @@ from typing import Any, Iterable
 from ..common.time import daily_calendar_date
 from ..intake.discovery import DiscoveredAsset
 from .daily_metrics import (
+    copies_within_snapshots,
     merge_observations,
     observation_weight,
     public_fields,
@@ -183,13 +184,17 @@ def _normalize_daily(
         rows_by_date[row["calendar_date"]].append(row)
     normalized: list[dict[str, Any]] = []
     duplicate_count = 0
+    copy_count = 0
     disagreements: list[dict[str, Any]] = []
     absent_values: Counter[str] = Counter()
     for calendar_date in sorted(rows_by_date):
         numbers = [row.get("_snapshot_numbers") for row in rows_by_date[calendar_date]]
         rows = [public_fields(row) for row in rows_by_date[calendar_date]]
         signatures = {_stable_row(row) for row in rows}
-        duplicate_count += len(rows) - len(signatures)
+        # Copies within one Snapshot count as in a one-shot run (stage A3b).
+        copies = sum(copies_within_snapshots(items) for items in numbers)
+        copy_count += copies
+        duplicate_count += len(rows) - len(signatures) + copies
         if len(signatures) == 1:
             row = dict(rows[0])
             row["disagreeing_fields"] = []
@@ -218,7 +223,7 @@ def _normalize_daily(
         "dataset": dataset,
         "status": "PASS",
         "detected_asset_count": len(selected_assets),
-        "source_record_count": source_record_count,
+        "source_record_count": source_record_count + copy_count,
         "accepted_record_count": len(normalized),
         "excluded_record_count": sum(excluded_reasons.values()),
         "excluded_reason_counts": dict(sorted(excluded_reasons.items())),

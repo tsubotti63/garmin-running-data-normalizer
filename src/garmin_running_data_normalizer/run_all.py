@@ -46,6 +46,7 @@ from .normalizers.performance_metrics import (
     normalize_hill_score,
 )
 from .normalizers.race_prediction import normalize_race_prediction
+from .normalizers.records import RecordMerge, merge_repeated_records
 from .normalizers.sleep import normalize_sleep_daily_assets
 from .normalizers.training_history import normalize_training_history
 from .normalizers.training_load import normalize_acute_training_load
@@ -90,11 +91,9 @@ RECORD_AUDIT_FORMAT = "garmin-running-data-normalizer-dataset-audit-v1"
 
 # Datasets whose rows are each built from one observation: every row has an
 # empty ``disagreeing_fields``, as every row of every dataset has the field.
+# Activities, Gear, activity_gear, and Personal Records merge their repeated
+# records instead (stage A3b), and their rows name the fields that disagree.
 SINGLE_OBSERVATION_DATASETS = (
-    "activities",
-    "gear",
-    "activity_gear",
-    "personal_records",
     "fit_sessions",
     "fit_laps",
     "activity_fit_links",
@@ -445,8 +444,13 @@ def _normalize_datasets(
     dict[str, Any],
     dict[str, Any],
     dict[str, Any],
+    dict[str, RecordMerge],
 ]:
     records: dict[str, list[dict[str, Any]]] = {name: [] for name in DATASET_PATHS}
+    # Repeated records of the same stable key become one row (stage A3b).
+    merges: dict[str, RecordMerge] = {
+        name: merge_repeated_records(name, []) for name in RECORD_AUDIT_DATASETS
+    }
     fit_audit: list[dict[str, Any]] = []
     fit_status_counts: Counter[str] = Counter()
     fit_invalid_sentinel_counts: Counter[str] = Counter()
@@ -455,9 +459,11 @@ def _normalize_datasets(
 
     _notify(progress, "normalizing", step="activities")
     try:
-        records["activities"] = normalize_activities(
-            str(input_root), timezone_name, assets=assets
+        merges["activities"] = merge_repeated_records(
+            "activities",
+            normalize_activities(str(input_root), timezone_name, assets=assets),
         )
+        records["activities"] = merges["activities"].rows
     except Exception as exc:
         raise RunAllError("ACTIVITIES_NORMALIZATION_FAILED", "detected Activities input could not be normalized") from exc
     if not records["activities"]:
@@ -466,18 +472,22 @@ def _normalize_datasets(
     if families["gear"]:
         _notify(progress, "normalizing", step="gear")
         try:
-            records["gear"], records["activity_gear"] = normalize_gear(
-                str(input_root), assets=assets
-            )
+            gear_rows, link_rows = normalize_gear(str(input_root), assets=assets)
+            merges["gear"] = merge_repeated_records("gear", gear_rows)
+            merges["activity_gear"] = merge_repeated_records("activity_gear", link_rows)
+            records["gear"] = merges["gear"].rows
+            records["activity_gear"] = merges["activity_gear"].rows
         except Exception as exc:
             raise RunAllError("GEAR_NORMALIZATION_FAILED", "detected Gear input could not be normalized") from exc
 
     if families["personal_records"]:
         _notify(progress, "normalizing", step="personal_records")
         try:
-            records["personal_records"] = normalize_personal_records(
-                str(input_root), assets=assets
+            merges["personal_records"] = merge_repeated_records(
+                "personal_records",
+                normalize_personal_records(str(input_root), assets=assets),
             )
+            records["personal_records"] = merges["personal_records"].rows
         except Exception as exc:
             raise RunAllError(
                 "PERSONAL_RECORDS_NORMALIZATION_FAILED",
@@ -684,12 +694,14 @@ def _normalize_datasets(
         activity_fit_audit,
         relationship_summary,
         performance_audit,
+        merges,
     )
 
 
 def _record_audits(
     records: dict[str, list[dict[str, Any]]],
     snapshot_context: dict[str, Any] | None,
+    merges: dict[str, RecordMerge],
 ) -> dict[str, dict[str, Any]]:
     """Return the audit records of Activities, Gear, activity_gear, and Personal Records.
 
@@ -699,6 +711,12 @@ def _record_audits(
     the records kept although the latest Snapshot does not contain them, and
     ``removed_links`` the activity_gear links left out because the latest
     Snapshot has Gear links and their Activity and Gear, but not them.
+
+    When repeated records were merged (stage A3b), the record also counts
+    the copies with the same values, the observations without a value,
+    and the keys whose values disagree, and lists every disagreeing value;
+    these keys appear only when there is something to count, so that an
+    Export without repeated records gives the same bytes as before.
     """
     changes = (
         snapshot_context.get("record_changes") or {}
@@ -728,6 +746,17 @@ def _record_audits(
             removed = list(change.get("removed_links", []))
             audit["removed_link_count"] = len(removed)
             audit["removed_links"] = removed
+        merge = merges[name]
+        # In a Snapshot run, the build counts the copies within the Snapshots
+        # of earlier time points, and the merge those of the last one.
+        copies = merge.same_value_duplicate_count + int(change.get("earlier_copy_count", 0))
+        if copies:
+            audit["same_value_duplicate_count"] = copies
+        if merge.absent_value_counts:
+            audit["absent_value_counts"] = dict(merge.absent_value_counts)
+        if merge.disagreements:
+            audit["disagreement_key_count"] = len(merge.disagreements)
+            audit["disagreements"] = list(merge.disagreements)
         audits[name] = audit
     return audits
 
@@ -1134,6 +1163,25 @@ def _family_results(
                         ),
                     }
                 )
+        # Repeated records whose values disagree (stage A3b).
+        record_disagreement_count = sum(
+            int(record_audits[name].get("disagreement_key_count", 0))
+            for name in record_audit_datasets.get(family, ())
+        )
+        if record_disagreement_count:
+            disagreement_key_count = record_disagreement_count
+            family_warnings += 1
+            warnings.append(
+                {
+                    "code": "VALUES_DISAGREE",
+                    "family": family,
+                    "count": record_disagreement_count,
+                    "message": (
+                        "observations of one or more stable keys have different values; "
+                        "those fields are empty and the audit keeps every observed value"
+                    ),
+                }
+            )
         updated_record_count = sum(
             int(record_audits[name]["updated_record_count"])
             + int(record_audits[name].get("removed_link_count", 0))
@@ -1338,6 +1386,7 @@ def run_all(
                 activity_fit_audit,
                 relationship_summary,
                 performance_audit,
+                record_merges,
             ) = _normalize_datasets(
                 input_root,
                 families,
@@ -1388,7 +1437,7 @@ def run_all(
         raise RunAllError("INPUT_CHANGED", "input assets changed during Run-All processing")
     _notify(progress, "building_output")
 
-    record_audits = _record_audits(records, snapshot_context)
+    record_audits = _record_audits(records, snapshot_context, record_merges)
     family_results, warnings, status = _family_results(
         families,
         records,
@@ -1586,6 +1635,7 @@ def run_all(
         fit_status=fit_status,
         source_completeness=source_completeness,
         authority_payloads=payloads,
+        record_audits=record_audits,
     )
     payloads.update(
         {

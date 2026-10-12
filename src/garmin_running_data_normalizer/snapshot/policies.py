@@ -254,11 +254,16 @@ FUTURE_READY_DATASETS = ("health_status",)
 # records it. For the daily datasets (v2.0) and for Activities, Gear,
 # activity_gear, and Personal Records (v2.1), these rules replace the merge
 # fields of the v1.0 policy registry; the other datasets follow that registry
-# until stage A3. Snapshots are numbered from 1 in the order of their Export
-# observation times, and the numbers are given again in every build. From v2.2,
-# Snapshots with the same content are one Snapshot, and a store that holds the
-# Exports of more than one account stops the build.
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.2"
+# until stages A3c and A3d. Snapshots are numbered from 1 in the order of their
+# Export observation times, and the numbers are given again in every build.
+# From v2.2, Snapshots with the same content are one Snapshot, and a store that
+# holds the Exports of more than one account stops the build. From v2.3, Snapshots
+# observed at the same time are one time point; the repeated records of
+# Activities, Gear, activity_gear, and Personal Records within one time point
+# are compared as in a one-shot run instead of stopping the build, a change
+# is a difference between time points, identifiers written in two ways name
+# one record, and copies within one Snapshot are counted as in a one-shot run.
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.3"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -281,6 +286,7 @@ MERGE_RULES: dict[str, Any] = {
         "same_observation_time_conflict_policy": "disagreement_kept_empty_values_audited",
         "explicit_null_policy": "absent_counted_not_disagreement",
         "explicit_empty_policy": "absent_counted_not_disagreement",
+        "copies_within_snapshot": "counted_as_in_a_one_shot_run",
         "snapshot_reference": "snapshot_number_in_export_observed_order",
         "keep_last": False,
         "automatic_winner": False,
@@ -292,8 +298,14 @@ MERGE_RULES: dict[str, Any] = {
             "activity_gear",
             "personal_records",
         ],
-        "merge_mode": "latest_snapshot_containing_the_field",
+        "merge_mode": "latest_time_point_containing_the_field",
         "snapshot_order": "export_observed_at",
+        "time_point": "snapshots_observed_at_the_same_time",
+        "within_time_point_policy": "compared_as_in_a_one_shot_run",
+        "within_snapshot_conflict_policy": "disagreement_kept_empty_values_audited",
+        "same_observation_time_conflict_policy": "disagreement_kept_empty_values_audited",
+        "copies_within_snapshot": "merged_and_counted_as_in_a_one_shot_run",
+        "update_policy": "differences_between_time_points_only",
         "field_unit": "top_level_field_replaced_whole",
         "explicit_null_policy": "value_removed_field_empty",
         "explicit_empty_policy": "value_removed_field_empty",
@@ -302,7 +314,7 @@ MERGE_RULES: dict[str, Any] = {
         "absent_record_policy": "kept_last_seen_snapshot_audited",
         "earlier_values": "kept_in_dataset_audit_with_snapshot_numbers",
         "update_comparison": "empty_values_alike_numbers_by_value_booleans_apart",
-        "conflict_policy": "deterministic_if_ordered_else_stop",
+        "identifier_forms": "spaces_trimmed_digits_as_numbers_one_identifier",
         "snapshot_reference": "snapshot_number_in_export_observed_order",
         "automatic_deletion": False,
     },
@@ -312,13 +324,14 @@ MERGE_RULES: dict[str, Any] = {
         },
         "hrv_daily": {
             "snapshot_reference": "snapshot_numbers_of_the_snapshots_holding_the_fit_file",
+            "copies_within_snapshot": "counted_as_files_as_in_a_one_shot_run",
         },
         "activity_gear": {
             "absent_link_policy": "removed_and_audited_when_the_latest_snapshot_shows_the_change",
             "absent_link_removal_requires": [
-                "gear_links_object_in_the_latest_snapshot",
-                "gear_in_the_latest_snapshot",
-                "activity_in_the_latest_snapshot",
+                "gear_links_object_in_the_latest_time_point",
+                "gear_in_the_latest_time_point",
+                "activity_in_the_latest_time_point",
             ],
         },
     },

@@ -76,8 +76,8 @@ Each item gives the v1.7.1 behavior and the v2.0.0 behavior.
   only counts.
 - v2.0.0 (stage A2a for one-shot runs and stage A2b-1 for daily datasets in
   Snapshot runs; Activities, Gear, `activity_gear`, and Personal Records
-  follow in stage A3 within one Export or Snapshot, and their values across
-  Snapshots are updates, see
+  follow in stage A3b within one Export or one time point of a Snapshot
+  run, and their values across Snapshots are updates, see
   [Changes across Snapshots](#changes-across-snapshots)):
   - The normalized row stays, one per stable key. Each value field that differs
     between the observations is empty, and the row's `disagreeing_fields` lists
@@ -145,6 +145,39 @@ Each item gives the v1.7.1 behavior and the v2.0.0 behavior.
     HRV rows whose values disagree have the `dedupe_status`
     `same_day_values_disagree` instead of
     `review_required_same_day_differing_values`.
+  - Stage A3b applies these rules to Activities, Gear, `activity_gear`, and
+    Personal Records within one Export, and within one time point of a
+    Snapshot run (see [Changes across Snapshots](#changes-across-snapshots)).
+    - The rows of one record are compared on every normalized field except
+      the provenance fields, whose names start with `source_`, and the
+      fields that name the record, which come from the first row: the first
+      in path order, then in record order within a file, and in a Snapshot
+      run after the Snapshot number.
+    - Values that differ only in how they are written are one value, as for
+      updates across Snapshots: every empty value is the same empty value,
+      and numbers are compared by their value, so `100` and `100.0` agree;
+      the row keeps the first row's form. An empty value (null, `""`, `[]`,
+      or `{}`) or a missing field is no value, so an empty memo next to a
+      memo is not a disagreement; when no row has a value, the field keeps
+      the first row's empty value. The activity of a Personal Record is
+      compared as an identifier (see [Duplicates](#duplicates)), and
+      `memo_present` is set when any row has a memo, as a UDS `raw_has_*`
+      flag, so it is never empty.
+    - Their audit records (`audit/activities.json`, `audit/gear.json`,
+      `audit/activity_gear.json`, and `audit/personal_records.json`) gain
+      `disagreement_key_count` and `disagreements` in the form of the daily
+      audit records, with the Snapshot numbers in Snapshot runs, and
+      `absent_value_counts`, each only when there is something to count
+      (see [Output shape](#output-shape)). Warning `VALUES_DISAGREE` gives
+      the number of keys per family, `activity_gear` counting for Gear; the
+      run summary's family results and Run Quality's `conflict_summary`
+      count them too.
+    - A disagreement in a field that a relationship uses leaves the
+      relationship as an empty value does: an Activity whose start time
+      disagrees gets no FIT link, and the linkage audit names the reason.
+      Until stage A3d, a Personal Record whose activity disagrees stops the
+      run as a missing activity does (`RELATIONSHIP_CONTRACT_FAILED`; v1.7.1
+      stopped with `DIVERGENT_DUPLICATE`).
 
 ### Changes across Snapshots
 
@@ -188,11 +221,11 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     record that the latest Snapshot does not contain.
   - A record with a removed value is normalized as a one-shot run normalizes
     the same row: a removed start time of an Activity leaves its local date
-    and time empty. Until stage A3, a removed value that the normalized
+    and time empty. Until stage A3d, a removed value that the normalized
     dataset does not accept stops the run as it does in a one-shot run: an
     empty string for a number, an empty list or object for a single value
     (`OUTPUT_EXPERIENCE_FAILED`), or a null Activity of a Personal Record
-    (`RELATIONSHIP_CONTRACT_FAILED`), all with exit 2. From stage A3, such a
+    (`RELATIONSHIP_CONTRACT_FAILED`), all with exit 2. From stage A3d, such a
     row is left out and counted by reason (exit 3).
   - Every earlier value is kept in the dataset's audit record:
     `audit/activities.json`, `audit/gear.json`, `audit/activity_gear.json`,
@@ -233,9 +266,43 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
   - Run Quality binds the four audit records by digest, as it does the daily
     audit records. Their values stay in the local output: the Support Bundle,
     the External-safe Pack, and the merge summaries carry counts only.
-  - Within one Snapshot, or in two Snapshots observed at the same time, two
-    different values for one record still stop the build until stage A3,
-    which makes them a disagreement.
+  - Stage A3b (merge rules v2.3): Snapshots observed at the same time are one
+    time point, and the Snapshots of the last time point are together the
+    latest Snapshot. A record in any of them is in the latest Snapshot, and
+    an `activity_gear` link is removed only when one of them has Gear
+    links, one has the link's Activity, one has its Gear, and none has the
+    link. Which of them is numbered first means nothing; until stage A3b,
+    the Snapshot with the last identifier was the latest one, and two
+    different values for one record stopped the build.
+  - At each time point, a field's value is the value of the observations
+    that contain the field, compared as within one Export: an empty value
+    is no value there, unless every observation that contains the field
+    leaves it empty, which removes the value, and two or more values
+    disagree. Each field takes the value of the last time point that
+    contains it. When that time point's values disagree, the field is
+    empty and listed in `disagreeing_fields`, and the audit record's
+    `disagreements` lists the values with the Snapshots that gave them, as
+    in [Values that disagree](#values-that-disagree). This holds also for
+    a field that the record's last time point does not contain: its earlier
+    values that disagree stay a disagreement.
+  - An update is a difference between time points: a field counts for
+    `VALUES_UPDATED` when its value, or its set of values that disagree, at
+    a time point that contains it differs from the previous one;
+    differences within one time point are disagreements only. In
+    `updates`, the values follow the time points: a time point with one
+    value continues the entry of the same value before it, and a time point
+    whose values disagree lists each value, numbers by size and other
+    values by their JSON text, with the Snapshots that gave it, apart from
+    the entries before and after it. For example, Snapshots 1 and 2 observed
+    at one time with the names "A" and "B", then Snapshot 3 with "B",
+    give the values `[{"value": "A", "snapshots": [1]}, {"value": "B",
+    "snapshots": [2]}, {"value": "B", "snapshots": [3]}]`, one updated
+    record, and no disagreement, because the last time point has one value.
+  - Updates are compared on the Export's values, as in stage A2b-2, and
+    disagreements on the normalized values, as in a one-shot run. A
+    difference only in a source field that no normalized field holds can
+    therefore make an earlier time point's values a set, and count as an
+    update, without a disagreement; the normalized values stay correct.
 
 ### Duplicates
 
@@ -243,9 +310,14 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
   `RELATIONSHIP_CONTRACT_FAILED`, even when the rows are identical; a repeated
   Personal Record stops with `DIVERGENT_DUPLICATE`; identical daily rows and FIT
   files are merged and counted.
-- v2.0.0:
+- v2.0.0 (stage A3b for repeated records):
   - Records with the same stable key and the same values are merged into one
-    row, and the audit record counts how often they appeared.
+    row, and the audit record counts the further copies
+    (`same_value_duplicate_count`), without a warning. Activities, Gear,
+    `activity_gear`, and Personal Records are compared on their normalized
+    values, so a difference only in a source field that no normalized field
+    holds is not counted; records whose values differ are a disagreement
+    (see [Values that disagree](#values-that-disagree)).
   - When the input holds the same Export more than once, as when an Export is
     given twice or together with its extracted copy, it is read once, and
     warning `INPUT_DUPLICATE_SOURCES` is given once per run with the number of
@@ -254,8 +326,15 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     inside one file are counted without a warning, and so are files with the
     same content at different places in one Export, such as several files
     that hold an empty list: they are not a repeated Export.
-  - Identifiers written in two ways, such as `" 123"` and `123`, are the same
-    identifier, as in v1.7.1.
+  - Identifiers written in two ways, such as `" 123"`, `"0123"`, and `123`,
+    are the same identifier, as in v1.7.1, and name one record (stage A3b);
+    the row keeps the first row's form.
+  - A Snapshot run counts the copies within one Snapshot as a one-shot run
+    of that Export counts them: in these four datasets, in the daily audit
+    records, and in the HRV record and file counts (stage A3b), so that one
+    Export gives the same counts either way. The same record in two
+    Snapshots is not a copy, even when they are observed at the same time:
+    every Export holds the earlier days again.
 
 ### Mixed input
 
@@ -561,6 +640,14 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `RECORDS_NOT_IN_LATEST_SNAPSHOT` (stage A2b-2), `INPUT_DUPLICATE_SOURCES`
   (stage A3a), and, with provisional names, `DATA_FILE_LEFT_OUT`,
   `DATA_ROW_LEFT_OUT`, `DATA_VALUE_INVALID`, and `DATA_TEXT_REPAIRED`.
+- Stage A3b adds to the audit records of Activities, Gear, `activity_gear`,
+  and Personal Records `same_value_duplicate_count`, `absent_value_counts`,
+  `disagreement_key_count`, and `disagreements`, each only when there is
+  something to count, so the outputs of an Export without repeated records
+  do not change. `updates` names a field as the Export does, and
+  `disagreements` as the normalized dataset does, as each row's
+  `disagreeing_fields`: an Activity's memo is `description` in `updates`
+  and `memo_text_raw` in `disagreements`.
 - Stage A3a adds `files_not_read` to `run_manifest.json` and
   `input_warning_count` to `run_summary.json`, each only when there is
   something to report, so the outputs of an input with one Export and no files
@@ -593,7 +680,7 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   longer stops for problems in the data. Sleep rows without `calendarDate` take
   the sleep day from the end time, as in one-shot runs, instead of being held
   back (stage A2b-1); the end time identifies the same sleep across Snapshots,
-  and a row with neither is still held back until stage A3.
+  and a row with neither is still held back until stage A3d.
 - Stage A2b-1 removes the stops for daily datasets: values that differ across
   Snapshots, within one Snapshot, or between two Snapshots observed at the same
   time follow [Values that disagree](#values-that-disagree), with the Snapshot
@@ -601,9 +688,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `snapshot/canonical_merge_summary.json` and `run_summary.json` no longer hold
   the observed values (`observed_variants`); the values stay only in the audit
   records. The same Activity twice with different values in one Snapshot, or
-  in two Snapshots observed at the same time, still stops until stage A3, as a
-  repeated Activity does in a one-shot run; so do a malformed Lactate
-  Threshold candidate and a JSON file that cannot be read.
+  in two Snapshots observed at the same time, stopped until stage A3b, which
+  makes it a disagreement; a malformed Lactate Threshold candidate and a
+  JSON file that cannot be read still stop until stages A3c and A3d.
 - Stage A2b-2 makes an explicit empty value in Activities, Gear,
   `activity_gear`, and Personal Records an update instead of a review hold, so
   the merge summaries no longer count review holds such as
@@ -622,10 +709,13 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `garmin_snapshot_merge_rules:v2.1` from stage A2b-2, which adds the rules
   for Activities, Gear, `activity_gear`, and Personal Records, and
   `garmin_snapshot_merge_rules:v2.2` from stage A3a, which adds the rules for
-  Snapshots with the same content and for accounts, in
+  Snapshots with the same content and for accounts, and
+  `garmin_snapshot_merge_rules:v2.3` from stage A3b, which makes Snapshots
+  observed at the same time one time point and compares the repeated
+  records within a time point as a one-shot run does, in
   `config/garmin_snapshot_merge_rules_v2.json`. For these datasets they
   replace the merge fields of the v1.0 registry; the other datasets follow the
-  v1.0 registry until stage A3. A build records
+  v1.0 registry until stages A3c and A3d. A build records
   `merge_rules_version` in `snapshot/snapshot_lineage.json`, the approved input
   manifest, the merge summary, and the build digest; a store never records it.
   v1.7.1 still reads a store that v2.0.0 registered to, and builds it with the
@@ -688,7 +778,8 @@ Every stop has a specific code; errors that v1.7.1 reports only as
 - Outputs: `run_all_version` 2, the new fields, audit records, and audit
   sections, and the new warning codes. The synthetic Run-All output grows from
   46 to 50 files with the audit records of Activities, Gear, `activity_gear`,
-  and Personal Records. Rerun Run-All; earlier outputs are not converted. Renamed in
+  and Personal Records. Repeated Activities, Gear records, links, and
+  Personal Records become one row, and their differing fields are empty. Rerun Run-All; earlier outputs are not converted. Renamed in
   stage A2a: the HRV `dedupe_status` `review_required_same_day_differing_values`
   becomes `same_day_values_disagree`, the Run Quality reason
   `CONFLICT_PRESERVED_NO_WINNER` becomes `VALUES_DISAGREE` in Run Quality v2,
@@ -710,7 +801,10 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Registering an Export that the store already holds reports the Snapshot
   that holds it instead of adding one, a build counts Snapshots with the same
   content once, and a store that holds the Exports of two accounts stops the
-  build. The merge rules v2.2 are published in
+  build. Repeated records within one Snapshot, or in Snapshots observed at
+  the same time, no longer stop the build: their differing fields are
+  empty, and Snapshots observed at the same time are together the latest
+  Snapshot. The merge rules v2.3 are published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around

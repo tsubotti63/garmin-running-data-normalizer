@@ -4,6 +4,7 @@ from typing import Any, Iterable
 
 from ..common.identity import stable_hash
 from ..intake.discovery import DiscoveredAsset, load_json_assets
+from .records import row_snapshot_marks
 
 
 def _containers(value: Any) -> list[dict[str, Any]]:
@@ -45,6 +46,7 @@ def normalize_gear(
                     "maximum_meters": row.get("maximumMeters"),
                     "source_path": asset.provenance_path,
                     "source_sha256": asset.sha256,
+                    **row_snapshot_marks(row),
                 })
             activity_links = container.get("gearActivityDTOs") or {}
             if isinstance(activity_links, dict):
@@ -61,6 +63,7 @@ def normalize_gear(
                                 "activity_id": activity_id,
                                 "source_path": asset.provenance_path,
                                 "source_sha256": asset.sha256,
+                                **row_snapshot_marks(row),
                             })
     gear.sort(key=lambda row: (str(row["gear_key"]), str(row["source_path"])))
     links.sort(key=lambda row: (str(row["gear_key"]), str(row["activity_id"])))

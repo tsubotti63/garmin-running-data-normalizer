@@ -3,6 +3,7 @@
   "daily_datasets": {
     "automatic_winner": false,
     "conflict_policy": "disagreement_kept_empty_values_audited",
+    "copies_within_snapshot": "counted_as_in_a_one_shot_run",
     "datasets": [
       "hill_score_daily",
       "endurance_score_daily",
@@ -26,12 +27,13 @@
     "activity_gear": {
       "absent_link_policy": "removed_and_audited_when_the_latest_snapshot_shows_the_change",
       "absent_link_removal_requires": [
-        "gear_links_object_in_the_latest_snapshot",
-        "gear_in_the_latest_snapshot",
-        "activity_in_the_latest_snapshot"
+        "gear_links_object_in_the_latest_time_point",
+        "gear_in_the_latest_time_point",
+        "activity_in_the_latest_time_point"
       ]
     },
     "hrv_daily": {
+      "copies_within_snapshot": "counted_as_files_as_in_a_one_shot_run",
       "snapshot_reference": "snapshot_numbers_of_the_snapshots_holding_the_fit_file"
     },
     "sleep_daily": {
@@ -42,7 +44,7 @@
     "absent_field_policy": "not_observed_earlier_value_kept",
     "absent_record_policy": "kept_last_seen_snapshot_audited",
     "automatic_deletion": false,
-    "conflict_policy": "deterministic_if_ordered_else_stop",
+    "copies_within_snapshot": "merged_and_counted_as_in_a_one_shot_run",
     "datasets": [
       "activities",
       "gear",
@@ -59,12 +61,18 @@
     ],
     "explicit_null_policy": "value_removed_field_empty",
     "field_unit": "top_level_field_replaced_whole",
-    "merge_mode": "latest_snapshot_containing_the_field",
+    "identifier_forms": "spaces_trimmed_digits_as_numbers_one_identifier",
+    "merge_mode": "latest_time_point_containing_the_field",
+    "same_observation_time_conflict_policy": "disagreement_kept_empty_values_audited",
     "snapshot_order": "export_observed_at",
     "snapshot_reference": "snapshot_number_in_export_observed_order",
-    "update_comparison": "empty_values_alike_numbers_by_value_booleans_apart"
+    "time_point": "snapshots_observed_at_the_same_time",
+    "update_comparison": "empty_values_alike_numbers_by_value_booleans_apart",
+    "update_policy": "differences_between_time_points_only",
+    "within_snapshot_conflict_policy": "disagreement_kept_empty_values_audited",
+    "within_time_point_policy": "compared_as_in_a_one_shot_run"
   },
-  "merge_rules_version": "garmin_snapshot_merge_rules:v2.2",
+  "merge_rules_version": "garmin_snapshot_merge_rules:v2.3",
   "other_datasets_follow": "garmin_public_snapshot_dataset_merge_policies:v1.0",
   "same_content_snapshots": "counted_once_earliest_observed_kept",
   "store_contract_version": "garmin_public_snapshot_lifecycle:v1.0",
