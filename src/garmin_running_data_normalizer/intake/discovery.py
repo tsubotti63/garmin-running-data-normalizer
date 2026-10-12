@@ -5,7 +5,8 @@ digest, and keeps nothing else; an asset reads its content again when its
 ``data`` is used, one file at a time, while the reading is open. A file whose
 content then differs from the first reading marks the reading as changed.
 ``discover_export`` keeps every file's content, for callers that use the assets
-after the reading is closed.
+after the reading is closed. The Export to read is chosen in the input as
+``roots.open_export`` describes.
 """
 
 from __future__ import annotations
@@ -18,7 +19,8 @@ from typing import Any, Callable, Iterable, Iterator
 from zipfile import ZipInfo
 
 from .archive import ArchiveLimits, digest_member, read_member, validated_members
-from .source import ExportFile, ExportSource
+from .roots import ExportView, open_export
+from .source import ExportFile
 
 
 SUPPORTED_SUFFIXES = {".json", ".fit"}
@@ -86,11 +88,16 @@ class ExportReading:
 
     ZIP files in the Export are read one level deep; within them, only JSON and
     FIT members are read, and only those members count against the limits.
+    ``same_export_count`` is the number of other copies of the same Export in
+    the input, which are not read, and ``outside_files`` are the files outside
+    the Export, as (path, bytes), which are not read either.
     """
 
-    def __init__(self, source: ExportSource, *, keep_data: bool) -> None:
+    def __init__(self, source: ExportView, *, keep_data: bool) -> None:
         self._source = source
         self.changed = False
+        self.same_export_count = 0
+        self.outside_files: list[tuple[str, int]] = []
         self.assets = self._index(keep_data)
 
     def _index(self, keep_data: bool) -> list[DiscoveredAsset]:
@@ -165,9 +172,15 @@ def read_export(
     *,
     keep_data: bool = False,
 ) -> Iterator[ExportReading]:
-    """Open an Export folder or Export ZIP file and list its JSON and FIT files."""
-    with ExportSource(root, limits) as source:
-        yield ExportReading(source, keep_data=keep_data)
+    """Open an Export folder or Export ZIP file and list its JSON and FIT files.
+
+    Raises ``MixedExportsError`` when the input holds different Exports.
+    """
+    with open_export(root, limits) as opened:
+        reading = ExportReading(opened.source, keep_data=keep_data)
+        reading.same_export_count = opened.same_export_count
+        reading.outside_files = list(opened.outside_files)
+        yield reading
 
 
 def discover_export(root: str | Path, limits: ArchiveLimits = ArchiveLimits()) -> list[DiscoveredAsset]:

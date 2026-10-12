@@ -22,7 +22,9 @@ from .common.time import (
 )
 from .fit.parser import parse_fit_export
 from .export.analysis_pack import build_analysis_pack_payloads
-from .intake.discovery import DiscoveredAsset, ExportReading, read_export
+from .intake.accounts import asset_accounts
+from .intake.discovery import DiscoveredAsset, ExportReading, InputChangedError, read_export
+from .intake.roots import MIXED_INPUT_MESSAGE, OUTSIDE_EXPORT_ROOT, MixedExportsError
 from .intake.source import (
     CorruptArchiveError,
     ExportTooLargeError,
@@ -335,6 +337,8 @@ def _validate_paths(input_path: str | Path, output_path: str | Path) -> tuple[Pa
 
 
 def _input_error(exc: Exception) -> RunAllError:
+    if isinstance(exc, MixedExportsError):
+        return RunAllError("INPUT_MULTIPLE_EXPORTS", exc.safe_message)
     if isinstance(exc, CorruptArchiveError):
         return RunAllError("INPUT_ZIP_CORRUPT", "the Export ZIP file is damaged or incomplete")
     if isinstance(exc, ExportTooLargeError):
@@ -1314,6 +1318,16 @@ def run_all(
         families = _classify_assets(initial_assets)
         if not families["activities"]:
             raise RunAllError("ACTIVITIES_NOT_FOUND", "required Activities input was not found")
+        # Records that name more than one account mix Exports; the accounts
+        # are compared here only and never written.
+        try:
+            accounts = asset_accounts(initial_assets)
+        except InputChangedError as exc:
+            raise RunAllError("INPUT_CHANGED", "input assets changed during Run-All processing") from exc
+        if len(accounts) > 1:
+            raise RunAllError("INPUT_MULTIPLE_EXPORTS", MIXED_INPUT_MESSAGE)
+        same_export_count = reading.same_export_count
+        outside_files = list(reading.outside_files)
         _validate_dataset_table()
 
         try:
@@ -1383,6 +1397,16 @@ def run_all(
         relationship_summary,
         record_audits,
     )
+    if same_export_count:
+        warnings.append(
+            {
+                "code": "INPUT_DUPLICATE_SOURCES",
+                "count": same_export_count,
+                "message": "the input holds the same Export more than once; it was read once",
+            }
+        )
+        if status == "PASS":
+            status = "PASS_WITH_WARNINGS"
     performance_summary = {
         "format": "garmin-running-data-normalizer-performance-metrics-summary-v1",
         "status": (
@@ -1654,6 +1678,13 @@ def run_all(
         "deterministic_output_digest": "projection-pending",
         "candidate_features": {"lactate_threshold": lactate_candidate_features},
     }
+    if outside_files:
+        # Files outside the Export are not read; the list keeps the
+        # established manifest byte-stable when there are none.
+        manifest["files_not_read"] = [
+            {"source_path": relative, "bytes": size, "reason": OUTSIDE_EXPORT_ROOT}
+            for relative, size in outside_files
+        ]
     summary = {
         "format": "garmin-running-data-normalizer-run-summary-v1",
         "product_version": __version__,
@@ -1689,6 +1720,10 @@ def run_all(
         # Keep the established PASS summary byte-stable; this additive field
         # appears only when a valid unresolved relationship warning exists.
         summary["relationship_warning_count"] = relationship_warning_count
+    if same_export_count:
+        # The input warning has no family; like the warnings above, it is
+        # counted only when it exists.
+        summary["input_warning_count"] = 1
     if snapshot_context is not None:
         lifecycle_summary = dict(snapshot_context["merge_summary"])
         manifest["snapshot_lifecycle"] = {

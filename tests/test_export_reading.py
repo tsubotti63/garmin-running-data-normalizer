@@ -158,7 +158,9 @@ class ReadCountTest(unittest.TestCase):
             self.assertEqual(digests[unread_path], 2)
             self.assertEqual(reads[unread_path], 0)
             self.assertEqual(digests[activities], 2)
-            self.assertEqual(reads[activities], 1)
+            # Once to compare the accounts that the records name (stage A3a),
+            # once to normalize them.
+            self.assertEqual(reads[activities], 2)
 
 
 class InputChangeTest(unittest.TestCase):

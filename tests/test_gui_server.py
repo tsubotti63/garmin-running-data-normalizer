@@ -5,6 +5,7 @@ import http.client
 import io
 import json
 import os
+import shutil
 import socket
 import tempfile
 import threading
@@ -626,6 +627,112 @@ class GuiRunApiTest(GuiServerTestCase):
         ):
             with self.subTest(payload=payload):
                 self.assertEqual(self.call("/api/check-input", payload), (422, {"error": code}))
+
+    def test_the_input_check_reports_mixed_and_repeated_exports(self) -> None:
+        self.start_server(600.0)
+        mixed = self.root / "mixed"
+        for name, activity_id in (("export-a", "SYNTHETIC-A1"), ("export-b", "SYNTHETIC-B1")):
+            fitness = mixed / name / "DI_CONNECT" / "DI-Connect-Fitness"
+            fitness.mkdir(parents=True)
+            (fitness / "synthetic_summarizedActivities.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "summarizedActivitiesExport": [
+                                {
+                                    "activityId": activity_id,
+                                    "activityType": "running",
+                                    "startTimeGmt": 1893456000000,
+                                }
+                            ]
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+        status, answer = self.call("/api/check-input", {"input": str(mixed)})
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            answer,
+            {
+                "ready": False,
+                "findings": [
+                    {
+                        "code": "INPUT_MULTIPLE_EXPORTS",
+                        "severity": "ERROR",
+                        "message_id": "INPUT_HOLDS_MORE_THAN_ONE_EXPORT",
+                        "next_action_id": "SELECT_ONE_EXPORT_OR_USE_SNAPSHOTS",
+                    }
+                ],
+            },
+        )
+        repeated = self.root / "repeated"
+        for name in ("copy-a", "copy-b"):
+            shutil.copytree(SYNTHETIC_EXPORT, repeated / name)
+        status, answer = self.call("/api/check-input", {"input": str(repeated)})
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            answer,
+            {
+                "ready": True,
+                "findings": [
+                    {
+                        "code": "INPUT_DUPLICATE_SOURCES",
+                        "severity": "WARNING",
+                        "message_id": "INPUT_HOLDS_THE_SAME_EXPORT_MORE_THAN_ONCE",
+                        "next_action_id": "RUN_ALL",
+                    },
+                    {
+                        "code": "RUN_ALL_NOT_EVALUATED",
+                        "severity": "INFO",
+                        "message_id": "INPUT_READY_FOR_BOUNDED_RUN_ALL_ATTEMPT",
+                        "next_action_id": "RUN_ALL",
+                    },
+                ],
+            },
+        )
+        self.assertNotIn(str(self.root), json.dumps(answer))
+
+    def test_a_mix_of_accounts_is_reported_without_their_values(self) -> None:
+        self.start_server(600.0)
+        accounts = ("9876543210123", "1234509876543")
+        mixed = self.root / "accounts"
+        fitness = mixed / "DI_CONNECT" / "DI-Connect-Fitness"
+        fitness.mkdir(parents=True)
+        (fitness / "synthetic_summarizedActivities.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "summarizedActivitiesExport": [
+                            {
+                                "activityId": f"SYNTHETIC-A{index}",
+                                "activityType": "running",
+                                "startTimeGmt": 1893456000000,
+                                "userProfileId": int(account),
+                            }
+                            for index, account in enumerate(accounts)
+                        ]
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            status, check = self.call("/api/check-input", {"input": str(mixed)})
+            self.assertEqual(status, 200)
+            self.assertEqual(
+                [item["code"] for item in check["findings"]], ["INPUT_MULTIPLE_EXPORTS"]
+            )
+            request = {**self.run_request("accounts-output"), "input": str(mixed)}
+            self.assertEqual(self.call("/api/run/start", request)[0], 200)
+            answer = self.wait_for_state({"failed"})
+        self.assertEqual(answer["error_code"], "INPUT_MULTIPLE_EXPORTS")
+        for value in accounts:
+            with self.subTest(account=value):
+                self.assertNotIn(value, json.dumps(check))
+                self.assertNotIn(value, json.dumps(answer))
+                self.assertNotIn(value, stdout.getvalue())
 
     def test_a_run_blocks_a_second_run_and_shutdown_until_it_ends(self) -> None:
         self.start_server(600.0, runs=stub_manager("wait"))

@@ -255,8 +255,10 @@ FUTURE_READY_DATASETS = ("health_status",)
 # activity_gear, and Personal Records (v2.1), these rules replace the merge
 # fields of the v1.0 policy registry; the other datasets follow that registry
 # until stage A3. Snapshots are numbered from 1 in the order of their Export
-# observation times, and the numbers are given again in every build.
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.1"
+# observation times, and the numbers are given again in every build. From v2.2,
+# Snapshots with the same content are one Snapshot, and a store that holds the
+# Exports of more than one account stops the build.
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.2"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -320,6 +322,8 @@ MERGE_RULES: dict[str, Any] = {
             ],
         },
     },
+    "same_content_snapshots": "counted_once_earliest_observed_kept",
+    "account_consistency": "one_account_per_store_else_stop",
     "other_datasets_follow": REGISTRY_VERSION,
 }
 

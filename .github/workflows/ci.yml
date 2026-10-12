@@ -120,6 +120,9 @@ jobs:
       - name: Verify Windows Snapshot record updates
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_snapshot_record_updates.py -q
+      - name: Verify Windows mixed and repeated Exports
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_mixed_and_duplicate_exports.py -q
       - name: Build distributions
         shell: powershell
         run: |

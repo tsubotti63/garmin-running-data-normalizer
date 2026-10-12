@@ -21,6 +21,7 @@ from garmin_running_data_normalizer.diagnostics.doctor import doctor_input
 from garmin_running_data_normalizer.intake import source as source_module
 from garmin_running_data_normalizer.intake.archive import ArchiveLimits, UnsafeArchiveError
 from garmin_running_data_normalizer.intake.discovery import discover_export, read_export
+from garmin_running_data_normalizer.intake.roots import open_export
 from garmin_running_data_normalizer.intake.source import (
     CorruptArchiveError,
     ExportSource,
@@ -358,9 +359,17 @@ class ZipInputFormsTest(unittest.TestCase):
 
         with mock.patch.object(ExportSource, "_read_member", record_whole_read):
             register(store, self.forms["ZIP file"])
-        # Nothing is read whole: files are hashed and copied to the store in
-        # parts, and ZIP files inside the Export are copied, not read in memory.
-        self.assertEqual(whole, [])
+        # Only the files whose records name their account are read whole, within
+        # the limits of a run, to compare the accounts (stage A3a). Other files
+        # are hashed and copied to the store in parts, and ZIP files inside the
+        # Export are copied, not read in memory.
+        self.assertEqual(
+            sorted(whole),
+            [
+                "DI_CONNECT/DI-Connect-Fitness/synthetic_gear.json",
+                "DI_CONNECT/DI-Connect-Fitness/synthetic_summarizedActivities.json",
+            ],
+        )
         self.assertEqual(verify_store(store)["status"], "PASS")
 
 
@@ -651,8 +660,8 @@ class ZipLimitsTest(unittest.TestCase):
             store = root / "store"
             initialize_store(store, "synthetic-account-boundary")
             with mock.patch(
-                "garmin_running_data_normalizer.snapshot.store.ExportSource",
-                side_effect=lambda path: ExportSource(path, small),
+                "garmin_running_data_normalizer.snapshot.store.open_export",
+                side_effect=lambda path: open_export(path, small),
             ):
                 exit_code, console = run_cli(*snapshot_register_arguments(store, archive))
             self.assertEqual(exit_code, 2)

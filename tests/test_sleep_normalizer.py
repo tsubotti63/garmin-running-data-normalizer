@@ -127,7 +127,9 @@ class SleepNormalizerTest(unittest.TestCase):
             (root / "a_unclassified.json").write_text("{}", encoding="utf-8")
             repeated = normalize_sleep(str(root))[0]
             self.assertEqual(original["sleep_record_key"], repeated["sleep_record_key"])
-            self.assertIn("!DI-Connect-Wellness/", original["source_path"])
+            # An Export ZIP file in a folder is read as when it is selected
+            # directly: paths are counted from the Export inside it (stage A3a).
+            self.assertEqual(original["source_path"], "DI-Connect-Wellness/synthetic_sleepData.json")
 
 
 if __name__ == "__main__":

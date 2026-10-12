@@ -14,7 +14,9 @@ from ..common.time import (
     require_timezone_data,
     resolve_timezone_name,
 )
+from ..intake.accounts import asset_accounts
 from ..intake.discovery import read_export
+from ..intake.roots import MixedExportsError
 from ..intake.source import (
     CorruptArchiveError,
     ExportTooLargeError,
@@ -177,9 +179,26 @@ def doctor_input(
             )
         try:
             # Every file is read for its digest, as at the start of a run,
-            # without keeping its content.
+            # without keeping its content. The accounts that the records name
+            # are compared as at the start of a run, and never reported.
             with read_export(requested) as reading:
                 assets = reading.assets
+                same_export_count = reading.same_export_count
+                mixed_accounts = len(asset_accounts(assets)) > 1
+            if mixed_accounts:
+                raise MixedExportsError()
+        except MixedExportsError:
+            findings.append(
+                _finding(
+                    "INPUT_MULTIPLE_EXPORTS",
+                    severity="ERROR",
+                    actionability="ACTION_REQUIRED",
+                    safe_message_id="INPUT_HOLDS_MORE_THAN_ONE_EXPORT",
+                    next_action_id="SELECT_ONE_EXPORT_OR_USE_SNAPSHOTS",
+                    authority_reference="product:intake-discovery",
+                    evidence_reference="diagnostic:source-discovery",
+                )
+            )
         except CorruptArchiveError:
             findings.append(
                 _finding(
@@ -229,6 +248,18 @@ def doctor_input(
                 )
             )
         else:
+            if same_export_count:
+                findings.append(
+                    _finding(
+                        "INPUT_DUPLICATE_SOURCES",
+                        severity="WARNING",
+                        actionability="NONE",
+                        safe_message_id="INPUT_HOLDS_THE_SAME_EXPORT_MORE_THAN_ONCE",
+                        next_action_id="RUN_ALL",
+                        authority_reference="product:intake-discovery",
+                        evidence_reference="diagnostic:source-discovery",
+                    )
+                )
             has_activities = any(
                 asset.kind == "json"
                 and (asset.member_path or asset.source_path).lower().endswith(
