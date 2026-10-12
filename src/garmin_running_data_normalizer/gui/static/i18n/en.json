@@ -201,6 +201,8 @@
   "warning.optional_family_empty": "Some optional data was in the export but produced no records ({code}).",
   "warning.optional_family_not_present": "Some optional data was not in the export, so its tables are empty ({code}).",
   "warning.other": "Another warning ({code}).",
+  "warning.records_not_in_latest_snapshot": "Some records are not in the latest export. They are kept, and the audit files show the last export that had each of them ({code}).",
   "warning.relationship_unresolved": "Some links between datasets point to records that are not in the output. Nothing was guessed ({code}).",
-  "warning.values_disagree": "Some records have values that disagree. Those fields are left empty, and every value is kept in the audit files. None was chosen ({code})."
+  "warning.values_disagree": "Some records have values that disagree. Those fields are left empty, and every value is kept in the audit files. None was chosen ({code}).",
+  "warning.values_updated": "A later export changed some records, such as the name of an activity. The tables have the latest values, and the earlier values are kept in the audit files ({code})."
 }

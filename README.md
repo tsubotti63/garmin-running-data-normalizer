@@ -59,7 +59,7 @@ environment. Do not include real Garmin data or personal health information.
 The previews below were generated from the tracked Synthetic Run-All fixture
 and a tracked fictional analysis CSV. They contain no personal Garmin data.
 
-[![Synthetic / fictional Run-All preview: PASS_WITH_WARNINGS, one Activity record, three warnings, zero errors, 17 dataset entries, 46 generated files, and the first-read order START_HERE.md, DATASET_INVENTORY.md, then ANALYSIS_HANDOFF.md](https://raw.githubusercontent.com/tsubotti63/garmin-running-data-normalizer/main/docs/assets/first-user-conversion/synthetic-output-preview.svg)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/synthetic-output-preview.svg)
+[![Synthetic / fictional Run-All preview: PASS_WITH_WARNINGS, one Activity record, three warnings, zero errors, 17 dataset entries, 50 generated files, and the first-read order START_HERE.md, DATASET_INVENTORY.md, then ANALYSIS_HANDOFF.md](https://raw.githubusercontent.com/tsubotti63/garmin-running-data-normalizer/main/docs/assets/first-user-conversion/synthetic-output-preview.svg)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/synthetic-output-preview.svg)
 
 [![Synthetic / fictional monthly activity distance: four activities and 37.0 km in 2030-01; four activities and 47.0 km in 2030-02](https://raw.githubusercontent.com/tsubotti63/garmin-running-data-normalizer/main/docs/assets/first-user-conversion/synthetic-monthly-distance.svg)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/synthetic-monthly-distance.svg)
 

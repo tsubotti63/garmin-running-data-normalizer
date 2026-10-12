@@ -201,6 +201,8 @@ export const WARNING_KEYS = {
   OPTIONAL_FAMILY_EMPTY: "warning.optional_family_empty",
   DAILY_METRICS_REVIEW_REQUIRED: "warning.daily_metrics_review",
   VALUES_DISAGREE: "warning.values_disagree",
+  VALUES_UPDATED: "warning.values_updated",
+  RECORDS_NOT_IN_LATEST_SNAPSHOT: "warning.records_not_in_latest_snapshot",
   FIT_PARSE_INCOMPLETE: "warning.fit_parse_incomplete",
   LACTATE_CANDIDATE_AUTHORITY_UNRESOLVED: "warning.lactate_candidates",
   RELATIONSHIP_UNRESOLVED_VALID_LINK: "warning.relationship_unresolved",

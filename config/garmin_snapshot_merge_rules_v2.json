@@ -18,18 +18,52 @@
     "keep_last": false,
     "merge_mode": "every_distinct_record_compared_in_run_all",
     "same_observation_time_conflict_policy": "disagreement_kept_empty_values_audited",
-    "snapshot_reference": "import_number",
+    "snapshot_reference": "snapshot_number_in_export_observed_order",
     "within_snapshot_conflict_policy": "disagreement_kept_empty_values_audited"
   },
   "dataset_rules": {
+    "activity_gear": {
+      "absent_link_policy": "removed_and_audited_when_the_latest_snapshot_shows_the_change",
+      "absent_link_removal_requires": [
+        "gear_links_object_in_the_latest_snapshot",
+        "gear_in_the_latest_snapshot",
+        "activity_in_the_latest_snapshot"
+      ]
+    },
     "hrv_daily": {
-      "snapshot_reference": "import_numbers_of_the_snapshots_holding_the_fit_file"
+      "snapshot_reference": "snapshot_numbers_of_the_snapshots_holding_the_fit_file"
     },
     "sleep_daily": {
       "missing_calendar_date_policy": "sleep_day_from_end_time_as_one_shot"
     }
   },
-  "merge_rules_version": "garmin_snapshot_merge_rules:v2.0",
+  "entity_datasets": {
+    "absent_field_policy": "not_observed_earlier_value_kept",
+    "absent_record_policy": "kept_last_seen_snapshot_audited",
+    "automatic_deletion": false,
+    "conflict_policy": "deterministic_if_ordered_else_stop",
+    "datasets": [
+      "activities",
+      "gear",
+      "activity_gear",
+      "personal_records"
+    ],
+    "earlier_values": "kept_in_dataset_audit_with_snapshot_numbers",
+    "explicit_empty_policy": "value_removed_field_empty",
+    "explicit_empty_values": [
+      "null",
+      "empty_string",
+      "empty_list",
+      "empty_object"
+    ],
+    "explicit_null_policy": "value_removed_field_empty",
+    "field_unit": "top_level_field_replaced_whole",
+    "merge_mode": "latest_snapshot_containing_the_field",
+    "snapshot_order": "export_observed_at",
+    "snapshot_reference": "snapshot_number_in_export_observed_order",
+    "update_comparison": "empty_values_alike_numbers_by_value_booleans_apart"
+  },
+  "merge_rules_version": "garmin_snapshot_merge_rules:v2.1",
   "other_datasets_follow": "garmin_public_snapshot_dataset_merge_policies:v1.0",
   "store_contract_version": "garmin_public_snapshot_lifecycle:v1.0",
   "store_policy_registry_version": "garmin_public_snapshot_dataset_merge_policies:v1.0"

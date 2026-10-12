@@ -157,7 +157,7 @@ class SnapshotDailyMergeTest(unittest.TestCase):
         self.assertEqual(single[5]["distinct_record_count"], 1)
 
         rows = _snapshot_observations("endurance_score_daily", [70, 71, 70])
-        canonical, _, _, _, conflicts, summary = _merge_dataset("endurance_score_daily", rows, 3)
+        canonical, _, _, _, conflicts, summary, _ = _merge_dataset("endurance_score_daily", rows, 3)
         self.assertEqual(conflicts, [])
         self.assertEqual(
             sorted(
@@ -179,14 +179,14 @@ class SnapshotDailyMergeTest(unittest.TestCase):
             digests = set()
             for order in itertools.permutations(range(4)):
                 observations = [_snapshot_observations(dataset, values)[index] for index in order]
-                canonical, _, _, _, conflicts, summary = _merge_dataset(dataset, observations, 4)
+                canonical, _, _, _, conflicts, summary, _ = _merge_dataset(dataset, observations, 4)
                 self.assertEqual(conflicts, [])
                 semantic = {"canonical": canonical, "summary": summary}
                 digests.add(hashlib.sha256(json.dumps(semantic, sort_keys=True).encode()).hexdigest())
             self.assertEqual(len(digests), 1, dataset)
 
     def test_merge_summary_holds_counts_and_no_values(self) -> None:
-        _, _, _, _, _, summary = _merge_dataset(
+        _, _, _, _, _, summary, _ = _merge_dataset(
             "endurance_score_daily", _snapshot_observations("endurance_score_daily", [70, 71, 72, 73]), 4
         )
         serialized = json.dumps(summary)

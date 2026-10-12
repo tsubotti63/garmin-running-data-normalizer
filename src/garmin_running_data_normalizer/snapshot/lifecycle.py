@@ -62,6 +62,7 @@ def run_snapshot_all(
                     "source_completeness_context"
                 ],
                 "fit_snapshot_numbers": build["fit_snapshot_numbers"],
+                "record_changes": build["record_changes"],
                 **build["relationship_context"],
             },
         )
