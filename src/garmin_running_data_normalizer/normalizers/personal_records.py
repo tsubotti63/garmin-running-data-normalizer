@@ -4,6 +4,7 @@ from typing import Any, Iterable
 
 from ..common.identity import stable_hash
 from ..intake.discovery import DiscoveredAsset, load_json_assets
+from .records import row_snapshot_marks
 
 
 def _personal_record_key(
@@ -60,5 +61,6 @@ def normalize_personal_records(
                     "source_path": asset.provenance_path,
                     "source_sha256": asset.sha256,
                     "source_confidence": "high",
+                    **row_snapshot_marks(row),
                 })
     return sorted(records, key=lambda row: (str(row["personal_record_id"]), str(row["source_path"])))

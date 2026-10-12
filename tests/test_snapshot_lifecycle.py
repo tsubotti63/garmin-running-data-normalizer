@@ -283,7 +283,7 @@ class SnapshotLifecycleTest(unittest.TestCase):
             "gear": [],
         }
         self.assertEqual(
-            _latest_relationship_state(observations, 2),
+            _latest_relationship_state(observations, {2}),
             {"current_activity_ids": ["current"], "current_gear_keys": []},
         )
 
@@ -299,7 +299,7 @@ class SnapshotLifecycleTest(unittest.TestCase):
             "gear": [],
         }
         self.assertEqual(
-            _latest_relationship_state(observations, 2),
+            _latest_relationship_state(observations, {2}),
             {"current_activity_ids": [], "current_gear_keys": []},
         )
 
@@ -1270,7 +1270,7 @@ class SnapshotLifecycleTest(unittest.TestCase):
                 verification["failures"],
             )
 
-    def test_corrupt_archive_lock_integrity_and_same_order_conflict_fail_closed(self) -> None:
+    def test_corrupt_archive_lock_integrity_and_same_snapshot_disagreement(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             store = root / "store"
@@ -1295,6 +1295,9 @@ class SnapshotLifecycleTest(unittest.TestCase):
                 self.register(store, locked, "LOCKED", 1)
             (store / ".single-writer.lock").unlink()
 
+            # Two values for one record in one Snapshot no longer stop the
+            # build (stage A3b): each observation goes to Run-All with its
+            # Snapshot number, and Run-All keeps them as a disagreement.
             conflict = root / "conflict"
             _write_snapshot(
                 conflict,
@@ -1304,8 +1307,24 @@ class SnapshotLifecycleTest(unittest.TestCase):
                 ],
             )
             self.register(store, conflict, "S1", 1)
-            with self.assertRaises(SnapshotMergeError):
-                build_approved_input(store, root / "conflict-build")
+            build_approved_input(store, root / "conflict-build")
+            written = [
+                row
+                for path in sorted(
+                    (root / "conflict-build/approved_input/DI-Connect-Fitness").glob(
+                        "*summarizedActivities.json"
+                    )
+                )
+                for container in json.loads(path.read_text(encoding="utf-8"))
+                for row in container["summarizedActivitiesExport"]
+            ]
+            self.assertEqual(
+                sorted(
+                    (row["name"], row["garminRunningDataNormalizerSnapshotNumbers"])
+                    for row in written
+                ),
+                [("divergent", [1]), ("first", [1])],
+            )
 
             manifest = next((store / "snapshots").glob("*/manifest.json"))
             inventory = json.loads(manifest.read_text(encoding="utf-8"))["objects"]

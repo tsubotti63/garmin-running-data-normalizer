@@ -9,6 +9,7 @@ from typing import Any
 from ..common.time import daily_calendar_date
 from ..fit.hrv import parse_fit_hrv_bytes, parse_fit_hrv_export
 from ..intake.discovery import DiscoveredAsset, load_json_assets
+from .daily_metrics import copies_within_snapshots
 
 MAX_SAFE_INTEGER = (1 << 53) - 1
 
@@ -168,9 +169,14 @@ def normalize_hrv_daily_assets(
     ``snapshot_numbers``, in a Snapshot run, maps the SHA-256 digest of each FIT
     file to the import numbers of the Snapshots that contained it. The audit
     record then counts each Snapshot occurrence and names the Snapshots that
-    gave each value.
+    gave each value. A file's copies within one Snapshot count as files, as
+    a one-shot run of that Export counts them (stage A3b).
     """
     fit_assets = [asset for asset in assets if asset.kind == "fit"]
+
+    def copies(asset: DiscoveredAsset) -> int:
+        return 1 + copies_within_snapshots((snapshot_numbers or {}).get(asset.sha256))
+
     by_date: dict[str, list[tuple[int | float, str]]] = defaultdict(list)
     parse_status_counts: Counter[str] = Counter()
     invalid_value_count = 0
@@ -183,19 +189,20 @@ def normalize_hrv_daily_assets(
             source_path="not_exposed",
             timezone_name=timezone_name,
         )
-        parse_status_counts[str(parsed["status"])] += 1
+        weight = copies(asset)
+        parse_status_counts[str(parsed["status"])] += weight
         for row in parsed["records"]:
-            source_record_count += 1
+            source_record_count += weight
             if row.get("fit_hrv_invalid_raw_value_flag"):
-                invalid_value_count += 1
+                invalid_value_count += weight
                 continue
             date = row.get("date")
             value = row.get("fit_hrv_value")
             if date is None:
-                missing_date_count += 1
+                missing_date_count += weight
                 continue
             if isinstance(value, (int, float)) and not isinstance(value, bool):
-                by_date[str(date)].append((value, asset.sha256))
+                by_date[str(date)].extend([(value, asset.sha256)] * weight)
 
     records: list[dict[str, Any]] = []
     disagreement_key_count = 0
@@ -210,7 +217,13 @@ def normalize_hrv_daily_assets(
             # Every value is kept in the audit; the day's value is left empty.
             disagreement_key_count += 1
             weighted: dict[int | float, list[Any]] = {}
-            for value, source in observations:
+            # In a Snapshot run, each file counts once for each Snapshot
+            # occurrence, its copies included.
+            for value, source in (
+                observations
+                if snapshot_numbers is None
+                else list(dict.fromkeys(observations))
+            ):
                 numbers = (snapshot_numbers or {}).get(source) or []
                 entry = weighted.setdefault(value, [0, set()])
                 entry[0] += len(numbers) or 1
@@ -264,7 +277,7 @@ def normalize_hrv_daily_assets(
             "format": "garmin-running-data-normalizer-hrv-daily-audit-v2",
             "dataset": "hrv_daily",
             "status": "PASS_WITH_REVIEW_ITEMS" if review_count else "PASS",
-            "detected_asset_count": len(fit_assets),
+            "detected_asset_count": sum(copies(asset) for asset in fit_assets),
             "source_record_count": source_record_count,
             "accepted_record_count": len(records),
             "same_value_duplicate_count": duplicate_count,

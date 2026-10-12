@@ -115,6 +115,16 @@ def observation_weight(numbers: list[int] | None) -> int:
     return len(numbers) if numbers else 1
 
 
+def copies_within_snapshots(numbers: list[int] | None) -> int:
+    """Count the further copies of one record within the Snapshots that gave it.
+
+    A Snapshot build writes a record once with one import number for each
+    copy; a copy within one Snapshot counts as in a one-shot run of that
+    Export, and the same record in two Snapshots is not a copy (stage A3b).
+    """
+    return len(numbers) - len(set(numbers)) if numbers else 0
+
+
 def _value_order(item: tuple[str, list[Any]]) -> tuple[int, float, str]:
     """Order observed values: numbers by size, then other values by their JSON."""
     key, (value, *_counts) = item
@@ -148,6 +158,8 @@ def merge_observations(
     recomputed_fields: frozenset[str] = frozenset(),
     alternatives: list[dict[str, list[Any]]] | None = None,
     snapshots: list[list[int] | None] | None = None,
+    form: Callable[[str, Any], str] | None = None,
+    is_absent: Callable[[Any], bool] | None = None,
 ) -> MergedObservations:
     """Merge the observations of one stable key, field by field.
 
@@ -161,6 +173,11 @@ def merge_observations(
     holds for a field when its source fields disagree among themselves.
     ``snapshots``, one entry per row in a Snapshot run, give the import numbers
     of the Snapshots that gave the row; the row then counts once for each.
+    ``form`` gives, for a field and a value, the text by which values are
+    compared; by default, their JSON text. The first value of each form is
+    kept. ``is_absent`` tells the values that mean that the observation has
+    no value; by default, null. When no observation has a value, the field
+    keeps the first observation's.
     """
     merged: dict[str, Any] = {}
     disagreeing: list[str] = []
@@ -185,13 +202,20 @@ def merge_observations(
             total += weight
             held = (alternatives[index] if alternatives else {}).get(field)
             values = [item for item in held if item is not None] if held else [row.get(field)]
-            values = [value for value in values if value is not None]
+            values = [
+                value
+                for value in values
+                if not (is_absent(value) if is_absent else value is None)
+            ]
             if not values:
                 continue
             observed += weight
             # One observation counts once for each value it gives.
-            for value in {stable_json(value): value for value in values}.values():
-                entry = counts.setdefault(stable_json(value), [value, 0, set()])
+            forms: dict[str, Any] = {}
+            for value in values:
+                forms.setdefault(form(field, value) if form else stable_json(value), value)
+            for text, value in forms.items():
+                entry = counts.setdefault(text, [value, 0, set()])
                 entry[1] += weight
                 entry[2].update(numbers or ())
         if observed and observed < total:
@@ -215,7 +239,7 @@ def merge_observations(
                 }
             )
         else:
-            merged[field] = next(iter(counts.values()))[0] if counts else None
+            merged[field] = next(iter(counts.values()))[0] if counts else rows[0].get(field)
     return MergedObservations(merged, disagreeing, disagreements, absent)
 
 
@@ -249,7 +273,9 @@ def finalize_daily(
     are stripped, the values that the row holds for a field whose source
     fields disagree; such a field disagrees even within one observation.
     An accepted row from a Snapshot build carries the Snapshot import numbers
-    in ``_snapshot_numbers``; internal fields never reach the output.
+    in ``_snapshot_numbers``; internal fields never reach the output. Its
+    copies within one Snapshot are counted as source records and same-value
+    duplicates, as a one-shot run of that Export counts them.
     """
     if not key_fields:
         raise DailyMetricError("daily metric stable key must not be empty")
@@ -261,6 +287,7 @@ def finalize_daily(
     review_key_count = 0
     duplicate_group_count = 0
     duplicate_row_count = 0
+    copy_count = 0
     collapsed_exact = False
     merged_different = False
     disagreements: list[dict[str, Any]] = []
@@ -273,10 +300,12 @@ def finalize_daily(
         held = [alternatives(row) for row in grouped[key]] if alternatives else []
         numbers = [row.get("_snapshot_numbers") for row in grouped[key]]
         signatures = {stable_json(row) for row in rows}
-        same_value_duplicates += len(rows) - len(signatures)
-        if len(rows) > 1:
+        copies = sum(copies_within_snapshots(items) for items in numbers)
+        copy_count += copies
+        same_value_duplicates += len(rows) - len(signatures) + copies
+        if len(rows) > 1 or copies:
             duplicate_group_count += 1
-            duplicate_row_count += len(rows) - 1
+            duplicate_row_count += len(rows) - 1 + copies
         provenance_conflict = bool(
             provenance_conflict_predicate
             and len(rows) > 1
@@ -339,7 +368,7 @@ def finalize_daily(
         "dataset": dataset,
         "status": "PASS_WITH_REVIEW_ITEMS" if review_items else "PASS",
         "detected_asset_count": len(selected_assets),
-        "source_record_count": source_record_count,
+        "source_record_count": source_record_count + copy_count,
         "accepted_record_count": len(output),
         "excluded_record_count": sum(excluded_reasons.values()),
         "excluded_reason_counts": dict(sorted(excluded_reasons.items())),
@@ -385,6 +414,7 @@ __all__ = [
     "DailyMetricResult",
     "MergedObservations",
     "SNAPSHOT_NUMBERS_FIELD",
+    "copies_within_snapshots",
     "boolean",
     "finalize_daily",
     "load_rows",

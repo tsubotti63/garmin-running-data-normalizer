@@ -6,18 +6,22 @@ import os
 import shutil
 import tempfile
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .. import __version__
-from ..common.identity import garmin_activity_key, stable_hash
+from ..common.identity import garmin_activity_key, identity_token, stable_hash
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
+from ..common.values import comparable as _comparable
+from ..common.values import is_empty
 from ..diagnostics.contracts import FAMILY_DATASETS, SOURCE_FAMILY_ORDER
 from ..diagnostics.detector import classify_source_name
 from ..intake.accounts import names_account, payload_accounts
 from ..intake.archive import ArchiveLimits
 from ..intake.roots import MIXED_STORE_MESSAGE, MixedExportsError
 from ..normalizers.daily_metrics import SNAPSHOT_NUMBERS_FIELD
+from ..normalizers.records import SNAPSHOT_PROBE_FIELD
 from .policies import CONTRACT_VERSION, MERGE_RULES, MERGE_RULES_VERSION, REGISTRY_VERSION
 from .store import SnapshotStoreError, content_multiset, load_manifests, load_store, sha256_file
 from .store import verify_store
@@ -568,31 +572,6 @@ def _value_state(value: Any) -> str:
     return "explicit_value"
 
 
-def _comparable(value: Any) -> Any:
-    """Return the form in which a later Snapshot's value is compared.
-
-    Values that differ only in how they are written are one value: every
-    empty value (null, "", [], or {}) is the same empty value, and numbers are
-    compared by their value, so 1000 and 1000.0 are the same, also inside
-    lists and objects. A boolean is not a number.
-    """
-    if _value_state(value) != "explicit_value":
-        return ["empty"]
-    if isinstance(value, bool):
-        return ["boolean", value]
-    if isinstance(value, (int, float)):
-        if isinstance(value, float) and value.is_integer():
-            value = int(value)
-        return ["number", value]
-    if isinstance(value, str):
-        return ["text", value]
-    if isinstance(value, list):
-        return ["list", [_comparable(item) for item in value]]
-    if isinstance(value, dict):
-        return ["object", {str(key): _comparable(item) for key, item in value.items()}]
-    return ["other", value]
-
-
 def _lactate_power_conflicts(
     observations: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -686,6 +665,37 @@ def _canonical_key(dataset: str, values: tuple[Any, ...]) -> str:
     return f"{dataset}:{_sha256_value(list(values))}"
 
 
+def _record_identity(dataset: str, observation: dict[str, Any]) -> tuple[str, ...]:
+    """Return what tells the records of one dataset apart.
+
+    In Activities, Gear, activity_gear, and Personal Records, identifiers
+    written in two ways, such as " 123" and 123, name one record (stage A3b).
+    """
+    raw_key = observation["raw_key"]
+    if dataset not in ENTITY_DATASETS:
+        return (_canonical_key(dataset, raw_key),)
+    if dataset == "activities":
+        token = identity_token(observation["record"].get("activityId"))
+        if token is not None:
+            return ("identifier:" + token,)
+        return ("key:" + str(raw_key[0]),)
+    return tuple(
+        "identifier:" + token
+        if (token := identity_token(value)) is not None
+        else "value:" + _stable_json(value)
+        for value in raw_key
+    )
+
+
+def _observation_order(item: dict[str, Any]) -> tuple[int, str, str, str]:
+    return (
+        int(item["logical_order"]),
+        str(item["snapshot_id"]),
+        str(item["source_relative_path"]),
+        str(item["source_record_index"]),
+    )
+
+
 def _reappeared(bits: str) -> bool:
     first = bits.find("1")
     last = bits.rfind("1")
@@ -720,7 +730,184 @@ def _link_removed(
     if latest_endpoints is None:
         return False
     gear_keys, activity_ids = latest_endpoints
-    return str(raw_key[0]) in gear_keys and str(raw_key[1]) in activity_ids
+    return (
+        identity_token(raw_key[0]) in gear_keys
+        and identity_token(raw_key[1]) in activity_ids
+    )
+
+
+def _entry_order(entry: tuple[str, Any, list[int], dict[str, Any]]) -> tuple[int, float, str]:
+    """Order the values of one time point: numbers by size, then the others by text."""
+    form, value, _numbers, _first = entry
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return (0, float(value), form)
+    return (1, 0.0, form)
+
+
+def _merge_entity(
+    ordered: list[dict[str, Any]],
+    point_of: dict[int, int],
+) -> dict[str, Any]:
+    """Merge the observations of one Activity, Gear, link, or Personal Record.
+
+    Snapshots observed at the same time are one time point (stage A3b, merge
+    rules v2.3). At each time point, a field's value is the value of the
+    observations that contain the field; an empty value (null, "", [], or
+    {}) is no value there, unless every observation that contains the field
+    leaves it empty, which removes the value. Two or more values at one time
+    point disagree. Each field takes its value from the last time point that
+    contains it, as in stage A2b-2, and a change is a value, or a set of
+    disagreeing values, that differs from the previous time point's;
+    differences within one time point are disagreements only.
+
+    The records written for Run-All are the observations of the record's last
+    time point: one record when they agree, each with the fields that no
+    observation of that time point contains taken from the earlier time
+    points; otherwise one record for each set of observations with the same
+    values, so that Run-All merges them as in a one-shot run. Each record
+    carries the import numbers of the observations behind it, one for each
+    copy, when there is more than one. A field that the last time point does
+    not contain and whose earlier values disagree is written as probes, which
+    let Run-All mark the fields that come from it. The copies within each
+    Snapshot of the earlier time points are counted here; Run-All counts
+    those of the last time point.
+    """
+    points: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for observation in ordered:
+        points[point_of[int(observation["logical_order"])]].append(observation)
+    fields = sorted(set().union(*(set(item["record"]) for item in ordered)))
+
+    def same_values(item: dict[str, Any]) -> str:
+        # A null or missing field is no value; forms alike are one value.
+        return _stable_json(_comparable({field: item["record"].get(field) for field in fields}))
+
+    earlier_copies = 0
+    for point in sorted(points)[:-1]:
+        by_number: dict[int, set[str]] = defaultdict(set)
+        count: Counter[int] = Counter()
+        for item in points[point]:
+            number = int(item["logical_order"])
+            by_number[number].add(same_values(item))
+            count[number] += 1
+        earlier_copies += sum(count[number] - len(by_number[number]) for number in count)
+    states: dict[str, list[tuple[int, list[tuple[str, Any, list[int], dict[str, Any]]]]]] = {}
+    for field in fields:
+        by_point: list[tuple[int, list[tuple[str, Any, list[int], dict[str, Any]]]]] = []
+        for point in sorted(points):
+            holders = [item for item in points[point] if field in item["record"]]
+            if not holders:
+                continue
+            given = [item for item in holders if not is_empty(item["record"][field])]
+            values: dict[str, list[Any]] = {}
+            # Only empty values: the value was removed at this time point.
+            for item in given or holders:
+                value = item["record"][field]
+                entry = values.setdefault(
+                    _stable_json(_comparable(value)), [value, [], item]
+                )
+                entry[1].append(int(item["logical_order"]))
+            by_point.append(
+                (
+                    point,
+                    [
+                        (form, value, sorted(numbers), first)
+                        for form, (value, numbers, first) in values.items()
+                    ],
+                )
+            )
+        states[field] = by_point
+
+    updates: list[dict[str, Any]] = []
+    change_count = 0
+    merged: dict[str, Any] = {}
+    selected: dict[str, dict[str, Any]] = {}
+    disagreeing: dict[str, list[tuple[str, Any, list[int], dict[str, Any]]]] = {}
+    for field, by_point in states.items():
+        runs: list[dict[str, Any]] = []
+        open_form: str | None = None
+        previous: frozenset[str] | None = None
+        changes = 0
+        for _point, entries in by_point:
+            signature = frozenset(entry[0] for entry in entries)
+            if previous is not None and signature != previous:
+                changes += 1
+            previous = signature
+            if len(entries) == 1:
+                form, value, numbers, _first = entries[0]
+                if open_form == form:
+                    # Values that differ only in form share an entry, which
+                    # shows the value of its latest time point.
+                    runs[-1]["value"] = value
+                    runs[-1]["snapshots"] = sorted(set(runs[-1]["snapshots"]) | set(numbers))
+                else:
+                    runs.append({"value": value, "snapshots": sorted(set(numbers))})
+                    open_form = form
+            else:
+                # The values of a time point that disagree, each with the
+                # Snapshots that gave it; they never share an entry.
+                for _form, value, numbers, _first in sorted(entries, key=_entry_order):
+                    runs.append({"value": value, "snapshots": sorted(set(numbers))})
+                open_form = None
+        _last_point, last_entries = by_point[-1]
+        selected[field] = last_entries[0][3]
+        if len(last_entries) == 1:
+            merged[field] = last_entries[0][1]
+        else:
+            disagreeing[field] = last_entries
+        if changes:
+            change_count += changes
+            updates.append({"field": field, "values": runs})
+
+    last = points[max(points)]
+    contained = sorted(set().union(*(set(item["record"]) for item in last)))
+    copies: dict[str, list[dict[str, Any]]] = {}
+    for item in last:
+        signature = _stable_json(
+            _comparable({field: item["record"].get(field) for field in contained})
+        )
+        copies.setdefault(signature, []).append(item)
+
+    def merge_copies(items: list[dict[str, Any]]) -> dict[str, Any]:
+        record: dict[str, Any] = {}
+        for field in contained:
+            holders = [item["record"][field] for item in items if field in item["record"]]
+            if holders:
+                given = [value for value in holders if not is_empty(value)]
+                record[field] = given[0] if given else holders[0]
+        return record
+
+    carried = {field: value for field, value in merged.items() if field not in contained}
+    records: list[tuple[dict[str, Any], list[int] | None]] = []
+    if len(copies) == 1:
+        (items,) = copies.values()
+        numbers = sorted(int(item["logical_order"]) for item in items)
+        records.append(({**carried, **merge_copies(items)}, numbers if len(items) > 1 else None))
+    else:
+        for items in copies.values():
+            records.append(
+                (
+                    {**carried, **merge_copies(items)},
+                    sorted(int(item["logical_order"]) for item in items),
+                )
+            )
+    probes: list[tuple[dict[str, Any], str, list[int] | None]] = []
+    for field, entries in sorted(disagreeing.items()):
+        if field in contained:
+            continue
+        base = {name: value for name, value in records[0][0].items() if name != field}
+        probes.append((base, field, None))
+        for _form, value, numbers, _first in sorted(entries, key=_entry_order):
+            probes.append(({**base, field: value}, field, numbers))
+    return {
+        "records": records,
+        "probes": probes,
+        "updates": updates,
+        "change_count": change_count,
+        "merged": merged,
+        "selected": selected,
+        "disagreeing": sorted(disagreeing),
+        "earlier_copies": earlier_copies,
+    }
 
 
 def _merge_dataset(
@@ -729,6 +916,7 @@ def _merge_dataset(
     snapshot_count: int,
     *,
     latest_state: dict[str, list[str]] | None = None,
+    time_points: list[list[int]] | None = None,
 ) -> tuple[
     list[dict[str, Any]],
     list[dict[str, Any]],
@@ -747,9 +935,11 @@ def _merge_dataset(
     ``latest_state`` gives the latest Snapshot's Activities and Gear for
     activity_gear, only when the latest Snapshot holds Gear links (the
     ``gearActivityDTOs`` object, even an empty one); without it, no link is
-    removed.
+    removed. ``time_points`` groups the Snapshot numbers of the Snapshots
+    observed at the same time, in time order (stage A3b); the Snapshots of
+    the last group are together the latest Snapshot.
     """
-    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    groups: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
     holds: list[dict[str, Any]] = []
     conflicts: list[dict[str, Any]] = []
     provenance: list[dict[str, Any]] = []
@@ -768,7 +958,7 @@ def _merge_dataset(
                 }
             )
             continue
-        groups[_canonical_key(dataset, raw_key)].append(observation)
+        groups[_record_identity(dataset, observation)].append(observation)
 
     canonical: list[dict[str, Any]] = []
     pattern_counts: Counter[str] = Counter()
@@ -779,6 +969,7 @@ def _merge_dataset(
     updated_fields = 0
     state_counts: Counter[str] = Counter()
     exact_repeat_count = 0
+    earlier_copies = 0
     daily = dataset in DAILY_DATASETS
     entity = dataset in ENTITY_DATASETS
     record_audit: dict[str, list[dict[str, Any]]] | None = (
@@ -786,6 +977,11 @@ def _merge_dataset(
         if entity
         else None
     )
+    if time_points is None:
+        time_points = [[number] for number in range(1, snapshot_count + 1)]
+    point_of = {
+        number: index for index, numbers in enumerate(time_points) for number in numbers
+    }
     latest_endpoints = (
         (
             set(latest_state["current_gear_keys"]),
@@ -794,16 +990,22 @@ def _merge_dataset(
         if latest_state is not None
         else None
     )
-    for key in sorted(groups):
-        group = groups[key]
+    # Each record is named by the key of its first observation.
+    named = sorted(
+        (_canonical_key(dataset, min(group, key=_observation_order)["raw_key"]), identity)
+        for identity, group in groups.items()
+    )
+    for key, identity in named:
+        group = groups[identity]
         by_snapshot: dict[int, list[dict[str, Any]]] = defaultdict(list)
         for observation in group:
             by_snapshot[int(observation["logical_order"])].append(observation)
-        # Daily records are compared in Run-All. Other records whose order
-        # cannot be told apart, within one Snapshot or in two Snapshots observed
-        # at the same time, still stop until stage A3, as repeated records do in
-        # a one-shot run.
-        for logical_order, rows in ([] if daily else by_snapshot.items()):
+        # Daily records are compared in Run-All, and Activities, Gear, links,
+        # and Personal Records by time point (stage A3b). Lactate candidates
+        # whose order cannot be told apart, within one Snapshot or in two
+        # Snapshots observed at the same time, still stop.
+        compared_here = not daily and not entity
+        for logical_order, rows in (by_snapshot.items() if compared_here else []):
             signatures = {_stable_json(item["record"]) for item in rows}
             if len(signatures) > 1:
                 conflicts.append(
@@ -820,7 +1022,7 @@ def _merge_dataset(
             by_observed_at[str(observation["export_observed_at"])].add(
                 _stable_json(observation["record"])
             )
-        for observed_at, signatures in ([] if daily else by_observed_at.items()):
+        for observed_at, signatures in (by_observed_at.items() if compared_here else []):
             if len(signatures) > 1 and len(
                 {
                     item["snapshot_id"]
@@ -840,15 +1042,7 @@ def _merge_dataset(
         if conflicts and conflicts[-1].get("canonical_key") == key:
             continue
 
-        ordered = sorted(
-            group,
-            key=lambda item: (
-                int(item["logical_order"]),
-                str(item["snapshot_id"]),
-                str(item["source_relative_path"]),
-                str(item["source_record_index"]),
-            ),
-        )
+        ordered = sorted(group, key=_observation_order)
         distinct_signatures = {_stable_json(item["record"]) for item in ordered}
         exact_repeat_count += len(ordered) - len(distinct_signatures)
         bits = "".join(
@@ -857,16 +1051,23 @@ def _merge_dataset(
         )
         pattern_counts[bits] += 1
         state_counts["record_absent"] += bits.count("0")
+        # Presence by time point: a record in any Snapshot of the latest time
+        # point is in the latest Snapshot.
+        point_bits = "".join(
+            "1" if any(point_of[number] == point for number in by_snapshot) else "0"
+            for point in range(len(time_points))
+        )
+        in_latest = point_bits.endswith("1")
         removed = (
             dataset == "activity_gear"
-            and bits.endswith("0")
+            and not in_latest
             and _link_removed(ordered[0]["raw_key"], latest_endpoints)
         )
-        if bits.endswith("0") and "1" in bits and not removed:
+        if not in_latest and not removed:
             previous_only += 1
-        if bits.endswith("1") and "1" not in bits[:-1]:
+        if in_latest and "1" not in point_bits[:-1]:
             new += 1
-        if _reappeared(bits):
+        if _reappeared(point_bits):
             reappeared += 1
 
         merged: dict[str, Any] = {}
@@ -947,35 +1148,96 @@ def _merge_dataset(
                     }
                 )
             continue
-        # The values of each field, in Snapshot order, with the Snapshots that
-        # gave each value; a field that a Snapshot does not contain has no
-        # entry for it. Values that differ only in form share an entry, which
-        # shows the value of its latest Snapshot.
-        history: dict[str, list[dict[str, Any]]] = {}
-        forms: dict[str, list[str]] = {}
+        if entity:
+            # Activities, Gear, links, and Personal Records: values by time
+            # point; the records of the last time point go to Run-All.
+            result = _merge_entity(ordered, point_of)
+            updated_fields += result["change_count"]
+            earlier_copies += result["earlier_copies"]
+            audit_key = _audit_key(dataset, ordered[0]["raw_key"])
+            if result["updates"]:
+                record_audit["updates"].append(
+                    {"key": audit_key, "fields": result["updates"]}
+                )
+            if not in_latest:
+                record_audit["not_in_latest_snapshot"].append(
+                    {"key": audit_key, "last_seen_snapshot": max(by_snapshot)}
+                )
+            for record, numbers in result["records"]:
+                canonical.append(
+                    {
+                        "canonical_key": key,
+                        "raw_record": record,
+                        "snapshot_numbers": numbers,
+                        "presence_pattern": bits,
+                        "source_snapshot_count": len(by_snapshot),
+                        "source_observation_count": len(ordered),
+                    }
+                )
+            for record, field, numbers in result["probes"]:
+                canonical.append(
+                    {
+                        "canonical_key": key,
+                        "raw_record": record,
+                        "snapshot_numbers": numbers,
+                        "probe_field": field,
+                        "presence_pattern": bits,
+                        "source_snapshot_count": len(by_snapshot),
+                        "source_observation_count": len(ordered),
+                    }
+                )
+            contributors = {id(item) for item in result["selected"].values()}
+            for observation in ordered:
+                provenance.append(
+                    {
+                        "dataset": dataset,
+                        "canonical_key": key,
+                        "snapshot_id": observation["snapshot_id"],
+                        "logical_order": observation["logical_order"],
+                        "source_relative_path": observation["source_relative_path"],
+                        "source_record_index": observation["source_record_index"],
+                        "source_object_sha256": observation["source_object_sha256"],
+                        "record_sha256": _sha256_value(observation["record"]),
+                        "field_presence": sorted(observation["record"]),
+                        "merge_disposition": (
+                            "field_contributor"
+                            if id(observation) in contributors
+                            else "exact_duplicate"
+                            if sum(
+                                _stable_json(item["record"])
+                                == _stable_json(observation["record"])
+                                for item in ordered
+                            )
+                            > 1
+                            else "superseded_record"
+                        ),
+                    }
+                )
+            for field, observation in sorted(result["selected"].items()):
+                disagrees = field in result["disagreeing"]
+                field_provenance.append(
+                    {
+                        "dataset": dataset,
+                        "canonical_key": key,
+                        "field_name": field,
+                        "value_state": (
+                            "values_disagree"
+                            if disagrees
+                            else _value_state(result["merged"][field])
+                        ),
+                        "selected_value_sha256": (
+                            None if disagrees else _sha256_value(result["merged"][field])
+                        ),
+                        "snapshot_id": observation["snapshot_id"],
+                        "logical_order": observation["logical_order"],
+                        "source_relative_path": observation["source_relative_path"],
+                        "source_record_index": observation["source_record_index"],
+                    }
+                )
+            continue
         for observation in ordered:
-            number = int(observation["logical_order"])
             for field in sorted(observation["record"]):
                 value = observation["record"][field]
-                if entity:
-                    # An explicit null or empty value in a later Snapshot
-                    # means that the value was removed, so it replaces the
-                    # earlier value like any other value.
-                    form = _stable_json(_comparable(value))
-                    runs = history.setdefault(field, [])
-                    run_forms = forms.setdefault(field, [])
-                    if run_forms and run_forms[-1] == form:
-                        runs[-1]["value"] = value
-                        if number not in runs[-1]["snapshots"]:
-                            runs[-1]["snapshots"].append(number)
-                    else:
-                        if run_forms:
-                            updated_fields += 1
-                        runs.append({"value": value, "snapshots": [number]})
-                        run_forms.append(form)
-                    merged[field] = value
-                    selected[field] = observation
-                    continue
                 if (state := _value_state(value)) in {
                     "explicit_null",
                     "explicit_empty",
@@ -1007,21 +1269,6 @@ def _merge_dataset(
                     updated_fields += 1
                 merged[field] = value
                 selected[field] = observation
-        if record_audit is not None:
-            audit_key = _audit_key(dataset, ordered[0]["raw_key"])
-            changed_fields = [
-                {"field": field, "values": runs}
-                for field, runs in sorted(history.items())
-                if len(runs) > 1
-            ]
-            if changed_fields:
-                record_audit["updates"].append(
-                    {"key": audit_key, "fields": changed_fields}
-                )
-            if bits.endswith("0"):
-                record_audit["not_in_latest_snapshot"].append(
-                    {"key": audit_key, "last_seen_snapshot": max(by_snapshot)}
-                )
         canonical.append(
             {
                 "canonical_key": key,
@@ -1106,6 +1353,9 @@ def _merge_dataset(
     if record_audit is not None:
         for entries in record_audit.values():
             entries.sort(key=lambda item: _stable_json(item["key"]))
+        # The copies within the Snapshots of earlier time points, which
+        # Run-All adds to the copies that it counts (stage A3b).
+        record_audit["earlier_copy_count"] = earlier_copies
         # Counts only: the values stay in the dataset's audit record.
         summary["updated_record_count"] = len(record_audit["updates"])
         if dataset == "activity_gear":
@@ -1118,12 +1368,17 @@ def _merge_dataset(
 def _materialized_record(item: dict[str, Any]) -> dict[str, Any]:
     """Return a canonical record as written for Run-All.
 
-    A daily record carries the import numbers of the Snapshots that gave it.
+    A daily record carries the import numbers of the Snapshots that gave it,
+    and so does a record of Activities, Gear, links, or Personal Records
+    that stands for more than one observation; a probe record also
+    carries the name of its field.
     """
-    numbers = item.get("snapshot_numbers")
-    if numbers is None:
-        return item["raw_record"]
-    return {**item["raw_record"], SNAPSHOT_NUMBERS_FIELD: numbers}
+    record = dict(item["raw_record"])
+    if item.get("snapshot_numbers") is not None:
+        record[SNAPSHOT_NUMBERS_FIELD] = item["snapshot_numbers"]
+    if item.get("probe_field") is not None:
+        record[SNAPSHOT_PROBE_FIELD] = item["probe_field"]
+    return record
 
 
 def _validation_matrix(
@@ -1207,39 +1462,41 @@ def _validation_matrix(
 
 def _latest_relationship_state(
     observations_by_dataset: dict[str, list[dict[str, Any]]],
-    snapshot_count: int,
+    latest_numbers: set[int],
 ) -> dict[str, list[str]]:
     """Return only the latest Export endpoint identities for validation.
 
     The cumulative approved input remains the validation record set. These
     latest-only sets let the relationship classifier distinguish an endpoint
     retained from an earlier authoritative Snapshot from one present in the
-    current Export without inferring any identity.
+    current Export without inferring any identity. ``latest_numbers`` are the
+    Snapshot numbers of the latest time point: the Snapshots observed at the
+    latest time are together the latest Export (stage A3b). Identifiers are
+    written as the relationship checks read them.
     """
 
     # `logical_order` is now fixed to the canonical acquisition chronology, so
-    # the final registered Snapshot is the maximum authoritative order even
-    # when a Dataset has no observations in that Snapshot. This preserves an
-    # empty current endpoint instead of retaining a stale older endpoint.
-    latest_acquisition_order = int(snapshot_count)
+    # the final registered Snapshots are the latest authoritative order even
+    # when a Dataset has no observations in them. This preserves an empty
+    # current endpoint instead of retaining a stale older endpoint.
     latest = {
         dataset: [
             item
             for item in observations
             if int(item.get("acquisition_order", item["logical_order"]))
-            == latest_acquisition_order
+            in latest_numbers
         ]
         for dataset, observations in observations_by_dataset.items()
     }
     activity_ids = {
-        str(item["record"].get("activityId"))
+        token
         for item in latest.get("activities", [])
-        if item["record"].get("activityId") not in (None, "")
+        if (token := identity_token(item["record"].get("activityId"))) is not None
     }
     gear_keys = {
-        str(item["record"].get("gearPk"))
+        token
         for item in latest.get("gear", [])
-        if item["record"].get("gearPk") not in (None, "")
+        if (token := identity_token(item["record"].get("gearPk"))) is not None
     }
     return {
         "current_activity_ids": sorted(activity_ids),
@@ -1292,6 +1549,19 @@ def build_approved_input(
         str(manifest["snapshot_id"]): index
         for index, manifest in enumerate(manifests, start=1)
     }
+    # Snapshots observed at the same time are one time point (stage A3b);
+    # the Snapshots of the last one are together the latest Snapshot.
+    time_points: list[list[int]] = []
+    previous_time: datetime | None = None
+    for index, manifest in enumerate(manifests, start=1):
+        observed = datetime.fromisoformat(str(manifest["export_observed_at"])).astimezone(
+            timezone.utc
+        )
+        if time_points and observed == previous_time:
+            time_points[-1].append(index)
+        else:
+            time_points.append([index])
+        previous_time = observed
     manifests_by_label = {
         str(manifest["snapshot_label"]): manifest for manifest in registered
     }
@@ -1501,7 +1771,7 @@ def build_approved_input(
         dataset_summaries: dict[str, Any] = {}
         latest_state = _latest_relationship_state(
             observations_by_dataset,
-            len(manifests),
+            set(time_points[-1]),
         )
         record_changes: dict[str, dict[str, list[dict[str, Any]]]] = {}
         for dataset in DATASET_ORDER:
@@ -1517,9 +1787,11 @@ def build_approved_input(
                 dataset,
                 observations_by_dataset.get(dataset, []),
                 len(manifests),
+                time_points=time_points,
                 latest_state=(
                     latest_state
-                    if dataset == "activity_gear" and len(manifests) in link_snapshots
+                    if dataset == "activity_gear"
+                    and any(number in link_snapshots for number in time_points[-1])
                     else None
                 ),
             )
@@ -1584,12 +1856,12 @@ def build_approved_input(
         aggregator = approved / "DI-Connect-Aggregator"
         lactate_source = sleep_source
         activity_rows = [
-            item["raw_record"] for item in canonical_by_dataset["activities"]
+            _materialized_record(item) for item in canonical_by_dataset["activities"]
         ]
         _write_activity_input(fitness, activity_rows)
-        gear_rows = [item["raw_record"] for item in canonical_by_dataset["gear"]]
+        gear_rows = [_materialized_record(item) for item in canonical_by_dataset["gear"]]
         link_rows = [
-            item["raw_record"] for item in canonical_by_dataset["activity_gear"]
+            _materialized_record(item) for item in canonical_by_dataset["activity_gear"]
         ]
         if gear_rows or link_rows:
             links_by_gear: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -1603,7 +1875,7 @@ def build_approved_input(
                 [{"gearDTOS": gear_rows, "gearActivityDTOs": dict(links_by_gear)}],
             )
         personal_rows = [
-            item["raw_record"]
+            _materialized_record(item)
             for item in canonical_by_dataset["personal_records"]
         ]
         if personal_rows:

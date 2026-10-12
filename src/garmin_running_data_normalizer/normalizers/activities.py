@@ -9,6 +9,7 @@ from ..common.time import (
     unix_ms_to_local_datetime,
 )
 from ..intake.discovery import DiscoveredAsset, load_json_assets
+from .records import row_snapshot_marks
 
 
 def _unwrap(value: Any) -> list[dict[str, Any]]:
@@ -70,6 +71,7 @@ def _normalize(
         "source_path": asset.provenance_path,
         "source_sha256": asset.sha256,
         "source_confidence": "high",
+        **row_snapshot_marks(row),
     }
 
 

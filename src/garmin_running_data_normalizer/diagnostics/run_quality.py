@@ -128,8 +128,14 @@ def build_run_quality(
     fit_status: Mapping[str, Any],
     source_completeness: Mapping[str, Any],
     authority_payloads: Mapping[str, bytes],
+    record_audits: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Project aggregate run evidence without rereading normalized records."""
+    """Project aggregate run evidence without rereading normalized records.
+
+    ``record_audits`` are the audit records of Activities, Gear,
+    activity_gear, and Personal Records, whose repeated records may
+    disagree (stage A3b).
+    """
     interpretation = interpretation_for_status(status)
     if (
         len(dataset_qa_entries) != 17
@@ -187,6 +193,10 @@ def build_run_quality(
             conflict_by_dataset[dataset] = conflicts
         if unresolved:
             unresolved_by_dataset[dataset] = unresolved
+    for dataset, audit in sorted((record_audits or {}).items()):
+        conflicts = _count(audit.get("disagreement_key_count", 0) or 0)
+        if conflicts:
+            conflict_by_dataset[dataset] = conflicts
     incomplete_fit = _count(fit_status.get("incomplete_fit_count", 0) or 0)
     if incomplete_fit:
         excluded_by_dataset["fit"] = incomplete_fit
