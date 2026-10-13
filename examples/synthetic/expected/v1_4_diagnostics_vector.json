@@ -8,7 +8,7 @@
   "product_exit_code": 0,
   "product_version": "1.7.1",
   "relationship_count": 6,
-  "run_quality_sha256": "f3a575f5e3e7d9a90eacd51fb2485ef5409acedb18003ad00aa3a988a6892464",
+  "run_quality_sha256": "08d478cc255ca961b71e28c320f5c33b7edde6479f48505b9a4f7a2d48c8b77a",
   "run_status": "PASS_WITH_WARNINGS",
   "source_completeness_sha256": "4322612ae48a59b8fbd0ae4e2be86419d6be3c99ddbdde3ac28bffc4a8f2448c",
   "support_bundle": {

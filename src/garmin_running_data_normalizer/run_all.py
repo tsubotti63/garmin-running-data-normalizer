@@ -1299,12 +1299,12 @@ def _family_results(
                         ),
                     }
                 )
+            # No dataset of Run-All gives review items since stage A3d-2b,
+            # when HRV readings joined the rules of the other daily datasets.
             review_item_count = int(
                 audit.get("review_required_count", 0)
                 or audit.get("review_item_count", 0)
                 or audit.get("review_key_count", 0)
-                + audit.get("invalid_value_count", 0)
-                + audit.get("missing_date_count", 0)
             )
             disagreement_key_count = int(audit.get("disagreement_key_count", 0))
             if review_item_count:

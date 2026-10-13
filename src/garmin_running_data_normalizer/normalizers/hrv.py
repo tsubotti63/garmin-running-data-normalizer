@@ -7,7 +7,15 @@ from pathlib import Path
 from typing import Any
 
 from ..common.time import daily_calendar_date
-from ..fit.hrv import parse_fit_hrv_bytes, parse_fit_hrv_export
+from ..common.values import ABSENT, INVALID, VALID, read_value
+from ..fit.hrv import (
+    FIT_HRV_DIVISOR,
+    FIT_HRV_INVALID_RAW_VALUE,
+    FIT_TIMESTAMP_INVALID_RAW_VALUE,
+    _fit_datetime,
+    parse_fit_hrv_export,
+    read_fit_hrv_messages,
+)
 from ..intake.discovery import DiscoveredAsset, load_json_assets
 from .daily_metrics import copies_within_snapshots
 
@@ -147,6 +155,38 @@ def normalize_hrv(root: str | Path, timezone_name: str = "Asia/Tokyo") -> dict[s
     }
 
 
+# Why an HRV reading is left out, named as the daily datasets name theirs
+# (stage A3d-2b).
+READING_TIMESTAMP_LEFT_OUT = "missing_or_invalid_reading_timestamp"
+READING_VALUE_LEFT_OUT = "missing_or_invalid_hrv_value"
+
+
+def _reading_value(raw: Any) -> tuple[str, float | None]:
+    """Read the value of an HRV reading as an integer field takes it.
+
+    A whole number, also one written with a decimal point, gives the value in
+    milliseconds. FIT's invalid value 65535, which marks that nothing was
+    measured, and a missing field give no value; any other value is of
+    another form (stage A3d-2b).
+    """
+    state, value = read_value(raw, "integer")
+    if state == ABSENT or (state == VALID and value == FIT_HRV_INVALID_RAW_VALUE):
+        return ABSENT, None
+    if state == INVALID:
+        return INVALID, None
+    return VALID, value / FIT_HRV_DIVISOR
+
+
+def _reading_date(raw: Any, timezone_name: str) -> str | None:
+    """Return the local date of an HRV reading's time, or None when the time
+    is missing, FIT's invalid value, of another form, or out of range."""
+    state, seconds = read_value(raw, "integer")
+    if state != VALID or seconds == FIT_TIMESTAMP_INVALID_RAW_VALUE:
+        return None
+    local = _fit_datetime(seconds, timezone_name)
+    return local[:10] if local else None
+
+
 HRV_DAILY_FIELDS = (
     "calendar_date",
     "hrv_value",
@@ -166,6 +206,16 @@ def normalize_hrv_daily_assets(
 ) -> dict[str, Any]:
     """Normalize FIT-derived HRV by date; values that disagree are left empty.
 
+    Each FIT reading (message 370) is an observation of its local date. A
+    reading without a date is left out as a daily row without one is (stage
+    A3d-1): one that holds a value is counted by reason, and one that holds
+    none is an empty record. A reading whose value is of another form is left
+    out too, because the value is what the reading is for, as a VO2max row
+    without its value is. A reading without a value, such as one with FIT's
+    invalid value, which marks that nothing was measured, is counted in
+    ``absent_value_counts`` and not announced; a date has a row only when one
+    of its readings has a value (stage A3d-2b).
+
     ``snapshot_numbers``, in a Snapshot run, maps the SHA-256 digest of each FIT
     file to the import numbers of the Snapshots that contained it. The audit
     record then counts each Snapshot occurrence and names the Snapshots that
@@ -179,30 +229,31 @@ def normalize_hrv_daily_assets(
 
     by_date: dict[str, list[tuple[int | float, str]]] = defaultdict(list)
     parse_status_counts: Counter[str] = Counter()
-    invalid_value_count = 0
-    missing_date_count = 0
+    left_out: Counter[str] = Counter()
+    empty_record_count = 0
+    absent_value_count = 0
     source_record_count = 0
     for asset in fit_assets:
-        parsed = parse_fit_hrv_bytes(
-            asset.data,
-            file_id=f"internal:{asset.sha256}",
-            source_path="not_exposed",
-            timezone_name=timezone_name,
-        )
+        status, readings, _unknown_records = read_fit_hrv_messages(asset.data)
         weight = copies(asset)
-        parse_status_counts[str(parsed["status"])] += weight
-        for row in parsed["records"]:
+        parse_status_counts[
+            status or ("parsed_fit_hrv" if readings else "no_fit_hrv_records")
+        ] += weight
+        for raw_value, raw_time in readings:
             source_record_count += weight
-            if row.get("fit_hrv_invalid_raw_value_flag"):
-                invalid_value_count += weight
-                continue
-            date = row.get("date")
-            value = row.get("fit_hrv_value")
+            state, value = _reading_value(raw_value)
+            date = _reading_date(raw_time, timezone_name)
             if date is None:
-                missing_date_count += weight
-                continue
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                by_date[str(date)].extend([(value, asset.sha256)] * weight)
+                if state == ABSENT:
+                    empty_record_count += weight
+                else:
+                    left_out[READING_TIMESTAMP_LEFT_OUT] += weight
+            elif state == INVALID:
+                left_out[READING_VALUE_LEFT_OUT] += weight
+            elif state == ABSENT:
+                absent_value_count += weight
+            else:
+                by_date[date].extend([(value, asset.sha256)] * weight)
 
     records: list[dict[str, Any]] = []
     disagreement_key_count = 0
@@ -269,22 +320,28 @@ def normalize_hrv_daily_assets(
                 "disagreeing_fields": ["hrv_value"] if conflict else [],
             }
         )
-    # Values that disagree are reported as disagreements, not as review items.
-    review_count = invalid_value_count + missing_date_count
-    result = {
+    # Values that disagree are reported as disagreements; readings left out
+    # and readings without a value are counted (stage A3d-2b).
+    return {
         "records": records,
         "audit": {
             "format": "garmin-running-data-normalizer-hrv-daily-audit-v2",
             "dataset": "hrv_daily",
-            "status": "PASS_WITH_REVIEW_ITEMS" if review_count else "PASS",
+            "status": "PASS",
             "detected_asset_count": sum(copies(asset) for asset in fit_assets),
             "source_record_count": source_record_count,
             "accepted_record_count": len(records),
+            "excluded_record_count": sum(left_out.values()),
+            "excluded_reason_counts": dict(sorted(left_out.items())),
+            # Readings left out that hold no value: counted apart, and not
+            # announced.
+            **({"empty_record_count": empty_record_count} if empty_record_count else {}),
             "same_value_duplicate_count": duplicate_count,
             "disagreement_key_count": disagreement_key_count,
             "disagreements": disagreements,
-            "invalid_value_count": invalid_value_count,
-            "missing_date_count": missing_date_count,
+            "absent_value_counts": (
+                {"hrv_value": absent_value_count} if absent_value_count else {}
+            ),
             "parse_status_counts": dict(sorted(parse_status_counts.items())),
             "source_definition": "non-running FIT message 370 field 1 raw divided by 128",
             "date_basis": "fit_end_jst_date_from_message_370_field_253_timestamp",
@@ -296,14 +353,6 @@ def normalize_hrv_daily_assets(
             "source_hashes_exposed": False,
         },
     }
-    if review_count:
-        result["audit"].update(
-            {
-                "review_required_count": review_count,
-                "review_item_count": review_count,
-            }
-        )
-    return result
 
 
 __all__ = ["HRV_DAILY_FIELDS", "normalize_hrv", "normalize_hrv_daily_assets"]

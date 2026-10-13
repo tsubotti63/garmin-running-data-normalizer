@@ -135,6 +135,9 @@ jobs:
       - name: Verify Windows values of another form
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_invalid_values.py -q
+      - name: Verify Windows HRV readings
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_hrv_readings.py -q
       - name: Build distributions
         shell: powershell
         run: |
