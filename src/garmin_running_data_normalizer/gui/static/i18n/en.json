@@ -204,7 +204,7 @@
   "timezone.label": "Timezone for local dates and times",
   "warning.daily_metrics_review": "Some daily metric values need review, such as a value without a date ({code}).",
   "warning.data_file_left_out": "Some files could not be read and were left out. run_manifest.json lists them with the reason ({code}).",
-  "warning.data_row_left_out": "Some rows lacked a required value, such as a date, and were left out. START_HERE.md gives their number for each table, and the audit files count them by reason ({code}).",
+  "warning.data_row_left_out": "Some rows lacked a required value, such as a date or a usable identifier, and were left out. START_HERE.md gives their number for each table, and the audit files count them by reason ({code}).",
   "warning.fit_parse_incomplete": "Some FIT files could not be read completely. They were left out, and nothing was guessed ({code}).",
   "warning.input_duplicate_sources": "The input held the same export more than once, such as the ZIP and the folder extracted from it. It was read once ({code}).",
   "warning.lactate_candidates": "There is more than one candidate for the lactate threshold. All are kept, and none was chosen ({code}).",
@@ -212,6 +212,7 @@
   "warning.optional_family_not_present": "Some optional data was not in the export, so its tables are empty ({code}).",
   "warning.other": "Another warning ({code}).",
   "warning.records_not_in_latest_snapshot": "Some records are not in the latest export. They are kept, and the audit files show the last export that had each of them ({code}).",
+  "warning.relationship_invalid_link": "Some personal records have a link to an activity that is missing, malformed, or disagrees. They are kept with the link unresolved, and nothing was guessed ({code}).",
   "warning.relationship_unresolved": "Some links between datasets point to records that are not in the output. Nothing was guessed ({code}).",
   "warning.values_disagree": "Some records have values that disagree. Those fields are left empty, and every value is kept in the audit files. None was chosen ({code}).",
   "warning.values_updated": "A later export changed some records, such as the name of an activity. The tables have the latest values, and the earlier values are kept in the audit files ({code})."

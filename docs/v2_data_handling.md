@@ -183,9 +183,12 @@ Each item gives the v1.7.1 behavior and the v2.0.0 behavior.
     - A disagreement in a field that a relationship uses leaves the
       relationship as an empty value does: an Activity whose start time
       disagrees gets no FIT link, and the linkage audit names the reason.
-      Until stage A3d, a Personal Record whose activity disagrees stops the
-      run as a missing activity does (`RELATIONSHIP_CONTRACT_FAILED`; v1.7.1
-      stopped with `DIVERGENT_DUPLICATE`).
+      From stage A3d-1b, a Personal Record whose activity disagrees stays
+      with its relationship `unresolved` and the reason
+      `activity_link_values_disagree` (see [Relationships](#relationships));
+      until then it stopped the run as a missing activity did
+      (`RELATIONSHIP_CONTRACT_FAILED`; v1.7.1 stopped with
+      `DIVERGENT_DUPLICATE`).
 
 ### Changes across Snapshots
 
@@ -229,12 +232,16 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     record that the latest Snapshot does not contain.
   - A record with a removed value is normalized as a one-shot run normalizes
     the same row: a removed start time of an Activity leaves its local date
-    and time empty. Until stage A3d, a removed value that the normalized
-    dataset does not accept stops the run as it does in a one-shot run: an
-    empty string for a number, an empty list or object for a single value
-    (`OUTPUT_EXPERIENCE_FAILED`), or a null Activity of a Personal Record
-    (`RELATIONSHIP_CONTRACT_FAILED`), all with exit 2. From stage A3d, such a
-    row is left out and counted by reason (exit 3).
+    and time empty, and, from stage A3d-1b, a Personal Record whose Activity
+    was removed stays with its relationship `unresolved` (see
+    [Relationships](#relationships)); until then it stopped the run
+    (`RELATIONSHIP_CONTRACT_FAILED`). Until stage A3d-2, a removed value
+    that the normalized dataset does not accept stops the run as it does in
+    a one-shot run: an empty string for a number, or an empty list or object
+    for a single value (`OUTPUT_EXPERIENCE_FAILED`, exit 2). From stage
+    A3d-2, such a field is empty, and the audit record keeps the value, with
+    warning `DATA_VALUE_INVALID` (see
+    [Rows and values with problems](#rows-and-values-with-problems)).
   - Every earlier value is kept in the dataset's audit record:
     `audit/activities.json`, `audit/gear.json`, `audit/activity_gear.json`,
     and `audit/personal_records.json` (format
@@ -336,7 +343,9 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     that hold an empty list: they are not a repeated Export.
   - Identifiers written in two ways, such as `" 123"`, `"0123"`, and `123`,
     are the same identifier, as in v1.7.1, and name one record (stage A3b);
-    the row keeps the first row's form.
+    the row keeps the first row's form. From stage A3d-1b, so is `123.0`,
+    which is written as `123`, and only the ASCII digits 0 to 9 are digits
+    (see [Rows and values with problems](#rows-and-values-with-problems)).
   - A Snapshot run counts the copies within one Snapshot as a one-shot run
     of that Export counts them: in these four datasets, in the daily audit
     records, and in the HRV record and file counts (stage A3b), so that one
@@ -374,7 +383,13 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     `userProfilePk` or `userProfilePK`. Only these files are used, because
     other files of an Export, such as those about connections, groups, or
     challenges, name other people's accounts. Values are compared as numbers,
-    so `" 123"` and `123` are one account. Records that name two or more
+    so `" 123"` and `123` are one account; from stage A3d-1b, they are read
+    as every identifier is (see
+    [Rows and values with problems](#rows-and-values-with-problems)), so
+    `123.0` is that account too, the full-width `"１２３"` is another
+    account, and a value that cannot be an identifier, such as a text of
+    more than 4,300 digits, names no account instead of stopping the run.
+    Records that name two or more
     accounts stop the run with `INPUT_MULTIPLE_EXPORTS`; an Export whose
     records name no account is not stopped for that reason. The accounts are
     compared within the run only and never appear in an output, a Snapshot
@@ -517,12 +532,12 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
   one distance is removed.
 - v2.0.0:
   - A row without a usable identity (no identifier and no fallback fields, an
-    identifier of an unsupported type, or an Activity identifier of 0) or
-    without a required value (such as a date) is left out with a reason.
-    Warning `DATA_ROW_LEFT_OUT`, status `PARTIAL_SUCCESS`.
-  - Stage A3d-1 does this for the daily datasets other than HRV; the rows of
-    Activities, Gear, links, and Personal Records still stop the run until
-    stage A3d-1b, and HRV follows in stage A3d-2. The rules for a daily row:
+    identifier of an unsupported type, or an identifier of 0 in Activities,
+    Gear, and links) or without a required value (such as a date) is left
+    out with a reason. Warning `DATA_ROW_LEFT_OUT`, status `PARTIAL_SUCCESS`.
+  - Stage A3d-1 does this for the daily datasets other than HRV, stage
+    A3d-1b for Activities, Gear, links, and Personal Records, and HRV follows
+    in stage A3d-2. The rules for a daily row:
     - The reasons are those of v1.7.1, which the dataset's audit record counts
       in `excluded_record_count` and `excluded_reason_counts`. The run gives
       one warning `DATA_ROW_LEFT_OUT` for each dataset with rows left out, with
@@ -543,6 +558,71 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
       of that Export (stage A3b).
     - Source Completeness gives the family `MALFORMED` when a row that holds
       a value is left out; empty records leave it valid.
+  - The rules for an identifier (stage A3d-1b):
+    - One rule reads every identifier: in the normalizers, in the checks of
+      relationships, when repeated records are merged, in the Snapshot
+      build, and when the accounts are compared (see
+      [Mixed input](#mixed-input)). A value is an identifier, missing, or
+      invalid.
+    - An identifier is an integer, such as `123`; a number written with a
+      decimal point or an exponent whose value is a whole number of at most
+      2^53 − 1 in size, such as `123.0`; or a text that is not blank.
+      Identifiers written in two ways are one identifier: the spaces around
+      a text are left out,
+      and a text of the ASCII digits 0 to 9 only is read without its
+      leading zeros, so `123`, `123.0`, `"123"`, and `" 0123"` name one
+      record, and so do `-5` and `"-5"`. Other digits, such as `"²"`,
+      full-width digits, or Arabic-Indic digits, are text, so `"１２３"` is
+      not `123`.
+    - Missing: absent, null, `""`, or spaces only. The record then takes a
+      key made from its other fields, as v1.7.1 did for an identifier that
+      was absent, null, or `""`: an Activity from its
+      start time, distance, duration, and type, a Gear record from its
+      `uuid`, `displayName`, and `dateBegin`, and a Personal Record from its
+      activity, type, value, and start time. A row without any of these
+      fields is left out with the reason `identity_missing`. An
+      `activity_gear` link has no such fields: a link without its Gear key
+      or its Activity is left out with the same reason.
+    - Invalid: a boolean, a list, an object, a number written with a
+      decimal point or an exponent that is not a whole number of at most
+      2^53 − 1 in size, such as `1.5` or `1e20`, NaN or an infinity, a text
+      of more than 4,300 ASCII digits, or a value of another type; and 0 in
+      Activities, Gear, and links, where it names no record. The row is left
+      out with the reason `identity_invalid`, also when it has the fields
+      for a key, so that it is never taken for another record. The limit of
+      4,300 digits is the product's own, so that every machine reads the
+      same identifiers whatever its Python settings. The identifier of a
+      Personal Record can be 0, as in v1.7.1.
+    - The normalized rows write each identifier as the Export does, as in
+      v1.7.1, except that a whole number written with a decimal point, such
+      as `123.0`, is written as the integer `123`, and the key made from it
+      is, for example, `garmin_activity:123`. In `activity_gear`, a Gear key
+      or an Activity of the ASCII digits is written as an integer, as in
+      v1.7.1; other text, such as `"²"`, stays text.
+    - The audit records of the four datasets count the rows left out in
+      `excluded_record_count` and `excluded_reason_counts`, with the copies
+      within one Snapshot, as the daily audit records count theirs. The run
+      gives one warning `DATA_ROW_LEFT_OUT` for each of the four datasets
+      with rows left out, so the Gear family can give two, one for Gear and
+      one for `activity_gear`, and its `left_out_row_count` is their sum;
+      `START_HERE.md` gives the number for each dataset in the same line as
+      for the daily datasets. Source Completeness gives the family
+      `MALFORMED`, and Run Quality counts the rows in `excluded`.
+    - Empty records (see [Terms](#terms)) are a rule of the daily datasets:
+      a row of these four datasets without a usable identifier is left out
+      with the warning, whatever else it holds.
+    - A link or a Personal Record that points to an Activity or a Gear
+      record that was left out has a valid link whose endpoint is absent
+      (see [Relationships](#relationships)).
+    - When every Activities row is left out, the run stops with
+      `ACTIVITIES_EMPTY`, as when every Activities file is left out.
+    - `normalize-activities` (the Golden Path) stops when an Activities row
+      has no usable identifier, because its output has no place for the
+      count, as it stops for an Activities file that cannot be read; stage
+      A3d-3 gives the stop its code. v1.7.1 stopped there without a code
+      for a row with neither an identifier nor the fields for a key, and
+      wrote a row whose identifier is invalid with a key made from the
+      value, such as `garmin_activity:True`.
   - A value of an unexpected type becomes empty in the normalized row, and the
     raw value is kept in the audit record. Warning `DATA_VALUE_INVALID`
     (provisional), status `PASS_WITH_WARNINGS`.
@@ -573,12 +653,38 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
 - v2.0.0:
   - These rows stay in the normalized output with the relationship status
     `unresolved` and a reason. Warning `RELATIONSHIP_UNRESOLVED_VALID_LINK`, as
-    in v1.x. Status `PASS_WITH_WARNINGS`.
-  - A Personal Record whose activity link is missing or malformed stays with the
-    status `unresolved`; an activity identifier of 0 stays `independent`.
+    in v1.x. Status `PASS_WITH_WARNINGS`. Stage A4 does this; until then,
+    they are removed and counted as in v1.7.1.
+  - A Personal Record whose activity link cannot be followed stays with the
+    relationship status `unresolved` and a reason (stage A3d-1b):
+    `activity_link_missing` when the link is absent, null, `""`, or spaces
+    only; `activity_link_invalid` when it cannot be an identifier (see
+    [Rows and values with problems](#rows-and-values-with-problems)); and
+    `activity_link_values_disagree` when the rows of the record disagree on
+    it (see [Values that disagree](#values-that-disagree)). Its
+    `garmin_activity_key` is empty, and so is its `activity_id`: null, or,
+    for a missing link, the value that the Export gave, such as `""`. An
+    activity identifier of 0 stays `independent`, as in v1.7.1.
+  - Warning `RELATIONSHIP_UNRESOLVED_INVALID_LINK` gives the number of such
+    Personal Records. Status `PASS_WITH_WARNINGS` (exit 0): the record stays,
+    so nothing is missing. Stage A3d-1b settles the name.
+  - `qa/relationship_summary.json` counts these Personal Records for
+    `personal_records_to_activities` in `eligible_count` and
+    `unresolved_count`, and in `relationship_malformed` (missing or
+    invalid) and `relationship_conflict` (values that disagree), which
+    v1.7.1 always gave as 0. `relationship_unresolved` and `orphan_count`
+    still count only the valid links whose endpoint is absent, so
+    `RELATIONSHIP_UNRESOLVED_VALID_LINK` keeps its meaning;
+    `primary_unresolved_reason` names the most frequent reason; and
+    `relationship_warning_count` in `run_summary.json` counts each of the
+    two warnings.
+  - Until stage A4, the two kinds of Personal Records differ: one whose link
+    cannot be followed stays, while one whose valid link points to an
+    Activity that is not in the output, such as an Activity left out, is
+    removed and counted.
   - Identifiers are compared after trimming spaces and leading zeros, and
-    digit-only text identifiers in `activity_gear` are written as integers, as
-    in v1.7.1; the Output Contract is corrected to say so.
+    text identifiers of the ASCII digits in `activity_gear` are written as
+    integers, as in v1.7.1; the Output Contract is corrected to say so.
 
 ### Values taken from several source fields
 
@@ -713,7 +819,7 @@ The run stops with exit 2 and publishes no output for:
   are left out instead (see [Files that cannot be read](#files-that-cannot-be-read)).
 - An input that is not an Export: no Activities (`ACTIVITIES_NOT_FOUND`) or no
   Activities records (`ACTIVITIES_EMPTY`), also when every Activities file
-  was left out.
+  or row was left out.
 - Mixed Exports or accounts (`INPUT_MULTIPLE_EXPORTS`).
 - An Export that changes during the run (`INPUT_CHANGED`).
 - The output: it already exists, it cannot be written, or its path is too long.
@@ -801,6 +907,23 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   keep its `dataset`, since a family can hold two datasets. The merge
   summaries of a Snapshot run gain `keyless_observation_count` and
   `keyless_record_count` for each daily dataset.
+- Stage A3d-1b adds, each only when there is something to report,
+  `excluded_record_count` and `excluded_reason_counts` to the audit records
+  of Activities, Gear, `activity_gear`, and Personal Records, warning
+  `DATA_ROW_LEFT_OUT` for each of these datasets, and warning
+  `RELATIONSHIP_UNRESOLVED_INVALID_LINK` with `family` `relationships` and
+  `count`. The merge summaries of a Snapshot run give
+  `keyless_observation_count` and `keyless_record_count` for these datasets
+  too, as for the daily datasets. The Schema Catalog lets
+  `personal_records.activity_id` be null, and the texts about the links of
+  Personal Records in `SCHEMA_CATALOG.json`, `ANALYSIS_CONTEXT.json`,
+  `START_HERE.md`, `DATASET_INVENTORY.md`, and `ANALYSIS_HANDOFF.md` now
+  cover the unresolved ones, so these files and the digests that cover
+  them change in every run.
+- The External-safe Pack lists each warning with its `code`, `family`, and
+  `count` only, as before. The Gear family can therefore list two
+  `DATA_ROW_LEFT_OUT` warnings, one for Gear and one for `activity_gear`,
+  whose counts add up to the family's rows left out.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
   and `SNAPSHOT_STORE_LOCKED` (provisional name).
@@ -844,6 +967,27 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Run-All does (records under `records`, `items`, or `data`), and counts a
   Snapshot's daily family as malformed in Source Completeness when Run-All
   leaves out a record of it that holds a value.
+- Stage A3d-1b: a record of Activities, Gear, `activity_gear`, or Personal
+  Records without a usable identifier (see
+  [Rows and values with problems](#rows-and-values-with-problems)) is passed
+  to Run-All in the same way, and Run-All leaves it out with warning
+  `DATA_ROW_LEFT_OUT`, as a one-shot run does. Until then, the build held
+  back without a warning a record without an identifier and the fields for
+  a key, a link without its Gear key or Activity, and a Personal Record
+  whose identifier had an invalid form; it gave the other records with an
+  invalid identifier a key, and Run-All then stopped. Such a record has no
+  key, so it has no updates and is never listed in
+  `not_in_latest_snapshot`. The merge summary counts these records as for
+  the daily datasets, so the review holds that `START_HERE.md` reports can
+  be lower, and a run whose store holds such a record ends with exit 3
+  where it ended with 0 or 2. A link is written under its Gear key as the
+  Export gave it, also an empty one, which the build dropped before. The
+  build reads identifiers as Run-All does, so `123` and `123.0` name one
+  record in any order of the files, and a text of more than 4,300 ASCII
+  digits or a Gear key such as `"²"` no longer stops the build. When every
+  Activities record lacks a usable identifier, `snapshot build-input`
+  writes them for Run-All, and `snapshot run-all` stops with
+  `ACTIVITIES_EMPTY`, as a one-shot run does.
 - Stage A2b-1 removes the stops for daily datasets: values that differ across
   Snapshots, within one Snapshot, or between two Snapshots observed at the same
   time follow [Values that disagree](#values-that-disagree), with the Snapshot
@@ -880,7 +1024,10 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `garmin_snapshot_merge_rules:v2.4` from stage A3c-2, which leaves out the
   files that a run cannot read, and `garmin_snapshot_merge_rules:v2.5` from
   stage A3d-1, which passes the daily records without a stable key to
-  Run-All, in `config/garmin_snapshot_merge_rules_v2.json`. For these
+  Run-All, and `garmin_snapshot_merge_rules:v2.6` from stage A3d-1b, which
+  reads identifiers as Run-All does and passes the records of Activities,
+  Gear, `activity_gear`, and Personal Records without a usable identifier
+  to Run-All, in `config/garmin_snapshot_merge_rules_v2.json`. For these
   datasets they replace the merge fields of the v1.0 registry; the other
   datasets follow the v1.0 registry until stage A3d. A build records
   `merge_rules_version` in `snapshot/snapshot_lineage.json`, the approved input
@@ -947,14 +1094,27 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   with exit 3 or 0, and the warnings say what was left out or kept. A daily
   row without a required value, such as a date, which v1.7.1 left out with a
   count only, now gives warning `DATA_ROW_LEFT_OUT` and exit 3 when it holds
-  a value; a row that holds no value is counted as an empty record.
+  a value; a row that holds no value is counted as an empty record. A row of
+  Activities, Gear, `activity_gear`, or Personal Records without a usable
+  identifier, which stopped v1.7.1, is left out with the same warning and
+  exit 3, and a Personal Record whose activity link is missing, malformed,
+  or disagrees is kept unresolved with warning
+  `RELATIONSHIP_UNRESOLVED_INVALID_LINK` and exit 0.
 - Outputs: `run_all_version` 2, the new fields, audit records, and audit
   sections, and the new warning codes. The synthetic Run-All output grows from
   46 to 50 files with the audit records of Activities, Gear, `activity_gear`,
   and Personal Records. Repeated Activities, Gear records, links, and
-  Personal Records become one row, and their differing fields are empty. Rerun Run-All; earlier outputs are not converted. Renamed in
-  stage A2a: the HRV `dedupe_status` `review_required_same_day_differing_values`
-  becomes `same_day_values_disagree`, the Run Quality reason
+  Personal Records become one row, and their differing fields are empty. An
+  identifier written as a whole number with a decimal point, such as
+  `123.0`, is written as `123`, in its key too. Only the ASCII digits 0 to
+  9 are digits: an identifier written with other digits, such as the
+  full-width `"１２３"`, which v1.7.1 read as `123`, is now text, so a link
+  that names an Activity in this way is a valid link whose endpoint is
+  absent, and records that name their account in this way and as `123`
+  name two accounts, which stops the run with `INPUT_MULTIPLE_EXPORTS`.
+  Rerun Run-All; earlier outputs are not converted. Renamed in stage A2a:
+  the HRV `dedupe_status` `review_required_same_day_differing_values` becomes
+  `same_day_values_disagree`, the Run Quality reason
   `CONFLICT_PRESERVED_NO_WINNER` becomes `VALUES_DISAGREE` in Run Quality v2,
   and the daily audit counters `divergent_duplicate_count`,
   `divergent_duplicate_key_count`, and `same_day_conflict_count` give way to
@@ -982,7 +1142,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   builds leave out the files that a run cannot read, as one-shot runs do.
   Daily records without a stable key are no longer held back: Run-All leaves
   them out with warning `DATA_ROW_LEFT_OUT`, or counts them as empty
-  records, as in a one-shot run. The merge rules v2.5 are published in
+  records, as in a one-shot run. So are the records of Activities, Gear,
+  `activity_gear`, and Personal Records without a usable identifier, which
+  were held back or stopped the build. The merge rules v2.6 are published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around
@@ -1003,7 +1165,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   order mark is accepted in every file.
 - CLI: the pre-run checks that the GUI performed in v1.7.1 apply to the CLI,
   errors report what happened and the next step, and `Ctrl+C` reports the
-  cancellation.
+  cancellation. `normalize-activities` stops on an Activities row without a
+  usable identifier, which v1.7.1 wrote with a key made from the value when
+  the value had an invalid form.
 - Python API: `DiscoveredAsset` is a plain class instead of a frozen
   dataclass. Its fields, its constructor, and the content that
   `discover_export` returns are unchanged, but dataclass equality, hashing,
@@ -1018,9 +1182,15 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `normalize_uds`, `normalize_endurance_score`, and `finalize_daily` lose the
   keyword arguments `preserve_observed_variants` and `variant_lineage`, which
   no command used, and `finalize_daily` loses `signature_factory`.
+  `normalize_activities`, `normalize_gear`, and `normalize_personal_records`
+  gain an optional `left_out` counter, which counts the rows without a
+  usable identifier by reason (stage A3d-1b); without it, they raise
+  `ValueError` for such a row, also for an identifier of an invalid form or
+  of 0 in Activities and Gear, which v1.7.1 accepted.
 - Schema: the fields that a disagreement can leave empty are nullable (the
   Hill and Endurance `overall_score`, the four Race Prediction times,
-  `vo2max`, and `training_status`), every dataset gains `disagreeing_fields`
+  `vo2max`, and `training_status`), and so is `personal_records.activity_id`
+  for a link that cannot be followed; every dataset gains `disagreeing_fields`
   (224 to 241 fields), and readers of `analysis/activities.csv` and
   `analysis/performance_metrics_daily.csv` that rely on the column count see
   the new last columns.

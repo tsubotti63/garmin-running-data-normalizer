@@ -6,6 +6,8 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
+from .common.identity import IDENTIFIER, MISSING, is_ascii_digits, read_identifier
+
 
 class RelationshipContractError(ValueError):
     """Raised when a declared public relationship cannot be proven safely."""
@@ -78,21 +80,33 @@ def classify_relationship_endpoint(
 
 
 def _identity(value: Any, label: str, *, allow_zero: bool = False) -> str:
-    if isinstance(value, bool) or value in (None, ""):
+    """Return an identifier as one text, read as everywhere else (stage A3d-1b)."""
+    state, token = read_identifier(value)
+    if state == MISSING:
         raise RelationshipContractError(f"{label} is missing")
-    if isinstance(value, int):
-        token = str(value)
-    elif isinstance(value, str):
-        token = value.strip()
-        if not token:
-            raise RelationshipContractError(f"{label} is missing")
-        if token.isdecimal():
-            token = str(int(token))
-    else:
+    if state != IDENTIFIER or token is None:
         raise RelationshipContractError(f"{label} has an unsupported type")
     if token == "0" and not allow_zero:
         raise RelationshipContractError(f"{label} cannot be zero")
     return token
+
+
+def activity_link_problem(record: dict[str, Any]) -> str | None:
+    """Return why a Personal Record's activity link cannot be followed, or None.
+
+    The link is missing (absent, null, "", or blank), has a form that cannot
+    name an Activity, or holds values that disagree within the record
+    (stage A3d-1b). Such a Personal Record is kept with its relationship
+    unresolved.
+    """
+    if "activity_id" in (record.get("disagreeing_fields") or []):
+        return "activity_link_values_disagree"
+    state, _token = read_identifier(record.get("activity_id"))
+    if state == MISSING:
+        return "activity_link_missing"
+    if state != IDENTIFIER:
+        return "activity_link_invalid"
+    return None
 
 
 def _index_unique(
@@ -105,7 +119,7 @@ def _index_unique(
 ) -> dict[str, str]:
     index: dict[str, str] = {}
     for record in records:
-        if allow_missing and record.get(field) in (None, ""):
+        if allow_missing and read_identifier(record.get(field))[0] == MISSING:
             continue
         token = _identity(record.get(field), label)
         target = _identity(record.get(target_field), target_field)
@@ -237,9 +251,9 @@ def validate_declared_relationships(
         enriched_activity_gear.append(
             {
                 **record,
-                "gear_key": int(gear_key) if gear_key.isdecimal() else gear_key,
+                "gear_key": int(gear_key) if is_ascii_digits(gear_key) else gear_key,
                 "activity_id": int(activity_id)
-                if activity_id.isdecimal()
+                if is_ascii_digits(activity_id)
                 else activity_id,
                 "garmin_activity_key": activity_key,
                 "activity_relationship_status": "explicit",
@@ -260,7 +274,33 @@ def validate_declared_relationships(
     personal_record_activity_links = 0
     independent_personal_records = 0
     personal_record_snapshot_resolved = 0
+    # Personal Records kept with an activity link that cannot be followed
+    # (stage A3d-1b): missing or malformed, or with values that disagree.
+    malformed_personal_record_links = 0
+    conflicting_personal_record_links = 0
+    personal_record_link_problems: dict[str, int] = defaultdict(int)
     for record in records["personal_records"]:
+        problem = activity_link_problem(record)
+        if problem is not None:
+            personal_record_link_problems[problem] += 1
+            if problem == "activity_link_values_disagree":
+                conflicting_personal_record_links += 1
+            else:
+                malformed_personal_record_links += 1
+            enriched_personal_records.append(
+                {
+                    **record,
+                    "activity_id": (
+                        record.get("activity_id")
+                        if problem == "activity_link_missing"
+                        else None
+                    ),
+                    "garmin_activity_key": None,
+                    "activity_relationship_status": "unresolved",
+                    "activity_relationship_reason": problem,
+                }
+            )
+            continue
         activity_result = classify_relationship_endpoint(
             record.get("activity_id"),
             label="personal_records.activity_id",
@@ -364,9 +404,22 @@ def validate_declared_relationships(
     # relationship pair is not promoted for either endpoint view.
     activity_gear_activity_unresolved = activity_gear_total - len(enriched_activity_gear)
     activity_gear_gear_unresolved = activity_gear_total - len(enriched_activity_gear)
-    personal_record_total = (
-        personal_record_activity_links + len(unresolved_personal_records)
+    personal_record_unusable_links = (
+        malformed_personal_record_links + conflicting_personal_record_links
     )
+    personal_record_total = (
+        personal_record_activity_links
+        + len(unresolved_personal_records)
+        + personal_record_unusable_links
+    )
+    personal_record_reasons = {
+        **dict(personal_record_link_problems),
+        **(
+            {"missing_activity_endpoint": len(unresolved_personal_records)}
+            if unresolved_personal_records
+            else {}
+        ),
+    }
     fit_lap_total = len(enriched_fit_laps) + len(unresolved_fit_laps)
 
     def _relationship_entry(
@@ -378,7 +431,12 @@ def validate_declared_relationships(
         primary_reason: str | None,
         orphan_count: int = 0,
         independent_count: int | None = None,
+        malformed: int = 0,
+        conflict: int = 0,
     ) -> dict[str, Any]:
+        """``unresolved`` counts every link that is not followed: valid links
+        whose endpoint is absent, and the links that are missing or malformed
+        (``malformed``) or whose values disagree (``conflict``)."""
         entry = {
             "status": "explicit",
             "link_count": resolved,
@@ -397,9 +455,9 @@ def validate_declared_relationships(
                     "relationship_total": total,
                     "relationship_resolved": resolved,
                     "relationship_snapshot_resolved": snapshot_resolved,
-                    "relationship_unresolved": unresolved,
-                    "relationship_malformed": 0,
-                    "relationship_conflict": 0,
+                    "relationship_unresolved": unresolved - malformed - conflict,
+                    "relationship_malformed": malformed,
+                    "relationship_conflict": conflict,
                 }
             )
         if independent_count is not None:
@@ -439,15 +497,21 @@ def validate_declared_relationships(
                 **_relationship_entry(
                     resolved=personal_record_activity_links,
                     total=personal_record_total,
-                    unresolved=len(unresolved_personal_records),
+                    unresolved=len(unresolved_personal_records) + personal_record_unusable_links,
                     snapshot_resolved=personal_record_snapshot_resolved,
+                    # The most frequent reason; v1.7.1 had only the first.
                     primary_reason=(
-                        "missing_activity_endpoint"
-                        if unresolved_personal_records
+                        sorted(
+                            personal_record_reasons,
+                            key=lambda reason: (-personal_record_reasons[reason], reason),
+                        )[0]
+                        if personal_record_reasons
                         else None
                     ),
                     orphan_count=len(unresolved_personal_records),
                     independent_count=independent_personal_records,
+                    malformed=malformed_personal_record_links,
+                    conflict=conflicting_personal_record_links,
                 ),
             },
             "fit_laps_to_fit_sessions": {
@@ -464,7 +528,7 @@ def validate_declared_relationships(
             },
         },
     }
-    if snapshot_mode or unresolved_links:
+    if snapshot_mode or unresolved_links or personal_record_unusable_links:
         result.update(
             {
                 "relationship_total": (
@@ -480,9 +544,12 @@ def validate_declared_relationships(
                     + personal_record_snapshot_resolved
                     + fit_lap_snapshot_resolved
                 ),
+                # Valid links whose endpoint is absent; the Personal Records
+                # kept with a link that cannot be followed are counted apart
+                # (stage A3d-1b).
                 "relationship_unresolved": len(unresolved_links),
-                "relationship_malformed": 0,
-                "relationship_conflict": 0,
+                "relationship_malformed": malformed_personal_record_links,
+                "relationship_conflict": conflicting_personal_record_links,
                 "unresolved_links": unresolved_links,
             }
         )

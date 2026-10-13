@@ -37,15 +37,17 @@ def _non_negative(value: Any) -> int:
     return value
 
 
-def _audit_for_family(
+def _audits_for_family(
     family: str,
     performance_audit: Mapping[str, Mapping[str, Any]],
-) -> Mapping[str, Any]:
-    datasets = FAMILY_DATASETS[family]
-    for dataset in datasets:
-        if dataset in performance_audit:
-            return performance_audit[dataset]
-    return {}
+) -> list[Mapping[str, Any]]:
+    """Return the audit records of a family's datasets, such as Gear and its
+    links, which both count the rows left out (stage A3d-1b)."""
+    return [
+        performance_audit[dataset]
+        for dataset in FAMILY_DATASETS[family]
+        if dataset in performance_audit
+    ]
 
 
 def _fit_interpretation(
@@ -302,9 +304,9 @@ def build_source_completeness(
             reasons, content_reasons, readable = ["SOURCE_NOT_OBSERVED"], [], 0
             state_counts = {"ABSENT": 1}
         else:
-            audit = _audit_for_family(family, performance_audit)
             malformed_count = sum(
                 int(audit.get(key, 0) or 0)
+                for audit in _audits_for_family(family, performance_audit)
                 for key in (
                     "invalid_value_count",
                     "missing_date_count",

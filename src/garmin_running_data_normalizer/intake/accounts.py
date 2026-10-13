@@ -13,6 +13,8 @@ from __future__ import annotations
 import json
 from typing import Any, Iterable
 
+from ..common.identity import identity_token
+
 ACCOUNT_FIELDS = frozenset({"userProfileId", "userProfilePk", "userProfilePK"})
 # Source families whose records name the account that owns them.
 ACCOUNT_FAMILIES = frozenset(
@@ -32,16 +34,9 @@ ACCOUNT_FAMILIES = frozenset(
 
 
 def _account(value: Any) -> str | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, str):
-        token = value.strip()
-        if token.isdecimal():
-            return str(int(token))
-        return token or None
-    return None
+    # Read as every identifier is (stage A3d-1b): a text of more digits than a
+    # run reads names no account, instead of stopping the run.
+    return identity_token(value)
 
 
 def _records(value: Any) -> list[dict[str, Any]]:

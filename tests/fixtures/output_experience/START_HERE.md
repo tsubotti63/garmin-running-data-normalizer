@@ -126,7 +126,7 @@ remain in `audit/activity_fit_linkage.json`.
 
 ### Personal Records → Activities
 
-- Eligible population: 1 (nonzero-activity Personal Records)
+- Eligible population: 1 (Personal Records that are not independent)
 - Explicit links: 1
 - Coverage: 100.00%
 - Unresolved: 0

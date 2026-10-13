@@ -269,8 +269,11 @@ FUTURE_READY_DATASETS = ("health_status",)
 # family was left out from it are marked. From v2.5, a daily record without a
 # stable key, such as one without a date, is not held: it is written for
 # Run-All, which leaves it out as a one-shot run does, or only counts it when
-# it holds no value.
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.5"
+# it holds no value. From v2.6, an identifier is read as Run-All reads it (an
+# integral number such as 123.0 is 123, and only the ASCII digits are digits),
+# and a record of Activities, Gear, activity_gear, or Personal Records without
+# a usable identifier is passed to Run-All in the same way.
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.6"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -321,7 +324,7 @@ MERGE_RULES: dict[str, Any] = {
         "absent_record_policy": "kept_last_seen_snapshot_audited",
         "earlier_values": "kept_in_dataset_audit_with_snapshot_numbers",
         "update_comparison": "empty_values_alike_numbers_by_value_booleans_apart",
-        "identifier_forms": "spaces_trimmed_digits_as_numbers_one_identifier",
+        "identifier_forms": "spaces_trimmed_ascii_digits_and_integral_numbers_as_numbers_one_identifier",
         "snapshot_reference": "snapshot_number_in_export_observed_order",
         "automatic_deletion": False,
     },
@@ -354,6 +357,10 @@ MERGE_RULES: dict[str, Any] = {
     },
     "rows_without_a_stable_key": {
         "datasets": [
+            "activities",
+            "gear",
+            "activity_gear",
+            "personal_records",
             "hill_score_daily",
             "endurance_score_daily",
             "race_prediction_daily",
@@ -367,7 +374,8 @@ MERGE_RULES: dict[str, Any] = {
         "policy": "passed_to_run_all_and_left_out_as_in_a_one_shot_run",
         "same_content": "passed_once_with_one_snapshot_number_per_occurrence",
         "copies_within_snapshot": "counted_as_in_a_one_shot_run",
-        "rows_that_hold_no_value": "counted_as_empty_records_not_announced",
+        "rows_that_hold_no_value": "counted_as_empty_records_not_announced_in_daily_datasets",
+        "identifiers_that_cannot_name_a_record": "passed_to_run_all_without_a_key",
         "review_hold": False,
     },
     "other_datasets_follow": REGISTRY_VERSION,

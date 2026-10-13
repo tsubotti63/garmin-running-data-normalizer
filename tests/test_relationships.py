@@ -167,9 +167,6 @@ class RelationshipContractTest(unittest.TestCase):
         duplicate = declared_records()
         duplicate["activity_gear"].append(copy.deepcopy(duplicate["activity_gear"][0]))
         mutations.append(duplicate)
-        null_value = declared_records()
-        null_value["personal_records"][0]["activity_id"] = None
-        mutations.append(null_value)
         type_mismatch = declared_records()
         type_mismatch["activity_gear"][0]["activity_id"] = 1.5
         mutations.append(type_mismatch)
@@ -178,6 +175,52 @@ class RelationshipContractTest(unittest.TestCase):
                 RelationshipContractError
             ):
                 validate_declared_relationships(records)
+
+    def test_a_personal_record_link_that_cannot_be_followed_is_kept_unresolved(self) -> None:
+        # Stage A3d-1b: a Personal Record whose activity link is missing,
+        # malformed, or disagrees stays, with its relationship unresolved.
+        cases = (
+            ("missing", None, "activity_link_missing"),
+            ("blank", "  ", "activity_link_missing"),
+            ("malformed", [1], "activity_link_invalid"),
+            ("not integral", 1.5, "activity_link_invalid"),
+        )
+        for name, value, reason in cases:
+            with self.subTest(case=name):
+                records = declared_records()
+                records["personal_records"][0]["activity_id"] = value
+                summary = validate_declared_relationships(records)
+                record = next(
+                    item
+                    for item in records["personal_records"]
+                    if item["personal_record_id"] == "pr-1"
+                )
+                self.assertEqual(record["activity_relationship_status"], "unresolved")
+                self.assertEqual(record["activity_relationship_reason"], reason)
+                self.assertIsNone(record["garmin_activity_key"])
+                self.assertEqual(
+                    record["activity_id"], value if reason == "activity_link_missing" else None
+                )
+                entry = summary["relationships"]["personal_records_to_activities"]
+                self.assertEqual(entry["unresolved_count"], 1)
+                self.assertEqual(entry["eligible_count"], 1)
+                self.assertEqual(entry["orphan_count"], 0)
+                self.assertEqual(entry["relationship_malformed"], 1)
+                self.assertEqual(entry["primary_unresolved_reason"], reason)
+                self.assertEqual(summary["relationship_malformed"], 1)
+                # The warning for valid links whose endpoint is absent keeps
+                # its meaning.
+                self.assertEqual(summary["relationship_unresolved"], 0)
+        records = declared_records()
+        records["personal_records"][0]["activity_id"] = None
+        records["personal_records"][0]["disagreeing_fields"] = ["activity_id"]
+        summary = validate_declared_relationships(records)
+        self.assertEqual(
+            records["personal_records"][0]["activity_relationship_reason"],
+            "activity_link_values_disagree",
+        )
+        self.assertEqual(summary["relationship_conflict"], 1)
+        self.assertEqual(summary["relationship_malformed"], 0)
 
     def test_valid_orphan_endpoints_are_unresolved_and_non_fatal(self) -> None:
         records = declared_records()

@@ -28,6 +28,7 @@ from ..common.identity import identity_token
 from ..common.values import comparable_text, is_empty
 from .daily_metrics import (
     _value_order,
+    copies_within_snapshots,
     merge_observations,
     observation_weight,
     public_fields,
@@ -35,6 +36,11 @@ from .daily_metrics import (
 )
 
 RECORD_DATASETS = ("activities", "gear", "activity_gear", "personal_records")
+# The reasons for which a row of these datasets is left out (stage A3d-1b): it
+# has no identifier and no fields for a key in its place, or its identifier
+# has a form that cannot name a record.
+IDENTITY_MISSING = "identity_missing"
+IDENTITY_INVALID = "identity_invalid"
 
 # The stable key of each dataset, as the normalized dataset names it.
 STABLE_KEYS: dict[str, tuple[str, ...]] = {
@@ -95,6 +101,22 @@ def row_snapshot_marks(raw: dict[str, Any]) -> dict[str, Any]:
     if isinstance(probe, str) and probe:
         marks[ROW_SNAPSHOT_PROBE] = probe
     return marks
+
+
+def count_left_out(
+    left_out: Counter[str] | None,
+    raw: dict[str, Any],
+    reason: str,
+    message: str,
+) -> None:
+    """Count a row left out for its reason, once per copy within one Snapshot.
+
+    Without a counter, the row stops the normalization with ``message``, as
+    before stage A3d-1b.
+    """
+    if left_out is None:
+        raise ValueError(message)
+    left_out[reason] += 1 + copies_within_snapshots(snapshot_numbers(raw))
 
 
 def _identifier(value: Any) -> str:
@@ -304,11 +326,14 @@ def _apply_probes(
 
 
 __all__ = [
+    "IDENTITY_INVALID",
+    "IDENTITY_MISSING",
     "RECORD_DATASETS",
     "ROW_SNAPSHOT_NUMBERS",
     "RecordMerge",
     "STABLE_KEYS",
     "SNAPSHOT_PROBE_FIELD",
+    "count_left_out",
     "merge_repeated_records",
     "row_snapshot_marks",
 ]

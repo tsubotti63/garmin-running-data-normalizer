@@ -1,5 +1,7 @@
 """Rows that lack a required value are left out and announced, or only counted
-when they hold no value, alike in one-shot and Snapshot runs (stage A3d-1)."""
+when they hold no value, alike in one-shot and Snapshot runs (stage A3d-1); rows
+without a usable identifier are left out, and Personal Records whose activity
+link cannot be followed are kept unresolved (stage A3d-1b)."""
 
 from __future__ import annotations
 
@@ -12,6 +14,14 @@ from typing import Any
 
 # Import the diagnostics package before the standalone module: importing
 # standalone first meets a circular import when this file runs on its own.
+from garmin_running_data_normalizer.common.identity import (
+    IDENTIFIER,
+    IDENTIFIER_MAX_DIGITS,
+    INVALID,
+    MISSING,
+    identifier_value,
+    read_identifier,
+)
 from garmin_running_data_normalizer.diagnostics import doctor_run_output
 from garmin_running_data_normalizer.diagnostics.support_bundle import build_support_bundle
 from garmin_running_data_normalizer.normalizers.daily_metrics import value_source_names
@@ -50,7 +60,8 @@ from garmin_running_data_normalizer.normalizers.vo2max import (
     VO2MAX_VALUE_SOURCES,
 )
 from garmin_running_data_normalizer.output_experience import DATASET_FIELDS
-from garmin_running_data_normalizer.run_all import run_all
+from garmin_running_data_normalizer.run_all import RunAllError, run_all
+from garmin_running_data_normalizer.runner import GoldenPathError, run_activities
 from garmin_running_data_normalizer.snapshot import (
     build_approved_input,
     initialize_store,
@@ -60,7 +71,7 @@ from garmin_running_data_normalizer.snapshot.merge import _daily_definition, _me
 from garmin_running_data_normalizer.snapshot.policies import MERGE_RULES_VERSION
 from tests.test_repeated_records import audit, table
 from tests.test_snapshot_lifecycle import _activity
-from tests.test_snapshot_record_updates import ACCOUNT, load, write_export
+from tests.test_snapshot_record_updates import ACCOUNT, gear, load, personal_record, write_export
 from tests.test_snapshot_unreadable_files import one_snapshot, register
 
 DAILY = {
@@ -477,7 +488,7 @@ class SnapshotRowsTest(unittest.TestCase):
             self.assertEqual(audit(output, "sleep_daily")["empty_record_count"], 1)
             merge = load(output / "snapshot/canonical_merge_summary.json")
             self.assertEqual(merge["merge_rules_version"], MERGE_RULES_VERSION)
-            self.assertEqual(MERGE_RULES_VERSION, "garmin_snapshot_merge_rules:v2.5")
+            self.assertEqual(MERGE_RULES_VERSION, "garmin_snapshot_merge_rules:v2.6")
             self.assertEqual(merge["review_hold_count"], 0)
             uds = merge["datasets"]["uds_daily"]
             self.assertEqual(uds["keyless_observation_count"], 4)
@@ -525,6 +536,368 @@ class SnapshotRowsTest(unittest.TestCase):
             self.assertIn(b"DATA_ROW_LEFT_OUT", content)
             self.assertNotIn(b"987654321", content)
             self.assertNotIn(b"Private-date", content)
+
+
+RECORD_TABLES = ("activities", "gear", "activity_gear", "personal_records")
+
+
+def records_export(
+    root: Path,
+    name: str,
+    activities: list[dict[str, Any]],
+    *,
+    gear_rows: list[dict[str, Any]] | None = None,
+    link_rows: dict[str, list[dict[str, Any]]] | None = None,
+    records: list[dict[str, Any]] | None = None,
+) -> Path:
+    """An Export with these Activities, Gear, links (as Garmin keys them), and
+    Personal Records, written as given."""
+    source = write_export(root, name, activities)
+    fitness = source / "DI-Connect-Fitness"
+    if gear_rows is not None or link_rows is not None:
+        container: dict[str, Any] = {"gearDTOS": gear_rows or []}
+        if link_rows is not None:
+            container["gearActivityDTOs"] = link_rows
+        (fitness / "synthetic_gear.json").write_text(json.dumps([container]), encoding="utf-8")
+    if records is not None:
+        (fitness / "synthetic_personalRecord.json").write_text(
+            json.dumps([{"personalRecords": records}]), encoding="utf-8"
+        )
+    return source
+
+
+def record_outcome(output: Path) -> dict[str, Any]:
+    """What a run gives for the record datasets, whatever the form of the run."""
+    relationships = load(output / "qa/relationship_summary.json")
+    links = relationships["relationships"]["personal_records_to_activities"]
+    counts = ("relationship_unresolved", "relationship_malformed", "relationship_conflict")
+    return {
+        **outcome(output),
+        "record_audits": {
+            name: {
+                field: audit(output, name).get(field)
+                for field in ("record_count", "excluded_record_count", "excluded_reason_counts")
+            }
+            for name in RECORD_TABLES
+        },
+        "record_tables": {name: table(output, name) for name in RECORD_TABLES},
+        "personal_records_to_activities": {
+            **{
+                field: links.get(field)
+                for field in (
+                    "link_count",
+                    "eligible_count",
+                    "unresolved_count",
+                    "orphan_count",
+                    "independent_count",
+                    "primary_unresolved_reason",
+                )
+            },
+            # A Snapshot run gives these counts also when they are 0.
+            **{field: links.get(field, 0) for field in counts},
+        },
+        "relationship_counts": {field: relationships.get(field, 0) for field in counts},
+    }
+
+
+def record_both_forms(test: unittest.TestCase, root: Path, source: Path, name: str) -> Path:
+    one_shot = root / f"{name}-one-shot"
+    run_all(source, one_shot)
+    snapshot = one_snapshot(root, source, f"{name}-snapshot")
+    test.assertEqual(record_outcome(snapshot), record_outcome(one_shot))
+    return one_shot
+
+
+class IdentifierRuleTest(unittest.TestCase):
+    def test_how_a_value_names_a_record(self) -> None:
+        digits = "1" * IDENTIFIER_MAX_DIGITS
+        cases = (
+            (123, (IDENTIFIER, "123")),
+            (123.0, (IDENTIFIER, "123")),
+            (float(2**53 - 1), (IDENTIFIER, str(2**53 - 1))),
+            (" 0123", (IDENTIFIER, "123")),
+            ("0", (IDENTIFIER, "0")),
+            (-5, (IDENTIFIER, "-5")),
+            ("-5", (IDENTIFIER, "-5")),
+            ("SYNTHETIC-RUN-1", (IDENTIFIER, "SYNTHETIC-RUN-1")),
+            # Only the ASCII digits 0-9 are digits; other digits are text.
+            ("²", (IDENTIFIER, "²")),
+            ("１２３", (IDENTIFIER, "１２３")),
+            ("٣", (IDENTIFIER, "٣")),
+            (digits, (IDENTIFIER, digits)),
+            (None, (MISSING, None)),
+            ("", (MISSING, None)),
+            ("  ", (MISSING, None)),
+            (True, (INVALID, None)),
+            (123.5, (INVALID, None)),
+            (float("nan"), (INVALID, None)),
+            (float("inf"), (INVALID, None)),
+            (float(2**53), (INVALID, None)),
+            ([3], (INVALID, None)),
+            ({"id": 3}, (INVALID, None)),
+            (digits + "1", (INVALID, None)),
+        )
+        for value, expected in cases:
+            with self.subTest(value=repr(value)[:24]):
+                self.assertEqual(read_identifier(value), expected)
+        self.assertEqual(identifier_value(123.0), 123)
+        self.assertIsInstance(identifier_value(123.0), int)
+        self.assertEqual(identifier_value(" 0123"), " 0123")
+
+
+class IdentityRowsTest(unittest.TestCase):
+    def test_rows_without_a_usable_identifier_are_left_out_alike(self) -> None:
+        activities = [
+            _activity("A1"),
+            _activity("A2", activityId=123.0),
+            # No identifier, but the fields for a key in its place.
+            _activity("A3", activityId="  "),
+            {"name": "No identifier and no key fields"},
+            _activity("X1", activityId=[3]),
+            _activity("X2", activityId=0),
+            _activity("X3", activityId=True),
+            _activity("X4", activityId=1.5),
+            _activity("X5", activityId="1" * (IDENTIFIER_MAX_DIGITS + 1)),
+        ]
+        gear_rows = [
+            gear(1, "Synthetic Shoe"),
+            {**gear(7, "Synthetic Shoe 7"), "gearPk": 7.0},
+            {"gearTypeName": "Shoes"},
+            {**gear(2, "Synthetic Shoe 2"), "gearPk": 0},
+            {**gear(3, "Synthetic Shoe 3"), "gearPk": 2.5},
+            {**gear(4, "Synthetic Shoe 4"), "gearPk": True},
+        ]
+        link_rows = {
+            "1": [{"activityId": "A1"}, {}, {"activityId": 0}],
+            "": [{"activityId": "A1"}],
+            "0": [{"activityId": "A1"}],
+            # Text that is not ASCII digits names Gear that is not there.
+            "²": [{"activityId": "A1"}],
+        }
+        records = [
+            personal_record(1, "A1", 1.0),
+            {**personal_record(2, "A1", 2.0), "personalRecordId": True},
+            {**personal_record(3, "A1", 3.0), "personalRecordId": 2.5},
+            {"current": True},
+            {**personal_record(4, "A1", 4.0), "personalRecordId": 0},
+            {**personal_record(5, "A1", 5.0), "personalRecordId": 6.0},
+            {**personal_record(7, "A1", 7.0), "activityId": None},
+            {**personal_record(8, "A1", 8.0), "activityId": [1]},
+            {**personal_record(9, "A1", 9.0), "activityId": 0},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = records_export(
+                root, "export", activities, gear_rows=gear_rows, link_rows=link_rows, records=records
+            )
+            output = record_both_forms(self, root, source, "identity")
+            summary = summary_of(output)
+            self.assertEqual(summary["status"], "PARTIAL_SUCCESS")
+            self.assertEqual(
+                warnings_of(output, "DATA_ROW_LEFT_OUT"),
+                {"activities": 6, "gear": 4, "activity_gear": 4, "personal_records": 3},
+            )
+            self.assertEqual(summary["family_results"]["gear"]["left_out_row_count"], 8)
+            self.assertIn(
+                "- Rows left out: 17 (`activities` 6, `gear` 4, `activity_gear` 4, "
+                "`personal_records` 3), which lack a required value, such as a date "
+                "or a usable identifier;",
+                (output / "START_HERE.md").read_text(encoding="utf-8"),
+            )
+            expected_reasons = {
+                "activities": {"identity_invalid": 5, "identity_missing": 1},
+                "gear": {"identity_invalid": 3, "identity_missing": 1},
+                "activity_gear": {"identity_invalid": 2, "identity_missing": 2},
+                "personal_records": {"identity_invalid": 2, "identity_missing": 1},
+            }
+            for name, reasons in expected_reasons.items():
+                with self.subTest(dataset=name):
+                    self.assertEqual(audit(output, name)["excluded_reason_counts"], reasons)
+            activities_table = {row["garmin_activity_key"]: row for row in table(output, "activities")}
+            self.assertIn("garmin_activity:A1", activities_table)
+            self.assertEqual(activities_table["garmin_activity:123"]["activity_id"], 123)
+            self.assertEqual(len(activities_table), 3)
+            self.assertEqual(sorted(row["gear_key"] for row in table(output, "gear")), [1, 7])
+            records_table = {row["personal_record_id"]: row for row in table(output, "personal_records")}
+            self.assertEqual(sorted(records_table, key=str), [0, 1, 6, 7, 8, 9])
+            self.assertEqual(records_table[9]["activity_relationship_status"], "independent")
+            self.assertEqual(records_table[7]["activity_relationship_reason"], "activity_link_missing")
+            self.assertEqual(records_table[8]["activity_relationship_reason"], "activity_link_invalid")
+            self.assertIsNone(records_table[8]["activity_id"])
+            codes = {item["code"]: item.get("count") for item in summary["warnings"]}
+            self.assertEqual(codes["RELATIONSHIP_UNRESOLVED_INVALID_LINK"], 2)
+            self.assertEqual(codes["RELATIONSHIP_UNRESOLVED_VALID_LINK"], 1)
+            self.assertEqual(summary["relationship_warning_count"], 2)
+            completeness = {
+                item["source_family_id"]: item["content_validity"]
+                for item in load(output / "diagnostics/source_completeness.json")["families"]
+            }
+            self.assertEqual(completeness["activities"], "MALFORMED")
+            self.assertEqual(completeness["gear"], "MALFORMED")
+            self.assertIn("activities", load(output / "diagnostics/run_quality.json")["excluded"]["by_dataset"])
+
+    def test_links_to_rows_left_out_have_an_absent_endpoint(self) -> None:
+        # The Activity 1.5 and the Gear 2.5 are left out; links that name
+        # them as text are valid links whose endpoint is absent, removed and
+        # counted until stage A4.
+        activities = [_activity("A1"), _activity("X", activityId=1.5)]
+        gear_rows = [gear(1, "Synthetic Shoe"), {**gear(2, "Synthetic Shoe 2"), "gearPk": 2.5}]
+        link_rows = {"1": [{"activityId": "A1"}, {"activityId": "1.5"}], "2.5": [{"activityId": "A1"}]}
+        records = [personal_record(1, "A1", 1.0), personal_record(2, "1.5", 2.0)]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = records_export(
+                root, "export", activities, gear_rows=gear_rows, link_rows=link_rows, records=records
+            )
+            output = record_both_forms(self, root, source, "absent")
+            self.assertEqual(warnings_of(output, "DATA_ROW_LEFT_OUT"), {"activities": 1, "gear": 1})
+            codes = {item["code"]: item.get("count") for item in summary_of(output)["warnings"]}
+            self.assertEqual(codes["RELATIONSHIP_UNRESOLVED_VALID_LINK"], 3)
+            self.assertNotIn("RELATIONSHIP_UNRESOLVED_INVALID_LINK", codes)
+            self.assertEqual(
+                [(row["gear_key"], row["activity_id"]) for row in table(output, "activity_gear")],
+                [(1, "A1")],
+            )
+            self.assertEqual([row["personal_record_id"] for row in table(output, "personal_records")], [1])
+            entry = load(output / "qa/relationship_summary.json")["relationships"][
+                "personal_records_to_activities"
+            ]
+            self.assertEqual(
+                (entry["orphan_count"], entry["relationship_malformed"], entry["relationship_conflict"]),
+                (1, 0, 0),
+            )
+
+    def test_an_identifier_written_as_an_integral_number_is_one_record_in_one_export(self) -> None:
+        activities = [_activity("A1"), _activity("A2", activityId=123), _activity("A2", activityId=123.0)]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = records_export(root, "export", activities)
+            output = record_both_forms(self, root, source, "integral")
+            self.assertEqual(sorted(str(row["activity_id"]) for row in table(output, "activities")), ["123", "A1"])
+            self.assertEqual(audit(output, "activities")["same_value_duplicate_count"], 1)
+            codes = {item["code"] for item in summary_of(output)["warnings"]}
+            self.assertFalse({"DATA_ROW_LEFT_OUT", "VALUES_DISAGREE"} & codes)
+
+    def test_a_personal_record_whose_activity_disagrees_is_kept_unresolved(self) -> None:
+        records = [personal_record(1, "A1", 1.0), personal_record(1, "A2", 1.0)]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = records_export(root, "export", [_activity("A1"), _activity("A2")], records=records)
+            output = record_both_forms(self, root, source, "disagree")
+            [record] = table(output, "personal_records")
+            self.assertEqual(record["activity_relationship_status"], "unresolved")
+            self.assertEqual(record["activity_relationship_reason"], "activity_link_values_disagree")
+            self.assertIn("activity_id", record["disagreeing_fields"])
+            relationships = load(output / "qa/relationship_summary.json")
+            self.assertEqual(relationships["relationship_conflict"], 1)
+            codes = {item["code"] for item in summary_of(output)["warnings"]}
+            self.assertLessEqual({"VALUES_DISAGREE", "RELATIONSHIP_UNRESOLVED_INVALID_LINK"}, codes)
+            self.assertEqual(summary_of(output)["status"], "PASS_WITH_WARNINGS")
+
+    def test_the_support_bundle_and_the_external_safe_pack_carry_counts_only(self) -> None:
+        activities = [_activity("A1"), _activity("X", activityId=[918273645])]
+        gear_rows = [gear(1, "Synthetic Shoe"), {**gear(2, "Synthetic Shoe 2"), "gearPk": 5647382.5}]
+        link_rows = {"1": [{"activityId": "A1"}, {"activityId": 0}]}
+        records = [{**personal_record(1, "A1", 1.0), "activityId": [192837465]}]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = records_export(
+                root, "export", activities, gear_rows=gear_rows, link_rows=link_rows, records=records
+            )
+            output = root / "output"
+            run_all(source, output, external_safe_pack=True)
+            report = doctor_run_output(output)
+            self.assertLessEqual(
+                {"DATA_ROW_LEFT_OUT", "RELATIONSHIP_UNRESOLVED_INVALID_LINK"},
+                {item["code"] for item in report["findings"]},
+            )
+            bundle = root / "support.zip"
+            build_support_bundle(output, bundle)
+            with zipfile.ZipFile(bundle) as archive:
+                bundle_content = b"".join(archive.read(name) for name in archive.namelist())
+            with zipfile.ZipFile(output / "analysis/external_safe_handoff.zip") as archive:
+                pack_content = b"".join(archive.read(name) for name in archive.namelist())
+                context = json.loads(archive.read("safe/ANALYSIS_CONTEXT.json"))
+            # The pack keeps the form of its warnings, so Gear and its links
+            # give two warnings of the Gear family.
+            self.assertEqual(
+                sorted(
+                    (item["family"], item["count"])
+                    for item in context["warnings"]
+                    if item["code"] == "DATA_ROW_LEFT_OUT"
+                ),
+                [("activities", 1), ("gear", 1), ("gear", 1)],
+            )
+            for content in (bundle_content, pack_content):
+                self.assertIn(b"DATA_ROW_LEFT_OUT", content)
+                self.assertIn(b"RELATIONSHIP_UNRESOLVED_INVALID_LINK", content)
+                for value in (b"918273645", b"5647382", b"192837465"):
+                    self.assertNotIn(value, content)
+
+    def test_every_activities_row_left_out_stops_both_forms_of_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = records_export(root, "export", [{"name": "No identifier"}, _activity("X", activityId=0)])
+            with self.assertRaises(RunAllError) as one_shot:
+                run_all(source, root / "one-shot")
+            self.assertEqual(one_shot.exception.code, "ACTIVITIES_EMPTY")
+            with self.assertRaises(RunAllError) as snapshot:
+                one_snapshot(root, source)
+            self.assertEqual(snapshot.exception.code, "ACTIVITIES_EMPTY")
+
+    def test_the_golden_path_stops_on_an_activities_row_left_out(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = records_export(root, "export", [_activity("A1"), _activity("X", activityId=[1])])
+            with self.assertRaisesRegex(GoldenPathError, "no usable identifier"):
+                run_activities(source, root / "golden")
+
+
+class SnapshotIdentityTest(unittest.TestCase):
+    def test_rows_without_a_usable_identifier_are_counted_across_snapshots(self) -> None:
+        without = {"name": "No identifier and no key fields"}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = records_export(root, "first", [_activity("A1"), without, without])
+            second = records_export(
+                root, "second", [_activity("A1", activityId=123.0), without, _activity("X", activityId=0)]
+            )
+            store = root / "store"
+            initialize_store(store, ACCOUNT)
+            register(store, first, "S1", 1)
+            register(store, second, "S2", 2)
+            output = root / "output"
+            run_snapshot_all(store, output)
+            # The same row in both Snapshots is one row, and its copy within
+            # the first is a further row; the row with 0 is only in the second.
+            self.assertEqual(
+                audit(output, "activities")["excluded_reason_counts"],
+                {"identity_invalid": 1, "identity_missing": 2},
+            )
+            merge = load(output / "snapshot/canonical_merge_summary.json")["datasets"]["activities"]
+            self.assertEqual(merge["keyless_observation_count"], 4)
+            self.assertEqual(merge["keyless_record_count"], 2)
+            self.assertEqual(merge["null_key_hold_count"], 0)
+            builds = [
+                build_approved_input(store, root / f"build-{index}", processing_sequence=sequence)
+                for index, sequence in enumerate((["S1", "S2"], ["S2", "S1"]))
+            ]
+            self.assertEqual(len({build["canonical_build_sha256"] for build in builds}), 1)
+
+    def test_an_identifier_written_as_an_integral_number_is_one_record(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = records_export(root, "first", [_activity("A0"), _activity("A1", activityId=123)])
+            second = records_export(root, "second", [_activity("A0"), _activity("A1", activityId=123.0)])
+            store = root / "store"
+            initialize_store(store, ACCOUNT)
+            register(store, first, "S1", 1)
+            register(store, second, "S2", 2)
+            output = root / "output"
+            run_snapshot_all(store, output)
+            rows = [row for row in table(output, "activities") if row["activity_id"] != "A0"]
+            self.assertEqual([row["activity_id"] for row in rows], [123])
+            self.assertEqual(audit(output, "activities")["updated_record_count"], 0)
 
 
 if __name__ == "__main__":

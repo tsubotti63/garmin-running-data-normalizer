@@ -28,7 +28,8 @@ question requires them and the local/trusted environment is authorized.
    The `fit_*` columns in `analysis/activities.csv` already follow those links
    and are empty for activities without one.
 6. Treat Personal Records with `activity_relationship_status=independent`
-   as non-activity records and do not force an activity identity.
+   as non-activity records, and those with `unresolved` as records whose
+   activity is not known; do not force an activity identity.
 7. Preserve and disclose warnings or partial FIT status.
 8. Ask for an additional approved file when the supplied artifacts cannot
    answer the question; do not invent source fields or context.
@@ -108,7 +109,7 @@ remain in `audit/activity_fit_linkage.json`.
 
 ### Personal Records → Activities
 
-- Eligible population: 1 (nonzero-activity Personal Records)
+- Eligible population: 1 (Personal Records that are not independent)
 - Explicit links: 1
 - Coverage: 100.00%
 - Unresolved: 0
