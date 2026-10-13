@@ -197,6 +197,10 @@ def build_run_quality(
         conflicts = _count(audit.get("disagreement_key_count", 0) or 0)
         if conflicts:
             conflict_by_dataset[dataset] = conflicts
+        # Rows left out without a usable identifier (stage A3d-1b).
+        excluded = _count(audit.get("excluded_record_count", 0) or 0)
+        if excluded:
+            excluded_by_dataset[dataset] = excluded
     incomplete_fit = _count(fit_status.get("incomplete_fit_count", 0) or 0)
     if incomplete_fit:
         excluded_by_dataset["fit"] = incomplete_fit

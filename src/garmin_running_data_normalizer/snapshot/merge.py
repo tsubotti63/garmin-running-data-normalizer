@@ -12,7 +12,7 @@ from typing import Any
 from zipfile import ZipFile
 
 from .. import __version__
-from ..common.identity import garmin_activity_key, identity_token, stable_hash
+from ..common.identity import identifier_value, identity_token, is_ascii_digits
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..common.values import comparable as _comparable
 from ..common.values import is_empty
@@ -31,13 +31,19 @@ from ..intake.discovery import (
 )
 from ..intake.source import DAMAGED_ZIP_ERRORS
 from ..intake.roots import MIXED_STORE_MESSAGE, MixedExportsError
+from ..normalizers.activities import activity_key, activity_left_out_reason
 from ..normalizers.daily_metrics import SNAPSHOT_NUMBERS_FIELD, value_source_names
+from ..normalizers.gear import gear_left_out_reason, gear_record_key, link_left_out_reason
 from ..normalizers.performance_metrics import (
     ENDURANCE_VALUE_SOURCES,
     HILL_VALUE_SOURCES,
     endurance_score_left_out_reason,
     hill_score_left_out_reason,
     metric_rows,
+)
+from ..normalizers.personal_records import (
+    personal_record_key,
+    personal_record_left_out_reason,
 )
 from ..normalizers.race_prediction import (
     RACE_PREDICTION_VALUE_SOURCES,
@@ -299,42 +305,24 @@ def _activity_rows(value: Any) -> list[dict[str, Any]]:
     return rows
 
 
+# A record without a usable identifier, as Run-All reads it, has no stable
+# key: the build passes it to Run-All, which leaves it out (stage A3d-1b).
+
+
 def _activity_key(row: dict[str, Any]) -> str:
-    start = row.get("startTimeGmt")
-    if start is None:
-        start = row.get("beginTimestamp")
-    return garmin_activity_key(
-        row.get("activityId"),
-        start,
-        row.get("distance"),
-        row.get("duration"),
-        row.get("activityType"),
-    )
+    if activity_left_out_reason(row) is not None:
+        raise ValueError("Activities row without a usable identifier")
+    return activity_key(row)
 
 
-def _gear_key(row: dict[str, Any]) -> int | str | None:
-    raw = row.get("gearPk")
-    if raw not in (None, ""):
-        return raw
-    fallback = [row.get("uuid"), row.get("displayName"), row.get("dateBegin")]
-    if all(value in (None, "") for value in fallback):
+def _gear_key(row: dict[str, Any]) -> Any:
+    return None if gear_left_out_reason(row) is not None else gear_record_key(row)
+
+
+def _personal_record_key(row: dict[str, Any]) -> Any:
+    if personal_record_left_out_reason(row) is not None:
         return None
-    return stable_hash(fallback, prefix="garmin_gear_hash:")
-
-
-def _personal_record_key(row: dict[str, Any]) -> int | str | None:
-    raw = row.get("personalRecordId")
-    if raw not in (None, ""):
-        return raw if isinstance(raw, (int, str)) and not isinstance(raw, bool) else None
-    fallback = [
-        row.get("activityId"),
-        row.get("personalRecordType"),
-        row.get("value"),
-        row.get("prStartTimeGMT"),
-    ]
-    if all(value in (None, "") for value in fallback):
-        return None
-    return stable_hash(fallback, prefix="garmin_personal_record_hash:")
+    return personal_record_key(row)
 
 
 def _metric_row(dataset: str, row: dict[str, Any]) -> dict[str, Any]:
@@ -584,11 +572,10 @@ def _dataset_records(
                 for gear_key in sorted(links, key=str):
                     for index, row in enumerate(_dict_rows(links[gear_key])):
                         link_record = {**row, "gearPk": gear_key}
-                        activity_id = link_record.get("activityId")
                         key = (
                             None
-                            if gear_key in (None, "") or activity_id in (None, "")
-                            else (gear_key, activity_id)
+                            if link_left_out_reason(gear_key, row) is not None
+                            else (gear_key, identifier_value(row.get("activityId")))
                         )
                         result.append(
                             (
@@ -822,7 +809,7 @@ def _audit_key(dataset: str, raw_key: tuple[Any, ...]) -> dict[str, Any]:
     if dataset == "activity_gear":
         gear_key = raw_key[0]
         return {
-            "gear_key": int(gear_key) if str(gear_key).isdigit() else gear_key,
+            "gear_key": int(gear_key) if is_ascii_digits(str(gear_key)) else gear_key,
             "activity_id": raw_key[1],
         }
     return {"personal_record_id": raw_key[0]}
@@ -1054,7 +1041,9 @@ def _merge_dataset(
     dataset's family left out (stage A3c-2): the records that it lacks are
     marked, since they may only have been in that file.
     A daily record without a stable key is not held: it is written for
-    Run-All, which leaves it out as a one-shot run does (stage A3d-1).
+    Run-All, which leaves it out as a one-shot run does (stage A3d-1), and so
+    is a record of Activities, Gear, activity_gear, or Personal Records
+    without a usable identifier (stage A3d-1b).
     """
     groups: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
     holds: list[dict[str, Any]] = []
@@ -1065,7 +1054,7 @@ def _merge_dataset(
     for observation in observations:
         raw_key = observation["raw_key"]
         if raw_key is None or any(value in (None, "") for value in raw_key):
-            if dataset in DAILY_DATASETS:
+            if dataset in DAILY_DATASETS or dataset in ENTITY_DATASETS:
                 keyless.append(observation)
                 continue
             holds.append(
@@ -1442,10 +1431,10 @@ def _merge_dataset(
                 }
             )
 
-    # Each distinct daily record without a stable key is written once, after
-    # the records with one, with the import number of each Snapshot occurrence,
+    # Each distinct record without a stable key is written once, after the
+    # records with one, with the import number of each Snapshot occurrence,
     # so that Run-All counts it as a one-shot run of each Export does. It has
-    # no presence, changes, or record audit (stage A3d-1).
+    # no presence, changes, or record audit (stages A3d-1 and A3d-1b).
     keyed_record_count = len(canonical)
     by_content: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for observation in keyless:
@@ -1520,6 +1509,10 @@ def _merge_dataset(
         # but the primitive merge summary must expose deterministic repeat
         # accounting as well for direct merge QA and permutation tests.
         summary["exact_repeat_count"] = exact_repeat_count
+    if entity:
+        # Records without a usable identifier, written for Run-All (stage A3d-1b).
+        summary["keyless_observation_count"] = len(keyless)
+        summary["keyless_record_count"] = len(by_content)
     if record_audit is not None:
         for entries in record_audit.values():
             entries.sort(key=lambda item: _stable_json(item["key"]))
@@ -2109,10 +2102,10 @@ def build_approved_input(
         if gear_rows or link_rows:
             links_by_gear: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for row in link_rows:
+                # A link without a usable Gear key keeps the key it had, also
+                # an empty one, so that Run-All leaves it out (stage A3d-1b).
                 gear_key = row.get("gearPk")
-                if gear_key in (None, ""):
-                    continue
-                links_by_gear[str(gear_key)].append(row)
+                links_by_gear["" if gear_key is None else str(gear_key)].append(row)
             _write_json(
                 fitness / "snapshot_gear.json",
                 [{"gearDTOS": gear_rows, "gearActivityDTOs": dict(links_by_gear)}],

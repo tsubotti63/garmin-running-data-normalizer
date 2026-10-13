@@ -444,7 +444,9 @@ class RunAllTest(unittest.TestCase):
             self.assertEqual(second.returncode, 0, second.stderr)
             self.assertEqual(tree_hashes(output), tree_hashes(repeat))
 
-    def test_personal_record_identifier_type_fails_closed_end_to_end(self) -> None:
+    def test_personal_record_identifier_type_is_left_out_end_to_end(self) -> None:
+        # Stage A3d-1b: the row is left out with its reason, and the run
+        # finishes bounded instead of stopping.
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)
             input_root = self.synthetic_input(temporary, optional=True)
@@ -464,9 +466,23 @@ class RunAllTest(unittest.TestCase):
             )
             output = temporary / "output"
             result = self.run_command(input_root, output)
-            self.assertEqual(result.returncode, 2)
-            self.assertIn("PERSONAL_RECORDS_NORMALIZATION_FAILED", result.stderr)
-            self.assertFalse(output.exists())
+            self.assertEqual(result.returncode, 3, result.stderr)
+            summary = json.loads((output / "run_summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["status"], "PARTIAL_SUCCESS")
+            self.assertIn(
+                {
+                    "code": "DATA_ROW_LEFT_OUT",
+                    "family": "personal_records",
+                    "dataset": "personal_records",
+                    "count": 1,
+                },
+                [
+                    {key: item[key] for key in ("code", "family", "dataset", "count") if key in item}
+                    for item in summary["warnings"]
+                ],
+            )
+            audit = json.loads((output / "audit/personal_records.json").read_text(encoding="utf-8"))
+            self.assertEqual(audit["excluded_reason_counts"], {"identity_invalid": 1})
 
     def test_t3_fatal_inputs_do_not_publish_completion_marker(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -16,7 +16,7 @@ The source Synthetic Run-All completed with `PASS_WITH_WARNINGS`, exit code 0,
 one detected/processed Activity and one Activity record, three warnings, zero
 errors, 17 dataset inventory entries, and 50 generated files. Its deterministic
 output digest was
-`e969e67f50f5e8d4753d0ef3a4990dbfcfb9005ccd579c4871db3510af1072a5`.
+`8989d5a21f575f052c9a1d78d9ef250c6aab8852778f90074b07d3138d2d2a94`.
 A repeated run produced byte-identical output.
 
 The tracked fictional chart input aggregates to:

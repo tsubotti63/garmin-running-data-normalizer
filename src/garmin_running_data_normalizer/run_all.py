@@ -469,11 +469,16 @@ def _normalize_datasets(
     dict[str, Any],
     dict[str, Any],
     dict[str, RecordMerge],
+    dict[str, Counter[str]],
 ]:
     records: dict[str, list[dict[str, Any]]] = {name: [] for name in DATASET_PATHS}
     # Repeated records of the same stable key become one row (stage A3b).
     merges: dict[str, RecordMerge] = {
         name: merge_repeated_records(name, []) for name in RECORD_AUDIT_DATASETS
+    }
+    # The rows left out without a usable identifier, by reason (stage A3d-1b).
+    rows_left_out: dict[str, Counter[str]] = {
+        name: Counter() for name in RECORD_AUDIT_DATASETS
     }
     fit_audit: list[dict[str, Any]] = []
     fit_status_counts: Counter[str] = Counter()
@@ -485,7 +490,12 @@ def _normalize_datasets(
     try:
         merges["activities"] = merge_repeated_records(
             "activities",
-            normalize_activities(str(input_root), timezone_name, assets=assets),
+            normalize_activities(
+                str(input_root),
+                timezone_name,
+                assets=assets,
+                left_out=rows_left_out["activities"],
+            ),
         )
         records["activities"] = merges["activities"].rows
     except Exception as exc:
@@ -496,7 +506,9 @@ def _normalize_datasets(
     if families["gear"]:
         _notify(progress, "normalizing", step="gear")
         try:
-            gear_rows, link_rows = normalize_gear(str(input_root), assets=assets)
+            gear_rows, link_rows = normalize_gear(
+                str(input_root), assets=assets, left_out=rows_left_out
+            )
             merges["gear"] = merge_repeated_records("gear", gear_rows)
             merges["activity_gear"] = merge_repeated_records("activity_gear", link_rows)
             records["gear"] = merges["gear"].rows
@@ -509,7 +521,11 @@ def _normalize_datasets(
         try:
             merges["personal_records"] = merge_repeated_records(
                 "personal_records",
-                normalize_personal_records(str(input_root), assets=assets),
+                normalize_personal_records(
+                    str(input_root),
+                    assets=assets,
+                    left_out=rows_left_out["personal_records"],
+                ),
             )
             records["personal_records"] = merges["personal_records"].rows
         except Exception as exc:
@@ -719,6 +735,7 @@ def _normalize_datasets(
         relationship_summary,
         performance_audit,
         merges,
+        rows_left_out,
     )
 
 
@@ -726,6 +743,7 @@ def _record_audits(
     records: dict[str, list[dict[str, Any]]],
     snapshot_context: dict[str, Any] | None,
     merges: dict[str, RecordMerge],
+    rows_left_out: dict[str, Counter[str]] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Return the audit records of Activities, Gear, activity_gear, and Personal Records.
 
@@ -740,7 +758,9 @@ def _record_audits(
     the copies with the same values, the observations without a value,
     and the keys whose values disagree, and lists every disagreeing value;
     these keys appear only when there is something to count, so that an
-    Export without repeated records gives the same bytes as before.
+    Export without repeated records gives the same bytes as before. So do the
+    counts of the rows left out without a usable identifier, by reason, as
+    the daily audit records count theirs (stage A3d-1b).
     """
     changes = (
         snapshot_context.get("record_changes") or {}
@@ -781,6 +801,10 @@ def _record_audits(
         if merge.disagreements:
             audit["disagreement_key_count"] = len(merge.disagreements)
             audit["disagreements"] = list(merge.disagreements)
+        left_out = (rows_left_out or {}).get(name)
+        if left_out:
+            audit["excluded_record_count"] = sum(left_out.values())
+            audit["excluded_reason_counts"] = dict(sorted(left_out.items()))
         audits[name] = audit
     return audits
 
@@ -1205,6 +1229,25 @@ def _family_results(
                         ),
                     }
                 )
+        # Rows left out without a usable identifier (stage A3d-1b): one
+        # warning for each dataset, so that Gear and its links are told apart.
+        for name in record_audit_datasets.get(family, ()):
+            dataset_left_out = int(record_audits[name].get("excluded_record_count", 0))
+            if dataset_left_out:
+                left_out_row_count += dataset_left_out
+                family_warnings += 1
+                warnings.append(
+                    {
+                        "code": "DATA_ROW_LEFT_OUT",
+                        "family": family,
+                        "dataset": name,
+                        "count": dataset_left_out,
+                        "message": (
+                            "rows without a usable identifier were left out; the "
+                            "dataset's audit record counts them by reason"
+                        ),
+                    }
+                )
         # Repeated records whose values disagree (stage A3b).
         record_disagreement_count = sum(
             int(record_audits[name].get("disagreement_key_count", 0))
@@ -1335,6 +1378,23 @@ def _family_results(
                 ),
             }
         )
+    # Personal Records kept with an activity link that is missing, malformed,
+    # or whose values disagree (stage A3d-1b): no data is missing.
+    invalid_link_count = int(relationship_summary.get("relationship_malformed", 0)) + int(
+        relationship_summary.get("relationship_conflict", 0)
+    )
+    if invalid_link_count:
+        warnings.append(
+            {
+                "code": "RELATIONSHIP_UNRESOLVED_INVALID_LINK",
+                "family": "relationships",
+                "count": invalid_link_count,
+                "message": (
+                    "records whose link is missing, malformed, or disagrees are "
+                    "kept with the relationship unresolved; no endpoint was inferred"
+                ),
+            }
+        )
 
     # Rows left out bound the run as a FIT file not completely parsed does.
     rows_left_out = any(result.get("left_out_row_count") for result in results.values())
@@ -1458,6 +1518,7 @@ def run_all(
                 relationship_summary,
                 performance_audit,
                 record_merges,
+                record_rows_left_out,
             ) = _normalize_datasets(
                 input_root,
                 families,
@@ -1522,7 +1583,9 @@ def run_all(
         raise RunAllError("INPUT_CHANGED", "input assets changed during Run-All processing")
     _notify(progress, "building_output")
 
-    record_audits = _record_audits(records, snapshot_context, record_merges)
+    record_audits = _record_audits(
+        records, snapshot_context, record_merges, record_rows_left_out
+    )
     family_results, warnings, status = _family_results(
         families,
         records,
@@ -1713,7 +1776,9 @@ def run_all(
         },
         records=records,
         fit_status=fit_status,
-        performance_audit=performance_audit,
+        # The record audits count the rows left out of Activities, Gear,
+        # activity_gear, and Personal Records (stage A3d-1b).
+        performance_audit={**performance_audit, **record_audits},
         unknown_evidence_count=sum(
             1 for asset in initial_assets if _asset_family(asset) == "unclassified"
         ),
@@ -1873,10 +1938,15 @@ def run_all(
         summary["candidate_warning_count"] = lactate_warning_count
     relationship_warning_count = int(
         bool(relationship_summary.get("relationship_unresolved", 0))
+    ) + int(
+        bool(
+            relationship_summary.get("relationship_malformed", 0)
+            or relationship_summary.get("relationship_conflict", 0)
+        )
     )
     if relationship_warning_count:
         # Keep the established PASS summary byte-stable; this additive field
-        # appears only when a valid unresolved relationship warning exists.
+        # appears only when a relationship warning exists.
         summary["relationship_warning_count"] = relationship_warning_count
     input_warning_count = int(bool(same_export_count)) + int(bool(files_left_out))
     if input_warning_count:

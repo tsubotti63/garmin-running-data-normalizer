@@ -95,7 +95,10 @@ DATASET_PRESENTATION = {
     "personal_records": {
         "role": "authoritative personal records",
         "authority": "normalized source of truth",
-        "analysis_suitability": "explicit nonzero activity joins; zero is independent",
+        "analysis_suitability": (
+            "explicit nonzero activity joins; zero is independent; "
+            "a link that cannot be followed is unresolved"
+        ),
         "relationship_status": "explicit-or-independent",
         "privacy_classification": "personal-local",
     },
@@ -322,8 +325,13 @@ DATASET_RELATIONSHIP_METADATA = {
             semantics="fact",
         ),
         cardinality="many_records_to_zero_or_one_activity",
-        allowed_use="Join nonzero source Activity identities; preserve zero as independent.",
-        forbidden_join_guidance=("Do not force an Activity identity for independent records.",),
+        allowed_use=(
+            "Join nonzero source Activity identities; preserve zero as independent, "
+            "and an unresolved link as a record without a known Activity."
+        ),
+        forbidden_join_guidance=(
+            "Do not force an Activity identity for independent or unresolved records.",
+        ),
     ),
     "fit_sessions": _relationship_metadata(
         relationship_role="primary_fact",
@@ -773,10 +781,11 @@ DATASET_NONNULL_FIELDS = {
     ),
     "gear": frozenset({"gear_key", "source_path", "source_sha256", "disagreeing_fields"}),
     "activity_gear": frozenset(DATASET_FIELDS["activity_gear"]),
+    # A Personal Record whose activity link cannot be followed keeps an empty
+    # activity_id (stage A3d-1b).
     "personal_records": frozenset(
         {
             "personal_record_id",
-            "activity_id",
             "source_record_index",
             "activity_relationship_status",
             "activity_relationship_reason",
@@ -945,7 +954,7 @@ RELATIONSHIP_COVERAGE_PRESENTATION = {
     "personal_records_to_activities": {
         "title": "Personal Records → Activities",
         "qa_relationship_id": "personal_records_to_activities",
-        "eligible_population_label": "nonzero-activity Personal Records",
+        "eligible_population_label": "Personal Records that are not independent",
         "eligible_count_field": "eligible_count",
         "coverage_field": "coverage",
         "unresolved_count_field": "unresolved_count",
@@ -1314,6 +1323,15 @@ def _validate_projection_inputs(
     total_family_warnings = 0
     total_family_errors = 0
     rows_left_out = False
+    # The warnings about rows left out, by family: one for each dataset, so
+    # Gear can have two (stage A3d-1).
+    row_warnings: dict[str, list[int]] = {}
+    listed_warnings = summary_object.get("warnings")
+    for item in listed_warnings if isinstance(listed_warnings, list) else []:
+        if isinstance(item, Mapping) and item.get("code") == "DATA_ROW_LEFT_OUT":
+            row_warnings.setdefault(str(item.get("family")), []).append(
+                _non_negative_integer(item.get("count"), "rows left out")
+            )
     for family in expected_families:
         result = _mapping(family_results[family], f"family result {family}")
         status = result.get("status")
@@ -1424,12 +1442,20 @@ def _validate_projection_inputs(
         for field in ("updated_record_count", "not_in_latest_snapshot_count"):
             if _non_negative_integer(result.get(field, 0), f"{family} {field}"):
                 expected_warning_count += 1
-        # Rows left out that hold a value (stage A3d-1).
-        if _non_negative_integer(
+        # Rows left out (stage A3d-1): the family's warnings give the rows of
+        # each of its datasets.
+        left_out_row_count = _non_negative_integer(
             result.get("left_out_row_count", 0), f"{family} left-out row count"
+        )
+        family_row_warnings = row_warnings.get(family, [])
+        if sum(family_row_warnings) != left_out_row_count or (
+            bool(family_row_warnings) != bool(left_out_row_count)
         ):
-            expected_warning_count += 1
-            rows_left_out = True
+            raise OutputExperienceError(
+                f"{family}: left-out rows contradict the family warnings"
+            )
+        expected_warning_count += len(family_row_warnings)
+        rows_left_out = rows_left_out or bool(left_out_row_count)
 
         if status != expected_status:
             raise OutputExperienceError(
@@ -1996,7 +2022,8 @@ def _files_left_out_lines(manifest: Mapping[str, Any], summary: Mapping[str, Any
 
 
 def _rows_left_out_lines(summary: Mapping[str, Any]) -> list[str]:
-    """Count the rows left out because they lack a required value (stage A3d-1)."""
+    """Count the rows left out because they lack a required value (stage
+    A3d-1) or a usable identifier (stage A3d-1b)."""
     counts: dict[str, int] = {}
     for item in summary.get("warnings", []):
         if isinstance(item, Mapping) and item.get("code") == "DATA_ROW_LEFT_OUT":
@@ -2008,7 +2035,8 @@ def _rows_left_out_lines(summary: Mapping[str, Any]) -> list[str]:
     tables = ", ".join(f"{_code(dataset)} {count}" for dataset, count in counts.items())
     return [
         f"- Rows left out: {sum(counts.values())} ({tables}), which lack a required "
-        "value such as a date; each dataset's audit record counts them by reason"
+        "value, such as a date or a usable identifier; each dataset's audit record "
+        "counts them by reason"
     ]
 
 
@@ -2212,7 +2240,8 @@ def render_analysis_handoff(
         "   The `fit_*` columns in `analysis/activities.csv` already follow those links",
         "   and are empty for activities without one.",
         "6. Treat Personal Records with `activity_relationship_status=independent`",
-        "   as non-activity records and do not force an activity identity.",
+        "   as non-activity records, and those with `unresolved` as records whose",
+        "   activity is not known; do not force an activity identity.",
         "7. Preserve and disclose warnings or partial FIT status.",
         "8. Ask for an additional approved file when the supplied artifacts cannot",
         "   answer the question; do not invent source fields or context.",

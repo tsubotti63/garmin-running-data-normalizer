@@ -436,7 +436,7 @@ class SnapshotRecordUpdatesTest(unittest.TestCase):
             )
 
     def test_a_removed_value_that_the_dataset_rejects_stops_as_in_a_one_shot_run(self) -> None:
-        # Until stage A3, which leaves such a row out and counts it (exit 3),
+        # Until stage A3d-2, which keeps such a value empty with a warning,
         # the Snapshot run stops as a one-shot run of the same row does.
         cases = {
             "empty string for a number": (
@@ -446,13 +446,6 @@ class SnapshotRecordUpdatesTest(unittest.TestCase):
             "empty list for a text": (
                 {"activities": [_activity("X1", name=[])]},
                 "OUTPUT_EXPERIENCE_FAILED",
-            ),
-            "null Activity of a Personal Record": (
-                {
-                    "activities": [_activity("X1")],
-                    "records": [{**personal_record(1, "X1", 1500.0), "activityId": None}],
-                },
-                "RELATIONSHIP_CONTRACT_FAILED",
             ),
         }
         for name, (latest, code) in cases.items():
@@ -484,6 +477,37 @@ class SnapshotRecordUpdatesTest(unittest.TestCase):
                         root / "one-shot-output",
                     )
                 self.assertEqual(raised.exception.code, code)
+
+    def test_a_removed_activity_of_a_personal_record_is_unresolved_as_in_a_one_shot_run(
+        self,
+    ) -> None:
+        # Stage A3d-1b: the Personal Record stays, with its relationship
+        # unresolved, in the Snapshot run and in a one-shot run of the row.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            removed = {**personal_record(1, "X1", 1500.0), "activityId": None}
+            exports = {
+                1: write_export(
+                    root, "source-1", [_activity("X1")], records=[personal_record(1, "X1", 1500.0)]
+                ),
+                2: write_export(root, "source-2", [_activity("X1")], records=[removed]),
+            }
+            store = store_with(root, exports)
+            snapshot = root / "output"
+            self.assertEqual(
+                cli_main(["snapshot", "run-all", "--store", str(store), "--output", str(snapshot)]),
+                0,
+            )
+            one_shot = root / "one-shot-output"
+            run_all(write_export(root, "one-shot", [_activity("X1")], records=[removed]), one_shot)
+            for output in (snapshot, one_shot):
+                with self.subTest(output=output.name):
+                    [record] = load(output / "normalized/personal_records.json")
+                    self.assertEqual(record["activity_relationship_status"], "unresolved")
+                    self.assertEqual(record["activity_relationship_reason"], "activity_link_missing")
+                    self.assertIsNone(record["activity_id"])
+                    codes = {item["code"]: item.get("count") for item in load(output / "run_summary.json")["warnings"]}
+                    self.assertEqual(codes["RELATIONSHIP_UNRESOLVED_INVALID_LINK"], 1)
 
     def test_processing_sequence_does_not_change_the_changes_or_their_numbers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

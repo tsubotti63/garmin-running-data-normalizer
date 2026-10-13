@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -122,10 +123,21 @@ def run_activities(
         try:
             if len(asset_accounts(assets)) > 1:
                 raise MixedExportsError()
-            records = normalize_activities(str(input_root), timezone_name, assets=assets)
+            left_out: Counter[str] = Counter()
+            records = normalize_activities(
+                str(input_root), timezone_name, assets=assets, left_out=left_out
+            )
         except InputChangedError as exc:
             raise GoldenPathError("input changed or provenance diverged during processing") from exc
         _check_activities_read(reading.left_out)
+    if left_out:
+        # Run-All leaves such rows out and counts them; the Golden Path output
+        # has no such count, so it stops instead of leaving rows out silently
+        # (stage A3d-1b).
+        raise GoldenPathError(
+            "an Activities row has no usable identifier; run-all leaves such rows "
+            "out and counts them"
+        )
     if not records:
         raise GoldenPathError("supported input contained no activity records")
     discovered_sources = {(asset.provenance_path, asset.sha256) for asset in assets}

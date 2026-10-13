@@ -495,8 +495,14 @@ class SnapshotLifecycleTest(unittest.TestCase):
                     "snapshot_summarizedActivities.json"
                 ).read_text(encoding="utf-8")
             )[0]["summarizedActivitiesExport"]
-            by_id = {row["activityId"]: row for row in merged}
+            by_id = {row["activityId"]: row for row in merged if "activityId" in row}
             self.assertEqual(set(by_id), {"A1", "A2", "A3", "A4"})
+            # The record without an identifier is written for Run-All, which
+            # leaves it out, with the number of its Snapshot (stage A3d-1b).
+            self.assertEqual(
+                [row for row in merged if "activityId" not in row],
+                [{"garminRunningDataNormalizerSnapshotNumbers": [4]}],
+            )
             # Merge rules v2.1: the explicit empty value of the latest Snapshot
             # that contains the field means that the value was removed.
             self.assertEqual(by_id["A1"]["description"], "")
@@ -537,6 +543,9 @@ class SnapshotLifecycleTest(unittest.TestCase):
             self.assertEqual(activities["presence_pattern_counts"]["1011"], 1)
             self.assertEqual(activities["reappeared_record_count"], 2)
             self.assertEqual(activities["canonical_record_count"], 4)
+            self.assertEqual(activities["keyless_observation_count"], 1)
+            self.assertEqual(activities["keyless_record_count"], 1)
+            self.assertEqual(activities["null_key_hold_count"], 0)
             self.assertFalse(summary["automatic_deletion"])
             self.assertFalse(summary["inference_performed"])
             holds = json.loads(
@@ -544,12 +553,9 @@ class SnapshotLifecycleTest(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
-            # Explicit empty values are updates, not review holds; a record
-            # without a stable key is still held.
-            self.assertEqual(
-                {item["hold_type"] for item in holds},
-                {"null_stable_key"},
-            )
+            # Explicit empty values are updates, not review holds, and a
+            # record without a stable key is not held (stage A3d-1b).
+            self.assertEqual(holds, [])
             self.assertEqual(summary["explicit_null_review_count"], 0)
             self.assertEqual(summary["explicit_empty_review_count"], 0)
             self.assertEqual(activities["updated_record_count"], 1)

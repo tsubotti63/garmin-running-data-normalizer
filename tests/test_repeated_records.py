@@ -373,7 +373,8 @@ class EmptyValuesTest(unittest.TestCase):
 
     def test_no_field_that_must_have_a_value_stops_a_disagreement(self) -> None:
         # Every value field of each dataset differs between two observations,
-        # except the activity of a Personal Record (stage A3d).
+        # the activity of a Personal Record too, which leaves its link
+        # unresolved (stage A3d-1b).
         first_activity = _activity("A1", description="one", startTimeLocal="2030-01-01T09:00:00",
                                    elapsedDuration=1, movingDuration=1, avgHr=1, maxHr=1, avgPower=1,
                                    maxPower=1, avgRunCadence=1, trainingEffectLabel="one",
@@ -398,6 +399,7 @@ class EmptyValuesTest(unittest.TestCase):
         first_record = {**personal_record(1, "A1", 100.0), "prStartTimeGMT": "2030-01-01T08:00:00.0"}
         second_record = {
             **first_record,
+            "activityId": "A2",
             "personalRecordType": "other_best",
             "value": 99.0,
             "prStartTimeGMT": "2030-01-01T09:00:00.0",
@@ -428,7 +430,11 @@ class EmptyValuesTest(unittest.TestCase):
                     self.assertTrue(activity["memo_present"])
                     self.assertIn("name", activity["disagreeing_fields"])
                     self.assertIn("display_name", rows(output, "gear")[0]["disagreeing_fields"])
-                    self.assertIn("value", rows(output, "personal_records")[0]["disagreeing_fields"])
+                    record = rows(output, "personal_records")[0]
+                    self.assertLessEqual({"value", "activity_id"}, set(record["disagreeing_fields"]))
+                    self.assertEqual(
+                        record["activity_relationship_reason"], "activity_link_values_disagree"
+                    )
                     self.assertEqual(doctor_run_output(output)["product_exit_code"], 0)
 
 

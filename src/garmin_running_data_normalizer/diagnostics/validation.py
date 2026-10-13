@@ -408,7 +408,14 @@ def validate_diagnostic_authorities(
             summary=summary,
             manifest=manifest,
             dataset_qa=dataset_qa,
-            performance_audit=performance_audit,
+            # The record audits count the rows left out (stage A3d-1b).
+            performance_audit={
+                **performance_audit,
+                **{
+                    name: _json(root, f"audit/{name}.json")
+                    for name in ("activities", "gear", "activity_gear", "personal_records")
+                },
+            },
             fit_audit=fit_audit,
         )
     else:

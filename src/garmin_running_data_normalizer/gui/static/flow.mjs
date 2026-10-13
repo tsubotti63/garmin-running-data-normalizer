@@ -216,6 +216,7 @@ export const WARNING_KEYS = {
   FIT_PARSE_INCOMPLETE: "warning.fit_parse_incomplete",
   LACTATE_CANDIDATE_AUTHORITY_UNRESOLVED: "warning.lactate_candidates",
   RELATIONSHIP_UNRESOLVED_VALID_LINK: "warning.relationship_unresolved",
+  RELATIONSHIP_UNRESOLVED_INVALID_LINK: "warning.relationship_invalid_link",
 };
 
 const WINDOWS_RESERVED_NAMES = new Set([
