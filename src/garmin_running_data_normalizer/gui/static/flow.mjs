@@ -212,6 +212,7 @@ export const WARNING_KEYS = {
   RECORDS_NOT_IN_LATEST_SNAPSHOT: "warning.records_not_in_latest_snapshot",
   INPUT_DUPLICATE_SOURCES: "warning.input_duplicate_sources",
   DATA_FILE_LEFT_OUT: "warning.data_file_left_out",
+  DATA_ROW_LEFT_OUT: "warning.data_row_left_out",
   FIT_PARSE_INCOMPLETE: "warning.fit_parse_incomplete",
   LACTATE_CANDIDATE_AUTHORITY_UNRESOLVED: "warning.lactate_candidates",
   RELATIONSHIP_UNRESOLVED_VALID_LINK: "warning.relationship_unresolved",

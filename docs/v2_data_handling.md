@@ -44,6 +44,11 @@ These rules come from the Human maintainer's decisions of 2026-10-11:
   differ are disagreements, not updates.
 - **Not read**: a file type or source field outside the product's scope. It is
   recorded by name and count, never by value, and does not change the status.
+- **Empty record**: a daily row that lacks a required value, such as a date,
+  and holds no value of its dataset either, such as a Sleep record with only
+  its `retro` flag. Nothing is missing from the datasets, so it is only
+  counted: `empty_record_count` in the dataset's audit record, apart from the
+  rows left out, with no warning and no change of the status (stage A3d-1).
 
 ## Statuses and exit codes
 
@@ -514,7 +519,30 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
   - A row without a usable identity (no identifier and no fallback fields, an
     identifier of an unsupported type, or an Activity identifier of 0) or
     without a required value (such as a date) is left out with a reason.
-    Warning `DATA_ROW_LEFT_OUT` (provisional), status `PARTIAL_SUCCESS`.
+    Warning `DATA_ROW_LEFT_OUT`, status `PARTIAL_SUCCESS`.
+  - Stage A3d-1 does this for the daily datasets other than HRV; the rows of
+    Activities, Gear, links, and Personal Records still stop the run until
+    stage A3d-1b, and HRV follows in stage A3d-2. The rules for a daily row:
+    - The reasons are those of v1.7.1, which the dataset's audit record counts
+      in `excluded_record_count` and `excluded_reason_counts`. The run gives
+      one warning `DATA_ROW_LEFT_OUT` for each dataset with rows left out, with
+      `family`, `dataset`, and the number of rows (`count`); the family result
+      gains `left_out_row_count`, and `START_HERE.md` a line with the number
+      for each dataset.
+    - A row that holds no value of its dataset is an empty record (see
+      [Terms](#terms)). A value is what one of the dataset's value fields is
+      made from: each normalizer lists the source fields of each value field,
+      and names the fields that hold no value of a row (its key, date, and
+      states), and a test checks that every field of the Schema Catalog is in
+      one of the two lists. An empty value (null, `""`, `[]`, or `{}`) holds
+      nothing; 0, false, and a value of an unexpected type are values. Source
+      fields that no value field is made from, such as Sleep's `retro`, are
+      not looked at, and only the rows that are left out are: a row with its
+      key and no value stays in the dataset, as in v1.7.1.
+    - Copies of a row within one Snapshot count as rows, as in a one-shot run
+      of that Export (stage A3b).
+    - Source Completeness gives the family `MALFORMED` when a row that holds
+      a value is left out; empty records leave it valid.
   - A value of an unexpected type becomes empty in the normalized row, and the
     raw value is kept in the audit record. Warning `DATA_VALUE_INVALID`
     (provisional), status `PASS_WITH_WARNINGS`.
@@ -532,7 +560,9 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
   - A FIT field with an unexpected layout is treated as an unknown value with
     the `DATA_VALUE_INVALID` warning; the FIT file is not left out.
   - A Race Prediction row keeps the predictions it has, and a missing one is
-    empty.
+    empty (stage A3d-1). A row without any prediction is an empty record, and
+    a prediction given in a form that is not a positive number still leaves
+    the row out until stage A3d-2.
 
 ### Relationships
 
@@ -735,9 +765,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Support Bundle's copy of Run Quality name them.
 - New warning codes: `VALUES_DISAGREE` (stage A2a), `VALUES_UPDATED` and
   `RECORDS_NOT_IN_LATEST_SNAPSHOT` (stage A2b-2), `INPUT_DUPLICATE_SOURCES`
-  (stage A3a), `DATA_FILE_LEFT_OUT` (stage A3c), and, with provisional names,
-  `DATA_ROW_LEFT_OUT`, `DATA_VALUE_INVALID`, and `DATA_TEXT_REPAIRED`.
-  `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them.
+  (stage A3a), `DATA_FILE_LEFT_OUT` (stage A3c), `DATA_ROW_LEFT_OUT` (stage
+  A3d-1), and, with provisional names, `DATA_VALUE_INVALID` and
+  `DATA_TEXT_REPAIRED`. `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them.
 - Stage A3b adds to the audit records of Activities, Gear, `activity_gear`,
   and Personal Records `same_value_duplicate_count`, `absent_value_counts`,
   `disagreement_key_count`, and `disagreements`, each only when there is
@@ -763,6 +793,14 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `not_in_latest_file_left_out_count` to `run_summary.json`. In a Snapshot
   store, the row of a ZIP file stored without its members has the
   `parser_state` `zip_not_readable`, `zip_unsafe_member`, or `zip_too_large`.
+- Stage A3d-1 adds, each only when there is something to report,
+  `empty_record_count` to the daily audit records, `left_out_row_count` to
+  the family results of `run_summary.json`, a `START_HERE.md` line with the
+  number of rows left out for each dataset, and warning `DATA_ROW_LEFT_OUT`
+  with `family`, `dataset`, and `count`; Run Quality and the Support Bundle
+  keep its `dataset`, since a family can hold two datasets. The merge
+  summaries of a Snapshot run gain `keyless_observation_count` and
+  `keyless_record_count` for each daily dataset.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
   and `SNAPSHOT_STORE_LOCKED` (provisional name).
@@ -790,7 +828,22 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   longer stops for problems in the data. Sleep rows without `calendarDate` take
   the sleep day from the end time, as in one-shot runs, instead of being held
   back (stage A2b-1); the end time identifies the same sleep across Snapshots,
-  and a row with neither is still held back until stage A3d.
+  and from stage A3d-1 a row with neither is left out by Run-All, as below.
+- Stage A3d-1: a daily record without a stable key, such as one without a
+  date, is no longer held back. The build writes each distinct one once,
+  after the records with a key, with the number of each Snapshot that gave
+  it, also one in an earlier Snapshot only, and Run-All leaves it out, or
+  counts it as an empty record, as a one-shot run does: copies within one
+  Snapshot count as rows, and the same record in two Snapshots once. The
+  merge summary counts these records (`keyless_observation_count` and
+  `keyless_record_count`) instead of review holds, so the review holds that
+  `START_HERE.md` reports can be lower, and a run whose store holds such a
+  record that holds a value ends with exit 3 where it ended with 0. A family
+  whose records all lack a key gives `OPTIONAL_FAMILY_EMPTY` as in a one-shot
+  run, instead of being absent. The build reads Hill and Endurance files as
+  Run-All does (records under `records`, `items`, or `data`), and counts a
+  Snapshot's daily family as malformed in Source Completeness when Run-All
+  leaves out a record of it that holds a value.
 - Stage A2b-1 removes the stops for daily datasets: values that differ across
   Snapshots, within one Snapshot, or between two Snapshots observed at the same
   time follow [Values that disagree](#values-that-disagree), with the Snapshot
@@ -825,10 +878,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   observed at the same time one time point and compares the repeated
   records within a time point as a one-shot run does, and
   `garmin_snapshot_merge_rules:v2.4` from stage A3c-2, which leaves out the
-  files that a run cannot read, in
-  `config/garmin_snapshot_merge_rules_v2.json`. For these datasets they
-  replace the merge fields of the v1.0 registry; the other datasets follow the
-  v1.0 registry until stages A3c and A3d. A build records
+  files that a run cannot read, and `garmin_snapshot_merge_rules:v2.5` from
+  stage A3d-1, which passes the daily records without a stable key to
+  Run-All, in `config/garmin_snapshot_merge_rules_v2.json`. For these
+  datasets they replace the merge fields of the v1.0 registry; the other
+  datasets follow the v1.0 registry until stage A3d. A build records
   `merge_rules_version` in `snapshot/snapshot_lineage.json`, the approved input
   manifest, the merge summary, and the build digest; a store never records it.
   v1.7.1 still reads a store that v2.0.0 registered to, and builds it with the
@@ -890,7 +944,10 @@ Every stop has a specific code; errors that v1.7.1 reports only as
 ## Migration notes outline (v1.7.1 to v2.0.0)
 
 - Exit codes: runs that stopped with exit 2 for problems in the data now finish
-  with exit 3 or 0, and the warnings say what was left out or kept.
+  with exit 3 or 0, and the warnings say what was left out or kept. A daily
+  row without a required value, such as a date, which v1.7.1 left out with a
+  count only, now gives warning `DATA_ROW_LEFT_OUT` and exit 3 when it holds
+  a value; a row that holds no value is counted as an empty record.
 - Outputs: `run_all_version` 2, the new fields, audit records, and audit
   sections, and the new warning codes. The synthetic Run-All output grows from
   46 to 50 files with the audit records of Activities, Gear, `activity_gear`,
@@ -923,7 +980,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Snapshot. Registration no longer stops on a ZIP file inside the Export
   that cannot be read, holds an unsafe member, or exceeds the limits, and
   builds leave out the files that a run cannot read, as one-shot runs do.
-  The merge rules v2.4 are published in
+  Daily records without a stable key are no longer held back: Run-All leaves
+  them out with warning `DATA_ROW_LEFT_OUT`, or counts them as empty
+  records, as in a one-shot run. The merge rules v2.5 are published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around

@@ -215,8 +215,19 @@ def build_run_quality(
         family = warning.get("family")
         if isinstance(family, str) and family:
             item["family"] = family
+        # A warning about rows names its dataset, since a family can hold two
+        # datasets (stage A3d-1).
+        dataset = warning.get("dataset")
+        if isinstance(dataset, str) and dataset:
+            item["dataset"] = dataset
         warnings_projection.append(item)
-    warnings_projection.sort(key=lambda item: (str(item.get("code")), str(item.get("family", ""))))
+    warnings_projection.sort(
+        key=lambda item: (
+            str(item.get("code")),
+            str(item.get("family", "")),
+            str(item.get("dataset", "")),
+        )
+    )
 
     authority_entries = [
         {"path": path, "sha256": _sha256(data)}

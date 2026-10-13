@@ -1154,8 +1154,26 @@ def _family_results(
             })
         review_item_count = 0
         disagreement_key_count = 0
+        left_out_row_count = 0
         if family in daily_dataset_by_family:
             audit = performance_audit[daily_dataset_by_family[family]]
+            # Rows left out that hold a value (stage A3d-1); the rows that hold
+            # none are counted apart in the audit and not announced.
+            left_out_row_count = int(audit.get("excluded_record_count", 0))
+            if left_out_row_count:
+                family_warnings += 1
+                warnings.append(
+                    {
+                        "code": "DATA_ROW_LEFT_OUT",
+                        "family": family,
+                        "dataset": daily_dataset_by_family[family],
+                        "count": left_out_row_count,
+                        "message": (
+                            "rows that lack a required value, such as a date, were "
+                            "left out; the dataset's audit record counts them by reason"
+                        ),
+                    }
+                )
             review_item_count = int(
                 audit.get("review_required_count", 0)
                 or audit.get("review_item_count", 0)
@@ -1267,6 +1285,8 @@ def _family_results(
             "updated_record_count": updated_record_count,
             "not_in_latest_snapshot_count": not_in_latest_snapshot_count,
         }
+        if left_out_row_count:
+            results[family]["left_out_row_count"] = left_out_row_count
         if family == "fit":
             results[family]["parse_status_counts"] = {
                 key.removeprefix("status_"): value
@@ -1316,7 +1336,13 @@ def _family_results(
             }
         )
 
-    overall = "PARTIAL_SUCCESS" if incomplete_fit_count else ("PASS_WITH_WARNINGS" if warnings else "PASS")
+    # Rows left out bound the run as a FIT file not completely parsed does.
+    rows_left_out = any(result.get("left_out_row_count") for result in results.values())
+    overall = (
+        "PARTIAL_SUCCESS"
+        if incomplete_fit_count or rows_left_out
+        else ("PASS_WITH_WARNINGS" if warnings else "PASS")
+    )
     return results, warnings, overall
 
 

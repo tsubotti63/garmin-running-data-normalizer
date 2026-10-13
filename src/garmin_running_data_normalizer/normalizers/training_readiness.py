@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Iterable
+from typing import Any, Iterable
 
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..intake.discovery import DiscoveredAsset
 from .daily_metrics import (
     DailyMetricResult,
+    RowsLeftOut,
     boolean,
     copies_within_snapshots,
     finalize_daily,
@@ -14,6 +15,7 @@ from .daily_metrics import (
     selected_rows,
     snapshot_numbers,
     text,
+    value_source_names,
 )
 
 
@@ -32,6 +34,31 @@ TRAINING_READINESS_FIELDS = (
     "training_readiness_valid_sleep",
     "training_readiness_sleep_score",
 )
+# The source field of each value field (stage A3d-1); the other fields are the
+# record's key. A row left out that holds nothing in them is an empty record.
+TRAINING_READINESS_VALUE_SOURCES = {
+    "training_readiness_score": ("score",),
+    "training_readiness_level": ("level",),
+    "training_readiness_recovery_time": ("recoveryTime",),
+    "acwr_factor_percent": ("acwrFactorPercent",),
+    "stress_history_factor_percent": ("stressHistoryFactorPercent",),
+    "hrv_factor_percent": ("hrvFactorPercent",),
+    "sleep_history_factor_percent": ("sleepHistoryFactorPercent",),
+    "training_readiness_acute_load": ("acuteLoad",),
+    "training_readiness_hrv_weekly_average": ("hrvWeeklyAverage",),
+    "training_readiness_valid_sleep": ("validSleep",),
+    "training_readiness_sleep_score": ("sleepScore",),
+}
+TRAINING_READINESS_FIELDS_WITHOUT_VALUES = ("calendar_date", "observation_timestamp")
+
+
+def training_readiness_left_out_reason(raw: dict[str, Any]) -> str | None:
+    """Return why a Training Readiness record is left out, or None when it is kept."""
+    if daily_calendar_date(raw.get("calendarDate")) is None:
+        return "missing_or_invalid_calendar_date"
+    if normalize_observation_timestamp(raw.get("timestamp"))[0] is None:
+        return "missing_or_invalid_observation_timestamp"
+    return None
 
 
 def normalize_training_readiness(
@@ -41,18 +68,16 @@ def normalize_training_readiness(
         assets, lambda name: name.startswith("trainingreadinessdto")
     )
     accepted = []
-    excluded: Counter[str] = Counter()
+    left_out = RowsLeftOut(value_source_names(TRAINING_READINESS_VALUE_SOURCES))
     timestamp_semantics: Counter[str] = Counter()
     for raw in rows:
         date = daily_calendar_date(raw.get("calendarDate"))
         timestamp, semantics = normalize_observation_timestamp(raw.get("timestamp"))
         # Copies within one Snapshot count as in a one-shot run (stage A3b).
         timestamp_semantics[semantics] += 1 + copies_within_snapshots(snapshot_numbers(raw))
-        if date is None:
-            excluded["missing_or_invalid_calendar_date"] += 1
-            continue
-        if timestamp is None:
-            excluded["missing_or_invalid_observation_timestamp"] += 1
+        reason = training_readiness_left_out_reason(raw)
+        if reason is not None:
+            left_out.add(raw, reason)
             continue
         accepted.append(
             {
@@ -76,9 +101,10 @@ def normalize_training_readiness(
         dataset="training_readiness_daily",
         key_fields=("calendar_date", "observation_timestamp"),
         selected_assets=selected,
-        source_record_count=len(rows),
+        source_record_count=len(rows) + left_out.copy_count,
         accepted=accepted,
-        excluded_reasons=excluded,
+        excluded_reasons=left_out.reasons,
+        empty_record_count=left_out.empty_record_count,
         fields=TRAINING_READINESS_FIELDS,
     )
     result.audit["observation_timestamp_semantics_counts"] = dict(
@@ -89,4 +115,10 @@ def normalize_training_readiness(
     return result
 
 
-__all__ = ["TRAINING_READINESS_FIELDS", "normalize_training_readiness"]
+__all__ = [
+    "TRAINING_READINESS_FIELDS",
+    "TRAINING_READINESS_FIELDS_WITHOUT_VALUES",
+    "TRAINING_READINESS_VALUE_SOURCES",
+    "normalize_training_readiness",
+    "training_readiness_left_out_reason",
+]

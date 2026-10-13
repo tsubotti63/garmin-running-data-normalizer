@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Iterable
+from typing import Any, Iterable
 
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..intake.discovery import DiscoveredAsset
 from .daily_metrics import (
     DailyMetricResult,
+    RowsLeftOut,
     copies_within_snapshots,
     finalize_daily,
     number,
     selected_rows,
     snapshot_numbers,
     text,
+    value_source_names,
 )
 
 
@@ -25,6 +27,25 @@ ACUTE_TRAINING_LOAD_FIELDS = (
     "daily_training_load_chronic",
     "daily_acute_chronic_workload_ratio",
 )
+# The source field of each value field (stage A3d-1); the other fields are the
+# record's key. A row left out that holds nothing in them is an empty record.
+ACUTE_TRAINING_LOAD_VALUE_SOURCES = {
+    "acwr_percent": ("acwrPercent",),
+    "acwr_status": ("acwrStatus",),
+    "daily_training_load_acute": ("dailyTrainingLoadAcute",),
+    "daily_training_load_chronic": ("dailyTrainingLoadChronic",),
+    "daily_acute_chronic_workload_ratio": ("dailyAcuteChronicWorkloadRatio",),
+}
+ACUTE_TRAINING_LOAD_FIELDS_WITHOUT_VALUES = ("calendar_date", "observation_timestamp")
+
+
+def acute_training_load_left_out_reason(raw: dict[str, Any]) -> str | None:
+    """Return why an Acute Training Load record is left out, or None when it is kept."""
+    if daily_calendar_date(raw.get("calendarDate")) is None:
+        return "missing_or_invalid_calendar_date"
+    if normalize_observation_timestamp(raw.get("timestamp"))[0] is None:
+        return "missing_or_invalid_observation_timestamp"
+    return None
 
 
 def normalize_acute_training_load(
@@ -34,18 +55,16 @@ def normalize_acute_training_load(
         assets, lambda name: name.startswith("metricsacutetrainingload")
     )
     accepted = []
-    excluded: Counter[str] = Counter()
+    left_out = RowsLeftOut(value_source_names(ACUTE_TRAINING_LOAD_VALUE_SOURCES))
     timestamp_semantics: Counter[str] = Counter()
     for raw in rows:
         date = daily_calendar_date(raw.get("calendarDate"))
         timestamp, semantics = normalize_observation_timestamp(raw.get("timestamp"))
         # Copies within one Snapshot count as in a one-shot run (stage A3b).
         timestamp_semantics[semantics] += 1 + copies_within_snapshots(snapshot_numbers(raw))
-        if date is None:
-            excluded["missing_or_invalid_calendar_date"] += 1
-            continue
-        if timestamp is None:
-            excluded["missing_or_invalid_observation_timestamp"] += 1
+        reason = acute_training_load_left_out_reason(raw)
+        if reason is not None:
+            left_out.add(raw, reason)
             continue
         accepted.append(
             {
@@ -63,9 +82,10 @@ def normalize_acute_training_load(
         dataset="acute_training_load_daily",
         key_fields=("calendar_date", "observation_timestamp"),
         selected_assets=selected,
-        source_record_count=len(rows),
+        source_record_count=len(rows) + left_out.copy_count,
         accepted=accepted,
-        excluded_reasons=excluded,
+        excluded_reasons=left_out.reasons,
+        empty_record_count=left_out.empty_record_count,
         fields=ACUTE_TRAINING_LOAD_FIELDS,
     )
     result.audit["observation_timestamp_semantics_counts"] = dict(
@@ -76,4 +96,10 @@ def normalize_acute_training_load(
     return result
 
 
-__all__ = ["ACUTE_TRAINING_LOAD_FIELDS", "normalize_acute_training_load"]
+__all__ = [
+    "ACUTE_TRAINING_LOAD_FIELDS",
+    "ACUTE_TRAINING_LOAD_FIELDS_WITHOUT_VALUES",
+    "ACUTE_TRAINING_LOAD_VALUE_SOURCES",
+    "acute_training_load_left_out_reason",
+    "normalize_acute_training_load",
+]
