@@ -27,8 +27,9 @@ from .intake.source import (
     is_zip_input,
 )
 from .normalizers.activities import normalize_activities
+from .normalizers.records import check_values
 from .qa import summarize_records
-from .run_all import RunAllError, left_out_files, run_all
+from .run_all import RunAllError, _value_types, left_out_files, run_all
 from .diagnostics.doctor import (
     DoctorError,
     doctor_input,
@@ -137,6 +138,13 @@ def run_activities(
         raise GoldenPathError(
             "an Activities row has no usable identifier; run-all leaves such rows "
             "out and counts them"
+        )
+    # Values are read as Run-All reads them; a value of another form stops the
+    # Golden Path, whose output has no place to keep it (stage A3d-2a).
+    if check_values(records, _value_types("activities"), ("garmin_activity_key",)).audit_fields():
+        raise GoldenPathError(
+            "an Activities value has a form that its field does not take; run-all "
+            "leaves such values empty and keeps them in its audit records"
         )
     if not records:
         raise GoldenPathError("supported input contained no activity records")

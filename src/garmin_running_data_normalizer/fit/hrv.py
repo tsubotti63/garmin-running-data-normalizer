@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from ..common.time import TIME_OUT_OF_RANGE
 from ..intake.discovery import discover_export
 from .parser import (
     Definition,
@@ -36,7 +37,7 @@ def _fit_datetime(value: Any, timezone_name: str) -> str | None:
         return datetime.fromtimestamp(unix_seconds, timezone.utc).astimezone(
             ZoneInfo(timezone_name)
         ).isoformat()
-    except (OverflowError, TypeError, ValueError):
+    except TIME_OUT_OF_RANGE:
         return None
 
 

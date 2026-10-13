@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
-import io
 import json
 import tempfile
 import unittest
@@ -14,7 +12,7 @@ from pathlib import Path
 # standalone first meets a circular import when this file runs on its own.
 from garmin_running_data_normalizer.diagnostics import doctor_run_output
 from garmin_running_data_normalizer.diagnostics.support_bundle import build_support_bundle
-from garmin_running_data_normalizer.run_all import RECORD_AUDIT_DATASETS, RunAllError, run_all
+from garmin_running_data_normalizer.run_all import RECORD_AUDIT_DATASETS, run_all
 from garmin_running_data_normalizer.runner import main as cli_main
 from garmin_running_data_normalizer.snapshot import (
     build_approved_input,
@@ -435,48 +433,40 @@ class SnapshotRecordUpdatesTest(unittest.TestCase):
                 {key: value for key, value in one_shot_row.items() if key not in PROVENANCE_FIELDS},
             )
 
-    def test_a_removed_value_that_the_dataset_rejects_stops_as_in_a_one_shot_run(self) -> None:
-        # Until stage A3d-2, which keeps such a value empty with a warning,
-        # the Snapshot run stops as a one-shot run of the same row does.
+    def test_a_removed_value_that_the_field_does_not_take_is_empty_as_in_a_one_shot_run(
+        self,
+    ) -> None:
+        # An empty value is no value (stage A3d-2a): a later Snapshot that
+        # removes a value with an empty value of another form leaves the field
+        # empty without a warning, as a one-shot run of the same row does, and
+        # the audit keeps the earlier value. Until then, the run stopped.
         cases = {
-            "empty string for a number": (
-                {"activities": [_activity("X1", startTimeGmt="")]},
-                "OUTPUT_EXPERIENCE_FAILED",
-            ),
-            "empty list for a text": (
-                {"activities": [_activity("X1", name=[])]},
-                "OUTPUT_EXPERIENCE_FAILED",
-            ),
+            "empty string for a number": ({"startTimeGmt": ""}, "start_time_gmt_ms", "startTimeGmt"),
+            "empty list for a text": ({"name": []}, "name", "name"),
         }
-        for name, (latest, code) in cases.items():
+        for name, (removed, field, source_field) in cases.items():
             with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
-                latest_rows = dict(latest)
                 exports = {
-                    1: write_export(
-                        root,
-                        "source-1",
-                        [_activity("X1")],
-                        records=[personal_record(1, "X1", 1500.0)],
-                    ),
-                    2: write_export(root, "source-2", latest_rows.pop("activities"), **latest_rows),
+                    1: write_export(root, "source-1", [_activity("X1")]),
+                    2: write_export(root, "source-2", [_activity("X1", **removed)]),
                 }
                 store = store_with(root, exports)
-                stderr = io.StringIO()
-                with contextlib.redirect_stderr(stderr):
-                    exit_code = cli_main(
-                        ["snapshot", "run-all", "--store", str(store), "--output", str(root / "output")]
-                    )
-                self.assertEqual(exit_code, 2)
-                self.assertIn(f"ERROR [{code}]", stderr.getvalue())
-                self.assertFalse((root / "output").exists())
-                one_shot_rows = dict(latest)
-                with self.assertRaises(RunAllError) as raised:
-                    run_all(
-                        write_export(root, "one-shot", one_shot_rows.pop("activities"), **one_shot_rows),
-                        root / "one-shot-output",
-                    )
-                self.assertEqual(raised.exception.code, code)
+                snapshot = root / "output"
+                self.assertEqual(
+                    cli_main(["snapshot", "run-all", "--store", str(store), "--output", str(snapshot)]),
+                    0,
+                )
+                one_shot = root / "one-shot-output"
+                run_all(write_export(root, "one-shot", [_activity("X1", **removed)]), one_shot)
+                for output in (snapshot, one_shot):
+                    with self.subTest(output=output.name):
+                        [row] = load(output / "normalized/activities.json")
+                        self.assertIsNone(row[field])
+                        codes = {item["code"] for item in load(output / "run_summary.json")["warnings"]}
+                        self.assertNotIn("DATA_VALUE_INVALID", codes)
+                [update] = load(snapshot / "audit/activities.json")["updates"]
+                self.assertIn(source_field, [item["field"] for item in update["fields"]])
 
     def test_a_removed_activity_of_a_personal_record_is_unresolved_as_in_a_one_shot_run(
         self,

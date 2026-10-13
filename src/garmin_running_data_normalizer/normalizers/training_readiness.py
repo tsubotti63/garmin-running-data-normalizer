@@ -4,17 +4,15 @@ from collections import Counter
 from typing import Any, Iterable
 
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
+from ..common.values import ValueReader
 from ..intake.discovery import DiscoveredAsset
 from .daily_metrics import (
     DailyMetricResult,
     RowsLeftOut,
-    boolean,
     copies_within_snapshots,
     finalize_daily,
-    number,
     selected_rows,
     snapshot_numbers,
-    text,
     value_source_names,
 )
 
@@ -79,22 +77,24 @@ def normalize_training_readiness(
         if reason is not None:
             left_out.add(raw, reason)
             continue
+        values = ValueReader()
         accepted.append(
             {
                 "_snapshot_numbers": snapshot_numbers(raw),
                 "calendar_date": date,
                 "observation_timestamp": timestamp,
-                "training_readiness_score": number(raw.get("score")),
-                "training_readiness_level": text(raw.get("level")),
-                "training_readiness_recovery_time": number(raw.get("recoveryTime")),
-                "acwr_factor_percent": number(raw.get("acwrFactorPercent")),
-                "stress_history_factor_percent": number(raw.get("stressHistoryFactorPercent")),
-                "hrv_factor_percent": number(raw.get("hrvFactorPercent")),
-                "sleep_history_factor_percent": number(raw.get("sleepHistoryFactorPercent")),
-                "training_readiness_acute_load": number(raw.get("acuteLoad")),
-                "training_readiness_hrv_weekly_average": number(raw.get("hrvWeeklyAverage")),
-                "training_readiness_valid_sleep": boolean(raw.get("validSleep")),
-                "training_readiness_sleep_score": number(raw.get("sleepScore")),
+                "training_readiness_score": values.number(raw.get("score"), "training_readiness_score"),
+                "training_readiness_level": values.text(raw.get("level"), "training_readiness_level"),
+                "training_readiness_recovery_time": values.number(raw.get("recoveryTime"), "training_readiness_recovery_time"),
+                "acwr_factor_percent": values.number(raw.get("acwrFactorPercent"), "acwr_factor_percent"),
+                "stress_history_factor_percent": values.number(raw.get("stressHistoryFactorPercent"), "stress_history_factor_percent"),
+                "hrv_factor_percent": values.number(raw.get("hrvFactorPercent"), "hrv_factor_percent"),
+                "sleep_history_factor_percent": values.number(raw.get("sleepHistoryFactorPercent"), "sleep_history_factor_percent"),
+                "training_readiness_acute_load": values.number(raw.get("acuteLoad"), "training_readiness_acute_load"),
+                "training_readiness_hrv_weekly_average": values.number(raw.get("hrvWeeklyAverage"), "training_readiness_hrv_weekly_average"),
+                "training_readiness_valid_sleep": values.boolean(raw.get("validSleep"), "training_readiness_valid_sleep"),
+                "training_readiness_sleep_score": values.number(raw.get("sleepScore"), "training_readiness_sleep_score"),
+                "_value_problems": values.problems,
             }
         )
     result = finalize_daily(

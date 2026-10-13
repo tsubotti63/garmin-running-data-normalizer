@@ -7,6 +7,7 @@ from pathlib import PurePosixPath
 from typing import Any, Iterable
 
 from ..common.time import daily_calendar_date
+from ..common.values import INVALID, InvalidValues, ValueReader, read_value
 from ..intake.discovery import DiscoveredAsset, parse_json_asset
 from .daily_metrics import (
     RowsLeftOut,
@@ -109,13 +110,9 @@ def _calendar_date(value: Any) -> str | None:
 
 
 def _number(value: Any, *, integer: bool) -> int | float | None:
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    if integer:
-        return value if isinstance(value, int) else None
-    return value
+    """A Hill integer or an Endurance number, as the field takes it (stage
+    A3d-2a: 70.0 is the integer 70, and NaN or text is not a number)."""
+    return read_value(value, "integer" if integer else "number")[1]
 
 
 def _left_out_reason(raw: dict[str, Any], *, is_hill: bool) -> str | None:
@@ -189,20 +186,22 @@ def _normalize_daily(
                 continue
             calendar_date = _calendar_date(raw.get("calendarDate"))
             overall = _number(raw.get("overallScore"), integer=is_hill)
+            values = ValueReader()
             if is_hill:
                 accepted.append(
                     {
                         "_snapshot_numbers": snapshot_numbers(raw),
                         "calendar_date": calendar_date,
                         "overall_score": overall,
-                        "strength_score": _number(raw.get("strengthScore"), integer=True),
-                        "endurance_score": _number(raw.get("enduranceScore"), integer=True),
-                        "classification_id": _number(
-                            raw.get("hillScoreClassificationId"), integer=True
+                        "strength_score": values.integer(raw.get("strengthScore"), "strength_score"),
+                        "endurance_score": values.integer(raw.get("enduranceScore"), "endurance_score"),
+                        "classification_id": values.integer(
+                            raw.get("hillScoreClassificationId"), "classification_id"
                         ),
-                        "feedback_phrase_id": _number(
-                            raw.get("hillScoreFeedbackPhraseId"), integer=True
+                        "feedback_phrase_id": values.integer(
+                            raw.get("hillScoreFeedbackPhraseId"), "feedback_phrase_id"
                         ),
+                        "_value_problems": values.problems,
                     }
                 )
             else:
@@ -211,15 +210,26 @@ def _normalize_daily(
                         "_snapshot_numbers": snapshot_numbers(raw),
                         "calendar_date": calendar_date,
                         "overall_score": overall,
-                        "classification": _number(raw.get("classification"), integer=False),
-                        "feedback_phrase": _number(raw.get("feedbackPhrase"), integer=False),
+                        "classification": values.number(raw.get("classification"), "classification"),
+                        "feedback_phrase": values.number(raw.get("feedbackPhrase"), "feedback_phrase"),
+                        "_value_problems": values.problems,
                     }
                 )
 
     fields = HILL_FIELDS if is_hill else ENDURANCE_FIELDS
     rows_by_date: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    # The values of another form, kept before the rows of a day are merged
+    # (stage A3d-2a).
+    invalid = InvalidValues()
     for row in accepted:
         rows_by_date[row["calendar_date"]].append(row)
+        for field, value in row.get("_value_problems") or ():
+            invalid.add(
+                {"calendar_date": row["calendar_date"]},
+                field,
+                value,
+                row.get("_snapshot_numbers"),
+            )
     normalized: list[dict[str, Any]] = []
     duplicate_count = 0
     copy_count = 0
@@ -275,6 +285,7 @@ def _normalize_daily(
         "disagreement_key_count": len(disagreements),
         "disagreements": disagreements,
         "absent_value_counts": dict(sorted(absent_values.items())),
+        **invalid.audit_fields(),
         "stable_key": ["calendar_date"],
         "merge_policy": "daily_state_null_is_absent_disagreeing_values_kept_empty",
         "keep_last": False,
@@ -306,12 +317,19 @@ def normalize_endurance_score(
     return _normalize_daily(assets, dataset="endurance_score_daily")
 
 
-def _optional_number(value: Any, review_counts: Counter[str], field: str) -> int | float | None:
-    if value is None:
-        return None
-    parsed = _number(value, integer=False)
-    if parsed is None:
+def _optional_number(
+    value: Any,
+    review_counts: Counter[str],
+    field: str,
+    invalid: InvalidValues,
+    key: dict[str, Any],
+) -> int | float | None:
+    """A candidate's number. A value of another form is counted and kept with
+    the candidate's key; an empty value is no value (stage A3d-2a)."""
+    state, parsed = read_value(value, "number")
+    if state == INVALID:
         review_counts[f"invalid_{field}"] += 1
+        invalid.add(key, field, value)
     return parsed
 
 
@@ -328,6 +346,7 @@ def collect_lactate_threshold_candidates(
     family_asset_counts: Counter[str] = Counter()
     family_source_counts: Counter[str] = Counter()
     review_counts: Counter[str] = Counter()
+    invalid = InvalidValues()
 
     for asset in assets:
         if asset.kind != "json":
@@ -362,6 +381,7 @@ def collect_lactate_threshold_candidates(
             threshold_type = None
             if family == "derived_evidence" and raw.get("trainingMethod") == "LACTATE_THRESHOLD":
                 threshold_type = "LACTATE_THRESHOLD"
+            key = {"observation_family": family, "observation_timestamp": timestamp}
             row = {
                 "observation_timestamp": timestamp,
                 "observation_family": family,
@@ -369,16 +389,22 @@ def collect_lactate_threshold_candidates(
                     raw.get("lactateThresholdSpeed"),
                     review_counts,
                     "lactate_threshold_speed",
+                    invalid,
+                    key,
                 ),
                 "lactate_threshold_heart_rate": _optional_number(
                     raw.get("lactateThresholdHeartRate"),
                     review_counts,
                     "lactate_threshold_heart_rate",
+                    invalid,
+                    key,
                 ),
                 "functional_threshold_power": _optional_number(
                     raw.get("functionalThresholdPower"),
                     review_counts,
                     "functional_threshold_power",
+                    invalid,
+                    key,
                 ),
                 "lactate_threshold_type": threshold_type,
             }
@@ -429,6 +455,7 @@ def collect_lactate_threshold_candidates(
         "family_asset_counts": dict(sorted(family_asset_counts.items())),
         "family_source_record_counts": dict(sorted(family_source_counts.items())),
         "review_condition_counts": dict(sorted(review_counts.items())),
+        **invalid.audit_fields(),
         "source_paths_exposed": False,
         "source_hashes_exposed": False,
         "private_identifiers_exposed": False,

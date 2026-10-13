@@ -22,10 +22,18 @@ from __future__ import annotations
 import json
 from collections import Counter
 from dataclasses import dataclass
+from collections.abc import Mapping
 from typing import Any, Callable
 
 from ..common.identity import identity_token
-from ..common.values import comparable_text, is_empty
+from ..common.values import (
+    INVALID,
+    VALUE_PROBLEMS,
+    InvalidValues,
+    comparable_text,
+    is_empty,
+    read_value,
+)
 from .daily_metrics import (
     _value_order,
     copies_within_snapshots,
@@ -117,6 +125,46 @@ def count_left_out(
     if left_out is None:
         raise ValueError(message)
     left_out[reason] += 1 + copies_within_snapshots(snapshot_numbers(raw))
+
+
+def identifier_fields(dataset: str) -> frozenset[str]:
+    """The fields that name a record or another record. The rules for
+    identifiers read them (stage A3d-1b), not the check of values."""
+    return _NAMING_FIELDS.get(dataset, frozenset()) | _IDENTIFIER_FIELDS.get(dataset, frozenset())
+
+
+def check_values(
+    rows: list[dict[str, Any]],
+    logical_types: Mapping[str, str],
+    key_fields: tuple[str, ...],
+) -> InvalidValues:
+    """Leave empty each value of another form in the rows of one dataset, as
+    its fields take them, and return those values with the keys of their rows
+    (stage A3d-2a).
+
+    It runs before the repeated records are merged, so that a value of another
+    form is no value there. A normalizer's own findings, in
+    ``_value_problems``, are kept too. A whole number written with a decimal
+    point in an integer field is written as an integer, and an empty value
+    that a field does not take is written as null. A probe row of a Snapshot
+    build is not an observation: its values are left empty, not counted.
+    """
+    invalid = InvalidValues()
+    for row in rows:
+        problems = list(row.pop(VALUE_PROBLEMS, None) or ())
+        for field, logical_type in logical_types.items():
+            if field not in row:
+                continue
+            state, value = read_value(row[field], logical_type)
+            if state == INVALID:
+                problems.append((field, row[field]))
+            row[field] = value
+        if row.get(ROW_SNAPSHOT_PROBE):
+            continue
+        key = {name: row.get(name) for name in key_fields}
+        for field, value in problems:
+            invalid.add(key, field, value, row.get(ROW_SNAPSHOT_NUMBERS))
+    return invalid
 
 
 def _identifier(value: Any) -> str:
@@ -333,7 +381,10 @@ __all__ = [
     "RecordMerge",
     "STABLE_KEYS",
     "SNAPSHOT_PROBE_FIELD",
+    "VALUE_PROBLEMS",
+    "check_values",
     "count_left_out",
+    "identifier_fields",
     "merge_repeated_records",
     "row_snapshot_marks",
 ]

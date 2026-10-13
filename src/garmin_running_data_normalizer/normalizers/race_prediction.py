@@ -4,14 +4,13 @@ from collections import Counter
 from typing import Any, Iterable
 
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
-from ..common.values import is_empty
+from ..common.values import ValueReader, is_empty
 from ..intake.discovery import DiscoveredAsset
 from .daily_metrics import (
     DailyMetricResult,
     RowsLeftOut,
     copies_within_snapshots,
     finalize_daily,
-    number,
     selected_rows,
     snapshot_numbers,
     value_source_names,
@@ -37,9 +36,11 @@ RACE_PREDICTION_VALUE_SOURCES = {
 RACE_PREDICTION_FIELDS_WITHOUT_VALUES = ("calendar_date", "observation_timestamp")
 
 
-def _race_times(raw: dict[str, Any]) -> dict[str, int | float | None]:
+def _race_times(raw: dict[str, Any], values: ValueReader) -> dict[str, int | float | None]:
+    """The distances; one given in a form that is not a positive number is
+    left empty and kept in ``values`` (stage A3d-2a)."""
     return {
-        field: number(raw.get(name))
+        field: values.number(raw.get(name), field, positive=True)
         for field, (name,) in RACE_PREDICTION_VALUE_SOURCES.items()
     }
 
@@ -48,20 +49,15 @@ def race_prediction_left_out_reason(raw: dict[str, Any]) -> str | None:
     """Return why a Race Prediction record is left out, or None when it is kept.
 
     A distance that the record does not give stays empty, and the record is
-    kept with its other distances (stage A3d-1). A distance given in a form
-    that is not a positive number still leaves the record out, and so does a
-    record without any distance.
+    kept with its other distances (stage A3d-1); so is a distance given in a
+    form that is not a positive number, which the audit keeps (stage
+    A3d-2a). A record without any distance is left out, as an empty record.
     """
     if daily_calendar_date(raw.get("calendarDate")) is None:
         return "missing_or_invalid_calendar_date"
     if normalize_observation_timestamp(raw.get("timestamp"))[0] is None:
         return "missing_or_invalid_observation_timestamp"
-    times = _race_times(raw)
-    given_but_invalid = any(
-        not is_empty(raw.get(name)) and (times[field] is None or times[field] <= 0)
-        for field, (name,) in RACE_PREDICTION_VALUE_SOURCES.items()
-    )
-    if given_but_invalid or all(value is None for value in times.values()):
+    if all(is_empty(raw.get(name)) for (name,) in RACE_PREDICTION_VALUE_SOURCES.values()):
         return "missing_or_invalid_race_prediction"
     return None
 
@@ -83,12 +79,14 @@ def normalize_race_prediction(
         if reason is not None:
             left_out.add(raw, reason)
             continue
+        values = ValueReader()
         accepted.append(
             {
                 "_snapshot_numbers": snapshot_numbers(raw),
                 "calendar_date": daily_calendar_date(raw.get("calendarDate")),
                 "observation_timestamp": timestamp,
-                **_race_times(raw),
+                **_race_times(raw, values),
+                "_value_problems": values.problems,
             }
         )
     result = finalize_daily(

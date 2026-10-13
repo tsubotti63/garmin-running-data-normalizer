@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import math
 from datetime import datetime, timezone
 from collections import Counter
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
-from ..common.time import daily_calendar_date
+from ..common.time import TIME_OUT_OF_RANGE, daily_calendar_date
+from ..common.values import ValueReader, is_empty
 from ..intake.discovery import DiscoveredAsset, load_json_assets
 from .daily_metrics import (
     DailyMetricResult,
@@ -19,7 +19,6 @@ from .daily_metrics import (
     value_source_names,
 )
 
-MAX_SAFE_INTEGER = (1 << 53) - 1
 SLEEP_STAGE_ALIASES = (
     ("deepSleepSeconds", "deep_sleep_seconds"),
     ("lightSleepSeconds", "light_sleep_seconds"),
@@ -45,25 +44,26 @@ def _records(value: Any) -> list[dict[str, Any]]:
     return [value]
 
 
-def _number(value: Any) -> int | float | None:
-    if isinstance(value, bool) or value in (None, ""):
-        return None
-    if isinstance(value, int):
-        return value if abs(value) <= MAX_SAFE_INTEGER else None
-    if isinstance(value, float):
-        return value if math.isfinite(value) else None
-    try:
-        parsed = float(str(value))
-    except (OverflowError, ValueError):
-        return None
-    if not math.isfinite(parsed):
-        return None
-    return int(parsed) if parsed.is_integer() else parsed
+def _number(
+    value: Any,
+    values: ValueReader | None = None,
+    field: str = "",
+) -> int | float | None:
+    """A number, as a number field takes it (stage A3d-2a: text such as "5" is
+    not a number); a value of another form is kept in ``values``."""
+    return (values or ValueReader()).number(value, field)
 
 
-def _first_number(row: dict[str, Any], *names: str) -> int | float | None:
+def _first_number(
+    row: dict[str, Any],
+    *names: str,
+    values: ValueReader | None = None,
+    field: str = "",
+) -> int | float | None:
+    """The first of the source fields that holds a number. A value of another
+    form in a source field read before it is kept in ``values``."""
     for name in names:
-        value = _number(row.get(name))
+        value = _number(row.get(name), values, field)
         if value is not None:
             return value
     return None
@@ -71,6 +71,7 @@ def _first_number(row: dict[str, Any], *names: str) -> int | float | None:
 
 def _sleep_duration_seconds(
     row: dict[str, Any],
+    values: ValueReader | None = None,
 ) -> tuple[int | float | None, str, list[int | float]]:
     """Return the observed-stage/direct-fallback duration, its source, and
     the direct values when they disagree.
@@ -89,8 +90,10 @@ def _sleep_duration_seconds(
     if observed_stages:
         return sum(observed_stages), "stage_derived", []
 
+    # The stage values are kept in ``values`` with the stage fields; a direct
+    # value of another form is kept with the duration.
     direct_candidates = [
-        (name, _number(row.get(name)))
+        (name, _number(row.get(name), values, "sleep_duration_minutes_ex_awake"))
         for name in SLEEP_DIRECT_DURATION_ALIASES
     ]
     finite_candidates = [
@@ -113,23 +116,23 @@ def _timestamps(value: Any, timezone_name: str) -> tuple[str | None, str | None]
             parsed = parsed.replace(tzinfo=timezone.utc)
         utc_value = parsed.astimezone(timezone.utc)
         local_value = utc_value.astimezone(ZoneInfo(timezone_name))
-    except (TypeError, ValueError):
+    except TIME_OUT_OF_RANGE:
         return None, None
     return utc_value.isoformat(), local_value.isoformat()
 
 
-def _sleep_score(row: dict[str, Any]) -> int | float | None:
+def _sleep_score(row: dict[str, Any], values: ValueReader | None = None) -> int | float | None:
     scores = row.get("sleepScores")
     if isinstance(scores, dict):
-        direct = _number(scores.get("overallScore"))
+        direct = _number(scores.get("overallScore"), values, "sleep_score")
         if direct is not None:
             return direct
         overall = scores.get("overall")
         if isinstance(overall, dict):
-            nested = _number(overall.get("value"))
+            nested = _number(overall.get("value"), values, "sleep_score")
             if nested is not None:
                 return nested
-    return _first_number(row, "overallScore", "sleepScore")
+    return _first_number(row, "overallScore", "sleepScore", values=values, field="sleep_score")
 
 
 def _normalize_record(
@@ -431,16 +434,25 @@ def normalize_sleep_daily_assets(
         status, limitation, reason, available = _sleep_status(
             start_local, end_local, window_minutes
         )
-        deep = _first_number(raw, "deepSleepSeconds", "deep_sleep_seconds")
-        light = _first_number(raw, "lightSleepSeconds", "light_sleep_seconds")
-        rem = _first_number(raw, "remSleepSeconds", "rem_sleep_seconds")
-        awake = _first_number(raw, "awakeSleepSeconds", "awake_sleep_seconds")
-        duration, duration_source, disagreeing = _sleep_duration_seconds(raw)
+        values = ValueReader()
+        # A start or end time that is given but cannot be read, such as one
+        # out of range, is a value of another form (stage A3d-2a).
+        for name, local, field in (
+            ("sleepStartTimestampGMT", start_local, "sleep_start_local"),
+            ("sleepEndTimestampGMT", end_local, "sleep_end_local"),
+        ):
+            if local is None and not is_empty(raw.get(name)):
+                values.problems.append((field, raw.get(name)))
+        deep = _first_number(raw, "deepSleepSeconds", "deep_sleep_seconds", values=values, field="sleep_stage_deep_minutes")
+        light = _first_number(raw, "lightSleepSeconds", "light_sleep_seconds", values=values, field="sleep_stage_light_minutes")
+        rem = _first_number(raw, "remSleepSeconds", "rem_sleep_seconds", values=values, field="sleep_stage_rem_minutes")
+        awake = _first_number(raw, "awakeSleepSeconds", "awake_sleep_seconds", values=values, field="sleep_awake_minutes")
+        duration, duration_source, disagreeing = _sleep_duration_seconds(raw, values)
         # Copies within one Snapshot count as in a one-shot run (stage A3b).
         duration_source_counts[duration_source] += 1 + copies_within_snapshots(
             snapshot_numbers(raw)
         )
-        score = _sleep_score(raw)
+        score = _sleep_score(raw, values)
         accepted.append(
             {
                 "_snapshot_numbers": snapshot_numbers(raw),
@@ -462,6 +474,7 @@ def normalize_sleep_daily_assets(
                 "sleep_source_available_for_analysis_flag": available,
                 "_sleep_duration_source": duration_source,
                 "_sleep_duration_alternatives": [value / 60.0 for value in disagreeing],
+                "_value_problems": values.problems,
             }
         )
     result = finalize_daily(

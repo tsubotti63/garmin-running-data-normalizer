@@ -52,7 +52,14 @@ from .normalizers.performance_metrics import (
     normalize_hill_score,
 )
 from .normalizers.race_prediction import normalize_race_prediction
-from .normalizers.records import RecordMerge, merge_repeated_records
+from .common.values import InvalidValues
+from .normalizers.records import (
+    STABLE_KEYS,
+    RecordMerge,
+    check_values,
+    identifier_fields,
+    merge_repeated_records,
+)
 from .normalizers.sleep import normalize_sleep_daily_assets
 from .normalizers.training_history import normalize_training_history
 from .normalizers.training_load import normalize_acute_training_load
@@ -470,6 +477,7 @@ def _normalize_datasets(
     dict[str, Any],
     dict[str, RecordMerge],
     dict[str, Counter[str]],
+    dict[str, InvalidValues],
 ]:
     records: dict[str, list[dict[str, Any]]] = {name: [] for name in DATASET_PATHS}
     # Repeated records of the same stable key become one row (stage A3b).
@@ -480,8 +488,17 @@ def _normalize_datasets(
     rows_left_out: dict[str, Counter[str]] = {
         name: Counter() for name in RECORD_AUDIT_DATASETS
     }
+    # The values of another form of these datasets, left empty before their
+    # repeated records are merged (stage A3d-2a).
+    invalid_values: dict[str, InvalidValues] = {}
+
+    def checked(name: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        invalid_values[name] = check_values(rows, _value_types(name), STABLE_KEYS[name])
+        return rows
+
     fit_audit: list[dict[str, Any]] = []
     fit_status_counts: Counter[str] = Counter()
+    fit_invalid_value_counts: Counter[str] = Counter()
     fit_invalid_sentinel_counts: Counter[str] = Counter()
     incomplete_fit_count = 0
     performance_audit: dict[str, Any] = {}
@@ -490,11 +507,14 @@ def _normalize_datasets(
     try:
         merges["activities"] = merge_repeated_records(
             "activities",
-            normalize_activities(
-                str(input_root),
-                timezone_name,
-                assets=assets,
-                left_out=rows_left_out["activities"],
+            checked(
+                "activities",
+                normalize_activities(
+                    str(input_root),
+                    timezone_name,
+                    assets=assets,
+                    left_out=rows_left_out["activities"],
+                ),
             ),
         )
         records["activities"] = merges["activities"].rows
@@ -509,8 +529,10 @@ def _normalize_datasets(
             gear_rows, link_rows = normalize_gear(
                 str(input_root), assets=assets, left_out=rows_left_out
             )
-            merges["gear"] = merge_repeated_records("gear", gear_rows)
-            merges["activity_gear"] = merge_repeated_records("activity_gear", link_rows)
+            merges["gear"] = merge_repeated_records("gear", checked("gear", gear_rows))
+            merges["activity_gear"] = merge_repeated_records(
+                "activity_gear", checked("activity_gear", link_rows)
+            )
             records["gear"] = merges["gear"].rows
             records["activity_gear"] = merges["activity_gear"].rows
         except Exception as exc:
@@ -521,10 +543,13 @@ def _normalize_datasets(
         try:
             merges["personal_records"] = merge_repeated_records(
                 "personal_records",
-                normalize_personal_records(
-                    str(input_root),
-                    assets=assets,
-                    left_out=rows_left_out["personal_records"],
+                checked(
+                    "personal_records",
+                    normalize_personal_records(
+                        str(input_root),
+                        assets=assets,
+                        left_out=rows_left_out["personal_records"],
+                    ),
                 ),
             )
             records["personal_records"] = merges["personal_records"].rows
@@ -543,6 +568,27 @@ def _normalize_datasets(
                 progress=progress,
                 assets=assets,
             )
+            # The values of another form in the sessions and laps of a FIT
+            # file are left empty and kept in its audit entry (stage A3d-2a).
+            audit_by_file = {str(item["fit_file_id"]): item for item in base_audit}
+            for dataset, key_field in (("fit_sessions", "fit_session_key"), ("fit_laps", "fit_lap_key")):
+                rows_by_file: dict[str, list[dict[str, Any]]] = defaultdict(list)
+                for row in records[dataset]:
+                    rows_by_file[str(row["fit_file_id"])].append(row)
+                types = _value_types(dataset)
+                for file_id, rows in sorted(rows_by_file.items()):
+                    found = check_values(rows, types, (key_field,)).audit_fields()
+                    if not found:
+                        continue
+                    item = audit_by_file[file_id]
+                    counts = item.setdefault("invalid_value_counts", {})
+                    for field, count in found["invalid_value_counts"].items():
+                        counts[f"{dataset}.{field}"] = count
+                    item.setdefault("invalid_values", []).extend(
+                        {**entry, "field": f"{dataset}.{entry['field']}"}
+                        for entry in found["invalid_values"]
+                    )
+                    fit_invalid_value_counts[dataset] += sum(found["invalid_value_counts"].values())
             for item in base_audit:
                 unknown_records = int(item.get("unknown_records", 0) or 0)
                 fit_audit.append(item)
@@ -730,13 +776,62 @@ def _normalize_datasets(
                 f"status_{key}": value
                 for key, value in sorted(fit_status_counts.items())
             },
+            **(
+                {"invalid_value_counts": dict(sorted(fit_invalid_value_counts.items()))}
+                if fit_invalid_value_counts
+                else {}
+            ),
         },
         activity_fit_audit,
         relationship_summary,
         performance_audit,
         merges,
         rows_left_out,
+        invalid_values,
     )
+
+
+def _invalid_value_counts(
+    family: str,
+    record_audits: dict[str, dict[str, Any]],
+    performance_audit: dict[str, Any],
+    fit_status: dict[str, Any],
+    daily_dataset_by_family: dict[str, str],
+) -> list[tuple[str, int]]:
+    """The values of another form of each dataset of a family, by dataset."""
+    if family == "fit":
+        counts = dict(fit_status.get("invalid_value_counts") or {})
+    else:
+        audits = {
+            name: record_audits[name]
+            for name in {
+                "activities": ("activities",),
+                "gear": ("gear", "activity_gear"),
+                "personal_records": ("personal_records",),
+            }.get(family, ())
+        }
+        if family in daily_dataset_by_family:
+            name = daily_dataset_by_family[family]
+            audits[name] = performance_audit.get(name, {})
+        counts = {
+            name: sum(int(count) for count in (audit.get("invalid_value_counts") or {}).values())
+            for name, audit in audits.items()
+        }
+    return [(name, int(count)) for name, count in counts.items() if count]
+
+
+def _value_types(dataset: str) -> dict[str, str]:
+    """The logical type of each value field of a normalized dataset: not
+    ``disagreeing_fields``, which the merge of repeated records adds, nor the
+    identifiers, which their own rules read (stage A3d-1b)."""
+    from .output_experience import DATASET_FIELDS, _field_descriptor
+
+    skipped = identifier_fields(dataset) | {"disagreeing_fields"}
+    return {
+        field: str(_field_descriptor(dataset, field)["logical_type"])
+        for field in DATASET_FIELDS[dataset]
+        if field not in skipped
+    }
 
 
 def _record_audits(
@@ -744,6 +839,7 @@ def _record_audits(
     snapshot_context: dict[str, Any] | None,
     merges: dict[str, RecordMerge],
     rows_left_out: dict[str, Counter[str]] | None = None,
+    invalid_values: dict[str, InvalidValues] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Return the audit records of Activities, Gear, activity_gear, and Personal Records.
 
@@ -760,7 +856,9 @@ def _record_audits(
     these keys appear only when there is something to count, so that an
     Export without repeated records gives the same bytes as before. So do the
     counts of the rows left out without a usable identifier, by reason, as
-    the daily audit records count theirs (stage A3d-1b).
+    the daily audit records count theirs (stage A3d-1b), and the values of
+    another form that were left empty, with the keys of their records
+    (stage A3d-2a).
     """
     changes = (
         snapshot_context.get("record_changes") or {}
@@ -805,6 +903,9 @@ def _record_audits(
         if left_out:
             audit["excluded_record_count"] = sum(left_out.values())
             audit["excluded_reason_counts"] = dict(sorted(left_out.items()))
+        invalid = (invalid_values or {}).get(name)
+        if invalid is not None:
+            audit.update(invalid.audit_fields())
         audits[name] = audit
     return audits
 
@@ -1248,6 +1349,30 @@ def _family_results(
                         ),
                     }
                 )
+        # Values of another form, left empty (stage A3d-2a): one warning for
+        # each dataset of the family, as for the rows left out.
+        invalid_value_count = 0
+        for name, count in _invalid_value_counts(
+            family,
+            record_audits,
+            performance_audit,
+            fit_status,
+            daily_dataset_by_family,
+        ):
+            invalid_value_count += count
+            family_warnings += 1
+            warnings.append(
+                {
+                    "code": "DATA_VALUE_INVALID",
+                    "family": family,
+                    "dataset": name,
+                    "count": count,
+                    "message": (
+                        "values of a form that their field does not take were left "
+                        "empty; the audit records keep them"
+                    ),
+                }
+            )
         # Repeated records whose values disagree (stage A3b).
         record_disagreement_count = sum(
             int(record_audits[name].get("disagreement_key_count", 0))
@@ -1330,6 +1455,8 @@ def _family_results(
         }
         if left_out_row_count:
             results[family]["left_out_row_count"] = left_out_row_count
+        if invalid_value_count:
+            results[family]["invalid_value_count"] = invalid_value_count
         if family == "fit":
             results[family]["parse_status_counts"] = {
                 key.removeprefix("status_"): value
@@ -1363,6 +1490,23 @@ def _family_results(
                 "message": (
                     "multiple accepted Lactate Threshold candidates are preserved; "
                     "Stable promotion remains unavailable"
+                ),
+            }
+        )
+    # Candidate values of another form (stage A3d-2a); a candidate warning,
+    # as Lactate has no family result.
+    lactate_invalid_count = sum(
+        int(count) for count in (lactate_audit.get("invalid_value_counts") or {}).values()
+    )
+    if lactate_invalid_count:
+        warnings.append(
+            {
+                "code": "DATA_VALUE_INVALID",
+                "family": "lactate_threshold",
+                "count": lactate_invalid_count,
+                "message": (
+                    "candidate values of a form that their field does not take were "
+                    "left empty; the candidates' audit record keeps them"
                 ),
             }
         )
@@ -1519,6 +1663,7 @@ def run_all(
                 performance_audit,
                 record_merges,
                 record_rows_left_out,
+                record_invalid_values,
             ) = _normalize_datasets(
                 input_root,
                 families,
@@ -1584,7 +1729,7 @@ def run_all(
     _notify(progress, "building_output")
 
     record_audits = _record_audits(
-        records, snapshot_context, record_merges, record_rows_left_out
+        records, snapshot_context, record_merges, record_rows_left_out, record_invalid_values
     )
     family_results, warnings, status = _family_results(
         families,
@@ -1926,9 +2071,7 @@ def run_all(
         "candidate_features": {"lactate_threshold": lactate_candidate_features},
     }
     lactate_warning_count = sum(
-        1
-        for item in warnings
-        if item.get("code") == "LACTATE_CANDIDATE_AUTHORITY_UNRESOLVED"
+        1 for item in warnings if item.get("family") == "lactate_threshold"
     )
     if lactate_warning_count:
         # Candidate-layer warnings are intentionally separate from runtime

@@ -13,6 +13,9 @@ TIMEZONE_INVALID_ERROR_CODE = "TIMEZONE_INVALID"
 # "Factory" is the IANA placeholder for an unset local time, not a location.
 _UNSUPPORTED_TIMEZONE_NAMES = frozenset({"Factory"})
 _TIMEZONE_NAME_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_+\-]*(?:/[A-Za-z0-9_+\-]+)*")
+# The errors of a time out of range. They differ between platforms: macOS
+# raises OSError for a time that its C library cannot hold (stage A3d-2a).
+TIME_OUT_OF_RANGE = (OverflowError, OSError, TypeError, ValueError)
 
 
 class TimezoneDataUnavailableError(RuntimeError):
@@ -90,7 +93,7 @@ def unix_ms_to_local_datetime(
         return datetime.fromtimestamp(float(value) / 1000.0, timezone.utc).astimezone(
             require_timezone_data(timezone_name)
         ).isoformat()
-    except (OverflowError, TypeError, ValueError):
+    except TIME_OUT_OF_RANGE:
         return None
 
 
@@ -111,7 +114,7 @@ def daily_calendar_date(value: Any) -> str | None:
     if isinstance(value, (int, float)):
         try:
             return datetime.fromtimestamp(float(value) / 1000.0, timezone.utc).date().isoformat()
-        except (OverflowError, TypeError, ValueError):
+        except TIME_OUT_OF_RANGE:
             return None
     text = str(value)
     if len(text) >= 10:
@@ -141,7 +144,7 @@ def normalize_observation_timestamp(
     if isinstance(value, (int, float)):
         try:
             parsed = datetime.fromtimestamp(float(value) / 1000.0, timezone.utc)
-        except (OverflowError, TypeError, ValueError):
+        except TIME_OUT_OF_RANGE:
             return None, "INVALID"
         return parsed.isoformat().replace("+00:00", "Z"), "EPOCH_MILLISECONDS_UTC"
     try:
@@ -149,10 +152,11 @@ def normalize_observation_timestamp(
     except ValueError:
         return None, "INVALID"
     if parsed.tzinfo is not None:
-        return (
-            parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "EXPLICIT_OFFSET_UTC_NORMALIZED",
-        )
+        try:
+            utc = parsed.astimezone(timezone.utc)
+        except TIME_OUT_OF_RANGE:
+            return None, "INVALID"
+        return utc.isoformat().replace("+00:00", "Z"), "EXPLICIT_OFFSET_UTC_NORMALIZED"
     if naive_timezone_semantics == "UTC_SOURCE_FIELD":
         return (
             parsed.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),

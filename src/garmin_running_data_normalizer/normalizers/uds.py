@@ -3,12 +3,12 @@ from __future__ import annotations
 from typing import Any, Iterable
 
 from ..common.time import daily_calendar_date
+from ..common.values import ValueReader
 from ..intake.discovery import DiscoveredAsset
 from .daily_metrics import (
     DailyMetricResult,
     RowsLeftOut,
     finalize_daily,
-    number,
     selected_rows,
     snapshot_numbers,
     value_source_names,
@@ -99,26 +99,28 @@ def normalize_uds(
         battery = raw.get("bodyBattery")
         stress = raw.get("allDayStress")
         total = _total_stress(stress)
+        values = ValueReader()
         accepted.append(
             {
                 "_snapshot_numbers": snapshot_numbers(raw),
                 "calendar_date": date,
-                "steps": number(raw.get("totalSteps") if "totalSteps" in raw else raw.get("steps")),
-                "distance_meters": number(raw.get("totalDistanceMeters") if "totalDistanceMeters" in raw else raw.get("distanceMeters")),
-                "active_calories": number(raw.get("activeKilocalories")),
-                "bmr_calories": number(raw.get("bmrKilocalories")),
-                "resting_heart_rate": number(raw.get("restingHeartRate")),
-                "min_heart_rate": number(raw.get("minHeartRate")),
-                "max_heart_rate": number(raw.get("maxHeartRate")),
-                "bb_charged_value": number(battery.get("chargedValue")) if isinstance(battery, dict) else None,
-                "bb_drained_value": number(battery.get("drainedValue")) if isinstance(battery, dict) else None,
-                "stress_total_averageStressLevel": number(total.get("averageStressLevel")),
-                "stress_total_maxStressLevel": number(total.get("maxStressLevel")),
-                "stress_total_stressDuration": number(total.get("stressDuration")),
-                "stress_total_restDuration": number(total.get("restDuration")),
+                "steps": values.number(raw.get("totalSteps") if "totalSteps" in raw else raw.get("steps"), "steps"),
+                "distance_meters": values.number(raw.get("totalDistanceMeters") if "totalDistanceMeters" in raw else raw.get("distanceMeters"), "distance_meters"),
+                "active_calories": values.number(raw.get("activeKilocalories"), "active_calories"),
+                "bmr_calories": values.number(raw.get("bmrKilocalories"), "bmr_calories"),
+                "resting_heart_rate": values.number(raw.get("restingHeartRate"), "resting_heart_rate"),
+                "min_heart_rate": values.number(raw.get("minHeartRate"), "min_heart_rate"),
+                "max_heart_rate": values.number(raw.get("maxHeartRate"), "max_heart_rate"),
+                "bb_charged_value": values.number(battery.get("chargedValue"), "bb_charged_value") if isinstance(battery, dict) else None,
+                "bb_drained_value": values.number(battery.get("drainedValue"), "bb_drained_value") if isinstance(battery, dict) else None,
+                "stress_total_averageStressLevel": values.number(total.get("averageStressLevel"), "stress_total_averageStressLevel"),
+                "stress_total_maxStressLevel": values.number(total.get("maxStressLevel"), "stress_total_maxStressLevel"),
+                "stress_total_stressDuration": values.number(total.get("stressDuration"), "stress_total_stressDuration"),
+                "stress_total_restDuration": values.number(total.get("restDuration"), "stress_total_restDuration"),
                 "raw_has_body_battery": isinstance(battery, dict),
                 "raw_has_all_day_stress": isinstance(stress, dict),
                 "raw_has_body_battery_feedback": isinstance(raw.get("bodyBatteryFeedback"), dict),
+                "_value_problems": values.problems,
             }
         )
     return finalize_daily(
