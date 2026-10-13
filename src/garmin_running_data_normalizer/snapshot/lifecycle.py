@@ -10,7 +10,7 @@ from ..common.time import (
     TimezoneNameInvalidError,
     resolve_timezone_name,
 )
-from .merge import SnapshotMergeError, build_approved_input
+from .merge import ActivitiesNotReadableError, SnapshotMergeError, build_approved_input
 from .store import (
     SnapshotStoreError,
     initialize_store,
@@ -32,7 +32,7 @@ def run_snapshot_all(
     timezone_name: str = DEFAULT_TIMEZONE,
 ) -> dict[str, Any]:
     """Build an approved cumulative input and run the existing Run-All pipeline."""
-    from ..run_all import RunAllError, run_all
+    from ..run_all import ACTIVITIES_NOT_READABLE_MESSAGE, RunAllError, run_all
 
     try:
         timezone_name = resolve_timezone_name(timezone_name)
@@ -44,11 +44,15 @@ def run_snapshot_all(
     output = Path(output_root)
     with tempfile.TemporaryDirectory(prefix="garmin-snapshot-run-all-") as temporary:
         build_root = Path(temporary) / "canonical-build"
-        build = build_approved_input(
-            store_root,
-            build_root,
-            processing_sequence=processing_sequence,
-        )
+        try:
+            build = build_approved_input(
+                store_root,
+                build_root,
+                processing_sequence=processing_sequence,
+            )
+        except ActivitiesNotReadableError as exc:
+            # As a one-shot run of the same Exports stops (stage A3c-2).
+            raise RunAllError("ACTIVITIES_EMPTY", ACTIVITIES_NOT_READABLE_MESSAGE) from exc
         result = run_all(
             build_root / "approved_input",
             output,
@@ -63,6 +67,8 @@ def run_snapshot_all(
                 ],
                 "fit_snapshot_numbers": build["fit_snapshot_numbers"],
                 "record_changes": build["record_changes"],
+                "files_left_out": build["files_left_out"],
+                "files_not_read": build["files_not_read"],
                 **build["relationship_context"],
             },
         )

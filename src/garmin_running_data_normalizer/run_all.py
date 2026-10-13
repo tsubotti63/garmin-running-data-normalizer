@@ -72,6 +72,11 @@ RUN_ALL_VERSION = 2
 ACTIVITIES_NOT_READABLE_MESSAGE = (
     "the Activities files could not be read; obtain a complete, readable Export"
 )
+# An internal check: the Snapshot build leaves out the files that a run
+# cannot read (stage A3c-2).
+SNAPSHOT_LEFT_OUT_MESSAGE = (
+    "the approved Snapshot input holds a file that the build should have left out"
+)
 DATASET_TABLE = (
     {"name": "activities", "family": "activities", "record_grain": "activity", "stable_key": ("garmin_activity_key",), "required": True},
     {"name": "gear", "family": "gear", "record_grain": "gear", "stable_key": ("gear_key",), "required": False},
@@ -1381,9 +1386,9 @@ def run_all(
     _notify(progress, "discovering")
     with _read_input(input_root) as reading:
         if snapshot_context is not None and (reading.left_out or reading.not_read):
-            # Snapshot builds leave such files out from stage A3c-2; until
-            # then, they stop as in v1.7.1.
-            raise RunAllError("INPUT_DISCOVERY_FAILED", "input discovery or archive safety validation failed")
+            # The Snapshot build leaves such files out and lists them by
+            # Snapshot number (stage A3c-2); the approved input holds none.
+            raise RunAllError("SNAPSHOT_CONTEXT_INVALID", SNAPSHOT_LEFT_OUT_MESSAGE)
         initial_assets = reading.assets
         initial_snapshot = _snapshot(initial_assets)
         families = _classify_assets(initial_assets)
@@ -1406,8 +1411,16 @@ def run_all(
             raise RunAllError("INPUT_MULTIPLE_EXPORTS", MIXED_INPUT_MESSAGE)
         same_export_count = reading.same_export_count
         outside_files = list(reading.outside_files)
-        # JSON files over the limit that no dataset reads (stage A3c).
-        too_large_files = sorted(reading.not_read)
+        # JSON files over the limit that no dataset reads (stage A3c), as the
+        # Snapshot build lists them by Snapshot number in a Snapshot run.
+        too_large_files = (
+            [
+                {"source_path": path, "bytes": size, "reason": reason}
+                for path, size, reason in sorted(reading.not_read)
+            ]
+            if snapshot_context is None
+            else list(snapshot_context.get("files_not_read", []))
+        )
         _validate_dataset_table()
 
         try:
@@ -1441,8 +1454,14 @@ def run_all(
             raise
         changed_while_reading = reading.changed
         # The files that could not be read, found while listing and while
-        # parsing (stage A3c).
-        files_left_out = left_out_files(reading.left_out)
+        # parsing (stage A3c); in a Snapshot run, those that the build left
+        # out, by Snapshot number (stage A3c-2).
+        if snapshot_context is None:
+            files_left_out = left_out_files(reading.left_out)
+        elif reading.left_out:
+            raise RunAllError("SNAPSHOT_CONTEXT_INVALID", SNAPSHOT_LEFT_OUT_MESSAGE)
+        else:
+            files_left_out = list(snapshot_context.get("files_left_out", []))
     _validate_provenance(records, fit_audit, families)
     qa_entries = [
         _dataset_qa(dataset, records[str(dataset["name"])], len(families[str(dataset["family"])]))
@@ -1634,6 +1653,8 @@ def run_all(
             "source_completeness_context",
             "fit_snapshot_numbers",
             "record_changes",
+            "files_left_out",
+            "files_not_read",
         }
         if not required_snapshot_context <= set(snapshot_context) or not set(
             snapshot_context
@@ -1790,10 +1811,7 @@ def run_all(
                 {"source_path": relative, "bytes": size, "reason": OUTSIDE_EXPORT_ROOT}
                 for relative, size in outside_files
             ),
-            *(
-                {"source_path": path, "bytes": size, "reason": reason}
-                for path, size, reason in too_large_files
-            ),
+            *too_large_files,
         ]
     if files_left_out:
         # Files that could not be read are left out with the reason; the
@@ -1839,6 +1857,16 @@ def run_all(
         # The input warnings have no family; like the warnings above, they
         # are counted only when they exist.
         summary["input_warning_count"] = input_warning_count
+    # Records that the latest Snapshot lacks while a file of their family was
+    # left out from it keep their earlier values (stage A3c-2); counted only
+    # when there are some.
+    latest_left_out_count = sum(
+        bool(row.get("latest_file_left_out"))
+        for audit in record_audits.values()
+        for row in audit["not_in_latest_snapshot"]
+    )
+    if latest_left_out_count:
+        summary["not_in_latest_file_left_out_count"] = latest_left_out_count
     if snapshot_context is not None:
         lifecycle_summary = dict(snapshot_context["merge_summary"])
         manifest["snapshot_lifecycle"] = {

@@ -465,9 +465,40 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     no list of left-out files, so it stops when an Activities file cannot be
     read, instead of leaving its records out; the other files that cannot be
     read do not concern it.
-  - Stage A3c-2 applies these rules to Snapshot registration and builds;
-    until then, a Snapshot registration or build stops on such files as in
-    v1.7.1.
+  - Snapshots follow the same rules (stage A3c-2), so one Export gives the
+    same status, warnings, lists of files, and normalized datasets as one
+    Snapshot or in a one-shot run:
+    - `snapshot register` stores every file, as before. A ZIP file inside the
+      Export whose members cannot be listed or read within the limits of a
+      run is stored whole, without its members, and the reason is kept in
+      its row (`parser_state`). A member over the limit for one file is not
+      listed; the stored ZIP file holds it. The store format stays at
+      version 1, and the content identity of a Snapshot does not change.
+    - The build leaves out, or does not read, the stored files as a run
+      does. It does not open a ZIP file stored with a reason; of the other
+      ZIP files it reads only the list of members, to find the members over
+      the limit. The accounts that a file left out names are not compared.
+    - `run_manifest.json` gives each listed file the number of the Snapshot
+      that held it (`snapshot`); a file left out of several Snapshots is
+      listed once for each.
+    - The records of a file left out of a Snapshot are missing from that
+      Snapshot. When the file was left out of the latest Snapshot, the
+      records that it lacks are kept with their earlier values and warning
+      `RECORDS_NOT_IN_LATEST_SNAPSHOT`, as any record missing from the latest
+      Snapshot, and the audit record marks them (`latest_file_left_out`);
+      `START_HERE.md` gives their number. A link is removed only when the
+      latest Snapshot shows its Gear and its Activity, so such a link stays.
+    - When no Activities record remains because every Activities file was
+      left out, `snapshot run-all` stops with `ACTIVITIES_EMPTY`, as a
+      one-shot run does, and `snapshot build-input` stops with
+      `SNAPSHOT_LIFECYCLE_FAILED` and the same message.
+    - One difference remains. Registration counts every member of a ZIP
+      file inside the Export against the limits for one ZIP file (100,000
+      files and 2 GiB), and a run counts only the members that it reads. A
+      ZIP file over those limits only because of members that are not read
+      is therefore left out of a Snapshot build (`zip_too_large`, exit 3)
+      while a one-shot run reads it. Counting differently would change the
+      content identity of the Snapshots already registered.
 
 ### Rows and values with problems
 
@@ -616,7 +647,9 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     ZIP file inside the Export over its limits or with a member over the
     compression ratio, with a reason (see
     [Files that cannot be read](#files-that-cannot-be-read)); a member of the
-    Export ZIP file itself over the compression ratio stops the run.
+    Export ZIP file itself over the compression ratio stops the run. From
+    stage A3c-2, `snapshot register` stores such a ZIP file whole, without
+    its members, and the Snapshot build leaves it out in the same way.
   - From an Export ZIP file, one reading reads at most 64 GiB and 4,000,000
     files in total; beyond that, the run stops with `INPUT_TOO_LARGE`, and the
     extracted folder can be used instead. These totals are far above what an
@@ -723,6 +756,13 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   counts; both appear only when a file is left out, so the outputs of an
   Export without such files do not change. `files_not_read` gains the reason
   `file_too_large`.
+- Stage A3c-2 adds, each only when there is something to report, the number
+  of the Snapshot (`snapshot`) to the entries of `files_left_out` and
+  `files_not_read` in a Snapshot run, `latest_file_left_out` to the entries
+  of `not_in_latest_snapshot` in the record audits, and
+  `not_in_latest_file_left_out_count` to `run_summary.json`. In a Snapshot
+  store, the row of a ZIP file stored without its members has the
+  `parser_state` `zip_not_readable`, `zip_unsafe_member`, or `zip_too_large`.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
   and `SNAPSHOT_STORE_LOCKED` (provisional name).
@@ -759,8 +799,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   the observed values (`observed_variants`); the values stay only in the audit
   records. The same Activity twice with different values in one Snapshot, or
   in two Snapshots observed at the same time, stopped until stage A3b, which
-  makes it a disagreement; a malformed Lactate Threshold candidate and a
-  JSON file that cannot be read still stop until stages A3c and A3d.
+  makes it a disagreement; a malformed Lactate Threshold candidate still
+  stops until stage A3d, and a JSON file that cannot be read stopped until
+  stage A3c-2, which leaves it out.
 - Stage A2b-2 makes an explicit empty value in Activities, Gear,
   `activity_gear`, and Personal Records an update instead of a review hold, so
   the merge summaries no longer count review holds such as
@@ -782,14 +823,19 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Snapshots with the same content and for accounts, and
   `garmin_snapshot_merge_rules:v2.3` from stage A3b, which makes Snapshots
   observed at the same time one time point and compares the repeated
-  records within a time point as a one-shot run does, in
+  records within a time point as a one-shot run does, and
+  `garmin_snapshot_merge_rules:v2.4` from stage A3c-2, which leaves out the
+  files that a run cannot read, in
   `config/garmin_snapshot_merge_rules_v2.json`. For these datasets they
   replace the merge fields of the v1.0 registry; the other datasets follow the
   v1.0 registry until stages A3c and A3d. A build records
   `merge_rules_version` in `snapshot/snapshot_lineage.json`, the approved input
   manifest, the merge summary, and the build digest; a store never records it.
   v1.7.1 still reads a store that v2.0.0 registered to, and builds it with the
-  v1.7.1 rules.
+  v1.7.1 rules. A ZIP file that v2.0.0 stored without its members (stage
+  A3c-2) is then left out without a warning, since v1.7.1 does not read the
+  reason; `snapshot verify`, `snapshot status`, and `snapshot run-all` of
+  v1.7.1 pass on such a store.
 - Registering the same Export as a ZIP file or as its extracted folder gives
   the same content identity, however deeply it is wrapped in other folders; a
   test checks this from stage A1 on.
@@ -874,7 +920,10 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   build. Repeated records within one Snapshot, or in Snapshots observed at
   the same time, no longer stop the build: their differing fields are
   empty, and Snapshots observed at the same time are together the latest
-  Snapshot. The merge rules v2.3 are published in
+  Snapshot. Registration no longer stops on a ZIP file inside the Export
+  that cannot be read, holds an unsafe member, or exceeds the limits, and
+  builds leave out the files that a run cannot read, as one-shot runs do.
+  The merge rules v2.4 are published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around

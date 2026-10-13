@@ -263,7 +263,11 @@ FUTURE_READY_DATASETS = ("health_status",)
 # are compared as in a one-shot run instead of stopping the build, a change
 # is a difference between time points, identifiers written in two ways name
 # one record, and copies within one Snapshot are counted as in a one-shot run.
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.3"
+# From v2.4, a file that a one-shot run leaves out, or does not read because of
+# its size, is left out of the build in the same way and listed by Snapshot
+# number, and the records that the latest Snapshot lacks while a file of their
+# family was left out from it are marked.
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.4"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -337,6 +341,14 @@ MERGE_RULES: dict[str, Any] = {
     },
     "same_content_snapshots": "counted_once_earliest_observed_kept",
     "account_consistency": "one_account_per_store_else_stop",
+    "files_that_cannot_be_read": {
+        "policy": "left_out_as_in_a_one_shot_run",
+        "listed_by": "snapshot_number_in_export_observed_order",
+        "json_over_the_file_limit_that_no_dataset_reads": "not_read_as_in_a_one_shot_run",
+        "zip_file_without_listed_members": "left_out_with_the_reason_from_registration",
+        "records_the_latest_snapshot_lacks": "kept_and_marked_when_a_file_of_their_family_was_left_out",
+        "accounts": "files_left_out_not_compared",
+    },
     "other_datasets_follow": REGISTRY_VERSION,
 }
 

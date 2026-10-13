@@ -20,7 +20,15 @@ from ..common.private_files import (
     open_private_file,
 )
 from ..intake.accounts import account_values, names_account
-from ..intake.archive import ArchiveLimits, UnsafeArchiveError, digest_member, validated_members
+from ..intake.archive import (
+    ArchiveLimitError,
+    ArchiveLimits,
+    MemberTooLargeError,
+    UnsafeArchiveError,
+    digest_member,
+    validated_members,
+)
+from ..intake.discovery import ZIP_NOT_READABLE, ZIP_TOO_LARGE, ZIP_UNSAFE_MEMBER
 from ..intake.roots import (
     OTHER_ACCOUNT_MESSAGE,
     ExportView,
@@ -29,7 +37,9 @@ from ..intake.roots import (
     open_export,
 )
 from ..intake.source import (
+    DAMAGED_ZIP_ERRORS,
     CorruptArchiveError,
+    ExportFile,
     ExportTooLargeError,
     TempSpaceError,
     is_zip_input,
@@ -515,6 +525,77 @@ def _open_snapshot_input(source: Path) -> Iterator[OpenedExport]:
         yield opened
 
 
+def _scan_members(
+    relative: str,
+    item: ExportFile,
+    export: ExportView,
+    inventory: list[dict[str, Any]],
+    payloads: dict[str, Path | _StreamedFile],
+) -> str | None:
+    """List and hash the members of one ZIP file in the Export.
+
+    Return None when the members are listed, or why they cannot be, as a run
+    leaves the ZIP file out (stage A3c-2): it cannot be read, a member fails a
+    safety check, or it exceeds the limits for one ZIP file. The members are
+    then not listed. A member over the limit for one file is not listed
+    alone; the stored ZIP file holds it. Problems of the Export ZIP file
+    itself still stop the registration.
+    """
+    try:
+        export.local_path(item)
+    except MemberTooLargeError:
+        return ZIP_TOO_LARGE
+    except (CorruptArchiveError, ExportTooLargeError, TempSpaceError):
+        raise
+    except (BadZipFile, OSError, UnsafeArchiveError) as exc:
+        raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc
+    members: list[dict[str, Any]] = []
+    member_payloads: dict[str, _StreamedFile] = {}
+    try:
+        # Members are hashed now and copied to the store later, in parts
+        # both times, from the ZIP file that the input keeps open.
+        archive = export.archive(item)
+        for info in validated_members(archive, export.limits, oversize=[]):
+            member_digest, member_bytes = digest_member(archive, info, export.limits)
+            export.count_read(member_bytes)
+            member_payloads.setdefault(
+                member_digest,
+                _StreamedFile(
+                    lambda archive=archive, info=info: _open_member(archive, info),
+                    member_bytes,
+                ),
+            )
+            logical_path = f"{relative}!{info.filename}"
+            members.append(
+                {
+                    "object_kind": "archive_member",
+                    "relative_path": logical_path,
+                    "container_relative_path": relative,
+                    "archive_member_path": info.filename,
+                    "sha256": member_digest,
+                    "bytes": member_bytes,
+                    "source_family": _source_family(logical_path),
+                    "extension": Path(info.filename).suffix.lower(),
+                    "blob_relative_path": _blob_relative_path(member_digest),
+                    "parser_state": "parser_unsupported",
+                }
+            )
+    except (CorruptArchiveError, ExportTooLargeError, TempSpaceError):
+        raise
+    except DAMAGED_ZIP_ERRORS:
+        return ZIP_NOT_READABLE
+    except ArchiveLimitError:
+        return ZIP_TOO_LARGE
+    except UnsafeArchiveError:
+        return ZIP_UNSAFE_MEMBER
+    except OSError as exc:
+        raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc
+    inventory.extend(members)
+    for digest, payload in member_payloads.items():
+        payloads.setdefault(digest, payload)
+    return None
+
+
 def _scan_source(
     source: Path,
     export: ExportView,
@@ -587,39 +668,11 @@ def _scan_source(
         inventory.append(row)
         if item.suffix != ".zip":
             continue
-        try:
-            # Members are hashed now and copied to the store later, in parts
-            # both times, from the ZIP file that the input keeps open.
-            archive = export.archive(item)
-            for info in validated_members(archive):
-                member_digest, member_bytes = digest_member(archive, info)
-                export.count_read(member_bytes)
-                payloads.setdefault(
-                    member_digest,
-                    _StreamedFile(
-                        lambda archive=archive, info=info: _open_member(archive, info),
-                        member_bytes,
-                    ),
-                )
-                logical_path = f"{relative}!{info.filename}"
-                inventory.append(
-                    {
-                        "object_kind": "archive_member",
-                        "relative_path": logical_path,
-                        "container_relative_path": relative,
-                        "archive_member_path": info.filename,
-                        "sha256": member_digest,
-                        "bytes": member_bytes,
-                        "source_family": _source_family(logical_path),
-                        "extension": Path(info.filename).suffix.lower(),
-                        "blob_relative_path": _blob_relative_path(member_digest),
-                        "parser_state": "parser_unsupported",
-                    }
-                )
-        except (CorruptArchiveError, ExportTooLargeError, TempSpaceError):
-            raise
-        except (BadZipFile, OSError, UnsafeArchiveError) as exc:
-            raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc
+        reason = _scan_members(relative, item, export, inventory, payloads)
+        if reason is not None:
+            # The ZIP file is stored whole, without its members, and the
+            # build leaves it out for this reason (stage A3c-2).
+            row["parser_state"] = reason
     if archive_before is not None and archive_before != (
         source.stat().st_size,
         source.stat().st_mtime_ns,

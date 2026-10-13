@@ -26,15 +26,9 @@ from garmin_running_data_normalizer.run_all import (
     run_all,
 )
 from garmin_running_data_normalizer.runner import GoldenPathError, run_activities
-from garmin_running_data_normalizer.snapshot import (
-    SnapshotLifecycleError,
-    initialize_store,
-    register_snapshot,
-    run_snapshot_all,
-)
 from tests.fit_fixture_factory import synthetic_fit
 from tests.test_snapshot_lifecycle import _activity, _write_remaining_daily_metrics
-from tests.test_snapshot_record_updates import ACCOUNT, gear, load, personal_record, write_export
+from tests.test_snapshot_record_updates import gear, load, personal_record, write_export
 from tests.test_zip_input import flip_member_byte, mark_encrypted, run_cli, zip_export
 
 NOT_ZIP = b"synthetic, not a ZIP file\n"
@@ -131,18 +125,6 @@ def record_counts(output: Path) -> dict[str, int]:
 
 def rows(output: Path, dataset: str) -> int:
     return len(load(output / f"normalized/{dataset}.json"))
-
-
-def register(store: Path, source: Path) -> dict[str, Any]:
-    return register_snapshot(
-        store,
-        source,
-        snapshot_label="S1",
-        export_requested_at="2030-01-01T00:00:00+00:00",
-        export_downloaded_at="2030-01-01T01:00:00+00:00",
-        export_observed_at="2030-01-01T02:00:00+00:00",
-        confirm_complete=True,
-    )
 
 
 class LeftOutFilesTest(unittest.TestCase):
@@ -546,42 +528,6 @@ class NoActivitiesLeftTest(unittest.TestCase):
                 GoldenPathError, "^an Activities file could not be read; obtain a complete, readable Export$"
             ):
                 run_activities(source, root / "with-unreadable-activities")
-
-
-class SnapshotUntilStageA3c2Test(unittest.TestCase):
-    def test_snapshot_registration_and_builds_still_stop(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            broken = export(root, "broken")
-            write(broken / f"{UPLOADED}/UploadedFiles_broken_Part1.zip", NOT_ZIP)
-            store = root / "store"
-            initialize_store(store, ACCOUNT)
-            with self.assertRaisesRegex(SnapshotLifecycleError, "safe archive validation"):
-                register(store, broken)
-            big = export(root, "big")
-            write(big / f"{UPLOADED}/synthetic_big.fit", synthetic_fit() + padding(70 * 1024))
-            register(store, big)
-            with self.assertRaises(RunAllError) as raised:
-                with mock.patch(
-                    "garmin_running_data_normalizer.run_all.read_export",
-                    side_effect=lambda path: read_export(path, SMALL),
-                ):
-                    run_snapshot_all(store, root / "output")
-            self.assertEqual(raised.exception.code, "INPUT_DISCOVERY_FAILED")
-            self.assertFalse((root / "output").exists())
-            # So is a JSON file over the limit that no dataset reads.
-            unread = export(root, "unread")
-            write(unread / "DI-Connect-User/synthetic_big_user.json", big_json([]))
-            other_store = root / "other-store"
-            initialize_store(other_store, ACCOUNT)
-            register(other_store, unread)
-            with self.assertRaises(RunAllError) as raised:
-                with mock.patch(
-                    "garmin_running_data_normalizer.run_all.read_export",
-                    side_effect=lambda path: read_export(path, SMALL),
-                ):
-                    run_snapshot_all(other_store, root / "other-output")
-            self.assertEqual(raised.exception.code, "INPUT_DISCOVERY_FAILED")
 
 
 if __name__ == "__main__":
