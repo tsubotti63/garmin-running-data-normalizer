@@ -1961,17 +1961,30 @@ def _files_not_read_lines(manifest: Mapping[str, Any]) -> list[str]:
     ]
 
 
-def _files_left_out_lines(manifest: Mapping[str, Any]) -> list[str]:
-    """Count the files that could not be read and were left out (stage A3c)."""
+def _files_left_out_lines(manifest: Mapping[str, Any], summary: Mapping[str, Any]) -> list[str]:
+    """Count the files that could not be read and were left out (stage A3c),
+    and the records that keep earlier values because a file was left out of
+    the latest Snapshot (stage A3c-2)."""
     files = manifest.get("files_left_out", [])
     if not isinstance(files, list):
         raise OutputExperienceError("files left out must be a list")
     if not files:
         return []
-    return [
+    lines = [
         f"- Files left out: {len(files)}, which could not be read; "
         "`run_manifest.json` lists them with the reason"
     ]
+    kept = _non_negative_integer(
+        summary.get("not_in_latest_file_left_out_count", 0),
+        "records kept after a file was left out",
+    )
+    if kept:
+        lines.append(
+            f"- Records kept with their values from earlier Snapshots: {kept}, "
+            "because a file of the latest Snapshot was left out; the audit "
+            "records mark them"
+        )
+    return lines
 
 
 def render_start_here(
@@ -2003,7 +2016,7 @@ def render_start_here(
         f"- Warning count: {warning_count}",
         f"- Error count: {error_count}",
         *_files_not_read_lines(manifest),
-        *_files_left_out_lines(manifest),
+        *_files_left_out_lines(manifest, summary),
         "",
         "## Dataset Families",
         "",

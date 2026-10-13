@@ -9,6 +9,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
+from zipfile import ZipFile
 
 from .. import __version__
 from ..common.identity import garmin_activity_key, identity_token, stable_hash
@@ -18,7 +19,17 @@ from ..common.values import is_empty
 from ..diagnostics.contracts import FAMILY_DATASETS, SOURCE_FAMILY_ORDER
 from ..diagnostics.detector import classify_source_name
 from ..intake.accounts import names_account, payload_accounts
-from ..intake.archive import ArchiveLimits
+from ..intake.archive import ArchiveLimits, is_real_export_file
+from ..intake.discovery import (
+    FILE_TOO_LARGE,
+    JSON_NOT_READABLE,
+    SUPPORTED_SUFFIXES,
+    ZIP_NOT_READABLE,
+    ZIP_TOO_LARGE,
+    ZIP_UNSAFE_MEMBER,
+    path_family,
+)
+from ..intake.source import DAMAGED_ZIP_ERRORS
 from ..intake.roots import MIXED_STORE_MESSAGE, MixedExportsError
 from ..normalizers.daily_metrics import SNAPSHOT_NUMBERS_FIELD
 from ..normalizers.records import SNAPSHOT_PROBE_FIELD
@@ -65,6 +76,14 @@ SOURCE_OBSERVATION_DATASETS = {
 }
 SCHEMA_VERSION = "garmin-run-all-output:v1.1"
 APPROVED_INPUT_MAX_FILE_BYTES = ArchiveLimits().max_member_bytes
+# The limit for one file that a run reads: the build does not read a stored
+# file over it, as a run does not (stage A3c-2).
+SOURCE_FILE_MAX_BYTES = ArchiveLimits().max_member_bytes
+
+
+# The reasons for which registration stores a ZIP file without its members
+# (stage A3c-2); the build leaves such a ZIP file out.
+ZIP_LEFT_OUT_REASONS = frozenset({ZIP_NOT_READABLE, ZIP_UNSAFE_MEMBER, ZIP_TOO_LARGE})
 
 
 class SnapshotMergeError(SnapshotStoreError):
@@ -143,6 +162,32 @@ def _write_activity_input(
             ),
             data,
         )
+
+
+class ActivitiesNotReadableError(SnapshotMergeError):
+    """No Activities record remains because every Activities file was left out."""
+
+
+def _oversize_members(store: Path, row: dict[str, Any]) -> list[tuple[str, int]]:
+    """Return the members of a stored ZIP file that a run reads and that are
+    over the limit for one file, as (name, bytes).
+
+    Only the central directory is read: registration lists every other
+    member, and the ZIP file holds these (stage A3c-2).
+    """
+    try:
+        with ZipFile(store / str(row["blob_relative_path"])) as archive:
+            infos = archive.infolist()
+    except DAMAGED_ZIP_ERRORS as exc:
+        raise SnapshotMergeError("immutable snapshot blob failed verification") from exc
+    return sorted(
+        (info.filename, info.file_size)
+        for info in infos
+        if not info.is_dir()
+        and is_real_export_file(info.filename)
+        and PurePosixPath(info.filename).suffix.lower() in SUPPORTED_SUFFIXES
+        and info.file_size > SOURCE_FILE_MAX_BYTES
+    )
 
 
 def _read_blob(store: Path, row: dict[str, Any]) -> bytes:
@@ -917,6 +962,7 @@ def _merge_dataset(
     *,
     latest_state: dict[str, list[str]] | None = None,
     time_points: list[list[int]] | None = None,
+    latest_file_left_out: bool = False,
 ) -> tuple[
     list[dict[str, Any]],
     list[dict[str, Any]],
@@ -938,6 +984,9 @@ def _merge_dataset(
     removed. ``time_points`` groups the Snapshot numbers of the Snapshots
     observed at the same time, in time order (stage A3b); the Snapshots of
     the last group are together the latest Snapshot.
+    ``latest_file_left_out`` tells that the latest Snapshot had a file of the
+    dataset's family left out (stage A3c-2): the records that it lacks are
+    marked, since they may only have been in that file.
     """
     groups: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
     holds: list[dict[str, Any]] = []
@@ -1160,9 +1209,10 @@ def _merge_dataset(
                     {"key": audit_key, "fields": result["updates"]}
                 )
             if not in_latest:
-                record_audit["not_in_latest_snapshot"].append(
-                    {"key": audit_key, "last_seen_snapshot": max(by_snapshot)}
-                )
+                missing = {"key": audit_key, "last_seen_snapshot": max(by_snapshot)}
+                if latest_file_left_out:
+                    missing["latest_file_left_out"] = True
+                record_audit["not_in_latest_snapshot"].append(missing)
             for record, numbers in result["records"]:
                 canonical.append(
                     {
@@ -1528,7 +1578,6 @@ def build_approved_input(
     if verification["status"] != "PASS":
         raise SnapshotMergeError("snapshot store verification failed")
     store, store_metadata = load_store(store_root)
-    verification_failures: list[str] = []
     registered = load_manifests(store)
     if not registered:
         raise SnapshotMergeError("snapshot store has no registered snapshots")
@@ -1634,6 +1683,37 @@ def build_approved_input(
         # The accounts that the records name, compared here only and never
         # written: a store holds the Exports of one account.
         accounts: set[str] = set()
+        # The files that a run leaves out or does not read, by Snapshot
+        # number, as in a one-shot run of each Export (stage A3c-2).
+        files_left_out: list[dict[str, Any]] = []
+        files_not_read: list[dict[str, Any]] = []
+        left_out_families: dict[int, set[str]] = defaultdict(set)
+
+        def leave_out(number: int, path: str, size: int, reason: str) -> None:
+            family = path_family(path)
+            files_left_out.append(
+                {
+                    "snapshot": number,
+                    "source_path": path,
+                    "bytes": size,
+                    "family": family,
+                    "reason": reason,
+                }
+            )
+            left_out_families[number].add(family)
+            parser_states["extraction_failed"] += 1
+
+        def too_large(number: int, path: str, size: int) -> None:
+            # A file that no dataset reads adds nothing to the datasets: it
+            # is not read rather than left out (decision 20261013-7).
+            if path_family(path) == "unclassified":
+                files_not_read.append(
+                    {"snapshot": number, "source_path": path, "bytes": size, "reason": FILE_TOO_LARGE}
+                )
+                parser_states["parser_unsupported"] += 1
+            else:
+                leave_out(number, path, size, FILE_TOO_LARGE)
+
         for processing_index, manifest in enumerate(processing_manifests, start=1):
             diagnostic = snapshot_diagnostics[str(manifest["snapshot_id"])]
             acquisition_order = acquisition_order_by_snapshot_id[
@@ -1643,6 +1723,21 @@ def build_approved_input(
                 extension = str(source.get("extension", "")).lower()
                 object_kind = source.get("object_kind")
                 logical_name = str(source["relative_path"])
+                size = int(source["bytes"])
+                if extension in SUPPORTED_SUFFIXES and size > SOURCE_FILE_MAX_BYTES:
+                    # As in a run, a JSON or FIT file over the limit for one
+                    # file is not read.
+                    too_large(acquisition_order, logical_name, size)
+                    continue
+                if (
+                    extension == ".zip"
+                    and object_kind == "file"
+                    and source.get("parser_state") in ZIP_LEFT_OUT_REASONS
+                ):
+                    # Registration stored the ZIP file without its members;
+                    # it is not opened again.
+                    leave_out(acquisition_order, logical_name, size, str(source["parser_state"]))
+                    continue
                 detected_kind = "fit" if extension == ".fit" else (
                     "json" if extension == ".json" else "unknown"
                 )
@@ -1669,7 +1764,11 @@ def build_approved_input(
                     # The immutable Store preserves the archive container. Its
                     # validated members are materialized individually so the
                     # current discovery layer does not parse the same payload
-                    # twice through a copied container.
+                    # twice through a copied container. Its members over the
+                    # limit for one file are not listed; a run does not read
+                    # them either (stage A3c-2).
+                    for name, member_size in _oversize_members(store, source):
+                        too_large(acquisition_order, f"{logical_name}!{name}", member_size)
                     parser_states["explicit_value"] += 1
                     continue
                 if extension != ".json" or (
@@ -1696,20 +1795,30 @@ def build_approved_input(
                         }
                     )
                     continue
+                data = _read_blob(store, source)
                 try:
-                    value = json.loads(_read_blob(store, source).decode("utf-8-sig"))
-                except (UnicodeError, json.JSONDecodeError) as exc:
-                    parser_states["extraction_failed"] += 1
-                    verification_failures.append("supported_json_extraction_failed")
+                    value = json.loads(data.decode("utf-8-sig"))
+                    readable = True
+                except (ValueError, RecursionError):
+                    # The errors for which a run leaves a JSON file out: not
+                    # UTF-8, not JSON, nested too deeply, or a number with
+                    # too many digits (stage A3c-2).
+                    value = None
+                    readable = False
+                if not readable and detected_family != "unclassified":
+                    leave_out(acquisition_order, logical_name, size, JSON_NOT_READABLE)
                     continue
-                if names_account(logical_name):
+                if readable and names_account(logical_name):
+                    # A file left out is not compared, as in a run.
                     accounts |= payload_accounts(value)
-                if logical_name.lower().endswith("gear.json") and any(
+                if readable and logical_name.lower().endswith("gear.json") and any(
                     isinstance(container.get("gearActivityDTOs"), dict)
                     for container in _containers(value)
                 ):
                     link_snapshots.add(acquisition_order)
-                extracted = _dataset_records(logical_name, value)
+                # A JSON file that no dataset reads is kept as an unknown
+                # object, also when it cannot be read.
+                extracted = _dataset_records(logical_name, value) if readable else []
                 if not extracted:
                     unknown_object_count += 1
                     if detected_family == "unclassified":
@@ -1753,8 +1862,6 @@ def build_approved_input(
                             "source_object_sha256": source["sha256"],
                         }
                     )
-        if verification_failures:
-            raise SnapshotMergeError("supported source extraction failed")
         if len(accounts) > 1:
             raise MixedExportsError(MIXED_STORE_MESSAGE)
 
@@ -1772,6 +1879,11 @@ def build_approved_input(
         latest_state = _latest_relationship_state(
             observations_by_dataset,
             set(time_points[-1]),
+        )
+        # The families with a file left out in the latest Snapshot: their
+        # records that it lacks are marked (stage A3c-2).
+        latest_left_out_families = set().union(
+            *(left_out_families.get(number, set()) for number in time_points[-1])
         )
         record_changes: dict[str, dict[str, list[dict[str, Any]]]] = {}
         for dataset in DATASET_ORDER:
@@ -1794,6 +1906,7 @@ def build_approved_input(
                     and any(number in link_snapshots for number in time_points[-1])
                     else None
                 ),
+                latest_file_left_out=dataset_to_family.get(dataset) in latest_left_out_families,
             )
             canonical_by_dataset[dataset] = canonical
             all_provenance.extend(provenance)
@@ -1846,6 +1959,11 @@ def build_approved_input(
                 + _conflict_count_summary(all_conflicts)
             )
         if not canonical_by_dataset["activities"]:
+            if any(item["family"] == "activities" for item in files_left_out):
+                # As in a run: the Activities files could not be read.
+                from ..run_all import ACTIVITIES_NOT_READABLE_MESSAGE
+
+                raise ActivitiesNotReadableError(ACTIVITIES_NOT_READABLE_MESSAGE)
             raise SnapshotMergeError("canonical input contains no Activities records")
 
         approved = stage / "approved_input"
@@ -2277,6 +2395,14 @@ def build_approved_input(
             # Runtime only: Run-All writes these changes, with their values,
             # to the dataset audit records of the local output.
             "record_changes": record_changes,
+            # Runtime only: Run-All lists these files, by Snapshot number, in
+            # the local run manifest (stage A3c-2).
+            "files_left_out": sorted(
+                files_left_out, key=lambda item: (item["snapshot"], item["source_path"])
+            ),
+            "files_not_read": sorted(
+                files_not_read, key=lambda item: (item["snapshot"], item["source_path"])
+            ),
             "source_completeness_context": {
                 "observation_scope": "REGISTERED_SNAPSHOT_OBSERVATIONS",
                 "observations": sorted(
@@ -2295,6 +2421,7 @@ def build_approved_input(
 
 
 __all__ = [
+    "ActivitiesNotReadableError",
     "BUILD_FORMAT",
     "SnapshotMergeError",
     "build_approved_input",

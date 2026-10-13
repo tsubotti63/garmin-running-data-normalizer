@@ -33,6 +33,7 @@ from garmin_running_data_normalizer.snapshot import (
     build_approved_input,
     initialize_store,
     register_snapshot,
+    run_snapshot_all,
     verify_store,
 )
 from garmin_running_data_normalizer.snapshot.store import load_manifests
@@ -583,12 +584,29 @@ class UnsafeZipTest(unittest.TestCase):
                 [item["code"] for item in doctor_input(unsafe)["findings"]],
                 ["DATA_FILE_LEFT_OUT", "RUN_ALL_NOT_EVALUATED"],
             )
-            # Snapshot registration still stops until stage A3c-2.
+            # Snapshot registration stores it whole, without its members, and
+            # the build leaves it out (stage A3c-2).
             store = root / "store"
             initialize_store(store, "synthetic-account-boundary")
-            with self.assertRaisesRegex(SnapshotLifecycleError, "safe archive validation"):
-                register(store, unsafe)
-            self.assertEqual(load_manifests(store), [])
+            register(store, unsafe)
+            rows = {
+                row["relative_path"]: row["parser_state"]
+                for row in load_manifests(store)[0]["objects"]
+                if "UploadedFiles_synthetic_Part1.zip" in row["relative_path"]
+            }
+            self.assertEqual(
+                rows,
+                {"DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip": "zip_unsafe_member"},
+            )
+            snapshot_output = root / "snapshot-output"
+            self.assertEqual(run_snapshot_all(store, snapshot_output)["status"], "PARTIAL_SUCCESS")
+            self.assertEqual(
+                [
+                    (item["snapshot"], item["source_path"], item["reason"])
+                    for item in json.loads((snapshot_output / "run_manifest.json").read_text(encoding="utf-8"))["files_left_out"]
+                ],
+                [(1, "DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip", "zip_unsafe_member")],
+            )
 
 
 class ZipLimitsTest(unittest.TestCase):

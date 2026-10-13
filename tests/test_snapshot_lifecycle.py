@@ -18,6 +18,7 @@ from garmin_running_data_normalizer.snapshot import (
     verify_store,
 )
 from garmin_running_data_normalizer.snapshot.merge import (
+    ActivitiesNotReadableError,
     SnapshotMergeError,
     _latest_relationship_state,
 )
@@ -1099,7 +1100,7 @@ class SnapshotLifecycleTest(unittest.TestCase):
                 build_support_bundle(output, destination)
             self.assertFalse(destination.exists())
 
-    def test_malformed_supported_json_is_extraction_failed_not_deletion(
+    def test_malformed_supported_json_is_left_out_not_deleted(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1116,9 +1117,11 @@ class SnapshotLifecycleTest(unittest.TestCase):
             source_hash_before = _tree_hash(source)
             self.register(store, source, "S1", 1)
 
+            # The only Activities file is left out, so no Activities record
+            # remains (stage A3c-2).
             with self.assertRaisesRegex(
-                SnapshotMergeError,
-                "supported source extraction failed",
+                ActivitiesNotReadableError,
+                "the Activities files could not be read",
             ):
                 build_approved_input(store, root / "build")
 
@@ -1276,17 +1279,29 @@ class SnapshotLifecycleTest(unittest.TestCase):
             store = root / "store"
             initialize_store(store, "synthetic-account-boundary")
 
+            # A ZIP file whose members cannot be listed safely is stored
+            # whole, without its members, with the reason; the build leaves
+            # it out (stage A3c-2).
+            other_store = root / "other-store"
+            initialize_store(other_store, "synthetic-account-boundary")
             corrupt = root / "corrupt"
             corrupt.mkdir()
             (corrupt / "broken.zip").write_bytes(b"not-a-zip")
-            with self.assertRaises(SnapshotLifecycleError):
-                self.register(store, corrupt, "BAD", 1)
+            self.register(other_store, corrupt, "BAD", 1)
             unsafe = root / "unsafe"
             unsafe.mkdir()
             with zipfile.ZipFile(unsafe / "unsafe.zip", "w") as archive:
                 archive.writestr("../escape.json", "{}")
-            with self.assertRaises(SnapshotLifecycleError):
-                self.register(store, unsafe, "UNSAFE", 1)
+            self.register(other_store, unsafe, "UNSAFE", 2)
+            self.assertEqual(
+                sorted(
+                    (row["relative_path"], row["parser_state"])
+                    for manifest in load_manifests(other_store)
+                    for row in manifest["objects"]
+                ),
+                [("broken.zip", "zip_not_readable"), ("unsafe.zip", "zip_unsafe_member")],
+            )
+            self.assertEqual(verify_store(other_store)["status"], "PASS")
 
             locked = root / "locked"
             _write_snapshot(locked, [_activity("A1")])

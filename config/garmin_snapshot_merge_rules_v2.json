@@ -72,7 +72,15 @@
     "within_snapshot_conflict_policy": "disagreement_kept_empty_values_audited",
     "within_time_point_policy": "compared_as_in_a_one_shot_run"
   },
-  "merge_rules_version": "garmin_snapshot_merge_rules:v2.3",
+  "files_that_cannot_be_read": {
+    "accounts": "files_left_out_not_compared",
+    "json_over_the_file_limit_that_no_dataset_reads": "not_read_as_in_a_one_shot_run",
+    "listed_by": "snapshot_number_in_export_observed_order",
+    "policy": "left_out_as_in_a_one_shot_run",
+    "records_the_latest_snapshot_lacks": "kept_and_marked_when_a_file_of_their_family_was_left_out",
+    "zip_file_without_listed_members": "left_out_with_the_reason_from_registration"
+  },
+  "merge_rules_version": "garmin_snapshot_merge_rules:v2.4",
   "other_datasets_follow": "garmin_public_snapshot_dataset_merge_policies:v1.0",
   "same_content_snapshots": "counted_once_earliest_observed_kept",
   "store_contract_version": "garmin_public_snapshot_lifecycle:v1.0",
