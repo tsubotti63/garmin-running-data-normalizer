@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Iterable
+from typing import Any, Iterable
 
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..intake.discovery import DiscoveredAsset
 from .daily_metrics import (
     DailyMetricResult,
+    RowsLeftOut,
     copies_within_snapshots,
     finalize_daily,
     load_rows,
@@ -14,6 +15,7 @@ from .daily_metrics import (
     selected_rows,
     snapshot_numbers,
     text,
+    value_source_names,
 )
 
 
@@ -29,6 +31,70 @@ VO2MAX_FIELDS = (
     "max_met_category",
     "calibrated_data",
 )
+# The source field of each value field (stage A3d-1). The other fields are the
+# record's key, the Activity that it came from, and a confidence that is always
+# empty. A row left out that holds nothing in them is an empty record.
+VO2MAX_VALUE_SOURCES = {
+    "vo2max": ("vo2MaxValue",),
+    "max_met": ("maxMet",),
+    "max_met_category": ("maxMetCategory",),
+    "calibrated_data": ("calibratedData",),
+}
+VO2MAX_FIELDS_WITHOUT_VALUES = (
+    "calendar_date",
+    "observation_timestamp",
+    "vo2max_source_series",
+    "sport",
+    "source_activity_id",
+    "source_confidence",
+)
+
+
+def vo2max_series(raw: dict[str, Any], file_name: str) -> str:
+    """Return the series of a VO2max record: its own, or that of its file."""
+    series = text(raw.get("vo2MaxSourceSeries"))
+    if series is None:
+        series = (
+            "performance_metrics_daily"
+            if file_name.startswith("metricsmaxmetdata")
+            else "activity_vo2max_daily"
+        )
+    return series
+
+
+def _observation_timestamp(raw: dict[str, Any], series: str) -> tuple[str | None, str]:
+    timestamp_source = (
+        raw.get("timestampGmt")
+        if series == "activity_vo2max_daily"
+        else raw.get("updateTimestamp")
+    )
+    if timestamp_source in (None, ""):
+        timestamp_source = raw.get("observationTimestamp")
+    return normalize_observation_timestamp(
+        timestamp_source,
+        naive_timezone_semantics=(
+            "UTC_SOURCE_FIELD"
+            if series == "activity_vo2max_daily" and raw.get("timestampGmt") not in (None, "")
+            else "UNCONFIRMED"
+        ),
+    )
+
+
+def vo2max_left_out_reason(raw: dict[str, Any], file_name: str) -> str | None:
+    """Return why a VO2max record is left out, or None when it is kept.
+
+    ``file_name`` is the lower-case name of the record's file, which gives
+    the series of a record without its own.
+    """
+    if daily_calendar_date(raw.get("calendarDate")) is None:
+        return "missing_or_invalid_calendar_date"
+    if _observation_timestamp(raw, vo2max_series(raw, file_name))[0] is None:
+        return "missing_or_invalid_observation_timestamp"
+    if number(raw.get("vo2MaxValue")) is None:
+        return "missing_or_invalid_vo2max"
+    if text(raw.get("sport")) is None:
+        return "missing_sport_for_stable_key"
+    return None
 
 
 def normalize_vo2max(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
@@ -37,52 +103,24 @@ def normalize_vo2max(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
         lambda name: name.startswith(("activityvo2max", "metricsmaxmetdata", "snapshot_vo2max")),
     )
     accepted = []
-    excluded: Counter[str] = Counter()
+    left_out = RowsLeftOut(value_source_names(VO2MAX_VALUE_SOURCES))
     timestamp_semantics: Counter[str] = Counter()
     for asset in selected:
         name = (asset.member_path or asset.source_path).split("/")[-1].lower()
         for raw in load_rows(asset):
-            series = text(raw.get("vo2MaxSourceSeries"))
-            if series is None:
-                series = (
-                    "performance_metrics_daily"
-                    if name.startswith("metricsmaxmetdata")
-                    else "activity_vo2max_daily"
-                )
+            series = vo2max_series(raw, name)
             date = daily_calendar_date(raw.get("calendarDate"))
             value = number(raw.get("vo2MaxValue"))
-            timestamp_source = (
-                raw.get("timestampGmt")
-                if series == "activity_vo2max_daily"
-                else raw.get("updateTimestamp")
-            )
-            if timestamp_source in (None, ""):
-                timestamp_source = raw.get("observationTimestamp")
-            timestamp, semantics = normalize_observation_timestamp(
-                timestamp_source,
-                naive_timezone_semantics=(
-                    "UTC_SOURCE_FIELD"
-                    if series == "activity_vo2max_daily" and raw.get("timestampGmt") not in (None, "")
-                    else "UNCONFIRMED"
-                ),
-            )
+            timestamp, semantics = _observation_timestamp(raw, series)
             # Copies within one Snapshot count as in a one-shot run (stage A3b).
             timestamp_semantics[semantics] += 1 + copies_within_snapshots(snapshot_numbers(raw))
             sport = text(raw.get("sport"))
             source_activity_id = number(raw.get("activityId"))
             if not isinstance(source_activity_id, int):
                 source_activity_id = None
-            if date is None:
-                excluded["missing_or_invalid_calendar_date"] += 1
-                continue
-            if timestamp is None:
-                excluded["missing_or_invalid_observation_timestamp"] += 1
-                continue
-            if value is None:
-                excluded["missing_or_invalid_vo2max"] += 1
-                continue
-            if sport is None:
-                excluded["missing_sport_for_stable_key"] += 1
+            reason = vo2max_left_out_reason(raw, name)
+            if reason is not None:
+                left_out.add(raw, reason)
                 continue
             accepted.append(
                 {
@@ -108,9 +146,10 @@ def normalize_vo2max(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
             "observation_timestamp",
         ),
         selected_assets=selected,
-        source_record_count=len(rows),
+        source_record_count=len(rows) + left_out.copy_count,
         accepted=accepted,
-        excluded_reasons=excluded,
+        excluded_reasons=left_out.reasons,
+        empty_record_count=left_out.empty_record_count,
         fields=VO2MAX_FIELDS,
     )
     result.audit["observation_timestamp_semantics_counts"] = dict(
@@ -122,4 +161,11 @@ def normalize_vo2max(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
     return result
 
 
-__all__ = ["VO2MAX_FIELDS", "normalize_vo2max"]
+__all__ = [
+    "VO2MAX_FIELDS",
+    "VO2MAX_FIELDS_WITHOUT_VALUES",
+    "VO2MAX_VALUE_SOURCES",
+    "normalize_vo2max",
+    "vo2max_left_out_reason",
+    "vo2max_series",
+]

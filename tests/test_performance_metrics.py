@@ -28,23 +28,26 @@ def _asset(name: str, value: object) -> DiscoveredAsset:
 class HillScoreContractTest(unittest.TestCase):
     def test_h01_to_h11_normalization_matrix(self) -> None:
         cases = (
-            ("minimal", {"calendarDate": "2026-01-01", "overallScore": 78}, 1, 0),
-            ("full", {"calendarDate": "2026-01-02", "overallScore": 84, "strengthScore": 86, "enduranceScore": 82, "hillScoreClassificationId": 2, "hillScoreFeedbackPhraseId": 3}, 1, 0),
-            ("nullable", {"calendarDate": "2026-01-03", "overallScore": 80, "strengthScore": None}, 1, 0),
-            ("timestamp-date", {"calendarDate": "2026-01-04T12:00:00", "overallScore": 81}, 1, 0),
-            ("invalid-date", {"calendarDate": "not-a-date", "overallScore": 81}, 0, 1),
-            ("missing-date", {"overallScore": 81}, 0, 1),
-            ("missing-overall", {"calendarDate": "2026-01-05"}, 0, 1),
-            ("null-overall", {"calendarDate": "2026-01-06", "overallScore": None}, 0, 1),
-            ("float-overall", {"calendarDate": "2026-01-07", "overallScore": 1.5}, 0, 1),
-            ("unknown-field", {"calendarDate": "2026-01-08", "overallScore": 66, "unknown": "ignored"}, 1, 0),
-            ("private-fields", {"calendarDate": "2026-01-09", "overallScore": 70, "deviceId": "private", "userProfilePk": "private", "timestamp": 1}, 1, 0),
+            ("minimal", {"calendarDate": "2026-01-01", "overallScore": 78}, 1, 0, 0),
+            ("full", {"calendarDate": "2026-01-02", "overallScore": 84, "strengthScore": 86, "enduranceScore": 82, "hillScoreClassificationId": 2, "hillScoreFeedbackPhraseId": 3}, 1, 0, 0),
+            ("nullable", {"calendarDate": "2026-01-03", "overallScore": 80, "strengthScore": None}, 1, 0, 0),
+            ("timestamp-date", {"calendarDate": "2026-01-04T12:00:00", "overallScore": 81}, 1, 0, 0),
+            ("invalid-date", {"calendarDate": "not-a-date", "overallScore": 81}, 0, 1, 0),
+            ("missing-date", {"overallScore": 81}, 0, 1, 0),
+            ("missing-overall", {"calendarDate": "2026-01-05"}, 0, 0, 1),
+            ("null-overall", {"calendarDate": "2026-01-06", "overallScore": None}, 0, 0, 1),
+            ("float-overall", {"calendarDate": "2026-01-07", "overallScore": 1.5}, 0, 1, 0),
+            ("unknown-field", {"calendarDate": "2026-01-08", "overallScore": 66, "unknown": "ignored"}, 1, 0, 0),
+            ("private-fields", {"calendarDate": "2026-01-09", "overallScore": 70, "deviceId": "private", "userProfilePk": "private", "timestamp": 1}, 1, 0, 0),
         )
-        for name, row, accepted, excluded in cases:
+        # A row left out that holds no value is an empty record, counted
+        # apart from the rows left out with a value (stage A3d-1).
+        for name, row, accepted, excluded, empty in cases:
             with self.subTest(name=name):
                 result = normalize_hill_score([_asset("DI-Connect-Metrics/HillScore_test.json", [row])])
                 self.assertEqual(len(result.records), accepted)
                 self.assertEqual(result.audit["excluded_record_count"], excluded)
+                self.assertEqual(result.audit.get("empty_record_count", 0), empty)
                 self.assertTrue(
                     all(set(item) == {"calendar_date", "overall_score", "strength_score", "endurance_score", "classification_id", "feedback_phrase_id", "disagreeing_fields"} for item in result.records)
                 )
@@ -144,23 +147,26 @@ class HillScoreContractTest(unittest.TestCase):
 class EnduranceScoreContractTest(unittest.TestCase):
     def test_e01_to_e11_normalization_matrix(self) -> None:
         cases = (
-            ("minimal", {"calendarDate": "2026-03-01", "overallScore": 70}, 1, 0),
-            ("full", {"calendarDate": "2026-03-02", "overallScore": 71.5, "classification": 7, "feedbackPhrase": 100}, 1, 0),
-            ("nullable", {"calendarDate": "2026-03-03", "overallScore": 72, "classification": None}, 1, 0),
-            ("timestamp-date", {"calendarDate": "2026-03-04T00:00:00", "overallScore": 73}, 1, 0),
-            ("invalid-date", {"calendarDate": "2026-99-99", "overallScore": 73}, 0, 1),
-            ("missing-date", {"overallScore": 73}, 0, 1),
-            ("missing-overall", {"calendarDate": "2026-03-05"}, 0, 1),
-            ("null-overall", {"calendarDate": "2026-03-06", "overallScore": None}, 0, 1),
-            ("boolean-overall", {"calendarDate": "2026-03-07", "overallScore": True}, 0, 1),
-            ("contributors", {"calendarDate": "2026-03-08", "overallScore": 75, "enduranceScoreContributor": [{"group": 0}]}, 1, 0),
-            ("private-fields", {"calendarDate": "2026-03-09", "overallScore": 76, "deviceId": "private", "userProfilePK": "private", "primaryTrainingDevice": True}, 1, 0),
+            ("minimal", {"calendarDate": "2026-03-01", "overallScore": 70}, 1, 0, 0),
+            ("full", {"calendarDate": "2026-03-02", "overallScore": 71.5, "classification": 7, "feedbackPhrase": 100}, 1, 0, 0),
+            ("nullable", {"calendarDate": "2026-03-03", "overallScore": 72, "classification": None}, 1, 0, 0),
+            ("timestamp-date", {"calendarDate": "2026-03-04T00:00:00", "overallScore": 73}, 1, 0, 0),
+            ("invalid-date", {"calendarDate": "2026-99-99", "overallScore": 73}, 0, 1, 0),
+            ("missing-date", {"overallScore": 73}, 0, 1, 0),
+            ("missing-overall", {"calendarDate": "2026-03-05"}, 0, 0, 1),
+            ("null-overall", {"calendarDate": "2026-03-06", "overallScore": None}, 0, 0, 1),
+            ("boolean-overall", {"calendarDate": "2026-03-07", "overallScore": True}, 0, 1, 0),
+            ("contributors", {"calendarDate": "2026-03-08", "overallScore": 75, "enduranceScoreContributor": [{"group": 0}]}, 1, 0, 0),
+            ("private-fields", {"calendarDate": "2026-03-09", "overallScore": 76, "deviceId": "private", "userProfilePK": "private", "primaryTrainingDevice": True}, 1, 0, 0),
         )
-        for name, row, accepted, excluded in cases:
+        # A row left out that holds no value is an empty record, counted
+        # apart from the rows left out with a value (stage A3d-1).
+        for name, row, accepted, excluded, empty in cases:
             with self.subTest(name=name):
                 result = normalize_endurance_score([_asset("DI-Connect-Metrics/EnduranceScore_test.json", [row])])
                 self.assertEqual(len(result.records), accepted)
                 self.assertEqual(result.audit["excluded_record_count"], excluded)
+                self.assertEqual(result.audit.get("empty_record_count", 0), empty)
                 self.assertTrue(
                     all(set(item) == {"calendar_date", "overall_score", "classification", "feedback_phrase", "disagreeing_fields"} for item in result.records)
                 )

@@ -254,7 +254,7 @@ FUTURE_READY_DATASETS = ("health_status",)
 # records it. For the daily datasets (v2.0) and for Activities, Gear,
 # activity_gear, and Personal Records (v2.1), these rules replace the merge
 # fields of the v1.0 policy registry; the other datasets follow that registry
-# until stages A3c and A3d. Snapshots are numbered from 1 in the order of their
+# until stage A3d. Snapshots are numbered from 1 in the order of their
 # Export observation times, and the numbers are given again in every build.
 # From v2.2, Snapshots with the same content are one Snapshot, and a store that
 # holds the Exports of more than one account stops the build. From v2.3, Snapshots
@@ -266,8 +266,11 @@ FUTURE_READY_DATASETS = ("health_status",)
 # From v2.4, a file that a one-shot run leaves out, or does not read because of
 # its size, is left out of the build in the same way and listed by Snapshot
 # number, and the records that the latest Snapshot lacks while a file of their
-# family was left out from it are marked.
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.4"
+# family was left out from it are marked. From v2.5, a daily record without a
+# stable key, such as one without a date, is not held: it is written for
+# Run-All, which leaves it out as a one-shot run does, or only counts it when
+# it holds no value.
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.5"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -348,6 +351,24 @@ MERGE_RULES: dict[str, Any] = {
         "zip_file_without_listed_members": "left_out_with_the_reason_from_registration",
         "records_the_latest_snapshot_lacks": "kept_and_marked_when_a_file_of_their_family_was_left_out",
         "accounts": "files_left_out_not_compared",
+    },
+    "rows_without_a_stable_key": {
+        "datasets": [
+            "hill_score_daily",
+            "endurance_score_daily",
+            "race_prediction_daily",
+            "sleep_daily",
+            "uds_daily",
+            "acute_training_load_daily",
+            "training_readiness_daily",
+            "vo2max_daily",
+            "training_history_daily",
+        ],
+        "policy": "passed_to_run_all_and_left_out_as_in_a_one_shot_run",
+        "same_content": "passed_once_with_one_snapshot_number_per_occurrence",
+        "copies_within_snapshot": "counted_as_in_a_one_shot_run",
+        "rows_that_hold_no_value": "counted_as_empty_records_not_announced",
+        "review_hold": False,
     },
     "other_datasets_follow": REGISTRY_VERSION,
 }

@@ -570,11 +570,15 @@ def _run_quality_projection(quality: dict[str, Any]) -> dict[str, Any]:
         )
     public_warnings = []
     for item in quality.get("warnings", []):
-        if not isinstance(item, dict) or set(item) not in ({"code", "count"}, {"code", "count", "family"}):
+        if not isinstance(item, dict) or set(item) not in (
+            {"code", "count"},
+            {"code", "count", "family"},
+            {"code", "count", "family", "dataset"},
+        ):
             raise SupportBundleError("SUPPORT_BUNDLE_UNCLASSIFIED_FIELD", "Run Quality warning shape is invalid")
         if item.get("code") not in SAFE_WARNING_CODES or (
             "family" in item and item.get("family") not in SAFE_FAMILIES
-        ):
+        ) or ("dataset" in item and item.get("dataset") not in DATASET_ORDER):
             raise SupportBundleError("SUPPORT_BUNDLE_UNREGISTERED_DIAGNOSTIC", "Run Quality warning is not registered")
         count = item.get("count")
         if not isinstance(count, int) or isinstance(count, bool) or count < 0:

@@ -31,8 +31,34 @@ from ..intake.discovery import (
 )
 from ..intake.source import DAMAGED_ZIP_ERRORS
 from ..intake.roots import MIXED_STORE_MESSAGE, MixedExportsError
-from ..normalizers.daily_metrics import SNAPSHOT_NUMBERS_FIELD
+from ..normalizers.daily_metrics import SNAPSHOT_NUMBERS_FIELD, value_source_names
+from ..normalizers.performance_metrics import (
+    ENDURANCE_VALUE_SOURCES,
+    HILL_VALUE_SOURCES,
+    endurance_score_left_out_reason,
+    hill_score_left_out_reason,
+    metric_rows,
+)
+from ..normalizers.race_prediction import (
+    RACE_PREDICTION_VALUE_SOURCES,
+    race_prediction_left_out_reason,
+)
 from ..normalizers.records import SNAPSHOT_PROBE_FIELD
+from ..normalizers.sleep import SLEEP_VALUE_SOURCES, sleep_left_out_reason
+from ..normalizers.training_history import (
+    TRAINING_HISTORY_VALUE_SOURCES,
+    training_history_left_out_reason,
+)
+from ..normalizers.training_load import (
+    ACUTE_TRAINING_LOAD_VALUE_SOURCES,
+    acute_training_load_left_out_reason,
+)
+from ..normalizers.training_readiness import (
+    TRAINING_READINESS_VALUE_SOURCES,
+    training_readiness_left_out_reason,
+)
+from ..normalizers.uds import UDS_VALUE_SOURCES, uds_left_out_reason
+from ..normalizers.vo2max import VO2MAX_VALUE_SOURCES, vo2max_left_out_reason
 from .policies import CONTRACT_VERSION, MERGE_RULES, MERGE_RULES_VERSION, REGISTRY_VERSION
 from .store import SnapshotStoreError, content_multiset, load_manifests, load_store, sha256_file
 from .store import verify_store
@@ -73,6 +99,31 @@ SOURCE_OBSERVATION_DATASETS = {
     "training_readiness_daily",
     "vo2max_daily",
     "training_history_daily",
+}
+# The reason for which Run-All leaves a record of each daily dataset out, and
+# the source fields of the dataset's values, as Run-All reads them (stage A3d-1).
+# The reason for a VO2max record also needs the name of its file; see
+# _left_out_with_a_value.
+DAILY_LEFT_OUT_REASONS = {
+    "hill_score_daily": hill_score_left_out_reason,
+    "endurance_score_daily": endurance_score_left_out_reason,
+    "race_prediction_daily": race_prediction_left_out_reason,
+    "sleep_daily": sleep_left_out_reason,
+    "uds_daily": uds_left_out_reason,
+    "acute_training_load_daily": acute_training_load_left_out_reason,
+    "training_readiness_daily": training_readiness_left_out_reason,
+    "training_history_daily": training_history_left_out_reason,
+}
+DAILY_VALUE_SOURCE_NAMES = {
+    "hill_score_daily": value_source_names(HILL_VALUE_SOURCES),
+    "endurance_score_daily": value_source_names(ENDURANCE_VALUE_SOURCES),
+    "race_prediction_daily": value_source_names(RACE_PREDICTION_VALUE_SOURCES),
+    "sleep_daily": value_source_names(SLEEP_VALUE_SOURCES),
+    "uds_daily": value_source_names(UDS_VALUE_SOURCES),
+    "acute_training_load_daily": value_source_names(ACUTE_TRAINING_LOAD_VALUE_SOURCES),
+    "training_readiness_daily": value_source_names(TRAINING_READINESS_VALUE_SOURCES),
+    "vo2max_daily": value_source_names(VO2MAX_VALUE_SOURCES),
+    "training_history_daily": value_source_names(TRAINING_HISTORY_VALUE_SOURCES),
 }
 SCHEMA_VERSION = "garmin-run-all-output:v1.1"
 APPROVED_INPUT_MAX_FILE_BYTES = ArchiveLimits().max_member_bytes
@@ -199,6 +250,21 @@ def _read_blob(store: Path, row: dict[str, Any]) -> bytes:
     ):
         raise SnapshotMergeError("immutable snapshot blob failed verification")
     return path.read_bytes()
+
+
+def _left_out_with_a_value(dataset: str, record: dict[str, Any], logical_name: str) -> bool:
+    """Tell whether Run-All leaves a daily record out while it holds a value.
+
+    Such a record makes the family of its Snapshot malformed; a record that
+    holds no value is an empty record, which Run-All only counts (stage A3d-1).
+    """
+    if dataset == "vo2max_daily":
+        reason = vo2max_left_out_reason(record, PurePosixPath(logical_name).name.lower())
+    else:
+        reason = DAILY_LEFT_OUT_REASONS[dataset](record)
+    return reason is not None and any(
+        not is_empty(record.get(name)) for name in DAILY_VALUE_SOURCE_NAMES[dataset]
+    )
 
 
 def _dict_rows(value: Any) -> list[dict[str, Any]]:
@@ -545,7 +611,7 @@ def _dataset_records(
                     )
                 )
     elif PurePosixPath(lower).name.startswith("hillscore"):
-        for index, row in enumerate(_containers(payload)):
+        for index, row in enumerate(metric_rows(payload)):
             record = _metric_row("hill_score_daily", row)
             calendar_date = daily_calendar_date(record.get("calendarDate"))
             if calendar_date is not None:
@@ -559,7 +625,7 @@ def _dataset_records(
                 )
             )
     elif PurePosixPath(lower).name.startswith("endurancescore"):
-        for index, row in enumerate(_containers(payload)):
+        for index, row in enumerate(metric_rows(payload)):
             record = _metric_row("endurance_score_daily", row)
             calendar_date = daily_calendar_date(record.get("calendarDate"))
             if calendar_date is not None:
@@ -987,15 +1053,21 @@ def _merge_dataset(
     ``latest_file_left_out`` tells that the latest Snapshot had a file of the
     dataset's family left out (stage A3c-2): the records that it lacks are
     marked, since they may only have been in that file.
+    A daily record without a stable key is not held: it is written for
+    Run-All, which leaves it out as a one-shot run does (stage A3d-1).
     """
     groups: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
     holds: list[dict[str, Any]] = []
+    keyless: list[dict[str, Any]] = []
     conflicts: list[dict[str, Any]] = []
     provenance: list[dict[str, Any]] = []
     field_provenance: list[dict[str, Any]] = []
     for observation in observations:
         raw_key = observation["raw_key"]
         if raw_key is None or any(value in (None, "") for value in raw_key):
+            if dataset in DAILY_DATASETS:
+                keyless.append(observation)
+                continue
             holds.append(
                 {
                     "hold_type": "null_stable_key",
@@ -1370,9 +1442,54 @@ def _merge_dataset(
                 }
             )
 
+    # Each distinct daily record without a stable key is written once, after
+    # the records with one, with the import number of each Snapshot occurrence,
+    # so that Run-All counts it as a one-shot run of each Export does. It has
+    # no presence, changes, or record audit (stage A3d-1).
+    keyed_record_count = len(canonical)
+    by_content: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for observation in keyless:
+        by_content[_stable_json(observation["record"])].append(observation)
+    for signature in sorted(by_content):
+        rows = sorted(by_content[signature], key=_observation_order)
+        key = f"{dataset}:keyless:{_sha256_bytes(signature.encode('utf-8'))}"
+        numbers = sorted(int(item["logical_order"]) for item in rows)
+        canonical.append(
+            {
+                "canonical_key": key,
+                "raw_record": rows[0]["record"],
+                "snapshot_numbers": numbers,
+                "presence_pattern": "".join(
+                    "1" if number in numbers else "0"
+                    for number in range(1, snapshot_count + 1)
+                ),
+                "source_snapshot_count": len(set(numbers)),
+                "source_observation_count": len(rows),
+            }
+        )
+        for index, observation in enumerate(rows):
+            provenance.append(
+                {
+                    "dataset": dataset,
+                    "canonical_key": key,
+                    "snapshot_id": observation["snapshot_id"],
+                    "logical_order": observation["logical_order"],
+                    "source_relative_path": observation["source_relative_path"],
+                    "source_record_index": observation["source_record_index"],
+                    "source_object_sha256": observation["source_object_sha256"],
+                    "record_sha256": _sha256_value(observation["record"]),
+                    "field_presence": sorted(observation["record"]),
+                    "merge_disposition": (
+                        "observation_kept" if index == 0 else "exact_duplicate"
+                    ),
+                }
+            )
+
     summary = {
         "source_observation_count": len(observations),
-        "canonical_record_count": len({item["canonical_key"] for item in canonical}),
+        "canonical_record_count": len(
+            {item["canonical_key"] for item in canonical[:keyed_record_count]}
+        ),
         "null_key_hold_count": sum(
             item["dataset"] == dataset and item["hold_type"] == "null_stable_key"
             for item in holds
@@ -1390,8 +1507,11 @@ def _merge_dataset(
     if daily:
         summary.update(
             {
-                "distinct_record_count": len(canonical),
+                "distinct_record_count": keyed_record_count,
                 "exact_repeat_count": exact_repeat_count,
+                # Records without a stable key, written for Run-All (stage A3d-1).
+                "keyless_observation_count": len(keyless),
+                "keyless_record_count": len(by_content),
                 "automatic_winner": False,
             }
         )
@@ -1845,7 +1965,12 @@ def build_approved_input(
                     diagnostic_family = dataset_to_family.get(dataset)
                     if diagnostic_family is not None:
                         diagnostic["source_observation_counts"][diagnostic_family] += 1
-                        if raw_key is None:
+                        malformed = (
+                            _left_out_with_a_value(dataset, record, logical_name)
+                            if dataset in DAILY_VALUE_SOURCE_NAMES
+                            else raw_key is None
+                        )
+                        if malformed:
                             diagnostic["malformed_counts"][diagnostic_family] += 1
                     observations_by_dataset[dataset].append(
                         {

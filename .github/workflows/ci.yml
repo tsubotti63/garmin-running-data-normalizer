@@ -129,6 +129,9 @@ jobs:
       - name: Verify Windows files that cannot be read
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_unreadable_files.py .\tests\test_snapshot_unreadable_files.py -q
+      - name: Verify Windows rows left out
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_rows_left_out.py -q
       - name: Build distributions
         shell: powershell
         run: |

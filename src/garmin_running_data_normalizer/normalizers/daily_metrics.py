@@ -4,10 +4,12 @@ import json
 import hashlib
 import math
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any, Callable, Iterable
 
+from ..common.values import is_empty
 from ..intake.discovery import DiscoveredAsset, parse_json_asset
 
 
@@ -126,6 +128,37 @@ def copies_within_snapshots(numbers: list[int] | None) -> int:
     Export, and the same record in two Snapshots is not a copy (stage A3b).
     """
     return len(numbers) - len(set(numbers)) if numbers else 0
+
+
+def value_source_names(value_sources: Mapping[str, tuple[str, ...]]) -> tuple[str, ...]:
+    """Return the source fields of a dataset's value fields, each once, in order."""
+    return tuple(dict.fromkeys(name for names in value_sources.values() for name in names))
+
+
+@dataclass
+class RowsLeftOut:
+    """Count the rows of a daily dataset that lack a required value (stage A3d-1).
+
+    A row that holds a value in one of the dataset's value source fields is
+    left out with its reason, and the run announces it. A row that holds none,
+    such as a Sleep record with only its ``retro`` flag, is an empty record:
+    it is only counted. An empty value (null, "", [], or {}) holds nothing;
+    0, false, and a value of an unexpected type are values. Copies within one
+    Snapshot count as in a one-shot run of that Export (stage A3b).
+    """
+
+    value_sources: tuple[str, ...]
+    reasons: Counter[str] = field(default_factory=Counter)
+    empty_record_count: int = 0
+    copy_count: int = 0
+
+    def add(self, raw: dict[str, Any], reason: str) -> None:
+        copies = copies_within_snapshots(snapshot_numbers(raw))
+        self.copy_count += copies
+        if any(not is_empty(raw.get(name)) for name in self.value_sources):
+            self.reasons[reason] += 1 + copies
+        else:
+            self.empty_record_count += 1 + copies
 
 
 def _value_order(item: tuple[str, list[Any]]) -> tuple[int, float, str]:
@@ -254,6 +287,7 @@ def finalize_daily(
     source_record_count: int,
     accepted: list[dict[str, Any]],
     excluded_reasons: Counter[str],
+    empty_record_count: int = 0,
     fields: tuple[str, ...] | None = None,
     review_on_any_duplicate: bool = False,
     duplicate_review_factory: Callable[[str, list[dict[str, Any]]], dict[str, Any]] | None = None,
@@ -279,6 +313,8 @@ def finalize_daily(
     in ``_snapshot_numbers``; internal fields never reach the output. Its
     copies within one Snapshot are counted as source records and same-value
     duplicates, as a one-shot run of that Export counts them.
+    ``excluded_reasons`` counts the rows left out that hold a value, by reason,
+    and ``empty_record_count`` the rows left out that hold none (stage A3d-1).
     """
     if not key_fields:
         raise DailyMetricError("daily metric stable key must not be empty")
@@ -375,6 +411,8 @@ def finalize_daily(
         "accepted_record_count": len(output),
         "excluded_record_count": sum(excluded_reasons.values()),
         "excluded_reason_counts": dict(sorted(excluded_reasons.items())),
+        # Rows left out that hold no value: counted apart, and not announced.
+        **({"empty_record_count": empty_record_count} if empty_record_count else {}),
         "same_value_duplicate_count": same_value_duplicates,
         "review_key_count": review_key_count,
         "disagreement_key_count": len(disagreements),
@@ -394,6 +432,7 @@ def finalize_daily(
             dedupe_exact_duplicates
             or provenance_conflict_predicate is not None
             or excluded_reasons
+            or empty_record_count
             or review_required_count
         )
     ):
@@ -416,6 +455,7 @@ __all__ = [
     "DailyMetricError",
     "DailyMetricResult",
     "MergedObservations",
+    "RowsLeftOut",
     "SNAPSHOT_NUMBERS_FIELD",
     "copies_within_snapshots",
     "boolean",
@@ -430,5 +470,6 @@ __all__ = [
     "snapshot_numbers",
     "stable_json",
     "text",
+    "value_source_names",
     "variant_fingerprint",
 ]

@@ -1313,6 +1313,7 @@ def _validate_projection_inputs(
     normalized_family_results: dict[str, Mapping[str, Any]] = {}
     total_family_warnings = 0
     total_family_errors = 0
+    rows_left_out = False
     for family in expected_families:
         result = _mapping(family_results[family], f"family result {family}")
         status = result.get("status")
@@ -1423,6 +1424,12 @@ def _validate_projection_inputs(
         for field in ("updated_record_count", "not_in_latest_snapshot_count"):
             if _non_negative_integer(result.get(field, 0), f"{family} {field}"):
                 expected_warning_count += 1
+        # Rows left out that hold a value (stage A3d-1).
+        if _non_negative_integer(
+            result.get("left_out_row_count", 0), f"{family} left-out row count"
+        ):
+            expected_warning_count += 1
+            rows_left_out = True
 
         if status != expected_status:
             raise OutputExperienceError(
@@ -1474,14 +1481,15 @@ def _validate_projection_inputs(
             "summary error count does not match family error counts"
         )
     fit_is_partial = normalized_family_results["fit"]["status"] == "PARTIAL"
-    # A file left out also bounds the run (stage A3c).
+    # A file left out also bounds the run (stage A3c), and so does a row left
+    # out (stage A3d-1).
     files_left_out = any(
         isinstance(item, Mapping) and item.get("code") == "DATA_FILE_LEFT_OUT"
         for item in warnings
     )
     expected_run_status = (
         "PARTIAL_SUCCESS"
-        if fit_is_partial or files_left_out
+        if fit_is_partial or files_left_out or rows_left_out
         else "PASS_WITH_WARNINGS"
         if summary_warning_count
         else "PASS"
@@ -1987,6 +1995,23 @@ def _files_left_out_lines(manifest: Mapping[str, Any], summary: Mapping[str, Any
     return lines
 
 
+def _rows_left_out_lines(summary: Mapping[str, Any]) -> list[str]:
+    """Count the rows left out because they lack a required value (stage A3d-1)."""
+    counts: dict[str, int] = {}
+    for item in summary.get("warnings", []):
+        if isinstance(item, Mapping) and item.get("code") == "DATA_ROW_LEFT_OUT":
+            counts[str(item.get("dataset"))] = _non_negative_integer(
+                item.get("count"), "rows left out"
+            )
+    if not counts:
+        return []
+    tables = ", ".join(f"{_code(dataset)} {count}" for dataset, count in counts.items())
+    return [
+        f"- Rows left out: {sum(counts.values())} ({tables}), which lack a required "
+        "value such as a date; each dataset's audit record counts them by reason"
+    ]
+
+
 def render_start_here(
     manifest: Mapping[str, Any],
     summary: Mapping[str, Any],
@@ -2017,6 +2042,7 @@ def render_start_here(
         f"- Error count: {error_count}",
         *_files_not_read_lines(manifest),
         *_files_left_out_lines(manifest, summary),
+        *_rows_left_out_lines(summary),
         "",
         "## Dataset Families",
         "",

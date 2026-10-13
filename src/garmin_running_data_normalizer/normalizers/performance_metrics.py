@@ -9,11 +9,13 @@ from typing import Any, Iterable
 from ..common.time import daily_calendar_date
 from ..intake.discovery import DiscoveredAsset, parse_json_asset
 from .daily_metrics import (
+    RowsLeftOut,
     copies_within_snapshots,
     merge_observations,
     observation_weight,
     public_fields,
     snapshot_numbers,
+    value_source_names,
 )
 
 
@@ -31,6 +33,22 @@ ENDURANCE_FIELDS = (
     "classification",
     "feedback_phrase",
 )
+# The source field of each value field (stage A3d-1); the other field is the
+# record's key. A row left out that holds nothing in them is an empty record.
+HILL_VALUE_SOURCES = {
+    "overall_score": ("overallScore",),
+    "strength_score": ("strengthScore",),
+    "endurance_score": ("enduranceScore",),
+    "classification_id": ("hillScoreClassificationId",),
+    "feedback_phrase_id": ("hillScoreFeedbackPhraseId",),
+}
+HILL_FIELDS_WITHOUT_VALUES = ("calendar_date",)
+ENDURANCE_VALUE_SOURCES = {
+    "overall_score": ("overallScore",),
+    "classification": ("classification",),
+    "feedback_phrase": ("feedbackPhrase",),
+}
+ENDURANCE_FIELDS_WITHOUT_VALUES = ("calendar_date",)
 LACTATE_FIELDS = (
     "observation_timestamp",
     "observation_family",
@@ -68,7 +86,11 @@ def _load_json(asset: DiscoveredAsset) -> Any:
     return value if readable else None
 
 
-def _root_rows(value: Any) -> list[dict[str, Any]]:
+def metric_rows(value: Any) -> list[dict[str, Any]]:
+    """Return the records of a performance-metric file, as Run-All and the
+    Snapshot build read them: the objects of its top list, of the list that
+    its top object holds under ``records``, ``items``, or ``data``, or the top
+    object itself."""
     if isinstance(value, list):
         return [item for item in value if isinstance(item, dict)]
     if isinstance(value, dict):
@@ -94,6 +116,24 @@ def _number(value: Any, *, integer: bool) -> int | float | None:
     if integer:
         return value if isinstance(value, int) else None
     return value
+
+
+def _left_out_reason(raw: dict[str, Any], *, is_hill: bool) -> str | None:
+    if _calendar_date(raw.get("calendarDate")) is None:
+        return "missing_or_invalid_calendar_date"
+    if _number(raw.get("overallScore"), integer=is_hill) is None:
+        return "missing_or_invalid_overall_score"
+    return None
+
+
+def hill_score_left_out_reason(raw: dict[str, Any]) -> str | None:
+    """Return why a Hill Score record is left out, or None when it is kept."""
+    return _left_out_reason(raw, is_hill=True)
+
+
+def endurance_score_left_out_reason(raw: dict[str, Any]) -> str | None:
+    """Return why an Endurance Score record is left out, or None when it is kept."""
+    return _left_out_reason(raw, is_hill=False)
 
 
 def _stable_row(value: dict[str, Any]) -> str:
@@ -123,7 +163,9 @@ def _normalize_daily(
         )
     ]
     accepted: list[dict[str, Any]] = []
-    excluded_reasons: Counter[str] = Counter()
+    left_out = RowsLeftOut(
+        value_source_names(HILL_VALUE_SOURCES if is_hill else ENDURANCE_VALUE_SOURCES)
+    )
     source_record_count = 0
     excluded_private_fields: Counter[str] = Counter()
     private_names = {
@@ -137,19 +179,17 @@ def _normalize_daily(
     }
 
     for asset in selected_assets:
-        rows = _root_rows(_load_json(asset))
+        rows = metric_rows(_load_json(asset))
         source_record_count += len(rows)
         for raw in rows:
             excluded_private_fields.update(name for name in private_names if name in raw)
-            calendar_date = _calendar_date(raw.get("calendarDate"))
-            if calendar_date is None:
-                excluded_reasons["missing_or_invalid_calendar_date"] += 1
+            reason = _left_out_reason(raw, is_hill=is_hill)
+            if reason is not None:
+                left_out.add(raw, reason)
                 continue
+            calendar_date = _calendar_date(raw.get("calendarDate"))
+            overall = _number(raw.get("overallScore"), integer=is_hill)
             if is_hill:
-                overall = _number(raw.get("overallScore"), integer=True)
-                if overall is None:
-                    excluded_reasons["missing_or_invalid_overall_score"] += 1
-                    continue
                 accepted.append(
                     {
                         "_snapshot_numbers": snapshot_numbers(raw),
@@ -166,10 +206,6 @@ def _normalize_daily(
                     }
                 )
             else:
-                overall = _number(raw.get("overallScore"), integer=False)
-                if overall is None:
-                    excluded_reasons["missing_or_invalid_overall_score"] += 1
-                    continue
                 accepted.append(
                     {
                         "_snapshot_numbers": snapshot_numbers(raw),
@@ -225,10 +261,16 @@ def _normalize_daily(
         "dataset": dataset,
         "status": "PASS",
         "detected_asset_count": len(selected_assets),
-        "source_record_count": source_record_count + copy_count,
+        "source_record_count": source_record_count + copy_count + left_out.copy_count,
         "accepted_record_count": len(normalized),
-        "excluded_record_count": sum(excluded_reasons.values()),
-        "excluded_reason_counts": dict(sorted(excluded_reasons.items())),
+        "excluded_record_count": sum(left_out.reasons.values()),
+        "excluded_reason_counts": dict(sorted(left_out.reasons.items())),
+        # Rows left out that hold no value: counted apart, and not announced.
+        **(
+            {"empty_record_count": left_out.empty_record_count}
+            if left_out.empty_record_count
+            else {}
+        ),
         "same_value_duplicate_count": duplicate_count,
         "disagreement_key_count": len(disagreements),
         "disagreements": disagreements,
@@ -242,7 +284,7 @@ def _normalize_daily(
         "source_paths_exposed": False,
         "source_hashes_exposed": False,
     }
-    if excluded_reasons:
+    if left_out.reasons or left_out.empty_record_count:
         audit.update(
             {
                 "review_required_count": 0,
@@ -298,7 +340,7 @@ def collect_lactate_threshold_candidates(
         if matched is None:
             continue
         family_order, family = matched
-        rows = _root_rows(_load_json(asset))
+        rows = metric_rows(_load_json(asset))
         family_asset_counts[family] += 1
         family_source_counts[family] += len(rows)
         for source_index, raw in enumerate(rows):
@@ -415,11 +457,18 @@ def build_performance_metrics_daily_context(
 __all__ = [
     "DailyNormalizationResult",
     "ENDURANCE_FIELDS",
+    "ENDURANCE_FIELDS_WITHOUT_VALUES",
+    "ENDURANCE_VALUE_SOURCES",
     "HILL_FIELDS",
+    "HILL_FIELDS_WITHOUT_VALUES",
+    "HILL_VALUE_SOURCES",
     "LACTATE_FIELDS",
     "PerformanceMetricsError",
     "build_performance_metrics_daily_context",
     "collect_lactate_threshold_candidates",
+    "endurance_score_left_out_reason",
+    "hill_score_left_out_reason",
+    "metric_rows",
     "normalize_endurance_score",
     "normalize_hill_score",
 ]

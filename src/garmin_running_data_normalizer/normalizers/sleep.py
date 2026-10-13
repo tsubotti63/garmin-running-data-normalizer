@@ -10,10 +10,13 @@ from ..common.time import daily_calendar_date
 from ..intake.discovery import DiscoveredAsset, load_json_assets
 from .daily_metrics import (
     DailyMetricResult,
+    RowsLeftOut,
+    copies_within_snapshots,
     finalize_daily,
     load_rows,
     logical_basename,
     snapshot_numbers,
+    value_source_names,
 )
 
 MAX_SAFE_INTEGER = (1 << 53) - 1
@@ -260,6 +263,37 @@ SLEEP_DAILY_FIELDS = (
     "sleep_source_available_for_analysis_flag",
 )
 
+# The source fields of each value field (stage A3d-1); the other fields are the
+# sleep day and the states set from the values. A row left out that holds
+# nothing in them is an empty record, such as a record with only its ``retro``
+# flag. The end time also gives the sleep day, but it is a value as well.
+SLEEP_VALUE_SOURCES = {
+    "sleep_start_local": ("sleepStartTimestampGMT",),
+    "sleep_end_local": ("sleepEndTimestampGMT",),
+    "sleep_window_minutes_including_awake": (
+        "sleepStartTimestampGMT",
+        "sleepEndTimestampGMT",
+    ),
+    "sleep_duration_minutes_ex_awake": (
+        *(name for aliases in SLEEP_STAGE_ALIASES for name in aliases),
+        *SLEEP_DIRECT_DURATION_ALIASES,
+    ),
+    "sleep_stage_deep_minutes": ("deepSleepSeconds", "deep_sleep_seconds"),
+    "sleep_stage_light_minutes": ("lightSleepSeconds", "light_sleep_seconds"),
+    "sleep_stage_rem_minutes": ("remSleepSeconds", "rem_sleep_seconds"),
+    "sleep_score": ("sleepScores", "overallScore", "sleepScore"),
+    "sleep_awake_minutes": ("awakeSleepSeconds", "awake_sleep_seconds"),
+}
+SLEEP_FIELDS_WITHOUT_VALUES = (
+    "sleep_day",
+    "sleep_stage_available_flag",
+    "sleep_score_available_flag",
+    "sleep_normalization_status",
+    "sleep_limitation_type",
+    "sleep_reason_code",
+    "sleep_source_available_for_analysis_flag",
+)
+
 _SLEEP_STAGE_FIELDS = (
     "sleep_stage_deep_minutes",
     "sleep_stage_light_minutes",
@@ -347,6 +381,21 @@ def _public_sleep_review_row(
     }
 
 
+def sleep_left_out_reason(raw: dict[str, Any], timezone_name: str = "UTC") -> str | None:
+    """Return why a Sleep record is left out, or None when it is kept.
+
+    A record is kept when it has a sleep day: its calendar date, or else the
+    local date of its end time. Whether the end time can be read does not
+    depend on the timezone.
+    """
+    if (
+        daily_calendar_date(raw.get("calendarDate")) is None
+        and _timestamps(raw.get("sleepEndTimestampGMT"), timezone_name)[1] is None
+    ):
+        return "missing_or_invalid_sleep_day"
+    return None
+
+
 def normalize_sleep_daily_assets(
     assets: Iterable[DiscoveredAsset],
     timezone_name: str = "Asia/Tokyo",
@@ -358,7 +407,7 @@ def normalize_sleep_daily_assets(
     ]
     source_rows = [row for asset in selected for row in load_rows(asset)]
     accepted: list[dict[str, Any]] = []
-    excluded: Counter[str] = Counter()
+    left_out = RowsLeftOut(value_source_names(SLEEP_VALUE_SOURCES))
     duration_source_counts: Counter[str] = Counter()
     for raw in source_rows:
         _start_gmt, start_local = _timestamps(
@@ -370,8 +419,9 @@ def normalize_sleep_daily_assets(
         sleep_day = daily_calendar_date(raw.get("calendarDate"))
         if sleep_day is None and end_local is not None:
             sleep_day = end_local[:10]
-        if sleep_day is None:
-            excluded["missing_or_invalid_sleep_day"] += 1
+        reason = sleep_left_out_reason(raw, timezone_name)
+        if reason is not None:
+            left_out.add(raw, reason)
             continue
         window_minutes = None
         if start_local is not None and end_local is not None:
@@ -386,7 +436,10 @@ def normalize_sleep_daily_assets(
         rem = _first_number(raw, "remSleepSeconds", "rem_sleep_seconds")
         awake = _first_number(raw, "awakeSleepSeconds", "awake_sleep_seconds")
         duration, duration_source, disagreeing = _sleep_duration_seconds(raw)
-        duration_source_counts[duration_source] += 1
+        # Copies within one Snapshot count as in a one-shot run (stage A3b).
+        duration_source_counts[duration_source] += 1 + copies_within_snapshots(
+            snapshot_numbers(raw)
+        )
         score = _sleep_score(raw)
         accepted.append(
             {
@@ -415,9 +468,10 @@ def normalize_sleep_daily_assets(
         dataset="sleep_daily",
         key_fields=("sleep_day",),
         selected_assets=selected,
-        source_record_count=len(source_rows),
+        source_record_count=len(source_rows) + left_out.copy_count,
         accepted=accepted,
-        excluded_reasons=excluded,
+        excluded_reasons=left_out.reasons,
+        empty_record_count=left_out.empty_record_count,
         fields=SLEEP_DAILY_FIELDS,
         review_on_any_duplicate=False,
         duplicate_review_factory=_public_sleep_review_row,
@@ -440,6 +494,9 @@ def normalize_sleep_daily_assets(
 __all__ = [
     "SLEEP_DAILY_FIELDS",
     "SLEEP_DIRECT_DURATION_ALIASES",
+    "SLEEP_FIELDS_WITHOUT_VALUES",
+    "SLEEP_VALUE_SOURCES",
     "normalize_sleep",
     "normalize_sleep_daily_assets",
+    "sleep_left_out_reason",
 ]

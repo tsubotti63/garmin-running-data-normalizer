@@ -204,6 +204,7 @@
   "timezone.label": "日時に使うタイムゾーン",
   "warning.daily_metrics_review": "確かめが必要な日ごとの指標の値があります。日付が無い、などです（{code}）。",
   "warning.data_file_left_out": "読めなかったファイルがあり、除きました。run_manifest.json に、理由とともに一覧があります（{code}）。",
+  "warning.data_row_left_out": "日付など必要な値が無い行があり、除きました。START_HERE.md に表ごとの数が、監査の記録（audit）に理由ごとの数があります（{code}）。",
   "warning.fit_parse_incomplete": "最後まで読めなかった FIT ファイルがあります。その分は除き、推測で補っていません（{code}）。",
   "warning.input_duplicate_sources": "同じエクスポートが 2 つ以上入っていました（ZIP と、それを展開したフォルダーなど）。1 つだけ読みました（{code}）。",
   "warning.lactate_candidates": "乳酸閾値の候補が複数あります。すべて残し、どれか 1 つに決めていません（{code}）。",
