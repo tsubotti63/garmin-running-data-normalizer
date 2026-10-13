@@ -13,7 +13,7 @@ from garmin_running_data_normalizer.intake.archive import (
     UnsafeArchiveError,
     validated_members,
 )
-from garmin_running_data_normalizer.intake.discovery import discover_export
+from garmin_running_data_normalizer.intake.discovery import discover_export, read_export
 from garmin_running_data_normalizer.normalizers import (
     normalize_activities,
     normalize_gear,
@@ -126,12 +126,15 @@ class IntakeAndNormalizersTest(unittest.TestCase):
         with self.assertRaisesRegex(UnsafeArchiveError, "member count"):
             validated_members(excessive)  # type: ignore[arg-type]
 
-    def test_t9_malformed_archive_fails_closed(self) -> None:
+    def test_t9_malformed_archive_is_left_out_unread(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "malformed.zip").write_bytes(b"not-a-zip")
-            with self.assertRaises(zipfile.BadZipFile):
-                discover_export(root)
+            # Stage A3c leaves it out with a reason; nothing in it is read.
+            with read_export(root) as reading:
+                self.assertEqual(reading.assets, [])
+                self.assertEqual(reading.left_out, [("malformed.zip", 9, "zip_not_readable")])
+            self.assertEqual(discover_export(root), [])
 
     def test_gear_and_personal_records(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

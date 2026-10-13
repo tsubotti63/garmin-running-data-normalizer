@@ -29,7 +29,9 @@ These rules come from the Human maintainer's decisions of 2026-10-11:
 ## Terms
 
 - **Left out**: an input file or row that contributes nothing to the normalized
-  datasets. Every left-out item is counted by reason in an audit record.
+  datasets. Every left-out item is recorded with its reason: a file in the
+  list `files_left_out` of `run_manifest.json`, and a row as a count by reason
+  in an audit record.
 - **Kept with a warning**: the item stays in the output, possibly with an empty
   value and a marker, and every observed value is kept in an audit record.
 - **Disagreement**: observations that share a stable key and differ in a value,
@@ -56,8 +58,9 @@ These rules come from the Human maintainer's decisions of 2026-10-11:
   cannot be read completely are left out as in v1.x, and the same status now
   covers every other left-out file or row.
 - Because `PARTIAL_SUCCESS` now covers more than FIT files, stage B reviews
-  the page's result texts, which describe it in v1.7.1 as complete Activities
-  with some FIT files left out.
+  the texts that describe it in v1.7.1 as complete Activities with some FIT
+  files left out: the page's result texts, and the Doctor's next step for a
+  completed run (`REVIEW_EXCLUDED_FIT_EVIDENCE`) and its text.
 - Optional families that are absent keep the v1.x status `SKIPPED_NOT_PRESENT`
   and the warning `OPTIONAL_FAMILY_NOT_PRESENT`.
 
@@ -385,9 +388,11 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     and `START_HERE.md` gives their number; the status does not change. Their
     names never reach the Support Bundle or the External-safe Pack. An input
     without a root is read as before.
-  - The pre-run check (`doctor --input`, which the GUI uses) reports the same
-    result as the run: `INPUT_MULTIPLE_EXPORTS` as an error, and
-    `INPUT_DUPLICATE_SOURCES` as a warning that does not block the run.
+  - The pre-run check (`doctor --input`, which the GUI uses) reports these as
+    the run does: `INPUT_MULTIPLE_EXPORTS` as an error, and
+    `INPUT_DUPLICATE_SOURCES` as a warning that does not block the run. It
+    does not parse the content of JSON files; see
+    [Files that cannot be read](#files-that-cannot-be-read).
   - `normalize-activities` and `snapshot register` choose the Export in the
     same way; see [Snapshot Stores](#snapshot-stores) for registration.
   - Warnings and errors name no folder or file. The accounts are compared
@@ -399,17 +404,70 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
   order mark stops the Activities, Gear, and Personal Records readers; a Snapshot
   build stops on any such JSON file; an unreadable ZIP file anywhere in the
   input stops the run; a JSON or FIT file over 128 MiB stops the run.
-- v2.0.0:
+- v2.0.0 (stage A3c):
   - A UTF-8 byte order mark is accepted everywhere.
-  - A JSON file that cannot be read, a ZIP file inside the input that cannot be
-    read, and a JSON or FIT file over the size limit are left out with a reason.
-    Warning `DATA_FILE_LEFT_OUT` (provisional), status `PARTIAL_SUCCESS`.
+  - A file that cannot be read is left out with a reason, and the run goes on
+    with the other files, including the other files of the same family:
+    - `json_not_readable`: a JSON file that the run reads and that is not
+      UTF-8, is not JSON, is nested too deeply, or has a number with too many
+      digits. Only these four errors leave a file out; any other error is a
+      defect of the product and stops the run.
+    - `zip_not_readable`: a ZIP file inside the Export that cannot be opened,
+      ends early, or has a member that is read and is damaged.
+    - `zip_unsafe_member`: a ZIP file inside the Export with a member that
+      fails a safety check (a path outside the folder, a link, encryption, or
+      a compression ratio over the limit). Its members are read in memory and
+      never written, so leaving it out is safe. A member of the Export ZIP
+      file itself that fails a check still stops the run: rule 2 stops for an
+      unsafe container, and one unsafe container inside it is left out.
+    - `zip_too_large`: a ZIP file inside the Export over the limits on the
+      number of files or the bytes read from it, or, inside an Export ZIP
+      file, over the limit on its own size.
+    - `file_too_large`: a JSON or FIT file that the run reads, in a folder or
+      in a ZIP file, over the limit for one file (128 MiB).
+  - `run_manifest.json` lists the files left out under `files_left_out`, each
+    with its path from the Export's root (`inner.zip!member` for a member of
+    a ZIP file inside the Export), its size, its family, and the reason, and
+    `START_HERE.md` gives their number. Warning `DATA_FILE_LEFT_OUT` gives the
+    number once per run, and the status is `PARTIAL_SUCCESS` (exit 3). The
+    names never reach the Support Bundle or the External-safe Pack. With no
+    file left out, the outputs do not change.
+  - A JSON file over the limit for one file that no dataset reads adds
+    nothing to the datasets, so it is not read rather than left out:
+    `run_manifest.json` lists it under `files_not_read` with the reason
+    `file_too_large`, `START_HERE.md` counts it with the files not read, and
+    the status does not change.
+  - To tell whether two roots hold the same Export (see
+    [Mixed input](#mixed-input)), a file that is not read because of its
+    size, or a ZIP file that is left out, is compared by its path and size
+    only, as the files of the kinds that are not read.
   - A FIT file that cannot be read completely is left out as in v1.x
     (`FIT_PARSE_INCOMPLETE`).
-  - If no Activities record remains, the run stops as an input that is not an
-    Export.
+  - Records that point to an Activity whose file was left out do not stop the
+    run: the Gear links and Personal Records that point to it leave the
+    tables, counted with warning `RELATIONSHIP_UNRESOLVED_VALID_LINK` as in
+    v1.7.1, and FIT sessions stay without a link. Stage A4 keeps such rows as
+    unresolved.
+  - If no Activities record remains because every Activities file was left
+    out, the run stops with `ACTIVITIES_EMPTY` and says that the Activities
+    files could not be read; the next step is a complete, readable Export.
+  - The pre-run check (`doctor --input`) reports, as warning
+    `DATA_FILE_LEFT_OUT`, the files that it can tell are unreadable without
+    reading their content: the ZIP files and the files over the limit that
+    the run leaves out. When every Activities file is among them, it reports
+    `ACTIVITIES_EMPTY` as an error. It does not parse JSON content, which
+    takes long for a large Export, so a JSON file that cannot be read is
+    reported by the run; when every Activities file is such a file, the check
+    passes and the run stops with `ACTIVITIES_EMPTY`.
   - A damaged Export ZIP file stops the run (`INPUT_ZIP_CORRUPT`); see
     [An Export given as a ZIP file](#an-export-given-as-a-zip-file).
+  - `normalize-activities` reads only Activities files, and its output has
+    no list of left-out files, so it stops when an Activities file cannot be
+    read, instead of leaving its records out; the other files that cannot be
+    read do not concern it.
+  - Stage A3c-2 applies these rules to Snapshot registration and builds;
+    until then, a Snapshot registration or build stops on such files as in
+    v1.7.1.
 
 ### Rows and values with problems
 
@@ -554,8 +612,11 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
 
     Members that are not read do not count, in a ZIP file and in a folder
     alike. `snapshot register` reads every member of a ZIP file inside the
-    Export. A member that is read and exceeds one of these limits stops the
-    run as unsafe input (`INPUT_DISCOVERY_FAILED` in `run-all`), as in v1.7.1.
+    Export. From stage A3c, `run-all` leaves out a file over its limit, and a
+    ZIP file inside the Export over its limits or with a member over the
+    compression ratio, with a reason (see
+    [Files that cannot be read](#files-that-cannot-be-read)); a member of the
+    Export ZIP file itself over the compression ratio stops the run.
   - From an Export ZIP file, one reading reads at most 64 GiB and 4,000,000
     files in total; beyond that, the run stops with `INPUT_TOO_LARGE`, and the
     extracted folder can be used instead. These totals are far above what an
@@ -571,22 +632,25 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     is to free some space or to use the extracted folder. A ZIP file inside a
     folder is read where it is.
   - An Export ZIP file that cannot be opened, ends early, or has a member that
-    fails its CRC check stops the run with `INPUT_ZIP_CORRUPT`. A damaged ZIP
-    file inside the Export still stops the run with `INPUT_DISCOVERY_FAILED`
-    until stage A3c leaves it out with a reason.
+    fails its CRC check stops the run with `INPUT_ZIP_CORRUPT`. From stage
+    A3c, `run-all` leaves out a damaged ZIP file inside the Export with a
+    reason.
   - The Snapshot Store format does not change.
 
 ### Stops that remain
 
 The run stops with exit 2 and publishes no output for:
 
-- Safety: unsafe ZIP members (paths outside the folder, links, or encryption),
-  symbolic links in the input, a damaged Export ZIP file
-  (`INPUT_ZIP_CORRUPT`), and exceeded limits on the size, number, or
-  compression ratio of the members that are read, including the limits for the
-  whole Export ZIP file (`INPUT_TOO_LARGE`).
+- Safety: members of the Export ZIP file that fail a safety check (paths
+  outside the folder, links, encryption, or a compression ratio over the
+  limit), symbolic links in the input, a damaged Export ZIP file
+  (`INPUT_ZIP_CORRUPT`), and the totals for the whole Export ZIP file
+  (`INPUT_TOO_LARGE`). A file over the limit for one file, and a ZIP file
+  inside the Export that is damaged, too large, or holds an unsafe member,
+  are left out instead (see [Files that cannot be read](#files-that-cannot-be-read)).
 - An input that is not an Export: no Activities (`ACTIVITIES_NOT_FOUND`) or no
-  Activities records (`ACTIVITIES_EMPTY`).
+  Activities records (`ACTIVITIES_EMPTY`), also when every Activities file
+  was left out.
 - Mixed Exports or accounts (`INPUT_MULTIPLE_EXPORTS`).
 - An Export that changes during the run (`INPUT_CHANGED`).
 - The output: it already exists, it cannot be written, or its path is too long.
@@ -638,8 +702,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Support Bundle's copy of Run Quality name them.
 - New warning codes: `VALUES_DISAGREE` (stage A2a), `VALUES_UPDATED` and
   `RECORDS_NOT_IN_LATEST_SNAPSHOT` (stage A2b-2), `INPUT_DUPLICATE_SOURCES`
-  (stage A3a), and, with provisional names, `DATA_FILE_LEFT_OUT`,
+  (stage A3a), `DATA_FILE_LEFT_OUT` (stage A3c), and, with provisional names,
   `DATA_ROW_LEFT_OUT`, `DATA_VALUE_INVALID`, and `DATA_TEXT_REPAIRED`.
+  `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them.
 - Stage A3b adds to the audit records of Activities, Gear, `activity_gear`,
   and Personal Records `same_value_duplicate_count`, `absent_value_counts`,
   `disagreement_key_count`, and `disagreements`, each only when there is
@@ -652,7 +717,12 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `input_warning_count` to `run_summary.json`, each only when there is
   something to report, so the outputs of an input with one Export and no files
   outside it do not change.
-  `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them.
+- Stage A3c adds `files_left_out` to `run_manifest.json`, with `source_path`,
+  `bytes`, `family`, and `reason` for each file, and warning
+  `DATA_FILE_LEFT_OUT` with the number of files, which `input_warning_count`
+  counts; both appear only when a file is left out, so the outputs of an
+  Export without such files do not change. `files_not_read` gains the reason
+  `file_too_large`.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
   and `SNAPSHOT_STORE_LOCKED` (provisional name).
@@ -816,7 +886,13 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   read once, with warning `INPUT_DUPLICATE_SOURCES`. An Export ZIP file in the
   selected folder is read as when it is selected directly, with its uploaded
   FIT files and with paths counted from the Export inside it, and files
-  outside the Export are listed instead of read.
+  outside the Export are listed instead of read. A file that cannot be read,
+  such as a JSON file that is not UTF-8 or not JSON, a damaged ZIP file
+  inside the Export, or a JSON or FIT file over 128 MiB that the run reads,
+  is left out and listed in `run_manifest.json`, with warning
+  `DATA_FILE_LEFT_OUT` and exit 3, instead of stopping the run; a JSON file
+  over 128 MiB that no dataset reads is listed as not read; and a UTF-8 byte
+  order mark is accepted in every file.
 - CLI: the pre-run checks that the GUI performed in v1.7.1 apply to the CLI,
   errors report what happened and the next step, and `Ctrl+C` reports the
   cancellation.
@@ -824,7 +900,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   dataclass. Its fields, its constructor, and the content that
   `discover_export` returns are unchanged, but dataclass equality, hashing,
   `dataclasses.asdict`, and immutability no longer apply. `read_export` lists
-  an Export's files without keeping their content. The daily normalizers no
+  an Export's files without keeping their content. From stage A3c,
+  `read_export` and `discover_export` leave out a file that cannot be read
+  instead of raising, and `ExportReading.left_out` lists it with the reason;
+  a member whose data does not match its ZIP header raises `BadZipFile`
+  instead of `UnsafeArchiveError`. The daily normalizers no
   longer raise `DailyMetricConflictError` or `PerformanceMetricsConflictError`,
   which are removed; their rows carry `disagreeing_fields`; and
   `normalize_uds`, `normalize_endurance_score`, and `finalize_daily` lose the

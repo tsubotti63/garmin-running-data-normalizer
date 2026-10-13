@@ -495,7 +495,7 @@ class DamagedZipTest(unittest.TestCase):
                     self.assertEqual(verify_store(store)["status"], "PASS")
                     self.assertFalse(output.exists())
 
-    def test_a_damaged_zip_file_inside_the_export_still_stops_the_run(self) -> None:
+    def test_a_damaged_zip_file_inside_the_export_is_left_out(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             folder = write_export(root / "export")
@@ -505,9 +505,21 @@ class DamagedZipTest(unittest.TestCase):
             archive = zip_export(folder, root / "export.zip")
             for form in (folder, archive):
                 with self.subTest(form=form.name):
-                    with self.assertRaises(RunAllError) as raised:
-                        run_all(form, root / "output")
-                    self.assertEqual(raised.exception.code, "INPUT_DISCOVERY_FAILED")
+                    # Stage A3c leaves it out with a reason, and the run goes on.
+                    output = root / f"output-{form.name}"
+                    self.assertEqual(run_all(form, output)["status"], "PARTIAL_SUCCESS")
+                    manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+                    self.assertEqual(
+                        manifest["files_left_out"],
+                        [
+                            {
+                                "source_path": "DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part3.zip",
+                                "bytes": 26,
+                                "family": "unclassified",
+                                "reason": "zip_not_readable",
+                            }
+                        ],
+                    )
 
 
 class UnsafeZipTest(unittest.TestCase):
@@ -528,15 +540,6 @@ class UnsafeZipTest(unittest.TestCase):
             archive.writestr(info, "synthetic_summarizedActivities.json")
         cases["link"] = link
         cases["encrypted member"] = mark_encrypted(valid, ACTIVITIES_PATH, root / "encrypted.zip")
-        nested = root / "nested-unsafe"
-        shutil.copytree(folder, nested)
-        with zipfile.ZipFile(
-            nested / "DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip", "a"
-        ) as archive:
-            archive.writestr("../synthetic-escape.fit", b"synthetic")
-        cases["path outside the folder in a ZIP file inside the Export"] = zip_export(
-            nested, root / "nested-unsafe.zip"
-        )
         return cases
 
     def test_unsafe_members_stop_every_command(self) -> None:
@@ -557,6 +560,35 @@ class UnsafeZipTest(unittest.TestCase):
                     with self.assertRaisesRegex(SnapshotLifecycleError, "safe archive validation"):
                         register(store, unsafe)
                     self.assertEqual(load_manifests(store), [])
+
+    def test_an_unsafe_member_of_a_zip_file_inside_the_export(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            nested = write_export(root / "nested-unsafe")
+            with zipfile.ZipFile(
+                nested / "DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip", "a"
+            ) as archive:
+                archive.writestr("../synthetic-escape.fit", b"synthetic")
+            unsafe = zip_export(nested, root / "nested-unsafe.zip")
+            # Its members are read in memory only, so stage A3c leaves the ZIP
+            # file out with a reason, and the run goes on.
+            output = root / "output"
+            self.assertEqual(run_all(unsafe, output)["status"], "PARTIAL_SUCCESS")
+            manifest = json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                [(item["source_path"], item["reason"]) for item in manifest["files_left_out"]],
+                [("DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip", "zip_unsafe_member")],
+            )
+            self.assertEqual(
+                [item["code"] for item in doctor_input(unsafe)["findings"]],
+                ["DATA_FILE_LEFT_OUT", "RUN_ALL_NOT_EVALUATED"],
+            )
+            # Snapshot registration still stops until stage A3c-2.
+            store = root / "store"
+            initialize_store(store, "synthetic-account-boundary")
+            with self.assertRaisesRegex(SnapshotLifecycleError, "safe archive validation"):
+                register(store, unsafe)
+            self.assertEqual(load_manifests(store), [])
 
 
 class ZipLimitsTest(unittest.TestCase):
@@ -587,10 +619,22 @@ class ZipLimitsTest(unittest.TestCase):
             fitness = folder / "DI_CONNECT/DI-Connect-Fitness"
             (fitness / "synthetic_spaces.json").write_bytes(b"[" + b" " * 100_000 + b"]")
             archive = zip_export(folder, root / "export.zip")
-            with self.assertRaisesRegex(UnsafeArchiveError, "size limit"):
-                discover_export(archive, ArchiveLimits(max_member_bytes=8192))
-            with self.assertRaisesRegex(ValueError, "size limit"):
-                discover_export(folder, ArchiveLimits(max_member_bytes=8192))
+            # Stage A3c does not read a file over the limit: one that no
+            # dataset reads, as this one, is listed as not read.
+            for form in (archive, folder):
+                with self.subTest(form=form.name):
+                    with read_export(form, ArchiveLimits(max_member_bytes=8192)) as reading:
+                        self.assertEqual(
+                            reading.not_read,
+                            [("DI_CONNECT/DI-Connect-Fitness/synthetic_spaces.json", 100_002, "file_too_large")],
+                        )
+                        self.assertEqual(reading.left_out, [])
+                        self.assertNotIn(
+                            "DI_CONNECT/DI-Connect-Fitness/synthetic_spaces.json",
+                            [asset.provenance_path for asset in reading.assets],
+                        )
+            # A member of the Export ZIP file itself over the compression
+            # ratio still stops.
             with self.assertRaisesRegex(UnsafeArchiveError, "compression ratio"):
                 discover_export(archive)
             nested = root / "nested"
@@ -603,8 +647,11 @@ class ZipLimitsTest(unittest.TestCase):
                     inner.writestr(f"synthetic-{number}.fit", synthetic_fit())
             for form in (nested, zip_export(nested, root / "nested.zip")):
                 with self.subTest(form=form.name):
-                    with self.assertRaisesRegex(UnsafeArchiveError, "member count"):
-                        discover_export(form, ArchiveLimits(max_members=2))
+                    with read_export(form, ArchiveLimits(max_members=2)) as reading:
+                        self.assertEqual(
+                            [(path, reason) for path, _size, reason in reading.left_out],
+                            [("DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part3.zip", "zip_too_large")],
+                        )
 
     def test_whole_export_zip_limits_stop_with_input_too_large(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -711,8 +758,16 @@ class NestedZipCopyTest(unittest.TestCase):
         )
         damaged_archive = zip_export(damaged, self.root / "damaged.zip")
         with mock.patch.object(tempfile, "tempdir", str(self.temporary)):
-            with self.assertRaises(zipfile.BadZipFile):
-                discover_export(damaged_archive)
+            # A damaged ZIP file inside the Export is left out (stage A3c).
+            with read_export(damaged_archive) as reading:
+                self.assertEqual([reason for _path, _size, reason in reading.left_out], ["zip_not_readable"])
+            self.assertEqual(list(self.temporary.iterdir()), [])
+            with mock.patch(
+                "garmin_running_data_normalizer.intake.discovery.read_member",
+                side_effect=RuntimeError("synthetic failure"),
+            ):
+                with self.assertRaises(RuntimeError):
+                    discover_export(self.archive)
             self.assertEqual(list(self.temporary.iterdir()), [])
             with mock.patch(
                 "garmin_running_data_normalizer.intake.discovery.read_member",

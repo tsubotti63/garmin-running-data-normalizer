@@ -126,6 +126,9 @@ jobs:
       - name: Verify Windows repeated records
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_repeated_records.py -q
+      - name: Verify Windows files that cannot be read
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_unreadable_files.py -q
       - name: Build distributions
         shell: powershell
         run: |
