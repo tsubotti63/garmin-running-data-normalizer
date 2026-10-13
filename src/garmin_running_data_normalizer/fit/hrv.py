@@ -53,24 +53,23 @@ def _empty_result(status: str, file_id: str, source_path: str) -> dict[str, Any]
     }
 
 
-def parse_fit_hrv_bytes(
-    data: bytes,
-    *,
-    file_id: str,
-    source_path: str,
-    timezone_name: str = "Asia/Tokyo",
-) -> dict[str, Any]:
-    """Extract the bounded HRV PoC signal from FIT message 370 field 1."""
+def read_fit_hrv_messages(data: bytes) -> tuple[str | None, list[tuple[Any, Any]], int]:
+    """Read the value (field 1) and the time (field 253) of each FIT message
+    370, as the file gives them.
+
+    Return the status of a file that cannot be read, or None; the pairs, a
+    missing field being None; and the number of records read without their
+    definition, which ends the reading.
+    """
     container = check_fit_container(data)
     if container.status is not None:
-        return _empty_result(container.status, file_id, source_path)
+        return container.status, [], 0
 
     position = container.header_size
     data_end = container.header_size + container.data_size
     definitions: dict[int, Definition] = {}
-    records: list[dict[str, Any]] = []
+    messages: list[tuple[Any, Any]] = []
     unknown_records = 0
-    message_count = 0
 
     while position < data_end:
         record_header = data[position]
@@ -84,7 +83,7 @@ def parse_fit_hrv_bytes(
 
         if is_definition:
             if position + 5 > data_end:
-                return _empty_result("truncated", file_id, source_path)
+                return "truncated", [], 0
             position += 1
             architecture = data[position]
             position += 1
@@ -94,7 +93,7 @@ def parse_fit_hrv_bytes(
             field_count = data[position]
             position += 1
             if position + field_count * 3 > data_end:
-                return _empty_result("truncated", file_id, source_path)
+                return "truncated", [], 0
             fields = tuple(
                 FieldDef(
                     data[position + index * 3],
@@ -107,11 +106,11 @@ def parse_fit_hrv_bytes(
             developer_sizes: tuple[int, ...] = ()
             if record_header & 0x20:
                 if position >= data_end:
-                    return _empty_result("truncated", file_id, source_path)
+                    return "truncated", [], 0
                 developer_count = data[position]
                 position += 1
                 if position + developer_count * 3 > data_end:
-                    return _empty_result("truncated", file_id, source_path)
+                    return "truncated", [], 0
                 developer_sizes = tuple(
                     data[position + index * 3 + 1] for index in range(developer_count)
                 )
@@ -129,7 +128,7 @@ def parse_fit_hrv_bytes(
             definition.developer_field_sizes
         )
         if position + total_size > data_end:
-            return _empty_result("truncated", file_id, source_path)
+            return "truncated", [], 0
 
         values: dict[int, Any] = {}
         for field in definition.fields:
@@ -138,12 +137,26 @@ def parse_fit_hrv_bytes(
             if definition.global_message == FIT_HRV_MESSAGE_NUM:
                 values[field.number] = value
         position += sum(definition.developer_field_sizes)
-        if definition.global_message != FIT_HRV_MESSAGE_NUM:
-            continue
+        if definition.global_message == FIT_HRV_MESSAGE_NUM:
+            messages.append(
+                (values.get(FIT_HRV_VALUE_FIELD_NUM), values.get(FIT_TIMESTAMP_FIELD_NUM))
+            )
+    return None, messages, unknown_records
 
-        message_count += 1
-        raw_value = values.get(FIT_HRV_VALUE_FIELD_NUM)
-        timestamp_raw = values.get(FIT_TIMESTAMP_FIELD_NUM)
+
+def parse_fit_hrv_bytes(
+    data: bytes,
+    *,
+    file_id: str,
+    source_path: str,
+    timezone_name: str = "Asia/Tokyo",
+) -> dict[str, Any]:
+    """Extract the bounded HRV PoC signal from FIT message 370 field 1."""
+    status, messages, unknown_records = read_fit_hrv_messages(data)
+    if status is not None:
+        return _empty_result(status, file_id, source_path)
+    records: list[dict[str, Any]] = []
+    for raw_value, timestamp_raw in messages:
         scalar_raw = (
             raw_value
             if isinstance(raw_value, int) and not isinstance(raw_value, bool)
@@ -204,7 +217,7 @@ def parse_fit_hrv_bytes(
         "fit_file_id": file_id,
         "source_path": source_path,
         "records": records,
-        "message370_record_count": message_count,
+        "message370_record_count": len(messages),
         "hrv_record_count": len(records),
         "unknown_records": unknown_records,
     }

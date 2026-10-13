@@ -541,8 +541,9 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     Gear, and links) or without a required value (such as a date) is left
     out with a reason. Warning `DATA_ROW_LEFT_OUT`, status `PARTIAL_SUCCESS`.
   - Stage A3d-1 does this for the daily datasets other than HRV, stage
-    A3d-1b for Activities, Gear, links, and Personal Records, and HRV follows
-    in stage A3d-2. The rules for a daily row:
+    A3d-1b for Activities, Gear, links, and Personal Records, and stage
+    A3d-2b for HRV (see the rules for an HRV reading below). The rules for a
+    daily row:
     - The reasons are those of v1.7.1, which the dataset's audit record counts
       in `excluded_record_count` and `excluded_reason_counts`. The run gives
       one warning `DATA_ROW_LEFT_OUT` for each dataset with rows left out, with
@@ -563,6 +564,34 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
       of that Export (stage A3b).
     - Source Completeness gives the family `MALFORMED` when a row that holds
       a value is left out; empty records leave it valid.
+  - The rules for an HRV reading (stage A3d-2b), which v1.7.1 counted in
+    `DAILY_METRICS_REVIEW_REQUIRED` or dropped without a record:
+    - Each reading of FIT message 370 is an observation of the local date of
+      its time (field 253), and its value (field 1) is what the reading is
+      for. Both are read as integers, by the rule for values below, so a
+      whole number written with a decimal point, such as `6400.0`, is read.
+    - A reading whose date cannot be made, because its time is missing,
+      FIT's invalid value, of another form, or out of range, is left out with
+      the reason `missing_or_invalid_reading_timestamp` when it holds a
+      value, also one of another form, and is an empty record when it holds
+      none.
+    - A reading with a date whose value is of another form, such as a number
+      with a fraction, NaN, or a list, is left out with the reason
+      `missing_or_invalid_hrv_value`, as a VO2max row whose value is of
+      another form is, and the audit record does not keep the value. HRV
+      therefore gives no `DATA_VALUE_INVALID`: a reading has no other value.
+    - A reading without a value, which FIT's invalid value 65535 or a
+      missing value field gives, is counted in `absent_value_counts` when it
+      has a date (see the values that the source marks as absent below) and
+      is an empty record when it has none; neither is announced. A date has
+      a row only when one of its readings has a value, as in v1.7.1.
+    - Run Quality counts the readings left out in `excluded`, as it counts
+      the rows left out of the other daily datasets; v1.7.1 counted the
+      readings without a date in `missing` and every reading that needed a
+      review in `review_required`.
+    - HRV belongs to the FIT family of Source Completeness, which the state
+      of each FIT file alone decides, so a reading left out does not change
+      Source Completeness.
   - The rules for an identifier (stage A3d-1b):
     - One rule reads every identifier: in the normalizers, in the checks of
       relationships, when repeated records are merged, in the Snapshot
@@ -631,8 +660,10 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
   - A value of a form that its field does not take becomes empty in the
     normalized row, and the audit record keeps the value. Warning
     `DATA_VALUE_INVALID`, status `PASS_WITH_WARNINGS` (exit 0): the row stays,
-    so nothing is left out. Stage A3d-2a does this for every dataset but HRV,
-    which follows in stage A3d-2b, and settles the name:
+    so nothing is left out. Stage A3d-2a does this for every dataset but HRV
+    and settles the name; an HRV reading has no other value than the one it
+    is for, so a reading whose value is of another form is left out instead
+    (stage A3d-2b, see the rules for an HRV reading above):
     - One rule reads every value (`common.values.read_value`): the
       normalizers use it as they read a source field or make a value from
       it, and Run-All checks every value of Activities, Gear, `activity_gear`,
@@ -682,7 +713,9 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     an absent value: the field is empty, the audit record counts it, and no
     warning is given, because such a value marks that nothing was measured,
     not a problem in the data. v1.7.1 counts the HRV ones in
-    `DAILY_METRICS_REVIEW_REQUIRED`; stage A3d-2b follows this rule.
+    `DAILY_METRICS_REVIEW_REQUIRED`; from stage A3d-2b, the HRV audit record
+    counts a reading with this value in `absent_value_counts` when it has a
+    date and as an empty record when it has none.
   - A timestamp out of range leaves the derived date and time empty and keeps
     the raw value, with the same warning (stage A3d-2a): the start time of an
     Activity, a FIT session, or a FIT lap that a date cannot hold, and a
@@ -938,7 +971,10 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `RECORDS_NOT_IN_LATEST_SNAPSHOT` (stage A2b-2), `INPUT_DUPLICATE_SOURCES`
   (stage A3a), `DATA_FILE_LEFT_OUT` (stage A3c), `DATA_ROW_LEFT_OUT` (stage
   A3d-1), `DATA_VALUE_INVALID` (stage A3d-2a), and, with a provisional name,
-  `DATA_TEXT_REPAIRED`. `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them.
+  `DATA_TEXT_REPAIRED`. `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them:
+  from stage A3d-2b, no dataset of Run-All gives it. The code stays known
+  with the review items of the daily datasets, which the library keeps and
+  no dataset of Run-All uses.
 - Stage A3b adds to the audit records of Activities, Gear, `activity_gear`,
   and Personal Records `same_value_duplicate_count`, `absent_value_counts`,
   `disagreement_key_count`, and `disagreements`, each only when there is
@@ -1004,6 +1040,21 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   daily datasets write it as null. The outputs of an Export without such
   values do not change, except that Snapshot outputs give the merge rules
   version v2.7.
+- Stage A3d-2b gives the HRV audit record (`audit/hrv_daily.json`) the form
+  of the other daily audit records: it loses `invalid_value_count`,
+  `missing_date_count`, `review_required_count`, and `review_item_count`,
+  and gains `excluded_record_count`, `excluded_reason_counts`,
+  `absent_value_counts`, and, when there is something to count,
+  `empty_record_count`. Its `status` is always `PASS`, and so are the
+  `status` of `qa/daily_metrics_summary.json` and its HRV `audit_status`,
+  which HRV readings without a value made `PASS_WITH_REVIEW_ITEMS`. Run
+  Quality counts the HRV readings left out in `excluded` with the reason
+  `EXCLUDED_BY_EXISTING_AUTHORITY` instead of in `missing`
+  (`OBSERVED_REQUIRED_VALUE_MISSING`) and `review_required`. Every
+  run writes the HRV audit record, so the digests that name it, in
+  `diagnostics/run_quality.json`, `run_manifest.json`, and
+  `run_summary.json`, change for every Export; the normalized datasets and
+  the documents do not.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
   and `SNAPSHOT_STORE_LOCKED` (provisional name).
@@ -1192,7 +1243,12 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   outputs, and a time out of range, which stopped v1.7.1 on some
   platforms. Text such as `"5"` in a number field is no longer read as a
   number, and a Race Prediction with a distance that is not a positive
-  number keeps its row, where v1.7.1 left the row out.
+  number keeps its row, where v1.7.1 left the row out. An HRV reading
+  without a date that holds a value, which v1.7.1 counted in
+  `DAILY_METRICS_REVIEW_REQUIRED` with exit 0, and an HRV reading whose
+  value is of another form, which v1.7.1 dropped without a record, are left
+  out with warning `DATA_ROW_LEFT_OUT` and exit 3; an HRV reading without a
+  value is counted and no longer announced.
 - Outputs: `run_all_version` 2, the new fields, audit records, and audit
   sections, and the new warning codes. The synthetic Run-All output grows from
   46 to 50 files with the audit records of Activities, Gear, `activity_gear`,
@@ -1285,6 +1341,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   of 0 in Activities and Gear, which v1.7.1 accepted. The daily helpers
   `number`, `text`, and `boolean` read values as their fields take them
   (stage A3d-2a): `number` no longer reads text such as `"5"` as a number.
+  `normalize_hrv_daily_assets` follows the rules for an HRV reading and
+  gives the HRV audit record in its new form (stage A3d-2b); `fit.hrv`
+  gains `read_fit_hrv_messages`, which `parse_fit_hrv_bytes` now uses, and
+  the HRV functions that Run-All does not use, such as `normalize_hrv`,
+  keep their outputs.
 - Schema: the fields that a disagreement can leave empty are nullable (the
   Hill and Endurance `overall_score`, the four Race Prediction times,
   `vo2max`, and `training_status`), and so is `personal_records.activity_id`
