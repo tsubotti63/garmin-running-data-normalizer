@@ -145,9 +145,11 @@ export const FINDING_KEYS = {
   INPUT_ZIP_DAMAGED_OR_INCOMPLETE: "finding.zip_corrupt",
   INPUT_HOLDS_MORE_THAN_ONE_EXPORT: "finding.input_multiple_exports",
   INPUT_HOLDS_THE_SAME_EXPORT_MORE_THAN_ONCE: "finding.input_duplicate_sources",
+  INPUT_FILES_CANNOT_BE_READ_AND_WILL_BE_LEFT_OUT: "finding.files_left_out",
   INPUT_ZIP_TOO_LARGE_TO_READ_DIRECTLY: "finding.zip_too_large",
   TEMP_FOLDER_SPACE_INSUFFICIENT: "finding.temp_space_insufficient",
   REQUIRED_ACTIVITIES_SOURCE_NOT_OBSERVED: "finding.activities_missing",
+  ACTIVITIES_FILES_CANNOT_BE_READ: "finding.activities_unreadable",
   INPUT_READY_FOR_BOUNDED_RUN_ALL_ATTEMPT: "finding.ready",
 };
 export const ACTION_KEYS = {
@@ -209,6 +211,7 @@ export const WARNING_KEYS = {
   VALUES_UPDATED: "warning.values_updated",
   RECORDS_NOT_IN_LATEST_SNAPSHOT: "warning.records_not_in_latest_snapshot",
   INPUT_DUPLICATE_SOURCES: "warning.input_duplicate_sources",
+  DATA_FILE_LEFT_OUT: "warning.data_file_left_out",
   FIT_PARSE_INCOMPLETE: "warning.fit_parse_incomplete",
   LACTATE_CANDIDATE_AUTHORITY_UNRESOLVED: "warning.lactate_candidates",
   RELATIONSHIP_UNRESOLVED_VALID_LINK: "warning.relationship_unresolved",

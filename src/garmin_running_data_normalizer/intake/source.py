@@ -39,7 +39,7 @@ _LAYOUT_FOLDERS = frozenset({"di_connect", "di-golf"})
 _LAYOUT_FOLDER_PREFIX = "di-connect-"
 
 # Python errors that mean that bytes in a ZIP file are damaged or incomplete.
-_DAMAGED_ZIP_ERRORS = (BadZipFile, EOFError, zlib.error)
+DAMAGED_ZIP_ERRORS = (BadZipFile, EOFError, zlib.error)
 
 # Free space to leave in the temporary folder beyond the copies themselves.
 _TEMPORARY_SPACE_MARGIN = 64 * 1024 * 1024
@@ -172,7 +172,7 @@ class ExportSource:
                 for info in self._archive.infolist()
                 if is_safe_export_member(info)
             ]
-        except _DAMAGED_ZIP_ERRORS as exc:
+        except DAMAGED_ZIP_ERRORS as exc:
             raise CorruptArchiveError("the Export ZIP file is damaged or incomplete") from exc
         names = [PurePosixPath(info.filename).parts for info in members]
         prefix_parts = 0
@@ -241,7 +241,7 @@ class ExportSource:
         try:
             with self._archive.open(info, "r") as handle:
                 data = handle.read(max_bytes + 1)
-        except _DAMAGED_ZIP_ERRORS as exc:
+        except DAMAGED_ZIP_ERRORS as exc:
             raise CorruptArchiveError("the Export ZIP file is damaged or incomplete") from exc
         if len(data) != info.file_size or len(data) > max_bytes:
             raise CorruptArchiveError("the Export ZIP file is damaged or incomplete")
@@ -259,7 +259,7 @@ class ExportSource:
         try:
             with self._archive.open(item.member, "r") as handle:
                 yield handle
-        except _DAMAGED_ZIP_ERRORS as exc:
+        except DAMAGED_ZIP_ERRORS as exc:
             raise CorruptArchiveError("the Export ZIP file is damaged or incomplete") from exc
 
     def archive(self, item: ExportFile) -> ZipFile:
@@ -322,6 +322,7 @@ class ExportSource:
 
 __all__ = [
     "CorruptArchiveError",
+    "DAMAGED_ZIP_ERRORS",
     "ExportFile",
     "ExportSource",
     "ExportTooLargeError",

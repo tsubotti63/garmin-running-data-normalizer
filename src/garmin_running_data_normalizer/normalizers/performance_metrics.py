@@ -7,7 +7,7 @@ from pathlib import PurePosixPath
 from typing import Any, Iterable
 
 from ..common.time import daily_calendar_date
-from ..intake.discovery import DiscoveredAsset
+from ..intake.discovery import DiscoveredAsset, parse_json_asset
 from .daily_metrics import (
     copies_within_snapshots,
     merge_observations,
@@ -60,10 +60,12 @@ def _basename(asset: DiscoveredAsset) -> str:
 
 
 def _load_json(asset: DiscoveredAsset) -> Any:
-    try:
-        return json.loads(asset.data.decode("utf-8-sig"))
-    except (UnicodeError, json.JSONDecodeError) as exc:
-        raise PerformanceMetricsError("performance metric JSON could not be decoded") from exc
+    """Return one file's JSON value; a file that cannot be read gives None.
+
+    Such a file is left out with a reason in its reading (stage A3c).
+    """
+    readable, value = parse_json_asset(asset)
+    return value if readable else None
 
 
 def _root_rows(value: Any) -> list[dict[str, Any]]:

@@ -23,8 +23,8 @@ from pathlib import Path, PurePosixPath
 from typing import BinaryIO, ContextManager, Iterator, Union
 from zipfile import ZipFile
 
-from .archive import ArchiveLimits
-from .source import ExportFile, ExportSource, is_layout_folder
+from .archive import ArchiveLimits, MemberTooLargeError
+from .source import DAMAGED_ZIP_ERRORS, ExportFile, ExportSource, is_layout_folder
 
 
 # Files of these kinds outside every root are listed as not read.
@@ -126,10 +126,21 @@ class OpenedExport:
 
 
 def _holds_export(source: ExportSource, item: ExportFile) -> bool:
-    """Whether a ZIP file in the input holds the layout folders of an Export."""
+    """Whether a ZIP file in the input holds the layout folders of an Export.
+
+    A ZIP file that cannot be opened holds no Export; reading leaves it out
+    (stage A3c), as it does one too large to copy out of an Export ZIP file.
+    Copying it out still stops the run when the Export ZIP file itself is
+    damaged or unsafe.
+    """
+    try:
+        source.local_path(item)
+        names = [info.filename for info in source.archive(item).infolist()]
+    except (MemberTooLargeError, *DAMAGED_ZIP_ERRORS):
+        return False
     return any(
-        any(is_layout_folder(part) for part in PurePosixPath(info.filename).parts[:-1])
-        for info in source.archive(item).infolist()
+        any(is_layout_folder(part) for part in PurePosixPath(name).parts[:-1])
+        for name in names
     )
 
 
@@ -199,10 +210,14 @@ def _fingerprint(view: ExportView) -> tuple[tuple[str, tuple[int, str | None]], 
     """The files of one root: their paths, sizes, and, for those read, digests."""
     from .discovery import SUPPORTED_SUFFIXES, ExportReading
 
+    reading = ExportReading(view, keep_data=False)
     entries: dict[str, tuple[int, str | None]] = {
-        asset.provenance_path: (asset.size_bytes, asset.sha256)
-        for asset in ExportReading(view, keep_data=False).assets
+        asset.provenance_path: (asset.size_bytes, asset.sha256) for asset in reading.assets
     }
+    # A file that is not read because of its size is compared by its path
+    # and size, as the files of the kinds that are not read (stage A3c).
+    for path, size, _reason in (*reading.left_out, *reading.not_read):
+        entries.setdefault(path, (size, None))
     for item in view.files():
         if item.suffix not in SUPPORTED_SUFFIXES:
             entries.setdefault(item.relative_path, (item.size, None))

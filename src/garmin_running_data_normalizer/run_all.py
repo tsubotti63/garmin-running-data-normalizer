@@ -23,7 +23,13 @@ from .common.time import (
 from .fit.parser import parse_fit_export
 from .export.analysis_pack import build_analysis_pack_payloads
 from .intake.accounts import asset_accounts
-from .intake.discovery import DiscoveredAsset, ExportReading, InputChangedError, read_export
+from .intake.discovery import (
+    DiscoveredAsset,
+    ExportReading,
+    InputChangedError,
+    path_family,
+    read_export,
+)
 from .intake.roots import MIXED_INPUT_MESSAGE, OUTSIDE_EXPORT_ROOT, MixedExportsError
 from .intake.source import (
     CorruptArchiveError,
@@ -62,6 +68,10 @@ from .relationships import (
 
 
 RUN_ALL_VERSION = 2
+# The message when every Activities file was left out (stage A3c).
+ACTIVITIES_NOT_READABLE_MESSAGE = (
+    "the Activities files could not be read; obtain a complete, readable Export"
+)
 DATASET_TABLE = (
     {"name": "activities", "family": "activities", "record_grain": "activity", "stable_key": ("garmin_activity_key",), "required": True},
     {"name": "gear", "family": "gear", "record_grain": "gear", "stable_key": ("gear_key",), "required": False},
@@ -380,6 +390,15 @@ def _asset_family(asset: DiscoveredAsset) -> str:
 
     logical_name = asset.member_path or asset.source_path
     return classify_source_name(logical_name, asset.kind)
+
+
+def left_out_files(left_out: list[tuple[str, int, str]]) -> list[dict[str, Any]]:
+    """Return the files left out of the run, with their family and reason (stage A3c)."""
+    files = [
+        {"source_path": path, "bytes": size, "family": path_family(path), "reason": reason}
+        for path, size, reason in left_out
+    ]
+    return sorted(files, key=lambda item: item["source_path"])
 
 
 def _classify_assets(assets: list[DiscoveredAsset]) -> dict[str, list[DiscoveredAsset]]:
@@ -1361,10 +1380,21 @@ def run_all(
         raise RunAllError(exc.code, exc.safe_message) from exc
     _notify(progress, "discovering")
     with _read_input(input_root) as reading:
+        if snapshot_context is not None and (reading.left_out or reading.not_read):
+            # Snapshot builds leave such files out from stage A3c-2; until
+            # then, they stop as in v1.7.1.
+            raise RunAllError("INPUT_DISCOVERY_FAILED", "input discovery or archive safety validation failed")
         initial_assets = reading.assets
         initial_snapshot = _snapshot(initial_assets)
         families = _classify_assets(initial_assets)
         if not families["activities"]:
+            # Activities files that were left out make an Export without
+            # Activities records, not an input without Activities (stage A3c).
+            if any(
+                item["family"] == "activities"
+                for item in left_out_files(reading.left_out)
+            ):
+                raise RunAllError("ACTIVITIES_EMPTY", ACTIVITIES_NOT_READABLE_MESSAGE)
             raise RunAllError("ACTIVITIES_NOT_FOUND", "required Activities input was not found")
         # Records that name more than one account mix Exports; the accounts
         # are compared here only and never written.
@@ -1376,6 +1406,8 @@ def run_all(
             raise RunAllError("INPUT_MULTIPLE_EXPORTS", MIXED_INPUT_MESSAGE)
         same_export_count = reading.same_export_count
         outside_files = list(reading.outside_files)
+        # JSON files over the limit that no dataset reads (stage A3c).
+        too_large_files = sorted(reading.not_read)
         _validate_dataset_table()
 
         try:
@@ -1401,8 +1433,16 @@ def run_all(
             # input, whichever normalizer met it.
             if reading.changed:
                 raise RunAllError("INPUT_CHANGED", "input assets changed during Run-All processing") from exc
+            if exc.code == "ACTIVITIES_EMPTY" and any(
+                item["family"] == "activities"
+                for item in left_out_files(reading.left_out)
+            ):
+                raise RunAllError("ACTIVITIES_EMPTY", ACTIVITIES_NOT_READABLE_MESSAGE) from exc
             raise
         changed_while_reading = reading.changed
+        # The files that could not be read, found while listing and while
+        # parsing (stage A3c).
+        files_left_out = left_out_files(reading.left_out)
     _validate_provenance(records, fit_audit, families)
     qa_entries = [
         _dataset_qa(dataset, records[str(dataset["name"])], len(families[str(dataset["family"])]))
@@ -1446,6 +1486,19 @@ def run_all(
         relationship_summary,
         record_audits,
     )
+    if files_left_out:
+        # A file left out leaves the run bounded: PARTIAL_SUCCESS (exit 3).
+        warnings.append(
+            {
+                "code": "DATA_FILE_LEFT_OUT",
+                "count": len(files_left_out),
+                "message": (
+                    "one or more files could not be read and were left out; "
+                    "run_manifest.json lists them with the reason"
+                ),
+            }
+        )
+        status = "PARTIAL_SUCCESS"
     if same_export_count:
         warnings.append(
             {
@@ -1728,13 +1781,24 @@ def run_all(
         "deterministic_output_digest": "projection-pending",
         "candidate_features": {"lactate_threshold": lactate_candidate_features},
     }
-    if outside_files:
-        # Files outside the Export are not read; the list keeps the
-        # established manifest byte-stable when there are none.
+    if outside_files or too_large_files:
+        # Files outside the Export, and JSON files over the limit that no
+        # dataset reads, are not read; the list keeps the established
+        # manifest byte-stable when there are none.
         manifest["files_not_read"] = [
-            {"source_path": relative, "bytes": size, "reason": OUTSIDE_EXPORT_ROOT}
-            for relative, size in outside_files
+            *(
+                {"source_path": relative, "bytes": size, "reason": OUTSIDE_EXPORT_ROOT}
+                for relative, size in outside_files
+            ),
+            *(
+                {"source_path": path, "bytes": size, "reason": reason}
+                for path, size, reason in too_large_files
+            ),
         ]
+    if files_left_out:
+        # Files that could not be read are left out with the reason; the
+        # list appears only when there is one (stage A3c).
+        manifest["files_left_out"] = files_left_out
     summary = {
         "format": "garmin-running-data-normalizer-run-summary-v1",
         "product_version": __version__,
@@ -1770,10 +1834,11 @@ def run_all(
         # Keep the established PASS summary byte-stable; this additive field
         # appears only when a valid unresolved relationship warning exists.
         summary["relationship_warning_count"] = relationship_warning_count
-    if same_export_count:
-        # The input warning has no family; like the warnings above, it is
-        # counted only when it exists.
-        summary["input_warning_count"] = 1
+    input_warning_count = int(bool(same_export_count)) + int(bool(files_left_out))
+    if input_warning_count:
+        # The input warnings have no family; like the warnings above, they
+        # are counted only when they exist.
+        summary["input_warning_count"] = input_warning_count
     if snapshot_context is not None:
         lifecycle_summary = dict(snapshot_context["merge_summary"])
         manifest["snapshot_lifecycle"] = {
@@ -1871,5 +1936,6 @@ __all__ = [
     "SNAPSHOT_LIFECYCLE_PATHS",
     "RUN_ALL_VERSION",
     "RunAllError",
+    "left_out_files",
     "run_all",
 ]

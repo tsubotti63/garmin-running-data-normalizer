@@ -18,6 +18,19 @@ class UnsafeArchiveError(ValueError):
     """Raised when an archive violates the fail-closed intake contract."""
 
 
+class ArchiveLimitError(UnsafeArchiveError):
+    """Raised when an archive exceeds a limit on the members that are read.
+
+    Unlike the other ``UnsafeArchiveError`` cases (unsafe paths, links,
+    encryption, and compression ratios), the members are not unsafe; there
+    are only too many of them, or they are too large (stage A3c).
+    """
+
+
+class MemberTooLargeError(ArchiveLimitError):
+    """Raised when one member is larger than the limit for one file."""
+
+
 @dataclass(frozen=True)
 class ArchiveLimits:
     max_members: int = MAX_ARCHIVE_MEMBERS
@@ -77,7 +90,7 @@ def is_safe_export_member(info: ZipInfo) -> bool:
 
 def check_member_size(info: ZipInfo, max_bytes: int, limits: ArchiveLimits) -> None:
     if info.file_size > max_bytes:
-        raise UnsafeArchiveError(f"archive member exceeds size limit: {info.filename}")
+        raise MemberTooLargeError(f"archive member exceeds size limit: {info.filename}")
     if info.file_size and info.compress_size == 0:
         raise UnsafeArchiveError(f"invalid compressed size: {info.filename}")
     if info.compress_size and info.file_size / info.compress_size > limits.max_compression_ratio:
@@ -89,12 +102,15 @@ def validated_members(
     limits: ArchiveLimits = ArchiveLimits(),
     *,
     reads: Callable[[ZipInfo], bool] | None = None,
+    oversize: list[ZipInfo] | None = None,
 ) -> list[ZipInfo]:
     """Return the members to read, after checking every member for safety.
 
     ``reads`` selects the members that the caller reads (by default every
     Export file). The size, count, and compression limits apply only to those
     members, so a large member that is never read does not reject the archive.
+    ``oversize``, when given, collects the members larger than the limit for
+    one file instead of rejecting the archive; they are not read.
     """
     accepted: list[ZipInfo] = []
     total = 0
@@ -103,12 +119,15 @@ def validated_members(
             continue
         if reads is not None and not reads(info):
             continue
+        if oversize is not None and info.file_size > limits.max_member_bytes:
+            oversize.append(info)
+            continue
         if len(accepted) >= limits.max_members:
-            raise UnsafeArchiveError("archive member count exceeds configured limit")
+            raise ArchiveLimitError("archive member count exceeds configured limit")
         check_member_size(info, limits.max_member_bytes, limits)
         total += info.file_size
         if total > limits.max_total_bytes:
-            raise UnsafeArchiveError("archive expanded size exceeds configured limit")
+            raise ArchiveLimitError("archive expanded size exceeds configured limit")
         accepted.append(info)
     return accepted
 
@@ -121,7 +140,7 @@ def digest_member(
     The checks are those of ``read_member``, without holding the member.
     """
     if info.file_size > limits.max_member_bytes:
-        raise UnsafeArchiveError("archive member exceeds size limit")
+        raise MemberTooLargeError("archive member exceeds size limit")
     digest = hashlib.sha256()
     size = 0
     with archive.open(info, "r") as handle:
@@ -129,24 +148,28 @@ def digest_member(
             digest.update(chunk)
             size += len(chunk)
     if size != info.file_size or size > limits.max_member_bytes:
-        raise UnsafeArchiveError("archive member size changed or exceeded limit while reading")
+        # The member's data does not match its header: the archive is damaged.
+        raise BadZipFile("archive member size changed or exceeded limit while reading")
     return digest.hexdigest(), size
 
 
 def read_member(archive: ZipFile, info: ZipInfo, limits: ArchiveLimits = ArchiveLimits()) -> bytes:
     if info.file_size > limits.max_member_bytes:
-        raise UnsafeArchiveError("archive member exceeds size limit")
+        raise MemberTooLargeError("archive member exceeds size limit")
     with archive.open(info, "r") as handle:
         data = handle.read(limits.max_member_bytes + 1)
     if len(data) != info.file_size or len(data) > limits.max_member_bytes:
-        raise UnsafeArchiveError("archive member size changed or exceeded limit while reading")
+        # The member's data does not match its header: the archive is damaged.
+        raise BadZipFile("archive member size changed or exceeded limit while reading")
     return data
 
 
 __all__ = [
+    "ArchiveLimitError",
     "ArchiveLimits",
     "BadZipFile",
     "MAX_ARCHIVE_MEMBERS",
+    "MemberTooLargeError",
     "UnsafeArchiveError",
     "check_member_size",
     "digest_member",

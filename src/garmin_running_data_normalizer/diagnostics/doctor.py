@@ -23,6 +23,7 @@ from ..intake.source import (
     TempSpaceError,
     is_zip_input,
 )
+from ..run_all import left_out_files
 from ..standalone import StandaloneHandoffError, validate_standalone_handoff
 from .contracts import (
     DOCTOR_FORMAT,
@@ -184,6 +185,10 @@ def doctor_input(
             with read_export(requested) as reading:
                 assets = reading.assets
                 same_export_count = reading.same_export_count
+                # Files that cannot be read without reading their content
+                # (a damaged ZIP, a file over the limit) are left out of the
+                # run, which goes on (stage A3c).
+                left_out = list(reading.left_out)
                 mixed_accounts = len(asset_accounts(assets)) > 1
             if mixed_accounts:
                 raise MixedExportsError()
@@ -260,6 +265,18 @@ def doctor_input(
                         evidence_reference="diagnostic:source-discovery",
                     )
                 )
+            if left_out:
+                findings.append(
+                    _finding(
+                        "DATA_FILE_LEFT_OUT",
+                        severity="WARNING",
+                        actionability="NONE",
+                        safe_message_id="INPUT_FILES_CANNOT_BE_READ_AND_WILL_BE_LEFT_OUT",
+                        next_action_id="RUN_ALL",
+                        authority_reference="product:intake-discovery",
+                        evidence_reference="diagnostic:source-discovery",
+                    )
+                )
             has_activities = any(
                 asset.kind == "json"
                 and (asset.member_path or asset.source_path).lower().endswith(
@@ -267,7 +284,24 @@ def doctor_input(
                 )
                 for asset in assets
             )
-            if not has_activities:
+            activities_left_out = any(
+                item["family"] == "activities" for item in left_out_files(left_out)
+            )
+            if not has_activities and activities_left_out:
+                # The Export has Activities files, but none can be read: the
+                # run stops with ACTIVITIES_EMPTY, as here.
+                findings.append(
+                    _finding(
+                        "ACTIVITIES_EMPTY",
+                        severity="ERROR",
+                        actionability="ACTION_REQUIRED",
+                        safe_message_id="ACTIVITIES_FILES_CANNOT_BE_READ",
+                        next_action_id="OBTAIN_COMPLETE_READABLE_EXPORT",
+                        authority_reference="product:run-all-required-input",
+                        evidence_reference="diagnostic:activities-presence",
+                    )
+                )
+            elif not has_activities:
                 findings.append(
                     _finding(
                         "ACTIVITIES_NOT_FOUND",

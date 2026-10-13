@@ -27,7 +27,7 @@ from .intake.source import (
 )
 from .normalizers.activities import normalize_activities
 from .qa import summarize_records
-from .run_all import RunAllError, run_all
+from .run_all import RunAllError, left_out_files, run_all
 from .diagnostics.doctor import (
     DoctorError,
     doctor_input,
@@ -87,6 +87,19 @@ def _validate_paths(input_path: str | Path, output_path: str | Path) -> tuple[Pa
     return input_root, output_root
 
 
+def _check_activities_read(left_out: list[tuple[str, int, str]]) -> None:
+    """Stop when an Activities file could not be read (stage A3c).
+
+    Run-All leaves such a file out and lists it; the Golden Path output has no
+    such list, so it stops instead of leaving records out silently. Files of
+    other families are not used here.
+    """
+    if any(item["family"] == "activities" for item in left_out_files(left_out)):
+        raise GoldenPathError(
+            "an Activities file could not be read; obtain a complete, readable Export"
+        )
+
+
 def run_activities(
     input_path: str | Path,
     output_path: str | Path,
@@ -103,6 +116,7 @@ def run_activities(
             if asset.kind == "json"
             and (asset.member_path or asset.source_path).endswith("summarizedActivities.json")
         ]
+        _check_activities_read(reading.left_out)
         if not assets:
             raise GoldenPathError("no supported summarizedActivities.json input was found")
         try:
@@ -111,6 +125,7 @@ def run_activities(
             records = normalize_activities(str(input_root), timezone_name, assets=assets)
         except InputChangedError as exc:
             raise GoldenPathError("input changed or provenance diverged during processing") from exc
+        _check_activities_read(reading.left_out)
     if not records:
         raise GoldenPathError("supported input contained no activity records")
     discovered_sources = {(asset.provenance_path, asset.sha256) for asset in assets}

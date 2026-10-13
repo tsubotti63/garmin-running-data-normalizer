@@ -1474,9 +1474,14 @@ def _validate_projection_inputs(
             "summary error count does not match family error counts"
         )
     fit_is_partial = normalized_family_results["fit"]["status"] == "PARTIAL"
+    # A file left out also bounds the run (stage A3c).
+    files_left_out = any(
+        isinstance(item, Mapping) and item.get("code") == "DATA_FILE_LEFT_OUT"
+        for item in warnings
+    )
     expected_run_status = (
         "PARTIAL_SUCCESS"
-        if fit_is_partial
+        if fit_is_partial or files_left_out
         else "PASS_WITH_WARNINGS"
         if summary_warning_count
         else "PASS"
@@ -1956,6 +1961,19 @@ def _files_not_read_lines(manifest: Mapping[str, Any]) -> list[str]:
     ]
 
 
+def _files_left_out_lines(manifest: Mapping[str, Any]) -> list[str]:
+    """Count the files that could not be read and were left out (stage A3c)."""
+    files = manifest.get("files_left_out", [])
+    if not isinstance(files, list):
+        raise OutputExperienceError("files left out must be a list")
+    if not files:
+        return []
+    return [
+        f"- Files left out: {len(files)}, which could not be read; "
+        "`run_manifest.json` lists them with the reason"
+    ]
+
+
 def render_start_here(
     manifest: Mapping[str, Any],
     summary: Mapping[str, Any],
@@ -1985,6 +2003,7 @@ def render_start_here(
         f"- Warning count: {warning_count}",
         f"- Error count: {error_count}",
         *_files_not_read_lines(manifest),
+        *_files_left_out_lines(manifest),
         "",
         "## Dataset Families",
         "",

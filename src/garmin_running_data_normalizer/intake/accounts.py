@@ -81,7 +81,7 @@ def account_values(files: Iterable[tuple[str, bytes]]) -> set[str]:
     """Return the accounts that the given JSON files name, as (logical name, content).
 
     Files outside the account families, and files that cannot be read as JSON,
-    are passed over; reading them is left to the normalizers.
+    are passed over; the run leaves them out (stage A3c).
     """
     found: set[str] = set()
     for logical_name, data in files:
@@ -89,7 +89,9 @@ def account_values(files: Iterable[tuple[str, bytes]]) -> set[str]:
             continue
         try:
             payload = json.loads(data.decode("utf-8-sig"))
-        except (UnicodeError, json.JSONDecodeError):
+        except (UnicodeError, ValueError, RecursionError):
+            # The same errors as the run leaves a file out for: not UTF-8,
+            # not JSON, nested too deeply, or a number with too many digits.
             continue
         found |= payload_accounts(payload)
     return found

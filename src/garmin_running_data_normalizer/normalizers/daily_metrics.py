@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Any, Callable, Iterable
 
-from ..intake.discovery import DiscoveredAsset
+from ..intake.discovery import DiscoveredAsset, parse_json_asset
 
 
 class DailyMetricError(ValueError):
@@ -26,10 +26,13 @@ def logical_basename(asset: DiscoveredAsset) -> str:
 
 
 def load_rows(asset: DiscoveredAsset) -> list[dict[str, Any]]:
-    try:
-        value = json.loads(asset.data.decode("utf-8-sig"))
-    except (UnicodeError, json.JSONDecodeError) as exc:
-        raise DailyMetricError("daily metric JSON could not be decoded") from exc
+    """Return the rows of one daily file; a file that cannot be read gives none.
+
+    Such a file is left out with a reason in its reading (stage A3c).
+    """
+    readable, value = parse_json_asset(asset)
+    if not readable:
+        return []
     if isinstance(value, list):
         return [item for item in value if isinstance(item, dict)]
     if isinstance(value, dict):
