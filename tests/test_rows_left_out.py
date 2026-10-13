@@ -387,15 +387,19 @@ class RowsLeftOutTest(unittest.TestCase):
             )
             output = both_forms(self, root, source, "race")
             rows = {row["calendar_date"]: row for row in table(output, "race_prediction_daily")}
-            self.assertEqual(sorted(rows), [DATE, "2030-02-02"])
+            self.assertEqual(sorted(rows), [DATE, "2030-02-02", "2030-02-04"])
             self.assertIsNone(rows["2030-02-02"]["race_time_marathon_sec"])
             self.assertEqual(rows["2030-02-02"]["race_time_half_sec"], 4700)
+            # A distance of zero is a value of another form: the row stays,
+            # with that distance empty (stage A3d-2a).
+            self.assertIsNone(rows["2030-02-04"]["race_time_half_sec"])
             record = audit(output, "race_prediction_daily")
-            # The record without distances holds no value; the one with a
-            # distance of zero is left out until stage A3d-2.
+            # The record without distances holds no value.
             self.assertEqual(record["empty_record_count"], 1)
-            self.assertEqual(record["excluded_reason_counts"], {"missing_or_invalid_race_prediction": 1})
-            self.assertEqual(warnings_of(output, "DATA_ROW_LEFT_OUT"), {"race_prediction_daily": 1})
+            self.assertEqual(record["excluded_reason_counts"], {})
+            self.assertEqual(record["invalid_value_counts"], {"race_time_half_sec": 1})
+            self.assertEqual(warnings_of(output, "DATA_ROW_LEFT_OUT"), {})
+            self.assertEqual(warnings_of(output, "DATA_VALUE_INVALID"), {"race_prediction_daily": 1})
 
     def test_a_family_whose_rows_all_lack_their_date(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -488,7 +492,7 @@ class SnapshotRowsTest(unittest.TestCase):
             self.assertEqual(audit(output, "sleep_daily")["empty_record_count"], 1)
             merge = load(output / "snapshot/canonical_merge_summary.json")
             self.assertEqual(merge["merge_rules_version"], MERGE_RULES_VERSION)
-            self.assertEqual(MERGE_RULES_VERSION, "garmin_snapshot_merge_rules:v2.6")
+            self.assertEqual(MERGE_RULES_VERSION, "garmin_snapshot_merge_rules:v2.7")
             self.assertEqual(merge["review_hold_count"], 0)
             uds = merge["datasets"]["uds_daily"]
             self.assertEqual(uds["keyless_observation_count"], 4)

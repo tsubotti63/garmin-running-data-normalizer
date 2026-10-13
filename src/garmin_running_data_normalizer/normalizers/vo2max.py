@@ -4,6 +4,7 @@ from collections import Counter
 from typing import Any, Iterable
 
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
+from ..common.values import ValueReader
 from ..intake.discovery import DiscoveredAsset
 from .daily_metrics import (
     DailyMetricResult,
@@ -115,13 +116,12 @@ def normalize_vo2max(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
             # Copies within one Snapshot count as in a one-shot run (stage A3b).
             timestamp_semantics[semantics] += 1 + copies_within_snapshots(snapshot_numbers(raw))
             sport = text(raw.get("sport"))
-            source_activity_id = number(raw.get("activityId"))
-            if not isinstance(source_activity_id, int):
-                source_activity_id = None
             reason = vo2max_left_out_reason(raw, name)
             if reason is not None:
                 left_out.add(raw, reason)
                 continue
+            values = ValueReader()
+            source_activity_id = values.integer(raw.get("activityId"), "source_activity_id")
             accepted.append(
                 {
                     "_snapshot_numbers": snapshot_numbers(raw),
@@ -132,9 +132,10 @@ def normalize_vo2max(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
                     "sport": sport,
                     "source_activity_id": source_activity_id,
                     "source_confidence": None,
-                    "max_met": number(raw.get("maxMet")),
-                    "max_met_category": text(raw.get("maxMetCategory")),
-                    "calibrated_data": number(raw.get("calibratedData")),
+                    "max_met": values.number(raw.get("maxMet"), "max_met"),
+                    "max_met_category": values.text(raw.get("maxMetCategory"), "max_met_category"),
+                    "calibrated_data": values.number(raw.get("calibratedData"), "calibrated_data"),
+                    "_value_problems": values.problems,
                 }
             )
     result = finalize_daily(

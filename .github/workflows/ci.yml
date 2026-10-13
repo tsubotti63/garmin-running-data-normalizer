@@ -132,6 +132,9 @@ jobs:
       - name: Verify Windows rows left out
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_rows_left_out.py -q
+      - name: Verify Windows values of another form
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_invalid_values.py -q
       - name: Build distributions
         shell: powershell
         run: |

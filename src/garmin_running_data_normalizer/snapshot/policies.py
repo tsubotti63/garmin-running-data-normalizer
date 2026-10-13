@@ -272,8 +272,11 @@ FUTURE_READY_DATASETS = ("health_status",)
 # it holds no value. From v2.6, an identifier is read as Run-All reads it (an
 # integral number such as 123.0 is 123, and only the ASCII digits are digits),
 # and a record of Activities, Gear, activity_gear, or Personal Records without
-# a usable identifier is passed to Run-All in the same way.
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.6"
+# a usable identifier is passed to Run-All in the same way. From v2.7, the
+# build leaves the values of another form as they are, and Run-All leaves them
+# empty and keeps them in its audit records as a one-shot run does; a Lactate
+# Threshold candidate with such a value no longer stops the build.
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.7"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -377,6 +380,10 @@ MERGE_RULES: dict[str, Any] = {
         "rows_that_hold_no_value": "counted_as_empty_records_not_announced_in_daily_datasets",
         "identifiers_that_cannot_name_a_record": "passed_to_run_all_without_a_key",
         "review_hold": False,
+    },
+    "values_of_another_form": {
+        "policy": "passed_to_run_all_which_leaves_them_empty_and_keeps_them",
+        "lactate_threshold_candidates": "passed_to_run_all_instead_of_stopping_the_build",
     },
     "other_datasets_follow": REGISTRY_VERSION,
 }

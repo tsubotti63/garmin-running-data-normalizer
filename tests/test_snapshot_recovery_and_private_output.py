@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from garmin_running_data_normalizer.runner import run_activities
-from garmin_running_data_normalizer.snapshot.merge import SnapshotMergeError, build_approved_input
+from garmin_running_data_normalizer.snapshot.merge import build_approved_input
 from garmin_running_data_normalizer.snapshot.store import (
     SnapshotStoreError,
     initialize_store,
@@ -135,9 +135,10 @@ class PrivateOutputPermissionTest(unittest.TestCase):
 
 
 class SnapshotRecoveryMessageTest(unittest.TestCase):
-    def test_stop_conflict_error_reports_counts_without_private_values(self) -> None:
-        # A lactate threshold candidate with a value of the wrong type still
-        # stops the build; two values for one Activity no longer do (stage A3b).
+    def test_a_malformed_candidate_is_counted_without_private_values(self) -> None:
+        # A Lactate Threshold candidate with a value of the wrong type no
+        # longer stops the build (stage A3d-2a): the build counts it, and
+        # Run-All keeps the value in its local audit record only.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             store = root / "store"
@@ -159,17 +160,13 @@ class SnapshotRecoveryMessageTest(unittest.TestCase):
             )
             register(store, source, "S1", 1)
 
-            with self.assertRaises(SnapshotMergeError) as context:
-                build_approved_input(store, root / "build")
-
-            message = str(context.exception)
-            self.assertTrue(
-                message.startswith("canonical merge contains unresolved stop conflicts: ")
-            )
-            self.assertIn("lactate_threshold_candidates lactate_malformed_candidate=1", message)
-            for private in ("PRIVATE-NAME", "PRIVATE-SPEED", "A1", "canonical_key", str(root)):
-                self.assertNotIn(private, message)
-            self.assertFalse((root / "build").exists())
+            build = build_approved_input(store, root / "build")
+            summary = build["merge_summary"]["datasets"]["lactate_threshold_candidates"]
+            self.assertEqual(summary["malformed_count"], 1)
+            for name in ("canonical/snapshot_lineage.json", "approved_input/merge_summary.json"):
+                text = (root / "build" / name).read_text(encoding="utf-8")
+                for private in ("PRIVATE-NAME", "PRIVATE-SPEED"):
+                    self.assertNotIn(private, text)
 
     def test_stale_lock_reports_holder_and_documented_recovery_works(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -707,7 +707,11 @@ def _lactate_power_conflicts(
 def _lactate_malformed_conflicts(
     observations: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Return fail-closed records for structurally invalid candidate fields."""
+    """Return a record for each candidate with a field of another form.
+
+    The build counts them in the candidates' summary and passes the
+    candidates to Run-All; they no longer stop the build (stage A3d-2a).
+    """
 
     conflicts: list[dict[str, Any]] = []
     numeric_fields = {
@@ -1990,9 +1994,13 @@ def build_approved_input(
         candidate_reviews = _lactate_power_conflicts(
             observations_by_dataset.get("lactate_threshold_candidates", [])
         )
-        all_conflicts: list[dict[str, Any]] = _lactate_malformed_conflicts(
+        # A candidate with a value of another form is passed to Run-All, which
+        # counts it as a one-shot run does; the build only counts it (stage
+        # A3d-2a, merge rules v2.7). Until then, it stopped the build.
+        malformed_candidates = _lactate_malformed_conflicts(
             observations_by_dataset.get("lactate_threshold_candidates", [])
         )
+        all_conflicts: list[dict[str, Any]] = []
         dataset_summaries: dict[str, Any] = {}
         latest_state = _latest_relationship_state(
             observations_by_dataset,
@@ -2054,11 +2062,7 @@ def build_approved_input(
                 "multiple_candidate_group_count": len(candidate_reviews),
                 "authority_unresolved_count": len(candidate_reviews),
                 "stable_promotion_available": False,
-                "malformed_count": lactate_null_key_count
-                + sum(
-                    item["conflict_type"] == "lactate_malformed_candidate"
-                    for item in all_conflicts
-                ),
+                "malformed_count": lactate_null_key_count + len(malformed_candidates),
                 "candidate_status": (
                     "multiple_observed_candidates"
                     if candidate_reviews

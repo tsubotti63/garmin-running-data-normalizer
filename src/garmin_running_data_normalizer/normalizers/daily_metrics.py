@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import json
 import hashlib
-import math
 from collections import Counter, defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any, Callable, Iterable
 
-from ..common.values import is_empty
+from ..common.values import InvalidValues, is_empty, read_value
 from ..intake.discovery import DiscoveredAsset, parse_json_asset
 
 
@@ -60,27 +59,18 @@ def selected_rows(
 
 
 def number(value: Any) -> int | float | None:
-    if isinstance(value, bool) or value in (None, ""):
-        return None
-    if isinstance(value, int):
-        return value if abs(value) <= (1 << 53) - 1 else None
-    if isinstance(value, float):
-        return value if math.isfinite(value) else None
-    try:
-        parsed = float(str(value))
-    except (OverflowError, ValueError):
-        return None
-    if not math.isfinite(parsed):
-        return None
-    return int(parsed) if parsed.is_integer() else parsed
+    """A number as a number field takes it, or None (stage A3d-2a: text such
+    as "5" is not a number). The normalizers read their values with a
+    ``ValueReader``, which also keeps the values of another form."""
+    return read_value(value, "number")[1]
 
 
 def text(value: Any) -> str | None:
-    return value if isinstance(value, str) and value != "" else None
+    return None if value == "" else read_value(value, "string")[1]
 
 
 def boolean(value: Any) -> bool | None:
-    return value if isinstance(value, bool) else None
+    return read_value(value, "boolean")[1]
 
 
 def stable_json(value: Any) -> str:
@@ -315,12 +305,23 @@ def finalize_daily(
     duplicates, as a one-shot run of that Export counts them.
     ``excluded_reasons`` counts the rows left out that hold a value, by reason,
     and ``empty_record_count`` the rows left out that hold none (stage A3d-1).
+    An accepted row carries in ``_value_problems`` the values of another form
+    that its fields left empty; the audit keeps them, counted before the rows
+    of one key are merged (stage A3d-2a).
     """
     if not key_fields:
         raise DailyMetricError("daily metric stable key must not be empty")
     grouped: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
+    invalid = InvalidValues()
     for row in accepted:
         grouped[tuple(str(row[field]) for field in key_fields)].append(row)
+        for field, value in row.get("_value_problems") or ():
+            invalid.add(
+                {name: row[name] for name in key_fields},
+                field,
+                value,
+                row.get("_snapshot_numbers"),
+            )
     output: list[dict[str, Any]] = []
     same_value_duplicates = 0
     review_key_count = 0
@@ -418,6 +419,7 @@ def finalize_daily(
         "disagreement_key_count": len(disagreements),
         "disagreements": disagreements,
         "absent_value_counts": dict(sorted(absent_values.items())),
+        **invalid.audit_fields(),
         "stable_key": list(key_fields),
         "merge_policy": "observation_union_null_is_absent_disagreeing_values_kept_empty",
         "keep_last": False,

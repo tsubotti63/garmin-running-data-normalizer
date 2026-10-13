@@ -1326,11 +1326,17 @@ def _validate_projection_inputs(
     # The warnings about rows left out, by family: one for each dataset, so
     # Gear can have two (stage A3d-1).
     row_warnings: dict[str, list[int]] = {}
+    # And the warnings about values of another form, by family (stage A3d-2a).
+    value_warnings: dict[str, list[int]] = {}
     listed_warnings = summary_object.get("warnings")
     for item in listed_warnings if isinstance(listed_warnings, list) else []:
         if isinstance(item, Mapping) and item.get("code") == "DATA_ROW_LEFT_OUT":
             row_warnings.setdefault(str(item.get("family")), []).append(
                 _non_negative_integer(item.get("count"), "rows left out")
+            )
+        if isinstance(item, Mapping) and item.get("code") == "DATA_VALUE_INVALID":
+            value_warnings.setdefault(str(item.get("family")), []).append(
+                _non_negative_integer(item.get("count"), "values of another form")
             )
     for family in expected_families:
         result = _mapping(family_results[family], f"family result {family}")
@@ -1456,6 +1462,18 @@ def _validate_projection_inputs(
             )
         expected_warning_count += len(family_row_warnings)
         rows_left_out = rows_left_out or bool(left_out_row_count)
+        # Values of another form (stage A3d-2a), in the same way.
+        invalid_value_count = _non_negative_integer(
+            result.get("invalid_value_count", 0), f"{family} invalid value count"
+        )
+        family_value_warnings = value_warnings.get(family, [])
+        if sum(family_value_warnings) != invalid_value_count or (
+            bool(family_value_warnings) != bool(invalid_value_count)
+        ):
+            raise OutputExperienceError(
+                f"{family}: values of another form contradict the family warnings"
+            )
+        expected_warning_count += len(family_value_warnings)
 
         if status != expected_status:
             raise OutputExperienceError(
@@ -2021,6 +2039,25 @@ def _files_left_out_lines(manifest: Mapping[str, Any], summary: Mapping[str, Any
     return lines
 
 
+def _invalid_values_lines(summary: Mapping[str, Any]) -> list[str]:
+    """Count the values left empty because of their form (stage A3d-2a)."""
+    counts: dict[str, int] = {}
+    for item in summary.get("warnings", []):
+        if isinstance(item, Mapping) and item.get("code") == "DATA_VALUE_INVALID":
+            # The Lactate Threshold candidates are no dataset; their family names them.
+            name = str(item.get("dataset") or item.get("family"))
+            counts[name] = counts.get(name, 0) + _non_negative_integer(
+                item.get("count"), "values of another form"
+            )
+    if not counts:
+        return []
+    tables = ", ".join(f"{_code(dataset)} {count}" for dataset, count in counts.items())
+    return [
+        f"- Values left empty: {sum(counts.values())} ({tables}), which had a form "
+        "that their field does not take; the audit records keep each of them"
+    ]
+
+
 def _rows_left_out_lines(summary: Mapping[str, Any]) -> list[str]:
     """Count the rows left out because they lack a required value (stage
     A3d-1) or a usable identifier (stage A3d-1b)."""
@@ -2071,6 +2108,7 @@ def render_start_here(
         *_files_not_read_lines(manifest),
         *_files_left_out_lines(manifest, summary),
         *_rows_left_out_lines(summary),
+        *_invalid_values_lines(summary),
         "",
         "## Dataset Families",
         "",

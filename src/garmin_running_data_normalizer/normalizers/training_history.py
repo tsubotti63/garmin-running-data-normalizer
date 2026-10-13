@@ -4,6 +4,7 @@ from collections import Counter
 from typing import Any, Iterable
 
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
+from ..common.values import ValueReader
 from ..intake.discovery import DiscoveredAsset
 from .daily_metrics import (
     DailyMetricResult,
@@ -61,13 +62,15 @@ def normalize_training_history(
         if reason is not None:
             left_out.add(raw, reason)
             continue
+        values = ValueReader()
         accepted.append(
             {
                 "_snapshot_numbers": snapshot_numbers(raw),
                 "calendar_date": date,
                 "observation_timestamp": timestamp,
-                "training_status": text(raw.get("trainingStatus")),
-                "sport": text(raw.get("sport")),
+                "training_status": values.text(raw.get("trainingStatus"), "training_status"),
+                "sport": values.text(raw.get("sport"), "sport"),
+                "_value_problems": values.problems,
             }
         )
     result = finalize_daily(

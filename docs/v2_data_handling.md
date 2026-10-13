@@ -235,13 +235,18 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     and time empty, and, from stage A3d-1b, a Personal Record whose Activity
     was removed stays with its relationship `unresolved` (see
     [Relationships](#relationships)); until then it stopped the run
-    (`RELATIONSHIP_CONTRACT_FAILED`). Until stage A3d-2, a removed value
-    that the normalized dataset does not accept stops the run as it does in
-    a one-shot run: an empty string for a number, or an empty list or object
-    for a single value (`OUTPUT_EXPERIENCE_FAILED`, exit 2). From stage
-    A3d-2, such a field is empty, and the audit record keeps the value, with
-    warning `DATA_VALUE_INVALID` (see
-    [Rows and values with problems](#rows-and-values-with-problems)).
+    (`RELATIONSHIP_CONTRACT_FAILED`). A removed value that the field does
+    not take, such as an empty string for a number or an empty list or
+    object for a single value, is no value, as every empty value is: from
+    stage A3d-2a, the field is empty without a warning, as in a one-shot run
+    of the row, and `updates` keeps the earlier value; until then such a
+    value stopped the run (`OUTPUT_EXPERIENCE_FAILED`, exit 2). A later
+    value of another form, such as text for a number, replaces the earlier
+    value as any value does, so the field is empty and the earlier correct
+    value is no longer in the dataset; Run-All keeps the value of another
+    form with warning `DATA_VALUE_INVALID` (see
+    [Rows and values with problems](#rows-and-values-with-problems)), and
+    `updates` keeps both values.
   - Every earlier value is kept in the dataset's audit record:
     `audit/activities.json`, `audit/gear.json`, `audit/activity_gear.json`,
     and `audit/personal_records.json` (format
@@ -623,26 +628,86 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
       for a row with neither an identifier nor the fields for a key, and
       wrote a row whose identifier is invalid with a key made from the
       value, such as `garmin_activity:True`.
-  - A value of an unexpected type becomes empty in the normalized row, and the
-    raw value is kept in the audit record. Warning `DATA_VALUE_INVALID`
-    (provisional), status `PASS_WITH_WARNINGS`.
+  - A value of a form that its field does not take becomes empty in the
+    normalized row, and the audit record keeps the value. Warning
+    `DATA_VALUE_INVALID`, status `PASS_WITH_WARNINGS` (exit 0): the row stays,
+    so nothing is left out. Stage A3d-2a does this for every dataset but HRV,
+    which follows in stage A3d-2b, and settles the name:
+    - One rule reads every value (`common.values.read_value`): the
+      normalizers use it as they read a source field or make a value from
+      it, and Run-All checks every value of Activities, Gear, `activity_gear`,
+      Personal Records, and the FIT sessions and laps against the logical
+      type of its field in the Schema Catalog.
+    - A number is finite and at most 2^53 − 1 in size: NaN, an infinity, and
+      a larger number, such as 10^400, are of another form. A whole number
+      written with a decimal point is an integer, so 3.0 is 3 in an integer
+      field. Text is never a number, so `"5"` is of another form in a number
+      field: until stage A3d-2a, UDS, Sleep, Acute Training Load, Training
+      Readiness, VO2max, and Race Prediction read such text as a number, and
+      Hill and Endurance Score left it empty without a record. A boolean is
+      never a number, and a number is never text.
+    - An empty value (null, `""`, `[]`, or `{}`) is no value, as when values
+      are compared: a field that does not take it is empty without a
+      warning, and a text field keeps `""` as before.
+    - Values are checked before the rows of one key are merged (see
+      [Values that disagree](#values-that-disagree)), so a value of another
+      form is no value there: two rows of one day with the steps 5 and
+      `"abc"` give 5, without a disagreement.
+    - A value that a row needs, such as its date or a Hill or Endurance
+      overall score, leaves the row out when it is of another form, as when
+      it is missing (stage A3d-1); the audit record then counts the row by
+      reason and does not keep the value.
+    - The identifiers, including the activity of a Personal Record, follow
+      their own rules (stage A3d-1b; see [Relationships](#relationships)).
+    - The audit record of the dataset gains `invalid_value_counts`, by
+      field, and `invalid_values`, each with the key of its row, the field,
+      the value, `observation_count`, and, in a Snapshot run, the Snapshot
+      numbers. A number that is not finite is kept as an object that names
+      it, such as `{"non_finite_number": "NaN"}`, so that every output file
+      is strict JSON; v1.7.1 wrote NaN into the normalized datasets. The FIT
+      sessions and laps have no audit record of their own: the entry of
+      their FIT file in `audit/fit_audit.json` keeps their values, with each
+      field named after its dataset, such as `fit_sessions.sport`. The run
+      gives one warning for each dataset, with `family`, `dataset`, and
+      `count`; the family result gains `invalid_value_count`, and
+      `START_HERE.md` a line with the number for each dataset. Source
+      Completeness counts files and rows and does not change, so that a
+      Snapshot run, whose build does not read values, gives the same.
+    - `normalize-activities` (the Golden Path) stops when an Activities
+      value is of another form, as for a row without a usable identifier,
+      because its output has no place to keep the value; stage A3d-3 gives
+      the stop its code.
   - A value that the source marks as invalid or absent, such as the FIT
     invalid value that an HRV reading carries when nothing was measured, is
     an absent value: the field is empty, the audit record counts it, and no
     warning is given, because such a value marks that nothing was measured,
     not a problem in the data. v1.7.1 counts the HRV ones in
-    `DAILY_METRICS_REVIEW_REQUIRED`.
+    `DAILY_METRICS_REVIEW_REQUIRED`; stage A3d-2b follows this rule.
   - A timestamp out of range leaves the derived date and time empty and keeps
-    the raw value, with the same warning.
+    the raw value, with the same warning (stage A3d-2a): the start time of an
+    Activity, a FIT session, or a FIT lap that a date cannot hold, and a
+    Sleep start or end time that cannot be read. A date or an observation
+    time that a daily row needs leaves the row out instead, as a missing one
+    does. On some platforms, such as macOS, such a time stopped the run with
+    an error that it did not catch.
   - Text with a lone UTF-16 surrogate, such as a truncated emoji, is written
     with U+FFFD in its place, and the field is counted. Warning
-    `DATA_TEXT_REPAIRED` (provisional).
-  - A FIT field with an unexpected layout is treated as an unknown value with
-    the `DATA_VALUE_INVALID` warning; the FIT file is not left out.
+    `DATA_TEXT_REPAIRED` (provisional, stage A3d-2c).
+  - A FIT field with an unexpected layout, such as a sport given as an
+    array, is treated as an unknown value with the `DATA_VALUE_INVALID`
+    warning; the FIT file is not left out (stage A3d-2a).
   - A Race Prediction row keeps the predictions it has, and a missing one is
-    empty (stage A3d-1). A row without any prediction is an empty record, and
-    a prediction given in a form that is not a positive number still leaves
-    the row out until stage A3d-2.
+    empty (stage A3d-1). A row without any prediction is an empty record.
+    From stage A3d-2a, a prediction given in a form that is not a positive
+    number is empty with warning `DATA_VALUE_INVALID`, and the row stays;
+    until then it left the row out.
+  - The Lactate Threshold candidates keep their values of another form in
+    their audit record (`audit/lactate_threshold_candidates.json`), with
+    warning `DATA_VALUE_INVALID` for the family `lactate_threshold` and
+    without `dataset`, since the candidates are no normalized dataset; the
+    run summary counts it in `candidate_warning_count`.
+    `review_condition_counts` counts them as before, and no longer counts
+    an empty value (stage A3d-2a).
 
 ### Relationships
 
@@ -872,7 +937,7 @@ Every stop has a specific code; errors that v1.7.1 reports only as
 - New warning codes: `VALUES_DISAGREE` (stage A2a), `VALUES_UPDATED` and
   `RECORDS_NOT_IN_LATEST_SNAPSHOT` (stage A2b-2), `INPUT_DUPLICATE_SOURCES`
   (stage A3a), `DATA_FILE_LEFT_OUT` (stage A3c), `DATA_ROW_LEFT_OUT` (stage
-  A3d-1), and, with provisional names, `DATA_VALUE_INVALID` and
+  A3d-1), `DATA_VALUE_INVALID` (stage A3d-2a), and, with a provisional name,
   `DATA_TEXT_REPAIRED`. `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them.
 - Stage A3b adds to the audit records of Activities, Gear, `activity_gear`,
   and Personal Records `same_value_duplicate_count`, `absent_value_counts`,
@@ -924,6 +989,21 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `count` only, as before. The Gear family can therefore list two
   `DATA_ROW_LEFT_OUT` warnings, one for Gear and one for `activity_gear`,
   whose counts add up to the family's rows left out.
+- Stage A3d-2a adds, each only when there is something to report,
+  `invalid_value_counts` and `invalid_values` to the audit records of the
+  datasets other than HRV, to the entries of `audit/fit_audit.json`, and to
+  `audit/lactate_threshold_candidates.json`; `invalid_value_count` to the
+  family results; warning `DATA_VALUE_INVALID` with `family`, `dataset`, and
+  `count` (the Lactate Threshold candidates without `dataset`), which Run
+  Quality and the Support Bundle copy without values; and a `START_HERE.md`
+  line with the number for each dataset. A whole number written with a
+  decimal point in an integer field, such as a lap count of 3.0, is written
+  as an integer, and an empty value in a field that does not take it as
+  null. An empty text `""` stays as before: Activities, Gear, `activity_gear`,
+  Personal Records, and the FIT sessions and laps write it as `""`, and the
+  daily datasets write it as null. The outputs of an Export without such
+  values do not change, except that Snapshot outputs give the merge rules
+  version v2.7.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
   and `SNAPSHOT_STORE_LOCKED` (provisional name).
@@ -996,9 +1076,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   the observed values (`observed_variants`); the values stay only in the audit
   records. The same Activity twice with different values in one Snapshot, or
   in two Snapshots observed at the same time, stopped until stage A3b, which
-  makes it a disagreement; a malformed Lactate Threshold candidate still
-  stops until stage A3d, and a JSON file that cannot be read stopped until
-  stage A3c-2, which leaves it out.
+  makes it a disagreement; a malformed Lactate Threshold candidate stopped
+  until stage A3d-2a, which passes it to Run-All, and a JSON file that cannot
+  be read stopped until stage A3c-2, which leaves it out. A Snapshot build
+  does not read values: it passes them to Run-All as the Export gave them,
+  and Run-All checks them as in a one-shot run (stage A3d-2a).
 - Stage A2b-2 makes an explicit empty value in Activities, Gear,
   `activity_gear`, and Personal Records an update instead of a review hold, so
   the merge summaries no longer count review holds such as
@@ -1027,7 +1109,10 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Run-All, and `garmin_snapshot_merge_rules:v2.6` from stage A3d-1b, which
   reads identifiers as Run-All does and passes the records of Activities,
   Gear, `activity_gear`, and Personal Records without a usable identifier
-  to Run-All, in `config/garmin_snapshot_merge_rules_v2.json`. For these
+  to Run-All, and `garmin_snapshot_merge_rules:v2.7` from stage A3d-2a,
+  which passes the values of another form to Run-All and no longer stops
+  on a Lactate Threshold candidate with such a value, in
+  `config/garmin_snapshot_merge_rules_v2.json`. For these
   datasets they replace the merge fields of the v1.0 registry; the other
   datasets follow the v1.0 registry until stage A3d. A build records
   `merge_rules_version` in `snapshot/snapshot_lineage.json`, the approved input
@@ -1099,7 +1184,15 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   identifier, which stopped v1.7.1, is left out with the same warning and
   exit 3, and a Personal Record whose activity link is missing, malformed,
   or disagrees is kept unresolved with warning
-  `RELATIONSHIP_UNRESOLVED_INVALID_LINK` and exit 0.
+  `RELATIONSHIP_UNRESOLVED_INVALID_LINK` and exit 0. A value of a form that
+  its field does not take, which stopped v1.7.1 in Activities, Gear,
+  Personal Records, and FIT files, and which the daily datasets left empty
+  without a record, is empty with warning `DATA_VALUE_INVALID` and exit 0;
+  so is a number that is not finite, which v1.7.1 wrote as NaN into the
+  outputs, and a time out of range, which stopped v1.7.1 on some
+  platforms. Text such as `"5"` in a number field is no longer read as a
+  number, and a Race Prediction with a distance that is not a positive
+  number keeps its row, where v1.7.1 left the row out.
 - Outputs: `run_all_version` 2, the new fields, audit records, and audit
   sections, and the new warning codes. The synthetic Run-All output grows from
   46 to 50 files with the audit records of Activities, Gear, `activity_gear`,
@@ -1144,7 +1237,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   them out with warning `DATA_ROW_LEFT_OUT`, or counts them as empty
   records, as in a one-shot run. So are the records of Activities, Gear,
   `activity_gear`, and Personal Records without a usable identifier, which
-  were held back or stopped the build. The merge rules v2.6 are published in
+  were held back or stopped the build. A Lactate Threshold candidate with a
+  value of another form no longer stops the build. The merge rules v2.7 are
+  published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around
@@ -1167,7 +1262,8 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   errors report what happened and the next step, and `Ctrl+C` reports the
   cancellation. `normalize-activities` stops on an Activities row without a
   usable identifier, which v1.7.1 wrote with a key made from the value when
-  the value had an invalid form.
+  the value had an invalid form, and on an Activities value of a form that
+  its field does not take, which v1.7.1 wrote as it was.
 - Python API: `DiscoveredAsset` is a plain class instead of a frozen
   dataclass. Its fields, its constructor, and the content that
   `discover_export` returns are unchanged, but dataclass equality, hashing,
@@ -1186,7 +1282,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   gain an optional `left_out` counter, which counts the rows without a
   usable identifier by reason (stage A3d-1b); without it, they raise
   `ValueError` for such a row, also for an identifier of an invalid form or
-  of 0 in Activities and Gear, which v1.7.1 accepted.
+  of 0 in Activities and Gear, which v1.7.1 accepted. The daily helpers
+  `number`, `text`, and `boolean` read values as their fields take them
+  (stage A3d-2a): `number` no longer reads text such as `"5"` as a number.
 - Schema: the fields that a disagreement can leave empty are nullable (the
   Hill and Endurance `overall_score`, the four Race Prediction times,
   `vo2max`, and `training_status`), and so is `personal_records.activity_id`

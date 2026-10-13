@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from ..common.time import TIME_OUT_OF_RANGE
+from ..common.values import VALUE_PROBLEMS
 from ..intake.discovery import DiscoveredAsset, discover_export
 
 FIT_EPOCH_OFFSET = 631065600
@@ -232,8 +234,13 @@ def _fit_datetime(value: Any, timezone_name: str) -> str | None:
         return datetime.fromtimestamp(unix_seconds, timezone.utc).astimezone(
             ZoneInfo(timezone_name)
         ).isoformat()
-    except (OverflowError, TypeError, ValueError):
+    except TIME_OUT_OF_RANGE:
         return None
+
+
+def _is_code(value: Any) -> bool:
+    """Whether a FIT enum value is an integer code."""
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _scale(value: Any, scale: str | None, timezone_name: str) -> Any:
@@ -423,7 +430,12 @@ def parse_fit_bytes(
                         invalid_sentinel_counts.get(invalid_key, 0)
                         + invalid_count
                     )
-                record[name] = _scale(value, scale, timezone_name)
+                scaled = _scale(value, scale, timezone_name)
+                if scale == "date_time" and value is not None and scaled is None:
+                    # A time out of range: kept as a value of another form
+                    # (stage A3d-2a).
+                    record.setdefault(VALUE_PROBLEMS, []).append((name, value))
+                record[name] = scaled
         position += sum(definition.developer_field_sizes)
         if definition.global_message in messages:
             messages[definition.global_message].append(record)
@@ -541,6 +553,21 @@ def parse_fit_export(
             fit_session_key = f"fit_session:{asset.sha256}:{session_ordinal}"
             sport_code = session.get("sport", sport.get("sport"))
             sub_code = session.get("sub_sport", sport.get("sub_sport"))
+            # A code that is not an integer, such as an array, is a value of
+            # another form: the field is empty (stage A3d-2a).
+            # A session's start time is written as start_datetime_local; its
+            # timestamp is not written, so its value is not kept either.
+            problems = [
+                ("start_datetime_local", value)
+                for name, value in session.get(VALUE_PROBLEMS) or ()
+                if name == "start_time"
+            ]
+            if sport_code is not None and not _is_code(sport_code):
+                problems.append(("sport", sport_code))
+                sport_code = None
+            if sub_code is not None and not _is_code(sub_code):
+                problems.append(("sub_sport", sub_code))
+                sub_code = None
             fit_sport = (
                 None
                 if sport_code is None
@@ -577,6 +604,7 @@ def parse_fit_export(
                 "avg_step_length_mm": session.get("avg_step_length_mm"),
                 "record_count": parsed.get("record_count"),
                 "lap_count": len((parsed.get("laps_by_session") or [])[session_ordinal]),
+                **({VALUE_PROBLEMS: problems} if problems else {}),
             })
             for lap_ordinal, lap in enumerate(
                 (parsed.get("laps_by_session") or [])[session_ordinal]

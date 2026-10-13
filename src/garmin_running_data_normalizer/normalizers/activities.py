@@ -4,13 +4,19 @@ from collections import Counter
 from typing import Any, Iterable
 
 from ..common.identity import IDENTIFIER, MISSING, garmin_activity_key, identifier_value, read_identifier
+from ..common.values import read_value
 from ..common.time import (
     DEFAULT_TIMEZONE,
-    unix_ms_to_local_date,
     unix_ms_to_local_datetime,
 )
 from ..intake.discovery import DiscoveredAsset, load_json_assets
-from .records import IDENTITY_INVALID, IDENTITY_MISSING, count_left_out, row_snapshot_marks
+from .records import (
+    IDENTITY_INVALID,
+    IDENTITY_MISSING,
+    VALUE_PROBLEMS,
+    count_left_out,
+    row_snapshot_marks,
+)
 
 
 def _unwrap(value: Any) -> list[dict[str, Any]]:
@@ -76,6 +82,19 @@ def _normalize(
     distance = row.get("distance")
     duration = row.get("duration")
     description = row.get("description")
+    # Values are made from numbers only; a value of another form is left
+    # empty by Run-All, which keeps it (stage A3d-2a). A start time that is a
+    # number but out of range keeps its value, and its local date and time are
+    # empty; it is kept here, since Run-All cannot tell it from no time.
+    distance_value = read_value(distance, "number")[1]
+    duration_value = read_value(duration, "number")[1]
+    start_value = read_value(start_gmt, "number")[1]
+    local_datetime = unix_ms_to_local_datetime(start_value, timezone_name)
+    problems = (
+        [("start_time_gmt_ms", start_gmt)]
+        if start_value is not None and local_datetime is None
+        else []
+    )
     return {
         "garmin_activity_key": activity_key(row),
         "activity_id": identifier_value(row.get("activityId")),
@@ -86,12 +105,12 @@ def _normalize(
         "sport_type": row.get("sportType"),
         "start_time_gmt_ms": start_gmt,
         "start_time_local_raw": row.get("startTimeLocal"),
-        "activity_datetime_local": unix_ms_to_local_datetime(start_gmt, timezone_name),
-        "activity_date_local": unix_ms_to_local_date(start_gmt, timezone_name),
+        "activity_datetime_local": local_datetime,
+        "activity_date_local": local_datetime[:10] if local_datetime else None,
         "distance_raw_centimeters": distance,
-        "distance_m": float(distance) / 100.0 if isinstance(distance, (int, float)) else None,
+        "distance_m": None if distance_value is None else distance_value / 100.0,
         "duration_ms": duration,
-        "duration_sec": float(duration) / 1000.0 if isinstance(duration, (int, float)) else None,
+        "duration_sec": None if duration_value is None else duration_value / 1000.0,
         "elapsed_duration_ms": row.get("elapsedDuration"),
         "moving_duration_ms": row.get("movingDuration"),
         "avg_hr": row.get("avgHr"),
@@ -106,6 +125,7 @@ def _normalize(
         "source_sha256": asset.sha256,
         "source_confidence": "high",
         **row_snapshot_marks(row),
+        **({VALUE_PROBLEMS: problems} if problems else {}),
     }
 
 

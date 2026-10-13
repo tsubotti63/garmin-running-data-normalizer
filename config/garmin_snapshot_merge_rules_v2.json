@@ -80,7 +80,7 @@
     "records_the_latest_snapshot_lacks": "kept_and_marked_when_a_file_of_their_family_was_left_out",
     "zip_file_without_listed_members": "left_out_with_the_reason_from_registration"
   },
-  "merge_rules_version": "garmin_snapshot_merge_rules:v2.6",
+  "merge_rules_version": "garmin_snapshot_merge_rules:v2.7",
   "other_datasets_follow": "garmin_public_snapshot_dataset_merge_policies:v1.0",
   "rows_without_a_stable_key": {
     "copies_within_snapshot": "counted_as_in_a_one_shot_run",
@@ -107,5 +107,9 @@
   },
   "same_content_snapshots": "counted_once_earliest_observed_kept",
   "store_contract_version": "garmin_public_snapshot_lifecycle:v1.0",
-  "store_policy_registry_version": "garmin_public_snapshot_dataset_merge_policies:v1.0"
+  "store_policy_registry_version": "garmin_public_snapshot_dataset_merge_policies:v1.0",
+  "values_of_another_form": {
+    "lactate_threshold_candidates": "passed_to_run_all_instead_of_stopping_the_build",
+    "policy": "passed_to_run_all_which_leaves_them_empty_and_keeps_them"
+  }
 }

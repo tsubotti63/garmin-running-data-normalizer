@@ -4,16 +4,15 @@ from collections import Counter
 from typing import Any, Iterable
 
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
+from ..common.values import ValueReader
 from ..intake.discovery import DiscoveredAsset
 from .daily_metrics import (
     DailyMetricResult,
     RowsLeftOut,
     copies_within_snapshots,
     finalize_daily,
-    number,
     selected_rows,
     snapshot_numbers,
-    text,
     value_source_names,
 )
 
@@ -66,16 +65,18 @@ def normalize_acute_training_load(
         if reason is not None:
             left_out.add(raw, reason)
             continue
+        values = ValueReader()
         accepted.append(
             {
                 "_snapshot_numbers": snapshot_numbers(raw),
                 "calendar_date": date,
                 "observation_timestamp": timestamp,
-                "acwr_percent": number(raw.get("acwrPercent")),
-                "acwr_status": text(raw.get("acwrStatus")),
-                "daily_training_load_acute": number(raw.get("dailyTrainingLoadAcute")),
-                "daily_training_load_chronic": number(raw.get("dailyTrainingLoadChronic")),
-                "daily_acute_chronic_workload_ratio": number(raw.get("dailyAcuteChronicWorkloadRatio")),
+                "acwr_percent": values.number(raw.get("acwrPercent"), "acwr_percent"),
+                "acwr_status": values.text(raw.get("acwrStatus"), "acwr_status"),
+                "daily_training_load_acute": values.number(raw.get("dailyTrainingLoadAcute"), "daily_training_load_acute"),
+                "daily_training_load_chronic": values.number(raw.get("dailyTrainingLoadChronic"), "daily_training_load_chronic"),
+                "daily_acute_chronic_workload_ratio": values.number(raw.get("dailyAcuteChronicWorkloadRatio"), "daily_acute_chronic_workload_ratio"),
+                "_value_problems": values.problems,
             }
         )
     result = finalize_daily(
