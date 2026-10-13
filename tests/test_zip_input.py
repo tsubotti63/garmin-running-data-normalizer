@@ -44,6 +44,17 @@ ROOT = Path(__file__).resolve().parents[1]
 ACTIVITIES = ROOT / "examples/synthetic/garmin_export/DI-Connect-Fitness/synthetic_summarizedActivities.json"
 ACTIVITIES_PATH = "DI_CONNECT/DI-Connect-Fitness/synthetic_summarizedActivities.json"
 WRAPPER = "Garmin Export Synthetic"
+# The members of the ZIP files inside the synthetic Export carry this time, not
+# the time of writing, so that the Export is the same, byte for byte, whenever
+# it is written: tests compare the content identity of such Exports.
+SYNTHETIC_ZIP_TIME = (2030, 1, 1, 0, 0, 0)
+
+
+def _member(archive: zipfile.ZipFile, name: str) -> zipfile.ZipInfo:
+    """A member written with the fixed time and the compression of its ZIP file."""
+    member = zipfile.ZipInfo(name, date_time=SYNTHETIC_ZIP_TIME)
+    member.compress_type = archive.compression
+    return member
 
 
 def write_export(root: Path) -> Path:
@@ -83,16 +94,18 @@ def write_export(root: Path) -> Path:
     with zipfile.ZipFile(
         uploaded / "UploadedFiles_synthetic_Part1.zip", "w", compression=zipfile.ZIP_STORED
     ) as archive:
-        archive.writestr("synthetic-session-1.fit", synthetic_fit())
-        archive.writestr("synthetic-notes.txt", "synthetic\n")
+        archive.writestr(_member(archive, "synthetic-session-1.fit"), synthetic_fit())
+        archive.writestr(_member(archive, "synthetic-notes.txt"), "synthetic\n")
     deeper = io.BytesIO()
     with zipfile.ZipFile(deeper, "w") as archive:
-        archive.writestr("deeper_summarizedActivities.json", ACTIVITIES.read_bytes())
+        archive.writestr(
+            _member(archive, "deeper_summarizedActivities.json"), ACTIVITIES.read_bytes()
+        )
     with zipfile.ZipFile(
         uploaded / "UploadedFiles_synthetic_Part2.zip", "w", compression=zipfile.ZIP_DEFLATED
     ) as archive:
-        archive.writestr("synthetic-session-2.fit", synthetic_fit(sessions=2))
-        archive.writestr("synthetic-deeper.zip", deeper.getvalue())
+        archive.writestr(_member(archive, "synthetic-session-2.fit"), synthetic_fit(sessions=2))
+        archive.writestr(_member(archive, "synthetic-deeper.zip"), deeper.getvalue())
     # A folder whose name extends another folder's name: sorted as paths and
     # sorted as text, these files come in different orders.
     extra = connect / "DI-Connect-Fitness-Synthetic"
@@ -826,6 +839,25 @@ class NestedZipCopyTest(unittest.TestCase):
             with self.assertRaisesRegex(SnapshotLifecycleError, "changed during completeness scan"):
                 register(store, self.archive)
         self.assertEqual(load_manifests(store), [])
+
+
+class SyntheticExportTest(unittest.TestCase):
+    def test_the_synthetic_export_is_the_same_whenever_it_is_written(self) -> None:
+        # Tests compare the content identity of Exports written one after
+        # another; the ZIP files inside them must not carry the time of writing.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = write_export(root / "first")
+            later = zipfile.time.time() + 3600
+            with mock.patch.object(zipfile.time, "time", return_value=later):
+                second = write_export(root / "second")
+            archives = sorted(first.rglob("*.zip"))
+            self.assertEqual(len(archives), 2)
+            for path in archives:
+                with self.subTest(archive=path.name):
+                    self.assertEqual(
+                        path.read_bytes(), (second / path.relative_to(first)).read_bytes()
+                    )
 
 
 if __name__ == "__main__":
