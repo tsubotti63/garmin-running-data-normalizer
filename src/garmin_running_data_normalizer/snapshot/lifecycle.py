@@ -10,17 +10,32 @@ from ..common.time import (
     TimezoneNameInvalidError,
     resolve_timezone_name,
 )
-from .merge import ActivitiesNotReadableError, SnapshotMergeError, build_approved_input
+from ..intake.source import is_disk_full
+from .merge import (
+    ActivitiesNotReadableError,
+    SnapshotBuildOutputError,
+    SnapshotMergeError,
+    build_approved_input,
+)
 from .store import (
+    NOTICE_MESSAGES,
     SnapshotStoreError,
     initialize_store,
     register_snapshot,
+    shown_store_message,
     snapshot_status,
+    verification_error,
     verify_store,
 )
 
 
 SnapshotLifecycleError = SnapshotStoreError
+# The build of a Snapshot run is written in the temporary folder
+# (stage A3d-3b).
+SNAPSHOT_BUILD_TEMP_MESSAGE = (
+    "the temporary folder does not have enough free space to build the Snapshots; "
+    "free some space"
+)
 
 
 def run_snapshot_all(
@@ -47,9 +62,15 @@ def run_snapshot_all(
     check_run_output(output_root)
     verification = verify_store(store_root)
     if verification["status"] != "PASS":
-        raise SnapshotMergeError("snapshot store verification failed")
+        raise verification_error(verification, SnapshotMergeError)
     output = Path(output_root)
-    with tempfile.TemporaryDirectory(prefix="garmin-snapshot-run-all-") as temporary:
+    try:
+        temporary_folder = tempfile.TemporaryDirectory(prefix="garmin-snapshot-run-all-")
+    except OSError as exc:
+        if is_disk_full(exc):
+            raise RunAllError("TEMP_SPACE_INSUFFICIENT", SNAPSHOT_BUILD_TEMP_MESSAGE) from exc
+        raise
+    with temporary_folder as temporary:
         build_root = Path(temporary) / "canonical-build"
         try:
             build = build_approved_input(
@@ -60,6 +81,11 @@ def run_snapshot_all(
         except ActivitiesNotReadableError as exc:
             # As a one-shot run of the same Exports stops (stage A3c-2).
             raise RunAllError("ACTIVITIES_EMPTY", ACTIVITIES_NOT_READABLE_MESSAGE) from exc
+        except SnapshotBuildOutputError as exc:
+            # The build is written in the temporary folder (stage A3d-3b).
+            if exc.code == "OUTPUT_SPACE_INSUFFICIENT":
+                raise RunAllError("TEMP_SPACE_INSUFFICIENT", SNAPSHOT_BUILD_TEMP_MESSAGE) from exc
+            raise
         result = run_all(
             build_root / "approved_input",
             output,
@@ -90,11 +116,15 @@ def run_snapshot_all(
 
 
 __all__ = [
+    "NOTICE_MESSAGES",
+    "SNAPSHOT_BUILD_TEMP_MESSAGE",
     "SnapshotLifecycleError",
     "build_approved_input",
     "initialize_store",
     "register_snapshot",
     "run_snapshot_all",
+    "shown_store_message",
     "snapshot_status",
+    "verification_error",
     "verify_store",
 ]

@@ -147,6 +147,9 @@ jobs:
       - name: Verify Windows environment stops
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_environment_stops.py -q
+      - name: Verify Windows Snapshot Store stops
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_snapshot_store_environment.py -q
       - name: Build distributions
         shell: powershell
         run: |

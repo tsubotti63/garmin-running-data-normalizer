@@ -80,9 +80,24 @@ from ..normalizers.training_readiness import (
 )
 from ..normalizers.uds import UDS_VALUE_SOURCES, uds_left_out_reason
 from ..normalizers.vo2max import VO2MAX_VALUE_SOURCES, vo2max_left_out_reason
+from ..output_location import MESSAGES as OUTPUT_MESSAGES
+from ..output_location import (
+    OutputLocationError,
+    check_output_location,
+    path_error_code,
+    write_error_code,
+)
 from .policies import CONTRACT_VERSION, MERGE_RULES, MERGE_RULES_VERSION, REGISTRY_VERSION
-from .store import SnapshotStoreError, content_multiset, load_manifests, load_store, sha256_file
-from .store import verify_store
+from .store import (
+    SnapshotStoreError,
+    content_multiset,
+    load_manifests,
+    load_store,
+    not_readable_error,
+    sha256_file,
+    verification_error,
+    verify_store,
+)
 
 
 BUILD_FORMAT = "garmin-running-data-normalizer-canonical-snapshot-build-v1"
@@ -160,6 +175,25 @@ ZIP_LEFT_OUT_REASONS = frozenset({ZIP_NOT_READABLE, ZIP_UNSAFE_MEMBER, ZIP_TOO_L
 
 class SnapshotMergeError(SnapshotStoreError):
     """Canonical cumulative merge failed closed."""
+
+
+class SnapshotBuildOutputError(SnapshotMergeError):
+    """The build cannot be written in its place (stage A3d-3b); ``code`` is
+    one of the codes of the place of an output, as for a run."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(OUTPUT_MESSAGES[code], code)
+
+
+def _build_output_error(exc: OSError) -> SnapshotBuildOutputError | None:
+    code = write_error_code(exc)
+    return None if code is None else SnapshotBuildOutputError(code)
+
+
+# The blobs of the store that the build reads: one that cannot be opened is
+# named, and one that differs from its record makes a damaged store
+# (stage A3d-3b).
+_BLOB_FAILED = "immutable snapshot blob failed verification"
 
 
 def _json_bytes(value: Any) -> bytes:
@@ -247,11 +281,14 @@ def _oversize_members(store: Path, row: dict[str, Any]) -> list[tuple[str, int]]
     Only the central directory is read: registration lists every other
     member, and the ZIP file holds these (stage A3c-2).
     """
+    blob = store / str(row["blob_relative_path"])
     try:
-        with ZipFile(store / str(row["blob_relative_path"])) as archive:
+        with ZipFile(blob) as archive:
             infos = archive.infolist()
+    except PermissionError as exc:
+        raise not_readable_error(store, blob) from exc
     except DAMAGED_ZIP_ERRORS as exc:
-        raise SnapshotMergeError("immutable snapshot blob failed verification") from exc
+        raise SnapshotMergeError(_BLOB_FAILED, "SNAPSHOT_STORE_INVALID") from exc
     return sorted(
         (info.filename, info.file_size)
         for info in infos
@@ -264,13 +301,56 @@ def _oversize_members(store: Path, row: dict[str, Any]) -> list[tuple[str, int]]
 
 def _read_blob(store: Path, row: dict[str, Any]) -> bytes:
     path = store / str(row["blob_relative_path"])
-    if (
-        not path.is_file()
-        or path.stat().st_size != row["bytes"]
-        or sha256_file(path) != row["sha256"]
-    ):
-        raise SnapshotMergeError("immutable snapshot blob failed verification")
-    return path.read_bytes()
+    try:
+        data = path.read_bytes()
+    except PermissionError as exc:
+        raise not_readable_error(store, path) from exc
+    except OSError as exc:
+        raise SnapshotMergeError(_BLOB_FAILED, "SNAPSHOT_STORE_INVALID") from exc
+    if len(data) != row["bytes"] or hashlib.sha256(data).hexdigest() != row["sha256"]:
+        raise SnapshotMergeError(_BLOB_FAILED, "SNAPSHOT_STORE_INVALID")
+    return data
+
+
+def _copy_blob(store: Path, row: dict[str, Any], destination: Path, failure: str) -> None:
+    """Copy a blob of the store into the build, checking its SHA-256 as it is
+    read. A blob that cannot be read is named; an error of the destination is
+    left to the build, which gives it the code of the output's place."""
+    blob = store / str(row["blob_relative_path"])
+    digest = hashlib.sha256()
+    try:
+        source = blob.open("rb")
+    except PermissionError as exc:
+        raise not_readable_error(store, blob) from exc
+    except OSError as exc:
+        raise SnapshotMergeError(failure, "SNAPSHOT_STORE_INVALID") from exc
+    with source, destination.open("xb") as target:
+        while True:
+            try:
+                chunk = source.read(1024 * 1024)
+            except PermissionError as exc:
+                raise not_readable_error(store, blob) from exc
+            except OSError as exc:
+                raise SnapshotMergeError(failure, "SNAPSHOT_STORE_INVALID") from exc
+            if not chunk:
+                break
+            digest.update(chunk)
+            target.write(chunk)
+    if digest.hexdigest() != str(row["sha256"]):
+        raise SnapshotMergeError(failure, "SNAPSHOT_STORE_INVALID")
+
+
+def _fit_copy_bytes(manifests: list[dict[str, Any]]) -> int:
+    """The bytes of the FIT files that the build copies, each once: what it
+    writes for them, known before it starts (stage A3d-3b). The build writes
+    more, so these bytes are the least it needs."""
+    sizes: dict[str, int] = {}
+    for manifest in manifests:
+        for row in manifest["objects"]:
+            size = int(row["bytes"])
+            if str(row.get("extension", "")).lower() == ".fit" and size <= SOURCE_FILE_MAX_BYTES:
+                sizes.setdefault(str(row["sha256"]), size)
+    return sum(sizes.values())
 
 
 def _left_out_with_a_value(dataset: str, record: dict[str, Any], logical_name: str) -> bool:
@@ -1696,9 +1776,25 @@ def build_approved_input(
     *,
     processing_sequence: list[str] | None = None,
 ) -> dict[str, Any]:
+    # The output is checked before the store, whose verification can take
+    # long (stage A3d-3b).
+    requested_output = Path(output_root)
+    try:
+        if requested_output.is_symlink():
+            raise SnapshotMergeError("canonical build output must not be a symbolic link")
+        output = requested_output.resolve()
+        exists = output.exists()
+    except OSError as exc:
+        raise SnapshotBuildOutputError(path_error_code(requested_output, exc)) from exc
+    if exists:
+        raise SnapshotMergeError("canonical build output must not already exist")
+    try:
+        check_output_location(output, lambda parent, name: False)
+    except OutputLocationError as exc:
+        raise SnapshotBuildOutputError(exc.code) from exc
     verification = verify_store(store_root)
     if verification["status"] != "PASS":
-        raise SnapshotMergeError("snapshot store verification failed")
+        raise verification_error(verification, SnapshotMergeError)
     store, store_metadata = load_store(store_root)
     registered = load_manifests(store)
     if not registered:
@@ -1762,16 +1858,20 @@ def build_approved_input(
             if str(item["snapshot_id"]) in acquisition_order_by_snapshot_id
         ]
         processing_labels = [str(item["snapshot_label"]) for item in processing_manifests]
-    requested_output = Path(output_root)
-    if requested_output.is_symlink():
-        raise SnapshotMergeError("canonical build output must not be a symbolic link")
-    output = requested_output.resolve()
-    if output.exists():
-        raise SnapshotMergeError("canonical build output must not already exist")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    stage = Path(
-        tempfile.mkdtemp(prefix=f".{output.name}.snapshot-build-", dir=output.parent)
-    )
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        # The least that the build needs, against the free space where it is
+        # written: a build that cannot fit stops before it starts.
+        if _fit_copy_bytes(processing_manifests) > shutil.disk_usage(output.parent).free:
+            raise SnapshotBuildOutputError("OUTPUT_SPACE_INSUFFICIENT")
+        stage = Path(
+            tempfile.mkdtemp(prefix=f".{output.name}.snapshot-build-", dir=output.parent)
+        )
+    except OSError as exc:
+        error = _build_output_error(exc)
+        if error is None:
+            raise
+        raise error from exc
     try:
         observations_by_dataset: dict[str, list[dict[str, Any]]] = defaultdict(list)
         dataset_to_family = {
@@ -2233,20 +2333,14 @@ def build_approved_input(
         for digest, source in sorted(fit_unique.items()):
             destination = uploaded / f"snapshot_fit_{digest}.fit"
             destination.parent.mkdir(parents=True, exist_ok=True)
-            blob = store / str(source["blob_relative_path"])
-            if sha256_file(blob) != digest:
-                raise SnapshotMergeError("cumulative FIT blob failed verification")
-            shutil.copyfile(blob, destination)
+            _copy_blob(store, source, destination, "cumulative FIT blob failed verification")
         for digest, source in sorted(unknown_unique.items()):
             suffix = str(source.get("extension", "")).lower()
             if not suffix.startswith(".") or len(suffix) > 16:
                 suffix = ".bin"
             destination = approved / "preserved_unknown" / f"object_{digest}{suffix}"
             destination.parent.mkdir(parents=True, exist_ok=True)
-            blob = store / str(source["blob_relative_path"])
-            if sha256_file(blob) != digest:
-                raise SnapshotMergeError("preserved unknown blob failed verification")
-            shutil.copyfile(blob, destination)
+            _copy_blob(store, source, destination, "preserved unknown blob failed verification")
 
         # Source discovery follows runtime processing order, but every
         # audit/provenance list is serialized in authoritative acquisition
@@ -2590,15 +2684,21 @@ def build_approved_input(
             # into the public normalized payload or semantic digest.
             "processing_sequence": processing_labels,
         }
-    except Exception:
+    except Exception as exc:
         if stage.exists():
             shutil.rmtree(stage)
-        raise
+        # An error of writing the build: no free space, no permission, or a
+        # path too long (stage A3d-3b).
+        error = _build_output_error(exc) if isinstance(exc, OSError) else None
+        if error is None:
+            raise
+        raise error from exc
 
 
 __all__ = [
     "ActivitiesNotReadableError",
     "BUILD_FORMAT",
+    "SnapshotBuildOutputError",
     "SnapshotMergeError",
     "build_approved_input",
 ]
