@@ -1506,6 +1506,20 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   temporary files that a stopped write left, and `status` and `verify` tell of
   a lock or an interrupted registration in `notices`. The format of a store,
   and what a registration writes, do not change.
+- Stage A3d-4a: a Snapshot run counts the files of each family as a one-shot
+  run of each Export counts them, with the rule of stage A3b: the same
+  content in two Snapshots once, and each copy within one Snapshot. These
+  counts give `detected_asset_count` and `processed_asset_count` in the
+  family results, `detected_asset_count` in the audit records of the daily
+  datasets, `source_count` in the dataset summary, and the places of each FIT
+  file in its audit (`source_alias_count` and
+  `duplicate_source_alias_count`), where a Snapshot run counted the one file
+  of each family that the build writes, and each FIT file once. A family
+  whose files hold no record is `PROCESSED_EMPTY` with
+  `OPTIONAL_FAMILY_EMPTY`, as in a one-shot run, where a Snapshot run gave
+  `SKIPPED_NOT_PRESENT`. For a store that holds one Export, these counts are
+  those of a one-shot run of it. The build passes the counts to Run-All at
+  run time only; what it writes does not change.
 
 ## Golden outputs and tests
 
@@ -1597,7 +1611,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   with a lone surrogate. An item of a list of records that is not an
   object, and a list of records of another form, which a Snapshot build
   passed over, are left out by Run-All as in a one-shot run, and the build
-  reads the Lactate Threshold candidates as a run does. The merge rules v2.9
+  reads the Lactate Threshold candidates as a run does. From stage A3d-4a,
+  the counts of files in the family results, the audit records, the dataset
+  summary, and the FIT audit are those of the Exports, and a family whose
+  files hold no record is `PROCESSED_EMPTY` with `OPTIONAL_FAMILY_EMPTY`, as
+  in a one-shot run, instead of `SKIPPED_NOT_PRESENT`. The merge rules v2.9
   are published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.

@@ -7,7 +7,7 @@ import json
 import shutil
 import tempfile
 from collections import Counter, defaultdict
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Any
@@ -48,7 +48,7 @@ from .output_location import (
     write_error_code,
 )
 from .normalizers.activities import normalize_activities
-from .normalizers.daily_metrics import DailyMetricError
+from .normalizers.daily_metrics import DailyMetricError, copies_within_snapshots
 from .normalizers.gear import normalize_gear
 from .normalizers.hrv import normalize_hrv_daily_assets
 from .normalizers.personal_records import normalize_personal_records
@@ -568,6 +568,36 @@ def left_out_files(left_out: list[tuple[str, int, str]]) -> list[dict[str, Any]]
     return sorted(files, key=lambda item: item["source_path"])
 
 
+# The daily datasets whose audit records count the files that they found, by
+# family. In a Snapshot run, the build writes one file for each, and the
+# files found are those of the Exports, as the build counted them (stage
+# A3d-4a); HRV counts its FIT files itself, from their import numbers.
+SNAPSHOT_COUNTED_DATASETS = {
+    "hill_score_daily": "hill_score",
+    "endurance_score_daily": "endurance_score",
+    "race_prediction_daily": "race_prediction",
+    "sleep_daily": "sleep",
+    "uds_daily": "uds",
+    "acute_training_load_daily": "acute_training_load",
+    "training_readiness_daily": "training_readiness",
+    "vo2max_daily": "vo2max",
+    "training_history_daily": "training_history",
+}
+
+
+def _file_count(
+    family: str,
+    families: dict[str, list[DiscoveredAsset]],
+    file_counts: Mapping[str, int] | None,
+) -> int:
+    """The files of a family: those of the input, or in a Snapshot run those
+    of the Exports, as the build counted them (stage A3d-4a). HRV is read
+    from every FIT file, as in a one-shot run."""
+    if file_counts is None:
+        return len(families[family])
+    return int(file_counts.get("fit" if family == "hrv" else family, 0))
+
+
 def _classify_assets(assets: list[DiscoveredAsset]) -> dict[str, list[DiscoveredAsset]]:
     families = {family: [] for family in (*FAMILY_ORDER, *CANDIDATE_FAMILY_ORDER)}
     for asset in assets:
@@ -723,6 +753,17 @@ def _normalize_datasets(
                 progress=progress,
                 assets=assets,
             )
+            # The build writes each FIT file once: in a Snapshot run, its
+            # places are counted as a one-shot run of each Export counts
+            # them, from the import number of each occurrence (stage A3d-4a).
+            fit_numbers = (snapshot_context or {}).get("fit_snapshot_numbers")
+            if fit_numbers is not None:
+                for item in base_audit:
+                    aliases = 1 + copies_within_snapshots(
+                        fit_numbers.get(str(item["source_sha256"]))
+                    )
+                    item["source_alias_count"] = aliases
+                    item["duplicate_source_alias_count"] = aliases - 1
             # The values of another form in the sessions and laps of a FIT
             # file are left empty and kept in its audit entry (stage A3d-2a).
             audit_by_file = {str(item["fit_file_id"]): item for item in base_audit}
@@ -826,6 +867,13 @@ def _normalize_datasets(
             "DAILY_METRICS_NORMALIZATION_FAILED",
             "detected daily metric input could not be normalized",
         ) from exc
+
+    file_counts = (snapshot_context or {}).get("family_file_counts")
+    if file_counts is not None:
+        for dataset, family in SNAPSHOT_COUNTED_DATASETS.items():
+            audit = performance_audit.get(dataset)
+            if isinstance(audit, dict) and "detected_asset_count" in audit:
+                audit["detected_asset_count"] = _file_count(family, families, file_counts)
 
     if snapshot_context is not None:
         merge_summary = snapshot_context.get("merge_summary", {})
@@ -1357,6 +1405,7 @@ def _family_results(
     relationship_summary: dict[str, Any],
     record_audits: dict[str, dict[str, Any]],
     repaired_text_by_family: dict[str, int] | None = None,
+    file_counts: Mapping[str, int] | None = None,
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]], str]:
     repaired_text_by_family = repaired_text_by_family or {}
     warnings: list[dict[str, Any]] = []
@@ -1413,7 +1462,7 @@ def _family_results(
     }
     incomplete_fit_count = int(fit_status.get("incomplete_fit_count", 0))
     for family in FAMILY_ORDER:
-        detected = len(families[family])
+        detected = _file_count(family, families, file_counts)
         if (
             family == "hrv"
             and int(performance_audit["hrv_daily"].get("source_record_count", 0))
@@ -1928,7 +1977,15 @@ def run_all(
             )
     _validate_provenance(records, fit_audit, families)
     qa_entries = [
-        _dataset_qa(dataset, records[str(dataset["name"])], len(families[str(dataset["family"])]))
+        _dataset_qa(
+            dataset,
+            records[str(dataset["name"])],
+            _file_count(
+                str(dataset["family"]),
+                families,
+                snapshot_context.get("family_file_counts") if snapshot_context is not None else None,
+            ),
+        )
         for dataset in DATASET_TABLE
     ]
     dataset_summary = {
@@ -1966,6 +2023,9 @@ def run_all(
     repaired_text_by_family: Counter[str] = Counter()
     for item in files_with_repaired_text:
         repaired_text_by_family[str(item["family"])] += int(item["repaired_text_count"])
+    file_counts = (
+        snapshot_context.get("family_file_counts") if snapshot_context is not None else None
+    )
     family_results, warnings, status = _family_results(
         families,
         records,
@@ -1974,6 +2034,7 @@ def run_all(
         relationship_summary,
         record_audits,
         dict(repaired_text_by_family),
+        file_counts=file_counts,
     )
     if files_left_out:
         # A file left out leaves the run bounded: PARTIAL_SUCCESS (exit 3).
@@ -2122,6 +2183,7 @@ def run_all(
             "current_fit_session_keys",
             "source_completeness_context",
             "fit_snapshot_numbers",
+            "family_file_counts",
             "record_changes",
             "files_left_out",
             "files_not_read",
