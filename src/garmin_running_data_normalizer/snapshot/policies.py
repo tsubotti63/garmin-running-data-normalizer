@@ -284,8 +284,10 @@ FUTURE_READY_DATASETS = ("health_status",)
 # and a value of another form in the place of a list of records, are passed
 # to Run-All as marks without a key, which Run-All leaves out as a one-shot
 # run does, or only counts when the item is an empty value; and the Lactate
-# Threshold candidates are read as Run-All reads them.
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.9"
+# Threshold candidates are read as Run-All reads them. From v2.10, the build
+# keeps the activity of a VO2max record from the files of either series, as a
+# one-shot run reads it (stage A3d-4b).
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.10"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -407,6 +409,11 @@ MERGE_RULES: dict[str, Any] = {
         "same_content": "passed_once_with_one_snapshot_number_per_occurrence",
         "activity_gear_marks": "passed_without_a_gear_key",
         "lactate_threshold_candidates": "marks_passed_apart_from_the_candidates_and_candidates_read_as_run_all_reads_them",
+    },
+    # The fields of a record that the build keeps, as a one-shot run reads
+    # them (stage A3d-4b).
+    "fields_kept": {
+        "vo2max_activity_id": "kept_from_the_files_of_either_series",
     },
     "other_datasets_follow": REGISTRY_VERSION,
 }

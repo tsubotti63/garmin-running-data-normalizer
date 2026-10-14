@@ -875,52 +875,24 @@ def _normalize_datasets(
             if isinstance(audit, dict) and "detected_asset_count" in audit:
                 audit["detected_asset_count"] = _file_count(family, families, file_counts)
 
-    if snapshot_context is not None:
-        merge_summary = snapshot_context.get("merge_summary", {})
-        summaries = (
-            merge_summary.get("datasets", {})
-            if isinstance(merge_summary, dict)
-            else {}
+    # The build passes the Lactate Threshold candidates only, and the Hill and
+    # Endurance rows without their private fields: in a Snapshot run, the
+    # audit records take the counts of the Exports from the build, as a
+    # one-shot run counts them (stage A3d-4b). The build's own figures for
+    # the candidates stay in its merge summary.
+    lactate_counts = (snapshot_context or {}).get("lactate_threshold_counts")
+    if lactate_counts is not None:
+        performance_audit["lactate_threshold"]["family_asset_counts"] = dict(
+            lactate_counts["family_asset_counts"]
         )
-        lactate_source_summary = summaries.get(
-            "lactate_threshold_candidates", {}
+        performance_audit["lactate_threshold"]["family_source_record_counts"] = dict(
+            lactate_counts["family_source_record_counts"]
         )
-        if lactate_source_summary:
-            lactate_audit = performance_audit["lactate_threshold"]
-            lactate_audit.update(
-                {
-                    "candidate_rows": int(
-                        lactate_source_summary.get("candidate_rows", 0)
-                    ),
-                    "distinct_candidate_count": int(
-                        lactate_source_summary.get("distinct_candidate_count", 0)
-                    ),
-                    "exact_repeat_count": int(
-                        lactate_source_summary.get("exact_repeat_count", 0)
-                    ),
-                    "multiple_candidate_group_count": int(
-                        lactate_source_summary.get(
-                            "multiple_candidate_group_count", 0
-                        )
-                    ),
-                    "authority_unresolved_count": int(
-                        lactate_source_summary.get(
-                            "authority_unresolved_count", 0
-                        )
-                    ),
-                    "stable_promotion_available": False,
-                    "malformed_count": int(
-                        lactate_source_summary.get("malformed_count", 0)
-                    ),
-                    "candidate_status": lactate_source_summary.get(
-                        "candidate_status", "identity_or_semantics_unknown"
-                    ),
-                    "candidate_review_required": bool(
-                        lactate_source_summary.get(
-                            "candidate_review_required", False
-                        )
-                    ),
-                }
+    private_counts = (snapshot_context or {}).get("private_field_counts")
+    if private_counts is not None:
+        for dataset in ("hill_score_daily", "endurance_score_daily"):
+            performance_audit[dataset]["excluded_private_field_presence_counts"] = dict(
+                private_counts.get(dataset, {})
             )
 
     _notify(progress, "normalizing", step="relationships")
@@ -2184,6 +2156,8 @@ def run_all(
             "source_completeness_context",
             "fit_snapshot_numbers",
             "family_file_counts",
+            "lactate_threshold_counts",
+            "private_field_counts",
             "record_changes",
             "files_left_out",
             "files_not_read",
@@ -2282,32 +2256,6 @@ def run_all(
         "machine_stable_key_status": "PRODUCT_DECISION_REQUIRED",
         "audit_path": "audit/lactate_threshold_candidates.json",
     }
-    if snapshot_context is not None and "candidate_rows" in lactate_audit:
-        lactate_candidate_features.update(
-            {
-                "candidate_rows": int(lactate_audit["candidate_rows"]),
-                "distinct_candidate_count": int(
-                    lactate_audit.get(
-                        "distinct_candidate_count",
-                        lactate_audit["candidate_count"],
-                    )
-                ),
-                "exact_repeat_count": int(
-                    lactate_audit.get("exact_repeat_count", 0)
-                ),
-                "multiple_candidate_group_count": int(
-                    lactate_audit.get("multiple_candidate_group_count", 0)
-                ),
-                "authority_unresolved_count": int(
-                    lactate_audit.get("authority_unresolved_count", 0)
-                ),
-                "stable_promotion_available": False,
-                "malformed_count": int(lactate_audit.get("malformed_count", 0)),
-                "candidate_status": lactate_audit.get(
-                    "candidate_status", "identity_or_semantics_unknown"
-                ),
-            }
-        )
     manifest = {
         "format": "garmin-running-data-normalizer-run-manifest-v1",
         "product_version": __version__,

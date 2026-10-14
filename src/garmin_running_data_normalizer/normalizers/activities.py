@@ -128,9 +128,7 @@ def normalize_activities(
     stop the normalization.
     """
     records: list[dict[str, Any]] = []
-    for payload, asset in load_json_assets(
-        root, filename_suffix="summarizedActivities.json", assets=assets
-    ):
+    for payload, asset in load_json_assets(root, family="activities", assets=assets):
         for row in activity_items(payload):
             if count_mark(
                 left_out, row, "activity item is not an object or its list has an unsupported type"

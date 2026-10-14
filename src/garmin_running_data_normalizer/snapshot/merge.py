@@ -18,7 +18,11 @@ from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..common.values import comparable as _comparable
 from ..common.values import is_empty
 from ..diagnostics.contracts import FAMILY_DATASETS, SOURCE_FAMILY_ORDER
-from ..diagnostics.detector import classify_source_name, json_read_by_run_all
+from ..diagnostics.detector import (
+    classify_source_name,
+    json_read_by_run_all,
+    reads_record_file,
+)
 from ..intake.accounts import names_account, payload_accounts
 from ..intake.archive import ArchiveLimits, is_real_export_file
 from ..intake.discovery import (
@@ -47,6 +51,7 @@ from ..normalizers.gear import (
 from ..normalizers.performance_metrics import (
     ENDURANCE_VALUE_SOURCES,
     HILL_VALUE_SOURCES,
+    PRIVATE_FIELD_NAMES,
     endurance_score_left_out_reason,
     hill_score_left_out_reason,
     metric_rows,
@@ -274,6 +279,34 @@ def _write_activity_input(
         )
 
 
+# The datasets whose rows hold the private fields that their audit records
+# count (stage A3d-4b).
+PRIVATE_FIELD_DATASETS = {
+    "hill_score": "hill_score_daily",
+    "endurance_score": "endurance_score_daily",
+}
+
+
+def _content_counts(numbers_by_family: dict[str, dict[str, list[int]]]) -> dict[str, int]:
+    """For each family, its files or rows counted as a one-shot run of each
+    Export counts them: the same content in two Snapshots once, and each copy
+    within one Snapshot (stage A3b)."""
+    return {
+        family: sum(1 + copies_within_snapshots(numbers) for numbers in by_content.values())
+        for family, by_content in sorted(numbers_by_family.items())
+    }
+
+
+def _private_field_counts(rows: dict[str, tuple[dict[str, Any], list[int]]]) -> dict[str, int]:
+    """The rows that hold each private field, counted as above."""
+    counts: Counter[str] = Counter()
+    for row, numbers in rows.values():
+        weight = 1 + copies_within_snapshots(numbers)
+        for name in PRIVATE_FIELD_NAMES & set(row):
+            counts[name] += weight
+    return dict(sorted(counts.items()))
+
+
 class ActivitiesNotReadableError(SnapshotMergeError):
     """No Activities record remains because every Activities file was left out."""
 
@@ -483,10 +516,12 @@ def _daily_definition(
         (
             "metricsmaxmetdata",
             "vo2max_daily",
+            # The activity is kept as a one-shot run reads it (merge rules
+            # v2.10).
             (
                 "calendarDate", "vo2MaxValue", "sport", "maxMet", "maxMetCategory",
                 "calibratedData", "vo2MaxSourceSeries", "updateTimestamp",
-                "observationTimestamp",
+                "observationTimestamp", "activityId",
             ),
             "performance_metrics_daily",
         ),
@@ -616,14 +651,14 @@ def _dataset_records(
     """
     lower = logical_name.lower()
     result: list[tuple[str, str, dict[str, Any], tuple[Any, ...] | None]] = []
-    if lower.endswith("summarizedactivities.json"):
+    if reads_record_file(logical_name, "activities"):
         for index, row in enumerate(activity_items(payload)):
             try:
                 key: tuple[Any, ...] | None = None if is_mark(row) else (_activity_key(row),)
             except ValueError:
                 key = None
             result.append(("activities", str(index), row, key))
-    elif lower.endswith("gear.json"):
+    elif reads_record_file(logical_name, "gear"):
         for container_index, container in enumerate(container_items(payload)):
             if is_mark(container):
                 # An item of the file's top list counts as Gear, as in a run.
@@ -655,7 +690,7 @@ def _dataset_records(
                         else (gear_key, identifier_value(row.get("activityId")))
                     )
                     result.append(("activity_gear", record_index, link_record, key))
-    elif lower.endswith("personalrecord.json"):
+    elif reads_record_file(logical_name, "personal_records"):
         for container_index, container in enumerate(container_items(payload)):
             if is_mark(container):
                 result.append(("personal_records", str(container_index), container, None))
@@ -1915,6 +1950,18 @@ def build_approved_input(
         family_file_numbers: dict[str, dict[str, list[int]]] = defaultdict(
             lambda: defaultdict(list)
         )
+        # The Lactate Threshold files and their rows, also the rows that are
+        # not candidates, and the Hill and Endurance rows, by content, with
+        # the import number of each occurrence, so that Run-All counts their
+        # files, rows, and private fields as a one-shot run of each Export
+        # does (stage A3d-4b).
+        lactate_file_numbers: dict[str, dict[str, list[int]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+        lactate_row_numbers: dict[str, dict[str, list[int]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+        private_rows: dict[str, dict[str, tuple[dict[str, Any], list[int]]]] = defaultdict(dict)
         # The files that a run leaves out or does not read, by Snapshot
         # number, as in a one-shot run of each Export (stage A3c-2).
         files_left_out: list[dict[str, Any]] = []
@@ -2060,13 +2107,30 @@ def build_approved_input(
                             "repaired_text_count": repaired,
                         }
                     )
+                lactate_family = _lactate_family(logical_name)
+                if lactate_family is not None:
+                    # A file that cannot be read counts as a file without rows.
+                    lactate_file_numbers[lactate_family][str(source["sha256"])].append(
+                        acquisition_order
+                    )
+                    family_rows = lactate_row_numbers[lactate_family]
+                    for row in metric_rows(value) if readable else []:
+                        family_rows[_stable_json(row)].append(acquisition_order)
+                metric_dataset = PRIVATE_FIELD_DATASETS.get(detected_family)
+                if metric_dataset is not None and readable:
+                    for row in metric_rows(value):
+                        if not is_mark(row):
+                            _row, numbers = private_rows[metric_dataset].setdefault(
+                                _stable_json(row), (row, [])
+                            )
+                            numbers.append(acquisition_order)
                 if not readable and detected_family != "unclassified":
                     leave_out(acquisition_order, logical_name, size, JSON_NOT_READABLE)
                     continue
                 if readable and names_account(logical_name):
                     # A file left out is not compared, as in a run.
                     accounts |= payload_accounts(value)
-                if readable and logical_name.lower().endswith("gear.json") and any(
+                if readable and reads_record_file(logical_name, "gear") and any(
                     isinstance(container.get("gearActivityDTOs"), dict)
                     for container in container_items(value)
                 ):
@@ -2682,6 +2746,18 @@ def build_approved_input(
                     1 + copies_within_snapshots(numbers) for numbers in by_content.values()
                 )
                 for family, by_content in sorted(family_file_numbers.items())
+            },
+            # Runtime only: the Lactate Threshold files and rows, also the
+            # rows that are not candidates, which the build does not pass, and
+            # the private fields of the Hill and Endurance rows, which it
+            # leaves out, counted in the same way (stage A3d-4b).
+            "lactate_threshold_counts": {
+                "family_asset_counts": _content_counts(lactate_file_numbers),
+                "family_source_record_counts": _content_counts(lactate_row_numbers),
+            },
+            "private_field_counts": {
+                dataset: _private_field_counts(by_content)
+                for dataset, by_content in sorted(private_rows.items())
             },
             # Runtime only: Run-All lists these files, by Snapshot number, in
             # the local run manifest (stage A3c-2).

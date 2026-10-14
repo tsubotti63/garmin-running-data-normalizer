@@ -105,7 +105,7 @@ def normalize_gear(
     )
     gear: list[dict[str, Any]] = []
     links: list[dict[str, Any]] = []
-    for payload, asset in load_json_assets(root, filename_suffix="gear.json", assets=assets):
+    for payload, asset in load_json_assets(root, family="gear", assets=assets):
         for container in container_items(payload):
             if count_mark(gear_left_out, container, GEAR_ITEM_MESSAGE):
                 continue

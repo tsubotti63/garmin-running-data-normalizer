@@ -81,6 +81,22 @@ def _logical_name(asset: DiscoveredAsset) -> str:
     return asset.member_path or asset.source_path
 
 
+# The fields of a Hill or Endurance row that name a device, an account, or a
+# time of the source, which the audit record counts and the output leaves out;
+# the Snapshot build counts them in the same way (stage A3d-4b).
+PRIVATE_FIELD_NAMES = frozenset(
+    {
+        "deviceId",
+        "userProfilePk",
+        "userProfilePK",
+        "primaryTrainingDevice",
+        "timestamp",
+        "timestampGmt",
+        "enduranceScoreContributor",
+    }
+)
+
+
 def _basename(asset: DiscoveredAsset) -> str:
     return PurePosixPath(_logical_name(asset)).name.lower()
 
@@ -166,15 +182,7 @@ def _normalize_daily(
     )
     source_record_count = 0
     excluded_private_fields: Counter[str] = Counter()
-    private_names = {
-        "deviceId",
-        "userProfilePk",
-        "userProfilePK",
-        "primaryTrainingDevice",
-        "timestamp",
-        "timestampGmt",
-        "enduranceScoreContributor",
-    }
+    private_names = PRIVATE_FIELD_NAMES
 
     for asset in selected_assets:
         rows = metric_rows(_load_json(asset))

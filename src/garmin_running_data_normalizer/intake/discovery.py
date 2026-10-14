@@ -374,18 +374,29 @@ def discover_export(root: str | Path, limits: ArchiveLimits = ArchiveLimits()) -
 def load_json_assets(
     root: str | Path,
     *,
-    filename_suffix: str,
+    filename_suffix: str | None = None,
+    family: str | None = None,
     assets: Iterable[DiscoveredAsset] | None = None,
 ) -> list[tuple[Any, DiscoveredAsset]]:
-    """Load the JSON files whose names end in ``filename_suffix``.
+    """Load the JSON files of a record ``family`` (Activities, Gear, or
+    Personal Records), whatever the case of their names, as the input is
+    classified (stage A3d-4b), or else the files whose names end in
+    ``filename_suffix``.
 
     ``assets``, when given, are the Export's files from an open reading; the
     Export at ``root`` is not read again.
     """
+    from ..diagnostics.detector import reads_record_file
+
     loaded: list[tuple[Any, DiscoveredAsset]] = []
     for asset in discover_export(root) if assets is None else assets:
         logical_name = asset.member_path or asset.source_path
-        if asset.kind != "json" or not logical_name.endswith(filename_suffix):
+        if asset.kind != "json":
+            continue
+        if family is not None:
+            if not reads_record_file(logical_name, family):
+                continue
+        elif filename_suffix is None or not logical_name.endswith(filename_suffix):
             continue
         readable, value = parse_json_asset(asset)
         if readable:

@@ -52,6 +52,7 @@ from .run_all import (
     run_all,
     shown_message,
 )
+from .diagnostics.detector import reads_record_file
 from .diagnostics.doctor import (
     DoctorError,
     doctor_input,
@@ -199,7 +200,7 @@ def run_activities(
             asset
             for asset in reading.assets
             if asset.kind == "json"
-            and (asset.member_path or asset.source_path).endswith("summarizedActivities.json")
+            and reads_record_file(asset.member_path or asset.source_path, "activities")
         ]
         _check_activities_read(reading.left_out)
         if not assets:
