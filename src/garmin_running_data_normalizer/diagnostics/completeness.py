@@ -135,9 +135,16 @@ def build_source_completeness(
     unknown_evidence_count: int,
     source_observation_counts: Mapping[str, int] | None = None,
     snapshot_context: Mapping[str, Any] | None = None,
-    fit_audit: Sequence[Mapping[str, Any]] = (),
+    fit_audit: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Build deterministic one-shot or per-Snapshot completeness observations."""
+    """Build deterministic one-shot or per-Snapshot completeness observations.
+
+    With ``fit_audit``, a one-shot run counts each FIT file in each place
+    where it is found, with the status of its content, as it counts the FIT
+    files, so that a FIT file found in two places is not taken for a file
+    left unclassified; a Snapshot run counts the places of each Snapshot in
+    the same way (stage A3d-4c-1).
+    """
     if snapshot_context is not None:
         if set(snapshot_context) != {"observation_scope", "observations"} or (
             snapshot_context.get("observation_scope")
@@ -149,7 +156,7 @@ def build_source_completeness(
             raise ValueError("Snapshot completeness observations are missing")
         fit_by_sha = {
             str(item.get("source_sha256")): item
-            for item in fit_audit
+            for item in fit_audit or ()
             if isinstance(item, Mapping) and item.get("source_sha256")
         }
         all_families: list[dict[str, Any]] = []
@@ -283,6 +290,16 @@ def build_source_completeness(
         SOURCE_FAMILY_ORDER
     ):
         raise ValueError("source-family observation catalog does not match v1")
+    if fit_audit is not None:
+        places: Counter[str] = Counter()
+        for item in fit_audit:
+            places[str(item.get("parse_status"))] += _non_negative(
+                item.get("source_alias_count", 1)
+            )
+        fit_status = {
+            "incomplete_fit_count": fit_status.get("incomplete_fit_count", 0),
+            **{f"status_{status}": count for status, count in sorted(places.items())},
+        }
     families: list[dict[str, Any]] = []
     for family in SOURCE_FAMILY_ORDER:
         candidate_count = _non_negative(family_candidate_counts[family])

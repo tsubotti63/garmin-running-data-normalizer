@@ -2156,6 +2156,7 @@ def run_all(
             "source_completeness_context",
             "fit_snapshot_numbers",
             "family_file_counts",
+            "input_file_count",
             "lactate_threshold_counts",
             "private_field_counts",
             "record_changes",
@@ -2311,7 +2312,12 @@ def run_all(
         "local_timezone": timezone_name,
         "status": status,
         "family_results": family_results,
-        "input_asset_count": len(initial_assets),
+        # A Snapshot run counts the JSON and FIT files of the Exports, as a
+        # one-shot run of each Export counts its own, not the files of the
+        # build (stage A3d-4c-1).
+        "input_asset_count": (snapshot_context or {}).get(
+            "input_file_count", len(initial_assets)
+        ),
         "normalized_record_count": sum(len(value) for value in records.values()),
         "warning_count": len(warnings),
         "error_count": 0,

@@ -1450,7 +1450,8 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   reads the records of a file as a run does and passes the items that are
   not records to Run-All, and `garmin_snapshot_merge_rules:v2.10` from stage
   A3d-4b, which keeps the activity of a VO2max record from the files of
-  either series, in
+  either series, and `garmin_snapshot_merge_rules:v2.11` from stage A3d-4c-1,
+  which tells the files of an Export as a one-shot run tells them, in
   `config/garmin_snapshot_merge_rules_v2.json`. For these
   datasets they replace the merge fields of the v1.0 registry; the other
   datasets follow the v1.0 registry until stage A3d. A build records
@@ -1552,6 +1553,36 @@ Every stop has a specific code; errors that v1.7.1 reports only as
     a ZIP file, or a folder where names are case-sensitive, can hold, are
     both read, and the same record in both is a copy.
   The counts follow the rule of stage A3b for more Exports, as above.
+- Stage A3d-4c-1: a Snapshot run tells and counts the files of the Exports as
+  a one-shot run of each Export does (merge rules v2.11).
+  - The build tells a file of an Export by the rule of a one-shot run
+    (`classify_source_name`), a member of a ZIP file by its name within the
+    ZIP file, to count it and to read it. It told a member by the name of
+    its ZIP file and its own, so that the start of the name of a member at
+    the top of a ZIP file was the ZIP file's: a UDS file there was counted
+    as a file of no family, and a Hill or Endurance file there was not read.
+    It told a daily file by a mark anywhere in its name, such as `udsfile`
+    in `Copy of UDSFile_1.json`, which a one-shot run does not read: it read
+    the rows of such a file, and from stage A3d-4a, which counts the files
+    as a one-shot run does, a Snapshot run stopped with
+    `OUTPUT_EXPERIENCE_FAILED`. Such a file is no longer read in either run,
+    and counts as unknown evidence.
+  - `input_asset_count` in `run_summary.json` counts the JSON and FIT files
+    of the Exports that a run of each Export reads, with the rule of stage
+    A3b, where it counted the files of the build.
+  - The unknown evidence of Source Completeness counts, for each Snapshot,
+    the JSON and FIT files of no family, as a one-shot run counts them,
+    where it also counted the other objects that the build does not read,
+    such as a text file. `snapshot/snapshot_coverage.json` gives their
+    number in all Snapshots (`unknown_evidence_count`) next to the number of
+    the objects that the build does not read
+    (`unknown_or_unsupported_object_count`).
+  - Source Completeness counts each FIT file in each place where it is
+    found, with the status of its content, as it counts the FIT files, in
+    both runs. A one-shot run counted the status of each content once, so
+    that an Export that holds a FIT file in two places gave the FIT family
+    `AMBIGUOUS` with `FIT_CLASSIFICATION_INCOMPLETE`, however readable its
+    files were; it now gives the state of the files, such as `PRESENT`.
 
 ## Golden outputs and tests
 
@@ -1612,7 +1643,12 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `CONFLICT_PRESERVED_NO_WINNER` becomes `VALUES_DISAGREE` in Run Quality v2,
   and the daily audit counters `divergent_duplicate_count`,
   `divergent_duplicate_key_count`, and `same_day_conflict_count` give way to
-  `disagreement_key_count`.
+  `disagreement_key_count`. From stage A3d-4c-1, Source Completeness counts
+  each FIT file in each place where it is found: an Export that holds a FIT
+  file in two places no longer gives the FIT family `AMBIGUOUS` with
+  `FIT_CLASSIFICATION_INCOMPLETE` for that alone, its `readable_asset_count`
+  and `state_counts` count the files, and the state counts of Run Quality
+  and the Source Completeness of the Support Bundle follow.
 - Snapshots: existing stores need no migration; rerun `snapshot run-all`.
   Daily values that differ across Snapshots no longer stop the build, the
   Endurance Score and UDS days that v1.7.1 removed come back with the
@@ -1654,7 +1690,16 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   merge summary, a VO2max record of the `MetricsMaxMetData` files keeps its
   activity, and the counters of `qa/relationship_summary.json` are given
   when a link is not followed or an earlier Snapshot resolved one, as in a
-  one-shot run. The merge rules v2.10 are published in
+  one-shot run. From stage A3d-4c-1, a Snapshot run, too, tells the files of
+  an Export by the beginning of their names, and a member of a ZIP file by
+  its name within the ZIP file: a Hill or Endurance file at the top of a ZIP
+  file is read, and a file with the mark of a family elsewhere in its name,
+  such as `Copy of UDSFile_1.json`, is no longer read, as in a one-shot run,
+  and counts as unknown evidence. `input_asset_count` counts the files of
+  the Exports instead of those of the build, the unknown evidence of Source
+  Completeness only the JSON and FIT files of no family, and
+  `snapshot/snapshot_coverage.json` gives their number
+  (`unknown_evidence_count`). The merge rules v2.11 are published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around
@@ -1759,7 +1804,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `normalize_personal_records` pass instead of a name suffix;
   `diagnostics.detector` gains `reads_record_file` and
   `RECORD_FILE_SUFFIXES`, and `normalizers.performance_metrics` gains
-  `PRIVATE_FIELD_NAMES`.
+  `PRIVATE_FIELD_NAMES`. From stage A3d-4c-1, the build's result gains
+  `input_file_count`, which `run_snapshot_all` passes to Run-All, and
+  `build_source_completeness` (`diagnostics.completeness`) counts each FIT
+  file in each place when it is given `fit_audit` for one Export, whose
+  default is now `None`.
 - Schema: the fields that a disagreement can leave empty are nullable (the
   Hill and Endurance `overall_score`, the four Race Prediction times,
   `vo2max`, and `training_status`), and so is `personal_records.activity_id`

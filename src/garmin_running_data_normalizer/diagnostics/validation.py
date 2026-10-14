@@ -303,6 +303,7 @@ def _reconcile_one_export_completeness(
             item["detected_family"] == "unclassified" for item in input_assets
         ),
         source_observation_counts=source_counts,
+        fit_audit=fit_audit,
     )
     if report != expected:
         raise ValueError("Source Completeness contradicts Run-All authorities")
@@ -359,9 +360,11 @@ def _reconcile_snapshot_completeness(
     )
     if report != expected:
         raise ValueError("Snapshot Source Completeness contradicts coverage")
+    # The unknown evidence is the JSON and FIT files of no family that the
+    # build counted, not every object it did not read (stage A3d-4c-1).
     if (
         _count(report["unknown_evidence_summary"].get("count"))
-        != _count(coverage.get("unknown_or_unsupported_object_count"))
+        != _count(coverage.get("unknown_evidence_count"))
         or sum(
             _count(item.get("candidate_counts", {}).get("fit"))
             for item in observations

@@ -100,6 +100,7 @@ def run_snapshot_all(
                 ],
                 "fit_snapshot_numbers": build["fit_snapshot_numbers"],
                 "family_file_counts": build["family_file_counts"],
+                "input_file_count": build["input_file_count"],
                 "lactate_threshold_counts": build["lactate_threshold_counts"],
                 "private_field_counts": build["private_field_counts"],
                 "record_changes": build["record_changes"],
