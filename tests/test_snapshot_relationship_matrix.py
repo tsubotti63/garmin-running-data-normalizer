@@ -98,16 +98,17 @@ def _normalized_digest(order: tuple[int, ...]) -> tuple[str, dict]:
         current_gear_keys=current_gear_keys,
         current_fit_session_keys=set(),
     )
+    link = summary["relationships"]["activity_gear_to_activities"]
     payload = {
         "records": records,
         # Snapshot attribution is audit context and may legitimately identify
         # a different latest snapshot for a different permutation. The
         # normalized relationship result itself must remain byte-stable.
         "relationship": {
-            "relationship_total": summary["relationship_total"],
-            "relationship_resolved": summary["relationship_resolved"],
-            "relationship_unresolved": summary["relationship_unresolved"],
-            "unresolved_links": summary["unresolved_links"],
+            "eligible_count": link["eligible_count"],
+            "link_count": link["link_count"],
+            "unresolved_count": link["unresolved_count"],
+            "unresolved_links": summary.get("unresolved_links", []),
         },
     }
     digest = hashlib.sha256(
@@ -123,8 +124,12 @@ class SnapshotRelationshipMatrixTest(unittest.TestCase):
         self.assertEqual(len(digests), 1)
         for _digest, summary in results:
             self.assertEqual(summary["status"], "PASS")
-            self.assertEqual(summary["relationship_total"], 1)
-            self.assertEqual(summary["relationship_resolved"], 1)
-            self.assertEqual(summary["relationship_snapshot_resolved"], 0)
-            self.assertEqual(summary["relationship_unresolved"], 0)
+            link = summary["relationships"]["activity_gear_to_activities"]
+            self.assertEqual(
+                (link["eligible_count"], link["link_count"], link["unresolved_count"]), (1, 1, 0)
+            )
+            # Every link is followed, and none through an earlier Snapshot:
+            # the summary holds no counters, as a one-shot run gives (stage
+            # A3d-4b).
+            self.assertNotIn("relationship_total", summary)
             self.assertFalse(summary["relationships"]["activity_gear_to_activities"]["inference_performed"])

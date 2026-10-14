@@ -70,9 +70,7 @@ def normalize_personal_records(
     stop the normalization.
     """
     records: list[dict[str, Any]] = []
-    for payload, asset in load_json_assets(
-        root, filename_suffix="personalRecord.json", assets=assets
-    ):
+    for payload, asset in load_json_assets(root, family="personal_records", assets=assets):
         for container in container_items(payload):
             if count_mark(left_out, container, PERSONAL_RECORD_ITEM_MESSAGE):
                 continue

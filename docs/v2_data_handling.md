@@ -1448,7 +1448,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   text with a lone surrogate as a run does and lists the files by Snapshot
   number, and `garmin_snapshot_merge_rules:v2.9` from stage A3d-2c-2, which
   reads the records of a file as a run does and passes the items that are
-  not records to Run-All, in
+  not records to Run-All, and `garmin_snapshot_merge_rules:v2.10` from stage
+  A3d-4b, which keeps the activity of a VO2max record from the files of
+  either series, in
   `config/garmin_snapshot_merge_rules_v2.json`. For these
   datasets they replace the merge fields of the v1.0 registry; the other
   datasets follow the v1.0 registry until stage A3d. A build records
@@ -1520,6 +1522,36 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `SKIPPED_NOT_PRESENT`. For a store that holds one Export, these counts are
   those of a one-shot run of it. The build passes the counts to Run-All at
   run time only; what it writes does not change.
+- Stage A3d-4b: the audit records and the summaries of a Snapshot run hold
+  what a one-shot run of each Export holds.
+  - The Lactate Threshold audit counts the files and rows of the Exports
+    (`family_asset_counts` and `family_source_record_counts`), also the rows
+    that are not candidates, which the build does not pass, and no longer
+    holds the nine figures of the build that a Snapshot run copied to it and
+    to `candidate_features` in `run_summary.json`, `run_manifest.json`, and
+    `ANALYSIS_CONTEXT.json` (`candidate_rows`, `distinct_candidate_count`,
+    `exact_repeat_count`, `multiple_candidate_group_count`,
+    `authority_unresolved_count`, `malformed_count`, `candidate_status`,
+    `candidate_review_required`, and `stable_promotion_available`); they stay
+    in the build's merge summary.
+  - The Hill and Endurance audit records count the private fields of the
+    rows (`excluded_private_field_presence_counts`), which the build leaves
+    out of what it writes.
+  - A VO2max record of the `MetricsMaxMetData` files keeps its activity
+    (`source_activity_id`), which the build dropped (merge rules v2.10).
+  - `qa/relationship_summary.json` gives the counters `relationship_*` and
+    `unresolved_links` when a link is not followed, as a one-shot run does,
+    or when an earlier Snapshot resolved one, instead of always.
+  - The files of Activities, Gear, and Personal Records are told by one
+    rule, whatever the case of their names, when the input is classified,
+    when a one-shot run and the Golden Path read them, and when the build
+    reads them. A one-shot run read `summarizedActivities.json` but passed
+    over `summarizedactivities.json`, which it counted as an Activities file,
+    and stopped with `ACTIVITIES_EMPTY` when no other file held Activities,
+    where a Snapshot run read it. Two names that differ only in case, which
+    a ZIP file, or a folder where names are case-sensitive, can hold, are
+    both read, and the same record in both is a copy.
+  The counts follow the rule of stage A3b for more Exports, as above.
 
 ## Golden outputs and tests
 
@@ -1615,8 +1647,14 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   the counts of files in the family results, the audit records, the dataset
   summary, and the FIT audit are those of the Exports, and a family whose
   files hold no record is `PROCESSED_EMPTY` with `OPTIONAL_FAMILY_EMPTY`, as
-  in a one-shot run, instead of `SKIPPED_NOT_PRESENT`. The merge rules v2.9
-  are published in
+  in a one-shot run, instead of `SKIPPED_NOT_PRESENT`. From stage A3d-4b,
+  the Lactate Threshold, Hill, and Endurance audit records count the files,
+  rows, and private fields of the Exports, the nine figures of the build
+  leave the Lactate Threshold audit and `candidate_features` for the build's
+  merge summary, a VO2max record of the `MetricsMaxMetData` files keeps its
+  activity, and the counters of `qa/relationship_summary.json` are given
+  when a link is not followed or an earlier Snapshot resolved one, as in a
+  one-shot run. The merge rules v2.10 are published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around
@@ -1655,7 +1693,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   report; a folder of the store that cannot be opened stops `snapshot status`
   and `snapshot register`, which v1.7.1 passed over (exit 0), counting fewer
   Snapshots or writing the registry without them; and `snapshot build-input`
-  checks its output before it reads the store.
+  checks its output before it reads the store. From stage A3d-4b, `run-all`
+  and `normalize-activities` read the files of Activities, Gear, and Personal
+  Records whatever the case of their names, as the input is classified: a
+  file named `summarizedactivities.json`, which v1.7.1 counted and passed
+  over, stopping with `ACTIVITIES_EMPTY` when it was the only one, is read.
 - Python API: `DiscoveredAsset` is a plain class instead of a frozen
   dataclass. Its fields, its constructor, and the content that
   `discover_export` returns are unchanged, but dataclass equality, hashing,
@@ -1709,7 +1751,15 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   before the store and raises `SnapshotBuildOutputError`, with the code of
   the place of the output, when it cannot write the build; and the snapshot
   package gains `NOTICE_MESSAGES`, `shown_store_message`, and
-  `verification_error`.
+  `verification_error`. From stage A3d-4a, the build's result gains
+  `family_file_counts`, and from stage A3d-4b `lactate_threshold_counts`
+  and `private_field_counts`, which `run_snapshot_all` passes to Run-All.
+  From stage A3d-4b, `load_json_assets` in `intake.discovery` takes a
+  record `family`, which `normalize_activities`, `normalize_gear`, and
+  `normalize_personal_records` pass instead of a name suffix;
+  `diagnostics.detector` gains `reads_record_file` and
+  `RECORD_FILE_SUFFIXES`, and `normalizers.performance_metrics` gains
+  `PRIVATE_FIELD_NAMES`.
 - Schema: the fields that a disagreement can leave empty are nullable (the
   Hill and Endurance `overall_score`, the four Race Prediction times,
   `vo2max`, and `training_status`), and so is `personal_records.activity_id`

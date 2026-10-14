@@ -152,14 +152,6 @@ def validate_declared_relationships(
     current_fit_session_keys: set[str] | None = None,
 ) -> dict[str, Any]:
     """Validate and enrich the non-heuristic v1.1 relationship contracts."""
-    snapshot_mode = any(
-        value is not None
-        for value in (
-            current_activity_ids,
-            current_gear_keys,
-            current_fit_session_keys,
-        )
-    )
     activity_ids = _index_unique(
         records["activities"],
         "activity_id",
@@ -449,7 +441,10 @@ def validate_declared_relationships(
             "inference_performed": False,
             "primary_unresolved_reason": primary_reason,
         }
-        if snapshot_mode or unresolved:
+        # Written when a link is not followed, as in a one-shot run, or when an
+        # earlier Snapshot resolved one (stage A3d-4b); a store of one
+        # Export gives what a one-shot run gives.
+        if unresolved or snapshot_resolved:
             entry.update(
                 {
                     "relationship_total": total,
@@ -528,7 +523,12 @@ def validate_declared_relationships(
             },
         },
     }
-    if snapshot_mode or unresolved_links or personal_record_unusable_links:
+    snapshot_resolved_total = (
+        activity_gear_snapshot_resolved
+        + personal_record_snapshot_resolved
+        + fit_lap_snapshot_resolved
+    )
+    if unresolved_links or personal_record_unusable_links or snapshot_resolved_total:
         result.update(
             {
                 "relationship_total": (
@@ -539,11 +539,7 @@ def validate_declared_relationships(
                     + personal_record_activity_links
                     + len(enriched_fit_laps)
                 ),
-                "relationship_snapshot_resolved": (
-                    activity_gear_snapshot_resolved
-                    + personal_record_snapshot_resolved
-                    + fit_lap_snapshot_resolved
-                ),
+                "relationship_snapshot_resolved": snapshot_resolved_total,
                 # Valid links whose endpoint is absent; the Personal Records
                 # kept with a link that cannot be followed are counted apart
                 # (stage A3d-1b).

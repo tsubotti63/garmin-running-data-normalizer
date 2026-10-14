@@ -13,16 +13,30 @@ _SNAPSHOT_MERGED_NAMES = {
 }
 
 
+# The ends of the names of the files of Activities, Gear, and Personal Records.
+RECORD_FILE_SUFFIXES = {
+    "activities": "summarizedactivities.json",
+    "gear": "gear.json",
+    "personal_records": "personalrecord.json",
+}
+
+
+def reads_record_file(logical_name: str, family: str) -> bool:
+    """Whether a JSON file of this name is a file of ``family`` (Activities,
+    Gear, or Personal Records), whatever the case of its name. The input is
+    classified, the one-shot normalizers and the Golden Path read their
+    files, and the Snapshot build reads its files by this one rule, so that
+    none of them reads a file that another passes over (stage A3d-4b)."""
+    return logical_name.replace("\\", "/").lower().endswith(RECORD_FILE_SUFFIXES[family])
+
+
 def classify_source_name(logical_name: str, kind: str) -> str:
     """Return the closed Product source-family ID for one discovered object."""
     lower_name = logical_name.replace("\\", "/").lower()
     basename = PurePosixPath(lower_name).name
-    if kind == "json" and lower_name.endswith("summarizedactivities.json"):
-        return "activities"
-    if kind == "json" and lower_name.endswith("gear.json"):
-        return "gear"
-    if kind == "json" and lower_name.endswith("personalrecord.json"):
-        return "personal_records"
+    for family in RECORD_FILE_SUFFIXES:
+        if kind == "json" and reads_record_file(logical_name, family):
+            return family
     if kind == "json" and basename in _SNAPSHOT_MERGED_NAMES:
         return _SNAPSHOT_MERGED_NAMES[basename]
     if kind == "json" and basename.startswith("hillscore"):
