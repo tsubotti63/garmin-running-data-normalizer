@@ -33,7 +33,11 @@ from ..intake.discovery import (
 from ..intake.source import DAMAGED_ZIP_ERRORS
 from ..intake.roots import MIXED_STORE_MESSAGE, MixedExportsError
 from ..normalizers.activities import activity_key, activity_left_out_reason
-from ..normalizers.daily_metrics import SNAPSHOT_NUMBERS_FIELD, value_source_names
+from ..normalizers.daily_metrics import (
+    SNAPSHOT_NUMBERS_FIELD,
+    copies_within_snapshots,
+    value_source_names,
+)
 from ..normalizers.gear import (
     gear_left_out_reason,
     gear_links,
@@ -1905,6 +1909,12 @@ def build_approved_input(
         # The accounts that the records name, compared here only and never
         # written: a store holds the Exports of one account.
         accounts: set[str] = set()
+        # The files of each family, by content, with the import number of
+        # each occurrence, so that Run-All counts them as a one-shot run of
+        # each Export does (stage A3d-4a).
+        family_file_numbers: dict[str, dict[str, list[int]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
         # The files that a run leaves out or does not read, by Snapshot
         # number, as in a one-shot run of each Export (stage A3c-2).
         files_left_out: list[dict[str, Any]] = []
@@ -1969,6 +1979,9 @@ def build_approved_input(
                 detected_family = classify_source_name(logical_name, detected_kind)
                 if detected_family in diagnostic["candidate_counts"]:
                     diagnostic["candidate_counts"][detected_family] += 1
+                    family_file_numbers[detected_family][str(source["sha256"])].append(
+                        acquisition_order
+                    )
                 if extension == ".fit":
                     digest = str(source["sha256"])
                     diagnostic["fit_source_sha256"].append(digest)
@@ -2659,6 +2672,17 @@ def build_approved_input(
             # Runtime only: Run-All writes these changes, with their values,
             # to the dataset audit records of the local output.
             "record_changes": record_changes,
+            # Runtime only: the files of each family, counted as a one-shot
+            # run of each Export counts them: the same content in two
+            # Snapshots once, and its copies within one Snapshot (stage A3b),
+            # for the family results, the audit records, and the dataset
+            # summary (stage A3d-4a).
+            "family_file_counts": {
+                family: sum(
+                    1 + copies_within_snapshots(numbers) for numbers in by_content.values()
+                )
+                for family, by_content in sorted(family_file_numbers.items())
+            },
             # Runtime only: Run-All lists these files, by Snapshot number, in
             # the local run manifest (stage A3c-2).
             "files_left_out": sorted(

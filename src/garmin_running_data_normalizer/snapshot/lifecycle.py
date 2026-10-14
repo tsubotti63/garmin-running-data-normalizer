@@ -99,6 +99,7 @@ def run_snapshot_all(
                     "source_completeness_context"
                 ],
                 "fit_snapshot_numbers": build["fit_snapshot_numbers"],
+                "family_file_counts": build["family_file_counts"],
                 "record_changes": build["record_changes"],
                 "files_left_out": build["files_left_out"],
                 "files_not_read": build["files_not_read"],
