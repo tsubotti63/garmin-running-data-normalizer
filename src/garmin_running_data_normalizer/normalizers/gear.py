@@ -12,16 +12,31 @@ from ..common.identity import (
     read_identifier,
     stable_hash,
 )
+from ..common.values import is_empty
 from ..intake.discovery import DiscoveredAsset, load_json_assets
-from .records import IDENTITY_INVALID, IDENTITY_MISSING, count_left_out, row_snapshot_marks
+from .records import (
+    IDENTITY_INVALID,
+    IDENTITY_MISSING,
+    count_left_out,
+    count_mark,
+    row_snapshot_marks,
+)
+from .source_records import RECORDS_NOT_READABLE, container_items, list_items, mark
+
+GEAR_ITEM_MESSAGE = "gear item is not an object or its list has an unsupported type"
+LINK_ITEM_MESSAGE = "activity-gear link is not an object or its list has an unsupported type"
 
 
-def _containers(value: Any) -> list[dict[str, Any]]:
-    if isinstance(value, dict):
-        return [value]
-    if isinstance(value, list):
-        return [item for item in value if isinstance(item, dict)]
-    return []
+def gear_links(container: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Return the Gear links of a container, by Gear key, and a mark for a
+    ``gearActivityDTOs`` of another form than an object (stage A3d-2c-2): its
+    links cannot be read. An empty value holds no links."""
+    links = container.get("gearActivityDTOs")
+    if isinstance(links, dict):
+        return links, []
+    if is_empty(links):
+        return {}, []
+    return {}, [mark(RECORDS_NOT_READABLE, links)]
 
 
 def _fallback(row: dict[str, Any]) -> list[Any]:
@@ -79,8 +94,10 @@ def normalize_gear(
     """Normalize Gear and its links; ``assets`` are the Export's files from an open reading.
 
     A row without a usable identifier is counted by reason in
-    ``left_out["gear"]`` or ``left_out["activity_gear"]`` (stage A3d-1b);
-    without counters, it stops the normalization.
+    ``left_out["gear"]`` or ``left_out["activity_gear"]`` (stage A3d-1b), and
+    so are an item that is not a record and a list of records that cannot be
+    read (stage A3d-2c-2); an item of the file's top list counts as Gear.
+    Without counters, they stop the normalization.
     """
     gear_left_out = None if left_out is None else left_out.setdefault("gear", Counter())
     link_left_out = (
@@ -89,9 +106,11 @@ def normalize_gear(
     gear: list[dict[str, Any]] = []
     links: list[dict[str, Any]] = []
     for payload, asset in load_json_assets(root, filename_suffix="gear.json", assets=assets):
-        for container in _containers(payload):
-            for row in container.get("gearDTOS", []) or []:
-                if not isinstance(row, dict):
+        for container in container_items(payload):
+            if count_mark(gear_left_out, container, GEAR_ITEM_MESSAGE):
+                continue
+            for row in list_items(container.get("gearDTOS")):
+                if count_mark(gear_left_out, row, GEAR_ITEM_MESSAGE):
                     continue
                 reason = gear_left_out_reason(row)
                 if reason is not None:
@@ -117,35 +136,37 @@ def normalize_gear(
                     "source_sha256": asset.sha256,
                     **row_snapshot_marks(row),
                 })
-            activity_links = container.get("gearActivityDTOs") or {}
-            if isinstance(activity_links, dict):
-                for gear_key, values in activity_links.items():
-                    for row in values or []:
-                        if isinstance(row, dict):
-                            reason = link_left_out_reason(gear_key, row)
-                            if reason is not None:
-                                count_left_out(
-                                    link_left_out,
-                                    row,
-                                    reason,
-                                    "activity-gear link lacks gear key or activityId"
-                                    if reason == IDENTITY_MISSING
-                                    else "activity-gear link identifier has an unsupported type",
-                                )
-                                continue
-                            links.append({
-                                # Digits are written as an integer, as in v1.7.1;
-                                # other digits, such as "²", stay text.
-                                "gear_key": (
-                                    int(gear_key)
-                                    if isinstance(gear_key, str) and is_ascii_digits(gear_key)
-                                    else gear_key
-                                ),
-                                "activity_id": identifier_value(row.get("activityId")),
-                                "source_path": asset.provenance_path,
-                                "source_sha256": asset.sha256,
-                                **row_snapshot_marks(row),
-                            })
+            activity_links, unreadable = gear_links(container)
+            for row in unreadable:
+                count_mark(link_left_out, row, LINK_ITEM_MESSAGE)
+            for gear_key, values in activity_links.items():
+                for row in list_items(values):
+                    if count_mark(link_left_out, row, LINK_ITEM_MESSAGE):
+                        continue
+                    reason = link_left_out_reason(gear_key, row)
+                    if reason is not None:
+                        count_left_out(
+                            link_left_out,
+                            row,
+                            reason,
+                            "activity-gear link lacks gear key or activityId"
+                            if reason == IDENTITY_MISSING
+                            else "activity-gear link identifier has an unsupported type",
+                        )
+                        continue
+                    links.append({
+                        # Digits are written as an integer, as in v1.7.1;
+                        # other digits, such as "²", stay text.
+                        "gear_key": (
+                            int(gear_key)
+                            if isinstance(gear_key, str) and is_ascii_digits(gear_key)
+                            else gear_key
+                        ),
+                        "activity_id": identifier_value(row.get("activityId")),
+                        "source_path": asset.provenance_path,
+                        "source_sha256": asset.sha256,
+                        **row_snapshot_marks(row),
+                    })
     gear.sort(key=lambda row: (str(row["gear_key"]), str(row["source_path"])))
     links.sort(key=lambda row: (str(row["gear_key"]), str(row["activity_id"])))
     return gear, links

@@ -49,6 +49,8 @@ These rules come from the Human maintainer's decisions of 2026-10-11:
   its `retro` flag. Nothing is missing from the datasets, so it is only
   counted: `empty_record_count` in the dataset's audit record, apart from the
   rows left out, with no warning and no change of the status (stage A3d-1).
+  So is an item of a list of records that is an empty value, such as null,
+  in every dataset (stage A3d-2c-2).
 
 ## Statuses and exit codes
 
@@ -534,7 +536,12 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
   datasets; text with a lone UTF-16 surrogate and timestamps out of range stop
   the run, some without an error code; a FIT sport field with an unexpected
   layout stops with `FIT_PROCESSING_FAILED`; a Race Prediction row that lacks
-  one distance is removed.
+  one distance is removed; an item of a list of records that is not an
+  object is passed over without a count, and a number in the place of the
+  list of Gear, of the links of one Gear, or of Personal Records stops a
+  one-shot run with `GEAR_NORMALIZATION_FAILED` or
+  `PERSONAL_RECORDS_NORMALIZATION_FAILED`, while a Snapshot run passes over
+  it.
 - v2.0.0:
   - A row without a usable identity (no identifier and no fallback fields, an
     identifier of an unsupported type, or an identifier of 0 in Activities,
@@ -755,6 +762,76 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
       holds such text, also in a field that no table uses, because its
       output has no place for the report; stage A3d-3 gives the stop its
       code.
+  - An item of a list of records that is not an object, such as a number
+    among the Activities, and a value of another form in the place of a
+    list of records, such as a number where the list of Gear belongs, are
+    left out with a reason (stage A3d-2c-2):
+    - The lists of records are those that a run reads, listed below: the
+      list of records of each kind of file, the links of each Gear record,
+      and the top list of a file. A list inside a record, such as the value
+      of a field, is no list of records; its value follows the rule for
+      values above.
+    - An item that is not an object is left out with the reason
+      `not_an_object`. An item that is an empty value (null, `""`, or `[]`)
+      is an empty record (see [Terms](#terms)): the audit record counts it
+      in `empty_record_count`, with no warning.
+    - A value in the place of a list of records that is neither a list nor
+      an empty value (null, `""`, `[]`, and `{}` hold no records) is left
+      out as one item with the reason `records_not_readable`, since how
+      many records it stood for cannot be known. So is a `gearActivityDTOs`
+      that is not an object, and a file whose value is neither a list nor
+      an object, such as a number.
+    - Warning `DATA_ROW_LEFT_OUT` and status `PARTIAL_SUCCESS` (exit 3), as
+      for the other rows left out, with the reasons in the dataset's audit
+      record; the dataset's warning and the `START_HERE.md` line then say
+      that items that are not records were left out. An item of a file's
+      top list counts for the dataset of its file: Activities, Gear, or
+      Personal Records. The audit records of Activities, Gear,
+      `activity_gear`, and Personal Records gain `empty_record_count` when
+      there is an empty item.
+    - The Lactate Threshold candidates count theirs in their audit record
+      (`excluded_record_count`, `excluded_reason_counts`, and
+      `empty_record_count`), and the run gives warning `DATA_ROW_LEFT_OUT`
+      for the family `lactate_threshold`, without `dataset`, as a candidate
+      warning, which bounds the run as the rows left out of a dataset do.
+    - When every Activities item is left out, the run stops with
+      `ACTIVITIES_EMPTY`, also in a Snapshot run, which stopped with
+      `SNAPSHOT_LIFECYCLE_FAILED` before.
+    - The Snapshot build reads the records of a file with the functions of
+      a run (`normalizers.source_records`) and passes each such item to
+      Run-All in its place as a record without a key, so that Run-All counts
+      it as a one-shot run of the same Export does: copies within one
+      Snapshot count, and the same item in two Snapshots once, as for the
+      daily records without a stable key. No output names such an item or
+      holds its value, an account named inside it is not read, as a run
+      does not read it, and it has no updates (merge rules v2.9).
+    - `normalize-activities` (the Golden Path) stops when an Activities file
+      holds an item left out in this way, because its output has no place
+      for the count; an item that is an empty value is passed over, as
+      before. Stage A3d-3 gives the stop its code.
+    - The lists of records that a run and the Snapshot build read, by kind
+      of file:
+      - Activities: each `summarizedActivitiesExport` list, and the objects
+        with an `activityId` found in the other objects and lists of the
+        file, as in v1.7.1. The items of the file's top list that are
+        neither objects nor lists are items of a list of records; a list in
+        the top list, a `summarizedActivitiesExport` that is an object, and
+        the other lists are searched for records, and their other items are
+        not counted.
+      - Gear: the top object, or each object of the top list, with its
+        `gearDTOS` list and its `gearActivityDTOs` object, whose value for
+        each Gear key is the list of its links.
+      - Personal Records: the top object, or each object of the top list,
+        with its `personalRecords` list.
+      - The daily datasets other than HRV: the top list; or the first list
+        that the top object holds under `data`, `items`, `records`,
+        `values`, `summaries`, or `sleepData`, in this order; or the top
+        object itself.
+      - Hill Score, Endurance Score, and the Lactate Threshold candidates:
+        the top list; or the first list that the top object holds under
+        `records`, `items`, or `data`; or the top object itself. Until stage
+        A3d-2c-2, the Snapshot build read the candidates only in the top
+        object or the objects of the top list.
   - A FIT field with an unexpected layout, such as a sport given as an
     array, is treated as an unknown value with the `DATA_VALUE_INVALID`
     warning; the FIT file is not left out (stage A3d-2a).
@@ -945,8 +1022,8 @@ The run stops with exit 2 and publishes no output for:
   inside the Export that is damaged, too large, or holds an unsafe member,
   are left out instead (see [Files that cannot be read](#files-that-cannot-be-read)).
 - An input that is not an Export: no Activities (`ACTIVITIES_NOT_FOUND`) or no
-  Activities records (`ACTIVITIES_EMPTY`), also when every Activities file
-  or row was left out.
+  Activities records (`ACTIVITIES_EMPTY`), also when every Activities file,
+  row, or item was left out.
 - Mixed Exports or accounts (`INPUT_MULTIPLE_EXPORTS`).
 - An Export that changes during the run (`INPUT_CHANGED`).
 - The output: it already exists, it cannot be written, or its path is too long.
@@ -1089,6 +1166,17 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `files_with_repaired_text` to `run_manifest.json`, and a `START_HERE.md`
   line. The outputs of an Export without such text do not change, except
   that Snapshot outputs give the merge rules version v2.8.
+- Stage A3d-2c-2 adds the reasons `not_an_object` and
+  `records_not_readable` to the audit records; `empty_record_count` to the
+  audit records of Activities, Gear, `activity_gear`, and Personal Records;
+  `excluded_record_count`, `excluded_reason_counts`, and
+  `empty_record_count` to `audit/lactate_threshold_candidates.json`; and
+  warning `DATA_ROW_LEFT_OUT` for the family `lactate_threshold`, which
+  `candidate_warning_count` counts; each only when there is something to
+  count. The warning about the rows left out of a dataset that left out
+  such an item, and the `START_HERE.md` line about the rows left out, name
+  these items too. The outputs of an Export without such items do not
+  change, except that Snapshot outputs give the merge rules version v2.9.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
   and `SNAPSHOT_STORE_LOCKED` (provisional name).
@@ -1153,6 +1241,16 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Activities record lacks a usable identifier, `snapshot build-input`
   writes them for Run-All, and `snapshot run-all` stops with
   `ACTIVITIES_EMPTY`, as a one-shot run does.
+- Stage A3d-2c-2: the build reads the records of each file with the
+  functions of a run, and passes the items that are not records and the
+  lists of records of another form to Run-All as records without a key
+  (see [Rows and values with problems](#rows-and-values-with-problems)), so
+  a run whose store holds one that is not an empty value ends with exit 3,
+  where it ended with 0. Such a record takes no part in the changes across
+  Snapshots, and the accounts are not read in it; the merge summary counts
+  it in `keyless_observation_count` and `keyless_record_count`, except for
+  the Lactate Threshold candidates, whose summary counts candidates only.
+  The build now reads the Lactate Threshold candidates as Run-All does.
 - Stage A2b-1 removes the stops for daily datasets: values that differ across
   Snapshots, within one Snapshot, or between two Snapshots observed at the same
   time follow [Values that disagree](#values-that-disagree), with the Snapshot
@@ -1199,7 +1297,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   on a Lactate Threshold candidate with such a value, and
   `garmin_snapshot_merge_rules:v2.8` from stage A3d-2c-1, which repairs
   text with a lone surrogate as a run does and lists the files by Snapshot
-  number, in
+  number, and `garmin_snapshot_merge_rules:v2.9` from stage A3d-2c-2, which
+  reads the records of a file as a run does and passes the items that are
+  not records to Run-All, in
   `config/garmin_snapshot_merge_rules_v2.json`. For these
   datasets they replace the merge fields of the v1.0 registry; the other
   datasets follow the v1.0 registry until stage A3d. A build records
@@ -1288,7 +1388,12 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   value is counted and no longer announced. Text with a lone surrogate,
   which stopped v1.7.1 (exit 2) when it reached a table, and a Snapshot run
   also when no table used it, is written with U+FFFD and announced with
-  warning `DATA_TEXT_REPAIRED` (exit 0).
+  warning `DATA_TEXT_REPAIRED` (exit 0). An item of a list of records that
+  is not an object, which v1.7.1 passed over, and a value of another form in
+  the place of a list of records, which stopped a one-shot run of v1.7.1 for
+  a number among the Gear and Personal Records lists (exit 2) and was passed
+  over otherwise, are left out with warning `DATA_ROW_LEFT_OUT` (exit 3); an
+  item that is an empty value is counted as an empty record.
 - Outputs: `run_all_version` 2, the new fields, audit records, and audit
   sections, and the new warning codes. The synthetic Run-All output grows from
   46 to 50 files with the audit records of Activities, Gear, `activity_gear`,
@@ -1335,8 +1440,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `activity_gear`, and Personal Records without a usable identifier, which
   were held back or stopped the build. A Lactate Threshold candidate with a
   value of another form no longer stops the build, and neither does text
-  with a lone surrogate. The merge rules v2.8 are
-  published in
+  with a lone surrogate. An item of a list of records that is not an
+  object, and a list of records of another form, which a Snapshot build
+  passed over, are left out by Run-All as in a one-shot run, and the build
+  reads the Lactate Threshold candidates as a run does. The merge rules v2.9
+  are published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around
@@ -1390,7 +1498,15 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   with U+FFFD in its place, and `DiscoveredAsset.repaired_text_count` and
   `repaired_text_count` in `intake.discovery` give the texts and names
   repaired (stage A3d-2c-1); new public names: `common.text` and
-  `json_read_by_run_all` in `diagnostics.detector`.
+  `json_read_by_run_all` in `diagnostics.detector`. From stage A3d-2c-2, the
+  records of a file are read by the new module `normalizers.source_records`,
+  and `load_rows` in `normalizers.daily_metrics` and `metric_rows` in
+  `normalizers.performance_metrics` return a mark in the place of an item
+  that is not a record; `normalize_activities`, `normalize_gear`, and
+  `normalize_personal_records` count such items in `left_out`, and an item
+  that is an empty value under `EMPTY_RECORD` (`normalizers.records`), and
+  without the counter raise `ValueError` for one that is not an empty
+  value, which v1.7.1 passed over, or for which it raised `TypeError`.
 - Schema: the fields that a disagreement can leave empty are nullable (the
   Hill and Endurance `overall_score`, the four Race Prediction times,
   `vo2max`, and `training_status`), and so is `personal_records.activity_id`

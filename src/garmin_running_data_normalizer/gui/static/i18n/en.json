@@ -204,7 +204,7 @@
   "timezone.label": "Timezone for local dates and times",
   "warning.daily_metrics_review": "Some daily metric values need review, such as a value without a date ({code}).",
   "warning.data_file_left_out": "Some files could not be read and were left out. run_manifest.json lists them with the reason ({code}).",
-  "warning.data_row_left_out": "Some rows lacked a required value, such as a date or a usable identifier, and were left out. START_HERE.md gives their number for each table, and the audit files count them by reason ({code}).",
+  "warning.data_row_left_out": "Some rows lacked a required value, such as a date or a usable identifier, or were not records, such as a number in a list of records, and were left out. START_HERE.md gives their number for each table, and the audit files count them by reason ({code}).",
   "warning.data_text_repaired": "Some text held a broken character, such as an emoji cut in half. It is written with the replacement character � in its place, and run_manifest.json lists the files ({code}).",
   "warning.data_value_invalid": "Some values had a form that their field does not take, such as text where a number belongs. Those fields are left empty, and every such value is kept in the audit files ({code}).",
   "warning.fit_parse_incomplete": "Some FIT files could not be read completely. They were left out, and nothing was guessed ({code}).",

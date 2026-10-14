@@ -27,7 +27,8 @@ from .intake.source import (
     is_zip_input,
 )
 from .normalizers.activities import normalize_activities
-from .normalizers.records import check_values
+from .normalizers.records import EMPTY_RECORD, check_values
+from .normalizers.source_records import MARK_KINDS
 from .qa import summarize_records
 from .run_all import RunAllError, _value_types, left_out_files, run_all
 from .diagnostics.doctor import (
@@ -134,6 +135,15 @@ def run_activities(
         except InputChangedError as exc:
             raise GoldenPathError("input changed or provenance diverged during processing") from exc
         _check_activities_read(reading.left_out)
+    # An item that is an empty value holds nothing; Run-All only counts it.
+    left_out.pop(EMPTY_RECORD, None)
+    if MARK_KINDS & set(left_out):
+        # Run-All leaves such items out and counts them; the Golden Path
+        # output has no such count, so it stops (stage A3d-2c-2).
+        raise GoldenPathError(
+            "an Activities file holds an item that is not a record, or a list of "
+            "Activities that cannot be read; run-all leaves them out and counts them"
+        )
     if left_out:
         # Run-All leaves such rows out and counts them; the Golden Path output
         # has no such count, so it stops instead of leaving rows out silently

@@ -5,7 +5,18 @@ from typing import Any, Iterable
 
 from ..common.identity import IDENTIFIER, MISSING, identifier_value, read_identifier, stable_hash
 from ..intake.discovery import DiscoveredAsset, load_json_assets
-from .records import IDENTITY_INVALID, IDENTITY_MISSING, count_left_out, row_snapshot_marks
+from .records import (
+    IDENTITY_INVALID,
+    IDENTITY_MISSING,
+    count_left_out,
+    count_mark,
+    row_snapshot_marks,
+)
+from .source_records import container_items, list_items
+
+PERSONAL_RECORD_ITEM_MESSAGE = (
+    "personal record item is not an object or its list has an unsupported type"
+)
 
 
 def _fallback(row: dict[str, Any]) -> list[Any]:
@@ -54,18 +65,19 @@ def normalize_personal_records(
     """Normalize Personal Records; ``assets`` are the Export's files from an open reading.
 
     A row without a usable identifier is counted in ``left_out`` by reason
-    (stage A3d-1b); without a counter, it stops the normalization.
+    (stage A3d-1b), and so are an item that is not a record and a list of
+    records that cannot be read (stage A3d-2c-2); without a counter, they
+    stop the normalization.
     """
     records: list[dict[str, Any]] = []
     for payload, asset in load_json_assets(
         root, filename_suffix="personalRecord.json", assets=assets
     ):
-        containers = payload if isinstance(payload, list) else [payload]
-        for container in containers:
-            if not isinstance(container, dict):
+        for container in container_items(payload):
+            if count_mark(left_out, container, PERSONAL_RECORD_ITEM_MESSAGE):
                 continue
-            for index, row in enumerate(container.get("personalRecords", []) or []):
-                if not isinstance(row, dict):
+            for index, row in enumerate(list_items(container.get("personalRecords"))):
+                if count_mark(left_out, row, PERSONAL_RECORD_ITEM_MESSAGE):
                     continue
                 reason = personal_record_left_out_reason(row)
                 if reason is not None:

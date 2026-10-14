@@ -91,6 +91,8 @@ def normalize_uds(
     accepted = []
     left_out = RowsLeftOut(value_source_names(UDS_VALUE_SOURCES))
     for raw in rows:
+        if left_out.add_mark(raw):
+            continue
         reason = uds_left_out_reason(raw)
         if reason is not None:
             left_out.add(raw, reason)

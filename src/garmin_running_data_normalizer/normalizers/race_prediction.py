@@ -72,6 +72,8 @@ def normalize_race_prediction(
     left_out = RowsLeftOut(value_source_names(RACE_PREDICTION_VALUE_SOURCES))
     timestamp_semantics: Counter[str] = Counter()
     for raw in rows:
+        if left_out.add_mark(raw):
+            continue
         timestamp, semantics = normalize_observation_timestamp(raw.get("timestamp"))
         # Copies within one Snapshot count as in a one-shot run (stage A3b).
         timestamp_semantics[semantics] += 1 + copies_within_snapshots(snapshot_numbers(raw))

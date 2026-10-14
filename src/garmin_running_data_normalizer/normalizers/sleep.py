@@ -413,6 +413,8 @@ def normalize_sleep_daily_assets(
     left_out = RowsLeftOut(value_source_names(SLEEP_VALUE_SOURCES))
     duration_source_counts: Counter[str] = Counter()
     for raw in source_rows:
+        if left_out.add_mark(raw):
+            continue
         _start_gmt, start_local = _timestamps(
             raw.get("sleepStartTimestampGMT"), timezone_name
         )

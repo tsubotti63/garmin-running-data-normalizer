@@ -18,6 +18,13 @@ from .daily_metrics import (
     snapshot_numbers,
     value_source_names,
 )
+from .source_records import (
+    MARK_FIELD,
+    METRIC_WRAPPERS,
+    file_items,
+    is_mark,
+    mark_holds_a_value,
+)
 
 
 HILL_FIELDS = (
@@ -88,19 +95,13 @@ def _load_json(asset: DiscoveredAsset) -> Any:
 
 
 def metric_rows(value: Any) -> list[dict[str, Any]]:
-    """Return the records of a performance-metric file, as Run-All and the
-    Snapshot build read them: the objects of its top list, of the list that
-    its top object holds under ``records``, ``items``, or ``data``, or the top
-    object itself."""
-    if isinstance(value, list):
-        return [item for item in value if isinstance(item, dict)]
-    if isinstance(value, dict):
-        for key in ("records", "items", "data"):
-            nested = value.get(key)
-            if isinstance(nested, list):
-                return [item for item in nested if isinstance(item, dict)]
-        return [value]
-    return []
+    """Return the records of a performance-metric or Lactate Threshold file,
+    as Run-All and the Snapshot build read them: the items of its top list,
+    of the list that its top object holds under ``records``, ``items``, or
+    ``data``, or the top object itself. An item that is not an object, and a
+    file whose value is neither a list nor an object, give a mark (stage
+    A3d-2c-2)."""
+    return file_items(value, METRIC_WRAPPERS)
 
 
 def _calendar_date(value: Any) -> str | None:
@@ -179,6 +180,8 @@ def _normalize_daily(
         rows = metric_rows(_load_json(asset))
         source_record_count += len(rows)
         for raw in rows:
+            if left_out.add_mark(raw):
+                continue
             excluded_private_fields.update(name for name in private_names if name in raw)
             reason = _left_out_reason(raw, is_hill=is_hill)
             if reason is not None:
@@ -347,6 +350,10 @@ def collect_lactate_threshold_candidates(
     family_source_counts: Counter[str] = Counter()
     review_counts: Counter[str] = Counter()
     invalid = InvalidValues()
+    # Items that are not records, and lists of records that cannot be read
+    # (stage A3d-2c-2), counted as the daily datasets count them.
+    left_out: Counter[str] = Counter()
+    empty_record_count = 0
 
     for asset in assets:
         if asset.kind != "json":
@@ -363,6 +370,15 @@ def collect_lactate_threshold_candidates(
         family_asset_counts[family] += 1
         family_source_counts[family] += len(rows)
         for source_index, raw in enumerate(rows):
+            if is_mark(raw):
+                # Copies within one Snapshot count as in a one-shot run.
+                copies = copies_within_snapshots(snapshot_numbers(raw))
+                family_source_counts[family] += copies
+                if mark_holds_a_value(raw):
+                    left_out[str(raw[MARK_FIELD])] += 1 + copies
+                else:
+                    empty_record_count += 1 + copies
+                continue
             timestamp: str | None = None
             sequence = 0
             if family == "history":
@@ -455,6 +471,15 @@ def collect_lactate_threshold_candidates(
         "family_asset_counts": dict(sorted(family_asset_counts.items())),
         "family_source_record_counts": dict(sorted(family_source_counts.items())),
         "review_condition_counts": dict(sorted(review_counts.items())),
+        **(
+            {
+                "excluded_record_count": sum(left_out.values()),
+                "excluded_reason_counts": dict(sorted(left_out.items())),
+            }
+            if left_out
+            else {}
+        ),
+        **({"empty_record_count": empty_record_count} if empty_record_count else {}),
         **invalid.audit_fields(),
         "source_paths_exposed": False,
         "source_hashes_exposed": False,

@@ -15,26 +15,10 @@ from .records import (
     IDENTITY_MISSING,
     VALUE_PROBLEMS,
     count_left_out,
+    count_mark,
     row_snapshot_marks,
 )
-
-
-def _unwrap(value: Any) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    if isinstance(value, list):
-        for item in value:
-            rows.extend(_unwrap(item))
-    elif isinstance(value, dict):
-        exported = value.get("summarizedActivitiesExport")
-        if isinstance(exported, list):
-            rows.extend(item for item in exported if isinstance(item, dict))
-        elif "activityId" in value:
-            rows.append(value)
-        else:
-            for item in value.values():
-                if isinstance(item, (list, dict)):
-                    rows.extend(_unwrap(item))
-    return rows
+from .source_records import activity_items
 
 
 def _start(row: dict[str, Any]) -> Any:
@@ -139,13 +123,19 @@ def normalize_activities(
     """Normalize the Activities; ``assets`` are the Export's files from an open reading.
 
     A row without a usable identifier is counted in ``left_out`` by reason
-    (stage A3d-1b); without a counter, it stops the normalization.
+    (stage A3d-1b), and so are an item that is not a record and a list of
+    records that cannot be read (stage A3d-2c-2); without a counter, they
+    stop the normalization.
     """
     records: list[dict[str, Any]] = []
     for payload, asset in load_json_assets(
         root, filename_suffix="summarizedActivities.json", assets=assets
     ):
-        for row in _unwrap(payload):
+        for row in activity_items(payload):
+            if count_mark(
+                left_out, row, "activity item is not an object or its list has an unsupported type"
+            ):
+                continue
             reason = activity_left_out_reason(row)
             if reason is not None:
                 count_left_out(

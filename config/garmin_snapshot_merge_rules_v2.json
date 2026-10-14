@@ -80,7 +80,15 @@
     "records_the_latest_snapshot_lacks": "kept_and_marked_when_a_file_of_their_family_was_left_out",
     "zip_file_without_listed_members": "left_out_with_the_reason_from_registration"
   },
-  "merge_rules_version": "garmin_snapshot_merge_rules:v2.8",
+  "items_that_are_not_records": {
+    "activity_gear_marks": "passed_without_a_gear_key",
+    "items_that_are_empty_values": "counted_as_empty_records_not_announced",
+    "lactate_threshold_candidates": "marks_passed_apart_from_the_candidates_and_candidates_read_as_run_all_reads_them",
+    "lists_of_records_of_another_form": "one_mark_left_out_as_records_not_readable",
+    "policy": "passed_to_run_all_as_marks_without_a_key_and_left_out_as_in_a_one_shot_run",
+    "same_content": "passed_once_with_one_snapshot_number_per_occurrence"
+  },
+  "merge_rules_version": "garmin_snapshot_merge_rules:v2.9",
   "other_datasets_follow": "garmin_public_snapshot_dataset_merge_policies:v1.0",
   "rows_without_a_stable_key": {
     "copies_within_snapshot": "counted_as_in_a_one_shot_run",
