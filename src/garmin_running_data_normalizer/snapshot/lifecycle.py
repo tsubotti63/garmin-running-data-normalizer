@@ -69,6 +69,7 @@ def run_snapshot_all(
                 "record_changes": build["record_changes"],
                 "files_left_out": build["files_left_out"],
                 "files_not_read": build["files_not_read"],
+                "files_with_repaired_text": build["files_with_repaired_text"],
                 **build["relationship_context"],
             },
         )

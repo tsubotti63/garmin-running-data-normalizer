@@ -26,6 +26,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterable, Iterator
 from zipfile import ZipInfo
 
+from ..common.text import repair_json_text
 from .archive import (
     ArchiveLimitError,
     ArchiveLimits,
@@ -70,6 +71,7 @@ class DiscoveredAsset:
         "_data",
         "_load",
         "_leave_out",
+        "_repaired_text_count",
     )
 
     def __init__(
@@ -92,6 +94,7 @@ class DiscoveredAsset:
         self._data = data
         self._load = load
         self._leave_out = leave_out
+        self._repaired_text_count: int | None = None
 
     @property
     def data(self) -> bytes:
@@ -109,6 +112,12 @@ class DiscoveredAsset:
         """Record that this file is left out, with the reason, in its reading."""
         if self._leave_out is not None:
             self._leave_out(self.provenance_path, self.size_bytes, reason)
+
+    @property
+    def repaired_text_count(self) -> int | None:
+        """The texts and names with a lone surrogate that reading this JSON
+        file repaired, or None before it is read (stage A3d-2c-1)."""
+        return self._repaired_text_count
 
     def __repr__(self) -> str:
         return f"DiscoveredAsset({self.kind!r}, {self.provenance_path!r}, {self.size_bytes})"
@@ -306,6 +315,20 @@ def read_export(
         yield reading
 
 
+def _read_json(asset: DiscoveredAsset) -> tuple[bool, Any]:
+    """Read a JSON file and repair its text with a lone surrogate, counting
+    the texts and names repaired on the asset, once however often it is read."""
+    try:
+        text = asset.data.decode("utf-8-sig")
+        # json.loads raises ValueError only for text that is not JSON
+        # (JSONDecodeError) or a number too long to convert.
+        value, repaired = repair_json_text(text, json.loads(text))
+    except (ValueError, RecursionError):
+        return False, None
+    asset._repaired_text_count = repaired
+    return True, value
+
+
 def parse_json_asset(asset: DiscoveredAsset) -> tuple[bool, Any]:
     """Parse a JSON file; return whether it could be read, and its value.
 
@@ -313,21 +336,26 @@ def parse_json_asset(asset: DiscoveredAsset) -> tuple[bool, Any]:
     nests too deeply, or holds a number too long to convert is left out
     with the reason ``json_not_readable`` (stage A3c). Only these errors are
     caught; any other error, such as a file that changed during the run,
-    still stops the run.
+    still stops the run. Text with a lone UTF-16 surrogate, such as a
+    truncated emoji, is written with U+FFFD in its place, and the asset
+    counts the texts and names repaired (stage A3d-2c-1).
     """
-    data = asset.data
-    try:
-        text = data.decode("utf-8-sig")
-    except UnicodeDecodeError:
+    readable, value = _read_json(asset)
+    if not readable:
         asset.leave_out(JSON_NOT_READABLE)
-        return False, None
-    try:
-        # json.loads raises ValueError only for text that is not JSON
-        # (JSONDecodeError) or a number too long to convert.
-        return True, json.loads(text)
-    except (ValueError, RecursionError):
-        asset.leave_out(JSON_NOT_READABLE)
-        return False, None
+    return readable, value
+
+
+def repaired_text_count(asset: DiscoveredAsset) -> int:
+    """Return the texts and names that reading this JSON file repairs.
+
+    A file that no dataset parsed is read here for the count only: a file
+    that cannot be read counts none and is not left out, so that the count
+    changes nothing else.
+    """
+    if asset.repaired_text_count is None:
+        _read_json(asset)
+    return asset.repaired_text_count or 0
 
 
 def discover_export(root: str | Path, limits: ArchiveLimits = ArchiveLimits()) -> list[DiscoveredAsset]:
@@ -371,6 +399,7 @@ __all__ = [
     "discover_export",
     "load_json_assets",
     "parse_json_asset",
+    "repaired_text_count",
     "path_family",
     "read_export",
 ]

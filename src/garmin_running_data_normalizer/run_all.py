@@ -29,6 +29,7 @@ from .intake.discovery import (
     InputChangedError,
     path_family,
     read_export,
+    repaired_text_count,
 )
 from .intake.roots import MIXED_INPUT_MESSAGE, OUTSIDE_EXPORT_ROOT, MixedExportsError
 from .intake.source import (
@@ -83,6 +84,13 @@ ACTIVITIES_NOT_READABLE_MESSAGE = (
 # cannot read (stage A3c-2).
 SNAPSHOT_LEFT_OUT_MESSAGE = (
     "the approved Snapshot input holds a file that the build should have left out"
+)
+SNAPSHOT_REPAIRED_TEXT_MESSAGE = (
+    "the approved Snapshot input holds text that the build should have repaired"
+)
+REPAIRED_TEXT_MESSAGE = (
+    "text with a broken character, such as a truncated emoji, is written with "
+    "U+FFFD in its place; run_manifest.json lists the files"
 )
 DATASET_TABLE = (
     {"name": "activities", "family": "activities", "record_grain": "activity", "stable_key": ("garmin_activity_key",), "required": True},
@@ -402,6 +410,28 @@ def _asset_family(asset: DiscoveredAsset) -> str:
 
     logical_name = asset.member_path or asset.source_path
     return classify_source_name(logical_name, asset.kind)
+
+
+def _repaired_text_files(assets: list[DiscoveredAsset]) -> list[dict[str, Any]]:
+    """The JSON files that Run-All reads whose text with a lone surrogate was
+    repaired, with the number of texts and names, as the Snapshot build lists
+    them by Snapshot number (stage A3d-2c-1)."""
+    from .diagnostics.detector import json_read_by_run_all
+
+    files = []
+    for asset in assets:
+        if asset.kind != "json" or not json_read_by_run_all(asset.member_path or asset.source_path):
+            continue
+        count = repaired_text_count(asset)
+        if count:
+            files.append(
+                {
+                    "source_path": asset.provenance_path,
+                    "family": _asset_family(asset),
+                    "repaired_text_count": count,
+                }
+            )
+    return sorted(files, key=lambda item: item["source_path"])
 
 
 def left_out_files(left_out: list[tuple[str, int, str]]) -> list[dict[str, Any]]:
@@ -1195,7 +1225,9 @@ def _family_results(
     performance_audit: dict[str, Any],
     relationship_summary: dict[str, Any],
     record_audits: dict[str, dict[str, Any]],
+    repaired_text_by_family: dict[str, int] | None = None,
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]], str]:
+    repaired_text_by_family = repaired_text_by_family or {}
     warnings: list[dict[str, Any]] = []
     results: dict[str, dict[str, Any]] = {}
     # A link removed in a later Snapshot counts as an update of the Gear family.
@@ -1373,6 +1405,18 @@ def _family_results(
                     ),
                 }
             )
+        # Text with a lone surrogate, repaired as it was read (stage A3d-2c-1).
+        repaired_text = int(repaired_text_by_family.get(family, 0))
+        if repaired_text:
+            family_warnings += 1
+            warnings.append(
+                {
+                    "code": "DATA_TEXT_REPAIRED",
+                    "family": family,
+                    "count": repaired_text,
+                    "message": REPAIRED_TEXT_MESSAGE,
+                }
+            )
         # Repeated records whose values disagree (stage A3b).
         record_disagreement_count = sum(
             int(record_audits[name].get("disagreement_key_count", 0))
@@ -1457,6 +1501,8 @@ def _family_results(
             results[family]["left_out_row_count"] = left_out_row_count
         if invalid_value_count:
             results[family]["invalid_value_count"] = invalid_value_count
+        if repaired_text:
+            results[family]["repaired_text_count"] = repaired_text
         if family == "fit":
             results[family]["parse_status_counts"] = {
                 key.removeprefix("status_"): value
@@ -1508,6 +1554,17 @@ def _family_results(
                     "candidate values of a form that their field does not take were "
                     "left empty; the candidates' audit record keeps them"
                 ),
+            }
+        )
+    # Repaired text of the Lactate Threshold files, a candidate warning too.
+    lactate_repaired_text = int(repaired_text_by_family.get("lactate_threshold", 0))
+    if lactate_repaired_text:
+        warnings.append(
+            {
+                "code": "DATA_TEXT_REPAIRED",
+                "family": "lactate_threshold",
+                "count": lactate_repaired_text,
+                "message": REPAIRED_TEXT_MESSAGE,
             }
         )
     if unresolved_relationship_count:
@@ -1694,6 +1751,17 @@ def run_all(
             raise RunAllError("SNAPSHOT_CONTEXT_INVALID", SNAPSHOT_LEFT_OUT_MESSAGE)
         else:
             files_left_out = list(snapshot_context.get("files_left_out", []))
+        # The files whose text with a lone surrogate was repaired as it was
+        # read (stage A3d-2c-1); in a Snapshot run, those that the build
+        # repaired, by Snapshot number, as the approved input holds none.
+        if snapshot_context is None:
+            files_with_repaired_text = _repaired_text_files(initial_assets)
+        elif _repaired_text_files(initial_assets):
+            raise RunAllError("SNAPSHOT_CONTEXT_INVALID", SNAPSHOT_REPAIRED_TEXT_MESSAGE)
+        else:
+            files_with_repaired_text = list(
+                snapshot_context.get("files_with_repaired_text", [])
+            )
     _validate_provenance(records, fit_audit, families)
     qa_entries = [
         _dataset_qa(dataset, records[str(dataset["name"])], len(families[str(dataset["family"])]))
@@ -1731,6 +1799,9 @@ def run_all(
     record_audits = _record_audits(
         records, snapshot_context, record_merges, record_rows_left_out, record_invalid_values
     )
+    repaired_text_by_family: Counter[str] = Counter()
+    for item in files_with_repaired_text:
+        repaired_text_by_family[str(item["family"])] += int(item["repaired_text_count"])
     family_results, warnings, status = _family_results(
         families,
         records,
@@ -1738,6 +1809,7 @@ def run_all(
         performance_audit,
         relationship_summary,
         record_audits,
+        dict(repaired_text_by_family),
     )
     if files_left_out:
         # A file left out leaves the run bounded: PARTIAL_SUCCESS (exit 3).
@@ -1889,6 +1961,7 @@ def run_all(
             "record_changes",
             "files_left_out",
             "files_not_read",
+            "files_with_repaired_text",
         }
         if not required_snapshot_context <= set(snapshot_context) or not set(
             snapshot_context
@@ -2053,6 +2126,10 @@ def run_all(
         # Files that could not be read are left out with the reason; the
         # list appears only when there is one (stage A3c).
         manifest["files_left_out"] = files_left_out
+    if files_with_repaired_text:
+        # Files whose text was repaired, only when there is one (stage
+        # A3d-2c-1).
+        manifest["files_with_repaired_text"] = files_with_repaired_text
     summary = {
         "format": "garmin-running-data-normalizer-run-summary-v1",
         "product_version": __version__,

@@ -492,7 +492,7 @@ class SnapshotRowsTest(unittest.TestCase):
             self.assertEqual(audit(output, "sleep_daily")["empty_record_count"], 1)
             merge = load(output / "snapshot/canonical_merge_summary.json")
             self.assertEqual(merge["merge_rules_version"], MERGE_RULES_VERSION)
-            self.assertEqual(MERGE_RULES_VERSION, "garmin_snapshot_merge_rules:v2.7")
+            self.assertEqual(MERGE_RULES_VERSION, "garmin_snapshot_merge_rules:v2.8")
             self.assertEqual(merge["review_hold_count"], 0)
             uds = merge["datasets"]["uds_daily"]
             self.assertEqual(uds["keyless_observation_count"], 4)

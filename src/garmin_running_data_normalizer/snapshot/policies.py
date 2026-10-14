@@ -275,8 +275,12 @@ FUTURE_READY_DATASETS = ("health_status",)
 # a usable identifier is passed to Run-All in the same way. From v2.7, the
 # build leaves the values of another form as they are, and Run-All leaves them
 # empty and keeps them in its audit records as a one-shot run does; a Lactate
-# Threshold candidate with such a value no longer stops the build.
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.7"
+# Threshold candidate with such a value no longer stops the build. From v2.8,
+# the build writes text with a lone UTF-16 surrogate, such as a truncated
+# emoji, with U+FFFD in its place as it reads a file that Run-All reads, and
+# lists the file with the number of texts repaired by Snapshot number, as a
+# one-shot run counts them.
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.8"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -384,6 +388,12 @@ MERGE_RULES: dict[str, Any] = {
     "values_of_another_form": {
         "policy": "passed_to_run_all_which_leaves_them_empty_and_keeps_them",
         "lactate_threshold_candidates": "passed_to_run_all_instead_of_stopping_the_build",
+    },
+    "text_with_a_lone_surrogate": {
+        "policy": "written_with_u_fffd_as_the_file_is_read_as_in_a_one_shot_run",
+        "files": "those_that_run_all_reads",
+        "count": "texts_and_names_repaired_listed_by_file_and_snapshot_number",
+        "equal_names_once_repaired": "later_value_kept_as_json_keeps_the_later_of_two_equal_names",
     },
     "other_datasets_follow": REGISTRY_VERSION,
 }
