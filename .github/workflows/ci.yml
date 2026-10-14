@@ -144,6 +144,9 @@ jobs:
       - name: Verify Windows items and containers
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_items_and_containers.py -q
+      - name: Verify Windows environment stops
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_environment_stops.py -q
       - name: Build distributions
         shell: powershell
         run: |

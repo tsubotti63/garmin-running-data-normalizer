@@ -335,7 +335,7 @@ class RunManagerTest(unittest.TestCase):
     def test_a_name_too_long_for_the_location_is_reported_as_a_name_problem(self) -> None:
         manager = stub_manager("wait")
         with patch(
-            "garmin_running_data_normalizer.gui.runs.tempfile.mkdtemp",
+            "garmin_running_data_normalizer.output_location.tempfile.mkdtemp",
             side_effect=OSError(errno.ENAMETOOLONG, "File name too long"),
         ):
             with self.assertRaises(RunRequestError) as caught:
@@ -348,7 +348,7 @@ class RunManagerTest(unittest.TestCase):
         # itself is made to fail here; the next test uses real permissions.
         manager = stub_manager("wait")
         with patch(
-            "garmin_running_data_normalizer.gui.runs.tempfile.mkdtemp",
+            "garmin_running_data_normalizer.output_location.tempfile.mkdtemp",
             side_effect=PermissionError("denied"),
         ):
             with self.assertRaises(RunRequestError) as caught:
@@ -379,7 +379,7 @@ class RunManagerTest(unittest.TestCase):
 
     def test_a_write_check_folder_that_cannot_be_removed_does_not_stop_the_run(self) -> None:
         manager = stub_manager("wait")
-        with patch("garmin_running_data_normalizer.gui.runs.os.rmdir", side_effect=PermissionError("busy")):
+        with patch("garmin_running_data_normalizer.output_location.os.rmdir", side_effect=PermissionError("busy")):
             self.start(manager)
         left = [path.name for path in self.parent.iterdir()]
         self.assertEqual(len(left), 1)

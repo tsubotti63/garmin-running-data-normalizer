@@ -37,7 +37,7 @@ from .archive import (
     validated_members,
 )
 from .roots import ExportView, open_export
-from .source import DAMAGED_ZIP_ERRORS, ExportFile, ExportTooLargeError
+from .source import DAMAGED_ZIP_ERRORS, ExportFile, ExportTooLargeError, InputNotReadableError
 
 
 SUPPORTED_SUFFIXES = {".json", ".fit"}
@@ -192,12 +192,17 @@ class ExportReading:
                 if item.size > limits.max_member_bytes:
                     self._record_too_large(item.relative_path, item.size)
                     continue
-                if keep_data:
-                    data: bytes | None = source.read(item)
-                    digest, size = _digest(data), len(data)
-                else:
-                    data = None
-                    digest, size = source.digest(item)
+                try:
+                    if keep_data:
+                        data: bytes | None = source.read(item)
+                        digest, size = _digest(data), len(data)
+                    else:
+                        data = None
+                        digest, size = source.digest(item)
+                except PermissionError as exc:
+                    # A file that this app may not open stops the reading
+                    # (stage A3d-3a).
+                    raise InputNotReadableError([source.place_of(item)]) from exc
                 source.count_read(size)
                 assets.append(self._asset(item.suffix[1:], item, None, size, digest, data))
             elif item.suffix == ".zip":
@@ -238,6 +243,8 @@ class ExportReading:
                 found.append(self._asset(kind, item, info, size, digest, data))
         except ExportTooLargeError:
             raise
+        except PermissionError as exc:
+            raise InputNotReadableError([source.place_of(item)]) from exc
         except DAMAGED_ZIP_ERRORS:
             self._record_left_out(item.relative_path, item.size, ZIP_NOT_READABLE)
             return []

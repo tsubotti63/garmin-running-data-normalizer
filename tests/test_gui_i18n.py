@@ -139,6 +139,9 @@ class GuiMessageCoverageTest(unittest.TestCase):
     def test_every_error_code_has_a_message(self) -> None:
         codes = (
             codes_in("run_all.py", r'RunAllError\(\s*"([A-Z_]+)"')
+            # The codes of the place of the output, which Run-All and the GUI
+            # check alike (stage A3d-3a).
+            | codes_in("output_location.py", r'\n    "(OUTPUT_[A-Z_]+)": ')
             | codes_in("common/time.py", r'"(TIMEZONE_[A-Z_]+)"')
             | codes_in("gui/runs.py", r'RunRequestError\("([A-Z_]+)"\)')
             | codes_in("gui/runs.py", r'super\(\)\.__init__\("([A-Z_]+)"\)')

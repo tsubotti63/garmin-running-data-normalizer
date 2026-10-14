@@ -51,6 +51,7 @@ export const ERROR_KEYS = {
   ACTIVITIES_EMPTY: "error.activities_not_found",
   INPUT_CHANGED: "error.input_changed",
   INPUT_DISCOVERY_FAILED: "error.input_unreadable",
+  INPUT_NOT_READABLE: "error.input_not_readable",
   INPUT_ZIP_CORRUPT: "error.zip_corrupt",
   INPUT_MULTIPLE_EXPORTS: "error.input_multiple_exports",
   INPUT_TOO_LARGE: "error.input_too_large",
@@ -76,6 +77,7 @@ export const ERROR_KEYS = {
   RUN_ACTIVE: "error.run_active",
   OUTPUT_PARENT_NOT_WRITABLE: "error.output_parent_not_writable",
   OUTPUT_PATH_TOO_LONG: "error.output_path_too_long",
+  OUTPUT_SPACE_INSUFFICIENT: "error.output_space_insufficient",
   NO_FINISHED_OUTPUT: "error.no_finished_output",
   HANDOFF_INVALID: "error.output_changed",
   OUTPUT_CHANGED: "error.output_changed",
@@ -115,6 +117,7 @@ const ERROR_NEXT_KEYS = {
   activities_not_found: "next.choose_export_folder",
   input_changed: "next.run_again_unchanged",
   input_unreadable: "next.extract_again",
+  input_not_readable: "next.allow_input_access",
   zip_corrupt: "next.download_again",
   input_multiple_exports: "next.choose_one_export",
   input_too_large: "next.extract_and_choose_folder",
@@ -126,6 +129,7 @@ const ERROR_NEXT_KEYS = {
   run_active: "next.wait_or_cancel",
   output_parent_not_writable: "next.choose_writable_folder",
   output_path_too_long: "next.shorten_output_path",
+  output_space_insufficient: "next.free_output_space",
   no_finished_output: "next.run_first",
   output_changed: "next.report_if_unchanged",
   output_not_available: "next.check_output_location",
@@ -142,6 +146,7 @@ export const FINDING_KEYS = {
   INPUT_DIRECTORY_MUST_BE_LOCAL_DIRECTORY: "finding.input_directory",
   INSTALL_REQUIRED_TIMEZONE_DATA: "finding.timezone_data",
   INPUT_COULD_NOT_BE_SAFELY_DISCOVERED: "finding.input_unreadable",
+  INPUT_FOLDER_OR_FILE_CANNOT_BE_OPENED: "finding.input_not_readable",
   INPUT_ZIP_DAMAGED_OR_INCOMPLETE: "finding.zip_corrupt",
   INPUT_HOLDS_MORE_THAN_ONE_EXPORT: "finding.input_multiple_exports",
   INPUT_HOLDS_THE_SAME_EXPORT_MORE_THAN_ONCE: "finding.input_duplicate_sources",
@@ -156,6 +161,7 @@ export const ACTION_KEYS = {
   SELECT_VALID_EXPORT_DIRECTORY: "action.select_folder",
   REPAIR_RUNTIME_ENVIRONMENT: "action.repair_python",
   OBTAIN_COMPLETE_READABLE_EXPORT: "action.get_new_export",
+  ALLOW_INPUT_ACCESS_OR_SELECT_EXPORT_FOLDER: "action.allow_input_access",
   DOWNLOAD_EXPORT_AGAIN: "action.download_again",
   EXTRACT_EXPORT_AND_SELECT_FOLDER: "action.extract_and_choose_folder",
   FREE_TEMP_SPACE_OR_SELECT_EXTRACTED_FOLDER: "action.free_temp_space",
@@ -239,12 +245,22 @@ function nextStep(step) {
 }
 
 // What happened, what to do next, and the code to quote when asking for help.
-export function errorMessages(code) {
+// ``detail`` names, for a folder or file of the input that cannot be opened,
+// its place inside the input ("" is the input itself) and how many more.
+export function errorMessages(code, detail) {
   const key = lookup(ERROR_KEYS, code, "error.unknown");
-  const messages = [
-    { key, params: {}, keyParams: {} },
-    nextStep(lookup(ERROR_NEXT_KEYS, key.slice("error.".length), "next.reload_page")),
-  ];
+  const messages = [{ key, params: {}, keyParams: {} }];
+  if (typeof detail?.place === "string") {
+    messages.push(
+      detail.place === ""
+        ? { key: "error.place_input_itself", params: {}, keyParams: {} }
+        : { key: "error.place", params: { place: detail.place }, keyParams: {} },
+    );
+    if (Number.isInteger(detail.more) && detail.more > 0) {
+      messages.push({ key: "error.place_more", params: { more: detail.more }, keyParams: {} });
+    }
+  }
+  messages.push(nextStep(lookup(ERROR_NEXT_KEYS, key.slice("error.".length), "next.reload_page")));
   if (typeof code === "string" && code !== "") {
     messages.push({ key: "error.code", params: { code }, keyParams: {} });
   }
@@ -324,7 +340,7 @@ export function resultMessages(status) {
     messages.push(nextStep("next.start_again"));
   } else if (state === "failed") {
     messages.push({ key: "result.failed", params: {}, keyParams: {} });
-    messages.push(...errorMessages(status.error_code));
+    messages.push(...errorMessages(status.error_code, status.error_detail));
   }
   if (FINISHED_STATES.includes(state) && status.output_path) {
     messages.push({ key: "result.output", params: { path: status.output_path }, keyParams: {} });

@@ -20,6 +20,7 @@ from ..intake.roots import MixedExportsError
 from ..intake.source import (
     CorruptArchiveError,
     ExportTooLargeError,
+    InputNotReadableError,
     TempSpaceError,
     is_zip_input,
 )
@@ -224,6 +225,20 @@ def doctor_input(
                     actionability="ACTION_REQUIRED",
                     safe_message_id="INPUT_ZIP_TOO_LARGE_TO_READ_DIRECTLY",
                     next_action_id="EXTRACT_EXPORT_AND_SELECT_FOLDER",
+                    authority_reference="product:intake-discovery",
+                    evidence_reference="diagnostic:source-discovery",
+                )
+            )
+        except (InputNotReadableError, PermissionError):
+            # A folder or file that this app may not open stops a run
+            # (stage A3d-3a); which one, the run says where it is started.
+            findings.append(
+                _finding(
+                    "INPUT_NOT_READABLE",
+                    severity="ERROR",
+                    actionability="ACTION_REQUIRED",
+                    safe_message_id="INPUT_FOLDER_OR_FILE_CANNOT_BE_OPENED",
+                    next_action_id="ALLOW_INPUT_ACCESS_OR_SELECT_EXPORT_FOLDER",
                     authority_reference="product:intake-discovery",
                     evidence_reference="diagnostic:source-discovery",
                 )

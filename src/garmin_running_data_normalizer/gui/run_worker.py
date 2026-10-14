@@ -101,7 +101,13 @@ def main(argv: list[str] | None = None) -> int:
             _emit({"event": "cancelled"})
             return CANCELLED_EXIT_CODE
         except RunAllError as exc:
-            _emit({"event": "failed", "code": exc.code})
+            message: dict[str, Any] = {"event": "failed", "code": exc.code}
+            # Where the input cannot be opened is shown on the page only
+            # (stage A3d-3a); "" is the input itself.
+            if exc.code == "INPUT_NOT_READABLE" and exc.places:
+                message["place"] = exc.places[0]
+                message["more"] = len(exc.places) - 1
+            _emit(message)
             return FAILED_EXIT_CODE
         except Exception:
             _emit({"event": "failed", "code": "RUN_ALL_FAILED"})

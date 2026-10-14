@@ -734,6 +734,36 @@ class GuiRunApiTest(GuiServerTestCase):
                 self.assertNotIn(value, json.dumps(answer))
                 self.assertNotIn(value, stdout.getvalue())
 
+    @unittest.skipIf(
+        os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+        "permission bits do not stop this user here",
+    )
+    def test_a_folder_that_cannot_be_opened_is_named_on_the_page_only(self) -> None:
+        # The run stops, and the page names the folder; the check before the
+        # run and the server's log do not (stage A3d-3a).
+        self.start_server(600.0)
+        source = self.root / "closed"
+        shutil.copytree(SYNTHETIC_EXPORT, source)
+        closed = source / "DI-Connect-Fitness" / "synthetic-private-folder"
+        closed.mkdir()
+        closed.chmod(0o000)
+        self.addCleanup(closed.chmod, 0o700)
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            status, check = self.call("/api/check-input", {"input": str(source)})
+            self.assertEqual(status, 200)
+            self.assertIn("INPUT_NOT_READABLE", [item["code"] for item in check["findings"]])
+            request = {**self.run_request("closed-output"), "input": str(source)}
+            self.assertEqual(self.call("/api/run/start", request)[0], 200)
+            answer = self.wait_for_state({"failed"})
+        self.assertEqual(answer["error_code"], "INPUT_NOT_READABLE")
+        self.assertEqual(
+            answer["error_detail"],
+            {"place": "DI-Connect-Fitness/synthetic-private-folder", "more": 0},
+        )
+        self.assertNotIn("synthetic-private-folder", json.dumps(check))
+        self.assertNotIn("synthetic-private-folder", stdout.getvalue())
+
     def test_a_run_blocks_a_second_run_and_shutdown_until_it_ends(self) -> None:
         self.start_server(600.0, runs=stub_manager("wait"))
         status, answer = self.call("/api/run/start", self.run_request())

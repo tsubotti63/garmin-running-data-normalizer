@@ -199,6 +199,36 @@ test("an error shows what happened, the next step, and its code", () => {
   }
 });
 
+test("a folder or file that cannot be opened is named after the error", () => {
+  assert.deepEqual(
+    resultMessages({
+      state: "failed",
+      error_code: "INPUT_NOT_READABLE",
+      error_detail: { place: "DI_CONNECT/DI-Connect-Fitness", more: 2 },
+      staging_folders: [],
+    }).map(shape),
+    [
+      ["result.failed", {}, {}],
+      ["error.input_not_readable", {}, {}],
+      ["error.place", { place: "DI_CONNECT/DI-Connect-Fitness" }, {}],
+      ["error.place_more", { more: 2 }, {}],
+      ["next.label", {}, { step: "next.allow_input_access" }],
+      ["error.code", { code: "INPUT_NOT_READABLE" }, {}],
+    ],
+  );
+  assert.deepEqual(
+    errorMessages("INPUT_NOT_READABLE", { place: "", more: 0 }).map((message) => message.key),
+    ["error.input_not_readable", "error.place_input_itself", "next.label", "error.code"],
+  );
+  // A detail of another form names nothing.
+  for (const detail of [undefined, null, {}, { place: 3 }, "DI_CONNECT"]) {
+    assert.deepEqual(
+      errorMessages("INPUT_NOT_READABLE", detail).map((message) => message.key),
+      ["error.input_not_readable", "next.label", "error.code"],
+    );
+  }
+});
+
 test("every known error code has its own next step and shows its code", () => {
   for (const code of Object.keys(ERROR_KEYS)) {
     const [what, next, quoted] = errorMessages(code);

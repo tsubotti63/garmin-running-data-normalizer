@@ -24,7 +24,13 @@ from typing import BinaryIO, ContextManager, Iterator, Union
 from zipfile import ZipFile
 
 from .archive import ArchiveLimits, MemberTooLargeError
-from .source import DAMAGED_ZIP_ERRORS, ExportFile, ExportSource, is_layout_folder
+from .source import (
+    DAMAGED_ZIP_ERRORS,
+    ExportFile,
+    ExportSource,
+    InputNotReadableError,
+    is_layout_folder,
+)
 
 
 # Files of these kinds outside every root are listed as not read.
@@ -107,6 +113,9 @@ class RootView:
     def count_read(self, size: int) -> None:
         self._source.count_read(size)
 
+    def place_of(self, item: ExportFile) -> str:
+        return self._source.place_of(self._original[item])
+
 
 ExportView = Union[ExportSource, RootView]
 
@@ -138,6 +147,9 @@ def _holds_export(source: ExportSource, item: ExportFile) -> bool:
         names = [info.filename for info in source.archive(item).infolist()]
     except (MemberTooLargeError, *DAMAGED_ZIP_ERRORS):
         return False
+    except PermissionError as exc:
+        # A ZIP file that this app may not open stops the reading (stage A3d-3a).
+        raise InputNotReadableError([source.place_of(item)]) from exc
     return any(
         any(is_layout_folder(part) for part in PurePosixPath(name).parts[:-1])
         for name in names
