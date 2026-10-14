@@ -14,6 +14,7 @@ import json
 from typing import Any, Iterable
 
 from ..common.identity import identity_token
+from ..normalizers.source_records import is_mark
 
 ACCOUNT_FIELDS = frozenset({"userProfileId", "userProfilePk", "userProfilePK"})
 # Source families whose records name the account that owns them.
@@ -45,7 +46,10 @@ def _records(value: Any) -> list[dict[str, Any]]:
     tops = [value] if isinstance(value, dict) else value if isinstance(value, list) else []
     records: list[dict[str, Any]] = []
     for item in tops:
-        if not isinstance(item, dict):
+        # The mark of an item that is not a record, which a Snapshot build
+        # writes in its place (stage A3d-2c-2), is no record: its value is
+        # not read, as the item itself is not.
+        if not isinstance(item, dict) or is_mark(item):
             continue
         records.append(item)
         for inner in item.values():

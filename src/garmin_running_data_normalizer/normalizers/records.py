@@ -42,6 +42,7 @@ from .daily_metrics import (
     public_fields,
     snapshot_numbers,
 )
+from .source_records import MARK_FIELD, is_mark, mark_holds_a_value
 
 RECORD_DATASETS = ("activities", "gear", "activity_gear", "personal_records")
 # The reasons for which a row of these datasets is left out (stage A3d-1b): it
@@ -49,6 +50,10 @@ RECORD_DATASETS = ("activities", "gear", "activity_gear", "personal_records")
 # has a form that cannot name a record.
 IDENTITY_MISSING = "identity_missing"
 IDENTITY_INVALID = "identity_invalid"
+# The items of a list of records that are empty values are counted under this
+# name with the rows left out; the audit record counts them apart, as its
+# empty_record_count (stage A3d-2c-2).
+EMPTY_RECORD = "empty_record"
 
 # The stable key of each dataset, as the normalized dataset names it.
 STABLE_KEYS: dict[str, tuple[str, ...]] = {
@@ -125,6 +130,23 @@ def count_left_out(
     if left_out is None:
         raise ValueError(message)
     left_out[reason] += 1 + copies_within_snapshots(snapshot_numbers(raw))
+
+
+def count_mark(left_out: Counter[str] | None, raw: dict[str, Any], message: str) -> bool:
+    """Count a mark of the file's records (stage A3d-2c-2), once per copy
+    within one Snapshot, and return whether the row is a mark.
+
+    A mark that holds a value is left out with its reason; without a counter,
+    it stops the normalization with ``message``. An item that is an empty
+    value is an empty record, counted under ``EMPTY_RECORD``.
+    """
+    if not is_mark(raw):
+        return False
+    if mark_holds_a_value(raw):
+        count_left_out(left_out, raw, str(raw[MARK_FIELD]), message)
+    elif left_out is not None:
+        left_out[EMPTY_RECORD] += 1 + copies_within_snapshots(snapshot_numbers(raw))
+    return True
 
 
 def identifier_fields(dataset: str) -> frozenset[str]:
@@ -374,6 +396,7 @@ def _apply_probes(
 
 
 __all__ = [
+    "EMPTY_RECORD",
     "IDENTITY_INVALID",
     "IDENTITY_MISSING",
     "RECORD_DATASETS",
@@ -384,6 +407,7 @@ __all__ = [
     "VALUE_PROBLEMS",
     "check_values",
     "count_left_out",
+    "count_mark",
     "identifier_fields",
     "merge_repeated_records",
     "row_snapshot_marks",

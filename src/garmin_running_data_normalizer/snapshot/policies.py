@@ -279,8 +279,13 @@ FUTURE_READY_DATASETS = ("health_status",)
 # the build writes text with a lone UTF-16 surrogate, such as a truncated
 # emoji, with U+FFFD in its place as it reads a file that Run-All reads, and
 # lists the file with the number of texts repaired by Snapshot number, as a
-# one-shot run counts them.
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.8"
+# one-shot run counts them. From v2.9, the build and Run-All read the records
+# of a file in one way: an item of a list of records that is not an object,
+# and a value of another form in the place of a list of records, are passed
+# to Run-All as marks without a key, which Run-All leaves out as a one-shot
+# run does, or only counts when the item is an empty value; and the Lactate
+# Threshold candidates are read as Run-All reads them.
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.9"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -394,6 +399,14 @@ MERGE_RULES: dict[str, Any] = {
         "files": "those_that_run_all_reads",
         "count": "texts_and_names_repaired_listed_by_file_and_snapshot_number",
         "equal_names_once_repaired": "later_value_kept_as_json_keeps_the_later_of_two_equal_names",
+    },
+    "items_that_are_not_records": {
+        "policy": "passed_to_run_all_as_marks_without_a_key_and_left_out_as_in_a_one_shot_run",
+        "items_that_are_empty_values": "counted_as_empty_records_not_announced",
+        "lists_of_records_of_another_form": "one_mark_left_out_as_records_not_readable",
+        "same_content": "passed_once_with_one_snapshot_number_per_occurrence",
+        "activity_gear_marks": "passed_without_a_gear_key",
+        "lactate_threshold_candidates": "marks_passed_apart_from_the_candidates_and_candidates_read_as_run_all_reads_them",
     },
     "other_datasets_follow": REGISTRY_VERSION,
 }

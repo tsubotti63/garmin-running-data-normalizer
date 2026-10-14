@@ -441,12 +441,12 @@ class NormalizationErrorsTest(unittest.TestCase):
         # the file is not left out.
         cases = {
             "activities": (
-                "garmin_running_data_normalizer.normalizers.activities._unwrap",
+                "garmin_running_data_normalizer.normalizers.activities.activity_items",
                 lambda root, assets: normalize_activities(root, assets=assets),
                 "ACTIVITIES_NORMALIZATION_FAILED",
             ),
             "gear": (
-                "garmin_running_data_normalizer.normalizers.gear._containers",
+                "garmin_running_data_normalizer.normalizers.gear.container_items",
                 lambda root, assets: normalize_gear(root, assets=assets),
                 "GEAR_NORMALIZATION_FAILED",
             ),

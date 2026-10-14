@@ -141,6 +141,9 @@ jobs:
       - name: Verify Windows repaired text
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_repaired_text.py -q
+      - name: Verify Windows items and containers
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_items_and_containers.py -q
       - name: Build distributions
         shell: powershell
         run: |

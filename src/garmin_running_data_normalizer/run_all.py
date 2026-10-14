@@ -55,12 +55,14 @@ from .normalizers.performance_metrics import (
 from .normalizers.race_prediction import normalize_race_prediction
 from .common.values import InvalidValues
 from .normalizers.records import (
+    EMPTY_RECORD,
     STABLE_KEYS,
     RecordMerge,
     check_values,
     identifier_fields,
     merge_repeated_records,
 )
+from .normalizers.source_records import MARK_KINDS
 from .normalizers.sleep import normalize_sleep_daily_assets
 from .normalizers.training_history import normalize_training_history
 from .normalizers.training_load import normalize_acute_training_load
@@ -92,6 +94,35 @@ REPAIRED_TEXT_MESSAGE = (
     "text with a broken character, such as a truncated emoji, is written with "
     "U+FFFD in its place; run_manifest.json lists the files"
 )
+# The warnings about rows left out (stages A3d-1 and A3d-1b). When a dataset
+# also leaves out items that are not records or lists of records that cannot
+# be read (stage A3d-2c-2), its warning names them too.
+DAILY_ROWS_LEFT_OUT_MESSAGE = (
+    "rows that lack a required value, such as a date, were left out; the "
+    "dataset's audit record counts them by reason"
+)
+RECORD_ROWS_LEFT_OUT_MESSAGE = (
+    "rows without a usable identifier were left out; the dataset's audit "
+    "record counts them by reason"
+)
+ITEMS_LEFT_OUT_MESSAGE = (
+    "rows that lack a required value or a usable identifier, items that are "
+    "not records, or lists of records that cannot be read were left out; the "
+    "dataset's audit record counts them by reason"
+)
+CANDIDATE_ITEMS_LEFT_OUT_MESSAGE = (
+    "items that are not candidate records, or lists of candidates that cannot "
+    "be read, were left out; the candidates' audit record counts them by reason"
+)
+
+
+def _rows_left_out_message(audit: dict[str, Any], message: str) -> str:
+    """Return the message of a dataset's warning about rows left out."""
+    if MARK_KINDS & set(audit.get("excluded_reason_counts") or {}):
+        return ITEMS_LEFT_OUT_MESSAGE
+    return message
+
+
 DATASET_TABLE = (
     {"name": "activities", "family": "activities", "record_grain": "activity", "stable_key": ("garmin_activity_key",), "required": True},
     {"name": "gear", "family": "gear", "record_grain": "gear", "stable_key": ("gear_key",), "required": False},
@@ -886,9 +917,10 @@ def _record_audits(
     these keys appear only when there is something to count, so that an
     Export without repeated records gives the same bytes as before. So do the
     counts of the rows left out without a usable identifier, by reason, as
-    the daily audit records count theirs (stage A3d-1b), and the values of
+    the daily audit records count theirs (stage A3d-1b), the values of
     another form that were left empty, with the keys of their records
-    (stage A3d-2a).
+    (stage A3d-2a), and the items left out that are not records, by reason,
+    and those that are empty values (stage A3d-2c-2).
     """
     changes = (
         snapshot_context.get("record_changes") or {}
@@ -929,10 +961,15 @@ def _record_audits(
         if merge.disagreements:
             audit["disagreement_key_count"] = len(merge.disagreements)
             audit["disagreements"] = list(merge.disagreements)
-        left_out = (rows_left_out or {}).get(name)
+        left_out = Counter((rows_left_out or {}).get(name) or {})
+        # Items that are empty values, counted apart and not announced, as the
+        # daily audit records count their empty records (stage A3d-2c-2).
+        empty_record_count = left_out.pop(EMPTY_RECORD, 0)
         if left_out:
             audit["excluded_record_count"] = sum(left_out.values())
             audit["excluded_reason_counts"] = dict(sorted(left_out.items()))
+        if empty_record_count:
+            audit["empty_record_count"] = empty_record_count
         invalid = (invalid_values or {}).get(name)
         if invalid is not None:
             audit.update(invalid.audit_fields())
@@ -1325,10 +1362,7 @@ def _family_results(
                         "family": family,
                         "dataset": daily_dataset_by_family[family],
                         "count": left_out_row_count,
-                        "message": (
-                            "rows that lack a required value, such as a date, were "
-                            "left out; the dataset's audit record counts them by reason"
-                        ),
+                        "message": _rows_left_out_message(audit, DAILY_ROWS_LEFT_OUT_MESSAGE),
                     }
                 )
             # No dataset of Run-All gives review items since stage A3d-2b,
@@ -1375,9 +1409,8 @@ def _family_results(
                         "family": family,
                         "dataset": name,
                         "count": dataset_left_out,
-                        "message": (
-                            "rows without a usable identifier were left out; the "
-                            "dataset's audit record counts them by reason"
+                        "message": _rows_left_out_message(
+                            record_audits[name], RECORD_ROWS_LEFT_OUT_MESSAGE
                         ),
                     }
                 )
@@ -1556,6 +1589,19 @@ def _family_results(
                 ),
             }
         )
+    # Candidate items that are not records, and lists of candidates that
+    # cannot be read (stage A3d-2c-2): a candidate warning too, which bounds
+    # the run as the rows left out of a dataset do.
+    lactate_left_out = int(lactate_audit.get("excluded_record_count", 0))
+    if lactate_left_out:
+        warnings.append(
+            {
+                "code": "DATA_ROW_LEFT_OUT",
+                "family": "lactate_threshold",
+                "count": lactate_left_out,
+                "message": CANDIDATE_ITEMS_LEFT_OUT_MESSAGE,
+            }
+        )
     # Repaired text of the Lactate Threshold files, a candidate warning too.
     lactate_repaired_text = int(repaired_text_by_family.get("lactate_threshold", 0))
     if lactate_repaired_text:
@@ -1598,7 +1644,9 @@ def _family_results(
         )
 
     # Rows left out bound the run as a FIT file not completely parsed does.
-    rows_left_out = any(result.get("left_out_row_count") for result in results.values())
+    rows_left_out = lactate_left_out > 0 or any(
+        result.get("left_out_row_count") for result in results.values()
+    )
     overall = (
         "PARTIAL_SUCCESS"
         if incomplete_fit_count or rows_left_out

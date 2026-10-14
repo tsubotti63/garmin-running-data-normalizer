@@ -109,6 +109,8 @@ def normalize_vo2max(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
     for asset in selected:
         name = (asset.member_path or asset.source_path).split("/")[-1].lower()
         for raw in load_rows(asset):
+            if left_out.add_mark(raw):
+                continue
             series = vo2max_series(raw, name)
             date = daily_calendar_date(raw.get("calendarDate"))
             value = number(raw.get("vo2MaxValue"))

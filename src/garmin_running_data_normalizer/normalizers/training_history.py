@@ -54,6 +54,8 @@ def normalize_training_history(
     left_out = RowsLeftOut(value_source_names(TRAINING_HISTORY_VALUE_SOURCES))
     timestamp_semantics: Counter[str] = Counter()
     for raw in rows:
+        if left_out.add_mark(raw):
+            continue
         date = daily_calendar_date(raw.get("calendarDate"))
         timestamp, semantics = normalize_observation_timestamp(raw.get("timestamp"))
         # Copies within one Snapshot count as in a one-shot run (stage A3b).

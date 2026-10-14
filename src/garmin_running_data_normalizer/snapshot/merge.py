@@ -34,7 +34,12 @@ from ..intake.source import DAMAGED_ZIP_ERRORS
 from ..intake.roots import MIXED_STORE_MESSAGE, MixedExportsError
 from ..normalizers.activities import activity_key, activity_left_out_reason
 from ..normalizers.daily_metrics import SNAPSHOT_NUMBERS_FIELD, value_source_names
-from ..normalizers.gear import gear_left_out_reason, gear_record_key, link_left_out_reason
+from ..normalizers.gear import (
+    gear_left_out_reason,
+    gear_links,
+    gear_record_key,
+    link_left_out_reason,
+)
 from ..normalizers.performance_metrics import (
     ENDURANCE_VALUE_SOURCES,
     HILL_VALUE_SOURCES,
@@ -51,6 +56,15 @@ from ..normalizers.race_prediction import (
     race_prediction_left_out_reason,
 )
 from ..normalizers.records import SNAPSHOT_PROBE_FIELD
+from ..normalizers.source_records import (
+    DAILY_WRAPPERS,
+    activity_items,
+    container_items,
+    file_items,
+    is_mark,
+    list_items,
+    mark_holds_a_value,
+)
 from ..normalizers.sleep import SLEEP_VALUE_SOURCES, sleep_left_out_reason
 from ..normalizers.training_history import (
     TRAINING_HISTORY_VALUE_SOURCES,
@@ -274,38 +288,6 @@ def _left_out_with_a_value(dataset: str, record: dict[str, Any], logical_name: s
     )
 
 
-def _dict_rows(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    return [item for item in value if isinstance(item, dict)]
-
-
-def _containers(value: Any) -> list[dict[str, Any]]:
-    if isinstance(value, dict):
-        return [value]
-    if isinstance(value, list):
-        return [item for item in value if isinstance(item, dict)]
-    return []
-
-
-def _activity_rows(value: Any) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    if isinstance(value, list):
-        for item in value:
-            rows.extend(_activity_rows(item))
-    elif isinstance(value, dict):
-        exported = value.get("summarizedActivitiesExport")
-        if isinstance(exported, list):
-            rows.extend(item for item in exported if isinstance(item, dict))
-        elif "activityId" in value:
-            rows.append(value)
-        else:
-            for item in value.values():
-                if isinstance(item, (list, dict)):
-                    rows.extend(_activity_rows(item))
-    return rows
-
-
 # A record without a usable identifier, as Run-All reads it, has no stable
 # key: the build passes it to Run-All, which leaves it out (stage A3d-1b).
 
@@ -344,18 +326,6 @@ def _metric_row(dataset: str, row: dict[str, Any]) -> dict[str, Any]:
             "feedbackPhrase",
         )
     return {field: row[field] for field in fields if field in row}
-
-
-def _daily_source_rows(value: Any) -> list[dict[str, Any]]:
-    if isinstance(value, list):
-        return [item for item in value if isinstance(item, dict)]
-    if isinstance(value, dict):
-        for key in ("data", "items", "records", "values", "summaries", "sleepData"):
-            nested = value.get(key)
-            if isinstance(nested, list):
-                return [item for item in nested if isinstance(item, dict)]
-        return [value]
-    return []
 
 
 def _daily_definition(
@@ -543,23 +513,40 @@ def _lactate_row(family: str, row: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+# The marks of the items of a Lactate Threshold file that are not records and
+# of its lists of records that cannot be read (stage A3d-2c-2). They are not
+# candidates: the build writes them for Run-All apart from the candidates.
+LACTATE_MARKS = "lactate_threshold_marks"
+
+
 def _dataset_records(
     logical_name: str,
     payload: Any,
 ) -> list[tuple[str, str, dict[str, Any], tuple[Any, ...] | None]]:
+    """Return the records of one file, by dataset, as Run-All reads them.
+
+    The marks of its items that are not records and of its lists of records
+    that cannot be read (stage A3d-2c-2) are records without a key, passed as
+    they are, so that Run-All counts them as a one-shot run does. A link's
+    mark has no Gear key.
+    """
     lower = logical_name.lower()
     result: list[tuple[str, str, dict[str, Any], tuple[Any, ...] | None]] = []
     if lower.endswith("summarizedactivities.json"):
-        for index, row in enumerate(_activity_rows(payload)):
+        for index, row in enumerate(activity_items(payload)):
             try:
-                key: tuple[Any, ...] | None = (_activity_key(row),)
+                key: tuple[Any, ...] | None = None if is_mark(row) else (_activity_key(row),)
             except ValueError:
                 key = None
             result.append(("activities", str(index), row, key))
     elif lower.endswith("gear.json"):
-        for container_index, container in enumerate(_containers(payload)):
-            for index, row in enumerate(_dict_rows(container.get("gearDTOS"))):
-                gear_key = _gear_key(row)
+        for container_index, container in enumerate(container_items(payload)):
+            if is_mark(container):
+                # An item of the file's top list counts as Gear, as in a run.
+                result.append(("gear", str(container_index), container, None))
+                continue
+            for index, row in enumerate(list_items(container.get("gearDTOS"))):
+                gear_key = None if is_mark(row) else _gear_key(row)
                 result.append(
                     (
                         "gear",
@@ -568,28 +555,29 @@ def _dataset_records(
                         None if gear_key is None else (gear_key,),
                     )
                 )
-            links = container.get("gearActivityDTOs")
-            if isinstance(links, dict):
-                for gear_key in sorted(links, key=str):
-                    for index, row in enumerate(_dict_rows(links[gear_key])):
-                        link_record = {**row, "gearPk": gear_key}
-                        key = (
-                            None
-                            if link_left_out_reason(gear_key, row) is not None
-                            else (gear_key, identifier_value(row.get("activityId")))
-                        )
-                        result.append(
-                            (
-                                "activity_gear",
-                                f"{container_index}:{gear_key}:{index}",
-                                link_record,
-                                key,
-                            )
-                        )
+            links, unreadable = gear_links(container)
+            for row in unreadable:
+                result.append(("activity_gear", f"{container_index}:links", row, None))
+            for gear_key in sorted(links, key=str):
+                for index, row in enumerate(list_items(links[gear_key])):
+                    record_index = f"{container_index}:{gear_key}:{index}"
+                    if is_mark(row):
+                        result.append(("activity_gear", record_index, row, None))
+                        continue
+                    link_record = {**row, "gearPk": gear_key}
+                    key = (
+                        None
+                        if link_left_out_reason(gear_key, row) is not None
+                        else (gear_key, identifier_value(row.get("activityId")))
+                    )
+                    result.append(("activity_gear", record_index, link_record, key))
     elif lower.endswith("personalrecord.json"):
-        for container_index, container in enumerate(_containers(payload)):
-            for index, row in enumerate(_dict_rows(container.get("personalRecords"))):
-                record_key = _personal_record_key(row)
+        for container_index, container in enumerate(container_items(payload)):
+            if is_mark(container):
+                result.append(("personal_records", str(container_index), container, None))
+                continue
+            for index, row in enumerate(list_items(container.get("personalRecords"))):
+                record_key = None if is_mark(row) else _personal_record_key(row)
                 result.append(
                     (
                         "personal_records",
@@ -600,6 +588,9 @@ def _dataset_records(
                 )
     elif PurePosixPath(lower).name.startswith("hillscore"):
         for index, row in enumerate(metric_rows(payload)):
+            if is_mark(row):
+                result.append(("hill_score_daily", str(index), row, None))
+                continue
             record = _metric_row("hill_score_daily", row)
             calendar_date = daily_calendar_date(record.get("calendarDate"))
             if calendar_date is not None:
@@ -614,6 +605,9 @@ def _dataset_records(
             )
     elif PurePosixPath(lower).name.startswith("endurancescore"):
         for index, row in enumerate(metric_rows(payload)):
+            if is_mark(row):
+                result.append(("endurance_score_daily", str(index), row, None))
+                continue
             record = _metric_row("endurance_score_daily", row)
             calendar_date = daily_calendar_date(record.get("calendarDate"))
             if calendar_date is not None:
@@ -628,7 +622,11 @@ def _dataset_records(
             )
     elif (definition := _daily_definition(logical_name)) is not None:
         dataset, fields, source_series = definition
-        for index, row in enumerate(_daily_source_rows(payload)):
+        for index, row in enumerate(file_items(payload, DAILY_WRAPPERS)):
+            if is_mark(row):
+                # Not narrowed to the dataset's fields, and without a series.
+                result.append((dataset, str(index), row, None))
+                continue
             record = {field: row[field] for field in fields if field in row}
             if source_series is not None and "vo2MaxSourceSeries" not in record:
                 record["vo2MaxSourceSeries"] = source_series
@@ -647,7 +645,13 @@ def _dataset_records(
     else:
         lactate_family = _lactate_family(logical_name)
         if lactate_family is not None:
-            for index, row in enumerate(_containers(payload)):
+            # The candidates are read as Run-All reads them (stage A3d-2c-2;
+            # until then, the build read only the top object or the objects
+            # of the top list).
+            for index, row in enumerate(metric_rows(payload)):
+                if is_mark(row):
+                    result.append((LACTATE_MARKS, str(index), row, None))
+                    continue
                 record = _lactate_row(lactate_family, row)
                 measurement_fields = set(record) - {"metaData"}
                 if not measurement_fields:
@@ -1951,7 +1955,7 @@ def build_approved_input(
                     accounts |= payload_accounts(value)
                 if readable and logical_name.lower().endswith("gear.json") and any(
                     isinstance(container.get("gearActivityDTOs"), dict)
-                    for container in _containers(value)
+                    for container in container_items(value)
                 ):
                     link_snapshots.add(acquisition_order)
                 # A JSON file that no dataset reads is kept as an unknown
@@ -1983,8 +1987,12 @@ def build_approved_input(
                     diagnostic_family = dataset_to_family.get(dataset)
                     if diagnostic_family is not None:
                         diagnostic["source_observation_counts"][diagnostic_family] += 1
+                        # A mark that holds a value is left out by Run-All; an
+                        # item that is an empty value is an empty record.
                         malformed = (
-                            _left_out_with_a_value(dataset, record, logical_name)
+                            mark_holds_a_value(record)
+                            if is_mark(record)
+                            else _left_out_with_a_value(dataset, record, logical_name)
                             if dataset in DAILY_VALUE_SOURCE_NAMES
                             else raw_key is None
                         )
@@ -2194,6 +2202,25 @@ def build_approved_input(
                 "unknown",
             )
             lactate_rows[family].append(raw_record)
+        # The marks of the Lactate Threshold files follow the candidates of
+        # their family, each distinct mark once, with the import number of
+        # each Snapshot occurrence, so that Run-All counts them as a one-shot
+        # run of each Export does (stage A3d-2c-2).
+        lactate_marks: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+        for observation in observations_by_dataset.get(LACTATE_MARKS, []):
+            mark_family = str(_lactate_family(str(observation["source_relative_path"])))
+            lactate_marks[(mark_family, _stable_json(observation["record"]))].append(
+                observation
+            )
+        for (family, _signature), marks in sorted(lactate_marks.items()):
+            lactate_rows[family].append(
+                {
+                    **marks[0]["record"],
+                    SNAPSHOT_NUMBERS_FIELD: sorted(
+                        int(item["logical_order"]) for item in marks
+                    ),
+                }
+            )
         lactate_names = {
             "history": "snapshot_userBioMetrics.json",
             "latest_snapshot": "snapshot_bioMetrics_latest.json",

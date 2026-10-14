@@ -8,8 +8,10 @@ from typing import Any
 from .run_all import (
     ACTIVITIES_CSV_DURATION_COLUMNS,
     ACTIVITIES_CSV_FIT_SESSION_COLUMNS,
+    CANDIDATE_ITEMS_LEFT_OUT_MESSAGE,
     DATASET_PATHS,
     DATASET_TABLE,
+    ITEMS_LEFT_OUT_MESSAGE,
     OUTPUT_PATHS,
     RUN_ALL_VERSION,
     SNAPSHOT_LIFECYCLE_PATHS,
@@ -1541,6 +1543,9 @@ def _validate_projection_inputs(
             "summary error count does not match family error counts"
         )
     fit_is_partial = normalized_family_results["fit"]["status"] == "PARTIAL"
+    # A Lactate Threshold candidate item left out, which no family result
+    # counts, bounds the run too (stage A3d-2c-2).
+    rows_left_out = rows_left_out or bool(row_warnings.get("lactate_threshold"))
     # A file left out also bounds the run (stage A3c), and so does a row left
     # out (stage A3d-1).
     files_left_out = any(
@@ -2095,16 +2100,31 @@ def _invalid_values_lines(summary: Mapping[str, Any]) -> list[str]:
 
 def _rows_left_out_lines(summary: Mapping[str, Any]) -> list[str]:
     """Count the rows left out because they lack a required value (stage
-    A3d-1) or a usable identifier (stage A3d-1b)."""
+    A3d-1) or a usable identifier (stage A3d-1b), and the items left out that
+    are not records or lists of records that cannot be read (stage A3d-2c-2)."""
     counts: dict[str, int] = {}
+    items_left_out = False
     for item in summary.get("warnings", []):
         if isinstance(item, Mapping) and item.get("code") == "DATA_ROW_LEFT_OUT":
-            counts[str(item.get("dataset"))] = _non_negative_integer(
+            # The Lactate Threshold candidates are no dataset; their family names them.
+            name = str(item.get("dataset") or item.get("family"))
+            counts[name] = counts.get(name, 0) + _non_negative_integer(
                 item.get("count"), "rows left out"
+            )
+            items_left_out = items_left_out or item.get("message") in (
+                ITEMS_LEFT_OUT_MESSAGE,
+                CANDIDATE_ITEMS_LEFT_OUT_MESSAGE,
             )
     if not counts:
         return []
     tables = ", ".join(f"{_code(dataset)} {count}" for dataset, count in counts.items())
+    if items_left_out:
+        return [
+            f"- Rows left out: {sum(counts.values())} ({tables}), which lack a "
+            "required value, such as a date or a usable identifier, or are items "
+            "that are not records or lists of records that cannot be read; the "
+            "audit records count them by reason"
+        ]
     return [
         f"- Rows left out: {sum(counts.values())} ({tables}), which lack a required "
         "value, such as a date or a usable identifier; each dataset's audit record "

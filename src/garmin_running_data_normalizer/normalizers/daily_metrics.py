@@ -10,6 +10,7 @@ from typing import Any, Callable, Iterable
 
 from ..common.values import InvalidValues, is_empty, read_value
 from ..intake.discovery import DiscoveredAsset, parse_json_asset
+from .source_records import DAILY_WRAPPERS, MARK_FIELD, file_items, is_mark, mark_holds_a_value
 
 
 class DailyMetricError(ValueError):
@@ -34,15 +35,9 @@ def load_rows(asset: DiscoveredAsset) -> list[dict[str, Any]]:
     readable, value = parse_json_asset(asset)
     if not readable:
         return []
-    if isinstance(value, list):
-        return [item for item in value if isinstance(item, dict)]
-    if isinstance(value, dict):
-        for key in ("data", "items", "records", "values", "summaries", "sleepData"):
-            nested = value.get(key)
-            if isinstance(nested, list):
-                return [item for item in nested if isinstance(item, dict)]
-        return [value]
-    return []
+    # Items that are not objects and a value of another form in the place
+    # of the list are marks, which the normalizers count (stage A3d-2c-2).
+    return file_items(value, DAILY_WRAPPERS)
 
 
 def selected_rows(
@@ -149,6 +144,20 @@ class RowsLeftOut:
             self.reasons[reason] += 1 + copies
         else:
             self.empty_record_count += 1 + copies
+
+    def add_mark(self, raw: dict[str, Any]) -> bool:
+        """Count a mark of the file's records (stage A3d-2c-2): one that
+        holds a value is left out with its reason, and an item that is an
+        empty value is an empty record. Return whether the row is a mark."""
+        if not is_mark(raw):
+            return False
+        copies = copies_within_snapshots(snapshot_numbers(raw))
+        self.copy_count += copies
+        if mark_holds_a_value(raw):
+            self.reasons[str(raw[MARK_FIELD])] += 1 + copies
+        else:
+            self.empty_record_count += 1 + copies
+        return True
 
 
 def _value_order(item: tuple[str, list[Any]]) -> tuple[int, float, str]:
