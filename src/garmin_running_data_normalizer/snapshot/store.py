@@ -41,8 +41,10 @@ from ..intake.source import (
     CorruptArchiveError,
     ExportFile,
     ExportTooLargeError,
+    InputNotReadableError,
     TempSpaceError,
     is_zip_input,
+    walk_paths,
 )
 from .policies import CONTRACT_VERSION, REGISTRY_VERSION
 
@@ -514,12 +516,26 @@ def _open_snapshot_input(source: Path) -> Iterator[OpenedExport]:
     Raises ``MixedExportsError`` when the input holds different Exports.
     """
     if not is_zip_input(source):
-        for path in source.rglob("*"):
+        # A folder that this app may not open stops the registration, as it
+        # stops a run, instead of a Snapshot without its files (stage A3d-3a).
+        try:
+            paths, not_opened = walk_paths(source)
+        except FileNotFoundError as exc:
+            raise SnapshotStoreError("snapshot input changed during completeness scan") from exc
+        for path in paths:
             if path.is_symlink():
                 raise SnapshotStoreError("symbolic links are prohibited in snapshot input")
+        if not_opened:
+            raise InputNotReadableError(
+                ["" if path == source else path.relative_to(source).as_posix() for path in not_opened]
+            )
     with ExitStack() as stack:
         try:
             opened = stack.enter_context(open_export(source))
+        except InputNotReadableError:
+            raise
+        except PermissionError as exc:
+            raise InputNotReadableError([""]) from exc
         except (BadZipFile, OSError, UnsafeArchiveError) as exc:
             raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc
         yield opened
@@ -547,6 +563,8 @@ def _scan_members(
         return ZIP_TOO_LARGE
     except (CorruptArchiveError, ExportTooLargeError, TempSpaceError):
         raise
+    except PermissionError as exc:
+        raise InputNotReadableError([export.place_of(item)]) from exc
     except (BadZipFile, OSError, UnsafeArchiveError) as exc:
         raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc
     members: list[dict[str, Any]] = []
@@ -588,6 +606,8 @@ def _scan_members(
         return ZIP_TOO_LARGE
     except UnsafeArchiveError:
         return ZIP_UNSAFE_MEMBER
+    except PermissionError as exc:
+        raise InputNotReadableError([export.place_of(item)]) from exc
     except OSError as exc:
         raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc
     inventory.extend(members)
@@ -626,13 +646,18 @@ def _scan_source(
                 data = export.read(item)
             except UnsafeArchiveError:
                 data = None
+            except PermissionError as exc:
+                raise InputNotReadableError([export.place_of(item)]) from exc
             if data is not None:
                 accounts |= account_values([(relative, data)])
         if item.path is not None:
             path = item.path
-            before = (path.stat().st_size, path.stat().st_mtime_ns)
-            digest = sha256_file(path)
-            after = (path.stat().st_size, path.stat().st_mtime_ns)
+            try:
+                before = (path.stat().st_size, path.stat().st_mtime_ns)
+                digest = sha256_file(path)
+                after = (path.stat().st_size, path.stat().st_mtime_ns)
+            except PermissionError as exc:
+                raise InputNotReadableError([export.place_of(item)]) from exc
             if before != after:
                 raise SnapshotStoreError("snapshot input changed during completeness scan")
             byte_count = before[0]

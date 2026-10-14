@@ -35,8 +35,17 @@ from .intake.roots import MIXED_INPUT_MESSAGE, OUTSIDE_EXPORT_ROOT, MixedExports
 from .intake.source import (
     CorruptArchiveError,
     ExportTooLargeError,
+    InputNotReadableError,
     TempSpaceError,
     is_zip_input,
+)
+from .output_location import (
+    MESSAGES as OUTPUT_LOCATION_MESSAGES,
+    OutputLocationError,
+    check_output_location,
+    output_path_too_long,
+    path_error_code,
+    write_error_code,
 )
 from .normalizers.activities import normalize_activities
 from .normalizers.daily_metrics import DailyMetricError
@@ -90,6 +99,40 @@ SNAPSHOT_LEFT_OUT_MESSAGE = (
 SNAPSHOT_REPAIRED_TEXT_MESSAGE = (
     "the approved Snapshot input holds text that the build should have repaired"
 )
+# A folder or file of the input that this app may not open stops the run
+# (stage A3d-3a); the message names it, only where the run is started.
+INPUT_NOT_READABLE_NEXT_STEP = (
+    "allow this app to read it (on a Mac, in System Settings > Privacy & Security; "
+    "on Windows, in the Security tab of its Properties), or select the Export folder itself"
+)
+INPUT_CHANGED_MESSAGE = (
+    "input assets changed during Run-All processing; run again when the input no longer changes"
+)
+
+
+def input_not_readable_message(places: list[str] | None = None) -> str:
+    """The message of ``INPUT_NOT_READABLE``. With ``places``, for where the
+    run is started, it names the first folder or file that cannot be opened
+    and how many more; without them, it names none."""
+    if places is None:
+        return f"this app may not open a folder or file of the input; {INPUT_NOT_READABLE_NEXT_STEP}"
+    first = places[0] if places and places[0] else "the input folder or ZIP file itself"
+    more = len(places) - 1
+    named = first if more <= 0 else f"{first} and {more} more"
+    return (
+        f"this app may not open a folder or file of the input: {named}; "
+        f"{INPUT_NOT_READABLE_NEXT_STEP}"
+    )
+
+
+def shown_message(exc: RunAllError) -> str:
+    """The message of a Run-All error where the run is started: with the
+    places that cannot be opened, when there are some."""
+    if exc.code == "INPUT_NOT_READABLE" and exc.places is not None:
+        return input_not_readable_message(exc.places)
+    return exc.safe_message
+
+
 REPAIRED_TEXT_MESSAGE = (
     "text with a broken character, such as a truncated emoji, is written with "
     "U+FFFD in its place; run_manifest.json lists the files"
@@ -349,12 +392,18 @@ INCOMPLETE_FIT_STATUSES = {
 
 
 class RunAllError(ValueError):
-    """A fatal Run-All error with a bounded, privacy-safe public message."""
+    """A fatal Run-All error with a bounded, privacy-safe public message.
 
-    def __init__(self, code: str, message: str) -> None:
+    ``places`` name, for ``INPUT_NOT_READABLE``, the folders or files of the
+    input that cannot be opened (stage A3d-3a). They are not part of the
+    message: they are shown only where the run is started.
+    """
+
+    def __init__(self, code: str, message: str, *, places: list[str] | None = None) -> None:
         super().__init__(message)
         self.code = code
         self.safe_message = message
+        self.places = list(places) if places is not None else None
 
 
 def _notify(progress: ProgressCallback | None, stage: str, **details: Any) -> None:
@@ -381,24 +430,69 @@ def _is_within(path: Path, parent: Path) -> bool:
 def _validate_paths(input_path: str | Path, output_path: str | Path) -> tuple[Path, Path]:
     requested_input = Path(input_path)
     requested_output = Path(output_path)
-    if requested_input.is_symlink():
-        raise RunAllError("INPUT_SYMLINK", "input must not be a symbolic link")
-    input_root = requested_input.resolve()
-    if not input_root.is_dir() and not is_zip_input(input_root):
+    # A path that cannot be looked at, such as a name too long for the
+    # system, has a code too (stage A3d-3a).
+    try:
+        if requested_input.is_symlink():
+            raise RunAllError("INPUT_SYMLINK", "input must not be a symbolic link")
+        input_root = requested_input.resolve()
+        is_input = input_root.is_dir() or is_zip_input(input_root)
+    except OSError as exc:
+        if isinstance(exc, PermissionError):
+            raise RunAllError("INPUT_NOT_READABLE", input_not_readable_message(), places=[""]) from exc
+        raise RunAllError("INPUT_NOT_DIRECTORY", "input must be an existing folder or ZIP file") from exc
+    if not is_input:
         raise RunAllError("INPUT_NOT_DIRECTORY", "input must be an existing folder or ZIP file")
-    if requested_output.is_symlink():
-        raise RunAllError("OUTPUT_SYMLINK", "output directory must not be a symbolic link")
-    output_root = requested_output.resolve()
+    output_root = _requested_output(requested_output)
     if _is_within(output_root, input_root):
         raise RunAllError("OUTPUT_INSIDE_INPUT", "output directory must be outside the input directory")
-    if output_root.exists():
-        raise RunAllError("OUTPUT_EXISTS", "output directory must not already exist")
+    _check_output_place(output_root)
     return input_root, output_root
+
+
+def _requested_output(requested_output: Path) -> Path:
+    """Return the output's full path; it must be neither a symbolic link nor
+    there already."""
+    try:
+        if requested_output.is_symlink():
+            raise RunAllError("OUTPUT_SYMLINK", "output directory must not be a symbolic link")
+        output_root = requested_output.resolve()
+        exists = output_root.exists()
+    except OSError as exc:
+        code = path_error_code(requested_output, exc)
+        raise RunAllError(code, OUTPUT_LOCATION_MESSAGES[code]) from exc
+    if exists:
+        raise RunAllError("OUTPUT_EXISTS", "output directory must not already exist")
+    return output_root
+
+
+def _check_output_place(output_root: Path) -> None:
+    """Check the place of the output now, as the GUI checks it, instead of
+    after the whole run (stage A3d-3a)."""
+    try:
+        check_output_location(
+            output_root, lambda parent, name: output_path_too_long(parent, name, OUTPUT_PATHS)
+        )
+    except OutputLocationError as exc:
+        raise RunAllError(exc.code, exc.safe_message) from exc
+
+
+def check_run_output(output_path: str | Path) -> None:
+    """Check the output of a Snapshot run before its build (stage A3d-3a)."""
+    _check_output_place(_requested_output(Path(output_path)))
 
 
 def _input_error(exc: Exception) -> RunAllError:
     if isinstance(exc, MixedExportsError):
         return RunAllError("INPUT_MULTIPLE_EXPORTS", exc.safe_message)
+    # A folder or file that this app may not open, and one that went away
+    # while the input was read (stage A3d-3a).
+    if isinstance(exc, InputNotReadableError):
+        return RunAllError("INPUT_NOT_READABLE", input_not_readable_message(), places=exc.places)
+    if isinstance(exc, PermissionError):
+        return RunAllError("INPUT_NOT_READABLE", input_not_readable_message(), places=[""])
+    if isinstance(exc, (FileNotFoundError, InputChangedError)):
+        return RunAllError("INPUT_CHANGED", INPUT_CHANGED_MESSAGE)
     if isinstance(exc, CorruptArchiveError):
         return RunAllError("INPUT_ZIP_CORRUPT", "the Export ZIP file is damaged or incomplete")
     if isinstance(exc, ExportTooLargeError):
@@ -1673,8 +1767,13 @@ def _publish_outputs(
     manifest: dict[str, Any],
     summary: dict[str, Any],
 ) -> None:
-    output_root.parent.mkdir(parents=True, exist_ok=True)
-    stage = Path(tempfile.mkdtemp(prefix=f".{output_root.name}.run-all-", dir=output_root.parent))
+    try:
+        output_root.parent.mkdir(parents=True, exist_ok=True)
+        stage = Path(
+            tempfile.mkdtemp(prefix=f".{output_root.name}.run-all-", dir=output_root.parent)
+        )
+    except OSError as exc:
+        raise _publish_error(exc) from exc
     try:
         for relative in sorted(payloads):
             _write_exclusive(stage, relative, payloads[relative])
@@ -1688,10 +1787,19 @@ def _publish_outputs(
     except RunAllError:
         raise
     except Exception as exc:
-        raise RunAllError("OUTPUT_PUBLISH_FAILED", "Run-All output could not be published atomically") from exc
+        raise _publish_error(exc) from exc
     finally:
         if stage.exists():
             shutil.rmtree(stage)
+
+
+def _publish_error(exc: BaseException) -> RunAllError:
+    """The code for an output that could not be written: no free space, no
+    permission, or a path too long (stage A3d-3a); otherwise the general one."""
+    code = write_error_code(exc) if isinstance(exc, OSError) else None
+    if code is None:
+        return RunAllError("OUTPUT_PUBLISH_FAILED", "Run-All output could not be published atomically")
+    return RunAllError(code, OUTPUT_LOCATION_MESSAGES[code])
 
 
 def run_all(
@@ -1741,7 +1849,7 @@ def run_all(
         try:
             accounts = asset_accounts(initial_assets)
         except InputChangedError as exc:
-            raise RunAllError("INPUT_CHANGED", "input assets changed during Run-All processing") from exc
+            raise RunAllError("INPUT_CHANGED", INPUT_CHANGED_MESSAGE) from exc
         if len(accounts) > 1:
             raise RunAllError("INPUT_MULTIPLE_EXPORTS", MIXED_INPUT_MESSAGE)
         same_export_count = reading.same_export_count
@@ -1778,11 +1886,15 @@ def run_all(
                 timezone_name=timezone_name,
                 progress=progress,
             )
+        except InputChangedError as exc:
+            # The daily and performance-metric normalizers let it through; it
+            # is a changed input for every family (stage A3d-3a).
+            raise RunAllError("INPUT_CHANGED", INPUT_CHANGED_MESSAGE) from exc
         except RunAllError as exc:
             # A file that changed while it was read stops the run as a changed
             # input, whichever normalizer met it.
             if reading.changed:
-                raise RunAllError("INPUT_CHANGED", "input assets changed during Run-All processing") from exc
+                raise RunAllError("INPUT_CHANGED", INPUT_CHANGED_MESSAGE) from exc
             if exc.code == "ACTIVITIES_EMPTY" and any(
                 item["family"] == "activities"
                 for item in left_out_files(reading.left_out)
@@ -1802,9 +1914,13 @@ def run_all(
         # The files whose text with a lone surrogate was repaired as it was
         # read (stage A3d-2c-1); in a Snapshot run, those that the build
         # repaired, by Snapshot number, as the approved input holds none.
+        try:
+            repaired_files = _repaired_text_files(initial_assets)
+        except InputChangedError as exc:
+            raise RunAllError("INPUT_CHANGED", INPUT_CHANGED_MESSAGE) from exc
         if snapshot_context is None:
-            files_with_repaired_text = _repaired_text_files(initial_assets)
-        elif _repaired_text_files(initial_assets):
+            files_with_repaired_text = repaired_files
+        elif repaired_files:
             raise RunAllError("SNAPSHOT_CONTEXT_INVALID", SNAPSHOT_REPAIRED_TEXT_MESSAGE)
         else:
             files_with_repaired_text = list(
@@ -1841,7 +1957,7 @@ def run_all(
 
     _notify(progress, "verifying_input")
     if changed_while_reading or _input_snapshot(input_root) != initial_snapshot:
-        raise RunAllError("INPUT_CHANGED", "input assets changed during Run-All processing")
+        raise RunAllError("INPUT_CHANGED", INPUT_CHANGED_MESSAGE)
     _notify(progress, "building_output")
 
     record_audits = _record_audits(

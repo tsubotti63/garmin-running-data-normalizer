@@ -8,21 +8,26 @@ Windows, then terminates and finally kills the child if it does not stop.
 """
 from __future__ import annotations
 
-import errno
 import json
-import ntpath
 import os
 import re
 import signal
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import IO, Any
 
+from ..output_location import (
+    WINDOWS_MAX_FILE_PATH,
+    WINDOWS_MAX_FOLDER_PATH,
+    OutputLocationError,
+    check_output_location,
+)
+from ..output_location import long_paths_enabled as _long_paths_enabled
+from ..output_location import windows_paths_too_long as _windows_paths_too_long
 from ..run_all import OUTPUT_PATHS, PROGRESS_STAGES, PROGRESS_STEPS
 from .run_worker import FAMILY_COUNT_FIELDS
 
@@ -48,12 +53,6 @@ INVALID_NAME_CHARACTERS = frozenset('<>:"/\\|?*')
 # file by 29. Many file systems allow 255 bytes in one name, so 200 bytes leave
 # room on every system.
 MAX_OUTPUT_NAME_BYTES = 200
-# Without long paths, Windows limits a file path to 259 characters and a folder
-# path to 247, which leaves room for an 8.3 name. Both count UTF-16 units.
-WINDOWS_MAX_FILE_PATH = 260
-WINDOWS_MAX_FOLDER_PATH = 248
-# Run-All's staging folder is ".<name>.run-all-" and 8 random characters.
-STAGING_SUFFIX_LENGTH = len(".run-all-") + 8
 
 
 class RunRequestError(ValueError):
@@ -81,41 +80,9 @@ def absolute_path(value: Any, code: str) -> Path:
     return path
 
 
-def _long_paths_enabled() -> bool:
-    """Return whether Windows accepts long paths; assume not when unknown."""
-    try:
-        import winreg
-
-        with winreg.OpenKey(
-            winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\FileSystem"
-        ) as key:
-            value, _ = winreg.QueryValueEx(key, "LongPathsEnabled")
-    except (ImportError, OSError):
-        return False
-    return value == 1
-
-
-def _utf16_length(text: str) -> int:
-    return len(text.encode("utf-16-le", "surrogatepass")) // 2
-
-
 def windows_paths_too_long(parent: str, name: str) -> bool:
-    """Return whether Run-All's deepest paths for this output exceed MAX_PATH.
-
-    The paths are those inside the staging folder, which is longer than the
-    output folder; the write check and the Support Bundle's temporary file are
-    shorter. ``parent`` is measured in its absolute Windows form.
-    """
-    base = ntpath.abspath(parent)
-    if base.startswith("\\\\?\\"):
-        return False  # Such paths have no MAX_PATH limit.
-    staging = _utf16_length(ntpath.join(base, f".{name}")) + STAGING_SUFFIX_LENGTH
-    longest_file = max(len(path) for path in OUTPUT_PATHS)
-    longest_folder = max(len(path.rsplit("/", 1)[0]) for path in OUTPUT_PATHS if "/" in path)
-    return (
-        staging + 1 + longest_file >= WINDOWS_MAX_FILE_PATH
-        or staging + 1 + longest_folder >= WINDOWS_MAX_FOLDER_PATH
-    )
+    """Return whether Run-All's deepest paths for this output exceed MAX_PATH."""
+    return _windows_paths_too_long(parent, name, OUTPUT_PATHS)
 
 
 def output_path_too_long(parent: Path, name: str) -> bool:
@@ -146,6 +113,27 @@ def validate_output_name(name: Any) -> str:
     ):
         raise RunRequestError("OUTPUT_NAME_INVALID")
     return name
+
+
+# The longest place inside the input that a failed run may name.
+MAX_PLACE_LENGTH = 4096
+
+
+def _valid_detail(message: dict[str, Any]) -> dict[str, Any] | None:
+    """Return where the input cannot be opened, as the worker named it, or
+    None (stage A3d-3a). It goes to the page only, never to a log."""
+    place = message.get("place")
+    more = message.get("more")
+    if (
+        not isinstance(place, str)
+        or len(place) > MAX_PLACE_LENGTH
+        or any(ord(character) < 32 for character in place)
+        or not isinstance(more, int)
+        or isinstance(more, bool)
+        or more < 0
+    ):
+        return None
+    return {"place": place, "more": more}
 
 
 def _process_group_options() -> dict[str, Any]:
@@ -246,6 +234,7 @@ class _Run:
         self.progress: dict[str, Any] = {}
         self.result: dict[str, Any] | None = None
         self.error_code: str | None = None
+        self.error_detail: dict[str, Any] | None = None
         self.cancel_requested = False
         self.reported_cancel = False
         self.staging_folders: list[str] = []
@@ -310,21 +299,13 @@ class RunManager:
             raise RunRequestError("OUTPUT_SYMLINK")
         if output.exists():
             raise RunRequestError("OUTPUT_EXISTS")
-        if output_path_too_long(parent, name):
-            raise RunRequestError("OUTPUT_PATH_TOO_LONG")
         # Run-All writes to the parent only at the end, by creating a staging
         # folder there; try the same now instead of failing after a long run.
+        # Run-All makes the same check (stage A3d-3a).
         try:
-            probe = tempfile.mkdtemp(prefix=f".{name}.write-check-", dir=parent)
-        except OSError as exc:
-            if exc.errno == errno.ENAMETOOLONG:
-                # A shorter name fixes this; the parent may well be writable.
-                raise RunRequestError("OUTPUT_NAME_INVALID") from exc
-            raise RunRequestError("OUTPUT_PARENT_NOT_WRITABLE") from exc
-        try:
-            os.rmdir(probe)
-        except OSError:
-            pass  # At most an empty folder whose name starts with a dot remains.
+            check_output_location(output, output_path_too_long)
+        except OutputLocationError as exc:
+            raise RunRequestError(exc.code) from exc
         command = [
             *self._prefix,
             f"--input={input_path}",
@@ -366,6 +347,7 @@ class RunManager:
                 "output_path": str(run.output),
                 "result": json.loads(json.dumps(run.result)) if run.result else None,
                 "error_code": run.error_code,
+                **({"error_detail": dict(run.error_detail)} if run.error_detail else {}),
                 "staging_folders": list(run.staging_folders),
             }
 
@@ -449,6 +431,7 @@ class RunManager:
             code = message.get("code")
             if isinstance(code, str) and CODE.fullmatch(code):
                 run.error_code = code
+                run.error_detail = _valid_detail(message)
         elif event == "cancelled":
             run.reported_cancel = True
 

@@ -488,6 +488,34 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     passes and the run stops with `ACTIVITIES_EMPTY`.
   - A damaged Export ZIP file stops the run (`INPUT_ZIP_CORRUPT`); see
     [An Export given as a ZIP file](#an-export-given-as-a-zip-file).
+  - A folder or file of the input that this app may not open, such as a
+    folder that the operating system's privacy settings protect, is not a
+    problem of the data: its records would be missing without a word. From
+    stage A3d-3a it stops the run, the pre-run check, `normalize-activities`,
+    and `snapshot register` with `INPUT_NOT_READABLE` (exit 2), and so do the
+    input itself and its Activities folder when they cannot be opened
+    (until then `INPUT_DISCOVERY_FAILED` and `ACTIVITIES_NOT_FOUND`). Until
+    stage A3d-3a, such a folder was passed over without a word, as Python's
+    `Path.rglob` passes over it, and its family was reported as not present.
+    - The CLI's message names the first folder or file that cannot be opened,
+      by its path inside the input, and how many more there are; the GUI's
+      page names them in the same way. The pre-run check, the run's outputs,
+      the Support Bundle, the server's log, and the error's message itself
+      never name them.
+    - The next step: allow this app to read the input (on a Mac, in System
+      Settings > Privacy & Security; on Windows, in the Security tab of the
+      folder's Properties), or select the Export folder itself.
+    - The folders that an operating system keeps at the top of a drive and
+      that its users may not open (`System Volume Information`,
+      `$RECYCLE.BIN`, `.Spotlight-V100`, `.Trashes`, `.fseventsd`,
+      `.TemporaryItems`, and `.DocumentRevisions-V100`), directly in the
+      selected folder, and the folders of Finder's and AppleDouble's
+      metadata (`__MACOSX`) at any depth, are passed over as before when
+      they cannot be opened: they never hold an Export, and a drive that
+      holds an Export can be selected. Deeper in the input, a folder with
+      one of those names stops the run like any other folder.
+    - A file or folder that goes away while the input is read is a changed
+      input (`INPUT_CHANGED`).
   - `normalize-activities` reads only Activities files, and its output has
     no list of left-out files, so it stops when an Activities file cannot be
     read, instead of leaving its records out; the other files that cannot be
@@ -1012,7 +1040,48 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
 
 ### Stops that remain
 
-The run stops with exit 2 and publishes no output for:
+The run stops with exit 2 and publishes no output for the problems below.
+From stage A3d-3a, each has a code and a next step, in the CLI and the GUI
+alike, and the CLI checks the place of the output before it reads the input,
+as the GUI does, instead of after the whole run:
+
+| Problem | Code | Next step |
+|---|---|---|
+| The place for the output is not a folder | `OUTPUT_PARENT_NOT_FOUND` | Choose an existing folder |
+| This app cannot write there | `OUTPUT_PARENT_NOT_WRITABLE` | Choose another folder, or allow writing |
+| No free space there | `OUTPUT_SPACE_INSUFFICIENT` | Free some space, or choose another folder |
+| The output name is too long | `OUTPUT_NAME_INVALID` | Choose a shorter name |
+| The output path is too long | `OUTPUT_PATH_TOO_LONG` | Choose a shorter folder or name; on Windows, or turn on long paths |
+| A folder or file of the input cannot be opened | `INPUT_NOT_READABLE` | Allow this app to read it, or select the Export folder itself |
+| The input changed during the run, for every family | `INPUT_CHANGED` | Run again when it no longer changes |
+
+- The place of the output is checked by creating a hidden folder in it and
+  removing it at once, as the staging folder will be created; folders above
+  the output that are missing are still made only when the output is
+  written. A write that fails at the end gives the same codes; another
+  failure is `OUTPUT_PUBLISH_FAILED`, as before. One rule tells that a disk
+  has no free space, for the output and the temporary folder alike.
+- `snapshot run-all` checks its output before it builds the Snapshots, which
+  can take long.
+- `normalize-activities` (the Golden Path) gives every stop a code, with
+  Run-All's code for the same problem: the problems above, `INPUT_SYMLINK`,
+  `INPUT_NOT_DIRECTORY`, `OUTPUT_SYMLINK`, `OUTPUT_INSIDE_INPUT`,
+  `OUTPUT_EXISTS`, `ACTIVITIES_NOT_FOUND`, `ACTIVITIES_EMPTY`,
+  `PROVENANCE_MISMATCH`, and `OUTPUT_CONTRACT_INVALID`. The problems in the
+  data that Run-All reports and goes on with, which its output has no place
+  for (an Activities file that cannot be read, a row without a usable
+  identifier, an item that is not a record, a value of another form, and
+  text with a broken character), stop it with `GOLDEN_PATH_DATA_NEEDS_RUN_ALL`
+  and a message that names the problem; the next step is `run-all`. It
+  writes its output in a staging folder first, as Run-All does, so a stop
+  leaves no part of an output; an empty output folder that is there already
+  keeps its permissions. Until stage A3d-3a, it printed `ERROR: ...`
+  without a code and could leave some of its files.
+- An error that no code describes stops with `RUN_ALL_FAILED` (Run-All),
+  `GOLDEN_PATH_FAILED` (the Golden Path), or `COMMAND_FAILED` (the other
+  commands, which said "Golden Path failed" until stage A3d-3a).
+
+The problems:
 
 - Safety: members of the Export ZIP file that fail a safety check (paths
   outside the folder, links, encryption, or a compression ratio over the
@@ -1179,7 +1248,17 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   change, except that Snapshot outputs give the merge rules version v2.9.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
-  and `SNAPSHOT_STORE_LOCKED` (provisional name).
+  `INPUT_NOT_READABLE`, `OUTPUT_SPACE_INSUFFICIENT`,
+  `GOLDEN_PATH_DATA_NEEDS_RUN_ALL`, `GOLDEN_PATH_FAILED`, and
+  `COMMAND_FAILED` (stage A3d-3a), and `SNAPSHOT_STORE_LOCKED` (provisional
+  name). From stage A3d-3a, Run-All and the Golden Path also give the codes
+  for the place of the output that only the GUI gave until then
+  (`OUTPUT_PARENT_NOT_FOUND`, `OUTPUT_PARENT_NOT_WRITABLE`,
+  `OUTPUT_NAME_INVALID`, and `OUTPUT_PATH_TOO_LONG`); see
+  [Stops that remain](#stops-that-remain). The pre-run check gains the
+  finding `INPUT_NOT_READABLE`, and the GUI's run status gains
+  `error_detail`, which names, for `INPUT_NOT_READABLE`, the first place
+  that cannot be opened and how many more.
 - Warnings carry codes and counts only: no paths, values, or identifiers.
   Snapshots are named by number. User labels for Snapshots appear only in
   local output and never in the Support Bundle or the External-safe Pack.
@@ -1468,7 +1547,15 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   cancellation. `normalize-activities` stops on an Activities row without a
   usable identifier, which v1.7.1 wrote with a key made from the value when
   the value had an invalid form, and on an Activities value of a form that
-  its field does not take, which v1.7.1 wrote as it was.
+  its field does not take, which v1.7.1 wrote as it was. From stage A3d-3a,
+  `run-all` and `normalize-activities` check the place of the output before
+  they read the input; stops that said `RUN_ALL_FAILED`,
+  `INPUT_DISCOVERY_FAILED`, `ACTIVITIES_NOT_FOUND`, or "Golden Path failed"
+  give their own codes (see [Stops that remain](#stops-that-remain));
+  `normalize-activities` prints `ERROR [CODE]: ...` and leaves no part of an
+  output when it stops; and a folder of the input that this app may not
+  open, which v1.7.1 passed over and finished with exit 0, stops with
+  `INPUT_NOT_READABLE` (exit 2).
 - Python API: `DiscoveredAsset` is a plain class instead of a frozen
   dataclass. Its fields, its constructor, and the content that
   `discover_export` returns are unchanged, but dataclass equality, hashing,
@@ -1507,6 +1594,13 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   that is an empty value under `EMPTY_RECORD` (`normalizers.records`), and
   without the counter raise `ValueError` for one that is not an empty
   value, which v1.7.1 passed over, or for which it raised `TypeError`.
+  From stage A3d-3a, `read_export` and the other readers of an Export raise
+  `InputNotReadableError` (`intake.source`, with the places inside the
+  input) for a folder or file that this app may not open; `walk_paths` and
+  `is_disk_full` in `intake.source` and the module `output_location` are
+  new; `RunAllError` takes the keyword `places`; `GoldenPathError` takes a
+  code as its second argument and has `code`; and `run_snapshot_all`
+  checks its output before the build.
 - Schema: the fields that a disagreement can leave empty are nullable (the
   Hill and Endurance `overall_score`, the four Race Prediction times,
   `vo2max`, and `training_status`), and so is `personal_records.activity_id`

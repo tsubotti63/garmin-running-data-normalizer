@@ -11,12 +11,18 @@ that folder, in a ZIP file and in a folder alike and at any depth.
 Files are read one at a time and are not kept. A ZIP file inside an Export ZIP
 file is copied, when it is first used, to a private temporary folder, and stays
 open until the Export is closed; a ZIP file inside a folder is opened in place.
+
+A folder or file of the input that this app may not open, such as a folder
+that the operating system's privacy settings protect, stops the reading with
+``InputNotReadableError`` (stage A3d-3a): its records would otherwise be
+missing without a word, as ``Path.rglob`` passes over such a folder.
 """
 
 from __future__ import annotations
 
 import errno
 import hashlib
+import os
 import shutil
 import tempfile
 import zlib
@@ -59,6 +65,37 @@ class TempSpaceError(Exception):
     files inside an Export ZIP file."""
 
 
+class InputNotReadableError(Exception):
+    """Raised when this app may not open a folder or a file of the input.
+
+    ``places`` are their paths inside the input, as the Export's files are
+    named, sorted; "" is the input itself. They are shown only where the run
+    is started, never written to an output.
+    """
+
+    def __init__(self, places: list[str]) -> None:
+        super().__init__("a folder or file of the input cannot be opened")
+        self.places = sorted(set(places))
+
+
+# Folders that an operating system keeps at the top of a drive and that its
+# users may not open; they never hold an Export. One of them directly in the
+# input that cannot be opened is passed over, as before stage A3d-3a, instead
+# of stopping a run whose input is a drive that also holds an Export; deeper
+# in the input, a folder of such a name is like any other.
+SYSTEM_FOLDER_NAMES = frozenset(
+    {
+        "System Volume Information",
+        "$RECYCLE.BIN",
+        ".Spotlight-V100",
+        ".Trashes",
+        ".fseventsd",
+        ".TemporaryItems",
+        ".DocumentRevisions-V100",
+    }
+)
+
+
 def is_zip_input(path: Path) -> bool:
     """Return whether ``path`` is a ZIP file given as the Export (not a folder)."""
     return path.is_file() and path.suffix.lower() == ".zip"
@@ -70,9 +107,55 @@ def is_layout_folder(name: str) -> bool:
     return lower in _LAYOUT_FOLDERS or lower.startswith(_LAYOUT_FOLDER_PREFIX)
 
 
-def _is_disk_full(error: OSError) -> bool:
+def is_disk_full(error: OSError) -> bool:
+    """Return whether an error means that a disk has no free space left.
+
+    One rule for the temporary folder, the output, and the Snapshot Store.
+    """
     # ERROR_HANDLE_DISK_FULL and ERROR_DISK_FULL on Windows.
     return error.errno == errno.ENOSPC or getattr(error, "winerror", None) in (39, 112)
+
+
+_is_disk_full = is_disk_full
+
+
+def walk_paths(base: Path) -> tuple[list[Path], list[Path]]:
+    """Return every path under ``base`` as ``base.rglob("*")`` lists them,
+    without following a symbolic link to a folder, and the folders that could
+    not be opened, which ``rglob`` passes over without a word.
+
+    Passed over as before when they cannot be opened: the folders of
+    ``SYSTEM_FOLDER_NAMES`` directly in ``base``, and the folders of Finder's
+    and AppleDouble's metadata at any depth. A folder that went away while
+    it was listed raises ``FileNotFoundError``: the input changed.
+    """
+    paths: list[Path] = []
+    not_opened: list[Path] = []
+    pending = [base]
+    while pending:
+        folder = pending.pop()
+        try:
+            with os.scandir(folder) as entries:
+                children = list(entries)
+        except FileNotFoundError:
+            raise
+        except OSError:
+            if folder.parent == base and folder.name in SYSTEM_FOLDER_NAMES:
+                continue
+            if folder != base and is_os_metadata_path(folder.name):
+                continue
+            not_opened.append(folder)
+            continue
+        for entry in children:
+            path = folder / entry.name
+            paths.append(path)
+            try:
+                descend = entry.is_dir(follow_symlinks=False)
+            except OSError:
+                descend = False
+            if descend:
+                pending.append(path)
+    return paths, not_opened
 
 
 @dataclass(frozen=True)
@@ -138,12 +221,30 @@ class ExportSource:
     def files(self) -> list[ExportFile]:
         return list(self._files)
 
+    def _place(self, path: Path) -> str:
+        """The path of a folder or file inside the input; "" is the input itself."""
+        relative = path.relative_to(self.root).as_posix()
+        return "" if relative == "." else relative
+
+    def place_of(self, item: ExportFile) -> str:
+        """The path of one Export file inside the input, as a folder or ZIP
+        file that cannot be opened is named (stage A3d-3a)."""
+        if item.path is not None:
+            return self._place(item.path)
+        assert item.member is not None
+        return item.member.filename
+
     def _folder_files(self) -> list[ExportFile]:
         base = self.root
         while True:
-            children = [
-                child for child in base.iterdir() if not is_os_metadata_path(child.name)
-            ]
+            try:
+                children = [
+                    child for child in base.iterdir() if not is_os_metadata_path(child.name)
+                ]
+            except FileNotFoundError:
+                raise
+            except OSError as exc:
+                raise InputNotReadableError([self._place(base)]) from exc
             if not (
                 len(children) == 1
                 and children[0].is_dir()
@@ -152,16 +253,25 @@ class ExportSource:
             ):
                 break
             base = children[0]
+        paths, not_opened = walk_paths(base)
         files: list[ExportFile] = []
-        for path in sorted(
-            candidate for candidate in base.rglob("*") if candidate.is_file()
-        ):
-            relative = path.relative_to(base).as_posix()
-            if path.is_symlink():
-                raise ValueError(f"symbolic-link inputs are not supported: {relative}")
-            if is_os_metadata_path(relative):
+        for path in sorted(paths):
+            try:
+                if not path.is_file():
+                    continue
+                relative = path.relative_to(base).as_posix()
+                if path.is_symlink():
+                    raise ValueError(f"symbolic-link inputs are not supported: {relative}")
+                if is_os_metadata_path(relative):
+                    continue
+                size = path.stat().st_size
+            except PermissionError:
+                # A file in a folder that may be listed but not entered.
+                not_opened.append(path)
                 continue
-            files.append(ExportFile(relative, path.stat().st_size, path=path))
+            files.append(ExportFile(relative, size, path=path))
+        if not_opened:
+            raise InputNotReadableError([self._place(path) for path in not_opened])
         return files
 
     def _zip_files(self) -> list[ExportFile]:
@@ -172,6 +282,8 @@ class ExportSource:
                 for info in self._archive.infolist()
                 if is_safe_export_member(info)
             ]
+        except PermissionError as exc:
+            raise InputNotReadableError([""]) from exc
         except DAMAGED_ZIP_ERRORS as exc:
             raise CorruptArchiveError("the Export ZIP file is damaged or incomplete") from exc
         names = [PurePosixPath(info.filename).parts for info in members]
@@ -326,7 +438,11 @@ __all__ = [
     "ExportFile",
     "ExportSource",
     "ExportTooLargeError",
+    "InputNotReadableError",
+    "SYSTEM_FOLDER_NAMES",
     "TempSpaceError",
+    "is_disk_full",
     "is_layout_folder",
     "is_zip_input",
+    "walk_paths",
 ]

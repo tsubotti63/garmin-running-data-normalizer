@@ -32,12 +32,19 @@ def run_snapshot_all(
     timezone_name: str = DEFAULT_TIMEZONE,
 ) -> dict[str, Any]:
     """Build an approved cumulative input and run the existing Run-All pipeline."""
-    from ..run_all import ACTIVITIES_NOT_READABLE_MESSAGE, RunAllError, run_all
+    from ..run_all import (
+        ACTIVITIES_NOT_READABLE_MESSAGE,
+        RunAllError,
+        check_run_output,
+        run_all,
+    )
 
     try:
         timezone_name = resolve_timezone_name(timezone_name)
     except (TimezoneDataUnavailableError, TimezoneNameInvalidError) as exc:
         raise RunAllError(exc.code, exc.safe_message) from exc
+    # The output is checked before the build, which can take long (stage A3d-3a).
+    check_run_output(output_root)
     verification = verify_store(store_root)
     if verification["status"] != "PASS":
         raise SnapshotMergeError("snapshot store verification failed")

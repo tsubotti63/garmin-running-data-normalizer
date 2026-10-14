@@ -525,7 +525,7 @@ class NoActivitiesLeftTest(unittest.TestCase):
             self.assertEqual(run_activities(source, root / "with-broken-zip")["status"], "PASS")
             write(source / "DI-Connect-Fitness/other_summarizedActivities.json", NOT_JSON)
             with self.assertRaisesRegex(
-                GoldenPathError, "^an Activities file could not be read; obtain a complete, readable Export$"
+                GoldenPathError, "^an Activities file could not be read; run-all leaves it out and lists it, or obtain a complete, readable Export$"
             ):
                 run_activities(source, root / "with-unreadable-activities")
 
