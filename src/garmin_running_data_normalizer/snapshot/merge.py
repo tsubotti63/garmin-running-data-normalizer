@@ -445,13 +445,26 @@ def _metric_row(dataset: str, row: dict[str, Any]) -> dict[str, Any]:
     return {field: row[field] for field in fields if field in row}
 
 
+def _object_name(source: dict[str, Any]) -> str:
+    """Return the name by which the build tells a stored file, as a one-shot
+    run tells it: its path in the Export, and for a member of a ZIP file its
+    name within the ZIP file (stage A3d-4c-1)."""
+    return str(source.get("archive_member_path") or source["relative_path"])
+
+
 def _daily_definition(
-    logical_name: str,
+    family: str,
+    name: str,
 ) -> tuple[str, tuple[str, ...], str | None] | None:
-    name = PurePosixPath(logical_name).name.lower()
+    """Return the dataset, the fields, and the series of the records of a
+    daily file of this family. The family is told as a one-shot run tells it
+    (stage A3d-4c-1); the series of a VO2max file, by the beginning of its
+    name, as Run-All takes it."""
+    basename = PurePosixPath(name.replace("\\", "/")).name.lower()
     definitions = (
         (
-            "runracepredictions",
+            "race_prediction",
+            None,
             "race_prediction_daily",
             (
                 "calendarDate", "timestamp", "raceTime5K", "raceTime10K",
@@ -460,7 +473,8 @@ def _daily_definition(
             None,
         ),
         (
-            "sleepdata.json",
+            "sleep",
+            None,
             "sleep_daily",
             (
                 "calendarDate", "sleepStartTimestampGMT", "sleepEndTimestampGMT",
@@ -473,7 +487,8 @@ def _daily_definition(
             None,
         ),
         (
-            "udsfile",
+            "uds",
+            None,
             "uds_daily",
             (
                 "calendarDate", "date", "totalSteps", "steps", "totalDistanceMeters",
@@ -484,7 +499,8 @@ def _daily_definition(
             None,
         ),
         (
-            "metricsacutetrainingload",
+            "acute_training_load",
+            None,
             "acute_training_load_daily",
             (
                 "calendarDate", "acwrPercent", "acwrStatus", "dailyTrainingLoadAcute",
@@ -493,7 +509,8 @@ def _daily_definition(
             None,
         ),
         (
-            "trainingreadinessdto",
+            "training_readiness",
+            None,
             "training_readiness_daily",
             (
                 "calendarDate", "score", "level", "recoveryTime", "acwrFactorPercent",
@@ -504,6 +521,7 @@ def _daily_definition(
             None,
         ),
         (
+            "vo2max",
             "activityvo2max",
             "vo2max_daily",
             (
@@ -514,6 +532,7 @@ def _daily_definition(
             "activity_vo2max_daily",
         ),
         (
+            "vo2max",
             "metricsmaxmetdata",
             "vo2max_daily",
             # The activity is kept as a one-shot run reads it (merge rules
@@ -526,6 +545,7 @@ def _daily_definition(
             "performance_metrics_daily",
         ),
         (
+            "vo2max",
             "snapshot_vo2max",
             "vo2max_daily",
             (
@@ -536,14 +556,15 @@ def _daily_definition(
             None,
         ),
         (
-            "traininghistory",
+            "training_history",
+            None,
             "training_history_daily",
             ("calendarDate", "timestamp", "trainingStatus", "sport"),
             None,
         ),
     )
-    for marker, dataset, fields, source_series in definitions:
-        if marker in name:
+    for definition_family, prefix, dataset, fields, source_series in definitions:
+        if definition_family == family and (prefix is None or basename.startswith(prefix)):
             return dataset, fields, source_series
     return None
 
@@ -639,26 +660,28 @@ LACTATE_MARKS = "lactate_threshold_marks"
 
 
 def _dataset_records(
-    logical_name: str,
+    name: str,
     payload: Any,
 ) -> list[tuple[str, str, dict[str, Any], tuple[Any, ...] | None]]:
     """Return the records of one file, by dataset, as Run-All reads them.
 
-    The marks of its items that are not records and of its lists of records
-    that cannot be read (stage A3d-2c-2) are records without a key, passed as
-    they are, so that Run-All counts them as a one-shot run does. A link's
-    mark has no Gear key.
+    The file is told by its name as a one-shot run tells it, a member of a
+    ZIP file by its name within the ZIP file (stage A3d-4c-1). The marks of
+    its items that are not records and of its lists of records that cannot
+    be read (stage A3d-2c-2) are records without a key, passed as they are,
+    so that Run-All counts them as a one-shot run does. A link's mark has no
+    Gear key.
     """
-    lower = logical_name.lower()
+    family = classify_source_name(name, "json")
     result: list[tuple[str, str, dict[str, Any], tuple[Any, ...] | None]] = []
-    if reads_record_file(logical_name, "activities"):
+    if family == "activities":
         for index, row in enumerate(activity_items(payload)):
             try:
                 key: tuple[Any, ...] | None = None if is_mark(row) else (_activity_key(row),)
             except ValueError:
                 key = None
             result.append(("activities", str(index), row, key))
-    elif reads_record_file(logical_name, "gear"):
+    elif family == "gear":
         for container_index, container in enumerate(container_items(payload)):
             if is_mark(container):
                 # An item of the file's top list counts as Gear, as in a run.
@@ -690,7 +713,7 @@ def _dataset_records(
                         else (gear_key, identifier_value(row.get("activityId")))
                     )
                     result.append(("activity_gear", record_index, link_record, key))
-    elif reads_record_file(logical_name, "personal_records"):
+    elif family == "personal_records":
         for container_index, container in enumerate(container_items(payload)):
             if is_mark(container):
                 result.append(("personal_records", str(container_index), container, None))
@@ -705,7 +728,7 @@ def _dataset_records(
                         None if record_key is None else (record_key,),
                     )
                 )
-    elif PurePosixPath(lower).name.startswith("hillscore"):
+    elif family == "hill_score":
         for index, row in enumerate(metric_rows(payload)):
             if is_mark(row):
                 result.append(("hill_score_daily", str(index), row, None))
@@ -722,7 +745,7 @@ def _dataset_records(
                     None if calendar_date in (None, "") else (calendar_date,),
                 )
             )
-    elif PurePosixPath(lower).name.startswith("endurancescore"):
+    elif family == "endurance_score":
         for index, row in enumerate(metric_rows(payload)):
             if is_mark(row):
                 result.append(("endurance_score_daily", str(index), row, None))
@@ -739,7 +762,7 @@ def _dataset_records(
                     None if calendar_date in (None, "") else (calendar_date,),
                 )
             )
-    elif (definition := _daily_definition(logical_name)) is not None:
+    elif (definition := _daily_definition(family, name)) is not None:
         dataset, fields, source_series = definition
         for index, row in enumerate(file_items(payload, DAILY_WRAPPERS)):
             if is_mark(row):
@@ -761,8 +784,8 @@ def _dataset_records(
                     raw_key,
                 )
             )
-    else:
-        lactate_family = _lactate_family(logical_name)
+    elif family == "lactate_threshold":
+        lactate_family = _lactate_family(name)
         if lactate_family is not None:
             # The candidates are read as Run-All reads them (stage A3d-2c-2;
             # until then, the build read only the top object or the objects
@@ -1950,6 +1973,11 @@ def build_approved_input(
         family_file_numbers: dict[str, dict[str, list[int]]] = defaultdict(
             lambda: defaultdict(list)
         )
+        # The JSON and FIT files that a run of each Export reads, of any
+        # family or none, by content, with the import number of each
+        # occurrence, so that Run-All counts its input files as a one-shot
+        # run of each Export does (stage A3d-4c-1).
+        input_file_numbers: dict[str, list[int]] = defaultdict(list)
         # The Lactate Threshold files and their rows, also the rows that are
         # not candidates, and the Hill and Endurance rows, by content, with
         # the import number of each occurrence, so that Run-All counts their
@@ -2005,6 +2033,7 @@ def build_approved_input(
                 extension = str(source.get("extension", "")).lower()
                 object_kind = source.get("object_kind")
                 logical_name = str(source["relative_path"])
+                name = _object_name(source)
                 size = int(source["bytes"])
                 if extension in SUPPORTED_SUFFIXES and size > SOURCE_FILE_MAX_BYTES:
                     # As in a run, a JSON or FIT file over the limit for one
@@ -2023,12 +2052,20 @@ def build_approved_input(
                 detected_kind = "fit" if extension == ".fit" else (
                     "json" if extension == ".json" else "unknown"
                 )
-                detected_family = classify_source_name(logical_name, detected_kind)
+                detected_family = classify_source_name(name, detected_kind)
                 if detected_family in diagnostic["candidate_counts"]:
                     diagnostic["candidate_counts"][detected_family] += 1
                     family_file_numbers[detected_family][str(source["sha256"])].append(
                         acquisition_order
                     )
+                if extension in SUPPORTED_SUFFIXES:
+                    # A JSON or FIT file that a run of the Export reads; one
+                    # of no family is unknown evidence, as a one-shot run
+                    # counts it, and the other objects that the build does
+                    # not read are not (stage A3d-4c-1).
+                    input_file_numbers[str(source["sha256"])].append(acquisition_order)
+                    if detected_family == "unclassified":
+                        diagnostic["unknown_evidence_count"] += 1
                 if extension == ".fit":
                     digest = str(source["sha256"])
                     diagnostic["fit_source_sha256"].append(digest)
@@ -2052,8 +2089,8 @@ def build_approved_input(
                     # twice through a copied container. Its members over the
                     # limit for one file are not listed; a run does not read
                     # them either (stage A3c-2).
-                    for name, member_size in _oversize_members(store, source):
-                        too_large(acquisition_order, f"{logical_name}!{name}", member_size)
+                    for member_name, member_size in _oversize_members(store, source):
+                        too_large(acquisition_order, f"{logical_name}!{member_name}", member_size)
                     parser_states["explicit_value"] += 1
                     continue
                 if extension != ".json" or (
@@ -2061,8 +2098,6 @@ def build_approved_input(
                     and source.get("container_relative_path") is not None
                 ):
                     unknown_object_count += 1
-                    if detected_family == "unclassified":
-                        diagnostic["unknown_evidence_count"] += 1
                     unknown_families.add(
                         str(source.get("source_family", "unknown"))
                     )
@@ -2081,7 +2116,7 @@ def build_approved_input(
                     )
                     continue
                 data = _read_blob(store, source)
-                read_by_run_all = json_read_by_run_all(logical_name)
+                read_by_run_all = json_read_by_run_all(name)
                 try:
                     text = data.decode("utf-8-sig")
                     value = json.loads(text)
@@ -2107,7 +2142,7 @@ def build_approved_input(
                             "repaired_text_count": repaired,
                         }
                     )
-                lactate_family = _lactate_family(logical_name)
+                lactate_family = _lactate_family(name)
                 if lactate_family is not None:
                     # A file that cannot be read counts as a file without rows.
                     lactate_file_numbers[lactate_family][str(source["sha256"])].append(
@@ -2127,21 +2162,19 @@ def build_approved_input(
                 if not readable and detected_family != "unclassified":
                     leave_out(acquisition_order, logical_name, size, JSON_NOT_READABLE)
                     continue
-                if readable and names_account(logical_name):
+                if readable and names_account(name):
                     # A file left out is not compared, as in a run.
                     accounts |= payload_accounts(value)
-                if readable and reads_record_file(logical_name, "gear") and any(
+                if readable and reads_record_file(name, "gear") and any(
                     isinstance(container.get("gearActivityDTOs"), dict)
                     for container in container_items(value)
                 ):
                     link_snapshots.add(acquisition_order)
                 # A JSON file that no dataset reads is kept as an unknown
                 # object, also when it cannot be read.
-                extracted = _dataset_records(logical_name, value) if readable else []
+                extracted = _dataset_records(name, value) if readable else []
                 if not extracted:
                     unknown_object_count += 1
-                    if detected_family == "unclassified":
-                        diagnostic["unknown_evidence_count"] += 1
                     unknown_families.add(
                         str(source.get("source_family", "unknown"))
                     )
@@ -2169,7 +2202,7 @@ def build_approved_input(
                         malformed = (
                             mark_holds_a_value(record)
                             if is_mark(record)
-                            else _left_out_with_a_value(dataset, record, logical_name)
+                            else _left_out_with_a_value(dataset, record, name)
                             if dataset in DAILY_VALUE_SOURCE_NAMES
                             else raw_key is None
                         )
@@ -2637,6 +2670,12 @@ def build_approved_input(
             "coverage_gap_count": coverage_gap_count,
             "unknown_or_unsupported_object_count": unknown_object_count,
             "unknown_or_unsupported_families": sorted(unknown_families),
+            # The JSON and FIT files of no family in all the Snapshots, which
+            # Source Completeness counts as unknown evidence; the objects that
+            # the build does not read are counted above (stage A3d-4c-1).
+            "unknown_evidence_count": sum(
+                int(item["unknown_evidence_count"]) for item in snapshot_diagnostics.values()
+            ),
             "canonical_completeness_boundary": (
                 "registered complete exports only; unsupported or failed "
                 "observations are preserved but not promoted"
@@ -2747,6 +2786,12 @@ def build_approved_input(
                 )
                 for family, by_content in sorted(family_file_numbers.items())
             },
+            # Runtime only: the JSON and FIT files of the Exports, of any
+            # family or none, counted in the same way, for the run summary
+            # (stage A3d-4c-1).
+            "input_file_count": sum(
+                1 + copies_within_snapshots(numbers) for numbers in input_file_numbers.values()
+            ),
             # Runtime only: the Lactate Threshold files and rows, also the
             # rows that are not candidates, which the build does not pass, and
             # the private fields of the Hill and Endurance rows, which it

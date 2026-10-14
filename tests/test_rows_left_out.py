@@ -23,6 +23,7 @@ from garmin_running_data_normalizer.common.identity import (
     read_identifier,
 )
 from garmin_running_data_normalizer.diagnostics import doctor_run_output
+from garmin_running_data_normalizer.diagnostics.detector import classify_source_name
 from garmin_running_data_normalizer.diagnostics.support_bundle import build_support_bundle
 from garmin_running_data_normalizer.normalizers.daily_metrics import value_source_names
 from garmin_running_data_normalizer.normalizers.performance_metrics import (
@@ -269,7 +270,8 @@ class ValueFieldsTest(unittest.TestCase):
                     self.assertLessEqual(sources, kept)
                     continue
                 for name in names[dataset]:
-                    definition = _daily_definition(f"DI-Connect-Metrics/{name}")
+                    path = f"DI-Connect-Metrics/{name}"
+                    definition = _daily_definition(classify_source_name(path, "json"), path)
                     self.assertIsNotNone(definition)
                     self.assertEqual(definition[0], dataset)
                     self.assertLessEqual(sources, set(definition[1]))
@@ -492,7 +494,7 @@ class SnapshotRowsTest(unittest.TestCase):
             self.assertEqual(audit(output, "sleep_daily")["empty_record_count"], 1)
             merge = load(output / "snapshot/canonical_merge_summary.json")
             self.assertEqual(merge["merge_rules_version"], MERGE_RULES_VERSION)
-            self.assertEqual(MERGE_RULES_VERSION, "garmin_snapshot_merge_rules:v2.10")
+            self.assertEqual(MERGE_RULES_VERSION, "garmin_snapshot_merge_rules:v2.11")
             self.assertEqual(merge["review_hold_count"], 0)
             uds = merge["datasets"]["uds_daily"]
             self.assertEqual(uds["keyless_observation_count"], 4)

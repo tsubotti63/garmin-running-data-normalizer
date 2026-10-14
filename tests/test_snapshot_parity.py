@@ -12,6 +12,11 @@ Stage A3d-4b: the Lactate Threshold audit and candidate features, the
 private fields of the Hill and Endurance rows, the activity of a VO2max row
 of either series, the counters of the relationship summary, and the files of
 Activities, Gear, and Personal Records whatever the case of their names.
+
+Stage A3d-4c-1: the input files of the run summary, the unknown evidence of
+Source Completeness, the FIT files counted in each place where they are
+found, and the files of an Export told by one rule, a member of a ZIP file by
+its name within the ZIP file and a daily file by the beginning of its name.
 """
 
 from __future__ import annotations
@@ -28,14 +33,16 @@ from garmin_running_data_normalizer.diagnostics.detector import (
     classify_source_name,
     reads_record_file,
 )
-from garmin_running_data_normalizer.run_all import run_all
+from garmin_running_data_normalizer.intake.discovery import DiscoveredAsset
+from garmin_running_data_normalizer.run_all import _asset_family, run_all
 from garmin_running_data_normalizer.runner import run_activities
 from garmin_running_data_normalizer.snapshot import (
     initialize_store,
     register_snapshot,
     run_snapshot_all,
 )
-from tests.fit_fixture_factory import synthetic_fit
+from garmin_running_data_normalizer.snapshot.merge import _object_name
+from tests.fit_fixture_factory import synthetic_fit, truncated_fit, unsupported_chained_fit
 from tests.test_snapshot_lifecycle import (
     _activity,
     _write_performance_metrics,
@@ -56,6 +63,19 @@ DAILY_DATASETS = (
     "vo2max_daily",
     "training_history_daily",
     "hrv_daily",
+)
+# The fields that tell where a row came from, named one by one (learning
+# 20261014-26); a Snapshot run takes them from the files of its build.
+PROVENANCE_FIELDS = frozenset(
+    {
+        "source_path",
+        "source_sha256",
+        "source_record_index",
+        "activity_source_path",
+        "activity_source_sha256",
+        "fit_source_path",
+        "fit_source_sha256",
+    }
 )
 
 
@@ -384,6 +404,201 @@ class NameCaseTest(unittest.TestCase):
                 {key: value for key, value in audits[0].items() if key != "observation_scope"},
             )
             self.assertEqual(counts(snapshot), counts(one_shot))
+
+
+def file_figures(output: Path) -> dict[str, Any]:
+    """The counts of files of stage A3d-4c-1, whatever the form of the run."""
+    report = load(output / "diagnostics/source_completeness.json")
+    return {
+        "input_asset_count": load(output / "run_summary.json")["input_asset_count"],
+        "unknown_evidence": report["unknown_evidence_summary"],
+        "quality_unknown_evidence": load(output / "diagnostics/run_quality.json")[
+            "source_completeness"
+        ]["unknown_evidence_count"],
+        "candidates": sorted(
+            (item["source_family_id"], item["candidate_asset_count"]) for item in report["families"]
+        ),
+        "fit": [
+            {key: item[key] for key in ("candidate_asset_count", "readable_asset_count", "state_counts")}
+            for item in report["families"]
+            if item["source_family_id"] == "fit"
+        ],
+    }
+
+
+def fit_completeness(output: Path) -> dict[str, Any]:
+    return next(
+        item
+        for item in load(output / "diagnostics/source_completeness.json")["families"]
+        if item["source_family_id"] == "fit"
+    )
+
+
+def without_provenance(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{key: value for key, value in row.items() if key not in PROVENANCE_FIELDS} for row in rows]
+
+
+def with_fit_files(root: Path, name: str, members: dict[str, bytes]) -> Path:
+    """An Export whose FIT files are the members of one ZIP file."""
+    source = write_export(root, name, [_activity("1001")])
+    uploaded = source / "DI-Connect-Uploaded-Files"
+    uploaded.mkdir()
+    (uploaded / "UploadedFiles_0-_Part1.zip").write_bytes(zip_bytes(members))
+    return source
+
+
+class InputFileTest(unittest.TestCase):
+    def test_the_input_files_and_unknown_evidence_of_one_export(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            # The text file of every Export here, a CSV file, a JSON file of no
+            # family, and a ZIP file that holds a text file next to a FIT file.
+            source = with_fit_files(root, "export", {"readme.txt": b"synthetic", "a.fit": FIT_A})
+            fitness = source / "DI-Connect-Fitness"
+            (fitness / "synthetic_notes.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+            (fitness / "synthetic_unknown.json").write_text(json.dumps([{"x": 1}]), encoding="utf-8")
+            one_shot, snapshot = runs(root, source)
+            expected = file_figures(one_shot)
+            self.assertEqual(file_figures(snapshot), expected)
+            # The Activities file, the JSON file of no family, and the FIT
+            # file are read; only the JSON file of no family is unknown
+            # evidence, not the text and CSV files, which no run reads.
+            self.assertEqual(expected["input_asset_count"], 3)
+            self.assertEqual(expected["unknown_evidence"]["count"], 1)
+
+    def test_the_input_files_of_several_exports_follow_the_rule_of_stage_a3b(self) -> None:
+        uds = [{"calendarDate": "2030-02-01", "totalSteps": 5}]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = with_fit_files(root, "first", {"a.fit": FIT_A})
+            (first / "DI-Connect-Aggregator").mkdir()
+            (first / "DI-Connect-Aggregator" / "UDSFile_1.json").write_text(json.dumps(uds), encoding="utf-8")
+            second = with_fit_files(root, "second", {"a.fit": FIT_A, "b.fit": FIT_A})
+            (second / "DI-Connect-Aggregator").mkdir()
+            (second / "DI-Connect-Aggregator" / "UDSFile_2.json").write_text(
+                json.dumps([{**uds[0], "totalSteps": 6}]), encoding="utf-8"
+            )
+            one_shot, snapshot = runs(root, first, second)
+            # The same Activities file in both Snapshots once; the FIT file
+            # once, and its copy within the second; each UDS file once: 5,
+            # where the second Export alone has 4 and the two 7.
+            self.assertEqual(load(one_shot / "run_summary.json")["input_asset_count"], 4)
+            self.assertEqual(load(snapshot / "run_summary.json")["input_asset_count"], 5)
+
+    def test_a_fit_file_in_two_places_is_counted_in_each(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            one_shot, snapshot = runs(root, with_fit_files(root, "export", {"a.fit": FIT_A, "b.fit": FIT_A}))
+            fit = fit_completeness(one_shot)
+            # Until stage A3d-4c-1, the one content of the two files was taken
+            # for one of two files left unclassified: AMBIGUOUS.
+            self.assertEqual(
+                (fit["state"], fit["content_validity"], fit["reason_codes"]),
+                ("PRESENT", "VALID", ["FIT_EVIDENCE_PRESENT"]),
+            )
+            self.assertEqual((fit["readable_asset_count"], fit["state_counts"]), (2, {"parsed_activity": 2}))
+            self.assertEqual(file_figures(snapshot), file_figures(one_shot))
+
+    def test_fit_files_of_several_kinds(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            members = {
+                "activity.fit": FIT_A,
+                "activity_again.fit": FIT_A,
+                "broken.fit": truncated_fit(),
+                "chained.fit": unsupported_chained_fit(),
+            }
+            one_shot, snapshot = runs(root, with_fit_files(root, "export", members))
+            for output in (one_shot, snapshot):
+                with self.subTest(output=output.name):
+                    fit = fit_completeness(output)
+                    self.assertEqual(
+                        (fit["state"], fit["reason_codes"], fit["readable_asset_count"], fit["state_counts"]),
+                        (
+                            "AMBIGUOUS",
+                            ["MIXED_FIT_EVIDENCE"],
+                            2,
+                            {"parsed_activity": 2, "truncated": 1, "unsupported_chained": 1},
+                        ),
+                    )
+
+
+class FileNameTest(unittest.TestCase):
+    def test_the_build_and_a_one_shot_run_tell_a_file_by_one_rule(self) -> None:
+        # (path in the Export, name within a ZIP file, kind, family)
+        examples = (
+            ("DI-Connect-Aggregator/UDSFile_1.json", None, "json", "uds"),
+            ("DI-Connect-Aggregator/udsfile_1.JSON", None, "json", "uds"),
+            ("DI-Connect-Aggregator/Parts.zip", "UDSFile_1.json", "json", "uds"),
+            ("DI-Connect-Aggregator/Parts.zip", "inner/UDSFile_2.json", "json", "uds"),
+            ("DI-Connect-Metrics/Parts.zip", "HillScore_synthetic_1.json", "json", "hill_score"),
+            ("DI-Connect-Metrics/MetricsMaxMetData_1.json", None, "json", "vo2max"),
+            ("DI-Connect-Fitness/Parts.zip", "x_summarizedActivities.json", "json", "activities"),
+            ("DI-Connect-Aggregator/old_UDSFile_1.json", None, "json", "unclassified"),
+            ("DI-Connect-Aggregator/Copy of UDSFile_1.json", None, "json", "unclassified"),
+            ("DI-Connect-Uploaded-Files/Parts.zip", "a.fit", "fit", "fit"),
+        )
+        for path, member, kind, family in examples:
+            with self.subTest(path=path, member=member):
+                stored = {
+                    "relative_path": path if member is None else f"{path}!{member}",
+                    "archive_member_path": member,
+                }
+                read = DiscoveredAsset(kind, path, member, 0, "0" * 64, b"")
+                self.assertEqual(classify_source_name(_object_name(stored), kind), family)
+                self.assertEqual(_asset_family(read), family)
+
+    def test_daily_files_at_the_top_of_a_zip_file_are_read_by_both_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = write_export(root, "export", [_activity("1001")])
+            (source / "DI-Connect-Aggregator").mkdir()
+            (source / "DI-Connect-Aggregator" / "Parts.zip").write_bytes(
+                zip_bytes(
+                    {
+                        "UDSFile_1.json": json.dumps([{"calendarDate": "2030-02-01", "totalSteps": 5}]).encode(),
+                        "inner/UDSFile_2.json": json.dumps([{"calendarDate": "2030-02-02", "totalSteps": 6}]).encode(),
+                    }
+                )
+            )
+            (source / "DI-Connect-Metrics").mkdir()
+            (source / "DI-Connect-Metrics" / "Parts.zip").write_bytes(
+                zip_bytes(
+                    {
+                        "HillScore_synthetic_1.json": json.dumps(
+                            [{"calendarDate": "2030-02-01", "overallScore": 50, "strengthScore": 40,
+                              "enduranceScore": 30, "hillScoreClassificationId": 4}]
+                        ).encode()
+                    }
+                )
+            )
+            one_shot, snapshot = runs(root, source)
+            for table, rows in (("uds_daily", 2), ("hill_score_daily", 1)):
+                with self.subTest(table=table):
+                    found = [without_provenance(load(output / "normalized" / f"{table}.json")) for output in (one_shot, snapshot)]
+                    self.assertEqual(len(found[0]), rows)
+                    self.assertEqual(found[1], found[0])
+            self.assertEqual(counts(snapshot), counts(one_shot))
+            self.assertEqual(file_figures(snapshot), file_figures(one_shot))
+
+    def test_a_name_that_holds_the_marker_of_a_family_inside_is_read_by_neither_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = write_export(root, "export", [_activity("1001")])
+            (source / "DI-Connect-Aggregator").mkdir()
+            (source / "DI-Connect-Aggregator" / "Copy of UDSFile_1.json").write_text(
+                json.dumps([{"calendarDate": "2030-02-01", "totalSteps": 5}]), encoding="utf-8"
+            )
+            # A Snapshot run read it and, from stage A3d-4a, stopped with
+            # OUTPUT_EXPERIENCE_FAILED: the build read rows of a file that the
+            # counts did not hold.
+            one_shot, snapshot = runs(root, source)
+            for output in (one_shot, snapshot):
+                with self.subTest(output=output.name):
+                    self.assertEqual(load(output / "normalized/uds_daily.json"), [])
+            self.assertEqual(counts(snapshot), counts(one_shot))
+            self.assertEqual(file_figures(snapshot), file_figures(one_shot))
+            self.assertEqual(file_figures(one_shot)["unknown_evidence"]["count"], 1)
 
 
 if __name__ == "__main__":

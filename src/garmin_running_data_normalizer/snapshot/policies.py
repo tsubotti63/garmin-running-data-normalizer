@@ -286,8 +286,12 @@ FUTURE_READY_DATASETS = ("health_status",)
 # run does, or only counts when the item is an empty value; and the Lactate
 # Threshold candidates are read as Run-All reads them. From v2.10, the build
 # keeps the activity of a VO2max record from the files of either series, as a
-# one-shot run reads it (stage A3d-4b).
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.10"
+# one-shot run reads it (stage A3d-4b). From v2.11, the build tells the files
+# of an Export as a one-shot run tells them, a member of a ZIP file by its
+# name within the ZIP file and a daily file by the beginning of its name, to
+# read and count them, and counts as unknown evidence only the JSON and FIT
+# files of no family (stage A3d-4c-1).
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.11"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -414,6 +418,14 @@ MERGE_RULES: dict[str, Any] = {
     # them (stage A3d-4b).
     "fields_kept": {
         "vo2max_activity_id": "kept_from_the_files_of_either_series",
+    },
+    # The files of an Export, told and counted as a one-shot run tells and
+    # counts them (stage A3d-4c-1).
+    "file_names": {
+        "policy": "told_as_in_a_one_shot_run",
+        "zip_members": "told_by_their_names_within_the_zip_file",
+        "daily_files": "told_by_the_beginning_of_their_names",
+        "unknown_evidence": "json_and_fit_files_of_no_family_as_in_a_one_shot_run",
     },
     "other_datasets_follow": REGISTRY_VERSION,
 }
