@@ -205,6 +205,7 @@
   "warning.daily_metrics_review": "確かめが必要な日ごとの指標の値があります。日付が無い、などです（{code}）。",
   "warning.data_file_left_out": "読めなかったファイルがあり、除きました。run_manifest.json に、理由とともに一覧があります（{code}）。",
   "warning.data_row_left_out": "日付や使える ID など、必要な値が無い行があり、除きました。START_HERE.md に表ごとの数が、監査の記録（audit）に理由ごとの数があります（{code}）。",
+  "warning.data_text_repaired": "途中で切れた絵文字など、壊れた文字がありました。その文字は置き換えの文字「�」にして、そのファイルの一覧を run_manifest.json に残しています（{code}）。",
   "warning.data_value_invalid": "数のはずの所に文字があるなど、項目に合わない形の値がありました。その項目は空欄にし、元の値はすべて監査の記録（audit）に残しています（{code}）。",
   "warning.fit_parse_incomplete": "最後まで読めなかった FIT ファイルがあります。その分は除き、推測で補っていません（{code}）。",
   "warning.input_duplicate_sources": "同じエクスポートが 2 つ以上入っていました（ZIP と、それを展開したフォルダーなど）。1 つだけ読みました（{code}）。",

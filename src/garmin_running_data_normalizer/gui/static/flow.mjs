@@ -214,6 +214,7 @@ export const WARNING_KEYS = {
   DATA_FILE_LEFT_OUT: "warning.data_file_left_out",
   DATA_ROW_LEFT_OUT: "warning.data_row_left_out",
   DATA_VALUE_INVALID: "warning.data_value_invalid",
+  DATA_TEXT_REPAIRED: "warning.data_text_repaired",
   FIT_PARSE_INCOMPLETE: "warning.fit_parse_incomplete",
   LACTATE_CANDIDATE_AUTHORITY_UNRESOLVED: "warning.lactate_candidates",
   RELATIONSHIP_UNRESOLVED_VALID_LINK: "warning.relationship_unresolved",

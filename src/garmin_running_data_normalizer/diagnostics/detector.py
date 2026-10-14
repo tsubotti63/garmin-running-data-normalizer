@@ -59,4 +59,11 @@ def classify_source_name(logical_name: str, kind: str) -> str:
     return "unclassified"
 
 
-__all__ = ["classify_source_name"]
+def json_read_by_run_all(logical_name: str) -> bool:
+    """Whether Run-All reads a JSON file of this name: one of a family that a
+    dataset reads. A one-shot run and the Snapshot build count the text that
+    they repair in the same files (stage A3d-2c-1)."""
+    return classify_source_name(logical_name, "json") != "unclassified"
+
+
+__all__ = ["classify_source_name", "json_read_by_run_all"]

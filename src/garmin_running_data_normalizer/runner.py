@@ -18,7 +18,7 @@ from .common.time import (
 )
 from .common.private_files import PRIVATE_DIRECTORY_MODE, open_private_file
 from .intake.accounts import asset_accounts
-from .intake.discovery import InputChangedError, read_export
+from .intake.discovery import InputChangedError, read_export, repaired_text_count
 from .intake.roots import MixedExportsError
 from .intake.source import (
     CorruptArchiveError,
@@ -128,6 +128,9 @@ def run_activities(
             records = normalize_activities(
                 str(input_root), timezone_name, assets=assets, left_out=left_out
             )
+            # Text with a lone surrogate, repaired as the files were read
+            # (stage A3d-2c-1).
+            repaired_text = sum(repaired_text_count(asset) for asset in assets)
         except InputChangedError as exc:
             raise GoldenPathError("input changed or provenance diverged during processing") from exc
         _check_activities_read(reading.left_out)
@@ -145,6 +148,13 @@ def run_activities(
         raise GoldenPathError(
             "an Activities value has a form that its field does not take; run-all "
             "leaves such values empty and keeps them in its audit records"
+        )
+    # Run-All repairs such text and reports it; the Golden Path output has no
+    # place for the report, so it stops instead of repairing silently.
+    if repaired_text:
+        raise GoldenPathError(
+            "an Activities file holds text with a broken character, such as a "
+            "truncated emoji; run-all writes it with U+FFFD and reports it"
         )
     if not records:
         raise GoldenPathError("supported input contained no activity records")

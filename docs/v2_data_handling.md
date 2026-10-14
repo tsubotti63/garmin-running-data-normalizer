@@ -724,8 +724,37 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     does. On some platforms, such as macOS, such a time stopped the run with
     an error that it did not catch.
   - Text with a lone UTF-16 surrogate, such as a truncated emoji, is written
-    with U+FFFD in its place, and the field is counted. Warning
-    `DATA_TEXT_REPAIRED` (provisional, stage A3d-2c).
+    with U+FFFD in its place as its file is read (stage A3d-2c-1). JSON
+    gives such text only with an escape, such as `\ud83d` or `\uD83D`; a
+    whole pair, such as `\ud83d\ude00`, reads as one character and stays.
+    v1.7.1 stopped with `RUN_ALL_FAILED` when such text reached a table, and
+    a Snapshot run also when it was in a field that no table uses or in the
+    name of a field.
+    - Each JSON file that Run-All reads, one of a family that a dataset
+      reads, counts its texts and names of fields repaired, however many
+      surrogates each held: in the records, in the fields that no table
+      uses, and in the objects around the records alike. A one-shot run
+      reads such a file for the count even when no normalizer parses it, as
+      a file whose name differs in case only. When two names of one object
+      read alike once repaired, the later value is kept, as JSON keeps the
+      later of two equal names, and the earlier value is dropped.
+    - Warning `DATA_TEXT_REPAIRED` for each family, with `family` and
+      `count`, status `PASS_WITH_WARNINGS` (exit 0): nothing is left out.
+      The Lactate Threshold files give it as a candidate warning. The family
+      result gains `repaired_text_count`, `run_manifest.json` lists the
+      files in `files_with_repaired_text` with their family and count, and
+      `START_HERE.md` gains a line; each only when there is something to
+      report. The Support Bundle and the External-safe Pack carry the code
+      and the count only.
+    - The Snapshot build repairs and counts the same files as it reads them
+      and lists them by Snapshot number, as it lists the files left out, so
+      one Export gives the same in a one-shot run and as one Snapshot; a
+      file that two Snapshots hold is listed for each. The approved input
+      holds the repaired text (merge rules v2.8).
+    - `normalize-activities` (the Golden Path) stops when an Activities file
+      holds such text, also in a field that no table uses, because its
+      output has no place for the report; stage A3d-3 gives the stop its
+      code.
   - A FIT field with an unexpected layout, such as a sport given as an
     array, is treated as an unknown value with the `DATA_VALUE_INVALID`
     warning; the FIT file is not left out (stage A3d-2a).
@@ -970,8 +999,8 @@ Every stop has a specific code; errors that v1.7.1 reports only as
 - New warning codes: `VALUES_DISAGREE` (stage A2a), `VALUES_UPDATED` and
   `RECORDS_NOT_IN_LATEST_SNAPSHOT` (stage A2b-2), `INPUT_DUPLICATE_SOURCES`
   (stage A3a), `DATA_FILE_LEFT_OUT` (stage A3c), `DATA_ROW_LEFT_OUT` (stage
-  A3d-1), `DATA_VALUE_INVALID` (stage A3d-2a), and, with a provisional name,
-  `DATA_TEXT_REPAIRED`. `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them:
+  A3d-1), `DATA_VALUE_INVALID` (stage A3d-2a), and `DATA_TEXT_REPAIRED`
+  (stage A3d-2c-1). `DAILY_METRICS_REVIEW_REQUIRED` is replaced by them:
   from stage A3d-2b, no dataset of Run-All gives it. The code stays known
   with the review items of the daily datasets, which the library keeps and
   no dataset of Run-All uses.
@@ -1055,6 +1084,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `diagnostics/run_quality.json`, `run_manifest.json`, and
   `run_summary.json`, change for every Export; the normalized datasets and
   the documents do not.
+- Stage A3d-2c-1 adds, each only when text was repaired, warning
+  `DATA_TEXT_REPAIRED`, `repaired_text_count` to the family results,
+  `files_with_repaired_text` to `run_manifest.json`, and a `START_HERE.md`
+  line. The outputs of an Export without such text do not change, except
+  that Snapshot outputs give the merge rules version v2.8.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
   and `SNAPSHOT_STORE_LOCKED` (provisional name).
@@ -1162,7 +1196,10 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Gear, `activity_gear`, and Personal Records without a usable identifier
   to Run-All, and `garmin_snapshot_merge_rules:v2.7` from stage A3d-2a,
   which passes the values of another form to Run-All and no longer stops
-  on a Lactate Threshold candidate with such a value, in
+  on a Lactate Threshold candidate with such a value, and
+  `garmin_snapshot_merge_rules:v2.8` from stage A3d-2c-1, which repairs
+  text with a lone surrogate as a run does and lists the files by Snapshot
+  number, in
   `config/garmin_snapshot_merge_rules_v2.json`. For these
   datasets they replace the merge fields of the v1.0 registry; the other
   datasets follow the v1.0 registry until stage A3d. A build records
@@ -1248,7 +1285,10 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `DAILY_METRICS_REVIEW_REQUIRED` with exit 0, and an HRV reading whose
   value is of another form, which v1.7.1 dropped without a record, are left
   out with warning `DATA_ROW_LEFT_OUT` and exit 3; an HRV reading without a
-  value is counted and no longer announced.
+  value is counted and no longer announced. Text with a lone surrogate,
+  which stopped v1.7.1 (exit 2) when it reached a table, and a Snapshot run
+  also when no table used it, is written with U+FFFD and announced with
+  warning `DATA_TEXT_REPAIRED` (exit 0).
 - Outputs: `run_all_version` 2, the new fields, audit records, and audit
   sections, and the new warning codes. The synthetic Run-All output grows from
   46 to 50 files with the audit records of Activities, Gear, `activity_gear`,
@@ -1294,7 +1334,8 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   records, as in a one-shot run. So are the records of Activities, Gear,
   `activity_gear`, and Personal Records without a usable identifier, which
   were held back or stopped the build. A Lactate Threshold candidate with a
-  value of another form no longer stops the build. The merge rules v2.7 are
+  value of another form no longer stops the build, and neither does text
+  with a lone surrogate. The merge rules v2.8 are
   published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.
@@ -1345,7 +1386,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   gives the HRV audit record in its new form (stage A3d-2b); `fit.hrv`
   gains `read_fit_hrv_messages`, which `parse_fit_hrv_bytes` now uses, and
   the HRV functions that Run-All does not use, such as `normalize_hrv`,
-  keep their outputs.
+  keep their outputs. `parse_json_asset` writes text with a lone surrogate
+  with U+FFFD in its place, and `DiscoveredAsset.repaired_text_count` and
+  `repaired_text_count` in `intake.discovery` give the texts and names
+  repaired (stage A3d-2c-1); new public names: `common.text` and
+  `json_read_by_run_all` in `diagnostics.detector`.
 - Schema: the fields that a disagreement can leave empty are nullable (the
   Hill and Endurance `overall_score`, the four Race Prediction times,
   `vo2max`, and `training_status`), and so is `personal_records.activity_id`

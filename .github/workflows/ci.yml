@@ -138,6 +138,9 @@ jobs:
       - name: Verify Windows HRV readings
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_hrv_readings.py -q
+      - name: Verify Windows repaired text
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_repaired_text.py -q
       - name: Build distributions
         shell: powershell
         run: |

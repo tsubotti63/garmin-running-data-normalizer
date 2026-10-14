@@ -13,11 +13,12 @@ from zipfile import ZipFile
 
 from .. import __version__
 from ..common.identity import identifier_value, identity_token, is_ascii_digits
+from ..common.text import repair_json_text
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..common.values import comparable as _comparable
 from ..common.values import is_empty
 from ..diagnostics.contracts import FAMILY_DATASETS, SOURCE_FAMILY_ORDER
-from ..diagnostics.detector import classify_source_name
+from ..diagnostics.detector import classify_source_name, json_read_by_run_all
 from ..intake.accounts import names_account, payload_accounts
 from ..intake.archive import ArchiveLimits, is_real_export_file
 from ..intake.discovery import (
@@ -1804,6 +1805,9 @@ def build_approved_input(
         # number, as in a one-shot run of each Export (stage A3c-2).
         files_left_out: list[dict[str, Any]] = []
         files_not_read: list[dict[str, Any]] = []
+        # The files whose text with a lone surrogate the build repaired as it
+        # read them, by Snapshot number, as a run counts them (stage A3d-2c-1).
+        files_with_repaired_text: list[dict[str, Any]] = []
         left_out_families: dict[int, set[str]] = defaultdict(set)
 
         def leave_out(number: int, path: str, size: int, reason: str) -> None:
@@ -1913,8 +1917,16 @@ def build_approved_input(
                     )
                     continue
                 data = _read_blob(store, source)
+                read_by_run_all = json_read_by_run_all(logical_name)
                 try:
-                    value = json.loads(data.decode("utf-8-sig"))
+                    text = data.decode("utf-8-sig")
+                    value = json.loads(text)
+                    repaired = 0
+                    if read_by_run_all:
+                        # Text with a lone surrogate is repaired as a run
+                        # repairs it, so that the records can be written
+                        # (stage A3d-2c-1).
+                        value, repaired = repair_json_text(text, value)
                     readable = True
                 except (ValueError, RecursionError):
                     # The errors for which a run leaves a JSON file out: not
@@ -1922,6 +1934,15 @@ def build_approved_input(
                     # too many digits (stage A3c-2).
                     value = None
                     readable = False
+                if readable and repaired:
+                    files_with_repaired_text.append(
+                        {
+                            "snapshot": acquisition_order,
+                            "source_path": logical_name,
+                            "family": detected_family,
+                            "repaired_text_count": repaired,
+                        }
+                    )
                 if not readable and detected_family != "unclassified":
                     leave_out(acquisition_order, logical_name, size, JSON_NOT_READABLE)
                     continue
@@ -2524,6 +2545,12 @@ def build_approved_input(
             ),
             "files_not_read": sorted(
                 files_not_read, key=lambda item: (item["snapshot"], item["source_path"])
+            ),
+            # Runtime only: Run-All lists these files, by Snapshot number, in
+            # the local run manifest (stage A3d-2c-1).
+            "files_with_repaired_text": sorted(
+                files_with_repaired_text,
+                key=lambda item: (item["snapshot"], item["source_path"]),
             ),
             "source_completeness_context": {
                 "observation_scope": "REGISTERED_SNAPSHOT_OBSERVATIONS",
