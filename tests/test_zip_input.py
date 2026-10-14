@@ -836,8 +836,11 @@ class NestedZipCopyTest(unittest.TestCase):
             return original(export, item)  # type: ignore[arg-type]
 
         with mock.patch.object(ExportSource, "open_stream", touch_after_first_read):
-            with self.assertRaisesRegex(SnapshotLifecycleError, "changed during completeness scan"):
+            with self.assertRaises(SnapshotLifecycleError) as context:
                 register(store, self.archive)
+        # The code of a changed input, as in a run (stage A3d-3b).
+        self.assertEqual(context.exception.code, "INPUT_CHANGED")
+        self.assertIn("changed while it was registered", str(context.exception))
         self.assertEqual(load_manifests(store), [])
 
 

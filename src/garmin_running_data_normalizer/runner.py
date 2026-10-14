@@ -59,7 +59,12 @@ from .diagnostics.doctor import (
     render_doctor_human,
 )
 from .diagnostics.support_bundle import SupportBundleError, build_support_bundle
-from .snapshot import SnapshotLifecycleError
+from .snapshot import (
+    NOTICE_MESSAGES,
+    SnapshotLifecycleError,
+    shown_store_message,
+    verification_error,
+)
 from .standalone import StandaloneHandoffError, validate_standalone_handoff
 
 
@@ -613,8 +618,10 @@ def main(argv: list[str] | None = None) -> int:
     except RunAllError as exc:
         print(f"ERROR [{exc.code}]: {shown_message(exc)}", file=sys.stderr)
         return 2
+    # Each stop of the Snapshot Store has its code (stage A3d-3b); the stops
+    # of the store's contract keep SNAPSHOT_LIFECYCLE_FAILED.
     except SnapshotLifecycleError as exc:
-        print(f"ERROR [SNAPSHOT_LIFECYCLE_FAILED]: {exc}", file=sys.stderr)
+        print(f"ERROR [{exc.code}]: {shown_store_message(exc)}", file=sys.stderr)
         return 2
     except StandaloneHandoffError as exc:
         print(f"ERROR [HANDOFF_INVALID]: {exc}", file=sys.stderr)
@@ -649,7 +656,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     except Exception:
-        if args.command in {"run-all", "snapshot"}:
+        if args.command == "run-all" or (
+            args.command == "snapshot" and args.snapshot_command == "run-all"
+        ):
             print("ERROR [RUN_ALL_FAILED]: Run-All failed; verify the input and output contract", file=sys.stderr)
         elif args.command == "normalize-activities":
             print(
@@ -657,9 +666,11 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
         else:
-            # Until stage A3d-3a, these commands also said "Golden Path failed".
+            # Until stage A3d-3a, these commands also said "Golden Path failed",
+            # and until stage A3d-3b, the other snapshot commands "Run-All failed".
+            name = f"snapshot {args.snapshot_command}" if args.command == "snapshot" else args.command
             print(
-                f"ERROR [COMMAND_FAILED]: {args.command} failed; verify the input and output contract",
+                f"ERROR [COMMAND_FAILED]: {name} failed; verify the input and output contract",
                 file=sys.stderr,
             )
         return 2
@@ -683,7 +694,16 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "snapshot":
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
-        return 0 if result.get("status") == "PASS" else 2
+        # A NOTE line never means a stop; an ERROR line always does
+        # (stage A3d-3b).
+        for code in result.get("notices", []):
+            print(f"NOTE [{code}]: {NOTICE_MESSAGES[code]}", file=sys.stderr)
+        if result.get("status") == "PASS":
+            return 0
+        if args.snapshot_command == "verify":
+            error = verification_error(result)
+            print(f"ERROR [{error.code}]: {error}", file=sys.stderr)
+        return 2
 
     if args.command == "validate-handoff":
         print("PASS")

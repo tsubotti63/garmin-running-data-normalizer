@@ -1077,9 +1077,75 @@ as the GUI does, instead of after the whole run:
   leaves no part of an output; an empty output folder that is there already
   keeps its permissions. Until stage A3d-3a, it printed `ERROR: ...`
   without a code and could leave some of its files.
-- An error that no code describes stops with `RUN_ALL_FAILED` (Run-All),
-  `GOLDEN_PATH_FAILED` (the Golden Path), or `COMMAND_FAILED` (the other
-  commands, which said "Golden Path failed" until stage A3d-3a).
+- An error that no code describes stops with `RUN_ALL_FAILED` (Run-All and
+  `snapshot run-all`), `GOLDEN_PATH_FAILED` (the Golden Path), or
+  `COMMAND_FAILED` (the other commands, which said "Golden Path failed"
+  until stage A3d-3a, and the other snapshot commands, which said "Run-All
+  failed" until stage A3d-3b).
+- In the CLI, a line that starts with `ERROR [` is a stop (exit 2), and a
+  line that starts with `NOTE [` is a notice that does not stop (stage
+  A3d-3b). A program that reads the CLI's output can take only the first for
+  a stop.
+
+From stage A3d-3b, the stops of the Snapshot Store and its build have their
+own codes and next steps too, instead of `RUN_ALL_FAILED` or
+`SNAPSHOT_LIFECYCLE_FAILED`, which remains for the stops of the store's
+contract, such as an argument that is not valid:
+
+| Problem | Code | Next step |
+|---|---|---|
+| This app cannot write in the store, or create it there | `SNAPSHOT_STORE_NOT_WRITABLE` | Allow writing, then register the same Export again; for `snapshot init`, choose another folder or allow writing |
+| No free space for the store | `SNAPSHOT_STORE_SPACE_INSUFFICIENT` | Free some space, then register the same Export again; for `snapshot init`, or choose another folder |
+| A registration holds the lock, or one stopped and left it | `SNAPSHOT_STORE_LOCKED` | If no snapshot command is running, delete the lock file, then register again |
+| A registration was interrupted | `SNAPSHOT_REGISTRATION_INCOMPLETE` | Register the same Export, or another complete Export, again |
+| A folder or file of the store cannot be opened | `SNAPSHOT_STORE_NOT_READABLE` | Allow this app to read the whole store folder |
+| The store is damaged, or a Snapshot that it lists is missing | `SNAPSHOT_STORE_INVALID` | Change nothing in it; restore it from a backup that passed `snapshot verify`, or make a new store and register the Exports again |
+| A newer version of this app made the store | `SNAPSHOT_STORE_VERSION_UNSUPPORTED` | Use a newer version of this app |
+| The Export changed while it was registered | `INPUT_CHANGED` | Register it again when it no longer changes |
+| No free space in the temporary folder for the build of `snapshot run-all` | `TEMP_SPACE_INSUFFICIENT` | Free some space |
+| The output of `snapshot build-input` | The codes of the place of the output above | As above |
+
+- A registration finds that the store cannot be written when it creates its
+  lock, before it reads the Export. Before it writes, it compares the free
+  space with the size of the files that the store does not hold yet; a later
+  Export shares most of its files with the earlier ones, and those are not
+  counted, so that a registration is never stopped for them. A write that
+  finds no space or no permission stops with the same codes; a file that was
+  not copied whole is removed at once, and the journal stays for the next
+  registration, which completes the store as before. A `snapshot init` that
+  stops removes what it wrote, so that it can be run again.
+- At its start, with the lock held, a registration removes the temporary
+  files that a write to the store left when it stopped: only the names that
+  this app gives them, in the folders where it writes them (a blob's only in
+  the folder named after the first two characters of its SHA-256), without
+  following a link. Its result gives their number
+  (`temporary_files_removed`) when there are some. This app never removes the
+  lock or the journal.
+- `snapshot status` and `snapshot verify` tell of the lock, and `status` of an
+  interrupted registration, in `notices` and with a `NOTE` line, only when
+  there is one, and do not fail for them. When `snapshot verify` fails, it
+  still prints its report and adds an `ERROR` line:
+  `SNAPSHOT_REGISTRATION_INCOMPLETE` when the next registration completes the
+  store (the journal, and the lists that the interrupted registration did
+  not write again), and otherwise `SNAPSHOT_STORE_INVALID` with the names of
+  the failures. `snapshot build-input` and `snapshot run-all` stop with the
+  same code and message. For a store that it cannot open, that a newer
+  version made, or that is not a store, `snapshot verify` prints no report
+  and stops as the other commands do.
+- A folder or file of the store that cannot be opened stops `status`,
+  `verify`, a registration, and the build, and the CLI names the first place
+  inside the store and how many more. `status` no longer counts fewer
+  Snapshots, and a registration no longer writes the registry without the
+  Snapshots that it cannot read. A registration also stops, with
+  `SNAPSHOT_STORE_INVALID`, when the registry lists a Snapshot whose files are
+  missing, for example because its folder was deleted by hand or removed by a
+  sync app; no command removes a Snapshot. It writes the registry again
+  before it removes a journal, so that a stop leaves the journal.
+- The build of `snapshot run-all` is written in the temporary folder, and
+  that of `snapshot build-input` in its output, which is checked as the
+  output of a run before the store is read. Before the build starts, the
+  free space there is compared with the size of the FIT files that it copies,
+  the least that it needs.
 
 The problems:
 
@@ -1096,10 +1162,11 @@ The problems:
 - Mixed Exports or accounts (`INPUT_MULTIPLE_EXPORTS`).
 - An Export that changes during the run (`INPUT_CHANGED`).
 - The output: it already exists, it cannot be written, or its path is too long.
-- The temporary folder: not enough free space to read an Export ZIP file
-  (`TEMP_SPACE_INSUFFICIENT`).
-- The Snapshot Store: locked by an interrupted registration
-  (`SNAPSHOT_STORE_LOCKED`, provisional) or failing verification.
+- The temporary folder: not enough free space to read an Export ZIP file or
+  to build the Snapshots (`TEMP_SPACE_INSUFFICIENT`).
+- The Snapshot Store: it cannot be written or opened, it is locked, a
+  registration was interrupted, it fails verification, or a newer version
+  made it (see the second table).
 - Internal checks that data cannot trigger.
 
 Every stop has a specific code; errors that v1.7.1 reports only as
@@ -1250,8 +1317,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
   `INPUT_NOT_READABLE`, `OUTPUT_SPACE_INSUFFICIENT`,
   `GOLDEN_PATH_DATA_NEEDS_RUN_ALL`, `GOLDEN_PATH_FAILED`, and
-  `COMMAND_FAILED` (stage A3d-3a), and `SNAPSHOT_STORE_LOCKED` (provisional
-  name). From stage A3d-3a, Run-All and the Golden Path also give the codes
+  `COMMAND_FAILED` (stage A3d-3a), and `SNAPSHOT_STORE_LOCKED`,
+  `SNAPSHOT_STORE_NOT_WRITABLE`, `SNAPSHOT_STORE_SPACE_INSUFFICIENT`,
+  `SNAPSHOT_REGISTRATION_INCOMPLETE`, `SNAPSHOT_STORE_INVALID`,
+  `SNAPSHOT_STORE_NOT_READABLE`, and `SNAPSHOT_STORE_VERSION_UNSUPPORTED`
+  (stage A3d-3b). From stage A3d-3a, Run-All and the Golden Path also give the codes
   for the place of the output that only the GUI gave until then
   (`OUTPUT_PARENT_NOT_FOUND`, `OUTPUT_PARENT_NOT_WRITABLE`,
   `OUTPUT_NAME_INVALID`, and `OUTPUT_PATH_TOO_LONG`); see
@@ -1431,6 +1501,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
 - A test keeps a store in the v1.7.1 format as a fixed synthetic fixture, with
   the script that made it. Every stage A pull request checks that it loads
   without migration and that every Snapshot is used.
+- Stage A3d-3b: the stops of a store have their own codes and next steps (see
+  [Stops that remain](#stops-that-remain)); a registration removes the
+  temporary files that a stopped write left, and `status` and `verify` tell of
+  a lock or an interrupted registration in `notices`. The format of a store,
+  and what a registration writes, do not change.
 
 ## Golden outputs and tests
 
@@ -1555,7 +1630,14 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `normalize-activities` prints `ERROR [CODE]: ...` and leaves no part of an
   output when it stops; and a folder of the input that this app may not
   open, which v1.7.1 passed over and finished with exit 0, stops with
-  `INPUT_NOT_READABLE` (exit 2).
+  `INPUT_NOT_READABLE` (exit 2). From stage A3d-3b, the snapshot commands
+  give the stops of the store their own codes instead of `RUN_ALL_FAILED`
+  and `SNAPSHOT_LIFECYCLE_FAILED`; `snapshot status` and `snapshot verify`
+  can print `NOTE` lines, and `snapshot verify` an `ERROR` line after its
+  report; a folder of the store that cannot be opened stops `snapshot status`
+  and `snapshot register`, which v1.7.1 passed over (exit 0), counting fewer
+  Snapshots or writing the registry without them; and `snapshot build-input`
+  checks its output before it reads the store.
 - Python API: `DiscoveredAsset` is a plain class instead of a frozen
   dataclass. Its fields, its constructor, and the content that
   `discover_export` returns are unchanged, but dataclass equality, hashing,
@@ -1600,7 +1682,16 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `is_disk_full` in `intake.source` and the module `output_location` are
   new; `RunAllError` takes the keyword `places`; `GoldenPathError` takes a
   code as its second argument and has `code`; and `run_snapshot_all`
-  checks its output before the build.
+  checks its output before the build. From stage A3d-3b,
+  `SnapshotStoreError` (`SnapshotLifecycleError`) has `code` and `places`;
+  `snapshot_status` and `verify_store` can return `notices`; `verify_store`
+  raises for a store that it cannot open, that a newer version made, or that
+  is not a store, where it returned a failed report; `register_snapshot` can
+  return `temporary_files_removed`; `build_approved_input` checks its output
+  before the store and raises `SnapshotBuildOutputError`, with the code of
+  the place of the output, when it cannot write the build; and the snapshot
+  package gains `NOTICE_MESSAGES`, `shown_store_message`, and
+  `verification_error`.
 - Schema: the fields that a disagreement can leave empty are nullable (the
   Hill and Endurance `overall_score`, the four Race Prediction times,
   `vo2max`, and `training_status`), and so is `personal_records.activity_id`

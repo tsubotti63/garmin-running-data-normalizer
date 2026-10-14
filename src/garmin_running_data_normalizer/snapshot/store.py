@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
 import re
+import shutil
 import stat
 import zlib
 from collections import Counter
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -43,6 +45,7 @@ from ..intake.source import (
     ExportTooLargeError,
     InputNotReadableError,
     TempSpaceError,
+    is_disk_full,
     is_zip_input,
     walk_paths,
 )
@@ -50,15 +53,201 @@ from .policies import CONTRACT_VERSION, REGISTRY_VERSION
 
 
 STORE_FORMAT = "garmin-running-data-normalizer-snapshot-store-v1"
+# Every format of this app's stores starts so; another version is newer.
+STORE_FORMAT_FAMILY = "garmin-running-data-normalizer-snapshot-store-"
 STORE_FORMAT_VERSION = 1
 IMMUTABLE_FILE_MODE = stat.S_IRUSR
 ACCOUNT_STORE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$")
 LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+LOCK_NAME = ".single-writer.lock"
 
 
 class SnapshotStoreError(ValueError):
-    """Fail-closed snapshot store contract error."""
+    """Fail-closed snapshot store contract error.
+
+    ``code`` names the problem (stage A3d-3b); the stops of the store's
+    contract, such as an argument that is not valid, keep
+    ``SNAPSHOT_LIFECYCLE_FAILED``. ``places`` name, for
+    ``SNAPSHOT_STORE_NOT_READABLE``, what cannot be opened inside the store.
+    They are not part of the message: they are shown only where the command
+    is started.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        code: str = "SNAPSHOT_LIFECYCLE_FAILED",
+        *,
+        places: list[str] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.places = list(places) if places is not None else None
+
+
+# The stops of the Snapshot Store say what happened and what to do next
+# (stage A3d-3b).
+STORE_NOT_WRITABLE_MESSAGE = (
+    "this app cannot write in the Snapshot Store; allow this app to write in its "
+    "folder, then register the same Export again"
+)
+STORE_SPACE_MESSAGE = (
+    "the drive of the Snapshot Store does not have enough free space; free some "
+    "space, then register the same Export again"
+)
+NEW_STORE_NOT_WRITABLE_MESSAGE = (
+    "this app cannot create the Snapshot Store there; choose another folder, or "
+    "allow this app to write in it"
+)
+NEW_STORE_SPACE_MESSAGE = (
+    "the place for the Snapshot Store does not have enough free space; free some "
+    "space, or choose another folder"
+)
+REGISTRATION_INCOMPLETE_MESSAGE = (
+    "a registration in the Snapshot Store was interrupted; register the same "
+    "Export, or another complete Export, again, which completes the store"
+)
+STORE_INVALID_NEXT_STEP = (
+    "do not change the files inside the store; restore it from a backup that "
+    "passed snapshot verify, or make a new store and register the Exports again"
+)
+SNAPSHOT_MISSING_MESSAGE = (
+    "the Snapshot Store lists a Snapshot whose files are missing, for example "
+    "because its folder was deleted by hand or removed by a sync app; restore "
+    "the store from a backup that passed snapshot verify, or make a new store "
+    "and register the Exports again"
+)
+STORE_VERSION_MESSAGE = (
+    "the Snapshot Store was made by a newer version of this app; use a newer "
+    "version of this app, and do not change the files inside the store"
+)
+STORE_NOT_READABLE_NEXT_STEP = (
+    "allow this app to read the whole Snapshot Store folder (on a Mac, in System "
+    "Settings > Privacy & Security; on Windows, in the Security tab of its Properties)"
+)
+REGISTRATION_INPUT_CHANGED_MESSAGE = (
+    "the Export changed while it was registered; register it again when it no "
+    "longer changes"
+)
+# What a store holds that does not stop a command but should be known; the
+# CLI prints each as a NOTE line, which never means a stop.
+NOTICE_MESSAGES = {
+    "SNAPSHOT_STORE_LOCKED": (
+        f"the Snapshot Store has a lock file ({LOCK_NAME}): a registration is "
+        "running, or one stopped before it ended; if no snapshot command is "
+        "running, delete that file before the next registration"
+    ),
+    "SNAPSHOT_REGISTRATION_INCOMPLETE": REGISTRATION_INCOMPLETE_MESSAGE,
+}
+
+
+def store_not_readable_message(places: list[str] | None = None) -> str:
+    """The message of ``SNAPSHOT_STORE_NOT_READABLE``. With ``places``, for
+    where the command is started, it names the first folder or file that
+    cannot be opened and how many more; without them, it names none."""
+    if places is None:
+        return (
+            "this app may not open a folder or file of the Snapshot Store; "
+            f"{STORE_NOT_READABLE_NEXT_STEP}"
+        )
+    first = places[0] if places and places[0] else "the Snapshot Store folder itself"
+    more = len(places) - 1
+    named = first if more <= 0 else f"{first} and {more} more"
+    return (
+        f"this app may not open a folder or file of the Snapshot Store: {named}; "
+        f"{STORE_NOT_READABLE_NEXT_STEP}"
+    )
+
+
+def shown_store_message(exc: SnapshotStoreError) -> str:
+    """The message of a store error where the command is started: with the
+    places that cannot be opened, when there are some."""
+    if exc.code == "SNAPSHOT_STORE_NOT_READABLE" and exc.places is not None:
+        return store_not_readable_message(exc.places)
+    return str(exc)
+
+
+def _place(root: Path, path: Path) -> str:
+    """Where a path is inside the store, as the CLI names it."""
+    if path == root:
+        return ""
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.name
+
+
+def not_readable_error(root: Path, *paths: Path) -> SnapshotStoreError:
+    """The error for folders or files of the store that cannot be opened."""
+    return SnapshotStoreError(
+        store_not_readable_message(),
+        "SNAPSHOT_STORE_NOT_READABLE",
+        places=[_place(root, path) for path in paths],
+    )
+
+
+def invalid_store_error(detail: str) -> SnapshotStoreError:
+    """The error for a store whose files are damaged or were changed."""
+    return SnapshotStoreError(
+        f"the Snapshot Store is damaged: {detail}; {STORE_INVALID_NEXT_STEP}",
+        "SNAPSHOT_STORE_INVALID",
+    )
+
+
+def _input_changed() -> SnapshotStoreError:
+    return SnapshotStoreError(REGISTRATION_INPUT_CHANGED_MESSAGE, "INPUT_CHANGED")
+
+
+def _write_error(error: OSError, *, new_store: bool = False) -> SnapshotStoreError | None:
+    """The error for one met while the store was written: no free space, or no
+    permission; None for any other."""
+    if is_disk_full(error):
+        message = NEW_STORE_SPACE_MESSAGE if new_store else STORE_SPACE_MESSAGE
+        return SnapshotStoreError(message, "SNAPSHOT_STORE_SPACE_INSUFFICIENT")
+    if isinstance(error, PermissionError) or error.errno == errno.EROFS:
+        message = NEW_STORE_NOT_WRITABLE_MESSAGE if new_store else STORE_NOT_WRITABLE_MESSAGE
+        return SnapshotStoreError(message, "SNAPSHOT_STORE_NOT_WRITABLE")
+    return None
+
+
+@contextmanager
+def _writing(*, new_store: bool = False) -> Iterator[None]:
+    """Give an error met while the store is written its code. Only writes to
+    the store go inside, so that an error of the input is never taken for one
+    of the store."""
+    try:
+        yield
+    except OSError as exc:
+        error = _write_error(exc, new_store=new_store)
+        if error is None:
+            raise
+        raise error from exc
+
+
+def _exists(root: Path, path: Path, *, follow: bool = True) -> bool:
+    """Whether a path inside the store exists, following a link as
+    ``Path.exists`` does unless ``follow`` is false; one that cannot be
+    looked at stops instead of reading as absent."""
+    try:
+        os.stat(path) if follow else os.lstat(path)
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    except PermissionError as exc:
+        raise not_readable_error(root, root if path == root else path.parent) from exc
+    return True
+
+
+def _open_folder(root: Path, folder: Path) -> list[os.DirEntry[str]]:
+    """The entries of a folder of the store, sorted by name; none when it is
+    missing, and a stop when it cannot be opened."""
+    try:
+        with os.scandir(folder) as entries:
+            return sorted(entries, key=lambda entry: entry.name)
+    except (FileNotFoundError, NotADirectoryError):
+        return []
+    except PermissionError as exc:
+        raise not_readable_error(root, folder) from exc
 
 
 def _json_bytes(value: Any) -> bytes:
@@ -106,20 +295,34 @@ def _reject_store_symlink_components(root: Path, path: Path) -> None:
             mode = current.lstat().st_mode
         except FileNotFoundError:
             continue
+        except PermissionError as exc:
+            raise not_readable_error(root, current.parent) from exc
         if stat.S_ISLNK(mode):
             raise SnapshotStoreError(
                 "symbolic links are prohibited inside the snapshot store"
             )
 
 
+def _temporary_name(path: Path) -> Path:
+    """The temporary file that a write to the store fills before it takes the
+    place of ``path``; ``_remove_temporary_files`` knows these names."""
+    return path.with_name(f".{path.name}.{os.getpid()}.tmp")
+
+
 def _atomic_write(path: Path, data: bytes) -> None:
     ensure_private_directory(path.parent)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    with open_private_file(temporary) as handle:
-        handle.write(data)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
+    temporary = _temporary_name(path)
+    try:
+        with open_private_file(temporary) as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except BaseException:
+        # A file that was not written whole is removed at once (stage A3d-3b).
+        with suppress(OSError):
+            temporary.unlink()
+        raise
 
 
 def _atomic_json(path: Path, value: Any) -> None:
@@ -160,41 +363,107 @@ def _validate_label(value: str) -> str:
     return value
 
 
-def _load_json(path: Path) -> dict[str, Any]:
+def _load_json(path: Path, root: Path) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise SnapshotStoreError(f"invalid snapshot store metadata: {path.name}") from exc
+        data = path.read_bytes()
+    except PermissionError as exc:
+        raise not_readable_error(root, path) from exc
+    except OSError as exc:
+        raise invalid_store_error(f"invalid snapshot store metadata: {path.name}") from exc
+    try:
+        value = json.loads(data.decode("utf-8"))
+    except (ValueError, RecursionError) as exc:
+        raise invalid_store_error(f"invalid snapshot store metadata: {path.name}") from exc
     if not isinstance(value, dict):
-        raise SnapshotStoreError(f"snapshot store metadata must be an object: {path.name}")
+        raise invalid_store_error(f"snapshot store metadata must be an object: {path.name}")
     return value
 
 
-def load_store(store_root: str | Path) -> tuple[Path, dict[str, Any]]:
+def _store_root(store_root: str | Path) -> Path:
     requested = Path(store_root)
-    if requested.is_symlink():
+    try:
+        is_link = requested.is_symlink()
+    except PermissionError as exc:
+        raise SnapshotStoreError(
+            store_not_readable_message(), "SNAPSHOT_STORE_NOT_READABLE", places=[""]
+        ) from exc
+    if is_link:
         raise SnapshotStoreError("snapshot store must not be a symbolic link")
-    root = requested.resolve()
-    metadata_path = root / "store.json"
-    if not metadata_path.is_file():
-        raise SnapshotStoreError("snapshot store is not initialized")
-    metadata = _load_json(metadata_path)
+    return requested.resolve()
+
+
+def _check_store_version(metadata: dict[str, Any]) -> None:
+    """A store that this version knows, one that a newer version made, or
+    one that is not a store of this app (stage A3d-3b). Every earlier
+    version wrote the format that this version reads, so another version of
+    this app's format is newer."""
     if (
-        metadata.get("format") != STORE_FORMAT
-        or metadata.get("format_version") != STORE_FORMAT_VERSION
-        or metadata.get("contract_version") != CONTRACT_VERSION
-        or metadata.get("policy_registry_version") != REGISTRY_VERSION
+        metadata.get("format") == STORE_FORMAT
+        and metadata.get("format_version") == STORE_FORMAT_VERSION
+        and metadata.get("contract_version") == CONTRACT_VERSION
+        and metadata.get("policy_registry_version") == REGISTRY_VERSION
     ):
-        raise SnapshotStoreError("snapshot store format is not supported")
+        return
+    if str(metadata.get("format", "")).startswith(STORE_FORMAT_FAMILY):
+        raise SnapshotStoreError(STORE_VERSION_MESSAGE, "SNAPSHOT_STORE_VERSION_UNSUPPORTED")
+    raise invalid_store_error("snapshot store format is not supported")
+
+
+def load_store(store_root: str | Path) -> tuple[Path, dict[str, Any]]:
+    root = _store_root(store_root)
+    metadata_path = root / "store.json"
+    # The store's folder is opened first, so that one that cannot be opened is
+    # named instead of reading as a folder without a store.
+    _open_folder(root, root)
+    try:
+        is_file = stat.S_ISREG(os.stat(metadata_path).st_mode)
+    except (FileNotFoundError, NotADirectoryError):
+        is_file = False
+    except PermissionError as exc:
+        raise not_readable_error(root, root) from exc
+    if not is_file:
+        raise SnapshotStoreError("snapshot store is not initialized")
+    metadata = _load_json(metadata_path, root)
+    _check_store_version(metadata)
     if metadata.get("single_writer") is not True:
-        raise SnapshotStoreError("snapshot store single-writer policy is not enabled")
+        raise invalid_store_error("snapshot store single-writer policy is not enabled")
     if metadata.get("automatic_deletion") is not False:
-        raise SnapshotStoreError("snapshot store enables automatic deletion")
+        raise invalid_store_error("snapshot store enables automatic deletion")
     if metadata.get("garbage_collection") is not False:
-        raise SnapshotStoreError("snapshot store enables garbage collection")
-    _validate_account_store_id(str(metadata.get("account_store_id", "")))
-    _require_aware_iso(str(metadata.get("created_at_utc", "")), "created_at_utc")
+        raise invalid_store_error("snapshot store enables garbage collection")
+    try:
+        _validate_account_store_id(str(metadata.get("account_store_id", "")))
+        _require_aware_iso(str(metadata.get("created_at_utc", "")), "created_at_utc")
+    except SnapshotStoreError as exc:
+        raise invalid_store_error(str(exc)) from exc
     return root, metadata
+
+
+# The files that ``snapshot init`` writes at the top of a new store.
+_STORE_FILE_NAMES = (
+    "store.json",
+    "registry.json",
+    "snapshot_registry.json",
+    "snapshot_family_coverage.json",
+)
+_STORE_FOLDERS = ("blobs/sha256", "blobs", "snapshots", "journal")
+
+
+def _remove_new_store(root: Path, made_root: bool) -> None:
+    """Remove what a ``snapshot init`` that stopped wrote, by the names that
+    it uses, so that it can be run again (stage A3d-3b). The folder was empty
+    before; a folder is removed only when it is empty."""
+    for name in _STORE_FILE_NAMES:
+        for path in (root / name, _temporary_name(root / name)):
+            with suppress(OSError):
+                if stat.S_ISREG(os.lstat(path).st_mode):
+                    path.unlink()
+    for relative in _STORE_FOLDERS:
+        with suppress(OSError):
+            (root / relative).rmdir()
+    if made_root:
+        with suppress(OSError):
+            root.rmdir()
 
 
 def initialize_store(
@@ -202,12 +471,9 @@ def initialize_store(
     account_store_id: str,
 ) -> dict[str, Any]:
     account_id = _validate_account_store_id(account_store_id)
-    requested = Path(store_root)
-    if requested.is_symlink():
-        raise SnapshotStoreError("snapshot store must not be a symbolic link")
-    root = requested.resolve()
+    root = _store_root(store_root)
     metadata_path = root / "store.json"
-    if metadata_path.exists():
+    if _exists(root, metadata_path):
         existing_root, existing = load_store(root)
         if existing["account_store_id"] != account_id:
             raise SnapshotStoreError("initialized store belongs to another account boundary")
@@ -217,12 +483,15 @@ def initialize_store(
             "account_store_id": account_id,
             "snapshot_count": len(load_manifests(existing_root)),
         }
-    if root.exists() and any(root.iterdir()):
+    try:
+        root_mode: int | None = os.stat(root).st_mode
+    except (FileNotFoundError, NotADirectoryError):
+        root_mode = None
+    except PermissionError as exc:
+        raise not_readable_error(root, root) from exc
+    made_root = root_mode is None
+    if root_mode is not None and (not stat.S_ISDIR(root_mode) or _open_folder(root, root)):
         raise SnapshotStoreError("new snapshot store directory must be absent or empty")
-    ensure_private_directory(root)
-    root.chmod(PRIVATE_DIRECTORY_MODE)
-    for relative in ("blobs/sha256", "snapshots", "journal"):
-        ensure_private_directory(root / relative)
     metadata = {
         "format": STORE_FORMAT,
         "format_version": STORE_FORMAT_VERSION,
@@ -234,8 +503,19 @@ def initialize_store(
         "automatic_deletion": False,
         "garbage_collection": False,
     }
-    _atomic_json(metadata_path, metadata)
-    _write_registry(root, [])
+    try:
+        with _writing(new_store=True):
+            ensure_private_directory(root)
+            root.chmod(PRIVATE_DIRECTORY_MODE)
+            for relative in ("blobs/sha256", "snapshots", "journal"):
+                ensure_private_directory(root / relative)
+            # store.json last: a store that could not be written whole holds
+            # none, and what was written is removed (stage A3d-3b).
+            _write_registry(root, [])
+            _atomic_json(metadata_path, metadata)
+    except BaseException:
+        _remove_new_store(root, made_root)
+        raise
     return {
         "status": "PASS",
         "initialized": True,
@@ -264,14 +544,18 @@ def _lock_held_message(lock_path: Path) -> str:
 
 @contextmanager
 def _store_lock(root: Path) -> Iterator[None]:
-    lock_path = root / ".single-writer.lock"
+    lock_path = root / LOCK_NAME
     try:
-        descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        # Creating the lock is the first write of a registration: a store that
+        # cannot be written stops here, before the input is read.
+        with _writing():
+            descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     except FileExistsError as exc:
-        raise SnapshotStoreError(_lock_held_message(lock_path)) from exc
+        raise SnapshotStoreError(_lock_held_message(lock_path), "SNAPSHOT_STORE_LOCKED") from exc
     try:
-        os.write(descriptor, f"{os.getpid()}\n".encode("ascii"))
-        os.close(descriptor)
+        with _writing():
+            os.write(descriptor, f"{os.getpid()}\n".encode("ascii"))
+            os.close(descriptor)
         yield
     finally:
         try:
@@ -281,62 +565,134 @@ def _store_lock(root: Path) -> Iterator[None]:
         lock_path.unlink(missing_ok=True)
 
 
+def _registered_ids(root: Path) -> set[str]:
+    """The Snapshots that the registry lists; none when it is missing or
+    damaged, as a registration then writes it again from the Snapshots."""
+    path = root / "registry.json"
+    if not _exists(root, path):
+        return set()
+    try:
+        registry = _load_json(path, root)
+    except SnapshotStoreError as exc:
+        if exc.code != "SNAPSHOT_STORE_INVALID":
+            raise
+        return set()
+    snapshots = registry.get("snapshots")
+    if not isinstance(snapshots, list):
+        return set()
+    return {
+        str(item["snapshot_id"])
+        for item in snapshots
+        if isinstance(item, dict) and item.get("snapshot_id")
+    }
+
+
+def _manifests_to_write(root: Path) -> list[dict[str, Any]]:
+    """The Snapshots, read before the registry is written again. Every
+    Snapshot that the registry lists must be there, so that a registration
+    never takes one out of it (stage A3d-3b): a registration writes a
+    Snapshot before it lists it, so a listed Snapshot without its files was
+    removed from the store."""
+    manifests = load_manifests(root)
+    present = {str(item["snapshot_id"]) for item in manifests}
+    if not _registered_ids(root) <= present:
+        raise SnapshotStoreError(SNAPSHOT_MISSING_MESSAGE, "SNAPSHOT_STORE_INVALID")
+    return manifests
+
+
 def _recover_journal(root: Path) -> str:
     journal_path = root / "journal" / "registration.json"
-    if not journal_path.exists():
+    if not _exists(root, journal_path):
         return "not_required"
-    journal = _load_json(journal_path)
+    journal = _load_json(journal_path, root)
     snapshot_id = str(journal.get("snapshot_id", ""))
-    committed = bool(snapshot_id and (root / "snapshots" / snapshot_id / "manifest.json").is_file())
-    journal_path.unlink()
-    _write_registry(root, load_manifests(root))
+    manifests = _manifests_to_write(root)
+    committed = any(str(item["snapshot_id"]) == snapshot_id for item in manifests)
+    # The registry is written again before the journal is removed, so that a
+    # stop on the way leaves the journal for the next registration
+    # (stage A3d-3b).
+    with _writing():
+        _write_registry(root, manifests)
+        journal_path.unlink()
     return "completed_commit_reconciled" if committed else "incomplete_registration_reconciled"
+
+
+def _manifest_paths(root: Path) -> list[Path]:
+    """The manifests of the Snapshots. The folders are listed here, instead
+    of with ``glob``, which passes over a folder that cannot be opened
+    (stage A3d-3b); such a folder stops the command. A folder without a
+    manifest is what an interrupted registration leaves, and is passed over
+    as before."""
+    snapshots_dir = root / "snapshots"
+    paths: list[Path] = []
+    not_opened: list[Path] = []
+    for entry in _open_folder(root, snapshots_dir):
+        folder = snapshots_dir / entry.name
+        try:
+            if not entry.is_dir():
+                continue
+            os.stat(folder / "manifest.json")
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        except PermissionError:
+            not_opened.append(folder)
+            continue
+        paths.append(folder / "manifest.json")
+    if not_opened:
+        raise not_readable_error(root, *not_opened)
+    return paths
+
+
+def _check_manifest(manifest: dict[str, Any], path: Path) -> None:
+    required = {
+        "snapshot_id",
+        "snapshot_content_id",
+        "snapshot_label",
+        "account_store_id",
+        "export_requested_at",
+        "export_downloaded_at",
+        "export_observed_at",
+        "registered_at",
+        "file_count",
+        "archive_member_count",
+        "total_bytes",
+        "objects",
+    }
+    if not required.issubset(manifest):
+        raise SnapshotStoreError("snapshot manifest is missing required metadata")
+    if manifest.get("snapshot_id") != path.parent.name:
+        raise SnapshotStoreError("snapshot directory and manifest identity differ")
+    _validate_label(str(manifest["snapshot_label"]))
+    _validate_account_store_id(str(manifest["account_store_id"]))
+    for field in (
+        "export_requested_at",
+        "export_downloaded_at",
+        "export_observed_at",
+        "registered_at",
+    ):
+        _require_aware_iso(str(manifest[field]), field)
+    if not isinstance(manifest["objects"], list) or any(
+        not isinstance(item, dict) for item in manifest["objects"]
+    ):
+        raise SnapshotStoreError("snapshot manifest objects must be a list of objects")
+    if manifest.get("export_completion_confirmed") is not True:
+        raise SnapshotStoreError("snapshot manifest lacks complete-export confirmation")
+    if manifest.get("immutable") is not True:
+        raise SnapshotStoreError("snapshot manifest is not immutable")
+    if manifest.get("automatic_deletion") is not False:
+        raise SnapshotStoreError("snapshot manifest enables automatic deletion")
 
 
 def load_manifests(root: Path) -> list[dict[str, Any]]:
     manifests: list[dict[str, Any]] = []
-    snapshots_dir = root / "snapshots"
-    if not snapshots_dir.exists():
-        return manifests
-    for path in sorted(snapshots_dir.glob("*/manifest.json")):
-        manifest = _load_json(path)
-        required = {
-            "snapshot_id",
-            "snapshot_content_id",
-            "snapshot_label",
-            "account_store_id",
-            "export_requested_at",
-            "export_downloaded_at",
-            "export_observed_at",
-            "registered_at",
-            "file_count",
-            "archive_member_count",
-            "total_bytes",
-            "objects",
-        }
-        if not required.issubset(manifest):
-            raise SnapshotStoreError("snapshot manifest is missing required metadata")
-        if manifest.get("snapshot_id") != path.parent.name:
-            raise SnapshotStoreError("snapshot directory and manifest identity differ")
-        _validate_label(str(manifest["snapshot_label"]))
-        _validate_account_store_id(str(manifest["account_store_id"]))
-        for field in (
-            "export_requested_at",
-            "export_downloaded_at",
-            "export_observed_at",
-            "registered_at",
-        ):
-            _require_aware_iso(str(manifest[field]), field)
-        if not isinstance(manifest["objects"], list) or any(
-            not isinstance(item, dict) for item in manifest["objects"]
-        ):
-            raise SnapshotStoreError("snapshot manifest objects must be a list of objects")
-        if manifest.get("export_completion_confirmed") is not True:
-            raise SnapshotStoreError("snapshot manifest lacks complete-export confirmation")
-        if manifest.get("immutable") is not True:
-            raise SnapshotStoreError("snapshot manifest is not immutable")
-        if manifest.get("automatic_deletion") is not False:
-            raise SnapshotStoreError("snapshot manifest enables automatic deletion")
+    for path in _manifest_paths(root):
+        manifest = _load_json(path, root)
+        # A manifest that breaks the store's contract is a damaged store
+        # (stage A3d-3b); the message says what is wrong.
+        try:
+            _check_manifest(manifest, path)
+        except SnapshotStoreError as exc:
+            raise invalid_store_error(str(exc)) from exc
         manifests.append(manifest)
     try:
         return sorted(
@@ -347,7 +703,7 @@ def load_manifests(root: Path) -> list[dict[str, Any]]:
             ),
         )
     except (TypeError, ValueError) as exc:
-        raise SnapshotStoreError("snapshot logical ordering metadata is invalid") from exc
+        raise invalid_store_error("snapshot logical ordering metadata is invalid") from exc
 
 
 def _inventory_document(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -472,30 +828,58 @@ class _StreamedFile:
     size: int
 
 
-def _preserve_blob(root: Path, digest: str, source: Path | _StreamedFile) -> bool:
+def _preserve_blob(root: Path, digest: str, source: Path | _StreamedFile, size: int) -> bool:
+    """Copy one file of the input to the store, unless the store holds it.
+
+    The input is read again here: a file that cannot be read now, or whose
+    content differs, changed after it was listed (stage A3d-3b). A file that
+    was not copied whole is removed at once.
+    """
     destination = root / _blob_relative_path(digest)
     _reject_store_symlink_components(root, destination)
-    size = source.size if isinstance(source, _StreamedFile) else source.stat().st_size
-    if destination.exists():
-        if destination.stat().st_size != size or sha256_file(destination) != digest:
-            raise SnapshotStoreError("existing immutable blob failed integrity validation")
+    if _exists(root, destination):
+        try:
+            same = destination.stat().st_size == size and sha256_file(destination) == digest
+        except PermissionError as exc:
+            raise not_readable_error(root, destination) from exc
+        if not same:
+            raise invalid_store_error("existing immutable blob failed integrity validation")
         return False
-    ensure_private_directory(destination.parent)
+    with _writing():
+        ensure_private_directory(destination.parent)
     _reject_store_symlink_components(root, destination)
-    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    temporary = _temporary_name(destination)
     _reject_store_symlink_components(root, temporary)
-    with open_private_file(temporary) as handle:
-        opened = source.open() if isinstance(source, _StreamedFile) else source.open("rb")
-        with opened as input_handle:
-            while chunk := input_handle.read(1024 * 1024):
-                handle.write(chunk)
-        handle.flush()
-        os.fsync(handle.fileno())
-    if sha256_file(temporary) != digest:
-        temporary.unlink(missing_ok=True)
-        raise SnapshotStoreError("new immutable blob failed integrity validation")
-    os.replace(temporary, destination)
-    destination.chmod(IMMUTABLE_FILE_MODE)
+    try:
+        with _writing():
+            handle = open_private_file(temporary)
+        with handle, ExitStack() as reading:
+            try:
+                opened = source.open() if isinstance(source, _StreamedFile) else source.open("rb")
+                input_handle = reading.enter_context(opened)
+            except OSError as exc:
+                raise _input_changed() from exc
+            while True:
+                try:
+                    chunk = input_handle.read(1024 * 1024)
+                except OSError as exc:
+                    raise _input_changed() from exc
+                if not chunk:
+                    break
+                with _writing():
+                    handle.write(chunk)
+            with _writing():
+                handle.flush()
+                os.fsync(handle.fileno())
+        if sha256_file(temporary) != digest:
+            raise _input_changed()
+        with _writing():
+            os.replace(temporary, destination)
+            destination.chmod(IMMUTABLE_FILE_MODE)
+    except BaseException:
+        with suppress(OSError):
+            temporary.unlink()
+        raise
     return True
 
 
@@ -521,7 +905,7 @@ def _open_snapshot_input(source: Path) -> Iterator[OpenedExport]:
         try:
             paths, not_opened = walk_paths(source)
         except FileNotFoundError as exc:
-            raise SnapshotStoreError("snapshot input changed during completeness scan") from exc
+            raise _input_changed() from exc
         for path in paths:
             if path.is_symlink():
                 raise SnapshotStoreError("symbolic links are prohibited in snapshot input")
@@ -616,6 +1000,15 @@ def _scan_members(
     return None
 
 
+def _archive_state(source: Path) -> tuple[int, int]:
+    """The size and time of an Export ZIP file; one that went away changed."""
+    try:
+        status = source.stat()
+    except FileNotFoundError as exc:
+        raise _input_changed() from exc
+    return status.st_size, status.st_mtime_ns
+
+
 def _scan_source(
     source: Path,
     export: ExportView,
@@ -630,9 +1023,7 @@ def _scan_source(
     files = export.files()
     if not files:
         raise SnapshotStoreError("snapshot input contains no files")
-    archive_before = (
-        (source.stat().st_size, source.stat().st_mtime_ns) if is_zip_input(source) else None
-    )
+    archive_before = _archive_state(source) if is_zip_input(source) else None
     for item in files:
         relative = item.relative_path
         if (
@@ -648,6 +1039,8 @@ def _scan_source(
                 data = None
             except PermissionError as exc:
                 raise InputNotReadableError([export.place_of(item)]) from exc
+            except FileNotFoundError as exc:
+                raise _input_changed() from exc
             if data is not None:
                 accounts |= account_values([(relative, data)])
         if item.path is not None:
@@ -658,8 +1051,10 @@ def _scan_source(
                 after = (path.stat().st_size, path.stat().st_mtime_ns)
             except PermissionError as exc:
                 raise InputNotReadableError([export.place_of(item)]) from exc
+            except FileNotFoundError as exc:
+                raise _input_changed() from exc
             if before != after:
-                raise SnapshotStoreError("snapshot input changed during completeness scan")
+                raise _input_changed()
             byte_count = before[0]
             payloads.setdefault(digest, path)
         else:
@@ -698,11 +1093,8 @@ def _scan_source(
             # The ZIP file is stored whole, without its members, and the
             # build leaves it out for this reason (stage A3c-2).
             row["parser_state"] = reason
-    if archive_before is not None and archive_before != (
-        source.stat().st_size,
-        source.stat().st_mtime_ns,
-    ):
-        raise SnapshotStoreError("snapshot input changed during completeness scan")
+    if archive_before is not None and archive_before != _archive_state(source):
+        raise _input_changed()
     if not inventory:
         raise SnapshotStoreError("snapshot input contains no accepted files")
     return inventory, payloads, accounts
@@ -726,9 +1118,14 @@ def _snapshot_accounts(root: Path, manifest: dict[str, Any]) -> set[str]:
         ):
             continue
         blob = root / str(row["blob_relative_path"])
-        data = blob.read_bytes()
+        try:
+            data = blob.read_bytes()
+        except PermissionError as exc:
+            raise not_readable_error(root, blob) from exc
+        except OSError as exc:
+            raise invalid_store_error("immutable snapshot blob failed verification") from exc
         if len(data) != row["bytes"] or _sha256_bytes(data) != row["sha256"]:
-            raise SnapshotStoreError("immutable snapshot blob failed verification")
+            raise invalid_store_error("immutable snapshot blob failed verification")
         files.append((relative, data))
     return account_values(files)
 
@@ -747,6 +1144,83 @@ def _inventory_content_id(inventory: list[dict[str, Any]]) -> str:
         )
     ]
     return f"content:{_sha256_bytes(_stable_json_bytes(identity_rows))}"
+
+
+# A temporary file of a write to the store: ".<name>.<process ID>.tmp", next
+# to the file that it replaces (``_temporary_name``).
+_TEMPORARY_NAME = re.compile(r"^\.(?P<name>.+)\.[0-9]+\.tmp$")
+_BLOB_FOLDER_NAME = re.compile(r"^[0-9a-f]{2}$")
+
+
+def _remove_temporary_files(root: Path) -> int:
+    """Remove the temporary files that writes to the store left when they
+    stopped, and return how many (stage A3d-3b).
+
+    Called with the lock held, so that no write of this app is under way.
+    Only the names that this app gives them are removed, in the folders where
+    it writes them: the files at the top of the store, the journal, the
+    manifest and inventory of a Snapshot, and a blob in the folder of the
+    first two characters of its SHA-256. A link is never followed or
+    removed, and the lock and the journal are kept.
+    """
+    removed = 0
+
+    def remove(folder: Path, accepts: Callable[[str], bool]) -> None:
+        nonlocal removed
+        for entry in _open_folder(root, folder):
+            match = _TEMPORARY_NAME.fullmatch(entry.name)
+            if match is None or not accepts(match["name"]):
+                continue
+            if not entry.is_file(follow_symlinks=False):
+                continue
+            with _writing():
+                os.unlink(folder / entry.name)
+            removed += 1
+
+    def folders(parent: Path) -> list[Path]:
+        return [
+            parent / entry.name
+            for entry in _open_folder(root, parent)
+            if entry.is_dir(follow_symlinks=False)
+        ]
+
+    remove(root, lambda name: name in _STORE_FILE_NAMES)
+    remove(root / "journal", lambda name: name == "registration.json")
+    for folder in folders(root / "snapshots"):
+        remove(
+            folder,
+            lambda name, snapshot_id=folder.name: name
+            in {"manifest.json", f"{snapshot_id}.inventory.json"},
+        )
+    for folder in folders(root / "blobs" / "sha256"):
+        if _BLOB_FOLDER_NAME.fullmatch(folder.name) is None:
+            continue
+        remove(
+            folder,
+            lambda name, prefix=folder.name: SHA256_RE.fullmatch(name) is not None
+            and name[:2] == prefix,
+        )
+    return removed
+
+
+def _check_space(root: Path, payloads: dict[str, Path | _StreamedFile], sizes: dict[str, int]) -> None:
+    """Stop before anything is written when the drive of the store cannot hold
+    the files that the store does not hold yet (stage A3d-3b). Only these are
+    counted, so that a registration is never stopped for nothing: a later
+    Export shares most of its files with the earlier ones. The small files
+    that list the Snapshot are not counted; a write that finds no space stops
+    with the same code."""
+    needed = sum(
+        sizes[digest]
+        for digest in payloads
+        if not _exists(root, root / _blob_relative_path(digest))
+    )
+    try:
+        free = shutil.disk_usage(root).free
+    except OSError:
+        return
+    if needed > free:
+        raise SnapshotStoreError(STORE_SPACE_MESSAGE, "SNAPSHOT_STORE_SPACE_INSUFFICIENT")
 
 
 def register_snapshot(
@@ -779,6 +1253,10 @@ def register_snapshot(
 
     # The input stays open until its files are copied to the store.
     with _store_lock(root), ExitStack() as stack:
+        store_notes: dict[str, int] = {}
+        removed = _remove_temporary_files(root)
+        if removed:
+            store_notes["temporary_files_removed"] = removed
         recovery_status = _recover_journal(root)
         opened = stack.enter_context(_open_snapshot_input(source))
         inventory, payloads, accounts = _scan_source(source, opened.source)
@@ -789,13 +1267,14 @@ def register_snapshot(
             input_notes["same_export_count"] = opened.same_export_count
         if opened.outside_files:
             input_notes["files_not_registered_count"] = len(opened.outside_files)
-        manifests = load_manifests(root)
+        manifests = _manifests_to_write(root)
         # The same Export registered again, under any path, label, or time, is
         # not a new Snapshot (stage A3a).
         target = content_multiset(inventory)
         for index, existing in enumerate(manifests, start=1):
             if content_multiset(list(existing.get("objects", []))) == target:
-                _write_registry(root, manifests)
+                with _writing():
+                    _write_registry(root, manifests)
                 return {
                     "status": "PASS",
                     "snapshot_id": existing["snapshot_id"],
@@ -808,6 +1287,7 @@ def register_snapshot(
                     "logical_order": index,
                     "recovery_status": recovery_status,
                     **input_notes,
+                    **store_notes,
                 }
         if accounts and manifests:
             latest_accounts = _snapshot_accounts(root, manifests[-1])
@@ -847,7 +1327,8 @@ def register_snapshot(
                 raise SnapshotStoreError(
                     "idempotent registration metadata must match the original"
                 )
-            _write_registry(root, manifests)
+            with _writing():
+                _write_registry(root, manifests)
             return {
                 "status": "PASS",
                 "snapshot_id": snapshot_id,
@@ -855,20 +1336,24 @@ def register_snapshot(
                 "snapshot_count": len(manifests),
                 "logical_order": manifests.index(existing) + 1,
                 "recovery_status": recovery_status,
+                **store_notes,
             }
 
-        _atomic_json(
-            root / "journal" / "registration.json",
-            {
-                "format": "snapshot-registration-journal-v1",
-                "snapshot_id": snapshot_id,
-                "phase": "preserving_blobs",
-            },
-        )
+        sizes = {str(row["sha256"]): int(row["bytes"]) for row in inventory}
+        _check_space(root, payloads, sizes)
+        with _writing():
+            _atomic_json(
+                root / "journal" / "registration.json",
+                {
+                    "format": "snapshot-registration-journal-v1",
+                    "snapshot_id": snapshot_id,
+                    "phase": "preserving_blobs",
+                },
+            )
         added = 0
         reused = 0
         for digest in sorted(payloads):
-            if _preserve_blob(root, digest, payloads[digest]):
+            if _preserve_blob(root, digest, payloads[digest], sizes[digest]):
                 added += 1
             else:
                 reused += 1
@@ -897,10 +1382,11 @@ def register_snapshot(
             "automatic_deletion": False,
         }
         inventory_path = manifest_path.parent / f"{snapshot_id}.inventory.json"
-        _atomic_json(inventory_path, _inventory_document(manifest))
-        _atomic_json(manifest_path, manifest)
-        inventory_path.chmod(IMMUTABLE_FILE_MODE)
-        manifest_path.chmod(IMMUTABLE_FILE_MODE)
+        with _writing():
+            _atomic_json(inventory_path, _inventory_document(manifest))
+            _atomic_json(manifest_path, manifest)
+            inventory_path.chmod(IMMUTABLE_FILE_MODE)
+            manifest_path.chmod(IMMUTABLE_FILE_MODE)
         manifests.append(manifest)
         manifests = sorted(
             manifests,
@@ -909,8 +1395,9 @@ def register_snapshot(
                 str(item["snapshot_id"]),
             ),
         )
-        _write_registry(root, manifests)
-        (root / "journal" / "registration.json").unlink()
+        with _writing():
+            _write_registry(root, manifests)
+            (root / "journal" / "registration.json").unlink()
         return {
             "status": "PASS",
             "snapshot_id": snapshot_id,
@@ -921,13 +1408,26 @@ def register_snapshot(
             "blob_reused_count": reused,
             "recovery_status": recovery_status,
             **input_notes,
+            **store_notes,
         }
+
+
+def _notices(root: Path, *, journal: bool) -> list[str]:
+    """What a store holds that does not stop a command but should be known
+    (stage A3d-3b): the lock of a registration that runs or stopped, and,
+    with ``journal``, the journal of one that was interrupted."""
+    notices = []
+    if _exists(root, root / LOCK_NAME, follow=False):
+        notices.append("SNAPSHOT_STORE_LOCKED")
+    if journal and _exists(root, root / "journal" / "registration.json"):
+        notices.append("SNAPSHOT_REGISTRATION_INCOMPLETE")
+    return notices
 
 
 def snapshot_status(store_root: str | Path) -> dict[str, Any]:
     root, metadata = load_store(store_root)
     manifests = load_manifests(root)
-    return {
+    result: dict[str, Any] = {
         "status": "PASS",
         "account_store_id": metadata["account_store_id"],
         "snapshot_count": len(manifests),
@@ -943,6 +1443,24 @@ def snapshot_status(store_root: str | Path) -> dict[str, Any]:
             for index, manifest in enumerate(manifests, start=1)
         ],
     }
+    notices = _notices(root, journal=True)
+    if notices:
+        result["notices"] = notices
+    return result
+
+
+def _blob_whole(blob: Path, byte_count: int, digest: str) -> bool:
+    """Whether a blob is a regular file of its size and SHA-256. Raises
+    ``PermissionError`` when it cannot be opened."""
+    try:
+        status = os.stat(blob)
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    return (
+        stat.S_ISREG(status.st_mode)
+        and status.st_size == byte_count
+        and sha256_file(blob) == digest
+    )
 
 
 def verify_store(store_root: str | Path) -> dict[str, Any]:
@@ -950,7 +1468,12 @@ def verify_store(store_root: str | Path) -> dict[str, Any]:
     try:
         root, metadata = load_store(store_root)
         manifests = load_manifests(root)
-    except SnapshotStoreError:
+    except SnapshotStoreError as exc:
+        # A store that cannot be opened, that a newer version made, or that is
+        # not a store stops verification; a damaged store fails it
+        # (stage A3d-3b).
+        if exc.code != "SNAPSHOT_STORE_INVALID":
+            raise
         return {
             "status": "FAIL",
             "snapshot_count": 0,
@@ -961,8 +1484,20 @@ def verify_store(store_root: str | Path) -> dict[str, Any]:
             "automatic_deletion": False,
             "garbage_collection_performed": False,
         }
+    # The places that cannot be opened stop verification at its end, all named.
+    not_opened: list[str] = []
+
+    def load(path: Path) -> dict[str, Any] | None:
+        try:
+            return _load_json(path, root)
+        except SnapshotStoreError as exc:
+            if exc.code != "SNAPSHOT_STORE_NOT_READABLE":
+                raise
+            not_opened.extend(exc.places or [])
+            return None
+
     referenced: set[str] = set()
-    if (root / "journal" / "registration.json").exists():
+    if _exists(root, root / "journal" / "registration.json"):
         failures.append("incomplete_registration_journal_present")
     for manifest in manifests:
         if manifest.get("account_store_id") != metadata["account_store_id"]:
@@ -999,26 +1534,28 @@ def verify_store(store_root: str | Path) -> dict[str, Any]:
             blob = root / blob_relative_path
             try:
                 _reject_store_symlink_components(root, blob)
-                blob_valid = (
-                    blob.is_file()
-                    and blob.stat().st_size == byte_count
-                    and sha256_file(blob) == digest
-                )
-            except SnapshotStoreError:
+                blob_valid = _blob_whole(blob, byte_count, digest)
+            except PermissionError:
+                not_opened.append(_place(root, blob))
+                continue
+            except SnapshotStoreError as exc:
+                if exc.code == "SNAPSHOT_STORE_NOT_READABLE":
+                    not_opened.extend(exc.places or [])
+                    continue
                 failures.append("immutable_blob_symlink_failure")
                 blob_valid = False
             if not blob_valid:
                 failures.append("immutable_blob_integrity_failure")
     try:
-        registry = _load_json(root / "registry.json")
+        registry = load(root / "registry.json")
         expected_registry, expected_family_coverage = _registry_documents(manifests)
-        if registry != expected_registry:
+        if registry is not None and registry != expected_registry:
             failures.append("registry_manifest_binding_mismatch")
-        public_registry = _load_json(root / "snapshot_registry.json")
-        if public_registry != registry:
+        public_registry = load(root / "snapshot_registry.json")
+        if registry is not None and public_registry is not None and public_registry != registry:
             failures.append("snapshot_registry_alias_mismatch")
-        family_coverage = _load_json(root / "snapshot_family_coverage.json")
-        if family_coverage != expected_family_coverage:
+        family_coverage = load(root / "snapshot_family_coverage.json")
+        if family_coverage is not None and family_coverage != expected_family_coverage:
             failures.append("snapshot_family_coverage_binding_mismatch")
     except SnapshotStoreError:
         failures.append("snapshot_registry_metadata_failure")
@@ -1030,26 +1567,48 @@ def verify_store(store_root: str | Path) -> dict[str, Any]:
             / f"{manifest['snapshot_id']}.inventory.json"
         )
         try:
-            inventory = _load_json(inventory_path)
-            if inventory != _inventory_document(manifest):
+            inventory = load(inventory_path)
+            if inventory is not None and inventory != _inventory_document(manifest):
                 failures.append("snapshot_inventory_mismatch")
         except SnapshotStoreError:
             failures.append("snapshot_inventory_metadata_failure")
+    # The blobs are walked as ``rglob`` lists them, with the folders that
+    # cannot be opened, which ``rglob`` passes over (stage A3d-3b).
     blob_root = root / "blobs" / "sha256"
+    blob_tree: list[Path] = []
     try:
         _reject_store_symlink_components(root, blob_root)
-        blob_tree = list(blob_root.rglob("*")) if blob_root.exists() else []
-    except SnapshotStoreError:
+        if _exists(root, blob_root):
+            blob_tree, closed = walk_paths(blob_root)
+            not_opened.extend(_place(root, folder) for folder in closed)
+    except SnapshotStoreError as exc:
+        if exc.code != "SNAPSHOT_STORE_NOT_READABLE":
+            failures.append("immutable_blob_symlink_failure")
+        else:
+            not_opened.extend(exc.places or [])
+    all_blobs: set[str] = set()
+    symlink_found = False
+    for path in blob_tree:
+        try:
+            mode = os.lstat(path).st_mode
+        except FileNotFoundError:
+            continue
+        except PermissionError:
+            not_opened.append(_place(root, path.parent))
+            continue
+        if stat.S_ISLNK(mode):
+            symlink_found = True
+        elif stat.S_ISREG(mode):
+            all_blobs.add(path.name)
+    if symlink_found:
         failures.append("immutable_blob_symlink_failure")
-        blob_tree = []
-    if any(path.is_symlink() for path in blob_tree):
-        failures.append("immutable_blob_symlink_failure")
-    all_blobs = {
-        path.name
-        for path in blob_tree
-        if path.is_file() and not path.is_symlink()
-    }
-    return {
+    if not_opened:
+        raise SnapshotStoreError(
+            store_not_readable_message(),
+            "SNAPSHOT_STORE_NOT_READABLE",
+            places=list(dict.fromkeys(not_opened)),
+        )
+    result: dict[str, Any] = {
         "status": "PASS" if not failures else "FAIL",
         "snapshot_count": len(manifests),
         "referenced_blob_count": len(referenced),
@@ -1059,16 +1618,58 @@ def verify_store(store_root: str | Path) -> dict[str, Any]:
         "automatic_deletion": False,
         "garbage_collection_performed": False,
     }
+    notices = _notices(root, journal=False)
+    if notices:
+        result["notices"] = notices
+    return result
+
+
+# The failures that the next registration completes after one was
+# interrupted: its journal, and the registry that it did not write again.
+_COMPLETED_BY_REGISTRATION = frozenset(
+    {
+        "incomplete_registration_journal_present",
+        "registry_manifest_binding_mismatch",
+        "snapshot_registry_alias_mismatch",
+        "snapshot_family_coverage_binding_mismatch",
+    }
+)
+
+
+def verification_error(
+    verification: dict[str, Any],
+    error_class: type[SnapshotStoreError] = SnapshotStoreError,
+) -> SnapshotStoreError:
+    """The error of a store that failed verification (stage A3d-3b): an
+    interrupted registration, which the next one completes, or a damaged
+    store, with the names of its failures."""
+    failures = [str(item) for item in verification.get("failures", [])]
+    if (
+        "incomplete_registration_journal_present" in failures
+        and set(failures) <= _COMPLETED_BY_REGISTRATION
+    ):
+        return error_class(REGISTRATION_INCOMPLETE_MESSAGE, "SNAPSHOT_REGISTRATION_INCOMPLETE")
+    return error_class(
+        f"the Snapshot Store failed verification ({', '.join(failures)}); "
+        f"{STORE_INVALID_NEXT_STEP}",
+        "SNAPSHOT_STORE_INVALID",
+    )
 
 
 __all__ = [
+    "NOTICE_MESSAGES",
     "SnapshotStoreError",
     "content_multiset",
     "initialize_store",
+    "invalid_store_error",
     "load_manifests",
     "load_store",
+    "not_readable_error",
     "register_snapshot",
     "sha256_file",
+    "shown_store_message",
     "snapshot_status",
+    "store_not_readable_message",
+    "verification_error",
     "verify_store",
 ]
