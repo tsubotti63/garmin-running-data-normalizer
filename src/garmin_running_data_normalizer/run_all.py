@@ -663,6 +663,7 @@ def _normalize_datasets(
     dict[str, RecordMerge],
     dict[str, Counter[str]],
     dict[str, InvalidValues],
+    dict[str, tuple[tuple[str, ...], dict[tuple[str, ...], tuple[int, ...]]]],
 ]:
     records: dict[str, list[dict[str, Any]]] = {name: [] for name in DATASET_PATHS}
     # Repeated records of the same stable key become one row (stage A3b).
@@ -868,6 +869,29 @@ def _normalize_datasets(
             "detected daily metric input could not be normalized",
         ) from exc
 
+    # In a Snapshot run, the Snapshots that observed each row, by the row's
+    # stable key, for the observations of Source Completeness (stage A3d-4c-2).
+    observed: dict[str, tuple[tuple[str, ...], dict[tuple[str, ...], tuple[int, ...]]]] = {}
+    if snapshot_context is not None:
+        for name in RECORD_AUDIT_DATASETS:
+            observed[name] = _observed_by_key(
+                merges[name].rows, merges[name].row_snapshot_numbers, STABLE_KEYS[name]
+            )
+        for name, metric_result in (
+            ("hill_score_daily", hill_result),
+            ("endurance_score_daily", endurance_result),
+        ):
+            observed[name] = _observed_by_key(
+                metric_result.records, metric_result.row_snapshot_numbers, ("calendar_date",)
+            )
+        for name, result in daily_results.items():
+            observed[name] = _observed_by_key(
+                result.records, result.row_snapshot_numbers, tuple(result.audit["stable_key"])
+            )
+        observed["hrv_daily"] = _observed_by_key(
+            hrv_result["records"], hrv_result.get("row_snapshot_numbers", []), ("calendar_date",)
+        )
+
     file_counts = (snapshot_context or {}).get("family_file_counts")
     if file_counts is not None:
         for dataset, family in SNAPSHOT_COUNTED_DATASETS.items():
@@ -963,7 +987,50 @@ def _normalize_datasets(
         merges,
         rows_left_out,
         invalid_values,
+        observed,
     )
+
+
+def _observed_by_key(
+    rows: list[dict[str, Any]],
+    numbers: list[tuple[int, ...]],
+    key_fields: tuple[str, ...],
+) -> tuple[tuple[str, ...], dict[tuple[str, ...], tuple[int, ...]]]:
+    """Return the key fields of a dataset and the Snapshots that observed its
+    rows by their keys: the relationships later sort, leave out, or rebuild
+    rows, and their keys stay (stage A3d-4c-2)."""
+    return key_fields, {
+        tuple(str(row.get(field)) for field in key_fields): snapshots
+        for row, snapshots in zip(rows, numbers)
+    }
+
+
+def _snapshot_observations(
+    records: dict[str, list[dict[str, Any]]],
+    observed: dict[str, tuple[tuple[str, ...], dict[tuple[str, ...], tuple[int, ...]]]],
+    fit_numbers: dict[str, list[int]],
+    numbers: list[int],
+) -> dict[int, dict[str, int]]:
+    """Count, for each Snapshot, the rows of each family that it observed, as
+    a one-shot run of its Export counts the rows of the family's datasets
+    (stage A3d-4c-2). The rows that a FIT file gives, its sessions, laps,
+    links, and HRV dates, belong to the Snapshots that hold the file."""
+    from .diagnostics.contracts import FAMILY_DATASETS, SOURCE_FAMILY_ORDER
+
+    counts = {number: {family: 0 for family in SOURCE_FAMILY_ORDER} for number in numbers}
+    for family, datasets in FAMILY_DATASETS.items():
+        for dataset in datasets:
+            key_fields, by_key = observed.get(dataset, ((), {}))
+            for row in records[dataset]:
+                if dataset in ("fit_sessions", "fit_laps"):
+                    snapshots = set(fit_numbers.get(str(row.get("source_sha256"))) or ())
+                elif dataset == "activity_fit_links":
+                    snapshots = set(fit_numbers.get(str(row.get("fit_source_sha256"))) or ())
+                else:
+                    snapshots = set(by_key.get(tuple(str(row.get(field)) for field in key_fields), ()))
+                for number in snapshots & set(counts):
+                    counts[number][family] += 1
+    return counts
 
 
 def _invalid_value_counts(
@@ -1898,6 +1965,7 @@ def run_all(
                 record_merges,
                 record_rows_left_out,
                 record_invalid_values,
+                observed_rows,
             ) = _normalize_datasets(
                 input_root,
                 families,
@@ -2147,6 +2215,7 @@ def run_all(
         "qa/performance_metrics_summary.json": _json_bytes(performance_summary),
         "qa/daily_metrics_summary.json": _json_bytes(daily_metrics_summary),
     }
+    completeness_context: dict[str, Any] | None = None
     if snapshot_context is not None:
         required_snapshot_context = {"lineage", "coverage", "merge_summary"}
         allowed_snapshot_context = required_snapshot_context | {
@@ -2171,14 +2240,36 @@ def run_all(
                 "SNAPSHOT_CONTEXT_INVALID",
                 "snapshot lifecycle context is incomplete",
             )
+        # The observations of Source Completeness are the output rows of each
+        # family that each Snapshot observed, counted here as a one-shot run
+        # counts its rows; the build does not count them (stage A3d-4c-2).
+        snapshot_coverage = snapshot_context["coverage"]
+        completeness_context = snapshot_context.get("source_completeness_context")
+        observations = (completeness_context or {}).get("observations")
+        if isinstance(observations, list) and all(
+            isinstance(item, dict) for item in observations
+        ):
+            counts = _snapshot_observations(
+                records,
+                observed_rows,
+                snapshot_context.get("fit_snapshot_numbers") or {},
+                list(range(1, len(observations) + 1)),
+            )
+            observations = [
+                {**item, "source_observation_counts": counts[number]}
+                for number, item in enumerate(observations, start=1)
+            ]
+            completeness_context = {**completeness_context, "observations": observations}
+            snapshot_coverage = {
+                **snapshot_coverage,
+                "source_completeness_observations": observations,
+            }
         payloads.update(
             {
                 "snapshot/snapshot_lineage.json": _json_bytes(
                     snapshot_context["lineage"]
                 ),
-                "snapshot/snapshot_coverage.json": _json_bytes(
-                    snapshot_context["coverage"]
-                ),
+                "snapshot/snapshot_coverage.json": _json_bytes(snapshot_coverage),
                 "snapshot/canonical_merge_summary.json": _json_bytes(
                     snapshot_context["merge_summary"]
                 ),
@@ -2201,11 +2292,7 @@ def run_all(
         unknown_evidence_count=sum(
             1 for asset in initial_assets if _asset_family(asset) == "unclassified"
         ),
-        snapshot_context=(
-            snapshot_context.get("source_completeness_context")
-            if snapshot_context is not None
-            else None
-        ),
+        snapshot_context=completeness_context,
         fit_audit=fit_audit,
     )
     run_quality = build_run_quality(

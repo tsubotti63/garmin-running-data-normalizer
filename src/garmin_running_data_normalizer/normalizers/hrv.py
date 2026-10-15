@@ -352,6 +352,27 @@ def normalize_hrv_daily_assets(
             "source_paths_exposed": False,
             "source_hashes_exposed": False,
         },
+        # In a Snapshot run, the import numbers of the Snapshots that hold a
+        # FIT file with a reading of each record's date, in the order of the
+        # records (stage A3d-4c-2).
+        **(
+            {
+                "row_snapshot_numbers": [
+                    tuple(
+                        sorted(
+                            {
+                                number
+                                for _value, source in by_date[date]
+                                for number in snapshot_numbers.get(source) or ()
+                            }
+                        )
+                    )
+                    for date in sorted(by_date)
+                ]
+            }
+            if snapshot_numbers is not None
+            else {}
+        ),
     }
 
 

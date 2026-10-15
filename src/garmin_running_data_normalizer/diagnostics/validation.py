@@ -373,6 +373,19 @@ def _reconcile_snapshot_completeness(
         != _count(merge_summary.get("fit", {}).get("source_alias_count"))
     ):
         raise ValueError("Snapshot completeness aggregate contradicts coverage")
+    # The rows that a Snapshot observed are rows of the output: no more than
+    # the rows of each family, and all of them in a store of one Snapshot
+    # (stage A3d-4c-2).
+    dataset_counts = _dataset_record_counts(_json(root, "qa/dataset_summary.json"))
+    for item in observations:
+        observed = item.get("source_observation_counts") if isinstance(item, dict) else None
+        if not isinstance(observed, dict):
+            raise ValueError("Snapshot completeness observation authority is invalid")
+        for family, datasets in FAMILY_DATASETS.items():
+            rows = sum(dataset_counts.get(dataset, 0) for dataset in datasets)
+            count = _count(observed.get(family))
+            if count > rows or (snapshot_count == 1 and count != rows):
+                raise ValueError("Snapshot completeness observations contradict the datasets")
 
 
 def validate_diagnostic_authorities(

@@ -196,7 +196,6 @@ def build_source_completeness(
                         "malformed_count": malformed
                     }
             fit_counts: Counter[str] = Counter()
-            fit_record_count = 0
             fit_incomplete_count = 0
             fit_digests = observation.get("fit_source_sha256")
             if not isinstance(fit_digests, list) or any(
@@ -209,7 +208,6 @@ def build_source_completeness(
                     raise ValueError("Snapshot FIT audit binding is incomplete")
                 status = str(item.get("parse_status"))
                 fit_counts[status] += 1
-                fit_record_count += _non_negative(item.get("record_count", 0))
                 if status in FIT_UNREADABLE | FIT_UNSUPPORTED | FIT_MALFORMED or _non_negative(
                     item.get("unknown_records", 0)
                 ):
@@ -221,11 +219,14 @@ def build_source_completeness(
                     for status, count in sorted(fit_counts.items())
                 },
             }
+            # The rows of each family that the Snapshot observed, which Run-All
+            # counts as a one-shot run counts its rows; for FIT, the rows of
+            # its FIT files, where the per-second records of the files were
+            # counted until stage A3d-4c-2.
             effective_counts = {
                 family: _non_negative(observed_counts[family])
                 for family in SOURCE_FAMILY_ORDER
             }
-            effective_counts["fit"] = fit_record_count
             per_snapshot = build_source_completeness(
                 product_version=product_version,
                 family_candidate_counts={

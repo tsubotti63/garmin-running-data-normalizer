@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from collections.abc import Mapping
 from typing import Any, Callable
 
@@ -39,8 +39,10 @@ from .daily_metrics import (
     copies_within_snapshots,
     merge_observations,
     observation_weight,
+    observed_snapshots,
     public_fields,
     snapshot_numbers,
+    snapshot_presence,
 )
 from .source_records import MARK_FIELD, is_mark, mark_holds_a_value
 
@@ -81,6 +83,9 @@ _PRESENCE_FLAGS: dict[str, frozenset[str]] = {
 }
 # The internal field that carries the import numbers of a row in a Snapshot run.
 ROW_SNAPSHOT_NUMBERS = "_snapshot_numbers"
+# The internal field that carries the import numbers of every Snapshot that
+# holds a row's record, at any time point (stage A3d-4c-2).
+ROW_SNAPSHOT_PRESENCE = "_snapshot_presence"
 # A Snapshot build writes, for a field that the record's last time point does
 # not contain and whose earlier values disagree, a probe record without the
 # field and one probe record for each value, marked with the field's name.
@@ -97,19 +102,26 @@ class RecordMerge:
     same_value_duplicate_count: int
     absent_value_counts: dict[str, int]
     disagreements: list[dict[str, Any]]
+    # In a Snapshot run, the import numbers of the Snapshots that observed
+    # each row, in the order of the rows; empty for a one-shot run's rows
+    # (stage A3d-4c-2).
+    row_snapshot_numbers: list[tuple[int, ...]] = field(default_factory=list)
 
 
 def row_snapshot_marks(raw: dict[str, Any]) -> dict[str, Any]:
     """Return the marks that a Snapshot build gave a source record.
 
-    The marks are the import numbers of the observations behind the record
-    and, for a probe record, the name of its field. An Export's own records
-    never carry them.
+    The marks are the import numbers of the observations behind the record,
+    those of every Snapshot that holds the record, and, for a probe record,
+    the name of its field. An Export's own records never carry them.
     """
     marks: dict[str, Any] = {}
     numbers = snapshot_numbers(raw)
     if numbers:
         marks[ROW_SNAPSHOT_NUMBERS] = numbers
+    presence = snapshot_presence(raw)
+    if presence:
+        marks[ROW_SNAPSHOT_PRESENCE] = presence
     probe = raw.get(SNAPSHOT_PROBE_FIELD)
     if isinstance(probe, str) and probe:
         marks[ROW_SNAPSHOT_PROBE] = probe
@@ -242,12 +254,18 @@ def merge_repeated_records(dataset: str, rows: list[dict[str, Any]]) -> RecordMe
         return comparable_text(value)
 
     output: list[dict[str, Any]] = []
+    row_numbers: list[tuple[int, ...]] = []
     copies = 0
     absent: Counter[str] = Counter()
     disagreements: list[dict[str, Any]] = []
     for identity, group in groups.items():
         public = [public_fields(row) for row in group]
         numbers = [_numbers(row) for row in group]
+        # The Snapshots that hold the record, at any time point; the import
+        # numbers of a row stand only for the observations of the last.
+        row_numbers.append(
+            observed_snapshots(row.get(ROW_SNAPSHOT_PRESENCE) or items for row, items in zip(group, numbers))
+        )
         fields = [
             field
             for field in public[0]
@@ -276,6 +294,7 @@ def merge_repeated_records(dataset: str, rows: list[dict[str, Any]]) -> RecordMe
         same_value_duplicate_count=copies,
         absent_value_counts=dict(sorted(absent.items())),
         disagreements=disagreements,
+        row_snapshot_numbers=row_numbers,
     )
 
 
@@ -401,6 +420,7 @@ __all__ = [
     "IDENTITY_MISSING",
     "RECORD_DATASETS",
     "ROW_SNAPSHOT_NUMBERS",
+    "ROW_SNAPSHOT_PRESENCE",
     "RecordMerge",
     "STABLE_KEYS",
     "SNAPSHOT_PROBE_FIELD",

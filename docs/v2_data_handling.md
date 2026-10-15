@@ -1451,8 +1451,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   not records to Run-All, and `garmin_snapshot_merge_rules:v2.10` from stage
   A3d-4b, which keeps the activity of a VO2max record from the files of
   either series, and `garmin_snapshot_merge_rules:v2.11` from stage A3d-4c-1,
-  which tells the files of an Export as a one-shot run tells them, in
-  `config/garmin_snapshot_merge_rules_v2.json`. For these
+  which tells the files of an Export as a one-shot run tells them, and
+  `garmin_snapshot_merge_rules:v2.12` from stage A3d-4c-2, which writes a
+  record of Activities, Gear, links, or Personal Records with the Snapshots
+  that hold it and leaves the observations of Source Completeness to Run-All,
+  in `config/garmin_snapshot_merge_rules_v2.json`. For these
   datasets they replace the merge fields of the v1.0 registry; the other
   datasets follow the v1.0 registry until stage A3d. A build records
   `merge_rules_version` in `snapshot/snapshot_lineage.json`, the approved input
@@ -1583,6 +1586,49 @@ Every stop has a specific code; errors that v1.7.1 reports only as
     that an Export that holds a FIT file in two places gave the FIT family
     `AMBIGUOUS` with `FIT_CLASSIFICATION_INCOMPLETE`, however readable its
     files were; it now gives the state of the files, such as `PRESENT`.
+- Stage A3d-4c-2: the observations of Source Completeness
+  (`source_observation_count`) of each Snapshot are the output rows of each
+  family that the Snapshot observed, as a one-shot run counts the rows of
+  its Export (merge rules v2.12). Run-All counts them, from the Snapshots
+  that the build gives each record: a daily record carries those that gave
+  it, and a record of Activities, Gear, links, or Personal Records those that
+  hold it, at any time point; the rows of a FIT file, its sessions, laps,
+  links, and HRV dates, belong to the Snapshots that hold the file. The build
+  counted the rows that it read, also the repeated rows and those that
+  Run-All leaves out, and, for FIT, the per-second records of the files,
+  which gave a family the wrong state, such as `EMPTY` for FIT files whose
+  sessions and laps a one-shot run counts. Run-All writes the counts into
+  `snapshot/snapshot_coverage.json`, whose observations the output check
+  reads, and the check compares them with the rows of each family: no more,
+  and, for one Snapshot, all of them. `snapshot build-input` alone writes
+  the observations without them.
+- With stage A3d-4c-2, a Snapshot run of a store that holds one Export gives
+  every output of a one-shot run of that Export, but for what differs by
+  design; `tests/test_snapshot_parity.py` checks every output file of
+  synthetic Exports of many kinds against this list, field by field. What
+  differs by design:
+  - The names of the scope: `observation_scope` in the audit records and in
+    `diagnostics/source_completeness.json`, and its `observation_ref`,
+    `evidence_references`, and `authority_references`, which name the
+    Snapshots and the Snapshot files.
+  - The provenance of the build's files: the provenance fields of the
+    normalized tables (`source_path`, `source_sha256`, `source_record_index`,
+    `activity_source_path`, `activity_source_sha256`, `fit_source_path`, and
+    `fit_source_sha256`), `source_path` in the FIT audit, `input_assets` in
+    `run_manifest.json`, and the digests made from them or from the outputs:
+    `records_sha256`, the `provenance_references` and
+    `authority_evidence_digest` of Run Quality, `deterministic_output_digest`,
+    and `manifest_sha256`.
+  - The Snapshot numbers that a Snapshot run gives a value of the audit
+    records (`snapshots`) and a file of the lists of files of
+    `run_manifest.json` (`snapshot`).
+  - The files of a Snapshot run only (`snapshot/`), the lists of the output
+    files that name them (`outputs` in `run_manifest.json`,
+    `generated_paths` in `run_summary.json`, and `artifact_inventory.json`),
+    the `snapshot_lifecycle` sections of `run_summary.json`,
+    `run_manifest.json`, and `ANALYSIS_CONTEXT.json`, and the Snapshot
+    Accumulation section of `START_HERE.md`, `DATASET_INVENTORY.md`, and
+    `ANALYSIS_HANDOFF.md`.
 
 ## Golden outputs and tests
 
@@ -1699,9 +1745,15 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   the Exports instead of those of the build, the unknown evidence of Source
   Completeness only the JSON and FIT files of no family, and
   `snapshot/snapshot_coverage.json` gives their number
-  (`unknown_evidence_count`). The merge rules v2.11 are published in
-  `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
-  not change.
+  (`unknown_evidence_count`). From stage A3d-4c-2, the observations of
+  Source Completeness are the output rows that each Snapshot observed, which
+  Run-All counts and writes into `snapshot/snapshot_coverage.json`, so that a
+  family's state follows its rows as in a one-shot run; the coverage that
+  `snapshot build-input` writes alone has no such counts. A Snapshot run of
+  one Export now gives every output of a one-shot run of it but for what
+  differs by design (see [Snapshot Stores](#snapshot-stores)). The merge
+  rules v2.12 are published in `config/garmin_snapshot_merge_rules_v2.json`;
+  the v1.0 policy registry does not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around
   the Export, in a ZIP file or a folder, are left out of the recorded paths.
   An input that holds different Exports, or the records of more than one
@@ -1808,7 +1860,16 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `input_file_count`, which `run_snapshot_all` passes to Run-All, and
   `build_source_completeness` (`diagnostics.completeness`) counts each FIT
   file in each place when it is given `fit_audit` for one Export, whose
-  default is now `None`.
+  default is now `None`. From stage A3d-4c-2, `RecordMerge`,
+  `DailyMetricResult`, and `DailyNormalizationResult` gain
+  `row_snapshot_numbers`, the Snapshots that observed each row of a Snapshot
+  run (empty in a one-shot run), `normalize_hrv_daily_assets` returns them
+  as `row_snapshot_numbers` when it is given `snapshot_numbers`, and
+  `normalizers.daily_metrics` gains `SNAPSHOT_PRESENCE_FIELD`,
+  `snapshot_presence`, and `observed_snapshots`; the per-Snapshot
+  observations of `build_source_completeness` take the FIT rows from their
+  `source_observation_counts` instead of the per-second records of the FIT
+  audit.
 - Schema: the fields that a disagreement can leave empty are nullable (the
   Hill and Endurance `overall_score`, the four Race Prediction times,
   `vo2max`, and `training_status`), and so is `personal_records.activity_id`

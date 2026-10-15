@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any, Iterable
 
@@ -14,6 +14,7 @@ from .daily_metrics import (
     copies_within_snapshots,
     merge_observations,
     observation_weight,
+    observed_snapshots,
     public_fields,
     snapshot_numbers,
     value_source_names,
@@ -75,6 +76,9 @@ class PerformanceMetricsError(ValueError):
 class DailyNormalizationResult:
     records: list[dict[str, Any]]
     audit: dict[str, Any]
+    # In a Snapshot run, the import numbers of the Snapshots that observed
+    # each record, in the order of the records (stage A3d-4c-2).
+    row_snapshot_numbers: list[tuple[int, ...]] = field(default_factory=list)
 
 
 def _logical_name(asset: DiscoveredAsset) -> str:
@@ -242,12 +246,15 @@ def _normalize_daily(
                 row.get("_snapshot_numbers"),
             )
     normalized: list[dict[str, Any]] = []
+    row_numbers: list[tuple[int, ...]] = []
     duplicate_count = 0
     copy_count = 0
     disagreements: list[dict[str, Any]] = []
     absent_values: Counter[str] = Counter()
     for calendar_date in sorted(rows_by_date):
         numbers = [row.get("_snapshot_numbers") for row in rows_by_date[calendar_date]]
+        # Each date gives one record, in this order.
+        row_numbers.append(observed_snapshots(numbers))
         rows = [public_fields(row) for row in rows_by_date[calendar_date]]
         signatures = {_stable_row(row) for row in rows}
         # Copies within one Snapshot count as in a one-shot run (stage A3b).
@@ -313,7 +320,7 @@ def _normalize_daily(
                 "review_item_count": 0,
             }
         )
-    return DailyNormalizationResult(normalized, audit)
+    return DailyNormalizationResult(normalized, audit, row_numbers)
 
 
 def normalize_hill_score(

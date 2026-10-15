@@ -39,6 +39,7 @@ from ..intake.roots import MIXED_STORE_MESSAGE, MixedExportsError
 from ..normalizers.activities import activity_key, activity_left_out_reason
 from ..normalizers.daily_metrics import (
     SNAPSHOT_NUMBERS_FIELD,
+    SNAPSHOT_PRESENCE_FIELD,
     copies_within_snapshots,
     value_source_names,
 )
@@ -1431,6 +1432,9 @@ def _merge_dataset(
                         "canonical_key": key,
                         "raw_record": record,
                         "snapshot_numbers": numbers,
+                        # Every Snapshot that holds the record, for the rows
+                        # that each Snapshot observed (stage A3d-4c-2).
+                        "observed_snapshots": sorted(by_snapshot),
                         "presence_pattern": bits,
                         "source_snapshot_count": len(by_snapshot),
                         "source_observation_count": len(ordered),
@@ -1684,12 +1688,15 @@ def _materialized_record(item: dict[str, Any]) -> dict[str, Any]:
 
     A daily record carries the import numbers of the Snapshots that gave it,
     and so does a record of Activities, Gear, links, or Personal Records
-    that stands for more than one observation; a probe record also
-    carries the name of its field.
+    that stands for more than one observation; every such record with a
+    stable key also carries those of every Snapshot that holds it (stage
+    A3d-4c-2); a probe record also carries the name of its field.
     """
     record = dict(item["raw_record"])
     if item.get("snapshot_numbers") is not None:
         record[SNAPSHOT_NUMBERS_FIELD] = item["snapshot_numbers"]
+    if item.get("observed_snapshots") is not None:
+        record[SNAPSHOT_PRESENCE_FIELD] = item["observed_snapshots"]
     if item.get("probe_field") is not None:
         record[SNAPSHOT_PROBE_FIELD] = item["probe_field"]
     return record
@@ -1941,13 +1948,13 @@ def build_approved_input(
             for family, datasets in FAMILY_DATASETS.items()
             for dataset in datasets
         }
+        # The observations of each Snapshot, without the rows that it
+        # observed: Run-All counts them in its output, as a one-shot run
+        # counts its rows (stage A3d-4c-2).
         snapshot_diagnostics = {
             str(manifest["snapshot_id"]): {
                 "observation_ref": f"snapshot-{acquisition_order_by_snapshot_id[str(manifest['snapshot_id'])]}",
                 "candidate_counts": {family: 0 for family in SOURCE_FAMILY_ORDER},
-                "source_observation_counts": {
-                    family: 0 for family in SOURCE_FAMILY_ORDER
-                },
                 "malformed_counts": {family: 0 for family in SOURCE_FAMILY_ORDER},
                 "fit_source_sha256": [],
                 "unknown_evidence_count": 0,
@@ -2196,7 +2203,6 @@ def build_approved_input(
                 for dataset, record_index, record, raw_key in extracted:
                     diagnostic_family = dataset_to_family.get(dataset)
                     if diagnostic_family is not None:
-                        diagnostic["source_observation_counts"][diagnostic_family] += 1
                         # A mark that holds a value is left out by Run-All; an
                         # item that is an empty value is an empty record.
                         malformed = (

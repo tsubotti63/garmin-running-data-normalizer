@@ -290,8 +290,11 @@ FUTURE_READY_DATASETS = ("health_status",)
 # of an Export as a one-shot run tells them, a member of a ZIP file by its
 # name within the ZIP file and a daily file by the beginning of its name, to
 # read and count them, and counts as unknown evidence only the JSON and FIT
-# files of no family (stage A3d-4c-1).
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.11"
+# files of no family (stage A3d-4c-1). From v2.12, a record of Activities,
+# Gear, links, or Personal Records carries the import numbers of every
+# Snapshot that holds it, and the build no longer counts the observations of
+# Source Completeness, which Run-All counts from its rows (stage A3d-4c-2).
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.12"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -426,6 +429,13 @@ MERGE_RULES: dict[str, Any] = {
         "zip_members": "told_by_their_names_within_the_zip_file",
         "daily_files": "told_by_the_beginning_of_their_names",
         "unknown_evidence": "json_and_fit_files_of_no_family_as_in_a_one_shot_run",
+    },
+    # The observations of Source Completeness: the output rows that each
+    # Snapshot observed, which Run-All counts as a one-shot run counts its
+    # rows (stage A3d-4c-2).
+    "source_completeness_observations": {
+        "counted_by": "run_all_from_the_output_rows_of_each_snapshot",
+        "entity_records": "written_with_the_import_numbers_of_every_snapshot_holding_them",
     },
     "other_datasets_follow": REGISTRY_VERSION,
 }
