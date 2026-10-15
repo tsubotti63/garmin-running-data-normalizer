@@ -48,6 +48,21 @@ WRAPPER = "Garmin Export Synthetic"
 # the time of writing, so that the Export is the same, byte for byte, whenever
 # it is written: tests compare the content identity of such Exports.
 SYNTHETIC_ZIP_TIME = (2030, 1, 1, 0, 0, 0)
+# The files of the synthetic Export that no dataset reads, which a run lists
+# with the reason (stage A4b): its operating-system metadata file is not an
+# Export file and is not listed.
+SYNTHETIC_NOT_READ = [
+    ("DI_CONNECT/DI-Connect-Fitness-Synthetic/synthetic-notes.txt", "format_not_read"),
+    (
+        "DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part1.zip!synthetic-notes.txt",
+        "format_not_read",
+    ),
+    (
+        "DI_CONNECT/DI-Connect-Uploaded-Files/UploadedFiles_synthetic_Part2.zip!synthetic-deeper.zip",
+        "zip_in_zip",
+    ),
+    ("synthetic-readme.txt", "format_not_read"),
+]
 
 
 def _member(archive: zipfile.ZipFile, name: str) -> zipfile.ZipInfo:
@@ -651,13 +666,23 @@ class ZipLimitsTest(unittest.TestCase):
             (fitness / "synthetic_spaces.json").write_bytes(b"[" + b" " * 100_000 + b"]")
             archive = zip_export(folder, root / "export.zip")
             # Stage A3c does not read a file over the limit: one that no
-            # dataset reads, as this one, is listed as not read.
+            # dataset reads, as this one, is listed as not read, next to the
+            # files of a form not read (stage A4b).
             for form in (archive, folder):
                 with self.subTest(form=form.name):
                     with read_export(form, ArchiveLimits(max_member_bytes=8192)) as reading:
-                        self.assertEqual(
+                        self.assertIn(
+                            ("DI_CONNECT/DI-Connect-Fitness/synthetic_spaces.json", 100_002, "file_too_large"),
                             reading.not_read,
-                            [("DI_CONNECT/DI-Connect-Fitness/synthetic_spaces.json", 100_002, "file_too_large")],
+                        )
+                        self.assertEqual(
+                            sorted((path, reason) for path, _size, reason in reading.not_read),
+                            sorted(
+                                [
+                                    ("DI_CONNECT/DI-Connect-Fitness/synthetic_spaces.json", "file_too_large"),
+                                    *SYNTHETIC_NOT_READ,
+                                ]
+                            ),
                         )
                         self.assertEqual(reading.left_out, [])
                         self.assertNotIn(

@@ -2028,8 +2028,9 @@ def _files_not_read_lines(manifest: Mapping[str, Any]) -> list[str]:
         raise OutputExperienceError("files not read must be a list")
     if not files:
         return []
+    # The reasons are several from stage A4b, so the line names none.
     return [
-        f"- Files not read: {len(files)}, such as files outside the Export; "
+        f"- Files not read: {len(files)}; "
         "`run_manifest.json` lists them with the reason"
     ]
 

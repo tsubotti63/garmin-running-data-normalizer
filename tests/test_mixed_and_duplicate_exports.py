@@ -40,7 +40,7 @@ from garmin_running_data_normalizer.intake.roots import (
 )
 from garmin_running_data_normalizer.intake.source import ExportSource
 from tests.test_snapshot_store_v1_7_1 import extract_store
-from tests.test_zip_input import run_cli, write_export, zip_export
+from tests.test_zip_input import SYNTHETIC_NOT_READ, run_cli, write_export, zip_export
 
 ACCOUNT = "synthetic-account-boundary"
 # Long account numbers, which a SHA-256 written in hexadecimal does not hold
@@ -259,16 +259,27 @@ class MixedExportsTest(unittest.TestCase):
             run_all(parent / "export", root / "alone")
             self.assertEqual(normalized(output), normalized(root / "alone"))
             manifest = load(output / "run_manifest.json")
+            # The files outside the Export of a form that a run reads come
+            # first; one of another form is not listed. The Export's own
+            # files of a form not read follow (stage A4b), as when the Export
+            # is given alone.
+            alone = load(root / "alone/run_manifest.json")["files_not_read"]
             self.assertEqual(
                 manifest["files_not_read"],
                 [
                     {"source_path": "Outside-private-name.fit", "bytes": 17, "reason": "outside_export_root"},
                     {"source_path": "Outside-private-notes.json", "bytes": 2, "reason": "outside_export_root"},
+                    *alone,
                 ],
             )
-            self.assertNotIn("files_not_read", load(root / "alone/run_manifest.json"))
+            self.assertEqual(
+                [(item["source_path"], item["reason"]) for item in alone], SYNTHETIC_NOT_READ
+            )
             start_here = (output / "START_HERE.md").read_text(encoding="utf-8")
-            self.assertIn("- Files not read: 2, such as files outside the Export", start_here)
+            self.assertIn(
+                f"- Files not read: {2 + len(alone)}; `run_manifest.json` lists them with the reason",
+                start_here,
+            )
             bundle = root / "support.zip"
             build_support_bundle(output, bundle)
             for path in (bundle, output / "analysis/external_safe_handoff.zip"):

@@ -24,6 +24,7 @@ from .fit.parser import parse_fit_export
 from .export.analysis_pack import build_analysis_pack_payloads
 from .intake.accounts import asset_accounts
 from .intake.discovery import (
+    FORMAT_NOT_READ,
     DiscoveredAsset,
     ExportReading,
     InputChangedError,
@@ -1916,9 +1917,14 @@ def run_all(
         raise RunAllError(exc.code, exc.safe_message) from exc
     _notify(progress, "discovering")
     with _read_input(input_root) as reading:
-        if snapshot_context is not None and (reading.left_out or reading.not_read):
+        if snapshot_context is not None and (
+            reading.left_out
+            or any(reason != FORMAT_NOT_READ for _path, _size, reason in reading.not_read)
+        ):
             # The Snapshot build leaves such files out and lists them by
             # Snapshot number (stage A3c-2); the approved input holds none.
+            # It holds the stored objects of a form that a run does not read,
+            # which the build lists by Snapshot number (stage A4b).
             raise RunAllError("SNAPSHOT_CONTEXT_INVALID", SNAPSHOT_LEFT_OUT_MESSAGE)
         initial_assets = reading.assets
         initial_snapshot = _snapshot(initial_assets)
@@ -1942,9 +1948,11 @@ def run_all(
             raise RunAllError("INPUT_MULTIPLE_EXPORTS", MIXED_INPUT_MESSAGE)
         same_export_count = reading.same_export_count
         outside_files = list(reading.outside_files)
-        # JSON files over the limit that no dataset reads (stage A3c), as the
-        # Snapshot build lists them by Snapshot number in a Snapshot run.
-        too_large_files = (
+        # JSON files over the limit that no dataset reads (stage A3c), and
+        # files of a form not read and ZIP files inside ZIP files (stage
+        # A4b), as the Snapshot build lists them by Snapshot number in a
+        # Snapshot run.
+        not_read_files = (
             [
                 {"source_path": path, "bytes": size, "reason": reason}
                 for path, size, reason in sorted(reading.not_read)
@@ -2373,16 +2381,17 @@ def run_all(
         "deterministic_output_digest": "projection-pending",
         "candidate_features": {"lactate_threshold": lactate_candidate_features},
     }
-    if outside_files or too_large_files:
-        # Files outside the Export, and JSON files over the limit that no
-        # dataset reads, are not read; the list keeps the established
-        # manifest byte-stable when there are none.
+    if outside_files or not_read_files:
+        # Files outside the Export, JSON files over the limit that no
+        # dataset reads, files of a form not read, and ZIP files inside ZIP
+        # files are not read; the list keeps the established manifest
+        # byte-stable when there are none.
         manifest["files_not_read"] = [
             *(
                 {"source_path": relative, "bytes": size, "reason": OUTSIDE_EXPORT_ROOT}
                 for relative, size in outside_files
             ),
-            *too_large_files,
+            *not_read_files,
         ]
     if files_left_out:
         # Files that could not be read are left out with the reason; the

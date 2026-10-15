@@ -81,6 +81,12 @@
     "unknown_evidence": "json_and_fit_files_of_no_family_as_in_a_one_shot_run",
     "zip_members": "told_by_their_names_within_the_zip_file"
   },
+  "files_not_read": {
+    "files_of_a_form_that_no_dataset_reads": "format_not_read",
+    "files_outside_the_export": "not_registered_so_not_listed",
+    "listed_by": "snapshot_number_as_in_a_one_shot_run",
+    "zip_files_inside_zip_files": "zip_in_zip_and_written_under_a_name_that_run_all_does_not_open"
+  },
   "files_that_cannot_be_read": {
     "accounts": "files_left_out_not_compared",
     "json_over_the_file_limit_that_no_dataset_reads": "not_read_as_in_a_one_shot_run",
@@ -97,7 +103,7 @@
     "policy": "passed_to_run_all_as_marks_without_a_key_and_left_out_as_in_a_one_shot_run",
     "same_content": "passed_once_with_one_snapshot_number_per_occurrence"
   },
-  "merge_rules_version": "garmin_snapshot_merge_rules:v2.12",
+  "merge_rules_version": "garmin_snapshot_merge_rules:v2.13",
   "other_datasets_follow": "garmin_public_snapshot_dataset_merge_policies:v1.0",
   "rows_without_a_stable_key": {
     "copies_within_snapshot": "counted_as_in_a_one_shot_run",

@@ -103,6 +103,7 @@ def validated_members(
     *,
     reads: Callable[[ZipInfo], bool] | None = None,
     oversize: list[ZipInfo] | None = None,
+    skipped: list[ZipInfo] | None = None,
 ) -> list[ZipInfo]:
     """Return the members to read, after checking every member for safety.
 
@@ -111,6 +112,9 @@ def validated_members(
     members, so a large member that is never read does not reject the archive.
     ``oversize``, when given, collects the members larger than the limit for
     one file instead of rejecting the archive; they are not read.
+    ``skipped``, when given, collects the Export files that ``reads`` does
+    not select (stage A4b); folders and operating-system metadata files are
+    not Export files.
     """
     accepted: list[ZipInfo] = []
     total = 0
@@ -118,6 +122,8 @@ def validated_members(
         if not is_safe_export_member(info):
             continue
         if reads is not None and not reads(info):
+            if skipped is not None:
+                skipped.append(info)
             continue
         if oversize is not None and info.file_size > limits.max_member_bytes:
             oversize.append(info)

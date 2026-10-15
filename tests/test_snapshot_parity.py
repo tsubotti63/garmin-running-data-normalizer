@@ -22,6 +22,10 @@ Stage A3d-4c-2: the observations of Source Completeness, which Run-All
 counts from the output rows that each Snapshot observed; and every output of
 a Snapshot run of one Export, which is that of a one-shot run of it but for
 what differs by design (``BY_DESIGN``).
+
+Stage A4b: the files that a run does not read, which both runs list, and a
+ZIP file inside a ZIP file, which neither run reads; the files outside the
+Export, which are not registered, differ by design.
 """
 
 from __future__ import annotations
@@ -641,6 +645,11 @@ BY_DESIGN = tuple(
 )
 SNAPSHOT_SECTION = "## Snapshot Accumulation"
 DOCUMENTS = ("START_HERE.md", "DATASET_INVENTORY.md", "ANALYSIS_HANDOFF.md")
+# Files outside the Export are not registered in the store, so a Snapshot run
+# does not list them (stage A4b): the rows of files_not_read whose reason is
+# outside_export_root, and their count in START_HERE.md, differ by design.
+OUTSIDE_REASON = "outside_export_root"
+FILES_NOT_READ_LINE = re.compile(r"- Files not read: (\d+);")
 
 
 def by_design(path: str) -> bool:
@@ -675,10 +684,40 @@ def without_section(text: str) -> list[str]:
     return kept
 
 
+def without_outside_rows(manifest: Any) -> Any:
+    """A run manifest without the rows of the files outside the Export."""
+    if not isinstance(manifest, dict):
+        return manifest
+    rows = [row for row in manifest.get("files_not_read", []) if row.get("reason") != OUTSIDE_REASON]
+    kept = {key: value for key, value in manifest.items() if key != "files_not_read"}
+    return {**kept, "files_not_read": rows} if rows else kept
+
+
+def without_outside_count(lines: list[str], outside: int) -> list[str]:
+    """The lines of a document, with the count of files not read less the
+    files outside the Export."""
+    kept: list[str] = []
+    for line in lines:
+        found = FILES_NOT_READ_LINE.match(line)
+        if found and outside:
+            rest = int(found.group(1)) - outside
+            if not rest:
+                continue
+            line = f"- Files not read: {rest};{line[found.end():]}"
+        kept.append(line)
+    return kept
+
+
 def differences(one_shot: Path, snapshot: Path) -> list[str]:
     """The places where every output file of the two runs differs, other
     than by design."""
     found: list[str] = []
+    manifest = one_shot / "run_manifest.json"
+    outside = (
+        sum(row.get("reason") == OUTSIDE_REASON for row in load(manifest).get("files_not_read", []))
+        if manifest.is_file()
+        else 0
+    )
     names = sorted(
         {path.relative_to(one_shot).as_posix() for path in one_shot.rglob("*") if path.is_file()}
         | {path.relative_to(snapshot).as_posix() for path in snapshot.rglob("*") if path.is_file()}
@@ -691,11 +730,13 @@ def differences(one_shot: Path, snapshot: Path) -> list[str]:
             a, b = load(left), load(right)
             if name.startswith("normalized/"):
                 a, b = without_provenance(a), without_provenance(b)
+            if name == "run_manifest.json":
+                a, b = without_outside_rows(a), without_outside_rows(b)
             walk(a, b, name, found)
         elif name in DOCUMENTS:
-            if without_section(left.read_text(encoding="utf-8")) != without_section(
-                right.read_text(encoding="utf-8")
-            ):
+            if without_outside_count(
+                without_section(left.read_text(encoding="utf-8")), outside
+            ) != without_section(right.read_text(encoding="utf-8")):
                 found.append(name)
         elif left.read_bytes() != right.read_bytes():
             found.append(name)
@@ -768,6 +809,23 @@ def scenarios(root: Path) -> dict[str, Path]:
     source = write_export(root, "copy-name", [_activity("1001")])
     daily_rows(source, "DI-Connect-Aggregator", "Copy of UDSFile_1.json", [{"calendarDate": "2030-02-01", "totalSteps": 5}])
     found["a name with the mark of a family inside"] = source
+    # Stage A4b: files of a form not read, and a ZIP file inside a ZIP file
+    # that holds a UDS file, which stopped a Snapshot run from stage A3d-4a.
+    source = write_export(root, "not-read", [_activity("1001")])
+    uploaded = source / "DI-Connect-Uploaded-Files"
+    uploaded.mkdir(exist_ok=True)
+    (uploaded / "synthetic-track.tcx").write_bytes(b"<synthetic/>")
+    (uploaded / "UploadedFiles_0-_Part1.zip").write_bytes(zip_bytes({
+        "synthetic.fit": FIT_A, "synthetic-notes.txt": b"synthetic\n",
+        "UDSFile_parts.zip": zip_bytes({
+            "UDSFile_1.json": json.dumps([{"calendarDate": "2030-02-01", "totalSteps": 5}]).encode()})}))
+    found["files of a form not read and a ZIP file inside a ZIP file"] = source
+    # Files outside the Export, which a Snapshot run does not list.
+    parent = root / "outside"
+    write_export(parent, "export", [_activity("1001")])
+    (parent / "Outside-notes.json").write_text("[]", encoding="utf-8")
+    (parent / "Outside-readme.txt").write_text("synthetic", encoding="utf-8")
+    found["files outside the Export"] = parent
     return found
 
 
