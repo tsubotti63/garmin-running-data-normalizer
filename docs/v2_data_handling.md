@@ -957,7 +957,24 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
   developer fields are skipped, and the FIT audit always reports 0 for them.
 - v2.0.0:
   - Files that are not read are listed in `run_manifest.json`, and their count
-    appears in `START_HERE.md`. The status does not change.
+    appears in `START_HERE.md`. The status does not change. Stage A4b lists,
+    under `files_not_read`, a file of a form that no dataset reads, in the
+    Export or in one of its ZIP files, with the reason `format_not_read`, and
+    a ZIP file inside a ZIP file of the Export with the reason `zip_in_zip`;
+    a member is named `inner.zip!member`, and each entry gives its size
+    (`bytes`). Operating-system metadata files are not Export files and are
+    not listed. Files outside the Export stay listed only when they are JSON,
+    FIT, or ZIP files (see [Mixed input](#mixed-input)), so that the names of
+    other files in a selected folder are not written. An input without the
+    layout folders of an Export is read whole as the Export, so every file of
+    another form in it is listed. As for the other files listed, the names
+    never reach the Support Bundle or the External-safe Pack.
+  - A Snapshot run lists the same files by Snapshot number (stage A4b), and
+    neither run reads a ZIP file inside a ZIP file. Until stage A4b, and in
+    v1.7.1, a Snapshot run read one as a ZIP file of the Export, unlike a
+    one-shot run, and could stop (see [Snapshot Stores](#snapshot-stores)).
+    Files outside the Export are not registered, so a Snapshot run does not
+    list them.
   - File names are matched without regard to letter case.
   - Source fields outside a dataset's field list are counted by name in the
     dataset's audit record, without values.
@@ -983,7 +1000,8 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     limits on reading from a ZIP file, below, differ between the forms.
   - A ZIP file is read as the folder extracted from it: the same files at the
     same paths. ZIP files inside it are read one level deep and recorded as
-    `inner.zip!member`, as in a folder; a ZIP file inside those is not read.
+    `inner.zip!member`, as in a folder; a ZIP file inside those is not read,
+    and from stage A4b it is listed as not read (`zip_in_zip`).
     From stage A3a, an Export ZIP file in the selected folder is read as when
     it is selected directly (see [Mixed input](#mixed-input)).
   - Folders around the Export are left out of the paths. While everything in
@@ -1313,6 +1331,13 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   such an item, and the `START_HERE.md` line about the rows left out, name
   these items too. The outputs of an Export without such items do not
   change, except that Snapshot outputs give the merge rules version v2.9.
+- Stage A4b adds to `files_not_read` the files of a form that no dataset
+  reads (`format_not_read`) and the ZIP files inside the ZIP files of the
+  Export (`zip_in_zip`), and the `START_HERE.md` line about the files not
+  read no longer gives an example: `Files not read: N; run_manifest.json
+  lists them with the reason`. The outputs of an Export that holds such
+  files change; those of an Export without them do not, except that
+  Snapshot outputs give the merge rules version v2.13.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
   `INPUT_NOT_READABLE`, `OUTPUT_SPACE_INSUFFICIENT`,
@@ -1455,6 +1480,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `garmin_snapshot_merge_rules:v2.12` from stage A3d-4c-2, which writes a
   record of Activities, Gear, links, or Personal Records with the Snapshots
   that hold it and leaves the observations of Source Completeness to Run-All,
+  and `garmin_snapshot_merge_rules:v2.13` from stage A4b, which lists the
+  files that a run does not read by Snapshot number and writes a ZIP file
+  inside a ZIP file under a name that Run-All does not open,
   in `config/garmin_snapshot_merge_rules_v2.json`. For these
   datasets they replace the merge fields of the v1.0 registry; the other
   datasets follow the v1.0 registry until stage A3d. A build records
@@ -1629,6 +1657,26 @@ Every stop has a specific code; errors that v1.7.1 reports only as
     `run_manifest.json`, and `ANALYSIS_CONTEXT.json`, and the Snapshot
     Accumulation section of `START_HERE.md`, `DATASET_INVENTORY.md`, and
     `ANALYSIS_HANDOFF.md`.
+  - The files outside the Export, which registration does not store: the
+    entries of `files_not_read` whose reason is `outside_export_root`, and
+    their number in the `START_HERE.md` line about the files not read
+    (stage A4b).
+- Stage A4b: the build lists the stored files that a run does not read, by
+  Snapshot number, as a one-shot run lists them: the files and ZIP members of
+  a form that no dataset reads, among them the members over the limit for
+  one file that the stored ZIP file holds, and the ZIP files inside the ZIP
+  files of the Export (merge rules v2.13). It writes a ZIP file inside a ZIP
+  file into its approved input under a name that Run-All does not open
+  (`.bin`, as an unknown object with an unusual extension). Until then, and
+  in v1.7.1, Run-All read such a ZIP file as a ZIP file of the Export, which
+  a one-shot run does not read: a Snapshot run read rows that a one-shot run
+  does not, and could stop, with `RELATIONSHIP_CONTRACT_FAILED` when they
+  repeated records of the Export, and, from stage A3d-4a, with
+  `OUTPUT_EXPERIENCE_FAILED` when they were of a family that the build found
+  no file of. A Snapshot run stops with `SNAPSHOT_CONTEXT_INVALID` when its
+  approved input holds a file that the build should have left out or
+  listed; the unknown objects of a form not read that the build writes there
+  do not stop it.
 
 ## Golden outputs and tests
 
@@ -1751,9 +1799,13 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   family's state follows its rows as in a one-shot run; the coverage that
   `snapshot build-input` writes alone has no such counts. A Snapshot run of
   one Export now gives every output of a one-shot run of it but for what
-  differs by design (see [Snapshot Stores](#snapshot-stores)). The merge
-  rules v2.12 are published in `config/garmin_snapshot_merge_rules_v2.json`;
-  the v1.0 policy registry does not change.
+  differs by design (see [Snapshot Stores](#snapshot-stores)). From stage
+  A4b, a Snapshot run no longer reads a ZIP file inside a ZIP file of an
+  Export, which v1.7.1 read as a ZIP file of the Export and which could stop
+  the run, and lists the files that a run does not read by Snapshot number.
+  The merge rules v2.13 are published in
+  `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
+  not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around
   the Export, in a ZIP file or a folder, are left out of the recorded paths.
   An input that holds different Exports, or the records of more than one
@@ -1769,7 +1821,10 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   is left out and listed in `run_manifest.json`, with warning
   `DATA_FILE_LEFT_OUT` and exit 3, instead of stopping the run; a JSON file
   over 128 MiB that no dataset reads is listed as not read; and a UTF-8 byte
-  order mark is accepted in every file.
+  order mark is accepted in every file. From stage A4b, the files of a form
+  that no dataset reads, such as `.tcx`, `.gpx`, and `.csv` files, and the ZIP
+  files inside the ZIP files of the Export, which v1.7.1 skipped without a
+  record, are listed as not read.
 - CLI: the pre-run checks that the GUI performed in v1.7.1 apply to the CLI,
   errors report what happened and the next step, and `Ctrl+C` reports the
   cancellation. `normalize-activities` stops on an Activities row without a

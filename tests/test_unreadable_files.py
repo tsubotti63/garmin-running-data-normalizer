@@ -296,6 +296,8 @@ class LeftOutFilesTest(unittest.TestCase):
                         [
                             (f"{UPLOADED}/UploadedFiles_big_Part1.zip!synthetic-big-notes.json", "file_too_large"),
                             ("DI-Connect-User/synthetic_big_user.json", "file_too_large"),
+                            # A file of a form not read (stage A4b).
+                            ("preserved-unknown.txt", "format_not_read"),
                         ],
                     )
                     # The other member of the ZIP file is read.
@@ -329,11 +331,17 @@ class LeftOutFilesTest(unittest.TestCase):
                         "source_path": "DI-Connect-User/synthetic_big_user.json",
                         "bytes": (source / "DI-Connect-User/synthetic_big_user.json").stat().st_size,
                         "reason": "file_too_large",
-                    }
+                    },
+                    # A file of a form not read (stage A4b).
+                    {
+                        "source_path": "preserved-unknown.txt",
+                        "bytes": (source / "preserved-unknown.txt").stat().st_size,
+                        "reason": "format_not_read",
+                    },
                 ],
             )
             self.assertIn(
-                "- Files not read: 1", (output / "START_HERE.md").read_text(encoding="utf-8")
+                "- Files not read: 2;", (output / "START_HERE.md").read_text(encoding="utf-8")
             )
             self.assertEqual(findings(check(source, SMALL)), [("RUN_ALL_NOT_EVALUATED", "INFO")])
 

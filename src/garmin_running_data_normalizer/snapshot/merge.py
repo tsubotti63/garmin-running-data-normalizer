@@ -27,8 +27,10 @@ from ..intake.accounts import names_account, payload_accounts
 from ..intake.archive import ArchiveLimits, is_real_export_file
 from ..intake.discovery import (
     FILE_TOO_LARGE,
+    FORMAT_NOT_READ,
     JSON_NOT_READABLE,
     SUPPORTED_SUFFIXES,
+    ZIP_IN_ZIP,
     ZIP_NOT_READABLE,
     ZIP_TOO_LARGE,
     ZIP_UNSAFE_MEMBER,
@@ -313,11 +315,13 @@ class ActivitiesNotReadableError(SnapshotMergeError):
 
 
 def _oversize_members(store: Path, row: dict[str, Any]) -> list[tuple[str, int]]:
-    """Return the members of a stored ZIP file that a run reads and that are
-    over the limit for one file, as (name, bytes).
+    """Return the members of a stored ZIP file that are over the limit for
+    one file, as (name, bytes).
 
     Only the central directory is read: registration lists every other
-    member, and the ZIP file holds these (stage A3c-2).
+    member, and the ZIP file holds these (stage A3c-2). A run does not read
+    them: those of a form that a dataset reads are too large, and the others
+    are of a form not read (stage A4b).
     """
     blob = store / str(row["blob_relative_path"])
     try:
@@ -332,9 +336,15 @@ def _oversize_members(store: Path, row: dict[str, Any]) -> list[tuple[str, int]]
         for info in infos
         if not info.is_dir()
         and is_real_export_file(info.filename)
-        and PurePosixPath(info.filename).suffix.lower() in SUPPORTED_SUFFIXES
         and info.file_size > SOURCE_FILE_MAX_BYTES
     )
+
+
+def _not_read_reason(name: str) -> str:
+    """Why a run does not read a file of a form that no dataset reads, from
+    its name in the Export or in its ZIP file: a ZIP file inside a ZIP file of
+    the Export, or a file of another form (stage A4b)."""
+    return ZIP_IN_ZIP if PurePosixPath(name).suffix.lower() == ".zip" else FORMAT_NOT_READ
 
 
 def _read_blob(store: Path, row: dict[str, Any]) -> bytes:
@@ -2031,6 +2041,18 @@ def build_approved_input(
             else:
                 leave_out(number, path, size, FILE_TOO_LARGE)
 
+        def not_read(number: int, path: str, size: int, name: str) -> None:
+            # A file of a form that no dataset reads, and a ZIP file inside
+            # a ZIP file, are not read, as in a run (stage A4b).
+            files_not_read.append(
+                {
+                    "snapshot": number,
+                    "source_path": path,
+                    "bytes": size,
+                    "reason": _not_read_reason(name),
+                }
+            )
+
         for processing_index, manifest in enumerate(processing_manifests, start=1):
             diagnostic = snapshot_diagnostics[str(manifest["snapshot_id"])]
             acquisition_order = acquisition_order_by_snapshot_id[
@@ -2095,9 +2117,15 @@ def build_approved_input(
                     # current discovery layer does not parse the same payload
                     # twice through a copied container. Its members over the
                     # limit for one file are not listed; a run does not read
-                    # them either (stage A3c-2).
+                    # them either (stage A3c-2), and lists those of a form
+                    # not read as such (stage A4b).
                     for member_name, member_size in _oversize_members(store, source):
-                        too_large(acquisition_order, f"{logical_name}!{member_name}", member_size)
+                        member_path = f"{logical_name}!{member_name}"
+                        if PurePosixPath(member_name).suffix.lower() in SUPPORTED_SUFFIXES:
+                            too_large(acquisition_order, member_path, member_size)
+                        else:
+                            not_read(acquisition_order, member_path, member_size, member_name)
+                            parser_states["parser_unsupported"] += 1
                     parser_states["explicit_value"] += 1
                     continue
                 if extension != ".json" or (
@@ -2121,6 +2149,8 @@ def build_approved_input(
                             "parser_state": "parser_unsupported",
                         }
                     )
+                    if extension not in SUPPORTED_SUFFIXES:
+                        not_read(acquisition_order, logical_name, size, name)
                     continue
                 data = _read_blob(store, source)
                 read_by_run_all = json_read_by_run_all(name)
@@ -2452,7 +2482,10 @@ def build_approved_input(
             _copy_blob(store, source, destination, "cumulative FIT blob failed verification")
         for digest, source in sorted(unknown_unique.items()):
             suffix = str(source.get("extension", "")).lower()
-            if not suffix.startswith(".") or len(suffix) > 16:
+            # A ZIP file inside a ZIP file of the Export is written under a
+            # name that a run does not open: a run of the Export does not
+            # read it (stage A4b).
+            if not suffix.startswith(".") or len(suffix) > 16 or suffix == ".zip":
                 suffix = ".bin"
             destination = approved / "preserved_unknown" / f"object_{digest}{suffix}"
             destination.parent.mkdir(parents=True, exist_ok=True)

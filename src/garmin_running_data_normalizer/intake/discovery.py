@@ -15,6 +15,9 @@ larger than the limit for one file; and, when it is parsed, a JSON file that
 is not UTF-8 or not JSON. A JSON file over the limit that no dataset reads is
 not left out but only listed as not read. Problems of the Export ZIP file
 itself still stop.
+
+The files of a form that no dataset reads, and ZIP files inside the ZIP files
+of the Export, are listed as not read with the reason (stage A4b).
 """
 
 from __future__ import annotations
@@ -48,6 +51,11 @@ ZIP_NOT_READABLE = "zip_not_readable"
 ZIP_UNSAFE_MEMBER = "zip_unsafe_member"
 ZIP_TOO_LARGE = "zip_too_large"
 FILE_TOO_LARGE = "file_too_large"
+
+# Why a file is not read (stage A4b): it is of a form that no dataset reads,
+# or it is a ZIP file inside a ZIP file of the Export.
+FORMAT_NOT_READ = "format_not_read"
+ZIP_IN_ZIP = "zip_in_zip"
 
 
 class InputChangedError(Exception):
@@ -154,9 +162,11 @@ class ExportReading:
     the Export, as (path, bytes), which are not read either. ``left_out``
     lists the files that could not be read, as (path, bytes, reason), in the
     order they were found; a JSON file joins it when it is parsed.
-    ``not_read`` lists, in the same form, the JSON files over the limit for
-    one file that no dataset reads: they are not read, and nothing is left
-    out of the datasets for them (stage A3c).
+    ``not_read`` lists, in the same form, the files that are not read and
+    leave nothing out of the datasets: the JSON files over the limit for one
+    file that no dataset reads (stage A3c), the files and ZIP members of a
+    form that no dataset reads, and the ZIP files inside the ZIP files of the
+    Export (stage A4b).
     """
 
     def __init__(self, source: ExportView, *, keep_data: bool) -> None:
@@ -207,6 +217,8 @@ class ExportReading:
                 assets.append(self._asset(item.suffix[1:], item, None, size, digest, data))
             elif item.suffix == ".zip":
                 assets.extend(self._zip_assets(item, keep_data))
+            else:
+                self.not_read.append((item.relative_path, item.size, FORMAT_NOT_READ))
         return sorted(assets, key=lambda asset: asset.provenance_path)
 
     def _zip_assets(self, item: ExportFile, keep_data: bool) -> list[DiscoveredAsset]:
@@ -218,7 +230,9 @@ class ExportReading:
         written out, so leaving it out is safe. A member larger than the
         limit for one file is not read, alone. A ZIP file in an Export ZIP
         file that is too large to copy out is left out; the other problems
-        of the Export ZIP file itself, and its totals, still stop.
+        of the Export ZIP file itself, and its totals, still stop. The other
+        members of a ZIP file that is read, such as a ZIP file inside it,
+        are listed as not read (stage A4b).
         """
         source = self._source
         limits = source.limits
@@ -229,9 +243,12 @@ class ExportReading:
             return []
         found: list[DiscoveredAsset] = []
         oversize: list[ZipInfo] = []
+        skipped: list[ZipInfo] = []
         try:
             archive = source.archive(item)
-            for info in validated_members(archive, limits, reads=_is_read, oversize=oversize):
+            for info in validated_members(
+                archive, limits, reads=_is_read, oversize=oversize, skipped=skipped
+            ):
                 if keep_data:
                     data = read_member(archive, info, limits)
                     digest, size = _digest(data), len(data)
@@ -256,6 +273,9 @@ class ExportReading:
             return []
         for info in oversize:
             self._record_too_large(f"{item.relative_path}!{info.filename}", info.file_size)
+        for info in skipped:
+            reason = ZIP_IN_ZIP if Path(info.filename).suffix.lower() == ".zip" else FORMAT_NOT_READ
+            self.not_read.append((f"{item.relative_path}!{info.filename}", info.file_size, reason))
         return found
 
     def _asset(
@@ -408,9 +428,11 @@ __all__ = [
     "DiscoveredAsset",
     "ExportReading",
     "FILE_TOO_LARGE",
+    "FORMAT_NOT_READ",
     "InputChangedError",
     "JSON_NOT_READABLE",
     "SUPPORTED_SUFFIXES",
+    "ZIP_IN_ZIP",
     "ZIP_NOT_READABLE",
     "ZIP_TOO_LARGE",
     "ZIP_UNSAFE_MEMBER",

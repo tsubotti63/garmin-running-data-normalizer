@@ -294,7 +294,11 @@ FUTURE_READY_DATASETS = ("health_status",)
 # Gear, links, or Personal Records carries the import numbers of every
 # Snapshot that holds it, and the build no longer counts the observations of
 # Source Completeness, which Run-All counts from its rows (stage A3d-4c-2).
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.12"
+# From v2.13, the build lists the files that a one-shot run does not read, by
+# Snapshot number, and writes a ZIP file inside a ZIP file of the Export under
+# a name that Run-All does not open, as a one-shot run does not read it (stage
+# A4b).
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.13"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -436,6 +440,14 @@ MERGE_RULES: dict[str, Any] = {
     "source_completeness_observations": {
         "counted_by": "run_all_from_the_output_rows_of_each_snapshot",
         "entity_records": "written_with_the_import_numbers_of_every_snapshot_holding_them",
+    },
+    # The files that a one-shot run does not read, listed as it lists them
+    # (stage A4b).
+    "files_not_read": {
+        "listed_by": "snapshot_number_as_in_a_one_shot_run",
+        "files_of_a_form_that_no_dataset_reads": "format_not_read",
+        "zip_files_inside_zip_files": "zip_in_zip_and_written_under_a_name_that_run_all_does_not_open",
+        "files_outside_the_export": "not_registered_so_not_listed",
     },
     "other_datasets_follow": REGISTRY_VERSION,
 }
