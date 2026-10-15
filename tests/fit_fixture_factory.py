@@ -39,11 +39,14 @@ def synthetic_fit(
     declared_laps_per_session: int = 1,
     session_running_dynamics: tuple[int, int, int, int, int, int] | None = None,
     lap_running_dynamics: tuple[int, int, int, int, int, int] | None = None,
+    extra_body: bytes = b"",
 ) -> bytes:
     """Create a visibly synthetic FIT activity without using user data.
 
     Running-dynamics tuples hold raw uint16 values (0xFFFF is invalid) and are
-    added only when given, so the default bytes stay unchanged.
+    added only when given, so the default bytes stay unchanged. ``extra_body``
+    holds further definitions and records, such as those of other messages,
+    written after the sessions and laps (local message numbers 2 and up).
     """
     session_fields = [
         (2, 4, 0x86), (5, 1, 0x00), (6, 1, 0x00),
@@ -149,6 +152,7 @@ def synthetic_fit(
                 ),
             )
         )
+    body.extend(extra_body)
     base_header = (
         bytes([header_size, 0x20])
         + struct.pack("<H", 0)
@@ -167,6 +171,24 @@ def synthetic_fit(
     if invalid_file_crc:
         file_crc ^= 0xFFFF
     return payload + struct.pack("<H", file_crc)
+
+
+def definition_with_developer_fields(
+    local: int,
+    global_message: int,
+    fields: list[tuple[int, int, int]],
+    developer_fields: list[tuple[int, int, int]],
+) -> bytes:
+    """A definition message whose records also hold developer fields: each
+    is a field number, a size, and a developer data index."""
+    return (
+        bytes([0x60 | local, 0x00, 0x00])
+        + struct.pack("<H", global_message)
+        + bytes([len(fields)])
+        + b"".join(bytes(field) for field in fields)
+        + bytes([len(developer_fields)])
+        + b"".join(bytes(field) for field in developer_fields)
+    )
 
 
 def truncated_fit() -> bytes:

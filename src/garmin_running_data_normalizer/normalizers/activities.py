@@ -19,6 +19,19 @@ from .records import (
     row_snapshot_marks,
 )
 from .source_records import activity_items
+from .unread_fields import UnreadFields, count_unread
+
+# The source fields that the Activities read; the audit record counts the
+# others by name (stage A4c-1).
+ACTIVITY_SOURCE_FIELDS = frozenset(
+    {
+        "activityId", "name", "description", "activityType", "sportType",
+        "startTimeGmt", "beginTimestamp", "startTimeLocal", "distance",
+        "duration", "elapsedDuration", "movingDuration", "avgHr", "maxHr",
+        "avgPower", "maxPower", "avgRunCadence", "trainingEffectLabel",
+        "activityTrainingLoad", "lapCount",
+    }
+)
 
 
 def _start(row: dict[str, Any]) -> Any:
@@ -119,13 +132,15 @@ def normalize_activities(
     *,
     assets: Iterable[DiscoveredAsset] | None = None,
     left_out: Counter[str] | None = None,
+    unread: UnreadFields | None = None,
 ) -> list[dict[str, Any]]:
     """Normalize the Activities; ``assets`` are the Export's files from an open reading.
 
     A row without a usable identifier is counted in ``left_out`` by reason
     (stage A3d-1b), and so are an item that is not a record and a list of
     records that cannot be read (stage A3d-2c-2); without a counter, they
-    stop the normalization.
+    stop the normalization. The fields of the rows read that no field takes
+    are counted in ``unread`` (stage A4c-1).
     """
     records: list[dict[str, Any]] = []
     for payload, asset in load_json_assets(root, family="activities", assets=assets):
@@ -145,5 +160,6 @@ def normalize_activities(
                     else "activity_id has an unsupported type",
                 )
                 continue
+            count_unread(unread, row)
             records.append(_normalize(row, asset, timezone_name))
     return sorted(records, key=lambda row: (str(row["garmin_activity_key"]), str(row["source_path"])))

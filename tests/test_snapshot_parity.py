@@ -826,6 +826,23 @@ def scenarios(root: Path) -> dict[str, Path]:
     (parent / "Outside-notes.json").write_text("[]", encoding="utf-8")
     (parent / "Outside-readme.txt").write_text("synthetic", encoding="utf-8")
     found["files outside the Export"] = parent
+    # Stage A4c-1: fields that no dataset reads, in a record and its copy, in
+    # Gear, its links, and Personal Records, and FIT messages and developer
+    # fields that no dataset reads.
+    from tests.test_unread_fields import other_messages
+
+    source = write_export(
+        root, "unread", [_activity("1001", maxSpeed=3.5), _activity("1001", maxSpeed=3.5)],
+        gear_rows=[{**gear(1, "Shoe"), "gearStatusName": "active"}], links={"1": ["1001"]},
+        records=[{**personal_record(11, "1001", 300.0), "prTypeLabelKey": "synthetic"}])
+    path = source / "DI-Connect-Fitness" / "synthetic_gear.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload[0]["gearActivityDTOs"]["1"][0]["activityName"] = "synthetic"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    uploaded = source / "DI-Connect-Uploaded-Files"
+    uploaded.mkdir(exist_ok=True)
+    (uploaded / "synthetic-unread.fit").write_bytes(synthetic_fit(extra_body=other_messages()))
+    found["fields and FIT messages that no dataset reads"] = source
     return found
 
 

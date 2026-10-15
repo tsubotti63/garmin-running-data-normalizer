@@ -48,11 +48,14 @@ from .output_location import (
     path_error_code,
     write_error_code,
 )
-from .normalizers.activities import normalize_activities
+from .normalizers.activities import ACTIVITY_SOURCE_FIELDS, normalize_activities
 from .normalizers.daily_metrics import DailyMetricError, copies_within_snapshots
-from .normalizers.gear import normalize_gear
+from .normalizers.gear import GEAR_LINK_SOURCE_FIELDS, GEAR_SOURCE_FIELDS, normalize_gear
 from .normalizers.hrv import normalize_hrv_daily_assets
-from .normalizers.personal_records import normalize_personal_records
+from .normalizers.personal_records import (
+    PERSONAL_RECORD_SOURCE_FIELDS,
+    normalize_personal_records,
+)
 from .normalizers.performance_metrics import (
     ENDURANCE_FIELDS,
     HILL_FIELDS,
@@ -73,6 +76,7 @@ from .normalizers.records import (
     merge_repeated_records,
 )
 from .normalizers.source_records import MARK_KINDS
+from .normalizers.unread_fields import UnreadFields
 from .normalizers.sleep import normalize_sleep_daily_assets
 from .normalizers.training_history import normalize_training_history
 from .normalizers.training_load import normalize_acute_training_load
@@ -671,6 +675,7 @@ def _normalize_datasets(
     dict[str, Counter[str]],
     dict[str, InvalidValues],
     dict[str, tuple[tuple[str, ...], dict[tuple[str, ...], tuple[int, ...]]]],
+    dict[str, UnreadFields],
 ]:
     records: dict[str, list[dict[str, Any]]] = {name: [] for name in DATASET_PATHS}
     # Repeated records of the same stable key become one row (stage A3b).
@@ -684,6 +689,14 @@ def _normalize_datasets(
     # The values of another form of these datasets, left empty before their
     # repeated records are merged (stage A3d-2a).
     invalid_values: dict[str, InvalidValues] = {}
+    # The source fields of the rows read that no field takes, by name
+    # (stage A4c-1).
+    unread_fields: dict[str, UnreadFields] = {
+        "activities": UnreadFields(ACTIVITY_SOURCE_FIELDS),
+        "gear": UnreadFields(GEAR_SOURCE_FIELDS),
+        "activity_gear": UnreadFields(GEAR_LINK_SOURCE_FIELDS),
+        "personal_records": UnreadFields(PERSONAL_RECORD_SOURCE_FIELDS),
+    }
 
     def checked(name: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         invalid_values[name] = check_values(rows, _value_types(name), STABLE_KEYS[name])
@@ -707,6 +720,7 @@ def _normalize_datasets(
                     timezone_name,
                     assets=assets,
                     left_out=rows_left_out["activities"],
+                    unread=unread_fields["activities"],
                 ),
             ),
         )
@@ -720,7 +734,7 @@ def _normalize_datasets(
         _notify(progress, "normalizing", step="gear")
         try:
             gear_rows, link_rows = normalize_gear(
-                str(input_root), assets=assets, left_out=rows_left_out
+                str(input_root), assets=assets, left_out=rows_left_out, unread=unread_fields
             )
             merges["gear"] = merge_repeated_records("gear", checked("gear", gear_rows))
             merges["activity_gear"] = merge_repeated_records(
@@ -742,6 +756,7 @@ def _normalize_datasets(
                         str(input_root),
                         assets=assets,
                         left_out=rows_left_out["personal_records"],
+                        unread=unread_fields["personal_records"],
                     ),
                 ),
             )
@@ -995,6 +1010,7 @@ def _normalize_datasets(
         rows_left_out,
         invalid_values,
         observed,
+        unread_fields,
     )
 
 
@@ -1089,6 +1105,7 @@ def _record_audits(
     merges: dict[str, RecordMerge],
     rows_left_out: dict[str, Counter[str]] | None = None,
     invalid_values: dict[str, InvalidValues] | None = None,
+    unread_fields: dict[str, UnreadFields] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Return the audit records of Activities, Gear, activity_gear, and Personal Records.
 
@@ -1107,8 +1124,9 @@ def _record_audits(
     counts of the rows left out without a usable identifier, by reason, as
     the daily audit records count theirs (stage A3d-1b), the values of
     another form that were left empty, with the keys of their records
-    (stage A3d-2a), and the items left out that are not records, by reason,
-    and those that are empty values (stage A3d-2c-2).
+    (stage A3d-2a), the items left out that are not records, by reason,
+    and those that are empty values (stage A3d-2c-2), and the source fields of
+    the rows read that no field takes, by name (stage A4c-1).
     """
     changes = (
         snapshot_context.get("record_changes") or {}
@@ -1161,6 +1179,9 @@ def _record_audits(
         invalid = (invalid_values or {}).get(name)
         if invalid is not None:
             audit.update(invalid.audit_fields())
+        unread = (unread_fields or {}).get(name)
+        if unread is not None:
+            audit.update(unread.audit_fields())
         audits[name] = audit
     return audits
 
@@ -2001,6 +2022,7 @@ def run_all(
                 record_rows_left_out,
                 record_invalid_values,
                 observed_rows,
+                record_unread_fields,
             ) = _normalize_datasets(
                 input_root,
                 families,
@@ -2093,7 +2115,12 @@ def run_all(
     _notify(progress, "building_output")
 
     record_audits = _record_audits(
-        records, snapshot_context, record_merges, record_rows_left_out, record_invalid_values
+        records,
+        snapshot_context,
+        record_merges,
+        record_rows_left_out,
+        record_invalid_values,
+        record_unread_fields,
     )
     repaired_text_by_family: Counter[str] = Counter()
     for item in files_with_repaired_text:

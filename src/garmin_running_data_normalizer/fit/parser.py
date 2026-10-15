@@ -120,6 +120,13 @@ SUB_SPORT_ENUM = {
     46: "gravel_cycling",
 }
 MESSAGE_NAMES = {12: "sport", 18: "session", 19: "lap"}
+# The message of the HRV readings, which the HRV daily dataset reads from every
+# FIT file (``fit/hrv.py``).
+FIT_HRV_MESSAGE_NUM = 370
+# The messages that a run reads from every FIT file: sport, session, and lap,
+# record, which is counted, and the HRV readings. The others, and every
+# developer field, are counted as not read in the FIT audit (stage A4c-1).
+READ_MESSAGES = frozenset({12, 18, 19, 20, FIT_HRV_MESSAGE_NUM})
 
 
 @dataclass(frozen=True)
@@ -327,6 +334,10 @@ def parse_fit_bytes(
     definitions: dict[int, Definition] = {}
     messages: dict[int, list[dict[str, Any]]] = {12: [], 18: [], 19: [], 20: []}
     unknown_records = 0
+    # The messages of the other numbers and the developer fields, which are
+    # skipped (stage A4c-1). They do not make the file incomplete.
+    not_read_messages: dict[int, int] = {}
+    developer_field_count = 0
     invalid_sentinel_counts: dict[str, int] = {}
 
     while position < data_end:
@@ -437,8 +448,13 @@ def parse_fit_bytes(
                     record.setdefault(VALUE_PROBLEMS, []).append((name, value))
                 record[name] = scaled
         position += sum(definition.developer_field_sizes)
+        developer_field_count += len(definition.developer_field_sizes)
         if definition.global_message in messages:
             messages[definition.global_message].append(record)
+        elif definition.global_message not in READ_MESSAGES:
+            not_read_messages[definition.global_message] = (
+                not_read_messages.get(definition.global_message, 0) + 1
+            )
 
     sessions = messages[18]
     session = sessions[0] if sessions else None
@@ -483,6 +499,10 @@ def parse_fit_bytes(
         "session_count": len(sessions),
         "unallocated_lap_count": max(len(all_laps) - lap_cursor, 0),
         "unknown_records": unknown_records,
+        "not_read_message_counts": {
+            str(number): count for number, count in sorted(not_read_messages.items())
+        },
+        "developer_field_count": developer_field_count,
         "invalid_sentinel_count": sum(invalid_sentinel_counts.values()),
         "invalid_sentinel_counts": dict(sorted(invalid_sentinel_counts.items())),
         "header_crc_status": header_crc_status,
@@ -543,6 +563,18 @@ def parse_fit_export(
             "unallocated_lap_count": parsed.get("unallocated_lap_count", 0),
             "invalid_sentinel_count": parsed.get("invalid_sentinel_count", 0),
             "invalid_sentinel_counts": parsed.get("invalid_sentinel_counts", {}),
+            # The messages and developer fields that no dataset reads, by
+            # message number, only when there are any (stage A4c-1).
+            **(
+                {"not_read_message_counts": parsed["not_read_message_counts"]}
+                if parsed.get("not_read_message_counts")
+                else {}
+            ),
+            **(
+                {"developer_field_count": parsed["developer_field_count"]}
+                if parsed.get("developer_field_count")
+                else {}
+            ),
         })
         if progress is not None:
             progress({"stage": "reading_fit", "done": done, "total": total})

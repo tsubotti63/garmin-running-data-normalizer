@@ -303,9 +303,11 @@ class OneShotRepeatedRecordsTest(unittest.TestCase):
             for dataset in RECORD_DATASETS:
                 with self.subTest(dataset=dataset):
                     keys = set(audit(output, dataset))
+                    # The synthetic Activities carry a field that no dataset
+                    # reads, which the audit record counts (stage A4c-1).
                     expected = A2B2_AUDIT_KEYS | (
                         {"removed_link_count", "removed_links"} if dataset == "activity_gear" else set()
-                    )
+                    ) | ({"unread_field_counts"} if dataset == "activities" else set())
                     self.assertEqual(keys, expected)
 
 

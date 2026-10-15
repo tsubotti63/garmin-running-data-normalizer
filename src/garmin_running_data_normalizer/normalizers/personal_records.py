@@ -13,9 +13,18 @@ from .records import (
     row_snapshot_marks,
 )
 from .source_records import container_items, list_items
+from .unread_fields import UnreadFields, count_unread
 
 PERSONAL_RECORD_ITEM_MESSAGE = (
     "personal record item is not an object or its list has an unsupported type"
+)
+# The source fields that Personal Records read; the audit record counts the
+# others by name (stage A4c-1).
+PERSONAL_RECORD_SOURCE_FIELDS = frozenset(
+    {
+        "personalRecordId", "activityId", "personalRecordType", "value",
+        "prStartTimeGMT", "createdDate", "current", "confirmed",
+    }
 )
 
 
@@ -61,13 +70,15 @@ def normalize_personal_records(
     *,
     assets: Iterable[DiscoveredAsset] | None = None,
     left_out: Counter[str] | None = None,
+    unread: UnreadFields | None = None,
 ) -> list[dict[str, Any]]:
     """Normalize Personal Records; ``assets`` are the Export's files from an open reading.
 
     A row without a usable identifier is counted in ``left_out`` by reason
     (stage A3d-1b), and so are an item that is not a record and a list of
     records that cannot be read (stage A3d-2c-2); without a counter, they
-    stop the normalization.
+    stop the normalization. The fields of the rows read that no field takes
+    are counted in ``unread`` (stage A4c-1).
     """
     records: list[dict[str, Any]] = []
     for payload, asset in load_json_assets(root, family="personal_records", assets=assets):
@@ -88,6 +99,7 @@ def normalize_personal_records(
                         else "personal record identifier has an unsupported type",
                     )
                     continue
+                count_unread(unread, row)
                 records.append({
                     "personal_record_id": personal_record_key(row),
                     "activity_id": identifier_value(row.get("activityId")),

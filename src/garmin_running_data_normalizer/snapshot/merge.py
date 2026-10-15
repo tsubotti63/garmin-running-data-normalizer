@@ -113,6 +113,11 @@ from .store import (
 
 
 BUILD_FORMAT = "garmin-running-data-normalizer-canonical-snapshot-build-v1"
+# The Gear key of a link, which the build keeps with the link's record under
+# a name of its own and does not write for Run-All: Run-All takes it from the
+# Gear links object, as a one-shot run does, and the link keeps only the
+# fields of the Export, whose other fields Run-All counts (stage A4c-1).
+LINK_GEAR_KEY_FIELD = "garminRunningDataNormalizerSnapshotGearKey"
 DATASET_ORDER = (
     "activities",
     "gear",
@@ -717,7 +722,7 @@ def _dataset_records(
                     if is_mark(row):
                         result.append(("activity_gear", record_index, row, None))
                         continue
-                    link_record = {**row, "gearPk": gear_key}
+                    link_record = {**row, LINK_GEAR_KEY_FIELD: gear_key}
                     key = (
                         None
                         if link_left_out_reason(gear_key, row) is not None
@@ -818,6 +823,17 @@ def _dataset_records(
                     )
                 )
     return result
+
+
+def _as_counted(record: dict[str, Any]) -> dict[str, Any]:
+    """A record as the field states count it: the Gear key that the build
+    keeps with a link counts as the link's field ``gearPk``, as it did when
+    the build kept it there, before stage A4c-1."""
+    if LINK_GEAR_KEY_FIELD not in record:
+        return record
+    counted = {name: value for name, value in record.items() if name != LINK_GEAR_KEY_FIELD}
+    counted["gearPk"] = record[LINK_GEAR_KEY_FIELD]
+    return counted
 
 
 def _value_state(value: Any) -> str:
@@ -1021,16 +1037,17 @@ def _merge_entity(
     differences within one time point are disagreements only.
 
     The records written for Run-All are the observations of the record's last
-    time point: one record when they agree, each with the fields that no
-    observation of that time point contains taken from the earlier time
-    points; otherwise one record for each set of observations with the same
-    values, so that Run-All merges them as in a one-shot run. Each record
-    carries the import numbers of the observations behind it, one for each
-    copy, when there is more than one. A field that the last time point does
-    not contain and whose earlier values disagree is written as probes, which
-    let Run-All mark the fields that come from it. The copies within each
-    Snapshot of the earlier time points are counted here; Run-All counts
-    those of the last time point.
+    time point: one record when they hold the same values and fields, and
+    otherwise one record for each set of observations with the same values
+    and fields, so that Run-All merges them, and counts the fields that it
+    does not read, as in a one-shot run; each record has the fields that no
+    observation of that time point contains, taken from the earlier time
+    points. Each record carries the import numbers of the observations behind
+    it, one for each copy, when there is more than one. A field that the last
+    time point does not contain and whose earlier values disagree is written
+    as probes, which let Run-All mark the fields that come from it. The
+    copies within each Snapshot of the earlier time points are counted here;
+    Run-All counts those of the last time point.
     """
     points: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for observation in ordered:
@@ -1122,9 +1139,12 @@ def _merge_entity(
     contained = sorted(set().union(*(set(item["record"]) for item in last)))
     copies: dict[str, list[dict[str, Any]]] = {}
     for item in last:
-        signature = _stable_json(
-            _comparable({field: item["record"].get(field) for field in contained})
-        )
+        # Copies are one record only when they also hold the same fields, as
+        # an empty value and a missing field are alike here: Run-All then
+        # counts the fields that it does not read as a one-shot run counts
+        # those of each copy (stage A4c-1).
+        values = _comparable({field: item["record"].get(field) for field in contained})
+        signature = _stable_json([values, sorted(item["record"])])
         copies.setdefault(signature, []).append(item)
 
     def merge_copies(items: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1315,7 +1335,8 @@ def _merge_dataset(
             continue
 
         ordered = sorted(group, key=_observation_order)
-        distinct_signatures = {_stable_json(item["record"]) for item in ordered}
+        counted = [_as_counted(item["record"]) for item in ordered]
+        distinct_signatures = {_stable_json(record) for record in counted}
         exact_repeat_count += len(ordered) - len(distinct_signatures)
         bits = "".join(
             "1" if logical_order in by_snapshot else "0"
@@ -1344,14 +1365,10 @@ def _merge_dataset(
 
         merged: dict[str, Any] = {}
         selected: dict[str, dict[str, Any]] = {}
-        field_universe = set().union(
-            *(set(item["record"]) for item in ordered)
-        )
-        for observation in ordered:
-            state_counts["field_absent"] += len(
-                field_universe - set(observation["record"])
-            )
-            for value in observation["record"].values():
+        field_universe = set().union(*(set(record) for record in counted))
+        for record in counted:
+            state_counts["field_absent"] += len(field_universe - set(record))
+            for value in record.values():
                 state_counts[_value_state(value)] += 1
         if len(distinct_signatures) > 1:
             changed += 1
@@ -2383,7 +2400,7 @@ def build_approved_input(
             for row in link_rows:
                 # A link without a usable Gear key keeps the key it had, also
                 # an empty one, so that Run-All leaves it out (stage A3d-1b).
-                gear_key = row.get("gearPk")
+                gear_key = row.pop(LINK_GEAR_KEY_FIELD, None)
                 links_by_gear["" if gear_key is None else str(gear_key)].append(row)
             _write_json(
                 fitness / "snapshot_gear.json",

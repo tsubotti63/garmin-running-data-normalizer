@@ -581,6 +581,10 @@ class SnapshotRecordUpdatesTest(unittest.TestCase):
                     }
                     if name == "activity_gear":
                         expected.update({"removed_link_count": 0, "removed_links": []})
+                    if name == "activities":
+                        # Each synthetic Activity carries a field that no
+                        # dataset reads (stage A4c-1).
+                        expected["unread_field_counts"] = {"synthetic": expected["record_count"]}
                     self.assertEqual(audit, expected)
             self.assertEqual(warning_counts(outputs[0]), {})
             quality = load(outputs[0] / "diagnostics/run_quality.json")
