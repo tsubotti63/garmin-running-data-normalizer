@@ -18,6 +18,7 @@ from .daily_metrics import (
     snapshot_numbers,
     value_source_names,
 )
+from .unread_fields import UnreadFields
 
 SLEEP_STAGE_ALIASES = (
     ("deepSleepSeconds", "deep_sleep_seconds"),
@@ -296,6 +297,9 @@ SLEEP_FIELDS_WITHOUT_VALUES = (
     "sleep_reason_code",
     "sleep_source_available_for_analysis_flag",
 )
+# The source fields that Sleep reads; the audit record counts the others by
+# name (stage A4c-2).
+SLEEP_SOURCE_FIELDS = frozenset({"calendarDate", *value_source_names(SLEEP_VALUE_SOURCES)})
 
 _SLEEP_STAGE_FIELDS = (
     "sleep_stage_deep_minutes",
@@ -411,6 +415,7 @@ def normalize_sleep_daily_assets(
     source_rows = [row for asset in selected for row in load_rows(asset)]
     accepted: list[dict[str, Any]] = []
     left_out = RowsLeftOut(value_source_names(SLEEP_VALUE_SOURCES))
+    unread = UnreadFields(SLEEP_SOURCE_FIELDS)
     duration_source_counts: Counter[str] = Counter()
     for raw in source_rows:
         if left_out.add_mark(raw):
@@ -428,6 +433,7 @@ def normalize_sleep_daily_assets(
         if reason is not None:
             left_out.add(raw, reason)
             continue
+        unread.add(raw)
         window_minutes = None
         if start_local is not None and end_local is not None:
             window_minutes = (
@@ -495,6 +501,7 @@ def normalize_sleep_daily_assets(
         recomputed_fields=_SLEEP_RECOMPUTED_FIELDS,
         finalize_merged=_finalize_merged_sleep,
         alternatives=_sleep_alternatives,
+        unread_fields=unread.audit_fields(),
     )
     result.audit["sleep_duration_source_counts"] = dict(
         sorted(duration_source_counts.items())

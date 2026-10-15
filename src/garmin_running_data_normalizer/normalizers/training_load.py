@@ -15,6 +15,7 @@ from .daily_metrics import (
     snapshot_numbers,
     value_source_names,
 )
+from .unread_fields import UnreadFields
 
 
 ACUTE_TRAINING_LOAD_FIELDS = (
@@ -36,6 +37,11 @@ ACUTE_TRAINING_LOAD_VALUE_SOURCES = {
     "daily_acute_chronic_workload_ratio": ("dailyAcuteChronicWorkloadRatio",),
 }
 ACUTE_TRAINING_LOAD_FIELDS_WITHOUT_VALUES = ("calendar_date", "observation_timestamp")
+# The source fields that Acute Training Load reads; the audit record counts the others
+# by name (stage A4c-2).
+ACUTE_TRAINING_LOAD_SOURCE_FIELDS = frozenset(
+    {"calendarDate", "timestamp", *value_source_names(ACUTE_TRAINING_LOAD_VALUE_SOURCES)}
+)
 
 
 def acute_training_load_left_out_reason(raw: dict[str, Any]) -> str | None:
@@ -55,6 +61,7 @@ def normalize_acute_training_load(
     )
     accepted = []
     left_out = RowsLeftOut(value_source_names(ACUTE_TRAINING_LOAD_VALUE_SOURCES))
+    unread = UnreadFields(ACUTE_TRAINING_LOAD_SOURCE_FIELDS)
     timestamp_semantics: Counter[str] = Counter()
     for raw in rows:
         if left_out.add_mark(raw):
@@ -67,6 +74,7 @@ def normalize_acute_training_load(
         if reason is not None:
             left_out.add(raw, reason)
             continue
+        unread.add(raw)
         values = ValueReader()
         accepted.append(
             {
@@ -90,6 +98,7 @@ def normalize_acute_training_load(
         excluded_reasons=left_out.reasons,
         empty_record_count=left_out.empty_record_count,
         fields=ACUTE_TRAINING_LOAD_FIELDS,
+        unread_fields=unread.audit_fields(),
     )
     result.audit["observation_timestamp_semantics_counts"] = dict(
         sorted(timestamp_semantics.items())

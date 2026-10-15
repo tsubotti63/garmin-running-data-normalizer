@@ -202,6 +202,16 @@ DATASET_TABLE = (
 # the latest Snapshot does not contain. A one-shot run reads one Export, so
 # these lists are empty and the record has counts only.
 RECORD_AUDIT_DATASETS = ("activities", "gear", "activity_gear", "personal_records")
+# The audit records of the daily datasets and the Lactate Threshold candidates
+# that count the fields that no field takes (stage A4c-2).
+DAILY_UNREAD_AUDITS = frozenset(
+    {
+        "uds_daily", "sleep_daily", "training_readiness_daily",
+        "acute_training_load_daily", "training_history_daily", "hill_score_daily",
+        "endurance_score_daily", "vo2max_daily", "race_prediction_daily",
+        "lactate_threshold",
+    }
+)
 RECORD_AUDIT_FORMAT = "garmin-running-data-normalizer-dataset-audit-v1"
 
 # Datasets whose rows are each built from one observation: every row has an
@@ -940,6 +950,20 @@ def _normalize_datasets(
             performance_audit[dataset]["excluded_private_field_presence_counts"] = dict(
                 private_counts.get(dataset, {})
             )
+    # The build passes the daily rows and the Lactate Threshold candidates
+    # narrowed to the fields of their dataset: in a Snapshot run, their audit
+    # records take the fields that no field takes from the build, counted as
+    # a one-shot run counts them (stage A4c-2).
+    unread_counts = (snapshot_context or {}).get("unread_field_counts")
+    if unread_counts is not None:
+        for dataset, audit in performance_audit.items():
+            if not isinstance(audit, dict) or dataset not in DAILY_UNREAD_AUDITS:
+                continue
+            audit.pop("unread_field_counts", None)
+            audit.pop("unread_other_name_count", None)
+            counted = UnreadFields(frozenset())
+            counted.add_counts(unread_counts.get(dataset, {}))
+            audit.update(counted.audit_fields())
 
     _notify(progress, "normalizing", step="relationships")
     try:
@@ -2290,6 +2314,7 @@ def run_all(
             "input_file_count",
             "lactate_threshold_counts",
             "private_field_counts",
+            "unread_field_counts",
             "record_changes",
             "files_left_out",
             "files_not_read",

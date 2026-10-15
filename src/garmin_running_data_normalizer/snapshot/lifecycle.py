@@ -103,6 +103,7 @@ def run_snapshot_all(
                 "input_file_count": build["input_file_count"],
                 "lactate_threshold_counts": build["lactate_threshold_counts"],
                 "private_field_counts": build["private_field_counts"],
+                "unread_field_counts": build["unread_field_counts"],
                 "record_changes": build["record_changes"],
                 "files_left_out": build["files_left_out"],
                 "files_not_read": build["files_not_read"],

@@ -323,6 +323,7 @@ def finalize_daily(
     recomputed_fields: frozenset[str] = frozenset(),
     finalize_merged: Callable[[dict[str, Any], list[str]], None] | None = None,
     alternatives: Callable[[dict[str, Any]], dict[str, list[Any]]] | None = None,
+    unread_fields: Mapping[str, Any] | None = None,
 ) -> DailyMetricResult:
     """Keep one row per stable key; values that disagree are left empty.
 
@@ -342,7 +343,8 @@ def finalize_daily(
     and ``empty_record_count`` the rows left out that hold none (stage A3d-1).
     An accepted row carries in ``_value_problems`` the values of another form
     that its fields left empty; the audit keeps them, counted before the rows
-    of one key are merged (stage A3d-2a).
+    of one key are merged (stage A3d-2a). ``unread_fields`` are the audit's
+    counts of the source fields that no field takes (stage A4c-2).
     """
     if not key_fields:
         raise DailyMetricError("daily metric stable key must not be empty")
@@ -458,6 +460,9 @@ def finalize_daily(
         "disagreements": disagreements,
         "absent_value_counts": dict(sorted(absent_values.items())),
         **invalid.audit_fields(),
+        # The source fields that no field takes, by name, only when there are
+        # any (stage A4c-2).
+        **(dict(unread_fields) if unread_fields else {}),
         "stable_key": list(key_fields),
         "merge_policy": "observation_union_null_is_absent_disagreeing_values_kept_empty",
         "keep_last": False,

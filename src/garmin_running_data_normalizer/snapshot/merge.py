@@ -52,11 +52,15 @@ from ..normalizers.gear import (
     link_left_out_reason,
 )
 from ..normalizers.performance_metrics import (
+    ENDURANCE_SOURCE_FIELDS,
     ENDURANCE_VALUE_SOURCES,
+    HILL_SOURCE_FIELDS,
     HILL_VALUE_SOURCES,
+    LACTATE_SOURCE_FIELDS,
     PRIVATE_FIELD_NAMES,
     endurance_score_left_out_reason,
     hill_score_left_out_reason,
+    is_lactate_threshold_candidate,
     metric_rows,
 )
 from ..normalizers.personal_records import (
@@ -64,6 +68,7 @@ from ..normalizers.personal_records import (
     personal_record_left_out_reason,
 )
 from ..normalizers.race_prediction import (
+    RACE_PREDICTION_SOURCE_FIELDS,
     RACE_PREDICTION_VALUE_SOURCES,
     race_prediction_left_out_reason,
 )
@@ -77,21 +82,30 @@ from ..normalizers.source_records import (
     list_items,
     mark_holds_a_value,
 )
-from ..normalizers.sleep import SLEEP_VALUE_SOURCES, sleep_left_out_reason
+from ..normalizers.sleep import SLEEP_SOURCE_FIELDS, SLEEP_VALUE_SOURCES, sleep_left_out_reason
 from ..normalizers.training_history import (
+    TRAINING_HISTORY_SOURCE_FIELDS,
     TRAINING_HISTORY_VALUE_SOURCES,
     training_history_left_out_reason,
 )
 from ..normalizers.training_load import (
+    ACUTE_TRAINING_LOAD_SOURCE_FIELDS,
     ACUTE_TRAINING_LOAD_VALUE_SOURCES,
     acute_training_load_left_out_reason,
 )
 from ..normalizers.training_readiness import (
+    TRAINING_READINESS_SOURCE_FIELDS,
     TRAINING_READINESS_VALUE_SOURCES,
     training_readiness_left_out_reason,
 )
-from ..normalizers.uds import UDS_VALUE_SOURCES, uds_left_out_reason
-from ..normalizers.vo2max import VO2MAX_VALUE_SOURCES, vo2max_left_out_reason
+from ..normalizers.unread_fields import INTERNAL_FIELD_PREFIX
+from ..normalizers.uds import UDS_SOURCE_FIELDS, UDS_VALUE_SOURCES, uds_left_out_reason
+from ..normalizers.vo2max import (
+    VO2MAX_VALUE_SOURCES,
+    vo2max_left_out_reason,
+    vo2max_series,
+    vo2max_source_fields,
+)
 from ..output_location import MESSAGES as OUTPUT_MESSAGES
 from ..output_location import (
     OutputLocationError,
@@ -177,6 +191,18 @@ DAILY_VALUE_SOURCE_NAMES = {
     "training_readiness_daily": value_source_names(TRAINING_READINESS_VALUE_SOURCES),
     "vo2max_daily": value_source_names(VO2MAX_VALUE_SOURCES),
     "training_history_daily": value_source_names(TRAINING_HISTORY_VALUE_SOURCES),
+}
+# The source fields that Run-All reads from a record of each daily dataset;
+# VO2max reads those of the record's series (stage A4c-2).
+DAILY_SOURCE_FIELDS = {
+    "hill_score_daily": HILL_SOURCE_FIELDS,
+    "endurance_score_daily": ENDURANCE_SOURCE_FIELDS,
+    "race_prediction_daily": RACE_PREDICTION_SOURCE_FIELDS,
+    "sleep_daily": SLEEP_SOURCE_FIELDS,
+    "uds_daily": UDS_SOURCE_FIELDS,
+    "acute_training_load_daily": ACUTE_TRAINING_LOAD_SOURCE_FIELDS,
+    "training_readiness_daily": TRAINING_READINESS_SOURCE_FIELDS,
+    "training_history_daily": TRAINING_HISTORY_SOURCE_FIELDS,
 }
 SCHEMA_VERSION = "garmin-run-all-output:v1.1"
 APPROVED_INPUT_MAX_FILE_BYTES = ArchiveLimits().max_member_bytes
@@ -303,6 +329,56 @@ def _content_counts(numbers_by_family: dict[str, dict[str, list[int]]]) -> dict[
         family: sum(1 + copies_within_snapshots(numbers) for numbers in by_content.values())
         for family, by_content in sorted(numbers_by_family.items())
     }
+
+
+def _unread_rows(name: str, payload: Any) -> list[tuple[str, dict[str, Any], frozenset[str]]]:
+    """Return the rows of one file that Run-All keeps in a daily dataset or
+    as Lactate Threshold candidates, as a one-shot run keeps them, each with
+    its dataset and the source fields that the dataset reads from it.
+
+    The build passes these rows narrowed to the fields of their dataset, so it
+    counts the others itself, as it counts the private fields (stage A4c-2).
+    """
+    family = classify_source_name(name, "json")
+    found: list[tuple[str, dict[str, Any], frozenset[str]]] = []
+    if family in ("hill_score", "endurance_score"):
+        dataset = f"{family}_daily"
+        for row in metric_rows(payload):
+            if not is_mark(row) and DAILY_LEFT_OUT_REASONS[dataset](row) is None:
+                found.append((dataset, row, DAILY_SOURCE_FIELDS[dataset]))
+    elif family == "lactate_threshold":
+        lactate_family = _lactate_family(name)
+        if lactate_family is not None:
+            for row in metric_rows(payload):
+                if not is_mark(row) and is_lactate_threshold_candidate(row, lactate_family):
+                    found.append(("lactate_threshold", row, LACTATE_SOURCE_FIELDS[lactate_family]))
+    elif (definition := _daily_definition(family, name)) is not None:
+        dataset = definition[0]
+        file_name = PurePosixPath(name.replace("\\", "/")).name.lower()
+        for row in file_items(payload, DAILY_WRAPPERS):
+            if is_mark(row):
+                continue
+            if dataset == "vo2max_daily":
+                if vo2max_left_out_reason(row, file_name) is None:
+                    found.append((dataset, row, vo2max_source_fields(vo2max_series(row, file_name))))
+            elif DAILY_LEFT_OUT_REASONS[dataset](row) is None:
+                found.append((dataset, row, DAILY_SOURCE_FIELDS[dataset]))
+    return found
+
+
+def _unread_field_counts(
+    rows: dict[str, tuple[dict[str, Any], frozenset[str], list[int]]],
+) -> dict[str, int]:
+    """The rows that hold each field that their dataset does not read, by
+    name, counted as the private fields are: the same content in two
+    Snapshots once, and each copy within one Snapshot (stage A4c-2)."""
+    counts: Counter[str] = Counter()
+    for row, read, numbers in rows.values():
+        weight = 1 + copies_within_snapshots(numbers)
+        for name in row:
+            if name not in read and not name.startswith(INTERNAL_FIELD_PREFIX):
+                counts[name] += weight
+    return dict(sorted(counts.items()))
 
 
 def _private_field_counts(rows: dict[str, tuple[dict[str, Any], list[int]]]) -> dict[str, int]:
@@ -2024,6 +2100,11 @@ def build_approved_input(
             lambda: defaultdict(list)
         )
         private_rows: dict[str, dict[str, tuple[dict[str, Any], list[int]]]] = defaultdict(dict)
+        # The rows that Run-All keeps in a daily dataset or as Lactate
+        # Threshold candidates, by dataset and content (stage A4c-2).
+        unread_rows: dict[
+            str, dict[str, tuple[dict[str, Any], frozenset[str], list[int]]]
+        ] = defaultdict(dict)
         # The files that a run leaves out or does not read, by Snapshot
         # number, as in a one-shot run of each Export (stage A3c-2).
         files_left_out: list[dict[str, Any]] = []
@@ -2213,6 +2294,12 @@ def build_approved_input(
                                 _stable_json(row), (row, [])
                             )
                             numbers.append(acquisition_order)
+                if readable:
+                    for dataset, row, read in _unread_rows(name, value):
+                        _row, _read, numbers = unread_rows[dataset].setdefault(
+                            _stable_json([sorted(read), row]), (row, read, [])
+                        )
+                        numbers.append(acquisition_order)
                 if not readable and detected_family != "unclassified":
                     leave_out(acquisition_order, logical_name, size, JSON_NOT_READABLE)
                     continue
@@ -2859,6 +2946,15 @@ def build_approved_input(
             "private_field_counts": {
                 dataset: _private_field_counts(by_content)
                 for dataset, by_content in sorted(private_rows.items())
+            },
+            # Runtime only: the fields of the daily rows and the Lactate
+            # Threshold candidates that their dataset does not read, by name,
+            # which the build leaves out, counted in the same way (stage
+            # A4c-2).
+            "unread_field_counts": {
+                dataset: counts
+                for dataset, by_content in sorted(unread_rows.items())
+                if (counts := _unread_field_counts(by_content))
             },
             # Runtime only: Run-All lists these files, by Snapshot number, in
             # the local run manifest (stage A3c-2).

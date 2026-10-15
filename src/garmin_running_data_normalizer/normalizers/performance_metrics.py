@@ -26,6 +26,7 @@ from .source_records import (
     is_mark,
     mark_holds_a_value,
 )
+from .unread_fields import UnreadFields
 
 
 HILL_FIELDS = (
@@ -99,6 +100,52 @@ PRIVATE_FIELD_NAMES = frozenset(
         "enduranceScoreContributor",
     }
 )
+# The source fields that Hill and Endurance read; the private fields are
+# counted apart, so they are not counted again. The audit records count the
+# others by name (stage A4c-2).
+HILL_SOURCE_FIELDS = frozenset(
+    {"calendarDate", *value_source_names(HILL_VALUE_SOURCES), *PRIVATE_FIELD_NAMES}
+)
+ENDURANCE_SOURCE_FIELDS = frozenset(
+    {"calendarDate", *value_source_names(ENDURANCE_VALUE_SOURCES), *PRIVATE_FIELD_NAMES}
+)
+# The source fields that the Lactate Threshold candidates read, for each kind
+# of file; the audit record counts the others of the rows that become
+# candidates by name (stage A4c-2).
+_LACTATE_VALUE_SOURCE_FIELDS = frozenset(
+    {"lactateThresholdSpeed", "lactateThresholdHeartRate", "functionalThresholdPower"}
+)
+LACTATE_SOURCE_FIELDS = {
+    "history": _LACTATE_VALUE_SOURCE_FIELDS | {"metaData"},
+    "latest_snapshot": _LACTATE_VALUE_SOURCE_FIELDS,
+    "profile_state": _LACTATE_VALUE_SOURCE_FIELDS,
+    "derived_evidence": _LACTATE_VALUE_SOURCE_FIELDS | {"trainingMethod"},
+}
+
+
+def _lactate_threshold_type(raw: dict[str, Any], family: str) -> str | None:
+    """The type of a candidate: a row of the heart rate zones whose method is
+    the Lactate Threshold gives it."""
+    if family == "derived_evidence" and raw.get("trainingMethod") == "LACTATE_THRESHOLD":
+        return "LACTATE_THRESHOLD"
+    return None
+
+
+def is_lactate_threshold_candidate(raw: dict[str, Any], family: str) -> bool:
+    """Whether a row of a Lactate Threshold file of this kind becomes a
+    candidate, as ``collect_lactate_threshold_candidates`` takes it: a row of
+    the history needs the date of its metadata, and every row a value, a
+    number or the type that its method gives. The Snapshot build counts the
+    fields of such rows (stage A4c-2)."""
+    if family == "history":
+        metadata = raw.get("metaData")
+        if not isinstance(metadata, dict) or _calendar_date(metadata.get("calendarDate")) is None:
+            return False
+    if _lactate_threshold_type(raw, family) is not None:
+        return True
+    return any(
+        read_value(raw.get(name), "number")[1] is not None for name in sorted(_LACTATE_VALUE_SOURCE_FIELDS)
+    )
 
 
 def _basename(asset: DiscoveredAsset) -> str:
@@ -187,6 +234,7 @@ def _normalize_daily(
     source_record_count = 0
     excluded_private_fields: Counter[str] = Counter()
     private_names = PRIVATE_FIELD_NAMES
+    unread = UnreadFields(HILL_SOURCE_FIELDS if is_hill else ENDURANCE_SOURCE_FIELDS)
 
     for asset in selected_assets:
         rows = metric_rows(_load_json(asset))
@@ -199,6 +247,7 @@ def _normalize_daily(
             if reason is not None:
                 left_out.add(raw, reason)
                 continue
+            unread.add(raw)
             calendar_date = _calendar_date(raw.get("calendarDate"))
             overall = _number(raw.get("overallScore"), integer=is_hill)
             values = ValueReader()
@@ -304,6 +353,9 @@ def _normalize_daily(
         "disagreements": disagreements,
         "absent_value_counts": dict(sorted(absent_values.items())),
         **invalid.audit_fields(),
+        # The source fields that no field takes, by name, only when there are
+        # any (stage A4c-2).
+        **unread.audit_fields(),
         "stable_key": ["calendar_date"],
         "merge_policy": "daily_state_null_is_absent_disagreeing_values_kept_empty",
         "keep_last": False,
@@ -369,6 +421,9 @@ def collect_lactate_threshold_candidates(
     # (stage A3d-2c-2), counted as the daily datasets count them.
     left_out: Counter[str] = Counter()
     empty_record_count = 0
+    # The fields of the rows that become candidates that no field takes
+    # (stage A4c-2).
+    unread = UnreadFields(_LACTATE_VALUE_SOURCE_FIELDS)
 
     for asset in assets:
         if asset.kind != "json":
@@ -409,9 +464,7 @@ def collect_lactate_threshold_candidates(
                     review_counts["history_timestamp_missing_or_invalid"] += 1
                     continue
 
-            threshold_type = None
-            if family == "derived_evidence" and raw.get("trainingMethod") == "LACTATE_THRESHOLD":
-                threshold_type = "LACTATE_THRESHOLD"
+            threshold_type = _lactate_threshold_type(raw, family)
             key = {"observation_family": family, "observation_timestamp": timestamp}
             row = {
                 "observation_timestamp": timestamp,
@@ -441,6 +494,7 @@ def collect_lactate_threshold_candidates(
             }
             if not any(row[field] is not None for field in LACTATE_FIELDS[2:]):
                 continue
+            unread.add(raw, LACTATE_SOURCE_FIELDS[family])
             candidates.append((family_order, timestamp or "", sequence, row))
 
     candidates.sort(key=lambda item: (item[0], item[1], item[2], _stable_row(item[3])))
@@ -496,6 +550,7 @@ def collect_lactate_threshold_candidates(
         ),
         **({"empty_record_count": empty_record_count} if empty_record_count else {}),
         **invalid.audit_fields(),
+        **unread.audit_fields(),
         "source_paths_exposed": False,
         "source_hashes_exposed": False,
         "private_identifiers_exposed": False,

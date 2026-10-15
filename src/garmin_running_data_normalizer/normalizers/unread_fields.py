@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -38,19 +39,32 @@ class UnreadFields:
     counts: Counter[str] = field(default_factory=Counter)
     other_name_count: int = 0
 
-    def add(self, raw: dict[str, Any]) -> None:
-        """Count the fields of one row read that the dataset does not read."""
+    def add(self, raw: dict[str, Any], read: frozenset[str] | None = None) -> None:
+        """Count the fields of one row read that the dataset does not read;
+        ``read``, when given, is the field list of the row's series."""
         probe = raw.get(SNAPSHOT_PROBE_FIELD)
         if isinstance(probe, str) and probe:
             return
+        read = self.read if read is None else read
         copies = 1 + copies_within_snapshots(snapshot_numbers(raw))
         for name in raw:
-            if name in self.read or name.startswith(INTERNAL_FIELD_PREFIX):
+            if name in read or name.startswith(INTERNAL_FIELD_PREFIX):
                 continue
             if _FIELD_NAME.fullmatch(name):
                 self.counts[name] += copies
             else:
                 self.other_name_count += copies
+
+    def add_counts(self, counts: Mapping[str, int]) -> None:
+        """Add the rows that hold each field, by name, as a Snapshot build
+        counts them for the daily datasets (stage A4c-2)."""
+        for name, count in counts.items():
+            if name in self.read or name.startswith(INTERNAL_FIELD_PREFIX):
+                continue
+            if _FIELD_NAME.fullmatch(name):
+                self.counts[name] += count
+            else:
+                self.other_name_count += count
 
     def audit_fields(self) -> dict[str, Any]:
         """The fields of the audit record: present only when there is
