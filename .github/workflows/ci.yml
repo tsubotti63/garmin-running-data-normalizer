@@ -135,6 +135,9 @@ jobs:
       - name: Verify Windows unresolved links
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_unresolved_links.py -q
+      - name: Verify Windows unread fields
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_unread_fields.py -q
       - name: Verify Windows rows left out
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_rows_left_out.py -q

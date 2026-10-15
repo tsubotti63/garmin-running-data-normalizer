@@ -22,9 +22,19 @@ from .records import (
     row_snapshot_marks,
 )
 from .source_records import RECORDS_NOT_READABLE, container_items, list_items, mark
+from .unread_fields import UnreadFields, count_unread
 
 GEAR_ITEM_MESSAGE = "gear item is not an object or its list has an unsupported type"
 LINK_ITEM_MESSAGE = "activity-gear link is not an object or its list has an unsupported type"
+# The source fields that Gear and its links read; the audit records count
+# the others by name (stage A4c-1).
+GEAR_SOURCE_FIELDS = frozenset(
+    {
+        "gearPk", "uuid", "displayName", "customMakeModel", "gearTypeName",
+        "gearType", "dateBegin", "dateEnd", "maximumMeters",
+    }
+)
+GEAR_LINK_SOURCE_FIELDS = frozenset({"activityId"})
 
 
 def gear_links(container: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -90,6 +100,7 @@ def normalize_gear(
     *,
     assets: Iterable[DiscoveredAsset] | None = None,
     left_out: dict[str, Counter[str]] | None = None,
+    unread: dict[str, UnreadFields] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Normalize Gear and its links; ``assets`` are the Export's files from an open reading.
 
@@ -97,12 +108,16 @@ def normalize_gear(
     ``left_out["gear"]`` or ``left_out["activity_gear"]`` (stage A3d-1b), and
     so are an item that is not a record and a list of records that cannot be
     read (stage A3d-2c-2); an item of the file's top list counts as Gear.
-    Without counters, they stop the normalization.
+    Without counters, they stop the normalization. The fields of the rows read
+    that no field takes are counted in ``unread["gear"]`` and
+    ``unread["activity_gear"]`` (stage A4c-1).
     """
     gear_left_out = None if left_out is None else left_out.setdefault("gear", Counter())
     link_left_out = (
         None if left_out is None else left_out.setdefault("activity_gear", Counter())
     )
+    gear_unread = None if unread is None else unread.get("gear")
+    link_unread = None if unread is None else unread.get("activity_gear")
     gear: list[dict[str, Any]] = []
     links: list[dict[str, Any]] = []
     for payload, asset in load_json_assets(root, family="gear", assets=assets):
@@ -123,6 +138,7 @@ def normalize_gear(
                         else "gear record identifier has an unsupported type",
                     )
                     continue
+                count_unread(gear_unread, row)
                 gear.append({
                     "gear_key": gear_record_key(row),
                     "uuid": row.get("uuid"),
@@ -154,6 +170,7 @@ def normalize_gear(
                             else "activity-gear link identifier has an unsupported type",
                         )
                         continue
+                    count_unread(link_unread, row)
                     links.append({
                         # Digits are written as an integer, as in v1.7.1;
                         # other digits, such as "²", stay text.

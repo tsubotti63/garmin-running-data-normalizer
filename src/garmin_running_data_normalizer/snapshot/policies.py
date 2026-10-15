@@ -297,8 +297,12 @@ FUTURE_READY_DATASETS = ("health_status",)
 # From v2.13, the build lists the files that a one-shot run does not read, by
 # Snapshot number, and writes a ZIP file inside a ZIP file of the Export under
 # a name that Run-All does not open, as a one-shot run does not read it (stage
-# A4b).
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.13"
+# A4b). From v2.14, the build keeps the Gear key of a link under a name of its
+# own and writes the link for Run-All with the fields of the Export only, and
+# passes the copies of a record within one Snapshot as one record only when
+# they also hold the same fields, so that Run-All counts the fields that it
+# does not read as a one-shot run counts them (stage A4c-1).
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.14"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -448,6 +452,14 @@ MERGE_RULES: dict[str, Any] = {
         "files_of_a_form_that_no_dataset_reads": "format_not_read",
         "zip_files_inside_zip_files": "zip_in_zip_and_written_under_a_name_that_run_all_does_not_open",
         "files_outside_the_export": "not_registered_so_not_listed",
+    },
+    # The source fields that Run-All does not read, which it counts from the
+    # records that the build passes as a one-shot run counts them (stage A4c-1).
+    "fields_not_read": {
+        "counted_by": "run_all_from_the_records_that_the_build_passes",
+        "activity_gear_gear_key": "kept_by_the_build_under_its_own_name_and_not_written_with_the_link",
+        "copies_within_snapshot": "counted_as_in_a_one_shot_run",
+        "copies_passed_as_one_record": "only_when_they_hold_the_same_fields",
     },
     "other_datasets_follow": REGISTRY_VERSION,
 }

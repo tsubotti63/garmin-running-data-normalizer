@@ -13,11 +13,11 @@ from .parser import (
     Definition,
     FieldDef,
     FIT_EPOCH_OFFSET,
+    FIT_HRV_MESSAGE_NUM,
     _read_value,
     check_fit_container,
 )
 
-FIT_HRV_MESSAGE_NUM = 370
 FIT_HRV_VALUE_FIELD_NUM = 1
 FIT_TIMESTAMP_FIELD_NUM = 253
 FIT_HRV_DIVISOR = 128.0

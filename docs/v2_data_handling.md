@@ -1024,9 +1024,59 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     list them.
   - File names are matched without regard to letter case.
   - Source fields outside a dataset's field list are counted by name in the
-    dataset's audit record, without values.
+    dataset's audit record, without values. From stage A4c-1, the audit
+    records of Activities, Gear, `activity_gear`, and Personal Records give
+    `unread_field_counts`: for each field outside the list, the number of
+    rows read that hold it (stage A4c-2 counts those of the daily datasets).
+    A row read is a row kept in the dataset, before its repeated records are
+    merged; the rows left out and the items that are not records are not
+    counted. Only the names of the fields at the top of a row are counted,
+    never their values or the names inside them, and the keys of the objects
+    that hold the lists of records, such as `summarizedActivitiesExport` or
+    `gearActivityDTOs`, are not counted, since they are not records. A name
+    that is not a word of up to 64 letters, digits, and underscores starting
+    with a letter, such as a date or a number, may be a value: such fields
+    are counted together in `unread_other_name_count`, without their names.
+    Both appear only when there is something to count, so the audit records
+    of an Export without such fields do not change. The status and the
+    warnings do not change, and the names never reach the console, Doctor,
+    the Support Bundle, or the External-safe Pack. The fields that each
+    dataset reads: Activities `activityId`, `name`, `description`,
+    `activityType`, `sportType`, `startTimeGmt`, `beginTimestamp`,
+    `startTimeLocal`, `distance`, `duration`, `elapsedDuration`,
+    `movingDuration`, `avgHr`, `maxHr`, `avgPower`, `maxPower`,
+    `avgRunCadence`, `trainingEffectLabel`, `activityTrainingLoad`, and
+    `lapCount`; Gear `gearPk`, `uuid`, `displayName`, `customMakeModel`,
+    `gearTypeName`, `gearType`, `dateBegin`, `dateEnd`, and `maximumMeters`;
+    an `activity_gear` link `activityId`, its Gear key coming from the Gear
+    links object; and Personal Records `personalRecordId`, `activityId`,
+    `personalRecordType`, `value`, `prStartTimeGMT`, `createdDate`,
+    `current`, and `confirmed`.
+  - A Snapshot run counts the fields of the records that the build passes,
+    each copy within one Snapshot as in a one-shot run, so a Snapshot run of
+    a store that holds one Export gives the counts of a one-shot run of it:
+    the build passes the copies of a record within one Snapshot as one record
+    only when they also hold the same fields, since an empty value and a
+    missing field are alike when it compares them.
+    With several Snapshots, the build passes the record of each key's last
+    time point, with the fields that only earlier time points hold, so the
+    counts differ from those of one-shot runs of all the Exports; the probe
+    records that the build passes for values that disagreed at an earlier
+    time point are not counted (merge rules v2.14).
   - Unknown FIT messages and developer fields are counted in the FIT audit as
-    not read, and they do not make a FIT file incomplete.
+    not read, and they do not make a FIT file incomplete. From stage A4c-1,
+    each entry of `audit/fit_audit.json` gives `not_read_message_counts`, the
+    number of messages of each message number that no dataset reads (all but
+    sport 12, session 18, lap 19, record 20, and the HRV readings 370, which
+    the HRV daily dataset reads from every FIT file), and
+    `developer_field_count`, the number of developer field values; both
+    appear only when there is something to count. Message 370 is never
+    counted as not read, since the HRV readings read it, and a FIT file
+    without an activity, such as one of sleep, is counted as any other.
+    `unknown_records` keeps its
+    meaning, and the FIT family's state and Source Completeness do not
+    change. The fields of sessions and laps outside their field lists are not
+    counted.
 
 ### An Export given as a ZIP file
 
@@ -1402,6 +1452,16 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `ACTIVITY_FIT_LINK_AMBIGUOUS` is new, and `relationship_warning_count`
   counts it; the GUI's text for `RELATIONSHIP_UNRESOLVED_VALID_LINK` says
   that the rows stay.
+- Stage A4c-1 adds `unread_field_counts` and `unread_other_name_count` to the
+  audit records of Activities, Gear, `activity_gear`, and Personal Records,
+  and `not_read_message_counts` and `developer_field_count` to the entries of
+  `audit/fit_audit.json`, only when there is something to count (see [Files
+  and fields that are not read](#files-and-fields-that-are-not-read)). The
+  audit records of an Export whose rows hold such fields change, and so do
+  the Run Quality digests made from them; the synthetic example Export's
+  Activity holds one (`synthetic`), so its Run Quality digest and the
+  first-user conversion digests change. Snapshot outputs give the merge
+  rules version v2.14.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
   `INPUT_NOT_READABLE`, `OUTPUT_SPACE_INSUFFICIENT`,
@@ -1546,7 +1606,10 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   that hold it and leaves the observations of Source Completeness to Run-All,
   and `garmin_snapshot_merge_rules:v2.13` from stage A4b, which lists the
   files that a run does not read by Snapshot number and writes a ZIP file
-  inside a ZIP file under a name that Run-All does not open,
+  inside a ZIP file under a name that Run-All does not open, and
+  `garmin_snapshot_merge_rules:v2.14` from stage A4c-1, which keeps the Gear
+  key of a link under a name of its own and writes the link with the fields
+  of the Export only,
   in `config/garmin_snapshot_merge_rules_v2.json`. For these
   datasets they replace the merge fields of the v1.0 registry; the other
   datasets follow the v1.0 registry until stage A3d. A build records
@@ -1741,6 +1804,19 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   approved input holds a file that the build should have left out or
   listed; the unknown objects of a form not read that the build writes there
   do not stop it.
+- Stage A4c-1: Run-All counts the fields that it does not read from the
+  records that the build passes (see [Files and fields that are not
+  read](#files-and-fields-that-are-not-read)). The build keeps the Gear key
+  of a link under a name of its own, which starts with
+  `garminRunningDataNormalizer` as the other fields that it adds, and writes
+  the link into its approved input with the fields of the Export only, and it
+  passes the copies of a record within one Snapshot as one record only when
+  they also hold the same fields (merge rules v2.14). Until then, it wrote the
+  key into the link as `gearPk`, which Run-All does not read there, and
+  passed as one record the copies that differed only in a field that one of
+  them held with an empty value. The field states of the merge summaries
+  still count the Gear key of a link as its field `gearPk`, once, also when
+  the link holds a `gearPk` of its own, so they do not change.
 
 ## Golden outputs and tests
 
@@ -1815,7 +1891,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   by itself, where v1.7.1 counted a link with either endpoint missing as
   unresolved for both; and warning `ACTIVITY_FIT_LINK_AMBIGUOUS` announces
   the Activities and FIT sessions whose candidates tie, which v1.7.1 left
-  unlinked without a warning.
+  unlinked without a warning. From stage A4c-1, the audit records count by
+  name the source fields of Activities, Gear, `activity_gear`, and Personal
+  Records that no dataset reads, and the FIT audit counts the FIT messages
+  and developer fields that no dataset reads, which v1.7.1 dropped without
+  a count.
 - Snapshots: existing stores need no migration; rerun `snapshot run-all`.
   Daily values that differ across Snapshots no longer stop the build, the
   Endurance Score and UDS days that v1.7.1 removed come back with the
@@ -1876,7 +1956,8 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   A4b, a Snapshot run no longer reads a ZIP file inside a ZIP file of an
   Export, which v1.7.1 read as a ZIP file of the Export and which could stop
   the run, and lists the files that a run does not read by Snapshot number.
-  The merge rules v2.13 are published in
+  From stage A4c-1, the build writes a link with the fields of the Export
+  only. The merge rules v2.14 are published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around
