@@ -284,7 +284,8 @@ class SnapshotRunTest(unittest.TestCase):
                         [
                             ("DI-Connect-Uploaded-Files/UploadedFiles_big_Part1.zip!synthetic-big.zip", SMALL + 2, "zip_in_zip"),
                             ("DI-Connect-Uploaded-Files/UploadedFiles_big_Part1.zip!synthetic-video.mp4", SMALL + 1, "format_not_read"),
-                            ("preserved-unknown.txt", 10, "format_not_read"),
+                            # Written as text, its size depends on the line ends of the system.
+                            ("preserved-unknown.txt", (source / "preserved-unknown.txt").stat().st_size, "format_not_read"),
                         ],
                     )
                     self.assertEqual(len(load(output / "normalized/fit_sessions.json")), 1)
