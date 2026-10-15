@@ -1,7 +1,7 @@
 {
   "dataset_count": 17,
   "doctor_json_sha256": "3824fb69b6796a588264127bf116e2ca50321ddb45c977c1173d598144103b7d",
-  "field_count": 241,
+  "field_count": 243,
   "fixture": "examples/synthetic/garmin_export",
   "format": "garmin-running-data-normalizer-v1-4-diagnostics-expected-vector-v1",
   "generated_path_count": 50,

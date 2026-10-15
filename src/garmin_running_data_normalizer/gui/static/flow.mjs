@@ -210,6 +210,7 @@ export const NEXT_ACTION_KEYS = {
   REVIEW_EXCLUDED_FIT_EVIDENCE: "doctor.next_review_fit",
 };
 export const WARNING_KEYS = {
+  ACTIVITY_FIT_LINK_AMBIGUOUS: "warning.activity_fit_link_ambiguous",
   OPTIONAL_FAMILY_NOT_PRESENT: "warning.optional_family_not_present",
   OPTIONAL_FAMILY_EMPTY: "warning.optional_family_empty",
   DAILY_METRICS_REVIEW_REQUIRED: "warning.daily_metrics_review",

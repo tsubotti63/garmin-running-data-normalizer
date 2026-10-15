@@ -355,6 +355,23 @@ test("the output check shows the returned counts and one line per kind of warnin
   assert.equal(counts[0].params.datasets, 5);
 });
 
+test("the relationship warnings of an output check have their own lines", () => {
+  const checked = {
+    ...CHECKED,
+    doctor: {
+      ...CHECKED.doctor,
+      warning_codes: ["ACTIVITY_FIT_LINK_AMBIGUOUS", "RELATIONSHIP_UNRESOLVED_VALID_LINK"],
+    },
+  };
+  assert.deepEqual(
+    outputCheckMessages(checked).map(shape).slice(3, 5),
+    [
+      ["warning.activity_fit_link_ambiguous", { code: "ACTIVITY_FIT_LINK_AMBIGUOUS" }, {}],
+      ["warning.relationship_unresolved", { code: "RELATIONSHIP_UNRESOLVED_VALID_LINK" }, {}],
+    ],
+  );
+});
+
 test("a clean output check has no warning lines and no bundle suggestion", () => {
   const clean = {
     handoff: { status: "PASS", dataset_count: 17, relationship_count: 6, warning_count: 0 },

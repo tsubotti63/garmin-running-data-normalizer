@@ -395,9 +395,17 @@ class LeftOutFilesTest(unittest.TestCase):
             codes = {item["code"] for item in load(output / "run_summary.json")["warnings"]}
             self.assertIn("RELATIONSHIP_UNRESOLVED_VALID_LINK", codes)
             self.assertEqual((rows(output, "activities"), rows(output, "fit_sessions")), (1, 1))
-            # The link and the record leave the tables, as in v1.7.1, until
-            # stage A4 keeps them as unresolved.
-            self.assertEqual((rows(output, "activity_gear"), rows(output, "personal_records")), (0, 0))
+            # The link and the record stay, with the Activity unresolved
+            # (stage A4a).
+            self.assertEqual((rows(output, "activity_gear"), rows(output, "personal_records")), (1, 1))
+            self.assertEqual(
+                [
+                    row["activity_relationship_status"]
+                    for name in ("activity_gear", "personal_records")
+                    for row in load(output / f"normalized/{name}.json")
+                ],
+                ["unresolved", "unresolved"],
+            )
             # The Doctor reads the warning of a completed run.
             self.assertIn(
                 ("DATA_FILE_LEFT_OUT", "WARNING"), findings(doctor_run_output(output))

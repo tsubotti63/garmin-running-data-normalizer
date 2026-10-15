@@ -90,8 +90,11 @@ DATASET_PRESENTATION = {
     "activity_gear": {
         "role": "activity-to-gear links",
         "authority": "normalized relationship source of truth",
-        "analysis_suitability": "explicit activity and gear joins",
-        "relationship_status": "explicit",
+        "analysis_suitability": (
+            "explicit activity and gear joins; a link whose Activity or Gear "
+            "is not in the output is unresolved"
+        ),
+        "relationship_status": "explicit-or-unresolved",
         "privacy_classification": "identifier-bearing-local",
     },
     "personal_records": {
@@ -313,8 +316,14 @@ DATASET_RELATIONSHIP_METADATA = {
             semantics="link",
         ),
         cardinality="many_links_to_one_activity",
-        allowed_use="Authoritative Activity/Gear link table.",
-        forbidden_join_guidance=("Do not substitute source activity_id for the declared key.",),
+        allowed_use=(
+            "Authoritative Activity/Gear link table; a link whose Activity or "
+            "Gear is not in the output is kept with that endpoint unresolved."
+        ),
+        forbidden_join_guidance=(
+            "Do not substitute source activity_id for the declared key.",
+            "Do not force an Activity or Gear identity for an unresolved endpoint.",
+        ),
     ),
     "personal_records": _relationship_metadata(
         relationship_role="primary_fact",
@@ -634,6 +643,7 @@ DATASET_FIELDS = {
     "activity_gear": (
         "gear_key", "activity_id", "garmin_activity_key",
         "activity_relationship_status", "gear_relationship_status",
+        "activity_relationship_reason", "gear_relationship_reason",
         "source_path", "source_sha256",
         "disagreeing_fields",
     ),
@@ -782,7 +792,9 @@ DATASET_NONNULL_FIELDS = {
         }
     ),
     "gear": frozenset({"gear_key", "source_path", "source_sha256", "disagreeing_fields"}),
-    "activity_gear": frozenset(DATASET_FIELDS["activity_gear"]),
+    # A link whose Activity is not in the output keeps an empty
+    # garmin_activity_key (stage A4a).
+    "activity_gear": frozenset(set(DATASET_FIELDS["activity_gear"]) - {"garmin_activity_key"}),
     # A Personal Record whose activity link cannot be followed keeps an empty
     # activity_id (stage A3d-1b).
     "personal_records": frozenset(
@@ -2556,7 +2568,8 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         in {
             "garmin_activity_key", "fit_session_key", "fit_lap_key",
             "activity_relationship_status", "gear_relationship_status",
-            "activity_relationship_reason", "match_rule", "match_basis",
+            "activity_relationship_reason", "gear_relationship_reason",
+            "match_rule", "match_basis",
             "match_score", "match_status", "ambiguous", "eligibility_status",
             "exclusion_reason", "time_delta_seconds", "distance_delta_m",
             "duration_delta_seconds",
