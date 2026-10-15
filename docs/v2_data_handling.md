@@ -885,8 +885,56 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
 - v2.0.0:
   - These rows stay in the normalized output with the relationship status
     `unresolved` and a reason. Warning `RELATIONSHIP_UNRESOLVED_VALID_LINK`, as
-    in v1.x. Status `PASS_WITH_WARNINGS`. Stage A4 does this; until then,
-    they are removed and counted as in v1.7.1.
+    in v1.x. Status `PASS_WITH_WARNINGS`. Stage A4a does this:
+    - An `activity_gear` link stays with the status of each endpoint:
+      `activity_relationship_status` and `gear_relationship_status` are
+      `explicit` or `unresolved`, and `activity_relationship_reason` and
+      `gear_relationship_reason` give `source_activity_id` and
+      `source_gear_key` for an endpoint that is followed, or
+      `missing_activity_endpoint` and `missing_gear_endpoint` for one that
+      is not in the output. Its `garmin_activity_key` is empty when its
+      Activity is not in the output; it is the only field of
+      `activity_gear` that may be empty. The links of each Gear are ordered
+      by their Activity, and those whose Activity is not in the output
+      follow, by the activity identifier.
+    - A Personal Record whose valid link points to an Activity that is not
+      in the output, such as an Activity left out, stays as one whose link
+      cannot be followed does: status `unresolved`, reason
+      `missing_activity_endpoint`, `garmin_activity_key` empty, and its
+      `activity_id` as the Export gave it.
+    - A FIT lap is read with its session from one FIT file, so its session
+      is always in the output; a lap whose session were not would stay,
+      counted, without a field of its own for it.
+  - `qa/relationship_summary.json` counts each endpoint of an
+    `activity_gear` link by itself, as the statuses of the rows give it
+    (stage A4a): `activity_gear_to_activities` counts in `link_count` the
+    links whose Activity is followed, and in `unresolved_count` and
+    `orphan_count` those whose Activity is not in the output, and
+    `activity_gear_to_gear` does the same for the Gear;
+    `relationship_snapshot_resolved` of each entry counts the links whose
+    endpoint an earlier Snapshot followed; and `eligible_count` counts each
+    link once. Until stage A4a, a link with either endpoint not in the
+    output was unresolved for both, as it was removed, and `eligible_count`
+    counted a link with neither endpoint in the output twice. The totals do
+    not change: `relationship_resolved` counts the links whose both
+    endpoints are followed, `relationship_snapshot_resolved` those of them
+    that an earlier Snapshot followed, `relationship_unresolved` and the
+    count of warning `RELATIONSHIP_UNRESOLVED_VALID_LINK` each endpoint
+    that is not in the output, and `relationship_total` is
+    `relationship_resolved`, `relationship_unresolved`,
+    `relationship_malformed`, and `relationship_conflict` together, so a
+    link with neither endpoint counts twice in it.
+  - Activities and FIT sessions with more than one equally matching
+    candidate are not linked, as before, and the audit record
+    (`audit/activity_fit_linkage.json`) gives the reason
+    `ambiguous_candidate`; their candidates may stay unlinked too, with the
+    reason `one_to_one_conflict`. Warning `ACTIVITY_FIT_LINK_AMBIGUOUS`
+    (stage A4a) gives the number of such Activities and FIT sessions
+    (`ambiguous_count` of the relationship summary), with `family`
+    `relationships`; status `PASS_WITH_WARNINGS` (exit 0). A FIT file whose
+    content is in the Export twice is read once (stage A3a), so it does not
+    tie. `relationship_warning_count` in `run_summary.json` counts it as
+    the third relationship warning.
   - A Personal Record whose activity link cannot be followed stays with the
     relationship status `unresolved` and a reason (stage A3d-1b):
     `activity_link_missing` when the link is absent, null, `""`, or spaces
@@ -909,11 +957,10 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     `RELATIONSHIP_UNRESOLVED_VALID_LINK` keeps its meaning;
     `primary_unresolved_reason` names the most frequent reason; and
     `relationship_warning_count` in `run_summary.json` counts each of the
-    two warnings.
-  - Until stage A4, the two kinds of Personal Records differ: one whose link
-    cannot be followed stays, while one whose valid link points to an
-    Activity that is not in the output, such as an Activity left out, is
-    removed and counted.
+    relationship warnings, three from stage A4a.
+  - From stage A4a, the two kinds of Personal Records are alike: one whose
+    link cannot be followed and one whose valid link points to an Activity
+    that is not in the output both stay, unresolved, with their reason.
   - Identifiers are compared after trimming spaces and leading zeros, and
     text identifiers of the ASCII digits in `activity_gear` are written as
     integers, as in v1.7.1; the Output Contract is corrected to say so.
@@ -1338,6 +1385,23 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   lists them with the reason`. The outputs of an Export that holds such
   files change; those of an Export without them do not, except that
   Snapshot outputs give the merge rules version v2.13.
+- Stage A4a keeps in `normalized/activity_gear.json` and
+  `normalized/personal_records.json` the rows whose valid link points to a
+  record that is not in the output (see [Relationships](#relationships)), so
+  their record counts grow by those rows. `activity_gear` gains
+  `activity_relationship_reason` and `gear_relationship_reason`, never
+  empty, and its `garmin_activity_key` may be empty: the schema catalog, the
+  dataset inventory, and the digests made from them change for every run,
+  also without such links, and the synthetic diagnostics vector counts 243
+  fields. The relationship summary counts each endpoint of an
+  `activity_gear` link by itself, which changes its two `activity_gear`
+  entries, and the Run Quality and Support Bundle figures taken from them,
+  only for an Export with a link that misses an endpoint; a link that misses
+  both is no longer counted twice in their `eligible_count`. The totals of
+  the summary do not change. Warning
+  `ACTIVITY_FIT_LINK_AMBIGUOUS` is new, and `relationship_warning_count`
+  counts it; the GUI's text for `RELATIONSHIP_UNRESOLVED_VALID_LINK` says
+  that the rows stay.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
   `INPUT_NOT_READABLE`, `OUTPUT_SPACE_INSUFFICIENT`,
@@ -1742,7 +1806,16 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   file in two places no longer gives the FIT family `AMBIGUOUS` with
   `FIT_CLASSIFICATION_INCOMPLETE` for that alone, its `readable_asset_count`
   and `state_counts` count the files, and the state counts of Run Quality
-  and the Source Completeness of the Support Bundle follow.
+  and the Source Completeness of the Support Bundle follow. From stage A4a,
+  an `activity_gear` link or a Personal Record whose valid link points to a
+  record that is not in the output stays, unresolved, where v1.7.1 removed
+  it; `activity_gear` gains `activity_relationship_reason` and
+  `gear_relationship_reason`, and its `garmin_activity_key` may be empty;
+  the relationship summary counts each endpoint of an `activity_gear` link
+  by itself, where v1.7.1 counted a link with either endpoint missing as
+  unresolved for both; and warning `ACTIVITY_FIT_LINK_AMBIGUOUS` announces
+  the Activities and FIT sessions whose candidates tie, which v1.7.1 left
+  unlinked without a warning.
 - Snapshots: existing stores need no migration; rerun `snapshot run-all`.
   Daily values that differ across Snapshots no longer stop the build, the
   Endurance Score and UDS days that v1.7.1 removed come back with the

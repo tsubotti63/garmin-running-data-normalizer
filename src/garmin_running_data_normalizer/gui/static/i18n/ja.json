@@ -211,6 +211,7 @@
   "step.relationships": "データどうしのつながり",
   "timezone.help": "既定は Asia/Tokyo です。Europe/London のような IANA の名前で入れてください。",
   "timezone.label": "日時に使うタイムゾーン",
+  "warning.activity_fit_link_ambiguous": "同じくらい合う相手の候補が 2 つ以上あって、つながりを決められなかったアクティビティや FIT のセッションがあります。そのつながりは作らず、その候補もつながらないことがあります。audit/activity_fit_linkage.json に理由つきの一覧があります（{code}）。",
   "warning.daily_metrics_review": "確かめが必要な日ごとの指標の値があります。日付が無い、などです（{code}）。",
   "warning.data_file_left_out": "読めなかったファイルがあり、除きました。run_manifest.json に、理由とともに一覧があります（{code}）。",
   "warning.data_row_left_out": "日付や使える ID など必要な値が無い行や、記録の一覧の中の数など記録として読めない項目があり、除きました。START_HERE.md に表ごとの数が、監査の記録（audit）に理由ごとの数があります（{code}）。",
@@ -224,7 +225,7 @@
   "warning.other": "ほかの警告があります（{code}）。",
   "warning.records_not_in_latest_snapshot": "最新のエクスポートに入っていない記録があります。消さずに残し、それぞれが最後に入っていた回を監査の記録（audit）に残しています（{code}）。",
   "warning.relationship_invalid_link": "どのアクティビティのものかが無い・形が違う・食い違う自己ベストがあります。行は残し、つながりは未解決にしています。推測で補っていません（{code}）。",
-  "warning.relationship_unresolved": "データどうしのつながりの中に、相手の記録が出力に無いものがあります。相手を推測で補っていません（{code}）。",
+  "warning.relationship_unresolved": "データどうしのつながりの中に、相手の記録が出力に無いものがあります。行は残し、つながりは未解決にしています。相手を推測で補っていません（{code}）。",
   "warning.values_disagree": "同じ記録に、食い違う値があります。その項目は空欄にし、どの値も監査の記録（audit）に残しています。どれか 1 つに決めていません（{code}）。",
   "warning.values_updated": "後のエクスポートで変わった記録があります（アクティビティの名前など）。表には最新の値を入れ、前の値は監査の記録（audit）に残しています（{code}）。"
 }

@@ -92,6 +92,12 @@ RUN_ALL_VERSION = 2
 ACTIVITIES_NOT_READABLE_MESSAGE = (
     "the Activities files could not be read; obtain a complete, readable Export"
 )
+# Activities and FIT sessions whose candidates tie (stage A4a).
+AMBIGUOUS_FIT_LINK_MESSAGE = (
+    "Activities or FIT sessions had more than one equally matching candidate, so "
+    "no link was decided for them, and their candidates may stay unlinked too; "
+    "audit/activity_fit_linkage.json lists each with the reason"
+)
 # An internal check: the Snapshot build leaves out the files that a run
 # cannot read (stage A3c-2).
 SNAPSHOT_LEFT_OUT_MESSAGE = (
@@ -1437,6 +1443,15 @@ def _external_safe_pack(
     return pack
 
 
+def _ambiguous_fit_links(relationship_summary: Mapping[str, Any]) -> int:
+    """The Activities and FIT sessions with more than one equally matching
+    candidate, which are not linked (stage A4a)."""
+    metrics = (relationship_summary.get("relationships") or {}).get(
+        "activities_to_fit_sessions"
+    ) or {}
+    return int(metrics.get("ambiguous_count", 0))
+
+
 def _family_results(
     families: dict[str, list[DiscoveredAsset]],
     records: dict[str, list[dict[str, Any]]],
@@ -1806,6 +1821,18 @@ def _family_results(
                     "valid relationship links have unresolved endpoints; "
                     "no endpoint was inferred"
                 ),
+            }
+        )
+    # Activities and FIT sessions with more than one equally matching
+    # candidate are not linked, and the audit names them (stage A4a).
+    ambiguous_fit_link_count = _ambiguous_fit_links(relationship_summary)
+    if ambiguous_fit_link_count:
+        warnings.append(
+            {
+                "code": "ACTIVITY_FIT_LINK_AMBIGUOUS",
+                "family": "relationships",
+                "count": ambiguous_fit_link_count,
+                "message": AMBIGUOUS_FIT_LINK_MESSAGE,
             }
         )
     # Personal Records kept with an activity link that is missing, malformed,
@@ -2432,13 +2459,15 @@ def run_all(
         # dataset family.  The output validator accounts for this additive
         # warning bucket without fabricating a family result.
         summary["candidate_warning_count"] = lactate_warning_count
-    relationship_warning_count = int(
-        bool(relationship_summary.get("relationship_unresolved", 0))
-    ) + int(
-        bool(
-            relationship_summary.get("relationship_malformed", 0)
-            or relationship_summary.get("relationship_conflict", 0)
+    relationship_warning_count = (
+        int(bool(relationship_summary.get("relationship_unresolved", 0)))
+        + int(
+            bool(
+                relationship_summary.get("relationship_malformed", 0)
+                or relationship_summary.get("relationship_conflict", 0)
+            )
         )
+        + int(bool(_ambiguous_fit_links(relationship_summary)))
     )
     if relationship_warning_count:
         # Keep the established PASS summary byte-stable; this additive field

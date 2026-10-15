@@ -230,14 +230,62 @@ class RelationshipContractTest(unittest.TestCase):
         summary = validate_declared_relationships(records)
         self.assertEqual(summary["status"], "PASS")
         self.assertEqual(summary["relationship_unresolved"], 3)
-        self.assertEqual(len(records["activity_gear"]), 0)
-        self.assertEqual(len(records["personal_records"]), 1)
-        self.assertEqual(len(records["fit_laps"]), 0)
+        # The rows stay, with the endpoint unresolved and the reason (stage
+        # A4a); a lap is read with its session, so its case is only reached
+        # here.
+        self.assertEqual(len(records["activity_gear"]), 1)
+        self.assertEqual(len(records["personal_records"]), 2)
+        self.assertEqual(len(records["fit_laps"]), 1)
+        link = records["activity_gear"][0]
+        self.assertEqual(
+            (
+                link["gear_key"],
+                link["activity_id"],
+                link["garmin_activity_key"],
+                link["activity_relationship_status"],
+                link["activity_relationship_reason"],
+                link["gear_relationship_status"],
+                link["gear_relationship_reason"],
+            ),
+            (7, 999, None, "unresolved", "missing_activity_endpoint", "explicit", "source_gear_key"),
+        )
+        record = next(item for item in records["personal_records"] if item["activity_id"] == 999)
+        self.assertEqual(
+            (
+                record["garmin_activity_key"],
+                record["activity_relationship_status"],
+                record["activity_relationship_reason"],
+            ),
+            (None, "unresolved", "missing_activity_endpoint"),
+        )
+        self.assertEqual(records["fit_laps"][0]["fit_session_key"], "missing")
         self.assertEqual(
             summary["relationships"]["activity_gear_to_activities"][
                 "primary_unresolved_reason"
             ],
             "missing_activity_endpoint",
+        )
+        # Each endpoint of a link is counted by itself: the Gear of this link
+        # is in the output (stage A4a).
+        self.assertEqual(
+            {
+                name: (entry["link_count"], entry["unresolved_count"], entry["orphan_count"])
+                for name, entry in summary["relationships"].items()
+                if name.startswith("activity_gear")
+            },
+            {"activity_gear_to_activities": (0, 1, 1), "activity_gear_to_gear": (1, 0, 0)},
+        )
+        # The totals count the links followed and each endpoint that is not
+        # in the output; the independent record is apart.
+        self.assertEqual(
+            (summary["relationship_total"], summary["relationship_resolved"]), (3, 0)
+        )
+        self.assertEqual(
+            summary["relationship_total"],
+            summary["relationship_resolved"]
+            + summary["relationship_unresolved"]
+            + summary["relationship_malformed"]
+            + summary["relationship_conflict"],
         )
 
     def test_snapshot_only_endpoint_is_resolved_without_inference(self) -> None:

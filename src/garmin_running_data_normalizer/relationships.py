@@ -181,7 +181,15 @@ def validate_declared_relationships(
     enriched_activity_gear: list[dict[str, Any]] = []
     seen_activity_gear: set[tuple[str, str]] = set()
     unresolved_activity_gear: list[dict[str, Any]] = []
+    # Links whose both endpoints resolve, and those of them that an earlier
+    # Snapshot resolved; and, for each endpoint, the links that resolve it and
+    # those that an earlier Snapshot resolved (stage A4a).
+    activity_gear_resolved = 0
     activity_gear_snapshot_resolved = 0
+    activity_side_resolved = 0
+    activity_side_snapshot_resolved = 0
+    gear_side_resolved = 0
+    gear_side_snapshot_resolved = 0
     for record in records["activity_gear"]:
         gear_result = classify_relationship_endpoint(
             record.get("gear_key"),
@@ -215,31 +223,35 @@ def validate_declared_relationships(
         if pair in seen_activity_gear:
             raise RelationshipContractError("activity_gear contains a duplicate link")
         seen_activity_gear.add(pair)
-        unresolved = False
-        if gear_result.status == RelationshipEndpointStatus.UNRESOLVED_VALID_LINK:
-            unresolved = True
+        gear_resolved = gear_result.status == RelationshipEndpointStatus.RESOLVED
+        activity_resolved = activity_result.status == RelationshipEndpointStatus.RESOLVED
+        if not gear_resolved:
             unresolved_activity_gear.append(
                 {
                     "relationship_id": "activity_gear_to_gear",
                     "reason": "missing_gear_endpoint",
                 }
             )
-        if activity_result.status == RelationshipEndpointStatus.UNRESOLVED_VALID_LINK:
-            unresolved = True
+        if not activity_resolved:
             unresolved_activity_gear.append(
                 {
                     "relationship_id": "activity_gear_to_activities",
                     "reason": "missing_activity_endpoint",
                 }
             )
-        if unresolved:
-            continue
-        if (
-            gear_result.authority == "snapshot"
-            or activity_result.authority == "snapshot"
-        ):
-            activity_gear_snapshot_resolved += 1
-        activity_key = activity_ids[activity_id]
+        gear_side_resolved += gear_resolved
+        gear_side_snapshot_resolved += gear_result.authority == "snapshot"
+        activity_side_resolved += activity_resolved
+        activity_side_snapshot_resolved += activity_result.authority == "snapshot"
+        if gear_resolved and activity_resolved:
+            activity_gear_resolved += 1
+            if (
+                gear_result.authority == "snapshot"
+                or activity_result.authority == "snapshot"
+            ):
+                activity_gear_snapshot_resolved += 1
+        # A link whose Activity or Gear is not in the output stays, with that
+        # endpoint unresolved and the reason (stage A4a).
         enriched_activity_gear.append(
             {
                 **record,
@@ -247,16 +259,26 @@ def validate_declared_relationships(
                 "activity_id": int(activity_id)
                 if is_ascii_digits(activity_id)
                 else activity_id,
-                "garmin_activity_key": activity_key,
-                "activity_relationship_status": "explicit",
-                "gear_relationship_status": "explicit",
+                "garmin_activity_key": activity_ids[activity_id] if activity_resolved else None,
+                "activity_relationship_status": "explicit" if activity_resolved else "unresolved",
+                "gear_relationship_status": "explicit" if gear_resolved else "unresolved",
+                "activity_relationship_reason": (
+                    "source_activity_id" if activity_resolved else "missing_activity_endpoint"
+                ),
+                "gear_relationship_reason": (
+                    "source_gear_key" if gear_resolved else "missing_gear_endpoint"
+                ),
             }
         )
+    # The links of each Gear by their Activity; those whose Activity is not in
+    # the output follow, by the activity identifier (stage A4a).
     records["activity_gear"] = sorted(
         enriched_activity_gear,
         key=lambda item: (
             str(item["gear_key"]),
-            str(item["garmin_activity_key"]),
+            item["garmin_activity_key"] is None,
+            str(item["garmin_activity_key"] or ""),
+            str(item["activity_id"]),
             str(item["source_path"]),
         ),
     )
@@ -326,6 +348,16 @@ def validate_declared_relationships(
                     "reason": "missing_activity_endpoint",
                 }
             )
+            # The record stays, as one whose link cannot be followed does
+            # (stage A4a).
+            enriched_personal_records.append(
+                {
+                    **record,
+                    "garmin_activity_key": None,
+                    "activity_relationship_status": "unresolved",
+                    "activity_relationship_reason": "missing_activity_endpoint",
+                }
+            )
             continue
         if activity_result.authority == "snapshot":
             personal_record_snapshot_resolved += 1
@@ -350,6 +382,7 @@ def validate_declared_relationships(
     seen_laps: set[str] = set()
     enriched_fit_laps: list[dict[str, Any]] = []
     unresolved_fit_laps: list[dict[str, Any]] = []
+    fit_lap_resolved = 0
     fit_lap_snapshot_resolved = 0
     for record in records["fit_laps"]:
         lap_key = _identity(record.get("fit_lap_key"), "fit_lap_key")
@@ -370,13 +403,17 @@ def validate_declared_relationships(
                 "fit_laps contains a malformed or conflicting session endpoint"
             )
         if session_result.status == RelationshipEndpointStatus.UNRESOLVED_VALID_LINK:
+            # A lap is read with its session from one FIT file, so this does
+            # not happen; such a lap would stay, counted (stage A4a).
             unresolved_fit_laps.append(
                 {
                     "relationship_id": "fit_laps_to_fit_sessions",
                     "reason": "missing_session_endpoint",
                 }
             )
+            enriched_fit_laps.append(record)
             continue
+        fit_lap_resolved += 1
         if session_result.authority == "snapshot":
             fit_lap_snapshot_resolved += 1
         enriched_fit_laps.append(record)
@@ -391,11 +428,12 @@ def validate_declared_relationships(
     def _coverage(resolved: int, total: int) -> float | None:
         return resolved / total if total else None
 
-    activity_gear_total = len(enriched_activity_gear) + len(unresolved_activity_gear)
-    # Coverage is link-level: if either endpoint is unresolved, the declared
-    # relationship pair is not promoted for either endpoint view.
-    activity_gear_activity_unresolved = activity_gear_total - len(enriched_activity_gear)
-    activity_gear_gear_unresolved = activity_gear_total - len(enriched_activity_gear)
+    activity_gear_total = len(enriched_activity_gear)
+    # Each endpoint is counted by itself, as the statuses of the rows give it
+    # (stage A4a); until then, a link with either endpoint unresolved was
+    # unresolved for both, as it was removed.
+    activity_gear_activity_unresolved = activity_gear_total - activity_side_resolved
+    activity_gear_gear_unresolved = activity_gear_total - gear_side_resolved
     personal_record_unusable_links = (
         malformed_personal_record_links + conflicting_personal_record_links
     )
@@ -412,7 +450,12 @@ def validate_declared_relationships(
             else {}
         ),
     }
-    fit_lap_total = len(enriched_fit_laps) + len(unresolved_fit_laps)
+    fit_lap_total = len(enriched_fit_laps)
+    # The totals count, of activity_gear, the links whose both endpoints are
+    # followed and each endpoint that is not in the output, as before, so that
+    # relationship_total is relationship_resolved, relationship_unresolved,
+    # relationship_malformed, and relationship_conflict together.
+    activity_gear_relationship_count = activity_gear_resolved + len(unresolved_activity_gear)
 
     def _relationship_entry(
         *,
@@ -464,10 +507,10 @@ def validate_declared_relationships(
         "relationships": {
             "activity_gear_to_activities": {
                 **_relationship_entry(
-                    resolved=len(enriched_activity_gear),
+                    resolved=activity_side_resolved,
                     total=activity_gear_total,
                     unresolved=activity_gear_activity_unresolved,
-                    snapshot_resolved=activity_gear_snapshot_resolved,
+                    snapshot_resolved=activity_side_snapshot_resolved,
                     primary_reason=(
                         "missing_activity_endpoint"
                         if activity_gear_activity_unresolved
@@ -478,10 +521,10 @@ def validate_declared_relationships(
             },
             "activity_gear_to_gear": {
                 **_relationship_entry(
-                    resolved=len(enriched_activity_gear),
+                    resolved=gear_side_resolved,
                     total=activity_gear_total,
                     unresolved=activity_gear_gear_unresolved,
-                    snapshot_resolved=activity_gear_snapshot_resolved,
+                    snapshot_resolved=gear_side_snapshot_resolved,
                     primary_reason=(
                         "missing_gear_endpoint" if activity_gear_gear_unresolved else None
                     ),
@@ -511,7 +554,7 @@ def validate_declared_relationships(
             },
             "fit_laps_to_fit_sessions": {
                 **_relationship_entry(
-                    resolved=len(enriched_fit_laps),
+                    resolved=fit_lap_resolved,
                     total=fit_lap_total,
                     unresolved=len(unresolved_fit_laps),
                     snapshot_resolved=fit_lap_snapshot_resolved,
@@ -532,12 +575,12 @@ def validate_declared_relationships(
         result.update(
             {
                 "relationship_total": (
-                    activity_gear_total + personal_record_total + fit_lap_total
+                    activity_gear_relationship_count + personal_record_total + fit_lap_total
                 ),
                 "relationship_resolved": (
-                    len(enriched_activity_gear)
+                    activity_gear_resolved
                     + personal_record_activity_links
-                    + len(enriched_fit_laps)
+                    + fit_lap_resolved
                 ),
                 "relationship_snapshot_resolved": snapshot_resolved_total,
                 # Valid links whose endpoint is absent; the Personal Records

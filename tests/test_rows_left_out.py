@@ -744,8 +744,8 @@ class IdentityRowsTest(unittest.TestCase):
 
     def test_links_to_rows_left_out_have_an_absent_endpoint(self) -> None:
         # The Activity 1.5 and the Gear 2.5 are left out; links that name
-        # them as text are valid links whose endpoint is absent, removed and
-        # counted until stage A4.
+        # them as text are valid links whose endpoint is absent, kept with
+        # that endpoint unresolved from stage A4a.
         activities = [_activity("A1"), _activity("X", activityId=1.5)]
         gear_rows = [gear(1, "Synthetic Shoe"), {**gear(2, "Synthetic Shoe 2"), "gearPk": 2.5}]
         link_rows = {"1": [{"activityId": "A1"}, {"activityId": "1.5"}], "2.5": [{"activityId": "A1"}]}
@@ -761,10 +761,19 @@ class IdentityRowsTest(unittest.TestCase):
             self.assertEqual(codes["RELATIONSHIP_UNRESOLVED_VALID_LINK"], 3)
             self.assertNotIn("RELATIONSHIP_UNRESOLVED_INVALID_LINK", codes)
             self.assertEqual(
-                [(row["gear_key"], row["activity_id"]) for row in table(output, "activity_gear")],
-                [(1, "A1")],
+                [
+                    (row["gear_key"], row["activity_id"], row["activity_relationship_status"], row["gear_relationship_status"])
+                    for row in table(output, "activity_gear")
+                ],
+                [(1, "A1", "explicit", "explicit"), (1, "1.5", "unresolved", "explicit"), ("2.5", "A1", "explicit", "unresolved")],
             )
-            self.assertEqual([row["personal_record_id"] for row in table(output, "personal_records")], [1])
+            self.assertEqual(
+                [
+                    (row["personal_record_id"], row["activity_relationship_status"])
+                    for row in table(output, "personal_records")
+                ],
+                [(1, "explicit"), (2, "unresolved")],
+            )
             entry = load(output / "qa/relationship_summary.json")["relationships"][
                 "personal_records_to_activities"
             ]

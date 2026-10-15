@@ -355,7 +355,30 @@ class RunAllTest(unittest.TestCase):
             self.assertEqual(relationship["relationship_unresolved"], 1)
             self.assertEqual(relationship["relationship_resolved"], 2)
             self.assertEqual(len(activities), 1)
-            self.assertEqual(activity_gear, [])
+            # The link stays with its Activity unresolved (stage A4a).
+            self.assertEqual(
+                [
+                    (
+                        row["activity_id"],
+                        row["garmin_activity_key"],
+                        row["activity_relationship_status"],
+                        row["activity_relationship_reason"],
+                        row["gear_relationship_status"],
+                        row["gear_relationship_reason"],
+                    )
+                    for row in activity_gear
+                ],
+                [
+                    (
+                        "MISSING-ACTIVITY",
+                        None,
+                        "unresolved",
+                        "missing_activity_endpoint",
+                        "explicit",
+                        "source_gear_key",
+                    )
+                ],
+            )
 
     def test_performance_metrics_are_public_safe_and_lactate_stays_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
