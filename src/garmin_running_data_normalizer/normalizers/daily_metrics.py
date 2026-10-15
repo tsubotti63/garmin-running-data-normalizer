@@ -21,6 +21,9 @@ class DailyMetricError(ValueError):
 class DailyMetricResult:
     records: list[dict[str, Any]]
     audit: dict[str, Any]
+    # In a Snapshot run, the import numbers of the Snapshots that observed
+    # each record, in the order of the records (stage A3d-4c-2).
+    row_snapshot_numbers: list[tuple[int, ...]] = field(default_factory=list)
 
 
 def logical_basename(asset: DiscoveredAsset) -> str:
@@ -81,11 +84,27 @@ def variant_fingerprint(value: Any) -> str:
 # numbers of the Snapshots that gave it under this name (one number for each
 # time a Snapshot gave it). An Export's own records never carry it.
 SNAPSHOT_NUMBERS_FIELD = "garminRunningDataNormalizerSnapshotNumbers"
+# A Snapshot build writes a record of Activities, Gear, links, or Personal
+# Records with the import numbers of every Snapshot that holds it, once each,
+# under this name, so that Run-All counts the rows that each Snapshot observed
+# (stage A3d-4c-2). An Export's own records never carry it.
+SNAPSHOT_PRESENCE_FIELD = "garminRunningDataNormalizerSnapshotPresence"
 
 
 def snapshot_numbers(raw: dict[str, Any]) -> list[int] | None:
     """Return the Snapshot import numbers of a record from a Snapshot build."""
-    value = raw.get(SNAPSHOT_NUMBERS_FIELD)
+    return _import_numbers(raw.get(SNAPSHOT_NUMBERS_FIELD))
+
+
+def snapshot_presence(raw: dict[str, Any]) -> list[int] | None:
+    """Return the import numbers of every Snapshot that holds a record of
+    Activities, Gear, links, or Personal Records from a Snapshot build, at
+    any time point: the build writes the record of the last time point
+    only (stage A3d-4c-2)."""
+    return _import_numbers(raw.get(SNAPSHOT_PRESENCE_FIELD))
+
+
+def _import_numbers(value: Any) -> list[int] | None:
     if (
         not isinstance(value, list)
         or not value
@@ -113,6 +132,13 @@ def copies_within_snapshots(numbers: list[int] | None) -> int:
     Export, and the same record in two Snapshots is not a copy (stage A3b).
     """
     return len(numbers) - len(set(numbers)) if numbers else 0
+
+
+def observed_snapshots(numbers: Iterable[Iterable[int] | None]) -> tuple[int, ...]:
+    """Return the import numbers of the Snapshots that observed one output
+    row, from the numbers of the rows merged into it; none in a one-shot run,
+    whose rows carry no numbers (stage A3d-4c-2)."""
+    return tuple(sorted({number for items in numbers if items for number in items if number}))
 
 
 def value_source_names(value_sources: Mapping[str, tuple[str, ...]]) -> tuple[str, ...]:
@@ -332,6 +358,7 @@ def finalize_daily(
                 row.get("_snapshot_numbers"),
             )
     output: list[dict[str, Any]] = []
+    row_numbers: list[tuple[int, ...]] = []
     same_value_duplicates = 0
     review_key_count = 0
     duplicate_group_count = 0
@@ -348,6 +375,8 @@ def finalize_daily(
         ]
         held = [alternatives(row) for row in grouped[key]] if alternatives else []
         numbers = [row.get("_snapshot_numbers") for row in grouped[key]]
+        # Each key gives one output row, in this order.
+        row_numbers.append(observed_snapshots(numbers))
         signatures = {stable_json(row) for row in rows}
         copies = sum(copies_within_snapshots(items) for items in numbers)
         copy_count += copies
@@ -459,6 +488,7 @@ def finalize_daily(
     return DailyMetricResult(
         records=output,
         audit=audit,
+        row_snapshot_numbers=row_numbers,
     )
 
 
@@ -468,6 +498,7 @@ __all__ = [
     "MergedObservations",
     "RowsLeftOut",
     "SNAPSHOT_NUMBERS_FIELD",
+    "SNAPSHOT_PRESENCE_FIELD",
     "copies_within_snapshots",
     "boolean",
     "finalize_daily",
@@ -476,9 +507,11 @@ __all__ = [
     "merge_observations",
     "number",
     "observation_weight",
+    "observed_snapshots",
     "public_fields",
     "selected_rows",
     "snapshot_numbers",
+    "snapshot_presence",
     "stable_json",
     "text",
     "value_source_names",

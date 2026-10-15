@@ -17,12 +17,18 @@ Stage A3d-4c-1: the input files of the run summary, the unknown evidence of
 Source Completeness, the FIT files counted in each place where they are
 found, and the files of an Export told by one rule, a member of a ZIP file by
 its name within the ZIP file and a daily file by the beginning of its name.
+
+Stage A3d-4c-2: the observations of Source Completeness, which Run-All
+counts from the output rows that each Snapshot observed; and every output of
+a Snapshot run of one Export, which is that of a one-shot run of it but for
+what differs by design (``BY_DESIGN``).
 """
 
 from __future__ import annotations
 
 import io
 import json
+import re
 import tempfile
 import unittest
 import zipfile
@@ -599,6 +605,235 @@ class FileNameTest(unittest.TestCase):
             self.assertEqual(counts(snapshot), counts(one_shot))
             self.assertEqual(file_figures(snapshot), file_figures(one_shot))
             self.assertEqual(file_figures(one_shot)["unknown_evidence"]["count"], 1)
+
+
+# What differs by design between a one-shot run and a Snapshot run of one
+# Export, by the names of the fields (decisions 20261014-25 and -27); a
+# pattern covers what lies under it. The normalized tables are compared
+# without the provenance fields, and the documents without their Snapshot
+# Accumulation section; everything else is the same.
+BY_DESIGN = tuple(
+    re.compile(pattern)
+    for pattern in (
+        # The names of the scope.
+        r"audit/\w+\.json/observation_scope",
+        r"diagnostics/source_completeness\.json/(observation_scope|authority_references)",
+        r"diagnostics/source_completeness\.json/families\[\*\]/observation_ref",
+        r"diagnostics/source_completeness\.json/families\[\*\]/evidence_references\[\*\]/(artifact|json_pointer)",
+        # Provenance, and the digests made from it or from the outputs.
+        r"audit/fit_audit\.json\[\*\]/source_path",
+        r"(qa/dataset_summary|run_manifest)\.json/datasets\[\*\]/records_sha256",
+        r"diagnostics/run_quality\.json/provenance_references\[\*\]/sha256",
+        r"diagnostics/run_quality\.json/output_digests/authority_evidence_digest/value",
+        r"(run_manifest|run_summary)\.json/deterministic_output_digest",
+        r"run_summary\.json/manifest_sha256",
+        r"run_manifest\.json/input_assets",
+        # The Snapshot numbers of the values and of the files listed.
+        r"audit/\w+\.json/(disagreements\[\*\]/fields\[\*\]/values\[\*\]|invalid_values\[\*\])/snapshots",
+        r"run_manifest\.json/(files_left_out|files_not_read|files_with_repaired_text)\[\*\]/snapshot",
+        # The files of a Snapshot run only, and the lists and sections about them.
+        r"snapshot/(canonical_merge_summary|snapshot_coverage|snapshot_lineage)\.json",
+        r"run_manifest\.json/outputs",
+        r"run_summary\.json/generated_paths",
+        r"artifact_inventory\.json/artifacts",
+        r"(ANALYSIS_CONTEXT|run_manifest|run_summary)\.json/snapshot_lifecycle",
+    )
+)
+SNAPSHOT_SECTION = "## Snapshot Accumulation"
+DOCUMENTS = ("START_HERE.md", "DATASET_INVENTORY.md", "ANALYSIS_HANDOFF.md")
+
+
+def by_design(path: str) -> bool:
+    for pattern in BY_DESIGN:
+        found = pattern.match(path)
+        if found and (found.end() == len(path) or path[found.end()] in "/["):
+            return True
+    return False
+
+
+def walk(a: Any, b: Any, path: str, found: list[str]) -> None:
+    if isinstance(a, dict) and isinstance(b, dict):
+        for key in sorted(set(a) | set(b)):
+            if key not in a or key not in b:
+                found.append(f"{path}/{key}")
+            else:
+                walk(a[key], b[key], f"{path}/{key}", found)
+    elif isinstance(a, list) and isinstance(b, list) and len(a) == len(b):
+        for x, y in zip(a, b):
+            walk(x, y, f"{path}[*]", found)
+    elif a != b:
+        found.append(path)
+
+
+def without_section(text: str) -> list[str]:
+    kept, inside = [], False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            inside = line.rstrip() == SNAPSHOT_SECTION
+        if not inside:
+            kept.append(line)
+    return kept
+
+
+def differences(one_shot: Path, snapshot: Path) -> list[str]:
+    """The places where every output file of the two runs differs, other
+    than by design."""
+    found: list[str] = []
+    names = sorted(
+        {path.relative_to(one_shot).as_posix() for path in one_shot.rglob("*") if path.is_file()}
+        | {path.relative_to(snapshot).as_posix() for path in snapshot.rglob("*") if path.is_file()}
+    )
+    for name in names:
+        left, right = one_shot / name, snapshot / name
+        if not left.is_file() or not right.is_file():
+            found.append(name)
+        elif name.endswith(".json"):
+            a, b = load(left), load(right)
+            if name.startswith("normalized/"):
+                a, b = without_provenance(a), without_provenance(b)
+            walk(a, b, name, found)
+        elif name in DOCUMENTS:
+            if without_section(left.read_text(encoding="utf-8")) != without_section(
+                right.read_text(encoding="utf-8")
+            ):
+                found.append(name)
+        elif left.read_bytes() != right.read_bytes():
+            found.append(name)
+    return sorted({path for path in found if not by_design(path)})
+
+
+def daily_rows(source: Path, folder: str, name: str, rows: list[dict[str, Any]]) -> None:
+    (source / folder).mkdir(exist_ok=True)
+    (source / folder / name).write_text(json.dumps(rows), encoding="utf-8")
+
+
+def scenarios(root: Path) -> dict[str, Path]:
+    """Synthetic Exports of one kind each, among them those of the survey of
+    stage A3d-4c and the three that it found."""
+    from tests.test_hrv_readings import VALUE_TIME, day, hrv_fit, reading
+
+    found: dict[str, Path] = {"every family": every_family(root, "every-family", 1)}
+    source = write_export(root, "empty-gear", [_activity("1001")])
+    (source / "DI-Connect-Fitness" / "synthetic_gear.json").write_text(json.dumps([{"gearDTOS": []}]), encoding="utf-8")
+    found["a Gear file without records"] = source
+    source = write_export(root, "lower-case", [_activity("1001")])
+    path = source / "DI-Connect-Fitness" / "synthetic_summarizedActivities.json"
+    path.rename(path.with_name("synthetic_summarizedactivities.json"))
+    found["a name in lower case"] = source
+    source = write_export(root, "without-date", [_activity("1001")])
+    daily_rows(source, "DI-Connect-Aggregator", "UDSFile_1.json", [{"totalSteps": 5}])
+    found["a daily row without its date"] = source
+    source = write_export(root, "vo2max", [_activity("1001")])
+    daily_rows(source, "DI-Connect-Metrics", "MetricsMaxMetData_1.json", [
+        {"calendarDate": "2030-02-01", "updateTimestamp": "2030-02-01T06:00:00", "vo2MaxValue": 51,
+         "sport": "RUNNING", "activityId": 1001}])
+    found["the activity of a VO2max row"] = source
+    found["Lactate Threshold rows that are not candidates"] = lactate_and_private_fields(root, "lactate", 1)
+    found["FIT files of several kinds"] = with_fit_files(root, "fit-kinds", {
+        "activity.fit": FIT_A, "activity_again.fit": FIT_A, "broken.fit": truncated_fit(),
+        "chained.fit": unsupported_chained_fit()})
+    source = with_fit_files(root, "unknown", {"readme.txt": b"synthetic", "a.fit": FIT_A})
+    (source / "DI-Connect-Fitness" / "synthetic_unknown.json").write_text(json.dumps([{"x": 1}]), encoding="utf-8")
+    found["objects of no family"] = source
+    source = write_export(root, "repeated", [_activity("1001"), _activity("1001"), {"activityName": "no id"}])
+    row = {"calendarDate": "2030-02-01", "totalSteps": 5}
+    daily_rows(source, "DI-Connect-Aggregator", "UDSFile_1.json", [row, row, {"totalSteps": 7}])
+    daily_rows(source, "DI-Connect-Aggregator", "UDSFile_2.json", [row, {"calendarDate": "2030-02-02", "totalSteps": 6}])
+    found["repeated rows and rows left out"] = source
+    source = write_export(root, "invalid", [_activity("1001", distance="far")])
+    daily_rows(source, "DI-Connect-Aggregator", "UDSFile_1.json", [{"calendarDate": "2030-02-01", "totalSteps": "many"}])
+    found["values of another form"] = source
+    source = write_export(root, "broken", [_activity("1001")])
+    (source / "DI-Connect-Aggregator").mkdir()
+    (source / "DI-Connect-Aggregator" / "UDSFile_1.json").write_text('{"calendarDate": ', encoding="utf-8")
+    daily_rows(source, "DI-Connect-Aggregator", "UDSFile_2.json", [{"calendarDate": "2030-02-02", "totalSteps": 6}])
+    found["a file that is not JSON"] = source
+    found["links to nothing"] = write_export(
+        root, "links", [_activity("1001")], gear_rows=[gear(1, "Shoe")], links={"1": ["1001", "9999"]},
+        records=[personal_record(11, "1001", 300.0), personal_record(12, "", 200.0)])
+    source = write_export(root, "hrv", [_activity("1001")])
+    (source / "DI-Connect-Metrics").mkdir()
+    for name, value in (("a", 6400), ("b", 6400), ("c", 6528)):
+        (source / "DI-Connect-Metrics" / f"synthetic_hrv_{name}.fit").write_bytes(hrv_fit(VALUE_TIME, [reading(value, day(1))]))
+    found["HRV readings in copies of a FIT file"] = source
+    source = write_export(root, "zip-top", [_activity("1001")])
+    (source / "DI-Connect-Aggregator").mkdir()
+    (source / "DI-Connect-Aggregator" / "Parts.zip").write_bytes(zip_bytes({
+        "UDSFile_1.json": json.dumps([{"calendarDate": "2030-02-01", "totalSteps": 5}]).encode()}))
+    (source / "DI-Connect-Metrics").mkdir()
+    (source / "DI-Connect-Metrics" / "Parts.zip").write_bytes(zip_bytes({
+        "HillScore_synthetic_1.json": json.dumps([{"calendarDate": "2030-02-01", "overallScore": 50, "strengthScore": 40,
+                                                   "enduranceScore": 30, "hillScoreClassificationId": 4}]).encode()}))
+    found["daily files at the top of a ZIP file"] = source
+    source = write_export(root, "copy-name", [_activity("1001")])
+    daily_rows(source, "DI-Connect-Aggregator", "Copy of UDSFile_1.json", [{"calendarDate": "2030-02-01", "totalSteps": 5}])
+    found["a name with the mark of a family inside"] = source
+    return found
+
+
+def completeness_entries(output: Path, reference: str | None = None) -> list[dict[str, Any]]:
+    """The Source Completeness of each family, without the names of the
+    scope; of one Snapshot when ``reference`` names it."""
+    return [
+        {key: value for key, value in item.items() if key not in ("observation_ref", "evidence_references")}
+        for item in load(output / "diagnostics/source_completeness.json")["families"]
+        if reference is None or item["observation_ref"] == reference
+    ]
+
+
+class EveryOutputTest(unittest.TestCase):
+    def test_every_output_of_one_export_is_that_of_a_one_shot_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, source in scenarios(root / "exports").items():
+                with self.subTest(scenario=name):
+                    folder = root / "runs" / source.name
+                    one_shot, snapshot = runs(folder, source)
+                    self.assertEqual(differences(one_shot, snapshot), [])
+
+    def test_the_observations_of_one_export_are_its_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            one_shot, snapshot = runs(root, every_family(root, "export", 1))
+            self.assertEqual(completeness_entries(snapshot), completeness_entries(one_shot))
+            fit = fit_completeness(snapshot)
+            # The sessions and laps of the FIT files: until stage A3d-4c-2, the
+            # per-second records of the files, none in these, made it EMPTY.
+            self.assertEqual((fit["state"], fit["source_observation_count"] > 0), ("PRESENT", True))
+            coverage = load(snapshot / "snapshot/snapshot_coverage.json")
+            self.assertEqual(
+                coverage["source_completeness_observations"][0]["source_observation_counts"],
+                {item["source_family_id"]: item["source_observation_count"] for item in completeness_entries(one_shot)},
+            )
+
+    def test_each_snapshot_of_two_exports_observes_its_own_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first, second = every_family(root, "first", 1), every_family(root, "second", 2)
+            _one_shot, snapshot = runs(root / "store", first, second)
+            for number, source in enumerate((first, second), start=1):
+                with self.subTest(snapshot=number):
+                    run_all(source, root / f"one-shot-{number}")
+                    self.assertEqual(
+                        completeness_entries(snapshot, f"snapshot-{number}"),
+                        completeness_entries(root / f"one-shot-{number}"),
+                    )
+
+    def test_a_build_alone_writes_no_observations(self) -> None:
+        from garmin_running_data_normalizer.snapshot import build_approved_input
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            initialize_store(store, ACCOUNT)
+            stamp = "2030-01-01T02:00:00+00:00"
+            register_snapshot(store, every_family(root, "export", 1), snapshot_label="S1",
+                              export_requested_at=stamp, export_downloaded_at=stamp,
+                              export_observed_at=stamp, confirm_complete=True)
+            build_approved_input(store, root / "build")
+            coverage = load(root / "build/canonical/snapshot_coverage.json")
+            # The rows are Run-All's to count.
+            self.assertNotIn("source_observation_counts", coverage["source_completeness_observations"][0])
 
 
 if __name__ == "__main__":
