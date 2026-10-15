@@ -79,7 +79,8 @@
     "activity_gear_gear_key": "kept_by_the_build_under_its_own_name_and_not_written_with_the_link",
     "copies_passed_as_one_record": "only_when_they_hold_the_same_fields",
     "copies_within_snapshot": "counted_as_in_a_one_shot_run",
-    "counted_by": "run_all_from_the_records_that_the_build_passes"
+    "counted_by": "run_all_from_the_records_that_the_build_passes",
+    "daily_records_and_lactate_threshold_candidates": "counted_by_the_build_by_content_as_run_all_keeps_them"
   },
   "file_names": {
     "daily_files": "told_by_the_beginning_of_their_names",
@@ -109,7 +110,7 @@
     "policy": "passed_to_run_all_as_marks_without_a_key_and_left_out_as_in_a_one_shot_run",
     "same_content": "passed_once_with_one_snapshot_number_per_occurrence"
   },
-  "merge_rules_version": "garmin_snapshot_merge_rules:v2.14",
+  "merge_rules_version": "garmin_snapshot_merge_rules:v2.15",
   "other_datasets_follow": "garmin_public_snapshot_dataset_merge_policies:v1.0",
   "rows_without_a_stable_key": {
     "copies_within_snapshot": "counted_as_in_a_one_shot_run",

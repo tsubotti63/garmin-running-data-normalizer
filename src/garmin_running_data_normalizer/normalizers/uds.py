@@ -13,6 +13,7 @@ from .daily_metrics import (
     snapshot_numbers,
     value_source_names,
 )
+from .unread_fields import UnreadFields
 
 
 UDS_FIELDS = (
@@ -55,6 +56,9 @@ UDS_VALUE_SOURCES = {
     "raw_has_body_battery_feedback": ("bodyBatteryFeedback",),
 }
 UDS_FIELDS_WITHOUT_VALUES = ("calendar_date",)
+# The source fields that UDS reads; the audit record counts the others by name
+# (stage A4c-2).
+UDS_SOURCE_FIELDS = frozenset({"calendarDate", "date", *value_source_names(UDS_VALUE_SOURCES)})
 
 
 def _calendar_date(raw: dict[str, Any]) -> str | None:
@@ -90,6 +94,7 @@ def normalize_uds(
     selected, rows = selected_rows(assets, lambda name: name.startswith("udsfile"))
     accepted = []
     left_out = RowsLeftOut(value_source_names(UDS_VALUE_SOURCES))
+    unread = UnreadFields(UDS_SOURCE_FIELDS)
     for raw in rows:
         if left_out.add_mark(raw):
             continue
@@ -97,6 +102,7 @@ def normalize_uds(
         if reason is not None:
             left_out.add(raw, reason)
             continue
+        unread.add(raw)
         date = _calendar_date(raw)
         battery = raw.get("bodyBattery")
         stress = raw.get("allDayStress")
@@ -139,6 +145,7 @@ def normalize_uds(
         presence_flags=frozenset(
             {"raw_has_body_battery", "raw_has_all_day_stress", "raw_has_body_battery_feedback"}
         ),
+        unread_fields=unread.audit_fields(),
     )
 
 

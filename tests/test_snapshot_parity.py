@@ -843,6 +843,11 @@ def scenarios(root: Path) -> dict[str, Path]:
     uploaded.mkdir(exist_ok=True)
     (uploaded / "synthetic-unread.fit").write_bytes(synthetic_fit(extra_body=other_messages()))
     found["fields and FIT messages that no dataset reads"] = source
+    # Stage A4c-2: fields that no dataset reads in a row of every daily
+    # dataset and in a Lactate Threshold candidate.
+    from tests.test_daily_unread_fields import daily_export
+
+    found["daily rows with fields that no dataset reads"] = daily_export(root / "daily-unread")
     return found
 
 

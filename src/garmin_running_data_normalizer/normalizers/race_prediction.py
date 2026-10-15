@@ -15,6 +15,7 @@ from .daily_metrics import (
     snapshot_numbers,
     value_source_names,
 )
+from .unread_fields import UnreadFields
 
 
 RACE_PREDICTION_FIELDS = (
@@ -34,6 +35,11 @@ RACE_PREDICTION_VALUE_SOURCES = {
     "race_time_marathon_sec": ("raceTimeMarathon",),
 }
 RACE_PREDICTION_FIELDS_WITHOUT_VALUES = ("calendar_date", "observation_timestamp")
+# The source fields that Race Prediction reads; the audit record counts the others
+# by name (stage A4c-2).
+RACE_PREDICTION_SOURCE_FIELDS = frozenset(
+    {"calendarDate", "timestamp", *value_source_names(RACE_PREDICTION_VALUE_SOURCES)}
+)
 
 
 def _race_times(raw: dict[str, Any], values: ValueReader) -> dict[str, int | float | None]:
@@ -70,6 +76,7 @@ def normalize_race_prediction(
     )
     accepted = []
     left_out = RowsLeftOut(value_source_names(RACE_PREDICTION_VALUE_SOURCES))
+    unread = UnreadFields(RACE_PREDICTION_SOURCE_FIELDS)
     timestamp_semantics: Counter[str] = Counter()
     for raw in rows:
         if left_out.add_mark(raw):
@@ -81,6 +88,7 @@ def normalize_race_prediction(
         if reason is not None:
             left_out.add(raw, reason)
             continue
+        unread.add(raw)
         values = ValueReader()
         accepted.append(
             {
@@ -100,6 +108,7 @@ def normalize_race_prediction(
         excluded_reasons=left_out.reasons,
         empty_record_count=left_out.empty_record_count,
         fields=RACE_PREDICTION_FIELDS,
+        unread_fields=unread.audit_fields(),
     )
     result.audit["observation_timestamp_semantics_counts"] = dict(
         sorted(timestamp_semantics.items())

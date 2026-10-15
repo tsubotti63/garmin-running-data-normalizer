@@ -18,6 +18,7 @@ from .daily_metrics import (
     text,
     value_source_names,
 )
+from .unread_fields import UnreadFields
 
 
 VO2MAX_FIELDS = (
@@ -49,6 +50,27 @@ VO2MAX_FIELDS_WITHOUT_VALUES = (
     "source_activity_id",
     "source_confidence",
 )
+
+
+# The source fields that VO2max reads, for each series: the series of an
+# Activity takes its time from timestampGmt, any other series from
+# updateTimestamp, and both from observationTimestamp when that one is empty.
+# The audit record counts the others by name (stage A4c-2).
+_VO2MAX_COMMON_SOURCE_FIELDS = frozenset(
+    {
+        "vo2MaxSourceSeries", "calendarDate", "observationTimestamp", "sport",
+        "activityId", *value_source_names(VO2MAX_VALUE_SOURCES),
+    }
+)
+VO2MAX_ACTIVITY_SOURCE_FIELDS = _VO2MAX_COMMON_SOURCE_FIELDS | {"timestampGmt"}
+VO2MAX_METRICS_SOURCE_FIELDS = _VO2MAX_COMMON_SOURCE_FIELDS | {"updateTimestamp"}
+
+
+def vo2max_source_fields(series: str) -> frozenset[str]:
+    """The source fields that VO2max reads from a record of this series."""
+    if series == "activity_vo2max_daily":
+        return VO2MAX_ACTIVITY_SOURCE_FIELDS
+    return VO2MAX_METRICS_SOURCE_FIELDS
 
 
 def vo2max_series(raw: dict[str, Any], file_name: str) -> str:
@@ -105,6 +127,7 @@ def normalize_vo2max(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
     )
     accepted = []
     left_out = RowsLeftOut(value_source_names(VO2MAX_VALUE_SOURCES))
+    unread = UnreadFields(VO2MAX_METRICS_SOURCE_FIELDS)
     timestamp_semantics: Counter[str] = Counter()
     for asset in selected:
         name = (asset.member_path or asset.source_path).split("/")[-1].lower()
@@ -122,6 +145,7 @@ def normalize_vo2max(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
             if reason is not None:
                 left_out.add(raw, reason)
                 continue
+            unread.add(raw, vo2max_source_fields(series))
             values = ValueReader()
             source_activity_id = values.integer(raw.get("activityId"), "source_activity_id")
             accepted.append(
@@ -154,6 +178,7 @@ def normalize_vo2max(assets: Iterable[DiscoveredAsset]) -> DailyMetricResult:
         excluded_reasons=left_out.reasons,
         empty_record_count=left_out.empty_record_count,
         fields=VO2MAX_FIELDS,
+        unread_fields=unread.audit_fields(),
     )
     result.audit["observation_timestamp_semantics_counts"] = dict(
         sorted(timestamp_semantics.items())

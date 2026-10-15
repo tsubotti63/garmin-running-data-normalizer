@@ -301,8 +301,11 @@ FUTURE_READY_DATASETS = ("health_status",)
 # own and writes the link for Run-All with the fields of the Export only, and
 # passes the copies of a record within one Snapshot as one record only when
 # they also hold the same fields, so that Run-All counts the fields that it
-# does not read as a one-shot run counts them (stage A4c-1).
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.14"
+# does not read as a one-shot run counts them (stage A4c-1). From v2.15, the
+# build counts the fields of the daily rows and the Lactate Threshold candidates
+# that their dataset does not read, which it leaves out, by name, as it counts
+# the private fields, and Run-All takes the counts from it (stage A4c-2).
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.15"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -460,6 +463,7 @@ MERGE_RULES: dict[str, Any] = {
         "activity_gear_gear_key": "kept_by_the_build_under_its_own_name_and_not_written_with_the_link",
         "copies_within_snapshot": "counted_as_in_a_one_shot_run",
         "copies_passed_as_one_record": "only_when_they_hold_the_same_fields",
+        "daily_records_and_lactate_threshold_candidates": "counted_by_the_build_by_content_as_run_all_keeps_them",
     },
     "other_datasets_follow": REGISTRY_VERSION,
 }

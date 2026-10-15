@@ -16,6 +16,7 @@ from .daily_metrics import (
     text,
     value_source_names,
 )
+from .unread_fields import UnreadFields
 
 
 TRAINING_HISTORY_FIELDS = (
@@ -31,6 +32,11 @@ TRAINING_HISTORY_VALUE_SOURCES = {
     "sport": ("sport",),
 }
 TRAINING_HISTORY_FIELDS_WITHOUT_VALUES = ("calendar_date", "observation_timestamp")
+# The source fields that Training History reads; the audit record counts the others
+# by name (stage A4c-2).
+TRAINING_HISTORY_SOURCE_FIELDS = frozenset(
+    {"calendarDate", "timestamp", *value_source_names(TRAINING_HISTORY_VALUE_SOURCES)}
+)
 
 
 def training_history_left_out_reason(raw: dict[str, Any]) -> str | None:
@@ -52,6 +58,7 @@ def normalize_training_history(
     )
     accepted = []
     left_out = RowsLeftOut(value_source_names(TRAINING_HISTORY_VALUE_SOURCES))
+    unread = UnreadFields(TRAINING_HISTORY_SOURCE_FIELDS)
     timestamp_semantics: Counter[str] = Counter()
     for raw in rows:
         if left_out.add_mark(raw):
@@ -64,6 +71,7 @@ def normalize_training_history(
         if reason is not None:
             left_out.add(raw, reason)
             continue
+        unread.add(raw)
         values = ValueReader()
         accepted.append(
             {
@@ -84,6 +92,7 @@ def normalize_training_history(
         excluded_reasons=left_out.reasons,
         empty_record_count=left_out.empty_record_count,
         fields=TRAINING_HISTORY_FIELDS,
+        unread_fields=unread.audit_fields(),
     )
     result.audit["observation_timestamp_semantics_counts"] = dict(
         sorted(timestamp_semantics.items())

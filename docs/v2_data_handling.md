@@ -1027,7 +1027,7 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     dataset's audit record, without values. From stage A4c-1, the audit
     records of Activities, Gear, `activity_gear`, and Personal Records give
     `unread_field_counts`: for each field outside the list, the number of
-    rows read that hold it (stage A4c-2 counts those of the daily datasets).
+    rows read that hold it (for the daily datasets, see below).
     A row read is a row kept in the dataset, before its repeated records are
     merged; the rows left out and the items that are not records are not
     counted. Only the names of the fields at the top of a row are counted,
@@ -1052,6 +1052,23 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     links object; and Personal Records `personalRecordId`, `activityId`,
     `personalRecordType`, `value`, `prStartTimeGMT`, `createdDate`,
     `current`, and `confirmed`.
+  - From stage A4c-2, the audit records of the daily datasets give the same
+    counts: those of UDS, Sleep, Training Readiness, Acute Training Load,
+    Training History, Hill Score, Endurance Score, VO2max, and Race
+    Prediction, and that of the Lactate Threshold candidates, for the rows
+    that become candidates; a Lactate Threshold row without a value, neither
+    a number nor the type that the method of a heart-rate zones row gives,
+    which only the number of source rows counts, is not counted. The fields
+    that a daily dataset reads are the source fields of its values, aliases
+    included, its date, and its time where it has one. VO2max reads the time
+    of its series, `timestampGmt` for that of an Activity and
+    `updateTimestamp` for the other, and `observationTimestamp` when that one
+    is empty, so each series counts the time of the other; the Lactate
+    Threshold candidates read `metaData` from the history files and
+    `trainingMethod` from the heart-rate zones. The private fields of Hill
+    and Endurance are counted apart, in
+    `excluded_private_field_presence_counts`, and not again. The HRV daily
+    dataset reads FIT files only, whose messages the FIT audit counts.
   - A Snapshot run counts the fields of the records that the build passes,
     each copy within one Snapshot as in a one-shot run, so a Snapshot run of
     a store that holds one Export gives the counts of a one-shot run of it:
@@ -1062,7 +1079,17 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     time point, with the fields that only earlier time points hold, so the
     counts differ from those of one-shot runs of all the Exports; the probe
     records that the build passes for values that disagreed at an earlier
-    time point are not counted (merge rules v2.14).
+    time point are not counted (merge rules v2.14). The build passes the
+    records of the daily datasets and the Lactate Threshold candidates
+    narrowed to the fields of their dataset, so it counts the fields that
+    their dataset does not read itself, from the rows that Run-All keeps, as
+    it counts the private fields of Hill and Endurance: a row with the same
+    content in several Snapshots once, and each copy within one Snapshot;
+    Run-All takes these counts from it (merge rules v2.15). A Snapshot run of
+    a store that holds one Export gives the counts of a one-shot run of it;
+    with several Snapshots, a row whose content changed counts for each
+    Snapshot that gave it, so the counts are neither those of the output rows
+    nor those of reading all the Exports once.
   - Unknown FIT messages and developer fields are counted in the FIT audit as
     not read, and they do not make a FIT file incomplete. From stage A4c-1,
     each entry of `audit/fit_audit.json` gives `not_read_message_counts`, the
@@ -1462,6 +1489,11 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Activity holds one (`synthetic`), so its Run Quality digest and the
   first-user conversion digests change. Snapshot outputs give the merge
   rules version v2.14.
+- Stage A4c-2 adds `unread_field_counts` and `unread_other_name_count` to the
+  audit records of the daily datasets and of the Lactate Threshold
+  candidates, only when there is something to count. Snapshot outputs give
+  the merge rules version v2.15; the records that the build passes do not
+  change.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
   `INPUT_NOT_READABLE`, `OUTPUT_SPACE_INSUFFICIENT`,
@@ -1609,7 +1641,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   inside a ZIP file under a name that Run-All does not open, and
   `garmin_snapshot_merge_rules:v2.14` from stage A4c-1, which keeps the Gear
   key of a link under a name of its own and writes the link with the fields
-  of the Export only,
+  of the Export only, and `garmin_snapshot_merge_rules:v2.15` from stage
+  A4c-2, which counts for Run-All the fields of the daily rows and the
+  Lactate Threshold candidates that their dataset does not read,
   in `config/garmin_snapshot_merge_rules_v2.json`. For these
   datasets they replace the merge fields of the v1.0 registry; the other
   datasets follow the v1.0 registry until stage A3d. A build records
@@ -1817,6 +1851,15 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   them held with an empty value. The field states of the merge summaries
   still count the Gear key of a link as its field `gearPk`, once, also when
   the link holds a `gearPk` of its own, so they do not change.
+- Stage A4c-2: the build passes the daily records, the Hill and Endurance
+  records, and the Lactate Threshold candidates narrowed to the fields of
+  their dataset, as before. It counts by name the fields of these rows that
+  their dataset does not read, from the rows that Run-All keeps (it tells
+  them with the rules of Run-All: the reasons for which a daily row is left
+  out, and the rule of a candidate), as it counts the private fields of Hill
+  and Endurance, and Run-All takes the counts from it, applying the rule of
+  the names (merge rules v2.15). The records that it passes do not change,
+  and neither do the counts of the merge summaries and of the copies.
 
 ## Golden outputs and tests
 
@@ -1895,7 +1938,8 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   name the source fields of Activities, Gear, `activity_gear`, and Personal
   Records that no dataset reads, and the FIT audit counts the FIT messages
   and developer fields that no dataset reads, which v1.7.1 dropped without
-  a count.
+  a count; from stage A4c-2, so do the audit records of the daily datasets
+  and of the Lactate Threshold candidates.
 - Snapshots: existing stores need no migration; rerun `snapshot run-all`.
   Daily values that differ across Snapshots no longer stop the build, the
   Endurance Score and UDS days that v1.7.1 removed come back with the
@@ -1957,7 +2001,8 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Export, which v1.7.1 read as a ZIP file of the Export and which could stop
   the run, and lists the files that a run does not read by Snapshot number.
   From stage A4c-1, the build writes a link with the fields of the Export
-  only. The merge rules v2.14 are published in
+  only, and from stage A4c-2, it counts for Run-All the fields that it
+  leaves out of the daily rows. The merge rules v2.15 are published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around
