@@ -226,6 +226,31 @@ class RunManagerTest(unittest.TestCase):
         self.assertEqual(status["staging_folders"], [".output.run-all-stub"])
         self.assertTrue((self.parent / ".output.run-all-stub").is_dir())
 
+    def test_a_failure_reported_before_the_cancel_stays_a_failure(self) -> None:
+        # The failure comes first, as its code says what went wrong (stage
+        # A5c); until then the cancellation won.
+        manager = stub_manager("fail-then-wait", cancel_grace=60.0)
+        self.start(manager)
+        self.wait_for_progress(manager)
+        self.assertEqual(manager.status()["error_code"], "INPUT_ZIP_CORRUPT")
+        manager.cancel()
+        status = self.wait_for_end(manager, timeout=30.0)
+        self.assertEqual((status["state"], status["error_code"]), ("failed", "INPUT_ZIP_CORRUPT"))
+        self.assertIsNone(manager.finished_output())
+
+    def test_only_the_staging_folders_of_this_run_are_reported(self) -> None:
+        # One that was there before the run started is not this run's (stage
+        # A5c).
+        (self.parent / ".output.run-all-earlier").mkdir()
+        manager = stub_manager("stage-then-ignore", cancel_grace=0.3)
+        self.start(manager)
+        self.wait_for_progress(manager)
+        manager.cancel()
+        status = self.wait_for_end(manager)
+        self.assertEqual(status["state"], "cancelled")
+        self.assertEqual(status["staging_folders"], [".output.run-all-stub"])
+        self.assertTrue((self.parent / ".output.run-all-earlier").is_dir())
+
     def test_only_one_run_is_active_at_a_time(self) -> None:
         manager = stub_manager("wait")
         self.start(manager)

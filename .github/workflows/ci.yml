@@ -155,6 +155,9 @@ jobs:
       - name: Verify Windows stops and their next steps
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_stops.py -q
+      - name: Verify Windows cancellation
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_cancellation.py -q
       - name: Verify Windows rows left out
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_rows_left_out.py -q

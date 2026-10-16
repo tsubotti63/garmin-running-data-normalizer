@@ -33,7 +33,11 @@ def main() -> int:
     os.environ["PYTHONPATH"] = os.pathsep.join(
         path for path in (source, os.environ.get("PYTHONPATH")) if path
     )
-    from garmin_running_data_normalizer.gui.server import GuiServer, serve_until_stopped
+    from garmin_running_data_normalizer.gui.server import (
+        GuiServer,
+        cancel_report,
+        serve_until_stopped,
+    )
 
     server = GuiServer()
     print("GUI address (it contains the launch key; do not share it):")
@@ -41,7 +45,10 @@ def main() -> int:
     print("Stop with Ctrl+C or the Quit button on the page.", flush=True)
     if not args.no_browser:
         webbrowser.open(server.url)
-    serve_until_stopped(server)
+    stopped = serve_until_stopped(server)
+    # The run that Ctrl+C cancelled, as the CLI reports a cancelled command.
+    for line in cancel_report(stopped) if stopped is not None else []:
+        print(line, file=sys.stderr)
     print("GUI stopped.")
     return 0
 

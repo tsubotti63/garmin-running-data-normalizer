@@ -212,9 +212,14 @@ def _staging_folders(output: Path) -> list[str]:
 
 
 class _Run:
-    def __init__(self, process: subprocess.Popen[bytes], output: Path) -> None:
+    def __init__(
+        self, process: subprocess.Popen[bytes], output: Path, staging_before: set[str]
+    ) -> None:
         self.process = process
         self.output = output
+        # The staging folders for this output that were there before the run
+        # started, which it did not leave (stage A5c).
+        self.staging_before = staging_before
         self.started = time.monotonic()
         self.last_progress = self.started
         self.ended: float | None = None
@@ -300,6 +305,7 @@ class RunManager:
         ]
         if external_safe_pack:
             command.append("--external-safe-pack")
+        staging_before = set(_staging_folders(output))
         with self._lock:
             if self._run is not None and self._run.active:
                 raise RunActiveError()
@@ -310,7 +316,7 @@ class RunManager:
                 stderr=subprocess.DEVNULL,
                 **_process_group_options(),
             )
-            run = _Run(process, output)
+            run = _Run(process, output, staging_before)
             self._run = run
         run.follower = threading.Thread(target=self._follow, args=(run,), daemon=True)
         run.follower.start()
@@ -423,10 +429,16 @@ class RunManager:
 
     def _finish(self, run: _Run, returncode: int) -> None:
         output_exists = run.output.is_dir()
-        staging_folders = _staging_folders(run.output)
+        staging_folders = [
+            name for name in _staging_folders(run.output) if name not in run.staging_before
+        ]
         with self._lock:
             run.ended = time.monotonic()
-            if run.cancel_requested or run.reported_cancel:
+            if run.error_code is not None and run.result is None:
+                # A failure that the child reported comes first, also when a
+                # cancellation was asked for after it (stage A5c).
+                run.state = "failed"
+            elif run.cancel_requested or run.reported_cancel:
                 # Run-All checked that the output was absent before it started,
                 # so an output now means the run finished before the stop.
                 run.state = "finished_after_cancel" if output_exists else "cancelled"

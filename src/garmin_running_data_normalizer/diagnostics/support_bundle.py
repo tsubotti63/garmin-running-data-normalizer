@@ -1036,9 +1036,11 @@ def build_support_bundle(run_output: str | Path, output_path: str | Path) -> dic
         with os.fdopen(file_descriptor, "wb") as handle:
             handle.write(archive_bytes)
         Path(temporary_name).replace(destination)
-    except Exception:
+    except BaseException:
+        # The temporary file goes, also on Ctrl+C (stage A5c). The bundle is
+        # put in its place in one step, so when that fails there is none to
+        # remove, and a file that another program put there stays.
         Path(temporary_name).unlink(missing_ok=True)
-        destination.unlink(missing_ok=True)
         raise
     return {
         "status": "PASS",

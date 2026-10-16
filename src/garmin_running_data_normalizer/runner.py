@@ -5,8 +5,10 @@ import hashlib
 import json
 import os
 import shutil
+import signal
 import sys
 import tempfile
+import threading
 from collections import Counter
 from contextlib import ExitStack, contextmanager, suppress
 from pathlib import Path
@@ -69,6 +71,7 @@ from .snapshot import (
     shown_store_message,
     verification_error,
 )
+from .snapshot.store import LOCK_NAME
 from .standalone import StandaloneHandoffError, validate_standalone_handoff
 from .stops import STOPS, stop_line
 
@@ -77,6 +80,14 @@ OUTPUT_FILES = (
     "normalized_activities.json",
     "qa_summary.json",
     "run_manifest.json",
+)
+# The exit code of a command that Ctrl+C cancelled, as a shell gives it for
+# SIGINT (stage A5c); a stop is 2.
+CANCELLED_EXIT_CODE = 130
+# The commands that write a new output, which is there whole once it is
+# renamed into place.
+_OUTPUT_COMMANDS = frozenset(
+    {"run-all", "normalize-activities", "support-bundle", "snapshot run-all", "snapshot build-input"}
 )
 
 
@@ -387,10 +398,11 @@ def _publish_golden_output(output_root: Path, payloads: dict[str, bytes]) -> Non
                 for name in OUTPUT_FILES:
                     (stage / name).rename(output_root / name)
                     moved.append(name)
-            except OSError:
+            except BaseException:
                 # The files are moved one at a time; take back those that
                 # were, so that a stop leaves no part of an output in the
-                # folder that was empty (stage A5b).
+                # folder that was empty (stage A5b), nor does Ctrl+C (stage
+                # A5c).
                 for name in moved:
                     with suppress(OSError):
                         (output_root / name).unlink()
@@ -417,6 +429,149 @@ def _golden_write_error(exc: OSError) -> GoldenPathError:
             "Golden Path output could not be published atomically", "OUTPUT_PUBLISH_FAILED"
         )
     return GoldenPathError(OUTPUT_LOCATION_MESSAGES[code], code)
+
+
+def _names(folder: Path, prefix: str = "") -> set[str]:
+    """The names in ``folder`` that start with ``prefix``; none when it cannot
+    be listed."""
+    try:
+        with os.scandir(folder) as entries:
+            return {entry.name for entry in entries if entry.name.startswith(prefix)}
+    except OSError:
+        return set()
+
+
+def _is_there(path: Path) -> bool:
+    try:
+        return path.exists()
+    except OSError:
+        return False
+
+
+class _Watch:
+    """What a command may leave if Ctrl+C cancels it (stage A5c): its new
+    output, the hidden names made from the output's name next to it and, for
+    an empty output folder that is there already, in it, the folder of a new
+    store, and the journal and the lock of a store. What is there before the
+    command starts is not reported."""
+
+    def __init__(self, name: str, output: Path | None, store: Path | None) -> None:
+        self.name = name
+        # The output . or .. names a folder that is there (stage A5b-2).
+        self.output = None if output is None or names_folder_itself(output.name) else output
+        self.store = store
+        self.output_was_there = self.output is not None and _is_there(self.output)
+        self.next_to_before = self._next_to()
+        self.inside_before = _names(self.output) if self.output_was_there else set()
+        self.store_before = _names(store) if store is not None else set()
+        self.lock_before = store is not None and _is_there(store / LOCK_NAME)
+
+    @classmethod
+    def of(cls, args: argparse.Namespace) -> "_Watch":
+        name = f"snapshot {args.snapshot_command}" if args.command == "snapshot" else args.command
+        output = Path(args.output) if name in _OUTPUT_COMMANDS else None
+        store = Path(args.store) if args.command == "snapshot" else None
+        return cls(name, output, store)
+
+    def _next_to(self) -> set[str]:
+        if self.output is None:
+            return set()
+        return _names(self.output.parent, f".{self.output.name}.")
+
+    def output_complete(self) -> bool:
+        """Whether the new output is there whole: it is renamed into place,
+        or, in an empty folder of normalize-activities, its files are moved
+        in all together or taken back."""
+        if self.output is None:
+            return False
+        if not self.output_was_there:
+            return _is_there(self.output)
+        return self.name == "normalize-activities" and set(OUTPUT_FILES) <= _names(self.output)
+
+    def left(self, complete: bool) -> list[str]:
+        """The lines that name what the command left: only when a second
+        Ctrl+C stopped its cleanup. Names only, never a path."""
+        lines = [f"left next to the output: {name}" for name in sorted(self._next_to() - self.next_to_before)]
+        if self.output_was_there:
+            inside = _names(self.output) - self.inside_before
+            if complete:
+                inside -= set(OUTPUT_FILES)
+            lines += [f"left in the output folder: {name}" for name in sorted(inside)]
+        if (
+            self.name == "snapshot init"
+            and self.store is not None
+            and not _is_there(self.store / "store.json")
+        ):
+            lines += [
+                f"left in the store folder: {name}"
+                for name in sorted(_names(self.store) - self.store_before)
+            ]
+        return lines
+
+    def notices(self) -> list[str]:
+        """The notices of the store that a cancelled registration leaves."""
+        if self.name != "snapshot register" or self.store is None:
+            return []
+        found = []
+        if _is_there(self.store / "journal" / "registration.json"):
+            found.append("SNAPSHOT_REGISTRATION_INCOMPLETE")
+        if not self.lock_before and _is_there(self.store / LOCK_NAME):
+            found.append("SNAPSHOT_STORE_LOCKED")
+        return found
+
+
+class _Interrupts:
+    """Ctrl+C, and Ctrl+Break on Windows, ignored while a command reports how
+    it ended (stage A5c), so that a second one cannot end it with a
+    traceback; the earlier handlers are given back before ``main`` returns."""
+
+    def __init__(self) -> None:
+        self.saved: list[tuple[int, Any]] = []
+
+    def ignore(self) -> None:
+        if self.saved or threading.current_thread() is not threading.main_thread():
+            return
+        for name in ("SIGINT", "SIGBREAK"):
+            number = getattr(signal, name, None)
+            if number is not None:
+                self.saved.append((number, signal.getsignal(number)))
+                signal.signal(number, signal.SIG_IGN)
+
+    def restore(self) -> None:
+        for number, handler in reversed(self.saved):
+            if handler is not None:
+                signal.signal(number, handler)
+        self.saved.clear()
+
+
+def _cancelled(watch: _Watch) -> int:
+    """Report a command that Ctrl+C cancelled, and what it left (stage A5c)."""
+    complete = watch.output_complete()
+    if complete:
+        return _cancel(
+            "RUN_CANCELLED_AFTER_OUTPUT",
+            f"{watch.name} was cancelled with Ctrl+C after it wrote its output",
+            watch.left(complete),
+            watch.notices(),
+        )
+    return _cancel(
+        "RUN_CANCELLED",
+        f"{watch.name} was cancelled with Ctrl+C",
+        watch.left(complete),
+        watch.notices(),
+    )
+
+
+def _cancel(code: str, message: str, left: list[str], notices: list[str]) -> int:
+    """Print the line of a cancellation, the names of what it left, one on a
+    line, and the notices of the store; return the exit code of a
+    cancellation."""
+    print(stop_line(code, message), file=sys.stderr)
+    for line in left:
+        print(line, file=sys.stderr)
+    for notice in notices:
+        print(f"NOTE [{notice}]: {NOTICE_MESSAGES[notice]}", file=sys.stderr)
+    return CANCELLED_EXIT_CODE
 
 
 def _stop(code: str, message: str) -> int:
@@ -575,6 +730,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    watch = _Watch.of(args)
+    interrupts = _Interrupts()
+    try:
+        return _main(args, watch, interrupts)
+    finally:
+        interrupts.restore()
+
+
+def _main(args: argparse.Namespace, watch: _Watch, interrupts: _Interrupts) -> int:
     try:
         if args.command == "normalize-activities":
             result = run_activities(args.input, args.output, args.timezone)
@@ -634,6 +798,10 @@ def main(argv: list[str] | None = None) -> int:
             result = build_support_bundle(args.run_output, args.output)
         else:
             raise GoldenPathError("unsupported command", "COMMAND_UNSUPPORTED")
+    # Ctrl+C: a line instead of a traceback, and exit 130 (stage A5c).
+    except KeyboardInterrupt:
+        interrupts.ignore()
+        return _cancelled(watch)
     # Every stop prints what happened and the next step of its code (stage
     # A5b), and exits with 2.
     except GoldenPathError as exc:
@@ -678,9 +846,11 @@ def main(argv: list[str] | None = None) -> int:
             return _stop("RUN_ALL_FAILED", STOPS["RUN_ALL_FAILED"].what)
         if args.command == "normalize-activities":
             return _stop("GOLDEN_PATH_FAILED", STOPS["GOLDEN_PATH_FAILED"].what)
-        name = f"snapshot {args.snapshot_command}" if args.command == "snapshot" else args.command
-        return _stop("COMMAND_FAILED", f"{name} stopped unexpectedly")
+        return _stop("COMMAND_FAILED", f"{watch.name} stopped unexpectedly")
 
+    # A Ctrl+C that comes once the command has finished does not turn it into
+    # a cancellation, as in the GUI's child (stage A5c).
+    interrupts.ignore()
     if args.command == "run-all" or (
         args.command == "snapshot" and args.snapshot_command == "run-all"
     ):
