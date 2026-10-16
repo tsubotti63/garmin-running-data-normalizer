@@ -22,6 +22,14 @@ SYNTHETIC_EXPORT = ROOT / "examples/synthetic/garmin_export"
 ACCOUNT = "synthetic-account-boundary"
 
 
+def stop(code: str):
+    """The entry of a code in the table of stops (stage A5b), read where it is
+    used, so that each test fails on its own on a version without the table."""
+    from garmin_running_data_normalizer.stops import STOPS
+
+    return STOPS[code]
+
+
 def register(store: Path, source: Path, label: str, day: int) -> dict[str, object]:
     return register_snapshot(
         store,
@@ -194,10 +202,11 @@ class SnapshotRecoveryMessageTest(unittest.TestCase):
             with self.assertRaises(SnapshotStoreError) as context:
                 register(store, second, "S2", 2)
             message = str(context.exception)
-            self.assertTrue(message.startswith("snapshot store is locked by another writer"))
+            self.assertTrue(message.startswith("the Snapshot Store is locked by another writer"))
             self.assertIn(".single-writer.lock", message)
             self.assertIn("pid 424242", message)
-            self.assertIn("If no other snapshot command is running", message)
+            # The CLI adds the next step of the code (stage A5b).
+            self.assertIn("if no snapshot command is running", stop("SNAPSHOT_STORE_LOCKED").next_step)
             verification = verify_store(store)
             self.assertEqual(verification["status"], "FAIL")
             self.assertIn("incomplete_registration_journal_present", verification["failures"])

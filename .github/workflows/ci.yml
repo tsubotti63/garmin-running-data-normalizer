@@ -152,6 +152,9 @@ jobs:
       - name: Verify Windows pre-run checks and warning totals
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_pre_run_checks.py -q
+      - name: Verify Windows stops and their next steps
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_stops.py -q
       - name: Verify Windows rows left out
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_rows_left_out.py -q

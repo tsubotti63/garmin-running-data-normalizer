@@ -28,11 +28,13 @@ from garmin_running_data_normalizer.intake.source import (
     walk_paths,
 )
 from garmin_running_data_normalizer.output_location import MESSAGES
-from garmin_running_data_normalizer.run_all import (
-    INPUT_NOT_READABLE_NEXT_STEP,
-    RunAllError,
-    run_all,
-)
+from garmin_running_data_normalizer.run_all import RunAllError, run_all
+def stop(code: str):
+    """The entry of a code in the table of stops (stage A5b), read where it is
+    used, so that each test fails on its own on a version without the table."""
+    from garmin_running_data_normalizer.stops import STOPS
+
+    return STOPS[code]
 from garmin_running_data_normalizer.runner import GoldenPathError, main, run_activities
 from garmin_running_data_normalizer.snapshot import (
     SnapshotLifecycleError,
@@ -183,14 +185,15 @@ class InputNotReadableTest(unittest.TestCase):
             self.assertEqual(error.places, [UDS_FOLDER])
             # The message names no place; only where the run starts does.
             self.assertNotIn(UDS_FOLDER, error.safe_message)
-            self.assertIn(INPUT_NOT_READABLE_NEXT_STEP, error.safe_message)
+            # It says what happened; the CLI adds the next step (stage A5b).
+            self.assertEqual(error.safe_message, stop("INPUT_NOT_READABLE").what)
             with closed_folders(UDS_FOLDER):
                 code, message = cli("run-all", "--input", source, "--output", root / "cli-output")
             self.assertEqual(code, 2)
             self.assertEqual(
                 message,
                 "ERROR [INPUT_NOT_READABLE]: this app may not open a folder or file of the "
-                f"input: {UDS_FOLDER}; {INPUT_NOT_READABLE_NEXT_STEP}",
+                f"input: {UDS_FOLDER}; {stop('INPUT_NOT_READABLE').next_step}",
             )
 
     def test_a_file_that_cannot_be_opened_stops_the_run_and_is_named(self) -> None:
@@ -454,7 +457,11 @@ class GoldenPathTest(unittest.TestCase):
                 self.assertEqual(self.stops(source, root / "o4"), "INPUT_NOT_READABLE")
             code, message = cli("normalize-activities", "--input", root / "missing", "--output", root / "o5")
             self.assertEqual(code, 2)
-            self.assertEqual(message, "ERROR [INPUT_NOT_DIRECTORY]: input must be an existing folder or ZIP file")
+            self.assertEqual(
+                message,
+                "ERROR [INPUT_NOT_DIRECTORY]: input must be an existing folder or ZIP file; "
+                f"{stop('INPUT_NOT_DIRECTORY').next_step}",
+            )
 
     @REAL_SYMLINKS
     def test_symbolic_links(self) -> None:

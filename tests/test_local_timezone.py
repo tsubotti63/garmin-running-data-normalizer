@@ -34,9 +34,11 @@ from tests.test_hrv_normalizer import fit_timestamp, synthetic_hrv_fit
 
 NEW_YORK = "America/New_York"
 AUCKLAND = "Pacific/Auckland"
-INVALID_MESSAGE = (
-    "--timezone must be an exact IANA timezone name, "
-    "such as Asia/Tokyo or America/New_York."
+# What happened; the CLI adds the next step of the code (stage A5b).
+INVALID_MESSAGE = "the timezone given with --timezone is not an exact IANA timezone name"
+INVALID_LINE = (
+    f"ERROR [TIMEZONE_INVALID]: {INVALID_MESSAGE}; give an exact IANA timezone name, "
+    "such as Asia/Tokyo or America/New_York"
 )
 # The audit reproduction: a run at 20:00 EST on 2024-01-01 (01:00 UTC on 2024-01-02).
 EVENING_IN_NEW_YORK = "2024-01-02T01:00:00Z"
@@ -426,9 +428,7 @@ class TimezoneEntryPointTest(unittest.TestCase):
                 with self.subTest(command=label):
                     exit_code, stderr = run_cli(*arguments, "--timezone", "America")
                     self.assertEqual(exit_code, 2)
-                    self.assertEqual(
-                        stderr, f"ERROR [{TIMEZONE_INVALID_ERROR_CODE}]: {INVALID_MESSAGE}\n"
-                    )
+                    self.assertEqual(stderr, f"{INVALID_LINE}\n")
             self.assertFalse((root / "cli").exists())
             self.assertFalse((root / "golden").exists())
             self.assertFalse((root / "snapshot-output").exists())

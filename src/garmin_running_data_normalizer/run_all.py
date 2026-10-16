@@ -94,9 +94,7 @@ from .relationships import (
 
 RUN_ALL_VERSION = 2
 # The message when every Activities file was left out (stage A3c).
-ACTIVITIES_NOT_READABLE_MESSAGE = (
-    "the Activities files could not be read; obtain a complete, readable Export"
-)
+ACTIVITIES_NOT_READABLE_MESSAGE = "the Activities files could not be read"
 # Activities and FIT sessions whose candidates tie (stage A4a).
 AMBIGUOUS_FIT_LINK_MESSAGE = (
     "Activities or FIT sessions had more than one equally matching candidate, so "
@@ -112,13 +110,12 @@ SNAPSHOT_REPAIRED_TEXT_MESSAGE = (
     "the approved Snapshot input holds text that the build should have repaired"
 )
 # A folder or file of the input that this app may not open stops the run
-# (stage A3d-3a); the message names it, only where the run is started.
-INPUT_NOT_READABLE_NEXT_STEP = (
-    "allow this app to read it (on a Mac, in System Settings > Privacy & Security; "
-    "on Windows, in the Security tab of its Properties), or select the Export folder itself"
-)
-INPUT_CHANGED_MESSAGE = (
-    "input assets changed during Run-All processing; run again when the input no longer changes"
+# (stage A3d-3a); the message names it, only where the run is started. The
+# messages say what happened; the CLI adds the next step of the code from the
+# table of stops (stage A5b).
+INPUT_CHANGED_MESSAGE = "the input changed while Run-All read it"
+TEMP_SPACE_MESSAGE = (
+    "the temporary folder does not have enough free space to read the Export ZIP file"
 )
 
 
@@ -127,14 +124,11 @@ def input_not_readable_message(places: list[str] | None = None) -> str:
     run is started, it names the first folder or file that cannot be opened
     and how many more; without them, it names none."""
     if places is None:
-        return f"this app may not open a folder or file of the input; {INPUT_NOT_READABLE_NEXT_STEP}"
+        return "this app may not open a folder or file of the input"
     first = places[0] if places and places[0] else "the input folder or ZIP file itself"
     more = len(places) - 1
     named = first if more <= 0 else f"{first} and {more} more"
-    return (
-        f"this app may not open a folder or file of the input: {named}; "
-        f"{INPUT_NOT_READABLE_NEXT_STEP}"
-    )
+    return f"this app may not open a folder or file of the input: {named}"
 
 
 def shown_message(exc: RunAllError) -> str:
@@ -525,16 +519,9 @@ def _input_error(exc: Exception) -> RunAllError:
     if isinstance(exc, CorruptArchiveError):
         return RunAllError("INPUT_ZIP_CORRUPT", "the Export ZIP file is damaged or incomplete")
     if isinstance(exc, ExportTooLargeError):
-        return RunAllError(
-            "INPUT_TOO_LARGE",
-            "the Export ZIP file is too large to read directly; extract it and use the folder",
-        )
+        return RunAllError("INPUT_TOO_LARGE", "the Export ZIP file is too large to read directly")
     if isinstance(exc, TempSpaceError):
-        return RunAllError(
-            "TEMP_SPACE_INSUFFICIENT",
-            "the temporary folder does not have enough free space to read the Export ZIP file; "
-            "free some space, or extract it and use the folder",
-        )
+        return RunAllError("TEMP_SPACE_INSUFFICIENT", TEMP_SPACE_MESSAGE)
     return RunAllError("INPUT_DISCOVERY_FAILED", "input discovery or archive safety validation failed")
 
 

@@ -738,7 +738,7 @@ class ZipLimitsTest(unittest.TestCase):
             self.assertEqual(exit_code, 2)
             self.assertIn(
                 "ERROR [INPUT_TOO_LARGE]: the Export ZIP file is too large to read directly; "
-                "extract it and use the folder",
+                "extract it, and select the extracted folder",
                 console,
             )
             self.assertFalse((root / "output").exists())

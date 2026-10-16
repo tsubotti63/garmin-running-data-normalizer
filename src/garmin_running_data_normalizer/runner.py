@@ -8,7 +8,7 @@ import shutil
 import sys
 import tempfile
 from collections import Counter
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, contextmanager, suppress
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -45,6 +45,7 @@ from .normalizers.records import EMPTY_RECORD, check_values
 from .normalizers.source_records import MARK_KINDS
 from .qa import summarize_records
 from .run_all import (
+    TEMP_SPACE_MESSAGE,
     RunAllError,
     _input_error,
     _value_types,
@@ -68,6 +69,7 @@ from .snapshot import (
     verification_error,
 )
 from .standalone import StandaloneHandoffError, validate_standalone_handoff
+from .stops import STOPS, stop_line
 
 
 OUTPUT_FILES = (
@@ -191,8 +193,7 @@ def _check_activities_read(left_out: list[tuple[str, int, str]]) -> None:
     """
     if any(item["family"] == "activities" for item in left_out_files(left_out)):
         raise GoldenPathError(
-            "an Activities file could not be read; run-all leaves it out and lists it, "
-            "or obtain a complete, readable Export",
+            "an Activities file could not be read, which run-all leaves out and lists",
             DATA_NEEDS_RUN_ALL,
         )
 
@@ -229,10 +230,7 @@ def run_activities(
             # (stage A3d-2c-1).
             repaired_text = sum(repaired_text_count(asset) for asset in assets)
         except InputChangedError as exc:
-            raise GoldenPathError(
-                "input changed during processing; run again when the input no longer changes",
-                "INPUT_CHANGED",
-            ) from exc
+            raise GoldenPathError("the input changed while it was read", "INPUT_CHANGED") from exc
         _check_activities_read(reading.left_out)
     # An item that is an empty value holds nothing; Run-All only counts it.
     left_out.pop(EMPTY_RECORD, None)
@@ -241,7 +239,7 @@ def run_activities(
         # output has no such count, so it stops (stage A3d-2c-2).
         raise GoldenPathError(
             "an Activities file holds an item that is not a record, or a list of "
-            "Activities that cannot be read; run-all leaves them out and counts them",
+            "Activities that cannot be read, which run-all leaves out and counts",
             DATA_NEEDS_RUN_ALL,
         )
     if left_out:
@@ -249,16 +247,15 @@ def run_activities(
         # has no such count, so it stops instead of leaving rows out silently
         # (stage A3d-1b).
         raise GoldenPathError(
-            "an Activities row has no usable identifier; run-all leaves such rows "
-            "out and counts them",
+            "an Activities row has no usable identifier, which run-all leaves out and counts",
             DATA_NEEDS_RUN_ALL,
         )
     # Values are read as Run-All reads them; a value of another form stops the
     # Golden Path, whose output has no place to keep it (stage A3d-2a).
     if check_values(records, _value_types("activities"), ("garmin_activity_key",)).audit_fields():
         raise GoldenPathError(
-            "an Activities value has a form that its field does not take; run-all "
-            "leaves such values empty and keeps them in its audit records",
+            "an Activities value has a form that its field does not take, which "
+            "run-all leaves empty and keeps in its audit records",
             DATA_NEEDS_RUN_ALL,
         )
     # Run-All repairs such text and reports it; the Golden Path output has no
@@ -266,7 +263,7 @@ def run_activities(
     if repaired_text:
         raise GoldenPathError(
             "an Activities file holds text with a broken character, such as a "
-            "truncated emoji; run-all writes it with U+FFFD and reports it",
+            "truncated emoji, which run-all writes with U+FFFD and reports",
             DATA_NEEDS_RUN_ALL,
         )
     if not records:
@@ -379,8 +376,19 @@ def _publish_golden_output(output_root: Path, payloads: dict[str, bytes]) -> Non
                 raise GoldenPathError(
                     "output directory became non-empty during processing", "OUTPUT_EXISTS"
                 )
-            for name in OUTPUT_FILES:
-                (stage / name).rename(output_root / name)
+            moved: list[str] = []
+            try:
+                for name in OUTPUT_FILES:
+                    (stage / name).rename(output_root / name)
+                    moved.append(name)
+            except OSError:
+                # The files are moved one at a time; take back those that
+                # were, so that a stop leaves no part of an output in the
+                # folder that was empty (stage A5b).
+                for name in moved:
+                    with suppress(OSError):
+                        (output_root / name).unlink()
+                raise
         else:
             if output_root.exists():
                 raise GoldenPathError(
@@ -403,6 +411,13 @@ def _golden_write_error(exc: OSError) -> GoldenPathError:
             "Golden Path output could not be published atomically", "OUTPUT_PUBLISH_FAILED"
         )
     return GoldenPathError(OUTPUT_LOCATION_MESSAGES[code], code)
+
+
+def _stop(code: str, message: str) -> int:
+    """Print the line of a stop, with the next step of its code, and return
+    the exit code of a stop (stage A5b)."""
+    print(stop_line(code, message), file=sys.stderr)
+    return 2
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -613,79 +628,52 @@ def main(argv: list[str] | None = None) -> int:
             result = build_support_bundle(args.run_output, args.output)
         else:
             raise GoldenPathError("unsupported command", "COMMAND_UNSUPPORTED")
+    # Every stop prints what happened and the next step of its code (stage
+    # A5b), and exits with 2.
     except GoldenPathError as exc:
-        print(f"ERROR [{exc.code}]: {exc}", file=sys.stderr)
-        return 2
+        return _stop(exc.code, str(exc))
     # A folder or file of the input that this app may not open, met while a
     # Snapshot is registered (stage A3d-3a).
     except InputNotReadableError as exc:
-        print(
-            f"ERROR [INPUT_NOT_READABLE]: {input_not_readable_message(exc.places)}",
-            file=sys.stderr,
-        )
-        return 2
+        return _stop("INPUT_NOT_READABLE", input_not_readable_message(exc.places))
     except (TimezoneDataUnavailableError, TimezoneNameInvalidError) as exc:
-        print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)
-        return 2
+        return _stop(exc.code, exc.safe_message)
     except RunAllError as exc:
-        print(f"ERROR [{exc.code}]: {shown_message(exc)}", file=sys.stderr)
-        return 2
+        return _stop(exc.code, shown_message(exc))
     # Each stop of the Snapshot Store has its code (stage A3d-3b); the stops
     # of the store's contract keep SNAPSHOT_LIFECYCLE_FAILED.
     except SnapshotLifecycleError as exc:
-        print(f"ERROR [{exc.code}]: {shown_store_message(exc)}", file=sys.stderr)
-        return 2
+        return _stop(exc.code, shown_store_message(exc))
     except StandaloneHandoffError as exc:
-        print(f"ERROR [HANDOFF_INVALID]: {exc}", file=sys.stderr)
-        return 2
+        return _stop("HANDOFF_INVALID", str(exc))
     except DoctorError as exc:
-        print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)
-        return 2
+        return _stop(exc.code, exc.safe_message)
     except SupportBundleError as exc:
-        print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)
-        return 2
+        return _stop(exc.code, exc.safe_message)
     # The same codes as Run-All, for the commands that read an Export without
     # Run-All (normalize-activities and snapshot register) and for a Snapshot
     # Store that holds the Exports of more than one account.
     except MixedExportsError as exc:
-        print(f"ERROR [{exc.code}]: {exc.safe_message}", file=sys.stderr)
-        return 2
+        return _stop(exc.code, exc.safe_message)
     except CorruptArchiveError:
-        print("ERROR [INPUT_ZIP_CORRUPT]: the Export ZIP file is damaged or incomplete", file=sys.stderr)
-        return 2
+        return _stop("INPUT_ZIP_CORRUPT", STOPS["INPUT_ZIP_CORRUPT"].what)
     except ExportTooLargeError:
-        print(
-            "ERROR [INPUT_TOO_LARGE]: the Export ZIP file is too large to read directly; "
-            "extract it and use the folder",
-            file=sys.stderr,
-        )
-        return 2
+        return _stop("INPUT_TOO_LARGE", STOPS["INPUT_TOO_LARGE"].what)
     except TempSpaceError:
-        print(
-            "ERROR [TEMP_SPACE_INSUFFICIENT]: the temporary folder does not have enough free "
-            "space to read the Export ZIP file; free some space, or extract it and use the folder",
-            file=sys.stderr,
-        )
-        return 2
+        return _stop("TEMP_SPACE_INSUFFICIENT", TEMP_SPACE_MESSAGE)
     except Exception:
+        # Until stage A3d-3a, the other commands also said "Golden Path
+        # failed", and until stage A3d-3b, the other snapshot commands "Run-All
+        # failed"; until stage A5b, the next step of all three was to verify
+        # the input and output contract.
         if args.command == "run-all" or (
             args.command == "snapshot" and args.snapshot_command == "run-all"
         ):
-            print("ERROR [RUN_ALL_FAILED]: Run-All failed; verify the input and output contract", file=sys.stderr)
-        elif args.command == "normalize-activities":
-            print(
-                "ERROR [GOLDEN_PATH_FAILED]: Golden Path failed; verify the input and output contract",
-                file=sys.stderr,
-            )
-        else:
-            # Until stage A3d-3a, these commands also said "Golden Path failed",
-            # and until stage A3d-3b, the other snapshot commands "Run-All failed".
-            name = f"snapshot {args.snapshot_command}" if args.command == "snapshot" else args.command
-            print(
-                f"ERROR [COMMAND_FAILED]: {name} failed; verify the input and output contract",
-                file=sys.stderr,
-            )
-        return 2
+            return _stop("RUN_ALL_FAILED", STOPS["RUN_ALL_FAILED"].what)
+        if args.command == "normalize-activities":
+            return _stop("GOLDEN_PATH_FAILED", STOPS["GOLDEN_PATH_FAILED"].what)
+        name = f"snapshot {args.snapshot_command}" if args.command == "snapshot" else args.command
+        return _stop("COMMAND_FAILED", f"{name} stopped unexpectedly")
 
     if args.command == "run-all" or (
         args.command == "snapshot" and args.snapshot_command == "run-all"
@@ -723,7 +711,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.snapshot_command == "verify":
             error = verification_error(result)
-            print(f"ERROR [{error.code}]: {error}", file=sys.stderr)
+            return _stop(error.code, str(error))
         return 2
 
     if args.command == "validate-handoff":

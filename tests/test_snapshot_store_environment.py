@@ -45,7 +45,6 @@ from garmin_running_data_normalizer.snapshot.store import (
     NOTICE_MESSAGES,
     REGISTRATION_INCOMPLETE_MESSAGE,
     REGISTRATION_INPUT_CHANGED_MESSAGE,
-    STORE_INVALID_NEXT_STEP,
     STORE_NOT_WRITABLE_MESSAGE,
     STORE_SPACE_MESSAGE,
     STORE_VERSION_MESSAGE,
@@ -53,6 +52,20 @@ from garmin_running_data_normalizer.snapshot.store import (
     store_not_readable_message,
 )
 from tests.test_environment_stops import REAL_PERMISSIONS, REAL_SYMLINKS, files, permissions
+
+
+def stop(code: str):
+    """The entry of a code in the table of stops (stage A5b), read where it is
+    used, so that each test fails on its own on a version without the table."""
+    from garmin_running_data_normalizer.stops import STOPS
+
+    return STOPS[code]
+
+
+def line(code: str, what: str) -> str:
+    """The CLI's line of a stop: what happened, then the next step of its
+    code (stage A5b)."""
+    return f"ERROR [{code}]: {what}; {stop(code).next_step}"
 from tests.test_items_and_containers import ACTIVITIES, activities, export
 from tests.test_snapshot_lifecycle import _activity
 from tests.test_snapshot_record_updates import ACCOUNT
@@ -154,13 +167,15 @@ class Store(unittest.TestCase):
         return export(self.root, name, later_files(activity))
 
     def stops(self, code: str, *args: object) -> str:
-        """Run a snapshot command that must stop with ``code``; return the
-        rest of its error line."""
+        """Run a snapshot command that must stop with ``code``; return what
+        its error line says happened, which the next step of the code
+        follows (stage A5b)."""
         exit_code, stdout, stderr = cli("snapshot", *args)
         self.assertEqual(exit_code, 2, (args, stderr))
-        prefix = f"ERROR [{code}]: "
+        prefix, suffix = f"ERROR [{code}]: ", f"; {stop(code).next_step}"
         self.assertTrue(stderr.startswith(prefix), (args, stderr))
-        return stderr[len(prefix):]
+        self.assertTrue(stderr.endswith(suffix), (args, stderr))
+        return stderr[len(prefix):-len(suffix)]
 
     def every_reading_command(self) -> list[tuple[object, ...]]:
         return [
@@ -191,9 +206,8 @@ class LockAndJournalTest(Store):
     def test_a_lock_stops_a_registration_and_status_and_verify_tell_it(self) -> None:
         (self.store / ".single-writer.lock").write_text("424242\n", encoding="ascii")
         message = self.stops("SNAPSHOT_STORE_LOCKED", *register_args(self.store, self.later(), "S2", 2)[1:])
-        self.assertTrue(message.startswith("snapshot store is locked by another writer"), message)
+        self.assertTrue(message.startswith("the Snapshot Store is locked by another writer"), message)
         self.assertIn("pid 424242", message)
-        self.assertIn("delete that lock file", message)
         for command in ("status", "verify"):
             code, stdout, stderr = cli("snapshot", command, "--store", self.store)
             # A notice never stops a command.
@@ -211,12 +225,14 @@ class LockAndJournalTest(Store):
         code, stdout, stderr = cli("snapshot", "status", "--store", self.store)
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(stdout)["notices"], ["SNAPSHOT_REGISTRATION_INCOMPLETE"])
-        self.assertEqual(stderr, f"NOTE [SNAPSHOT_REGISTRATION_INCOMPLETE]: {REGISTRATION_INCOMPLETE_MESSAGE}")
+        self.assertEqual(
+            stderr, f"NOTE [SNAPSHOT_REGISTRATION_INCOMPLETE]: {NOTICE_MESSAGES['SNAPSHOT_REGISTRATION_INCOMPLETE']}"
+        )
         code, stdout, stderr = cli("snapshot", "verify", "--store", self.store)
         self.assertEqual(code, 2)
         # verify still prints its report, and an error line.
         self.assertEqual(json.loads(stdout)["failures"], ["incomplete_registration_journal_present"])
-        self.assertEqual(stderr, f"ERROR [SNAPSHOT_REGISTRATION_INCOMPLETE]: {REGISTRATION_INCOMPLETE_MESSAGE}")
+        self.assertEqual(stderr, line("SNAPSHOT_REGISTRATION_INCOMPLETE", REGISTRATION_INCOMPLETE_MESSAGE))
         for args in self.every_reading_command()[2:]:
             self.assertEqual(self.stops("SNAPSHOT_REGISTRATION_INCOMPLETE", *args), REGISTRATION_INCOMPLETE_MESSAGE)
         result = register(self.store, self.later(), "S2", 2)
@@ -262,18 +278,15 @@ class DamagedStoreTest(Store):
         self.assertIn("registry_manifest_binding_mismatch", json.loads(stdout)["failures"])
         expected = (
             "the Snapshot Store failed verification (registry_manifest_binding_mismatch, "
-            f"snapshot_registry_alias_mismatch); {STORE_INVALID_NEXT_STEP}"
+            "snapshot_registry_alias_mismatch)"
         )
-        self.assertEqual(stderr, f"ERROR [SNAPSHOT_STORE_INVALID]: {expected}")
+        self.assertEqual(stderr, line("SNAPSHOT_STORE_INVALID", expected))
         for args in self.every_reading_command()[2:]:
             self.assertEqual(self.stops("SNAPSHOT_STORE_INVALID", *args), expected)
 
     def test_a_damaged_file_of_the_store_is_a_damaged_store_for_every_command(self) -> None:
         (self.store / "store.json").write_text("{not json", encoding="utf-8")
-        expected = (
-            "the Snapshot Store is damaged: invalid snapshot store metadata: store.json; "
-            f"{STORE_INVALID_NEXT_STEP}"
-        )
+        expected = "the Snapshot Store is damaged: invalid snapshot store metadata: store.json"
         self.assertEqual(self.stops("SNAPSHOT_STORE_INVALID", "status", "--store", self.store), expected)
         self.assertEqual(
             self.stops("SNAPSHOT_STORE_INVALID", *register_args(self.store, self.later(), "S2", 2)[1:]), expected
@@ -289,7 +302,7 @@ class DamagedStoreTest(Store):
         manifest.write_text(json.dumps({**value, "immutable": False}), encoding="utf-8")
         self.assertEqual(
             self.stops("SNAPSHOT_STORE_INVALID", "status", "--store", self.store),
-            f"the Snapshot Store is damaged: snapshot manifest is not immutable; {STORE_INVALID_NEXT_STEP}",
+            "the Snapshot Store is damaged: snapshot manifest is not immutable",
         )
 
     def test_a_store_of_a_newer_version_is_not_a_damaged_one(self) -> None:
@@ -306,7 +319,7 @@ class DamagedStoreTest(Store):
             self.assertEqual(code, 2, args)
             # verify cannot check such a store either, and prints no report.
             self.assertEqual(stdout, "", args)
-            self.assertEqual(stderr, f"ERROR [SNAPSHOT_STORE_VERSION_UNSUPPORTED]: {STORE_VERSION_MESSAGE}")
+            self.assertEqual(stderr, line("SNAPSHOT_STORE_VERSION_UNSUPPORTED", STORE_VERSION_MESSAGE))
         newer_format = {**metadata, "format": "garmin-running-data-normalizer-snapshot-store-v2", "format_version": 2}
         (self.store / "store.json").write_text(json.dumps(newer_format), encoding="utf-8")
         self.stops("SNAPSHOT_STORE_VERSION_UNSUPPORTED", "status", "--store", self.store)
@@ -577,7 +590,7 @@ class BuildTest(unittest.TestCase):
             self.assertEqual(raised.exception.safe_message, SNAPSHOT_BUILD_TEMP_MESSAGE)
             code, _, stderr = cli("snapshot", "build-input", "--store", self.store, "--output", self.root / "build")
         self.assertEqual(code, 2)
-        self.assertEqual(stderr, f"ERROR [OUTPUT_SPACE_INSUFFICIENT]: {OUTPUT_MESSAGES['OUTPUT_SPACE_INSUFFICIENT']}")
+        self.assertEqual(stderr, line("OUTPUT_SPACE_INSUFFICIENT", OUTPUT_MESSAGES["OUTPUT_SPACE_INSUFFICIENT"]))
         self.assertFalse((self.root / "build").exists())
         # Room for the FIT files is enough to start.
         with mock.patch(f"{MERGE}.shutil.disk_usage", return_value=usage._replace(free=2000)):
@@ -587,7 +600,7 @@ class BuildTest(unittest.TestCase):
         full = OSError(errno.ENOSPC, "No space left on device")
         with mock.patch(f"{MERGE}._write_bytes", side_effect=full):
             code, _, stderr = cli("snapshot", "run-all", "--store", self.store, "--output", self.root / "output")
-            self.assertEqual((code, stderr), (2, f"ERROR [TEMP_SPACE_INSUFFICIENT]: {SNAPSHOT_BUILD_TEMP_MESSAGE}"))
+            self.assertEqual((code, stderr), (2, line("TEMP_SPACE_INSUFFICIENT", SNAPSHOT_BUILD_TEMP_MESSAGE)))
             with self.assertRaises(SnapshotLifecycleError) as raised:
                 build_approved_input(self.store, self.root / "build")
         self.assertEqual(raised.exception.code, "OUTPUT_SPACE_INSUFFICIENT")
@@ -603,7 +616,7 @@ class BuildTest(unittest.TestCase):
         ):
             code, _, stderr = cli("snapshot", "build-input", "--store", self.store, "--output", self.root / "build")
         self.assertEqual(code, 2)
-        self.assertEqual(stderr, f"ERROR [OUTPUT_PARENT_NOT_WRITABLE]: {OUTPUT_MESSAGES['OUTPUT_PARENT_NOT_WRITABLE']}")
+        self.assertEqual(stderr, line("OUTPUT_PARENT_NOT_WRITABLE", OUTPUT_MESSAGES["OUTPUT_PARENT_NOT_WRITABLE"]))
 
     @REAL_PERMISSIONS
     def test_real_permissions(self) -> None:
@@ -624,7 +637,7 @@ class InitTest(unittest.TestCase):
                 f"{STORE}.ensure_private_directory", side_effect=PermissionError(errno.EACCES, "denied")
             ):
                 code, _, stderr = cli("snapshot", "init", "--store", root / "store", "--account-store-id", ACCOUNT)
-            self.assertEqual((code, stderr), (2, f"ERROR [SNAPSHOT_STORE_NOT_WRITABLE]: {NEW_STORE_NOT_WRITABLE_MESSAGE}"))
+            self.assertEqual((code, stderr), (2, line("SNAPSHOT_STORE_NOT_WRITABLE", NEW_STORE_NOT_WRITABLE_MESSAGE)))
             self.assertFalse((root / "store").exists())
 
     @REAL_PERMISSIONS
@@ -634,7 +647,7 @@ class InitTest(unittest.TestCase):
             parent.mkdir()
             with permissions(parent, 0o555):
                 code, _, stderr = cli("snapshot", "init", "--store", parent / "store", "--account-store-id", ACCOUNT)
-            self.assertEqual((code, stderr), (2, f"ERROR [SNAPSHOT_STORE_NOT_WRITABLE]: {NEW_STORE_NOT_WRITABLE_MESSAGE}"))
+            self.assertEqual((code, stderr), (2, line("SNAPSHOT_STORE_NOT_WRITABLE", NEW_STORE_NOT_WRITABLE_MESSAGE)))
 
     def test_an_init_that_runs_out_of_space_can_be_run_again(self) -> None:
         full = OSError(errno.ENOSPC, "No space left on device")
@@ -664,13 +677,15 @@ class UnexpectedErrorTest(unittest.TestCase):
                 code, _, stderr = cli("snapshot", "status", "--store", store)
             self.assertEqual(
                 (code, stderr),
-                (2, "ERROR [COMMAND_FAILED]: snapshot status failed; verify the input and output contract"),
+                # Until stage A5b, the next step was to verify the input
+                # and output contract.
+                (2, line("COMMAND_FAILED", "snapshot status stopped unexpectedly")),
             )
             with mock.patch("garmin_running_data_normalizer.snapshot.run_snapshot_all", side_effect=RuntimeError):
                 code, _, stderr = cli("snapshot", "run-all", "--store", store, "--output", Path(directory) / "output")
             self.assertEqual(
                 (code, stderr),
-                (2, "ERROR [RUN_ALL_FAILED]: Run-All failed; verify the input and output contract"),
+                (2, line("RUN_ALL_FAILED", "Run-All stopped unexpectedly")),
             )
 
 
