@@ -235,9 +235,23 @@ test("every known error code has its own next step and shows its code", () => {
     assert.equal(what.key, ERROR_KEYS[code], code);
     assert.equal(next.key, "next.label", code);
     assert.match(next.keyParams.step, /^next\./, code);
-    assert.notEqual(next.keyParams.step, "next.reload_page", code);
+    // An unexpected error of a check is shown as an error that the page does
+    // not know, whose next step says what the CLI's says (stage A5b-2).
+    if (code !== "COMMAND_FAILED") {
+      assert.notEqual(next.keyParams.step, "next.reload_page", code);
+    }
     assert.deepEqual(shape(quoted), ["error.code", { code }, {}], code);
   }
+});
+
+test("an unexpected error of a check is shown as an error that the page does not know", () => {
+  assert.deepEqual(
+    errorMessages("COMMAND_FAILED").map(shape),
+    errorMessages("SOMETHING_NEW").map(shape).map((item) =>
+      item[0] === "error.code" ? ["error.code", { code: "COMMAND_FAILED" }, {}] : item,
+    ),
+  );
+  assert.equal(errorMessages("COMMAND_FAILED")[1].keyParams.step, "next.reload_page");
 });
 
 test("pre-run findings show the finding and then the next step", () => {

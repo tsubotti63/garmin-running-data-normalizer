@@ -1226,10 +1226,10 @@ class V14DiagnosticsTest(unittest.TestCase):
             output = self._run(root)
             destination = root / "support.zip"
             destination.write_bytes(b"existing")
-            with self.assertRaisesRegex(
-                SupportBundleError, "destination must be new"
-            ):
+            with self.assertRaises(SupportBundleError) as raised:
                 build_support_bundle(output, destination)
+            # The code that the GUI gives too (stage A5b-2).
+            self.assertEqual(raised.exception.code, "SUPPORT_BUNDLE_EXISTS")
             self.assertEqual(destination.read_bytes(), b"existing")
 
     def test_normalized_dataset_count_and_names_remain_frozen(self) -> None:

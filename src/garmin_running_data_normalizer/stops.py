@@ -170,13 +170,28 @@ STOPS: dict[str, Stop] = {
         "a newer version of this app made the Snapshot Store",
         "use a newer version of this app, and do not change the files inside the store",
     ),
+    "SNAPSHOT_STORE_NOT_FOUND": Stop(
+        "there is no Snapshot Store in the folder given for it",
+        "check the folder given with --store; for a new store, run snapshot init first",
+    ),
+    "SNAPSHOT_STORE_EMPTY": Stop(
+        "the Snapshot Store holds no Snapshot yet",
+        "register an Export with snapshot register first",
+    ),
+    # The stops of the store's contract that no code above describes, such
+    # as an argument that is not valid; a damaged store is always
+    # SNAPSHOT_STORE_INVALID (stage A5b-2).
     "SNAPSHOT_LIFECYCLE_FAILED": Stop(
         "a snapshot command cannot do what it was asked",
-        "correct the command or its input as the message says, and run it again; for "
-        "a store that fails snapshot verify, follow the next step that it gives",
+        "correct the command or its input as the message says, and run it again",
     ),
     # The checks of an output and the Support Bundle.
-    "HANDOFF_INVALID": Stop("the output does not pass the checks of its files", _NEW_OUTPUT),
+    "HANDOFF_INVALID": Stop(
+        "the folder is not the output of a run, or the files of the output do not pass "
+        "their checks",
+        "check that the folder is the output of Run-All; if it is, do not change its "
+        "files, and run Run-All again into a new folder",
+    ),
     "DOCTOR_AUTHORITY_INVALID": Stop(
         "the diagnostics of the output are missing, invalid, or disagree", _NEW_OUTPUT
     ),
@@ -191,8 +206,12 @@ STOPS: dict[str, Stop] = {
         "a new folder",
     ),
     "SUPPORT_BUNDLE_PATH_UNSAFE": Stop(
-        "the run output is not a folder, or the place for the Support Bundle is not new",
-        "give the folder of a completed run, and a new file for the Support Bundle",
+        "the run output is a link or not an existing folder",
+        "give the folder of a completed run",
+    ),
+    "SUPPORT_BUNDLE_EXISTS": Stop(
+        "a file or a link is there already in the place of the Support Bundle",
+        "move or rename it, or give another file for the Support Bundle",
     ),
     "SUPPORT_BUNDLE_AUTHORITY_INVALID": Stop(
         "the diagnostics of the run output do not allow a Support Bundle",

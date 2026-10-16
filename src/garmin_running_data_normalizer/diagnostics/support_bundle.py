@@ -967,8 +967,13 @@ def build_support_bundle(run_output: str | Path, output_path: str | Path) -> dic
     if requested_root.is_symlink() or not requested_root.is_dir():
         raise SupportBundleError("SUPPORT_BUNDLE_PATH_UNSAFE", "Run output path is not a safe directory")
     destination = Path(output_path)
+    # A file or a link in the place of the bundle is never replaced, and the
+    # CLI and the GUI give it the same code (stage A5b-2).
     if destination.is_symlink() or destination.exists():
-        raise SupportBundleError("SUPPORT_BUNDLE_PATH_UNSAFE", "Support Bundle destination must be new")
+        raise SupportBundleError(
+            "SUPPORT_BUNDLE_EXISTS",
+            "a file or a link is there already in the place of the Support Bundle",
+        )
     try:
         doctor = doctor_run_output(requested_root)
     except DoctorError as exc:

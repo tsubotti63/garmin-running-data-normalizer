@@ -35,6 +35,7 @@ from .output_location import (
     MESSAGES as OUTPUT_LOCATION_MESSAGES,
     OutputLocationError,
     check_output_location,
+    names_folder_itself,
     output_path_too_long,
     path_error_code,
     valid_output_name,
@@ -138,8 +139,13 @@ def _validate_paths(input_path: str | Path, output_path: str | Path) -> tuple[Pa
         # that Run-All and the GUI take too (stage A5a). It is checked as it
         # was given: Windows drops a dot or a space at the end of a name when
         # it resolves a path. An empty folder that is there already keeps its
-        # name.
-        if not requested_output.exists() and not valid_output_name(requested_output.name):
+        # name, and so do . and .. (stage A5b-2).
+        name = requested_output.name
+        if (
+            not requested_output.exists()
+            and not names_folder_itself(name)
+            and not valid_output_name(name)
+        ):
             raise GoldenPathError(
                 OUTPUT_LOCATION_MESSAGES["OUTPUT_NAME_INVALID"], "OUTPUT_NAME_INVALID"
             )

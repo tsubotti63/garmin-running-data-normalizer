@@ -111,10 +111,12 @@ from ..output_location import MESSAGES as OUTPUT_MESSAGES
 from ..output_location import (
     OutputLocationError,
     check_output_location,
+    names_folder_itself,
     path_error_code,
     valid_output_name,
     write_error_code,
 )
+from ..stops import STOPS
 from .policies import CONTRACT_VERSION, MERGE_RULES, MERGE_RULES_VERSION, REGISTRY_VERSION
 from .store import (
     SnapshotStoreError,
@@ -2014,19 +2016,20 @@ def build_approved_input(
 ) -> dict[str, Any]:
     # The output is checked before the store, whose verification can take
     # long (stage A3d-3b). Its name is checked as it was given, as for a run
-    # (stage A5a).
+    # (stage A5a), and it stops with the codes of a run (stage A5b-2).
     requested_output = Path(output_root)
-    if not valid_output_name(requested_output.name):
+    name = requested_output.name
+    if not names_folder_itself(name) and not valid_output_name(name):
         raise SnapshotBuildOutputError("OUTPUT_NAME_INVALID")
     try:
         if requested_output.is_symlink():
-            raise SnapshotMergeError("canonical build output must not be a symbolic link")
+            raise SnapshotMergeError("output directory must not be a symbolic link", "OUTPUT_SYMLINK")
         output = requested_output.resolve()
         exists = output.exists()
     except OSError as exc:
         raise SnapshotBuildOutputError(path_error_code(requested_output, exc)) from exc
     if exists:
-        raise SnapshotMergeError("canonical build output must not already exist")
+        raise SnapshotMergeError("output directory must not already exist", "OUTPUT_EXISTS")
     try:
         check_output_location(output, lambda parent, name: False)
     except OutputLocationError as exc:
@@ -2037,7 +2040,7 @@ def build_approved_input(
     store, store_metadata = load_store(store_root)
     registered = load_manifests(store)
     if not registered:
-        raise SnapshotMergeError("snapshot store has no registered snapshots")
+        raise SnapshotMergeError(STOPS["SNAPSHOT_STORE_EMPTY"].what, "SNAPSHOT_STORE_EMPTY")
     # Snapshots with the same content are one Export, registered more than
     # once; the earliest observed one is used (merge rules v2.2), so that an
     # Export registered again later never becomes the latest Snapshot.
@@ -2532,7 +2535,10 @@ def build_approved_input(
                 from ..run_all import ACTIVITIES_NOT_READABLE_MESSAGE
 
                 raise ActivitiesNotReadableError(ACTIVITIES_NOT_READABLE_MESSAGE)
-            raise SnapshotMergeError("canonical input contains no Activities records")
+            # As in a run: no Activities record could be kept (stage A5b-2).
+            from ..run_all import ACTIVITIES_EMPTY_MESSAGE
+
+            raise SnapshotMergeError(ACTIVITIES_EMPTY_MESSAGE, "ACTIVITIES_EMPTY")
 
         approved = stage / "approved_input"
         fitness = approved / "DI-Connect-Fitness"

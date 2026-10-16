@@ -108,6 +108,13 @@ class ApiError(Exception):
         self.code = code
 
 
+def _command_failed() -> ApiError:
+    """The answer to an unexpected error of a check, the Support Bundle, or
+    opening the output: the code with which the CLI's commands stop for one
+    (stage A5b-2). The server's own errors answer INTERNAL_ERROR."""
+    return ApiError(HTTPStatus.INTERNAL_SERVER_ERROR, "COMMAND_FAILED")
+
+
 def load_static_files() -> dict[str, tuple[bytes, str]]:
     """Read every file in STATIC_FILES from the installed package."""
     root = files(__package__).joinpath("static")
@@ -346,6 +353,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             report = doctor_input(input_path, timezone_name=timezone_name)
         except (RunRequestError, DoctorError) as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+        except Exception as exc:
+            raise _command_failed() from exc
         findings = [
             {
                 "code": finding["code"],
@@ -385,22 +394,31 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         return output
 
     def _api_check_output(self, payload: dict[str, Any]) -> dict[str, Any]:
+        output = self._finished_output()
         try:
-            return check_output(self._finished_output())
+            return check_output(output)
         except OutputActionError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+        except Exception as exc:
+            raise _command_failed() from exc
 
     def _api_support_bundle(self, payload: dict[str, Any]) -> dict[str, Any]:
+        output = self._finished_output()
         try:
-            return make_support_bundle(self._finished_output())
+            return make_support_bundle(output)
         except OutputActionError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+        except Exception as exc:
+            raise _command_failed() from exc
 
     def _api_open_output(self, payload: dict[str, Any]) -> dict[str, Any]:
+        output = self._finished_output()
         try:
-            open_output(self._finished_output(), payload.get("target"))
+            open_output(output, payload.get("target"))
         except OutputActionError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+        except Exception as exc:
+            raise _command_failed() from exc
         return {"status": "opened"}
 
     def _method_not_allowed(self, allow: str) -> None:
