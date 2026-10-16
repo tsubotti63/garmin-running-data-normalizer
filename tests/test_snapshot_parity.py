@@ -848,6 +848,12 @@ def scenarios(root: Path) -> dict[str, Path]:
     from tests.test_daily_unread_fields import daily_export
 
     found["daily rows with fields that no dataset reads"] = daily_export(root / "daily-unread")
+    # Stage A4d-1: values that several source names give, which agree or
+    # disagree, in UDS, Sleep, and Gear, and a UDS record left out because its
+    # names of the date give different days.
+    from tests.test_aliases import alias_export
+
+    found["values that several source names give"] = alias_export(root, "aliases", days_that_disagree=True)
     return found
 
 

@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from ..common.time import TIME_OUT_OF_RANGE, daily_calendar_date
 from ..common.values import ValueReader, is_empty
 from ..intake.discovery import DiscoveredAsset, load_json_assets
+from .aliases import ROW_VALUE_ALTERNATIVES, AliasDisagreements, alias_value, value_alternatives
 from .daily_metrics import (
     DailyMetricResult,
     RowsLeftOut,
@@ -25,6 +26,7 @@ SLEEP_STAGE_ALIASES = (
     ("lightSleepSeconds", "light_sleep_seconds"),
     ("remSleepSeconds", "rem_sleep_seconds"),
 )
+SLEEP_AWAKE_ALIASES = ("awakeSleepSeconds", "awake_sleep_seconds")
 SLEEP_DIRECT_DURATION_ALIASES = (
     "sleepTimeSeconds",
     "totalSleepSeconds",
@@ -55,19 +57,16 @@ def _number(
     return (values or ValueReader()).number(value, field)
 
 
-def _first_number(
+def _alias_number(
     row: dict[str, Any],
-    *names: str,
+    names: tuple[str, ...],
     values: ValueReader | None = None,
     field: str = "",
-) -> int | float | None:
-    """The first of the source fields that holds a number. A value of another
-    form in a source field read before it is kept in ``values``."""
-    for name in names:
-        value = _number(row.get(name), values, field)
-        if value is not None:
-            return value
-    return None
+) -> tuple[int | float | None, list[int | float]]:
+    """The number that the source names of one field give, and the numbers
+    when they disagree (stage A4d-1); a value of another form in any of them
+    is kept in ``values``."""
+    return alias_value(_number(row.get(name), values, field) for name in names)
 
 
 def _sleep_duration_seconds(
@@ -83,11 +82,13 @@ def _sleep_duration_seconds(
     differing candidates leave the duration empty and are returned, so that
     the duration is reported as a disagreement instead of using first-wins.
     """
-    stages = [
-        _first_number(row, *aliases)
-        for aliases in SLEEP_STAGE_ALIASES
-    ]
-    observed_stages = [value for value in stages if value is not None]
+    stages = [_alias_number(row, aliases) for aliases in SLEEP_STAGE_ALIASES]
+    if any(held for _value, held in stages):
+        # A stage whose names disagree is empty, so the stages give no sum,
+        # and the direct fields are not read, as with any stage present
+        # (stage A4d-1).
+        return None, "stage_aliases_disagree", []
+    observed_stages = [value for value, _held in stages if value is not None]
     if observed_stages:
         return sum(observed_stages), "stage_derived", []
 
@@ -122,18 +123,21 @@ def _timestamps(value: Any, timezone_name: str) -> tuple[str | None, str | None]
     return utc_value.isoformat(), local_value.isoformat()
 
 
-def _sleep_score(row: dict[str, Any], values: ValueReader | None = None) -> int | float | None:
+def _sleep_score(
+    row: dict[str, Any], values: ValueReader | None = None
+) -> tuple[int | float | None, list[int | float]]:
+    """The score, which four names give, and the scores when they disagree
+    (stage A4d-1): the overall score and the overall value of the scores, and
+    the two names at the top of the row."""
     scores = row.get("sleepScores")
-    if isinstance(scores, dict):
-        direct = _number(scores.get("overallScore"), values, "sleep_score")
-        if direct is not None:
-            return direct
-        overall = scores.get("overall")
-        if isinstance(overall, dict):
-            nested = _number(overall.get("value"), values, "sleep_score")
-            if nested is not None:
-                return nested
-    return _first_number(row, "overallScore", "sleepScore", values=values, field="sleep_score")
+    overall = scores.get("overall") if isinstance(scores, dict) else None
+    candidates = (
+        scores.get("overallScore") if isinstance(scores, dict) else None,
+        overall.get("value") if isinstance(overall, dict) else None,
+        row.get("overallScore"),
+        row.get("sleepScore"),
+    )
+    return alias_value(_number(value, values, "sleep_score") for value in candidates)
 
 
 def _normalize_record(
@@ -145,12 +149,12 @@ def _normalize_record(
     start_gmt, start_local = _timestamps(row.get("sleepStartTimestampGMT"), timezone_name)
     end_gmt, end_local = _timestamps(row.get("sleepEndTimestampGMT"), timezone_name)
     sleep_day = end_local[:10] if end_local else None
-    score = _sleep_score(row)
+    score, _held = _sleep_score(row)
 
-    deep_seconds = _first_number(row, "deepSleepSeconds", "deep_sleep_seconds")
-    light_seconds = _first_number(row, "lightSleepSeconds", "light_sleep_seconds")
-    rem_seconds = _first_number(row, "remSleepSeconds", "rem_sleep_seconds")
-    awake_seconds = _first_number(row, "awakeSleepSeconds", "awake_sleep_seconds")
+    deep_seconds, light_seconds, rem_seconds = (
+        _alias_number(row, aliases)[0] for aliases in SLEEP_STAGE_ALIASES
+    )
+    awake_seconds, _held = _alias_number(row, SLEEP_AWAKE_ALIASES)
     stages = [deep_seconds, light_seconds, rem_seconds]
     total_seconds, _duration_source, _disagreeing = _sleep_duration_seconds(row)
 
@@ -357,8 +361,11 @@ def _finalize_merged_sleep(row: dict[str, Any], disagreeing: list[str]) -> None:
 
 
 def _sleep_alternatives(row: dict[str, Any]) -> dict[str, list[Any]]:
+    held = value_alternatives(row)
     disagreeing = row.get("_sleep_duration_alternatives") or []
-    return {"sleep_duration_minutes_ex_awake": disagreeing} if disagreeing else {}
+    if disagreeing:
+        held["sleep_duration_minutes_ex_awake"] = disagreeing
+    return held
 
 
 def _strip_sleep_internal_fields(row: dict[str, Any]) -> dict[str, Any]:
@@ -416,6 +423,7 @@ def normalize_sleep_daily_assets(
     accepted: list[dict[str, Any]] = []
     left_out = RowsLeftOut(value_source_names(SLEEP_VALUE_SOURCES))
     unread = UnreadFields(SLEEP_SOURCE_FIELDS)
+    aliases = AliasDisagreements()
     duration_source_counts: Counter[str] = Counter()
     for raw in source_rows:
         if left_out.add_mark(raw):
@@ -451,19 +459,37 @@ def normalize_sleep_daily_assets(
         ):
             if local is None and not is_empty(raw.get(name)):
                 values.problems.append((field, raw.get(name)))
-        deep = _first_number(raw, "deepSleepSeconds", "deep_sleep_seconds", values=values, field="sleep_stage_deep_minutes")
-        light = _first_number(raw, "lightSleepSeconds", "light_sleep_seconds", values=values, field="sleep_stage_light_minutes")
-        rem = _first_number(raw, "remSleepSeconds", "rem_sleep_seconds", values=values, field="sleep_stage_rem_minutes")
-        awake = _first_number(raw, "awakeSleepSeconds", "awake_sleep_seconds", values=values, field="sleep_awake_minutes")
+        # The stages, the time awake, and the score have several names each
+        # (stage A4d-1); the numbers of names that disagree, in minutes for
+        # the times, are kept for the audit record.
+        alternatives: dict[str, list[Any]] = {}
+        seconds: dict[str, Any] = {}
+        for field, names in (
+            ("sleep_stage_deep_minutes", SLEEP_STAGE_ALIASES[0]),
+            ("sleep_stage_light_minutes", SLEEP_STAGE_ALIASES[1]),
+            ("sleep_stage_rem_minutes", SLEEP_STAGE_ALIASES[2]),
+            ("sleep_awake_minutes", SLEEP_AWAKE_ALIASES),
+        ):
+            seconds[field], held = _alias_number(raw, names, values, field)
+            if held:
+                alternatives[field] = [value / 60.0 for value in held]
+        deep = seconds["sleep_stage_deep_minutes"]
+        light = seconds["sleep_stage_light_minutes"]
+        rem = seconds["sleep_stage_rem_minutes"]
+        awake = seconds["sleep_awake_minutes"]
+        score, held = _sleep_score(raw, values)
+        if held:
+            alternatives["sleep_score"] = held
+        aliases.add(alternatives, snapshot_numbers(raw))
         duration, duration_source, disagreeing = _sleep_duration_seconds(raw, values)
         # Copies within one Snapshot count as in a one-shot run (stage A3b).
         duration_source_counts[duration_source] += 1 + copies_within_snapshots(
             snapshot_numbers(raw)
         )
-        score = _sleep_score(raw, values)
         accepted.append(
             {
                 "_snapshot_numbers": snapshot_numbers(raw),
+                ROW_VALUE_ALTERNATIVES: alternatives,
                 "sleep_day": sleep_day,
                 "sleep_start_local": start_local,
                 "sleep_end_local": end_local,
@@ -510,6 +536,7 @@ def normalize_sleep_daily_assets(
     result.audit["direct_fallback_count"] = duration_source_counts["direct_fallback"]
     result.audit["null_fallback_count"] = duration_source_counts["null_fallback"]
     result.audit["direct_aliases_disagree_count"] = duration_source_counts["direct_aliases_disagree"]
+    result.audit.update(aliases.audit_fields())
     return result
 
 

@@ -39,6 +39,7 @@ from ..intake.discovery import (
 from ..intake.source import DAMAGED_ZIP_ERRORS
 from ..intake.roots import MIXED_STORE_MESSAGE, MixedExportsError
 from ..normalizers.activities import activity_key, activity_left_out_reason
+from ..normalizers.aliases import ENTITY_FIELD_NAMES
 from ..normalizers.daily_metrics import (
     SNAPSHOT_NUMBERS_FIELD,
     SNAPSHOT_PRESENCE_FIELD,
@@ -1099,6 +1100,7 @@ def _entry_order(entry: tuple[str, Any, list[int], dict[str, Any]]) -> tuple[int
 def _merge_entity(
     ordered: list[dict[str, Any]],
     point_of: dict[int, int],
+    field_names: tuple[tuple[str, ...], ...] = (),
 ) -> dict[str, Any]:
     """Merge the observations of one Activity, Gear, link, or Personal Record.
 
@@ -1124,11 +1126,25 @@ def _merge_entity(
     as probes, which let Run-All mark the fields that come from it. The
     copies within each Snapshot of the earlier time points are counted here;
     Run-All counts those of the last time point.
+
+    ``field_names`` are the groups of source names of one field (stage
+    A4d-1, merge rules v2.16). When the record's observations use two or more
+    names of a group, the names are one field across time points: the last
+    time point that holds any of them gives the names that go on, with their
+    values, and the others are not carried; a change is listed once, under
+    the names joined by ``|``. A record that uses one name of a group is
+    merged field by field, as before.
     """
     points: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for observation in ordered:
         points[point_of[int(observation["logical_order"])]].append(observation)
     fields = sorted(set().union(*(set(item["record"]) for item in ordered)))
+    groups = [
+        names
+        for names in (tuple(name for name in group if name in fields) for group in field_names)
+        if len(names) > 1
+    ]
+    grouped = {name for names in groups for name in names}
 
     def same_values(item: dict[str, Any]) -> str:
         # A null or missing field is no value; forms alike are one value.
@@ -1170,12 +1186,10 @@ def _merge_entity(
             )
         states[field] = by_point
 
-    updates: list[dict[str, Any]] = []
-    change_count = 0
-    merged: dict[str, Any] = {}
-    selected: dict[str, dict[str, Any]] = {}
-    disagreeing: dict[str, list[tuple[str, Any, list[int], dict[str, Any]]]] = {}
-    for field, by_point in states.items():
+    def value_runs(
+        by_point: list[tuple[int, list[tuple[str, Any, list[int], dict[str, Any]]]]],
+    ) -> tuple[list[dict[str, Any]], int]:
+        """The values of a field by time point, and the number of changes."""
         runs: list[dict[str, Any]] = []
         open_form: str | None = None
         previous: frozenset[str] | None = None
@@ -1201,15 +1215,64 @@ def _merge_entity(
                 for _form, value, numbers, _first in sorted(entries, key=_entry_order):
                     runs.append({"value": value, "snapshots": sorted(set(numbers))})
                 open_form = None
+        return runs, changes
+
+    updates: list[dict[str, Any]] = []
+    change_count = 0
+    merged: dict[str, Any] = {}
+    selected: dict[str, dict[str, Any]] = {}
+    disagreeing: dict[str, list[tuple[str, Any, list[int], dict[str, Any]]]] = {}
+    for field, by_point in states.items():
+        runs, changes = value_runs(by_point)
         _last_point, last_entries = by_point[-1]
         selected[field] = last_entries[0][3]
         if len(last_entries) == 1:
             merged[field] = last_entries[0][1]
         else:
             disagreeing[field] = last_entries
-        if changes:
+        if changes and field not in grouped:
             change_count += changes
             updates.append({"field": field, "values": runs})
+    for names in groups:
+        # The names of one field, which the record's observations use two or
+        # more of: one field across time points (stage A4d-1).
+        by_point = []
+        for point in sorted(points):
+            pairs = [
+                (item, item["record"][name])
+                for item in points[point]
+                for name in names
+                if name in item["record"]
+            ]
+            if not pairs:
+                continue
+            given = [(item, value) for item, value in pairs if not is_empty(value)]
+            values: dict[str, list[Any]] = {}
+            for item, value in given or pairs:
+                entry = values.setdefault(_stable_json(_comparable(value)), [value, [], item])
+                entry[1].append(int(item["logical_order"]))
+            by_point.append(
+                (
+                    point,
+                    [
+                        (form, value, sorted(numbers), first)
+                        for form, (value, numbers, first) in values.items()
+                    ],
+                )
+            )
+        runs, changes = value_runs(by_point)
+        if changes:
+            change_count += changes
+            updates.append({"field": "|".join(names), "values": runs})
+        # The names of the last time point that holds any of them go on; the
+        # others are neither carried nor written as probes.
+        last_point = by_point[-1][0]
+        for name in names:
+            if not any(name in item["record"] for item in points[last_point]):
+                merged.pop(name, None)
+                selected.pop(name, None)
+                disagreeing.pop(name, None)
+    updates.sort(key=lambda item: item["field"])
 
     last = points[max(points)]
     contained = sorted(set().union(*(set(item["record"]) for item in last)))
@@ -1516,7 +1579,7 @@ def _merge_dataset(
         if entity:
             # Activities, Gear, links, and Personal Records: values by time
             # point; the records of the last time point go to Run-All.
-            result = _merge_entity(ordered, point_of)
+            result = _merge_entity(ordered, point_of, ENTITY_FIELD_NAMES.get(dataset, ()))
             updated_fields += result["change_count"]
             earlier_copies += result["earlier_copies"]
             audit_key = _audit_key(dataset, ordered[0]["raw_key"])

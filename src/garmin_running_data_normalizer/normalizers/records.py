@@ -34,6 +34,7 @@ from ..common.values import (
     is_empty,
     read_value,
 )
+from .aliases import ROW_VALUE_ALTERNATIVES
 from .daily_metrics import (
     _value_order,
     copies_within_snapshots,
@@ -106,6 +107,9 @@ class RecordMerge:
     # each row, in the order of the rows; empty for a one-shot run's rows
     # (stage A3d-4c-2).
     row_snapshot_numbers: list[tuple[int, ...]] = field(default_factory=list)
+    # The rows read whose source names of a field disagree, for each field,
+    # each copy within one Snapshot as in a one-shot run (stage A4d-1).
+    alias_disagreement_counts: dict[str, int] = field(default_factory=dict)
 
 
 def row_snapshot_marks(raw: dict[str, Any]) -> dict[str, Any]:
@@ -258,9 +262,17 @@ def merge_repeated_records(dataset: str, rows: list[dict[str, Any]]) -> RecordMe
     copies = 0
     absent: Counter[str] = Counter()
     disagreements: list[dict[str, Any]] = []
+    alias_counts: Counter[str] = Counter()
     for identity, group in groups.items():
         public = [public_fields(row) for row in group]
         numbers = [_numbers(row) for row in group]
+        # The values of a row's fields whose source names disagree: such a
+        # field disagrees even in a record of one row (stage A4d-1).
+        held = [dict(row.get(ROW_VALUE_ALTERNATIVES) or {}) for row in group]
+        for row_held, source in zip(held, group):
+            weight = 1 + copies_within_snapshots(source.get(ROW_SNAPSHOT_NUMBERS) or None)
+            for name in row_held:
+                alias_counts[name] += weight
         # The Snapshots that hold the record, at any time point; the import
         # numbers of a row stand only for the observations of the last.
         row_numbers.append(
@@ -276,10 +288,10 @@ def merge_repeated_records(dataset: str, rows: list[dict[str, Any]]) -> RecordMe
         copies += _copy_count(public, numbers, fields, form)
         row = dict(public[0])
         entry: dict[str, Any] | None = None
-        if len(group) == 1:
+        if len(group) == 1 and not any(held):
             row["disagreeing_fields"] = []
         else:
-            entry = _merge_group(row, public, numbers, fields, flags, form, absent)
+            entry = _merge_group(row, public, numbers, fields, flags, form, absent, held)
         for field_rows in probes.get(identity, {}).values():
             entry = _apply_probes(row, field_rows, fields, flags, form, entry)
         output.append(row)
@@ -295,6 +307,7 @@ def merge_repeated_records(dataset: str, rows: list[dict[str, Any]]) -> RecordMe
         absent_value_counts=dict(sorted(absent.items())),
         disagreements=disagreements,
         row_snapshot_numbers=row_numbers,
+        alias_disagreement_counts=dict(sorted(alias_counts.items())),
     )
 
 
@@ -330,11 +343,14 @@ def _merge_group(
     flags: frozenset[str],
     form: Callable[[str, Any], str],
     absent: Counter[str],
+    held: list[dict[str, list[Any]]] | None = None,
 ) -> dict[str, Any] | None:
     """Merge the rows of one record into ``row``; return its disagreements, if any.
 
     An empty value (null, "", [], or {}) means that the row has no value, as
     a missing field does; when no row has a value, the first row's is kept.
+    ``held`` gives, for each row, the values of its fields whose source names
+    disagree (stage A4d-1).
     """
     snapshots = numbers if any(number for items in numbers for number in items) else None
     merged = merge_observations(
@@ -342,6 +358,7 @@ def _merge_group(
         fields,
         key_fields=(),
         presence_flags=flags,
+        alternatives=held if held and any(held) else None,
         snapshots=snapshots,
         form=form,
         is_absent=is_empty,

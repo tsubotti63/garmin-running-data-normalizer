@@ -14,6 +14,7 @@ from ..common.identity import (
 )
 from ..common.values import is_empty
 from ..intake.discovery import DiscoveredAsset, load_json_assets
+from .aliases import GEAR_TYPE_NAMES, ROW_VALUE_ALTERNATIVES, alias_value
 from .records import (
     IDENTITY_INVALID,
     IDENTITY_MISSING,
@@ -139,17 +140,20 @@ def normalize_gear(
                     )
                     continue
                 count_unread(gear_unread, row)
+                # The type has two names (stage A4d-1).
+                gear_type, held = alias_value(row.get(name) for name in GEAR_TYPE_NAMES)
                 gear.append({
                     "gear_key": gear_record_key(row),
                     "uuid": row.get("uuid"),
                     "display_name": row.get("displayName"),
                     "custom_make_model": row.get("customMakeModel"),
-                    "gear_type": row.get("gearTypeName") or row.get("gearType"),
+                    "gear_type": gear_type,
                     "date_begin": row.get("dateBegin"),
                     "date_end": row.get("dateEnd"),
                     "maximum_meters": row.get("maximumMeters"),
                     "source_path": asset.provenance_path,
                     "source_sha256": asset.sha256,
+                    **({ROW_VALUE_ALTERNATIVES: {"gear_type": held}} if held else {}),
                     **row_snapshot_marks(row),
                 })
             activity_links, unreadable = gear_links(container)
