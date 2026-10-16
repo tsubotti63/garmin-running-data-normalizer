@@ -1,5 +1,7 @@
 """Stage A5b-1: every stop of the CLI says what happened and the next step of
-its code, from one table (synthetic data only)."""
+its code, from one table. Stage A5b-2: the snapshot commands, the Support
+Bundle, and the GUI's checks give the codes of the same problems in a run,
+and the documents give the table (synthetic data only)."""
 
 from __future__ import annotations
 
@@ -13,6 +15,7 @@ import re
 import shutil
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -22,7 +25,16 @@ from unittest import mock
 from garmin_running_data_normalizer import diagnostics  # noqa: F401
 from garmin_running_data_normalizer import runner
 from garmin_running_data_normalizer.diagnostics.doctor import doctor_input, render_doctor_human
+from garmin_running_data_normalizer.intake.archive import ArchiveLimits
+from garmin_running_data_normalizer.intake.discovery import read_export
+from garmin_running_data_normalizer.intake.roots import open_export
 from garmin_running_data_normalizer.run_all import RunAllError, run_all
+from garmin_running_data_normalizer.snapshot import store as store_module
+from garmin_running_data_normalizer.snapshot.store import (
+    SnapshotStoreError,
+    initialize_store,
+    register_snapshot,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "src/garmin_running_data_normalizer"
@@ -167,6 +179,44 @@ def cli(*args: object) -> tuple[int, str]:
     return code, stderr.getvalue()
 
 
+def register_args(store: Path, source: Path, label: str = "S1") -> tuple[object, ...]:
+    return (
+        "snapshot", "register", "--store", store, "--input", source, "--label", label,
+        "--requested-at", STAMP, "--downloaded-at", STAMP, "--observed-at", STAMP, "--confirm-complete",
+    )
+
+
+def registered(store: Path, source: Path, label: str = "S1") -> str:
+    """Register one Export into a new store; return the Snapshot's identity."""
+    if not store.exists():
+        initialize_store(store, "synthetic")
+    result = register_snapshot(
+        store,
+        source,
+        snapshot_label=label,
+        export_requested_at=STAMP,
+        export_downloaded_at=STAMP,
+        export_observed_at=STAMP,
+        confirm_complete=True,
+    )
+    return str(result["snapshot_id"])
+
+
+def can_symlink(directory: Path) -> bool:
+    probe = directory / "symlink-probe"
+    try:
+        probe.symlink_to(directory, target_is_directory=True)
+    except OSError:
+        return False
+    probe.unlink()
+    return True
+
+
+def cell(text: str) -> str:
+    """A text as a cell of a Markdown table."""
+    return text.replace("\\", "\\\\").replace("|", "\\|")
+
+
 class TableTest(unittest.TestCase):
     def test_every_code_of_a_stop_is_in_the_table_and_every_entry_is_used(self) -> None:
         table = stops_module().STOPS
@@ -218,8 +268,10 @@ class TableTest(unittest.TestCase):
         self.assertEqual(NOTICE_MESSAGES, {code: stops.stop_text(code) for code in NOTICE_MESSAGES})
 
 
-class StopLineTest(unittest.TestCase):
-    def assert_stop(self, code: str, args: tuple[object, ...], root: Path) -> str:
+class StopLines:
+    """The check of the line of a stop, for the tests below."""
+
+    def assert_stop(self: Any, code: str, args: tuple[object, ...], root: Path) -> str:
         exit_code, stderr = cli(*args)
         self.assertEqual(exit_code, 2, stderr)
         lines = stderr.splitlines()
@@ -237,6 +289,8 @@ class StopLineTest(unittest.TestCase):
         self.assertNotIn(root.name, line)
         return what
 
+
+class StopLineTest(StopLines, unittest.TestCase):
     def test_the_stops_of_every_kind_of_command(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -280,7 +334,8 @@ class StopLineTest(unittest.TestCase):
                 ("GOLDEN_PATH_DATA_NEEDS_RUN_ALL", ("normalize-activities", "--input", activities, "--output", root / "o8")),
                 ("SNAPSHOT_LIFECYCLE_FAILED", register),
                 ("HANDOFF_INVALID", ("validate-handoff", "--input", empty)),
-                ("SUPPORT_BUNDLE_PATH_UNSAFE", ("support-bundle", "--run-output", done, "--output", existing)),
+                ("SUPPORT_BUNDLE_EXISTS", ("support-bundle", "--run-output", done, "--output", existing)),
+                ("SUPPORT_BUNDLE_PATH_UNSAFE", ("support-bundle", "--run-output", empty / "missing", "--output", root / "b.zip")),
             ]
             for code, args in cases:
                 with self.subTest(code=code):
@@ -382,6 +437,351 @@ class DoctorNextStepTest(unittest.TestCase):
         for action, text in stops_module().NEXT_ACTIONS.items():
             self.assertNotIn("{", text, action)
             self.assertFalse(text.endswith("."), action)
+
+
+
+class SameProblemTest(StopLines, unittest.TestCase):
+    """Stage A5b-2: the snapshot commands and the Support Bundle stop with the
+    code of the same problem in a run, and with the same message."""
+
+    def test_the_place_of_the_build_and_the_input_of_a_registration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            registered(store, SYNTHETIC_EXPORT)
+            existing = root / "existing"
+            existing.mkdir()
+            plain = root / "plain.txt"
+            plain.write_text("synthetic", encoding="utf-8")
+            pairs = [
+                (
+                    "OUTPUT_EXISTS",
+                    ("snapshot", "build-input", "--store", store, "--output", existing),
+                    ("run-all", "--input", SYNTHETIC_EXPORT, "--output", existing),
+                ),
+                (
+                    "INPUT_NOT_DIRECTORY",
+                    register_args(store, plain, "S2"),
+                    ("run-all", "--input", plain, "--output", root / "o1"),
+                ),
+            ]
+            if can_symlink(root):
+                elsewhere = root / "elsewhere"
+                elsewhere.mkdir()
+                link = root / "link"
+                link.symlink_to(elsewhere, target_is_directory=True)
+                export_link = root / "export-link"
+                export_link.symlink_to(SYNTHETIC_EXPORT.resolve(), target_is_directory=True)
+                inside = root / "with-a-link"
+                shutil.copytree(SYNTHETIC_EXPORT, inside)
+                (inside / "synthetic-link.json").symlink_to(plain)
+                pairs += [
+                    (
+                        "OUTPUT_SYMLINK",
+                        ("snapshot", "build-input", "--store", store, "--output", link),
+                        ("run-all", "--input", SYNTHETIC_EXPORT, "--output", link),
+                    ),
+                    (
+                        "INPUT_SYMLINK",
+                        register_args(store, export_link, "S2"),
+                        ("run-all", "--input", export_link, "--output", root / "o2"),
+                    ),
+                    (
+                        "INPUT_DISCOVERY_FAILED",
+                        register_args(store, inside, "S2"),
+                        ("run-all", "--input", inside, "--output", root / "o3"),
+                    ),
+                ]
+            for code, snapshot_args, run_args in pairs:
+                with self.subTest(code=code):
+                    self.assertEqual(
+                        self.assert_stop(code, snapshot_args, root),
+                        self.assert_stop(code, run_args, root),
+                    )
+            # An input that cannot be looked at, as a run says it.
+            real = Path.is_symlink
+            for error, code in (
+                (PermissionError(errno.EACCES, "synthetic"), "INPUT_NOT_READABLE"),
+                (OSError(errno.ENAMETOOLONG, "synthetic"), "INPUT_NOT_DIRECTORY"),
+            ):
+
+                def is_symlink(self: Path, error: OSError = error) -> bool:
+                    if self == plain:
+                        raise error
+                    return real(self)
+
+                with self.subTest(code=code), mock.patch.object(Path, "is_symlink", is_symlink):
+                    self.assertEqual(
+                        self.assert_stop(code, register_args(store, plain, "S2"), root),
+                        self.assert_stop(code, ("run-all", "--input", plain, "--output", root / "o4"), root),
+                    )
+            # No output was made, and nothing was written through the link.
+            self.assertEqual(sorted(path.name for path in root.iterdir() if path.name.startswith("o")), [])
+            if (root / "elsewhere").exists():
+                self.assertEqual(list((root / "elsewhere").iterdir()), [])
+
+    def test_a_build_without_activities_stops_as_a_run_does(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "export"
+            shutil.copytree(SYNTHETIC_EXPORT, source)
+            for path in source.rglob("*summarizedActivities.json"):
+                path.write_text(json.dumps([{"summarizedActivitiesExport": []}]), encoding="utf-8")
+            store = root / "store"
+            registered(store, source)
+            run = self.assert_stop("ACTIVITIES_EMPTY", ("run-all", "--input", source, "--output", root / "o1"), root)
+            for args in (
+                ("snapshot", "build-input", "--store", store, "--output", root / "o2"),
+                ("snapshot", "run-all", "--store", store, "--output", root / "o3"),
+            ):
+                with self.subTest(command=args[1]):
+                    self.assertEqual(self.assert_stop("ACTIVITIES_EMPTY", args, root), run)
+            self.assertEqual(sorted(path.name for path in root.iterdir()), ["export", "store"])
+
+    def test_a_folder_without_a_store_and_a_store_without_snapshots(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            # A folder that holds files, but none that a store writes.
+            folder = root / "folder"
+            folder.mkdir()
+            (folder / "notes.txt").write_text("synthetic", encoding="utf-8")
+            for store in (root / "missing", folder):
+                for args in (
+                    ("snapshot", "status", "--store", store),
+                    ("snapshot", "verify", "--store", store),
+                    register_args(store, SYNTHETIC_EXPORT),
+                    ("snapshot", "build-input", "--store", store, "--output", root / "o1"),
+                    ("snapshot", "run-all", "--store", store, "--output", root / "o2"),
+                ):
+                    with self.subTest(store=store.name, command=args[1]):
+                        self.assert_stop("SNAPSHOT_STORE_NOT_FOUND", args, root)
+            store = root / "store"
+            initialize_store(store, "synthetic")
+            for args in (
+                ("snapshot", "build-input", "--store", store, "--output", root / "o1"),
+                ("snapshot", "run-all", "--store", store, "--output", root / "o2"),
+            ):
+                with self.subTest(command=args[1]):
+                    self.assert_stop("SNAPSHOT_STORE_EMPTY", args, root)
+            # A store without a Snapshot is not a stop for the commands that
+            # look at it.
+            for args in (("snapshot", "status", "--store", store), ("snapshot", "verify", "--store", store)):
+                with self.subTest(command=args[1]):
+                    self.assertEqual(cli(*args), (0, ""))
+            # A store that lost store.json, but holds what a store writes, is
+            # damaged, not a folder without a store.
+            damaged = root / "damaged"
+            registered(damaged, SYNTHETIC_EXPORT)
+            (damaged / "store.json").chmod(0o600)
+            (damaged / "store.json").unlink()
+            for args in (
+                ("snapshot", "status", "--store", damaged),
+                ("snapshot", "verify", "--store", damaged),
+                register_args(damaged, SYNTHETIC_EXPORT, "S2"),
+                ("snapshot", "build-input", "--store", damaged, "--output", root / "o1"),
+                ("snapshot", "run-all", "--store", damaged, "--output", root / "o2"),
+            ):
+                with self.subTest(store="damaged", command=args[1]):
+                    what = self.assert_stop("SNAPSHOT_STORE_INVALID", args, root)
+                    self.assertLessEqual(what.count("damaged:"), 1, what)
+                    if args[1] in ("status", "register"):
+                        self.assertEqual(what, "the Snapshot Store is damaged: store.json is missing")
+            # No store and no output were made.
+            self.assertEqual(sorted(path.name for path in root.iterdir()), ["damaged", "folder", "store"])
+            self.assertEqual([path.name for path in folder.iterdir()], ["notes.txt"])
+
+    def test_a_registration_that_meets_a_damaged_store(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            # A Snapshot whose identity is that of another content: the
+            # identity is made from the content, so the store is damaged.
+            other = root / "other"
+            shutil.copytree(SYNTHETIC_EXPORT, other)
+            (other / "DI-Connect-Fitness" / "synthetic_gear.json").write_text("[]", encoding="utf-8")
+            other_id = registered(root / "scratch", other)
+            store = root / "store"
+            first_id = registered(store, SYNTHETIC_EXPORT)
+            folder = store / "snapshots" / first_id
+            manifest_path = folder / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["snapshot_id"] = other_id
+            manifest_path.chmod(0o600)
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            folder.rename(store / "snapshots" / other_id)
+            (store / "registry.json").unlink()
+            what = self.assert_stop("SNAPSHOT_STORE_INVALID", register_args(store, other, "S2"), root)
+            self.assertEqual(
+                what, "the Snapshot Store is damaged: the identity of a registered Snapshot does not match its content"
+            )
+            # A damaged record of a Snapshot, which the store names since stage
+            # A3d-3b, says "damaged:" once; the build stops with the failures
+            # of verification.
+            records = root / "records"
+            record_id = registered(records, SYNTHETIC_EXPORT)
+            record_path = records / "snapshots" / record_id / "manifest.json"
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            del record["registered_at"]
+            record_path.chmod(0o600)
+            record_path.write_text(json.dumps(record), encoding="utf-8")
+            for args in (
+                register_args(records, other, "S2"),
+                ("snapshot", "status", "--store", records),
+                ("snapshot", "build-input", "--store", records, "--output", root / "o1"),
+            ):
+                with self.subTest(command=args[1]):
+                    what = self.assert_stop("SNAPSHOT_STORE_INVALID", args, root)
+                    self.assertLessEqual(what.count("damaged:"), 1, what)
+                    if args[1] != "build-input":
+                        self.assertEqual(
+                            what, "the Snapshot Store is damaged: snapshot manifest is missing required metadata"
+                        )
+            if can_symlink(root):
+                linked = root / "linked-store"
+                initialize_store(linked, "synthetic")
+                blobs = linked / "blobs" / "sha256"
+                shutil.rmtree(blobs)
+                outside = root / "outside"
+                outside.mkdir()
+                blobs.symlink_to(outside, target_is_directory=True)
+                what = self.assert_stop("SNAPSHOT_STORE_INVALID", register_args(linked, SYNTHETIC_EXPORT), root)
+                self.assertEqual(what, "the Snapshot Store is damaged: it holds a symbolic link")
+                self.assertEqual(list(outside.iterdir()), [])
+
+    def test_a_registration_reads_the_input_as_a_run_does(self) -> None:
+        # A ZIP file inside the Export that cannot be copied out or whose
+        # members cannot be read stops as a run stops for an input that
+        # cannot be read: INPUT_CHANGED for one that went away, and
+        # INPUT_DISCOVERY_FAILED otherwise.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "export"
+            shutil.copytree(SYNTHETIC_EXPORT, source)
+            uploaded = source / "DI-Connect-Uploaded-Files"
+            uploaded.mkdir()
+            with zipfile.ZipFile(uploaded / "UploadedFiles_0-_Part1.zip", "w") as archive:
+                archive.writestr("synthetic-session-1.fit", b"synthetic")
+            store = root / "store"
+            initialize_store(store, "synthetic")
+            for target in (
+                "garmin_running_data_normalizer.intake.source.ExportSource.local_path",
+                "garmin_running_data_normalizer.snapshot.store.digest_member",
+            ):
+                for error, code in (
+                    (OSError(errno.EIO, "synthetic"), "INPUT_DISCOVERY_FAILED"),
+                    (FileNotFoundError(errno.ENOENT, "synthetic"), "INPUT_CHANGED"),
+                ):
+                    with self.subTest(target=target.rsplit(".", 1)[1], code=code):
+                        with mock.patch(target, side_effect=error):
+                            self.assert_stop(code, register_args(store, source), root)
+            self.assertEqual(cli(*register_args(store, source))[0], 0)
+        # A member that cannot be read when it is copied was read whole when
+        # the input was listed: the input changed.
+        archive = mock.Mock()
+        archive.open.side_effect = zipfile.BadZipFile("synthetic")
+        with self.assertRaises(SnapshotStoreError) as raised:
+            with store_module._open_member(archive, mock.Mock()):
+                pass
+        self.assertEqual(raised.exception.code, "INPUT_CHANGED")
+
+    def test_an_export_zip_file_that_is_too_large_stops_a_registration_as_a_run(self) -> None:
+        # The same Export twice in an Export ZIP file: its two roots are read
+        # to compare them, which counts against the totals for one reading
+        # of the ZIP file. INPUT_TOO_LARGE is an UnsafeArchiveError too, and
+        # keeps its code (stage A5b-2).
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            activities = next(SYNTHETIC_EXPORT.rglob("*summarizedActivities.json"))
+            twice = root / "twice.zip"
+            with zipfile.ZipFile(twice, "w") as archive:
+                for name in ("export-a", "export-b"):
+                    archive.write(activities, f"{name}/DI_CONNECT/DI-Connect-Fitness/{activities.name}")
+            store = root / "store"
+            initialize_store(store, "synthetic")
+            limits = ArchiveLimits(max_export_read_bytes=1)
+            with mock.patch(
+                "garmin_running_data_normalizer.snapshot.store.open_export",
+                side_effect=lambda path: open_export(path, limits),
+            ), mock.patch(
+                "garmin_running_data_normalizer.run_all.read_export",
+                side_effect=lambda path: read_export(path, limits),
+            ):
+                self.assertEqual(
+                    self.assert_stop("INPUT_TOO_LARGE", register_args(store, twice), root),
+                    self.assert_stop("INPUT_TOO_LARGE", ("run-all", "--input", twice, "--output", root / "o1"), root),
+                )
+            self.assertEqual(cli("snapshot", "status", "--store", store)[0], 0)
+
+    def test_the_support_bundle_never_replaces_a_file_or_a_link(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            done = root / "done"
+            self.assertEqual(cli("run-all", "--input", SYNTHETIC_EXPORT, "--output", done)[0], 0)
+            existing = root / "existing.zip"
+            existing.write_bytes(b"synthetic")
+            places = [existing]
+            if can_symlink(root):
+                link = root / "link.zip"
+                link.symlink_to(existing)
+                broken = root / "broken.zip"
+                broken.symlink_to(root / "missing.zip")
+                places += [link, broken]
+            for place in places:
+                with self.subTest(place=place.name):
+                    self.assert_stop(
+                        "SUPPORT_BUNDLE_EXISTS", ("support-bundle", "--run-output", done, "--output", place), root
+                    )
+            self.assertEqual(existing.read_bytes(), b"synthetic")
+            self.assertFalse((root / "missing.zip").exists())
+            self.assert_stop(
+                "SUPPORT_BUNDLE_PATH_UNSAFE",
+                ("support-bundle", "--run-output", root / "missing", "--output", root / "new.zip"),
+                root,
+            )
+
+    def test_dot_and_dot_dot_name_a_folder_that_is_there(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            store = root / "store"
+            registered(store, SYNTHETIC_EXPORT)
+            work = root / "work"
+            work.mkdir()
+            with contextlib.chdir(work):
+                for output in (".", "..", "missing/.."):
+                    for args in (
+                        ("run-all", "--input", SYNTHETIC_EXPORT, "--output", output),
+                        ("snapshot", "run-all", "--store", store, "--output", output),
+                        ("snapshot", "build-input", "--store", store, "--output", output),
+                    ):
+                        with self.subTest(output=output, command=" ".join(map(str, args[:2]))):
+                            self.assert_stop("OUTPUT_EXISTS", args, root)
+                self.assertEqual(list(work.iterdir()), [])
+            # normalize-activities writes in an empty folder that is there, as
+            # before, also when the path names it from a folder that is not.
+            for name, output in (("golden-dot", "."), ("golden-up", "missing/..")):
+                folder = root / name
+                folder.mkdir()
+                with self.subTest(output=output), contextlib.chdir(folder):
+                    self.assertEqual(cli("normalize-activities", "--input", SYNTHETIC_EXPORT, "--output", output)[0], 0)
+                self.assertEqual(
+                    sorted(path.name for path in folder.iterdir()),
+                    ["normalized_activities.json", "qa_summary.json", "run_manifest.json"],
+                )
+
+
+class DocumentTableTest(unittest.TestCase):
+    def test_the_documents_give_the_table_of_stops(self) -> None:
+        # The table of the documents is made from stops.STOPS (stage
+        # A5b-2); when they differ, the message gives the rows to paste.
+        text = (ROOT / "docs" / "v2_data_handling.md").read_text(encoding="utf-8")
+        heading = "\n#### Stops and next steps\n"
+        self.assertTrue(heading in text, "the documents have no table of the stops")
+        section = text.split(heading, 1)[1].split("\n#", 1)[0]
+        rows = [line for line in section.splitlines() if line.startswith("| `")]
+        expected = [
+            f"| `{code}` | {cell(stop.what)} | {cell(stop.next_step)} |"
+            for code, stop in stops_module().STOPS.items()
+        ]
+        self.assertEqual(rows, expected, "\n" + "\n".join(expected))
 
 
 if __name__ == "__main__":

@@ -44,6 +44,7 @@ from .output_location import (
     MESSAGES as OUTPUT_LOCATION_MESSAGES,
     OutputLocationError,
     check_output_location,
+    names_folder_itself,
     output_path_too_long,
     path_error_code,
     valid_output_name,
@@ -90,11 +91,15 @@ from .relationships import (
     build_activity_fit_relationship,
     validate_declared_relationships,
 )
+from .stops import STOPS
 
 
 RUN_ALL_VERSION = 2
 # The message when every Activities file was left out (stage A3c).
 ACTIVITIES_NOT_READABLE_MESSAGE = "the Activities files could not be read"
+# The message when no Activities record could be kept; the build of a
+# Snapshot Store stops with it too (stage A5b-2).
+ACTIVITIES_EMPTY_MESSAGE = "Activities input produced no valid records"
 # Activities and FIT sessions whose candidates tie (stage A4a).
 AMBIGUOUS_FIT_LINK_MESSAGE = (
     "Activities or FIT sessions had more than one equally matching candidate, so "
@@ -473,8 +478,10 @@ def _requested_output(requested_output: Path) -> Path:
     """Return the output's full path; its name must be one that the GUI
     takes too (stage A5a), and it must be neither a symbolic link nor there
     already. The name is checked as it was given: Windows drops a dot or a
-    space at the end of a name when it resolves a path."""
-    if not valid_output_name(requested_output.name):
+    space at the end of a name when it resolves a path. ``.`` and ``..``
+    name a folder that is there already (stage A5b-2)."""
+    name = requested_output.name
+    if not names_folder_itself(name) and not valid_output_name(name):
         raise RunAllError("OUTPUT_NAME_INVALID", OUTPUT_LOCATION_MESSAGES["OUTPUT_NAME_INVALID"])
     try:
         if requested_output.is_symlink():
@@ -522,7 +529,8 @@ def _input_error(exc: Exception) -> RunAllError:
         return RunAllError("INPUT_TOO_LARGE", "the Export ZIP file is too large to read directly")
     if isinstance(exc, TempSpaceError):
         return RunAllError("TEMP_SPACE_INSUFFICIENT", TEMP_SPACE_MESSAGE)
-    return RunAllError("INPUT_DISCOVERY_FAILED", "input discovery or archive safety validation failed")
+    # A registration gives the same codes (stage A5b-2).
+    return RunAllError("INPUT_DISCOVERY_FAILED", STOPS["INPUT_DISCOVERY_FAILED"].what)
 
 
 @contextmanager
@@ -733,7 +741,7 @@ def _normalize_datasets(
     except Exception as exc:
         raise RunAllError("ACTIVITIES_NORMALIZATION_FAILED", "detected Activities input could not be normalized") from exc
     if not records["activities"]:
-        raise RunAllError("ACTIVITIES_EMPTY", "Activities input produced no valid records")
+        raise RunAllError("ACTIVITIES_EMPTY", ACTIVITIES_EMPTY_MESSAGE)
 
     if families["gear"]:
         _notify(progress, "normalizing", step="gear")

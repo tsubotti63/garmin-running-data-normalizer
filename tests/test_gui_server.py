@@ -881,6 +881,31 @@ class GuiRunApiTest(GuiServerTestCase):
                 self.assertEqual(self.call(route, {"target": "folder"}), (409, {"error": "NO_FINISHED_OUTPUT"}))
         self.assertEqual(list(self.parent.iterdir()), [])
 
+    def test_unexpected_errors_of_checks_and_output_actions_answer_command_failed(self) -> None:
+        # The code with which the CLI's commands stop for an unexpected error
+        # (stage A5b-2); the server's own errors answer INTERNAL_ERROR.
+        self.start_server(600.0, runs=stub_manager("publish-then-wait"))
+        unexpected = RuntimeError(str(self.root))
+        with patch("garmin_running_data_normalizer.gui.server.doctor_input", side_effect=unexpected):
+            self.assertEqual(
+                self.call("/api/check-input", {"input": str(SYNTHETIC_EXPORT)}),
+                (500, {"error": "COMMAND_FAILED"}),
+            )
+        self.assertEqual(self.call("/api/run/start", self.run_request())[0], 200)
+        self.assertTrue(wait_until(lambda: (self.parent / "output").is_dir()))
+        self.call("/api/run/cancel", {})
+        self.wait_for_state({"finished_after_cancel"})
+        for route, name in (
+            ("/api/check-output", "check_output"),
+            ("/api/support-bundle", "make_support_bundle"),
+            ("/api/open-output", "open_output"),
+        ):
+            with self.subTest(route=route), patch(
+                f"garmin_running_data_normalizer.gui.server.{name}", side_effect=unexpected
+            ):
+                self.assertEqual(self.call(route, {"target": "folder"}), (500, {"error": "COMMAND_FAILED"}))
+        self.assertEqual(sorted(path.name for path in self.parent.iterdir()), ["output"])
+
     def test_output_actions_report_an_incomplete_output_by_code(self) -> None:
         # The stub publishes an empty folder, as a run whose cancellation came
         # too late would leave a folder that this server did not check.

@@ -7,14 +7,13 @@ import os
 import re
 import shutil
 import stat
-import zlib
 from collections import Counter
 from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO, Callable, ContextManager, Iterator
-from zipfile import BadZipFile, ZipFile, ZipInfo
+from zipfile import ZipFile, ZipInfo
 
 from ..common.private_files import (
     PRIVATE_DIRECTORY_MODE,
@@ -99,6 +98,10 @@ SNAPSHOT_MISSING_MESSAGE = (
     "because its folder was deleted by hand or removed by a sync app"
 )
 STORE_VERSION_MESSAGE = "the Snapshot Store was made by a newer version of this app"
+STORE_NOT_FOUND_MESSAGE = STOPS["SNAPSHOT_STORE_NOT_FOUND"].what
+# The input of a registration that cannot be read safely, as a run says it
+# (stage A5b-2).
+INPUT_DISCOVERY_MESSAGE = STOPS["INPUT_DISCOVERY_FAILED"].what
 REGISTRATION_INPUT_CHANGED_MESSAGE = "the Export changed while it was registered"
 # What a store holds that does not stop a command but should be known; the
 # CLI prints each as a NOTE line, which never means a stop, with the meaning
@@ -242,10 +245,12 @@ def sha256_file(path: Path) -> str:
 
 
 def _reject_store_symlink_components(root: Path, path: Path) -> None:
+    # A store that holds a link, or a path that leads outside it, is damaged
+    # (stage A5b-2); verification names the failure instead.
     try:
         relative = path.relative_to(root)
     except ValueError as exc:
-        raise SnapshotStoreError("snapshot store path escaped its root") from exc
+        raise invalid_store_error("a path in it leads outside its folder") from exc
     current = root
     for part in relative.parts:
         current = current / part
@@ -256,9 +261,7 @@ def _reject_store_symlink_components(root: Path, path: Path) -> None:
         except PermissionError as exc:
             raise not_readable_error(root, current.parent) from exc
         if stat.S_ISLNK(mode):
-            raise SnapshotStoreError(
-                "symbolic links are prohibited inside the snapshot store"
-            )
+            raise invalid_store_error("it holds a symbolic link")
 
 
 def _temporary_name(path: Path) -> Path:
@@ -372,7 +375,7 @@ def load_store(store_root: str | Path) -> tuple[Path, dict[str, Any]]:
     metadata_path = root / "store.json"
     # The store's folder is opened first, so that one that cannot be opened is
     # named instead of reading as a folder without a store.
-    _open_folder(root, root)
+    entries = _open_folder(root, root)
     try:
         is_file = stat.S_ISREG(os.stat(metadata_path).st_mode)
     except (FileNotFoundError, NotADirectoryError):
@@ -380,7 +383,12 @@ def load_store(store_root: str | Path) -> tuple[Path, dict[str, Any]]:
     except PermissionError as exc:
         raise not_readable_error(root, root) from exc
     if not is_file:
-        raise SnapshotStoreError("snapshot store is not initialized")
+        # A folder that holds what a store writes, but not store.json, is a
+        # damaged store; any other folder holds no store, which has its own
+        # code, whose next step says how to make one (stage A5b-2).
+        if any(entry.name in _STORE_ENTRY_NAMES for entry in entries):
+            raise invalid_store_error("store.json is missing")
+        raise SnapshotStoreError(STORE_NOT_FOUND_MESSAGE, "SNAPSHOT_STORE_NOT_FOUND")
     metadata = _load_json(metadata_path, root)
     _check_store_version(metadata)
     if metadata.get("single_writer") is not True:
@@ -405,6 +413,12 @@ _STORE_FILE_NAMES = (
     "snapshot_family_coverage.json",
 )
 _STORE_FOLDERS = ("blobs/sha256", "blobs", "snapshots", "journal")
+# What a store holds at its top besides store.json (stage A5b-2).
+_STORE_ENTRY_NAMES = frozenset(
+    {name for name in _STORE_FILE_NAMES if name != "store.json"}
+    | {relative.split("/", 1)[0] for relative in _STORE_FOLDERS}
+    | {LOCK_NAME}
+)
 
 
 def _remove_new_store(root: Path, made_root: bool) -> None:
@@ -835,14 +849,27 @@ def _preserve_blob(root: Path, digest: str, source: Path | _StreamedFile, size: 
     return True
 
 
+def _input_read_error(error: BaseException) -> SnapshotStoreError:
+    """The error for an input that cannot be read safely, as a run gives it
+    (stage A5b-2): one that went away changed, and any other is
+    ``INPUT_DISCOVERY_FAILED``."""
+    if isinstance(error, FileNotFoundError):
+        return _input_changed()
+    return SnapshotStoreError(INPUT_DISCOVERY_MESSAGE, "INPUT_DISCOVERY_FAILED")
+
+
 @contextmanager
 def _open_member(archive: ZipFile, info: ZipInfo) -> Iterator[BinaryIO]:
-    """Open a member of a ZIP file inside the snapshot input, to copy it."""
+    """Open a member of a ZIP file inside the snapshot input, to copy it.
+
+    The member was read whole when the input was listed, so one that cannot
+    be read now changed, as any file of the input that cannot be read again
+    (stage A5b-2)."""
     try:
         with archive.open(info, "r") as handle:
             yield handle
-    except (BadZipFile, EOFError, zlib.error) as exc:
-        raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc
+    except DAMAGED_ZIP_ERRORS as exc:
+        raise _input_changed() from exc
 
 
 @contextmanager
@@ -860,7 +887,8 @@ def _open_snapshot_input(source: Path) -> Iterator[OpenedExport]:
             raise _input_changed() from exc
         for path in paths:
             if path.is_symlink():
-                raise SnapshotStoreError("symbolic links are prohibited in snapshot input")
+                # As a run stops for it (stage A5b-2).
+                raise SnapshotStoreError(INPUT_DISCOVERY_MESSAGE, "INPUT_DISCOVERY_FAILED")
         if not_opened:
             raise InputNotReadableError(
                 ["" if path == source else path.relative_to(source).as_posix() for path in not_opened]
@@ -870,10 +898,15 @@ def _open_snapshot_input(source: Path) -> Iterator[OpenedExport]:
             opened = stack.enter_context(open_export(source))
         except InputNotReadableError:
             raise
+        # The problems of the Export ZIP file itself keep their codes, as in
+        # a run: an Export ZIP file that is too large to read directly is an
+        # UnsafeArchiveError too (stage A5b-2).
+        except (CorruptArchiveError, ExportTooLargeError, TempSpaceError):
+            raise
         except PermissionError as exc:
             raise InputNotReadableError([""]) from exc
-        except (BadZipFile, OSError, UnsafeArchiveError) as exc:
-            raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc
+        except (*DAMAGED_ZIP_ERRORS, OSError, UnsafeArchiveError) as exc:
+            raise _input_read_error(exc) from exc
         yield opened
 
 
@@ -901,8 +934,8 @@ def _scan_members(
         raise
     except PermissionError as exc:
         raise InputNotReadableError([export.place_of(item)]) from exc
-    except (BadZipFile, OSError, UnsafeArchiveError) as exc:
-        raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc
+    except (*DAMAGED_ZIP_ERRORS, OSError, UnsafeArchiveError) as exc:
+        raise _input_read_error(exc) from exc
     members: list[dict[str, Any]] = []
     member_payloads: dict[str, _StreamedFile] = {}
     try:
@@ -945,7 +978,7 @@ def _scan_members(
     except PermissionError as exc:
         raise InputNotReadableError([export.place_of(item)]) from exc
     except OSError as exc:
-        raise SnapshotStoreError("detected ZIP input failed safe archive validation") from exc
+        raise _input_read_error(exc) from exc
     inventory.extend(members)
     for digest, payload in member_payloads.items():
         payloads.setdefault(digest, payload)
@@ -1188,12 +1221,21 @@ def register_snapshot(
     if confirm_complete is not True:
         raise SnapshotStoreError("snapshot registration requires --confirm-complete")
     root, store_metadata = load_store(store_root)
+    # The input stops with the codes of a run (stage A5b-2).
     requested_source = Path(input_root)
-    if requested_source.is_symlink():
-        raise SnapshotStoreError("snapshot input must not be a symbolic link")
-    source = requested_source.resolve()
-    if not source.is_dir() and not is_zip_input(source):
-        raise SnapshotStoreError("snapshot input must be an existing folder or ZIP file")
+    try:
+        if requested_source.is_symlink():
+            raise SnapshotStoreError("input must not be a symbolic link", "INPUT_SYMLINK")
+        source = requested_source.resolve()
+        is_input = source.is_dir() or is_zip_input(source)
+    except OSError as exc:
+        if isinstance(exc, PermissionError):
+            raise InputNotReadableError([""]) from exc
+        raise SnapshotStoreError(
+            "input must be an existing folder or ZIP file", "INPUT_NOT_DIRECTORY"
+        ) from exc
+    if not is_input:
+        raise SnapshotStoreError("input must be an existing folder or ZIP file", "INPUT_NOT_DIRECTORY")
     if source == root or root in source.parents or source in root.parents:
         raise SnapshotStoreError("snapshot input and snapshot store must be separate")
     label = _validate_label(snapshot_label)
@@ -1268,7 +1310,11 @@ def register_snapshot(
         )
         if existing is not None:
             if existing["snapshot_content_id"] != content_id:
-                raise SnapshotStoreError("snapshot identity collision")
+                # The identity of a Snapshot is made from its content, so a
+                # registered one whose content differs is damaged (stage A5b-2).
+                raise invalid_store_error(
+                    "the identity of a registered Snapshot does not match its content"
+                )
             expected_metadata = {
                 "snapshot_label": label,
                 "export_requested_at": requested_at,

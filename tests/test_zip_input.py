@@ -586,8 +586,10 @@ class UnsafeZipTest(unittest.TestCase):
                     )
                     store = root / f"store-{index}"
                     initialize_store(store, "synthetic-account-boundary")
-                    with self.assertRaisesRegex(SnapshotLifecycleError, "safe archive validation"):
+                    # The code of a run and of the pre-run check (stage A5b-2).
+                    with self.assertRaises(SnapshotLifecycleError) as raised:
                         register(store, unsafe)
+                    self.assertEqual(raised.exception.code, "INPUT_DISCOVERY_FAILED")
                     self.assertEqual(load_manifests(store), [])
 
     def test_an_unsafe_member_of_a_zip_file_inside_the_export(self) -> None:

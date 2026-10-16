@@ -74,6 +74,9 @@ export const ERROR_KEYS = {
   STABLE_KEY_MISSING: "error.internal",
   RUN_ALL_FAILED: "error.internal",
   RUN_START_FAILED: "error.internal",
+  // An unexpected error of a check, the Support Bundle, or opening the
+  // output, as the CLI's commands stop for one (stage A5b-2).
+  COMMAND_FAILED: "error.unknown",
   RUN_ACTIVE: "error.run_active",
   OUTPUT_PARENT_NOT_WRITABLE: "error.output_parent_not_writable",
   OUTPUT_PATH_TOO_LONG: "error.output_path_too_long",

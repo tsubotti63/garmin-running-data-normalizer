@@ -78,10 +78,10 @@ def support_bundle_path(output: Path) -> Path:
 
 
 def make_support_bundle(output: Path) -> dict[str, Any]:
-    """Build the Support Bundle next to the output; never replace an existing file."""
+    """Build the Support Bundle next to the output. ``build_support_bundle``
+    never replaces a file or a link there (``SUPPORT_BUNDLE_EXISTS``), for
+    the CLI and the GUI alike (stage A5b-2)."""
     destination = support_bundle_path(output)
-    if destination.is_symlink() or destination.exists():
-        raise OutputActionError("SUPPORT_BUNDLE_EXISTS")
     try:
         result = build_support_bundle(output, destination)
     except SupportBundleError as exc:

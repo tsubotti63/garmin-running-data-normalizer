@@ -157,6 +157,17 @@ def valid_output_name(name: object) -> bool:
     )
 
 
+def names_folder_itself(name: str) -> bool:
+    """Return whether the last part of an output path names the folder that
+    the path is in or the one above it, not a new folder: ``.`` and a root,
+    whose name is empty, and ``..``, as in ``foo/..``. Such an output is
+    there already, so the rules for the name of a new folder do not apply to
+    it, and Run-All stops with ``OUTPUT_EXISTS``, as in v1.7.1 (stage A5b-2;
+    from stage A5a until then, the name rules stopped it with
+    ``OUTPUT_NAME_INVALID``)."""
+    return name in ("", "..")
+
+
 def check_output_location(output: Path, too_long: Callable[[Path, str], bool]) -> None:
     """Check that a run can write ``output``, before it starts.
 
@@ -204,6 +215,7 @@ __all__ = [
     "WINDOWS_RESERVED_NAMES",
     "check_output_location",
     "long_paths_enabled",
+    "names_folder_itself",
     "output_path_too_long",
     "path_error_code",
     "utf16_length",

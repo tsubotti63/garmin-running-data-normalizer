@@ -315,6 +315,13 @@ Stage B sets the rules for the place of a new Snapshot Store and of a Support
 Bundle with the controls that choose them, and the page shows the warning
 totals.
 
+Stage A5b gives every stop of the CLI what happened and its next step from
+one table (`stops.STOPS`, see [Stops and next steps](v2_data_handling.md#stops-and-next-steps)),
+gives the snapshot commands and the Support Bundle the codes of the same
+problems in a run, and makes the GUI's server answer an unexpected error of
+a check, of the Support Bundle, or of the opening of the output with the
+CLI's `COMMAND_FAILED`. Stage B writes the page's texts from the table.
+
 ## Security
 
 Requests:

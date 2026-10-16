@@ -1294,17 +1294,16 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
 The run stops with exit 2 and publishes no output for the problems below.
 From stage A3d-3a, each has a code and a next step, in the CLI and the GUI
 alike, and the CLI checks the place of the output before it reads the input,
-as the GUI does, instead of after the whole run:
-
-| Problem | Code | Next step |
-|---|---|---|
-| The folder for the output does not exist or is not a folder | `OUTPUT_PARENT_NOT_FOUND` | Choose an existing folder, or create it first |
-| This app cannot write there | `OUTPUT_PARENT_NOT_WRITABLE` | Choose another folder, or allow writing |
-| No free space there | `OUTPUT_SPACE_INSUFFICIENT` | Free some space, or choose another folder |
-| The output name is too long or cannot be used on every system | `OUTPUT_NAME_INVALID` | Choose another name that every system takes (see below) |
-| The output path is too long | `OUTPUT_PATH_TOO_LONG` | Choose a shorter folder or name; on Windows, or turn on long paths |
-| A folder or file of the input cannot be opened | `INPUT_NOT_READABLE` | Allow this app to read it, or select the Export folder itself |
-| The input changed during the run, for every family | `INPUT_CHANGED` | Run again when it no longer changes |
+as the GUI does, instead of after the whole run: the folder for the output
+does not exist or is not a folder (`OUTPUT_PARENT_NOT_FOUND`), this app
+cannot write there (`OUTPUT_PARENT_NOT_WRITABLE`), there is no free space
+there (`OUTPUT_SPACE_INSUFFICIENT`), the output name cannot be used on every
+system (`OUTPUT_NAME_INVALID`, see below), the output path is too long
+(`OUTPUT_PATH_TOO_LONG`), a folder or file of the input cannot be opened
+(`INPUT_NOT_READABLE`), and the input changed during the run, for every
+family (`INPUT_CHANGED`). [Stops and next steps](#stops-and-next-steps), at
+the end of this section, gives every code with what it means and its next
+step.
 
 - The place of the output is checked by creating a hidden folder in it and
   removing it at once, as the staging folder will be created; folders above
@@ -1325,7 +1324,9 @@ as the GUI does, instead of after the whole run:
     checked as it was given, before the system looks at the path, because
     Windows drops a dot or a space at the end of a name when it resolves a
     path. `normalize-activities` writes in an empty output folder that is
-    there already, as before, whatever its name.
+    there already, as before, whatever its name. From stage A5b-2, `.`,
+    `..`, and a root name a folder that is there, not a new one, and the
+    rule does not apply to them (see below).
   - The folder for the output must exist: no command makes the folders above
     its output any more, so that a mistyped path makes no folders. Until
     stage A5a, the CLI made them when it wrote, while the GUI refused them.
@@ -1380,10 +1381,13 @@ as the GUI does, instead of after the whole run:
     until stage A5b, say to run the command again, and to report the code if
     it stops again.
   - `SNAPSHOT_LIFECYCLE_FAILED` says to correct the command or its input as
-    the message says, or, for a store that fails `snapshot verify`, to follow
-    the next step that it gives; stage A5b-2 gives the stops of a damaged
-    store and of the places of the input and the output the codes of the
-    same problems in a run.
+    the message says, and to run it again. From stage A5b-2, it is left only
+    to the stops of the store's contract that no other code describes, such
+    as an argument that is not valid, a store that is a link, a new store
+    whose folder is not empty, an input and a store that overlap, a store of
+    another account, and an input without files; a damaged store always
+    stops with `SNAPSHOT_STORE_INVALID`, so the next step no longer speaks of
+    `snapshot verify`, as it did in stage A5b-1.
   - `doctor --input` and `doctor --run-output` print, after each finding and
     after the next action of the report, the next step in words (for
     example, `Finding: ACTIVITIES_NOT_FOUND (next: select an Export that
@@ -1393,24 +1397,76 @@ as the GUI does, instead of after the whole run:
   already by moving its three files into it; from stage A5b, when it cannot
   move one, it removes those that it moved, so that a stop leaves no part of
   an output there either.
+- From stage A5b-2, the snapshot commands, `support-bundle`, and the GUI's
+  checks give the code of the same problem in a run, with the same message:
+  - `snapshot build-input` stops for an output that is there already
+    (`OUTPUT_EXISTS`) or that is a link (`OUTPUT_SYMLINK`), and with
+    `snapshot run-all` for a build without an Activities record that can be
+    kept (`ACTIVITIES_EMPTY`).
+  - `snapshot register` stops for an input that is a link (`INPUT_SYMLINK`),
+    that is not an existing folder or ZIP file (`INPUT_NOT_DIRECTORY`), or
+    that this app may not look at (`INPUT_NOT_READABLE`). It reads the input
+    as a run reads it: a member of the Export ZIP file that fails a safety
+    check, a symbolic link inside the input, and a ZIP file inside the Export
+    that cannot be copied out or whose members cannot be read stop it with
+    `INPUT_DISCOVERY_FAILED`, or with `INPUT_CHANGED` when a file went away;
+    a member that cannot be read when it is copied, after it was read whole,
+    is a change of the input (`INPUT_CHANGED`); and an Export ZIP file that is
+    too large to read directly stops it with `INPUT_TOO_LARGE` also when it
+    holds the same Export twice, whose roots are read to compare them.
+  - A registration that meets a symbolic link inside the store, or a
+    registered Snapshot whose identity does not match its content, stops
+    with `SNAPSHOT_STORE_INVALID`, as for other damage; `snapshot verify`
+    names them among its failures, as before. A damaged record of a
+    Snapshot has given `SNAPSHOT_STORE_INVALID` since stage A3d-3b.
+  - A folder that holds no store, none of the files and folders that a store
+    writes, stops every snapshot command but `snapshot init` with
+    `SNAPSHOT_STORE_NOT_FOUND`, whose next step says to check `--store` or to
+    run `snapshot init` first; a store that lost `store.json` but holds the
+    rest is damaged (`SNAPSHOT_STORE_INVALID`, "store.json is missing"), so
+    that it is never sent to `snapshot init`. A store without a Snapshot
+    stops `snapshot build-input` and `snapshot run-all` with
+    `SNAPSHOT_STORE_EMPTY`, whose next step says to register an Export first;
+    `snapshot status` and `snapshot verify` show it with no Snapshot and do
+    not stop, as before.
+  - `support-bundle` refuses a file or a link in the place of the bundle with
+    `SUPPORT_BUNDLE_EXISTS`, the code that the GUI gave, and never replaces
+    it; `SUPPORT_BUNDLE_PATH_UNSAFE` is for a run output that is a link or
+    not an existing folder. The GUI leaves the check to the same function.
+  - The output `.`, `..` (also as in `foo/..`), or a root names a folder that
+    is there: the rules of stage A5a for the name of a new folder do not
+    apply to it, and `run-all`, `snapshot run-all`, and `snapshot
+    build-input` stop with `OUTPUT_EXISTS`, as in v1.7.1;
+    `normalize-activities` writes in it when it is empty, as before.
+  - `validate-handoff` says to check first that the folder is the output of
+    Run-All, since a folder that is not one stops it with `HANDOFF_INVALID`
+    too.
+  - The GUI's checks of the input and of the output, its Support Bundle, and
+    the opening of the output answer an unexpected error with
+    `COMMAND_FAILED` (HTTP 500), the code with which the CLI's commands stop
+    for one, instead of `INTERNAL_ERROR`; the page shows its text for an
+    error that it does not know: reload the page and try again, and report
+    the code if it happens again. The server's own errors stay
+    `INTERNAL_ERROR`.
 
 From stage A3d-3b, the stops of the Snapshot Store and its build have their
 own codes and next steps too, instead of `RUN_ALL_FAILED` or
 `SNAPSHOT_LIFECYCLE_FAILED`, which remains for the stops of the store's
-contract, such as an argument that is not valid:
-
-| Problem | Code | Next step |
-|---|---|---|
-| This app cannot write in the store, or create it there | `SNAPSHOT_STORE_NOT_WRITABLE` | Allow writing, then register the same Export again; for `snapshot init`, choose another folder or allow writing |
-| No free space for the store | `SNAPSHOT_STORE_SPACE_INSUFFICIENT` | Free some space, then register the same Export again; for `snapshot init`, or choose another folder |
-| A registration holds the lock, or one stopped and left it | `SNAPSHOT_STORE_LOCKED` | If no snapshot command is running, delete the lock file, then register again |
-| A registration was interrupted | `SNAPSHOT_REGISTRATION_INCOMPLETE` | Register the same Export, or another complete Export, again |
-| A folder or file of the store cannot be opened | `SNAPSHOT_STORE_NOT_READABLE` | Allow this app to read the whole store folder |
-| The store is damaged, or a Snapshot that it lists is missing | `SNAPSHOT_STORE_INVALID` | Change nothing in it; restore it from a backup that passed `snapshot verify`, or make a new store and register the Exports again |
-| A newer version of this app made the store | `SNAPSHOT_STORE_VERSION_UNSUPPORTED` | Use a newer version of this app |
-| The Export changed while it was registered | `INPUT_CHANGED` | Register it again when it no longer changes |
-| No free space in the temporary folder for the build of `snapshot run-all` | `TEMP_SPACE_INSUFFICIENT` | Free some space |
-| The output of `snapshot build-input` | The codes of the place of the output above | As above |
+contract, such as an argument that is not valid: this app cannot write in the
+store or create it there (`SNAPSHOT_STORE_NOT_WRITABLE`), there is no free
+space for the store (`SNAPSHOT_STORE_SPACE_INSUFFICIENT`), a registration
+holds the lock or one stopped and left it (`SNAPSHOT_STORE_LOCKED`), a
+registration was interrupted (`SNAPSHOT_REGISTRATION_INCOMPLETE`), a folder
+or file of the store cannot be opened (`SNAPSHOT_STORE_NOT_READABLE`), the
+store is damaged or a Snapshot that it lists is missing
+(`SNAPSHOT_STORE_INVALID`), and a newer version of this app made the store
+(`SNAPSHOT_STORE_VERSION_UNSUPPORTED`). An Export that changes while it is
+registered stops with `INPUT_CHANGED`, the build of `snapshot run-all`
+without free space in the temporary folder with `TEMP_SPACE_INSUFFICIENT`,
+and the output of `snapshot build-input` with the codes of the place of an
+output. For `snapshot init`, the codes of writing and of free space are those
+of the place of the new store, for which another folder can be chosen.
+[Stops and next steps](#stops-and-next-steps) gives their next steps.
 
 - A registration finds that the store cannot be written when it creates its
   lock, before it reads the Export. Before it writes, it compares the free
@@ -1478,6 +1534,83 @@ The problems:
 
 Every stop has a specific code; errors that v1.7.1 reports only as
 `RUN_ALL_FAILED` get their own codes.
+
+#### Stops and next steps
+
+Every code with which a command of the CLI can stop, with what it means and
+its next step, as an `ERROR` line gives them after the message of the stop
+(`stops.STOPS`, stage A5b). The rows are made from the table of the code, in
+its order, and a test checks that they are the same. The GUI's page gives the
+same content in its own words from stage B; the codes that only the GUI
+gives, for its entries and controls, are not in this table.
+
+| Code | What happened | Next step |
+|---|---|---|
+| `INPUT_SYMLINK` | the input is a symbolic link | select the Export folder or ZIP file itself, not a link to it |
+| `INPUT_NOT_DIRECTORY` | the input is not an existing folder or ZIP file | select the Export folder, or the ZIP file downloaded from Garmin |
+| `INPUT_NOT_READABLE` | this app may not open a folder or file of the input | allow this app to read it (on a Mac, in System Settings > Privacy & Security; on Windows, in the Security tab of its Properties), or select the Export folder itself |
+| `INPUT_CHANGED` | the input changed while it was read | run the command again when no other program changes the input |
+| `INPUT_ZIP_CORRUPT` | the Export ZIP file is damaged or incomplete | download the Export ZIP file again; if it is damaged again, request a new Export from Garmin |
+| `INPUT_TOO_LARGE` | the Export ZIP file is too large to read directly | extract it, and select the extracted folder |
+| `INPUT_MULTIPLE_EXPORTS` | the input holds more than one Export, or Exports of more than one account | select one Export, or register each Export into a Snapshot Store for its own account |
+| `INPUT_DISCOVERY_FAILED` | the input could not be read safely | download or extract the Export again; if it stops again, please report the code |
+| `TEMP_SPACE_INSUFFICIENT` | the temporary folder does not have enough free space | free some space on its drive; an Export ZIP file can also be extracted and its folder selected |
+| `TIMEZONE_INVALID` | the timezone is not an exact IANA timezone name | give an exact IANA timezone name, such as Asia/Tokyo or America/New_York |
+| `TIMEZONE_DATA_UNAVAILABLE` | the timezone data is not installed | reinstall the package in a clean environment, so that the timezone data is installed |
+| `ACTIVITIES_NOT_FOUND` | the input holds no Activities file | select an Export that contains your Activities |
+| `ACTIVITIES_EMPTY` | the input holds no Activities record that can be kept | obtain a complete, readable Export that contains your Activities |
+| `GOLDEN_PATH_DATA_NEEDS_RUN_ALL` | the Activities hold data that normalize-activities has no place for | use run-all, which goes on and reports what it leaves out, keeps, or repairs |
+| `OUTPUT_SYMLINK` | the output is a symbolic link | choose a new folder for the output, not a link |
+| `OUTPUT_EXISTS` | the output folder is there already | choose another name for the output |
+| `OUTPUT_INSIDE_INPUT` | the output is inside the input | choose a place for the output outside the Export |
+| `OUTPUT_PARENT_NOT_FOUND` | the folder for the output does not exist or is not a folder | choose an existing folder for the output, or create it first |
+| `OUTPUT_PARENT_NOT_WRITABLE` | this app cannot write in the folder for the output | choose another folder, or allow this app to write in it |
+| `OUTPUT_NAME_INVALID` | the output folder name is too long or cannot be used on every system | choose a name of at most 200 bytes that does not start with a dot, end with a dot or a space, hold any of <>:"/\\\|?*, or name a device of Windows |
+| `OUTPUT_PATH_TOO_LONG` | the output path is too long | choose a shorter folder or name, or on Windows turn on long paths |
+| `OUTPUT_SPACE_INSUFFICIENT` | the place for the output does not have enough free space | free some space, or choose another folder |
+| `OUTPUT_PUBLISH_FAILED` | the output could not be written | check the free space and the permissions of the folder for the output, and run the command again |
+| `SNAPSHOT_STORE_NOT_WRITABLE` | this app cannot write in the Snapshot Store, or create it there | allow this app to write in its folder, or for a new store choose another folder; then run the command again |
+| `SNAPSHOT_STORE_SPACE_INSUFFICIENT` | the drive of the Snapshot Store does not have enough free space | free some space, or for a new store choose another folder; then run the command again |
+| `SNAPSHOT_STORE_LOCKED` | the Snapshot Store has a lock file (.single-writer.lock): a registration is running, or one stopped before it ended | if no snapshot command is running, delete that file, then run the command again |
+| `SNAPSHOT_REGISTRATION_INCOMPLETE` | a registration in the Snapshot Store was interrupted | register the same Export, or another complete Export, again, which completes the store |
+| `SNAPSHOT_STORE_NOT_READABLE` | this app may not open a folder or file of the Snapshot Store | allow this app to read it (on a Mac, in System Settings > Privacy & Security; on Windows, in the Security tab of its Properties); this app must be able to read the whole store folder |
+| `SNAPSHOT_STORE_INVALID` | the Snapshot Store is damaged, or a Snapshot that it lists is missing | do not change the files inside the store; restore it from a backup that passed snapshot verify, or make a new store and register the Exports again |
+| `SNAPSHOT_STORE_VERSION_UNSUPPORTED` | a newer version of this app made the Snapshot Store | use a newer version of this app, and do not change the files inside the store |
+| `SNAPSHOT_STORE_NOT_FOUND` | there is no Snapshot Store in the folder given for it | check the folder given with --store; for a new store, run snapshot init first |
+| `SNAPSHOT_STORE_EMPTY` | the Snapshot Store holds no Snapshot yet | register an Export with snapshot register first |
+| `SNAPSHOT_LIFECYCLE_FAILED` | a snapshot command cannot do what it was asked | correct the command or its input as the message says, and run it again |
+| `HANDOFF_INVALID` | the folder is not the output of a run, or the files of the output do not pass their checks | check that the folder is the output of Run-All; if it is, do not change its files, and run Run-All again into a new folder |
+| `DOCTOR_AUTHORITY_INVALID` | the diagnostics of the output are missing, invalid, or disagree | do not change the files of an output; run Run-All again into a new folder |
+| `DOCTOR_UNREGISTERED_DIAGNOSTIC` | the output holds a diagnostic code that this version of the app does not know | use the version of this app that made the output, or run Run-All again into a new folder |
+| `DOCTOR_VERSION_UNSUPPORTED` | a version of this app that this version does not know made the output | use the version of this app that made the output, or run Run-All again into a new folder |
+| `SUPPORT_BUNDLE_PATH_UNSAFE` | the run output is a link or not an existing folder | give the folder of a completed run |
+| `SUPPORT_BUNDLE_EXISTS` | a file or a link is there already in the place of the Support Bundle | move or rename it, or give another file for the Support Bundle |
+| `SUPPORT_BUNDLE_AUTHORITY_INVALID` | the diagnostics of the run output do not allow a Support Bundle | run Run-All again into a new folder, and make the Support Bundle from it |
+| `SUPPORT_BUNDLE_ARCHIVE_VALIDATION_FAILED` | the Support Bundle did not pass its check after it was written | the Support Bundle was not made; please report the code |
+| `SUPPORT_BUNDLE_MEMBER_SET_INVALID` | the Support Bundle would not hold exactly its six members | the Support Bundle was not made; please report the code |
+| `SUPPORT_BUNDLE_PRIVACY_SCAN_FAILED` | the privacy scan of the Support Bundle found a forbidden text | the Support Bundle was not made; please report the code |
+| `SUPPORT_BUNDLE_SIZE_LIMIT_EXCEEDED` | the Support Bundle would be larger than its limit | the Support Bundle was not made; please report the code |
+| `SUPPORT_BUNDLE_UNCLASSIFIED_FIELD` | the Support Bundle would hold a field that is not classified as safe | the Support Bundle was not made; please report the code |
+| `SUPPORT_BUNDLE_UNREGISTERED_DIAGNOSTIC` | the Support Bundle would hold a diagnostic code that is not registered | the Support Bundle was not made; please report the code |
+| `ACTIVITIES_NORMALIZATION_FAILED` | the Activities could not be normalized | no output was written; this is a defect of this app, so please report the code |
+| `GEAR_NORMALIZATION_FAILED` | the Gear could not be normalized | no output was written; this is a defect of this app, so please report the code |
+| `PERSONAL_RECORDS_NORMALIZATION_FAILED` | the Personal Records could not be normalized | no output was written; this is a defect of this app, so please report the code |
+| `DAILY_METRICS_NORMALIZATION_FAILED` | the daily datasets could not be normalized | no output was written; this is a defect of this app, so please report the code |
+| `PERFORMANCE_METRICS_NORMALIZATION_FAILED` | the performance metrics could not be normalized | no output was written; this is a defect of this app, so please report the code |
+| `FIT_PROCESSING_FAILED` | the FIT files could not be audited | no output was written; this is a defect of this app, so please report the code |
+| `DATASET_TABLE_INVALID` | the table of the datasets of this app is invalid | no output was written; this is a defect of this app, so please report the code |
+| `DATASET_NOT_SERIALIZABLE` | a normalized dataset could not be written as JSON | no output was written; this is a defect of this app, so please report the code |
+| `DIVERGENT_DUPLICATE` | a normalized dataset holds two rows with the same key | no output was written; this is a defect of this app, so please report the code |
+| `STABLE_KEY_MISSING` | a normalized row has no stable key | no output was written; this is a defect of this app, so please report the code |
+| `RELATIONSHIP_CONTRACT_FAILED` | a relationship between the datasets failed its check | no output was written; this is a defect of this app, so please report the code |
+| `PROVENANCE_MISMATCH` | the provenance of the output does not match the input that was read | no output was written; this is a defect of this app, so please report the code |
+| `OUTPUT_CONTRACT_INVALID` | the output does not match its contract | no output was written; this is a defect of this app, so please report the code |
+| `OUTPUT_EXPERIENCE_FAILED` | the documents of the output could not be made | no output was written; this is a defect of this app, so please report the code |
+| `SNAPSHOT_CONTEXT_INVALID` | the input built from the Snapshot Store does not match the build | no output was written; this is a defect of this app, so please report the code |
+| `COMMAND_UNSUPPORTED` | the command is not supported | no output was written; this is a defect of this app, so please report the code |
+| `RUN_ALL_FAILED` | Run-All stopped unexpectedly | run the command again; if it stops again, please report the code |
+| `GOLDEN_PATH_FAILED` | normalize-activities stopped unexpectedly | run the command again; if it stops again, please report the code |
+| `COMMAND_FAILED` | the command stopped unexpectedly | run the command again; if it stops again, please report the code |
 
 ## Output shape
 
@@ -2282,7 +2415,48 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   worded anew, such as that of `TIMEZONE_INVALID`, and those of
   `RUN_ALL_FAILED`, `GOLDEN_PATH_FAILED`, and `COMMAND_FAILED` no longer say
   to verify the input and output contract; `doctor`'s report for a person
-  gives the next steps in words.
+  gives the next steps in words. From stage A5b-2, the code itself changes
+  in the cases below, to the code of the same problem in a run (see
+  [Stops that remain](#stops-that-remain)), so that a script that looks for
+  a code finds here what to change:
+  - `snapshot build-input` with an output that is there already or a link:
+    `OUTPUT_EXISTS` or `OUTPUT_SYMLINK`, and `snapshot build-input` and
+    `snapshot run-all` without an Activities record that can be kept:
+    `ACTIVITIES_EMPTY`, where they said `SNAPSHOT_LIFECYCLE_FAILED`.
+  - `snapshot register` with an input that is a link or not an existing
+    folder or ZIP file: `INPUT_SYMLINK` or `INPUT_NOT_DIRECTORY`, where it
+    said `SNAPSHOT_LIFECYCLE_FAILED`, and with one that this app may not look
+    at: `INPUT_NOT_READABLE`, where it stopped as an unexpected error; with a
+    member of the Export ZIP file that fails a safety check, a symbolic link
+    inside the input, or a ZIP file inside the Export that cannot be copied
+    out or read: `INPUT_DISCOVERY_FAILED`, or `INPUT_CHANGED` when a file went
+    away or could not be read again, and with an Export ZIP file that is too
+    large to read directly and holds the same Export twice:
+    `INPUT_TOO_LARGE`, where it said `SNAPSHOT_LIFECYCLE_FAILED`.
+  - `snapshot register` with a store that holds a symbolic link, or a
+    registered Snapshot whose identity does not match its content:
+    `SNAPSHOT_STORE_INVALID`, where it said `SNAPSHOT_LIFECYCLE_FAILED`.
+  - Every snapshot command but `snapshot init` with a folder that holds no
+    store: `SNAPSHOT_STORE_NOT_FOUND`, and with a store that lost
+    `store.json` but holds the rest: `SNAPSHOT_STORE_INVALID`; `snapshot
+    build-input` and `snapshot run-all` with a store without a Snapshot:
+    `SNAPSHOT_STORE_EMPTY`. The first and the last are new codes; each of
+    these said `SNAPSHOT_LIFECYCLE_FAILED`.
+  - `support-bundle` with a file or a link in the place of the bundle:
+    `SUPPORT_BUNDLE_EXISTS`, where it said `SUPPORT_BUNDLE_PATH_UNSAFE`.
+  - The GUI, for an unexpected error of a check, of the Support Bundle, or of
+    the opening of the output: `COMMAND_FAILED`, where it said
+    `INTERNAL_ERROR`.
+  Without a change of code, these texts change from stage A5b-2: the
+  message of `INPUT_DISCOVERY_FAILED` says "the input could not be read
+  safely", in a one-shot run too, where it said "input discovery or archive
+  safety validation failed"; the messages of the stops in the list above are
+  those of the same problems in a run; the next step of
+  `SNAPSHOT_LIFECYCLE_FAILED` no longer speaks of `snapshot verify`; and
+  `HANDOFF_INVALID` says to check first that the folder is the output of
+  Run-All. `run-all`, `snapshot run-all`, and `snapshot build-input` keep
+  the `OUTPUT_EXISTS` of v1.7.1 for the output `.` or `..`, which stage A5a
+  had made `OUTPUT_NAME_INVALID`.
 - Python API: `DiscoveredAsset` is a plain class instead of a frozen
   dataclass. Its fields, its constructor, and the content that
   `discover_export` returns are unchanged, but dataclass equality, hashing,
@@ -2373,6 +2547,14 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   constants of their messages, of which `INPUT_NOT_READABLE_NEXT_STEP`,
   `STORE_INVALID_NEXT_STEP`, and `STORE_NOT_READABLE_NEXT_STEP` are removed),
   and `NOTICE_MESSAGES` gives the meaning and the next step of the code.
+  From stage A5b-2, `build_support_bundle` raises `SupportBundleError` with
+  `SUPPORT_BUNDLE_EXISTS` for a file or a link in the place of the bundle,
+  and `make_support_bundle` (`gui.outputs`) leaves that check to it;
+  `SnapshotStoreError` (`SnapshotLifecycleError`) has the codes of the stops
+  above; `stops` gains `SNAPSHOT_STORE_NOT_FOUND`, `SNAPSHOT_STORE_EMPTY`,
+  and `SUPPORT_BUNDLE_EXISTS`; `output_location` gains `names_folder_itself`;
+  `run_all` gains `ACTIVITIES_EMPTY_MESSAGE`; and `snapshot.store` gains
+  `STORE_NOT_FOUND_MESSAGE` and `INPUT_DISCOVERY_MESSAGE`.
 - Schema: the fields that a disagreement can leave empty are nullable (the
   Hill and Endurance `overall_score`, the four Race Prediction times,
   `vo2max`, and `training_status`), and so is `personal_records.activity_id`
