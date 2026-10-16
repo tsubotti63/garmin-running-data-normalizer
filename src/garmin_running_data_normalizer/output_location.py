@@ -41,28 +41,14 @@ WINDOWS_RESERVED_NAMES = frozenset(
 )
 INVALID_NAME_CHARACTERS = frozenset('<>:"/\\|?*')
 
+# What happened; the CLI adds the next step of the code from the table of
+# stops (stage A5b).
 MESSAGES = {
-    "OUTPUT_PARENT_NOT_FOUND": (
-        "the folder for the output does not exist or is not a folder; choose an "
-        "existing folder for the output, or create it first"
-    ),
-    "OUTPUT_PARENT_NOT_WRITABLE": (
-        "this app cannot write in the folder for the output; choose another folder, "
-        "or allow this app to write in it"
-    ),
-    "OUTPUT_NAME_INVALID": (
-        "the output folder name is too long or cannot be used on every system; "
-        "choose a name of at most 200 bytes that does not start with a dot, end "
-        'with a dot or a space, hold any of <>:"/\\|?*, or name a device of Windows'
-    ),
-    "OUTPUT_PATH_TOO_LONG": (
-        "the output path is too long; choose a shorter folder or name, or on Windows "
-        "turn on long paths"
-    ),
-    "OUTPUT_SPACE_INSUFFICIENT": (
-        "the place for the output does not have enough free space; free some space, "
-        "or choose another folder"
-    ),
+    "OUTPUT_PARENT_NOT_FOUND": "the folder for the output does not exist or is not a folder",
+    "OUTPUT_PARENT_NOT_WRITABLE": "this app cannot write in the folder for the output",
+    "OUTPUT_NAME_INVALID": "the output folder name is too long or cannot be used on every system",
+    "OUTPUT_PATH_TOO_LONG": "the output path is too long",
+    "OUTPUT_SPACE_INSUFFICIENT": "the place for the output does not have enough free space",
 }
 
 

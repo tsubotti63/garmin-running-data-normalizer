@@ -28,6 +28,7 @@ from ..intake.source import (
 from ..normalizers.activities import normalize_activities
 from ..run_all import left_out_files
 from ..standalone import StandaloneHandoffError, validate_standalone_handoff
+from ..stops import NEXT_ACTIONS
 from .contracts import (
     DOCTOR_FORMAT,
     DOCTOR_SCHEMA_VERSION,
@@ -583,8 +584,15 @@ def render_doctor_human(report: dict[str, Any]) -> str:
             "Run not completed (exit 2). No completed Run-All output was published. "
             "Run Doctor on the input and correct the reported condition."
         )
-    lines.extend(f"Finding: {item['code']}" for item in report["findings"])
-    lines.append(f"Next: {report['doctor_next_action_id']}")
+    # Each finding and the report give their next step in words, as the GUI
+    # does (stage A5b); the identifiers stay first, for programs that read
+    # the lines.
+    for item in report["findings"]:
+        step = NEXT_ACTIONS.get(str(item.get("next_action_id")))
+        lines.append(f"Finding: {item['code']}" + (f" (next: {step})" if step else ""))
+    next_id = str(report["doctor_next_action_id"])
+    step = NEXT_ACTIONS.get(next_id)
+    lines.append(f"Next: {next_id}" + (f" ({step})" if step else ""))
     return "\n".join(lines)
 
 

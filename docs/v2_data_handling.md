@@ -1360,6 +1360,39 @@ as the GUI does, instead of after the whole run:
   line that starts with `NOTE [` is a notice that does not stop (stage
   A3d-3b). A program that reads the CLI's output can take only the first for
   a stop.
+- From stage A5b, every stop of the CLI reads `ERROR [CODE]: <what happened>;
+  <next step>`. The message of the stop says what happened, with the details
+  that it may give, such as the place inside the input that cannot be opened
+  or the names of the failures of `snapshot verify`, and it holds no `;`; the
+  next step comes from one table of the codes (`stops.STOPS`), so that it is
+  the same wherever a command stops with the code. The table also gives each
+  code's meaning in one sentence, for the GUI's texts in stage B. A `NOTE`
+  line gives the meaning and the next step of the stop of the same code.
+  - The stops of the input, the output, and the Snapshot Store keep the next
+    steps that their messages gave; where one code had several, one text
+    covers them (for example, `INPUT_MULTIPLE_EXPORTS` says to select one
+    Export, or to register each Export into a Snapshot Store for its own
+    account).
+  - The internal checks, which data cannot trigger, say that no output was
+    written and that the code should be reported: every stop of Run-All comes
+    before its output is published. `RUN_ALL_FAILED`, `GOLDEN_PATH_FAILED`,
+    and `COMMAND_FAILED`, which said "verify the input and output contract"
+    until stage A5b, say to run the command again, and to report the code if
+    it stops again.
+  - `SNAPSHOT_LIFECYCLE_FAILED` says to correct the command or its input as
+    the message says, or, for a store that fails `snapshot verify`, to follow
+    the next step that it gives; stage A5b-2 gives the stops of a damaged
+    store and of the places of the input and the output the codes of the
+    same problems in a run.
+  - `doctor --input` and `doctor --run-output` print, after each finding and
+    after the next action of the report, the next step in words (for
+    example, `Finding: ACTIVITIES_NOT_FOUND (next: select an Export that
+    contains your Activities)`); the identifiers stay first, and the JSON
+    report does not change.
+- `normalize-activities` writes in an empty output folder that is there
+  already by moving its three files into it; from stage A5b, when it cannot
+  move one, it removes those that it moved, so that a stop leaves no part of
+  an output there either.
 
 From stage A3d-3b, the stops of the Snapshot Store and its build have their
 own codes and next steps too, instead of `RUN_ALL_FAILED` or
@@ -2243,7 +2276,13 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   [Reports of a run in the CLI and the GUI](#reports-of-a-run-in-the-cli-and-the-gui)).
   `doctor --input` reads the Activities files and reports `ACTIVITIES_EMPTY`
   when no Activities record can be kept, where v1.7.1 passed such an Export
-  and the run stopped.
+  and the run stopped. From stage A5b, every `ERROR` line gives the next
+  step of its code after what happened (see
+  [Stops that remain](#stops-that-remain)): the messages of some stops are
+  worded anew, such as that of `TIMEZONE_INVALID`, and those of
+  `RUN_ALL_FAILED`, `GOLDEN_PATH_FAILED`, and `COMMAND_FAILED` no longer say
+  to verify the input and output contract; `doctor`'s report for a person
+  gives the next steps in words.
 - Python API: `DiscoveredAsset` is a plain class instead of a frozen
   dataclass. Its fields, its constructor, and the content that
   `discover_export` returns are unchanged, but dataclass equality, hashing,
@@ -2326,7 +2365,14 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   stops with `OUTPUT_NAME_INVALID` for a name that the GUI refuses and with
   `OUTPUT_PARENT_NOT_FOUND` for a folder of the output that does not exist,
   where it tried the nearest folder that existed; and `doctor_input` reads
-  the Activities files.
+  the Activities files. From stage A5b, the new module `stops` gives the
+  table of the stops (`STOPS`), the next steps of the reports of `doctor`
+  (`NEXT_ACTIONS`), `stop_line`, and `stop_text`; the messages of the
+  exceptions say what happened only (`RunAllError`, `GoldenPathError`,
+  `SnapshotStoreError`, `MixedExportsError`, the timezone errors, and the
+  constants of their messages, of which `INPUT_NOT_READABLE_NEXT_STEP`,
+  `STORE_INVALID_NEXT_STEP`, and `STORE_NOT_READABLE_NEXT_STEP` are removed),
+  and `NOTICE_MESSAGES` gives the meaning and the next step of the code.
 - Schema: the fields that a disagreement can leave empty are nullable (the
   Hill and Endurance `overall_score`, the four Race Prediction times,
   `vo2max`, and `training_status`), and so is `personal_records.activity_id`

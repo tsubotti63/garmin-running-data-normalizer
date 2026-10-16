@@ -49,6 +49,7 @@ from ..intake.source import (
     is_zip_input,
     walk_paths,
 )
+from ..stops import STOPS, stop_text
 from .policies import CONTRACT_VERSION, REGISTRY_VERSION
 
 
@@ -86,59 +87,25 @@ class SnapshotStoreError(ValueError):
         self.places = list(places) if places is not None else None
 
 
-# The stops of the Snapshot Store say what happened and what to do next
-# (stage A3d-3b).
-STORE_NOT_WRITABLE_MESSAGE = (
-    "this app cannot write in the Snapshot Store; allow this app to write in its "
-    "folder, then register the same Export again"
-)
-STORE_SPACE_MESSAGE = (
-    "the drive of the Snapshot Store does not have enough free space; free some "
-    "space, then register the same Export again"
-)
-NEW_STORE_NOT_WRITABLE_MESSAGE = (
-    "this app cannot create the Snapshot Store there; choose another folder, or "
-    "allow this app to write in it"
-)
-NEW_STORE_SPACE_MESSAGE = (
-    "the place for the Snapshot Store does not have enough free space; free some "
-    "space, or choose another folder"
-)
-REGISTRATION_INCOMPLETE_MESSAGE = (
-    "a registration in the Snapshot Store was interrupted; register the same "
-    "Export, or another complete Export, again, which completes the store"
-)
-STORE_INVALID_NEXT_STEP = (
-    "do not change the files inside the store; restore it from a backup that "
-    "passed snapshot verify, or make a new store and register the Exports again"
-)
+# The stops of the Snapshot Store say what happened (stage A3d-3b); the CLI
+# adds the next step of their code from the table of stops (stage A5b).
+STORE_NOT_WRITABLE_MESSAGE = "this app cannot write in the Snapshot Store"
+STORE_SPACE_MESSAGE = "the drive of the Snapshot Store does not have enough free space"
+NEW_STORE_NOT_WRITABLE_MESSAGE = "this app cannot create the Snapshot Store there"
+NEW_STORE_SPACE_MESSAGE = "the place for the Snapshot Store does not have enough free space"
+REGISTRATION_INCOMPLETE_MESSAGE = STOPS["SNAPSHOT_REGISTRATION_INCOMPLETE"].what
 SNAPSHOT_MISSING_MESSAGE = (
     "the Snapshot Store lists a Snapshot whose files are missing, for example "
-    "because its folder was deleted by hand or removed by a sync app; restore "
-    "the store from a backup that passed snapshot verify, or make a new store "
-    "and register the Exports again"
+    "because its folder was deleted by hand or removed by a sync app"
 )
-STORE_VERSION_MESSAGE = (
-    "the Snapshot Store was made by a newer version of this app; use a newer "
-    "version of this app, and do not change the files inside the store"
-)
-STORE_NOT_READABLE_NEXT_STEP = (
-    "allow this app to read the whole Snapshot Store folder (on a Mac, in System "
-    "Settings > Privacy & Security; on Windows, in the Security tab of its Properties)"
-)
-REGISTRATION_INPUT_CHANGED_MESSAGE = (
-    "the Export changed while it was registered; register it again when it no "
-    "longer changes"
-)
+STORE_VERSION_MESSAGE = "the Snapshot Store was made by a newer version of this app"
+REGISTRATION_INPUT_CHANGED_MESSAGE = "the Export changed while it was registered"
 # What a store holds that does not stop a command but should be known; the
-# CLI prints each as a NOTE line, which never means a stop.
+# CLI prints each as a NOTE line, which never means a stop, with the meaning
+# and the next step of the stop of the same code (stage A5b).
 NOTICE_MESSAGES = {
-    "SNAPSHOT_STORE_LOCKED": (
-        f"the Snapshot Store has a lock file ({LOCK_NAME}): a registration is "
-        "running, or one stopped before it ended; if no snapshot command is "
-        "running, delete that file before the next registration"
-    ),
-    "SNAPSHOT_REGISTRATION_INCOMPLETE": REGISTRATION_INCOMPLETE_MESSAGE,
+    "SNAPSHOT_STORE_LOCKED": stop_text("SNAPSHOT_STORE_LOCKED"),
+    "SNAPSHOT_REGISTRATION_INCOMPLETE": stop_text("SNAPSHOT_REGISTRATION_INCOMPLETE"),
 }
 
 
@@ -147,17 +114,11 @@ def store_not_readable_message(places: list[str] | None = None) -> str:
     where the command is started, it names the first folder or file that
     cannot be opened and how many more; without them, it names none."""
     if places is None:
-        return (
-            "this app may not open a folder or file of the Snapshot Store; "
-            f"{STORE_NOT_READABLE_NEXT_STEP}"
-        )
+        return STOPS["SNAPSHOT_STORE_NOT_READABLE"].what
     first = places[0] if places and places[0] else "the Snapshot Store folder itself"
     more = len(places) - 1
     named = first if more <= 0 else f"{first} and {more} more"
-    return (
-        f"this app may not open a folder or file of the Snapshot Store: {named}; "
-        f"{STORE_NOT_READABLE_NEXT_STEP}"
-    )
+    return f"this app may not open a folder or file of the Snapshot Store: {named}"
 
 
 def shown_store_message(exc: SnapshotStoreError) -> str:
@@ -189,10 +150,7 @@ def not_readable_error(root: Path, *paths: Path) -> SnapshotStoreError:
 
 def invalid_store_error(detail: str) -> SnapshotStoreError:
     """The error for a store whose files are damaged or were changed."""
-    return SnapshotStoreError(
-        f"the Snapshot Store is damaged: {detail}; {STORE_INVALID_NEXT_STEP}",
-        "SNAPSHOT_STORE_INVALID",
-    )
+    return SnapshotStoreError(f"the Snapshot Store is damaged: {detail}", "SNAPSHOT_STORE_INVALID")
 
 
 def _input_changed() -> SnapshotStoreError:
@@ -533,13 +491,7 @@ def _lock_held_message(lock_path: Path) -> str:
             recorded = ""
         if recorded.isdigit():
             holder = f"pid {recorded}"
-    return (
-        "snapshot store is locked by another writer "
-        f"({lock_path.name}, held by {holder}). If no other snapshot command is "
-        "running, delete that lock file and rerun snapshot register with the same "
-        "Export, or another complete Export, to reconcile the interrupted "
-        "registration."
-    )
+    return f"the Snapshot Store is locked by another writer ({lock_path.name}, held by {holder})"
 
 
 @contextmanager
@@ -1650,8 +1602,7 @@ def verification_error(
     ):
         return error_class(REGISTRATION_INCOMPLETE_MESSAGE, "SNAPSHOT_REGISTRATION_INCOMPLETE")
     return error_class(
-        f"the Snapshot Store failed verification ({', '.join(failures)}); "
-        f"{STORE_INVALID_NEXT_STEP}",
+        f"the Snapshot Store failed verification ({', '.join(failures)})",
         "SNAPSHOT_STORE_INVALID",
     )
 

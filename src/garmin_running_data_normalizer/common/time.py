@@ -25,10 +25,8 @@ class TimezoneDataUnavailableError(RuntimeError):
 
     def __init__(self, timezone_name: str) -> None:
         self.timezone_name = timezone_name
-        self.safe_message = (
-            f"IANA timezone data for {timezone_name} is unavailable. "
-            "Reinstall the package in a clean environment."
-        )
+        # The CLI adds the next step of the code (stage A5b).
+        self.safe_message = f"IANA timezone data for {timezone_name} is unavailable"
         super().__init__(self.safe_message)
 
 
@@ -36,10 +34,8 @@ class TimezoneNameInvalidError(ValueError):
     """Raised when a requested local timezone is not an exact IANA name."""
 
     code = TIMEZONE_INVALID_ERROR_CODE
-    safe_message = (
-        "--timezone must be an exact IANA timezone name, "
-        "such as Asia/Tokyo or America/New_York."
-    )
+    # The CLI adds the next step of the code (stage A5b).
+    safe_message = "the timezone given with --timezone is not an exact IANA timezone name"
 
     def __init__(self) -> None:
         super().__init__(self.safe_message)

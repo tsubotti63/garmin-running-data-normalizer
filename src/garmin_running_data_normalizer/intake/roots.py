@@ -39,24 +39,22 @@ OUTSIDE_EXPORT_ROOT = "outside_export_root"
 
 
 # Fixed messages, which never name a folder, a file, or an account.
+# The CLI adds the next step of INPUT_MULTIPLE_EXPORTS from the table of
+# stops (stage A5b).
 MIXED_INPUT_MESSAGE = (
-    "the input holds more than one Export, or Exports of more than one account; "
-    "select one Export, or register each Export as a Snapshot"
+    "the input holds more than one Export, or Exports of more than one account"
 )
 OTHER_ACCOUNT_MESSAGE = (
-    "the Export belongs to another account than the Snapshots in this Snapshot Store; "
-    "register it into a Snapshot Store for its account"
+    "the Export belongs to another account than the Snapshots in this Snapshot Store"
 )
-MIXED_STORE_MESSAGE = (
-    "the Snapshot Store holds the Exports of more than one account; "
-    "create a new Snapshot Store for each account"
-)
+MIXED_STORE_MESSAGE = "the Snapshot Store holds the Exports of more than one account"
 
 
 class MixedExportsError(ValueError):
     """Raised when an input holds different Exports, or Exports of different accounts.
 
-    ``safe_message`` says where the mix was found and what to do next.
+    ``safe_message`` says where the mix was found; the CLI adds the next
+    step of its code (stage A5b).
     """
 
     code = "INPUT_MULTIPLE_EXPORTS"

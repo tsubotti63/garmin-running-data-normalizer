@@ -33,8 +33,7 @@ SnapshotLifecycleError = SnapshotStoreError
 # The build of a Snapshot run is written in the temporary folder
 # (stage A3d-3b).
 SNAPSHOT_BUILD_TEMP_MESSAGE = (
-    "the temporary folder does not have enough free space to build the Snapshots; "
-    "free some space"
+    "the temporary folder does not have enough free space to build the Snapshots"
 )
 
 

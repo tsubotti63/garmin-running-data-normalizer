@@ -49,10 +49,9 @@ class WindowsTimezoneDataTest(unittest.TestCase):
 
         self.assertEqual(raised.exception.code, TIMEZONE_DATA_ERROR_CODE)
         self.assertEqual(raised.exception.timezone_name, "Asia/Tokyo")
+        # What happened; the CLI adds the next step of the code (stage A5b).
         self.assertEqual(
-            raised.exception.safe_message,
-            "IANA timezone data for Asia/Tokyo is unavailable. "
-            "Reinstall the package in a clean environment.",
+            raised.exception.safe_message, "IANA timezone data for Asia/Tokyo is unavailable"
         )
         self.assertNotIn("synthetic missing timezone", raised.exception.safe_message)
 
@@ -71,9 +70,7 @@ class WindowsTimezoneDataTest(unittest.TestCase):
 
         self.assertEqual(raised.exception.code, TIMEZONE_DATA_ERROR_CODE)
         self.assertEqual(
-            raised.exception.safe_message,
-            "IANA timezone data for Asia/Tokyo is unavailable. "
-            "Reinstall the package in a clean environment.",
+            raised.exception.safe_message, "IANA timezone data for Asia/Tokyo is unavailable"
         )
         self.assertFalse(output.exists())
 
@@ -99,8 +96,8 @@ class WindowsTimezoneDataTest(unittest.TestCase):
         self.assertEqual(
             error.getvalue(),
             "ERROR [TIMEZONE_DATA_UNAVAILABLE]: "
-            "IANA timezone data for Asia/Tokyo is unavailable. "
-            "Reinstall the package in a clean environment.\n",
+            "IANA timezone data for Asia/Tokyo is unavailable; "
+            "reinstall the package in a clean environment, so that the timezone data is installed\n",
         )
         self.assertNotIn("Traceback", error.getvalue())
 
