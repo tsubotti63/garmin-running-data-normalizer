@@ -125,7 +125,9 @@ def codes_in_the_package() -> set[str]:
                         codes.add(value.value)
                     elif value is None and default is not None:
                         codes.add(default)
-                if name == "_stop" and node.args and isinstance(node.args[0], ast.Constant):
+                # The stops and, from stage A5c, the cancellations that the
+                # CLI prints.
+                if name in ("_stop", "_cancel") and node.args and isinstance(node.args[0], ast.Constant):
                     codes.add(node.args[0].value)
             # The codes that the functions of the place of an output return.
             if isinstance(node, ast.FunctionDef) and node.name in ("write_error_code", "path_error_code"):

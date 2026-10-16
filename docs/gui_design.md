@@ -153,7 +153,10 @@ Local Snapshot Store and new output folders
   staging folder, so a run cancelled before that leaves no output folder. A
   cancellation that arrives after the rename is reported as a finished run,
   with its result. If a forced stop leaves a hidden staging folder, the GUI
-  reports the one that this run created and does not delete anything.
+  reports the one that this run created and does not delete anything; one
+  that was there before the run started is not reported (stage A5c). A
+  failure that the run reported before the cancellation arrived is shown as
+  the failure, with its code (stage A5c).
 - Only one run at a time. Other browser tabs show the running state. While a
   run is active, the Quit button is refused, and `Ctrl+C` cancels the run
   before the server stops and reports the outcome in the terminal.
@@ -321,6 +324,16 @@ gives the snapshot commands and the Support Bundle the codes of the same
 problems in a run, and makes the GUI's server answer an unexpected error of
 a check, of the Support Bundle, or of the opening of the output with the
 CLI's `COMMAND_FAILED`. Stage B writes the page's texts from the table.
+
+Stage A5c ends every command of the CLI that `Ctrl+C` cancels with
+`ERROR [RUN_CANCELLED]`, or `ERROR [RUN_CANCELLED_AFTER_OUTPUT]` when the
+output was already written, and exit 130, names what a second `Ctrl+C` left on
+lines of their own, and leaves no part of an output on one `Ctrl+C` (see
+[Cancellation](v2_data_handling.md#cancellation)). The GUI shows a failure that
+came before a cancellation as the failure, reports only the staging folders
+that this run made, prints the lines of the CLI in the terminal when `Ctrl+C`
+stops the server during a run, and shows the result table for a run whose
+cancellation came after its output.
 
 ## Security
 

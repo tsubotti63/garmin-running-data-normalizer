@@ -22,6 +22,9 @@ import {
   resultMessages,
   stalledSeconds,
 } from "../../src/garmin_running_data_normalizer/gui/static/flow.mjs";
+// Read through the module, so that a test of a function that a version lacks
+// fails on its own.
+import * as flow from "../../src/garmin_running_data_normalizer/gui/static/flow.mjs";
 
 // A message as [key, params, keyParams], for compact comparisons.
 const shape = (message) => [message.key, message.params, message.keyParams];
@@ -306,6 +309,17 @@ test("family rows are sorted and fall back for unknown names", () => {
     { family: "sleep", nameKey: "family.sleep", statusKey: "family_status.skipped_not_present", records: 0, warnings: 0 },
   ]);
   assert.deepEqual(familyRows(null), []);
+});
+
+test("the result table shows a run whose cancellation came after its output, when its result is known", () => {
+  // Until stage A5c, the table was shown for a finished run only.
+  const rows = familyRows(FINISHED.result);
+  assert.deepEqual(flow.resultRows(FINISHED), rows);
+  assert.deepEqual(flow.resultRows({ ...FINISHED, state: "finished_after_cancel" }), rows);
+  assert.deepEqual(flow.resultRows({ state: "finished_after_cancel", result: null }), []);
+  assert.deepEqual(flow.resultRows({ ...FINISHED, state: "cancelled" }), []);
+  assert.deepEqual(flow.resultRows({ ...FINISHED, state: "failed" }), []);
+  assert.deepEqual(flow.resultRows(null), []);
 });
 
 test("result messages describe each way a run can end", () => {

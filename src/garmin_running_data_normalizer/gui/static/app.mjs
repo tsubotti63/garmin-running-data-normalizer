@@ -13,7 +13,6 @@ import {
   controls,
   defaultOutputName,
   errorMessages,
-  familyRows,
   findingMessages,
   formatElapsed,
   nextOutputName,
@@ -21,6 +20,7 @@ import {
   shouldFocusResult,
   progressMessage,
   resultMessages,
+  resultRows,
   stalledSeconds,
 } from "./flow.mjs";
 
@@ -365,7 +365,7 @@ function renderRun() {
   const terminal = TERMINAL_STATES.includes(run.state);
   ui.resultHeading.hidden = !terminal;
   replaceLines(ui.runResult, terminal ? resultMessages(run).map(describe) : []);
-  const rows = run.state === "finished" ? familyRows(run.result) : [];
+  const rows = resultRows(run);
   ui.familyTable.hidden = rows.length === 0;
   ui.familyRows.replaceChildren(...rows.map(familyRow));
 }

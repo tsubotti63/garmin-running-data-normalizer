@@ -24,6 +24,7 @@ from typing import Any
 from .. import __version__
 from ..common.time import DEFAULT_TIMEZONE
 from ..diagnostics.doctor import DoctorError, doctor_input
+from ..stops import STOPS, stop_line
 from .folders import FolderError, list_folders
 from .outputs import OutputActionError, check_output, make_support_bundle, open_output
 from .runs import (
@@ -450,13 +451,18 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
 
-def serve_until_stopped(server: GuiServer, *, poll_interval: float = 0.5) -> None:
+def serve_until_stopped(
+    server: GuiServer, *, poll_interval: float = 0.5
+) -> dict[str, Any] | None:
     """Serve until Ctrl+C, /api/shutdown, or idle_timeout without an API request.
 
     The server does not stop for idleness while a run is active, and
     /api/shutdown is refused then. On Ctrl+C an active run is cancelled
-    first. The listening socket is closed before this function returns.
+    first, and its status is returned, for ``cancel_report`` (stage A5c);
+    otherwise None. The listening socket is closed before this function
+    returns.
     """
+    stopped: dict[str, Any] | None = None
     finished = threading.Event()
 
     def stop_when_idle() -> None:
@@ -474,8 +480,36 @@ def serve_until_stopped(server: GuiServer, *, poll_interval: float = 0.5) -> Non
         pass
     finally:
         finished.set()
+        active = server.runs.active()
         server.runs.stop()
+        if active:
+            stopped = server.runs.status()
         server.server_close()
+    return stopped
+
+
+def cancel_report(status: dict[str, Any]) -> list[str]:
+    """The lines for the terminal about the run that Ctrl+C stopped with the
+    server: the content that the CLI prints for a cancelled command, and the
+    names of the staging folders that it left, one on a line (stage A5c)."""
+    state = status.get("state")
+    if state == "finished_after_cancel":
+        lines = [
+            stop_line(
+                "RUN_CANCELLED_AFTER_OUTPUT",
+                "the run of the GUI was cancelled with Ctrl+C after it wrote its output",
+            )
+        ]
+    elif state == "cancelled":
+        lines = [stop_line("RUN_CANCELLED", "the run of the GUI was cancelled with Ctrl+C")]
+    elif state == "failed" and status.get("error_code") in STOPS:
+        code = str(status["error_code"])
+        lines = [stop_line(code, STOPS[code].what)]
+    else:
+        return []
+    for name in status.get("staging_folders") or []:
+        lines.append(f"left next to the output: {name}")
+    return lines
 
 
 __all__ = [
@@ -484,6 +518,7 @@ __all__ = [
     "LANGUAGES",
     "LAUNCH_KEY_HEADER",
     "STATIC_FILES",
+    "cancel_report",
     "load_static_files",
     "serve_until_stopped",
 ]

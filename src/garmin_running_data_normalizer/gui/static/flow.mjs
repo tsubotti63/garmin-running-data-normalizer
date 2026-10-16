@@ -319,6 +319,13 @@ export function findingMessages(finding) {
   return messages;
 }
 
+// The rows of the result table: for a finished run, and for one whose
+// cancellation came after it wrote its output, when its result is known
+// (stage A5c).
+export function resultRows(status) {
+  return FINISHED_STATES.includes(status?.state) ? familyRows(status.result) : [];
+}
+
 export function familyRows(result) {
   const families = result?.families ?? {};
   return Object.keys(families)

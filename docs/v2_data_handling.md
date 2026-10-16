@@ -1360,7 +1360,9 @@ step.
 - In the CLI, a line that starts with `ERROR [` is a stop (exit 2), and a
   line that starts with `NOTE [` is a notice that does not stop (stage
   A3d-3b). A program that reads the CLI's output can take only the first for
-  a stop.
+  a stop. From stage A5c, an `ERROR [` line also ends a command that `Ctrl+C`
+  cancelled (exit 130), and lines that start with `left ` name what such a
+  command left (see [Cancellation](#cancellation)).
 - From stage A5b, every stop of the CLI reads `ERROR [CODE]: <what happened>;
   <next step>`. The message of the stop says what happened, with the details
   that it may give, such as the place inside the input that cannot be opened
@@ -1608,9 +1610,63 @@ gives, for its entries and controls, are not in this table.
 | `OUTPUT_EXPERIENCE_FAILED` | the documents of the output could not be made | no output was written; this is a defect of this app, so please report the code |
 | `SNAPSHOT_CONTEXT_INVALID` | the input built from the Snapshot Store does not match the build | no output was written; this is a defect of this app, so please report the code |
 | `COMMAND_UNSUPPORTED` | the command is not supported | no output was written; this is a defect of this app, so please report the code |
+| `RUN_CANCELLED` | the command was cancelled with Ctrl+C before it finished | run the command again when you need its result, and when no command runs, delete what the lines after this one name, if any |
+| `RUN_CANCELLED_AFTER_OUTPUT` | the command was cancelled with Ctrl+C after it wrote its output, which is complete | use the output as it is, and check it first with validate-handoff if it is the output of a run; running the command again stops with OUTPUT_EXISTS |
 | `RUN_ALL_FAILED` | Run-All stopped unexpectedly | run the command again; if it stops again, please report the code |
 | `GOLDEN_PATH_FAILED` | normalize-activities stopped unexpectedly | run the command again; if it stops again, please report the code |
 | `COMMAND_FAILED` | the command stopped unexpectedly | run the command again; if it stops again, please report the code |
+
+### Cancellation
+
+From stage A5c, `Ctrl+C` ends every command of the CLI with one line and exit
+130, as a shell gives it for `SIGINT`, instead of a Python traceback. The exit
+code of a stop stays 2.
+
+- `ERROR [RUN_CANCELLED]: <command> was cancelled with Ctrl+C; <next step>`:
+  the command did not finish; run it again when you need its result.
+- `ERROR [RUN_CANCELLED_AFTER_OUTPUT]: <command> was cancelled with Ctrl+C
+  after it wrote its output; <next step>`: the cancellation came after the new
+  output of `run-all`, `snapshot run-all`, `snapshot build-input`,
+  `normalize-activities`, or `support-bundle` was put in its place, so the
+  output is complete. The exit code is 130 here too, and running the command
+  again stops with `OUTPUT_EXISTS`: a script that reads only the exit code
+  checks the output first, for example with `validate-handoff`, instead of
+  running the command again. `snapshot init` and `snapshot register` give the
+  same result when they run again, so they end with `RUN_CANCELLED` only.
+- One `Ctrl+C` leaves no part of an output: Run-All, the build of the
+  Snapshots, `normalize-activities` (also in an empty output folder that is
+  there already), the Support Bundle, and a new Snapshot Store remove what
+  they wrote. Until stage A5c, `snapshot build-input` left its hidden staging
+  folder next to its output, `normalize-activities` left the files that it
+  had moved into an empty output folder, and `support-bundle` left its hidden
+  temporary file.
+- A cancelled registration leaves its journal, as any registration that
+  stops does, and says so with `NOTE [SNAPSHOT_REGISTRATION_INCOMPLETE]`
+  after the `ERROR` line: the next registration completes the store.
+- A second `Ctrl+C` while a command cleans up can stop the cleanup. The lines
+  after the `ERROR` line then name what the command left, one on a line and
+  by name only, never by path: `left next to the output: <name>` for a hidden
+  folder or file that it made next to its output, `left in the output folder:
+  <name>` for one in an empty output folder of `normalize-activities`, and
+  `left in the store folder: <name>` for a part of a new store; a lock that a
+  registration left gives `NOTE [SNAPSHOT_STORE_LOCKED]`. Only what was not
+  there before the command started is named. Delete it when no command runs.
+  A temporary folder of the system (`garmin-export-zip-…` or
+  `garmin-snapshot-run-all-…`) that such a stop leaves is not named, because
+  it cannot be told from those of other runs; it can be deleted when no
+  command runs.
+- After the first `Ctrl+C`, and while a command that finished prints its
+  result, `Ctrl+C` is ignored until the command has printed its lines, as the
+  GUI's run does once its output is published, so that a command never ends
+  with a traceback. The handling of `Ctrl+C` is given back when the command
+  returns.
+- The GUI: a failure that the run reported before a cancellation arrived is
+  shown as the failure, with its code, where until stage A5c the
+  cancellation was shown; a staging folder is reported only when this run
+  made it; when `Ctrl+C` stops the GUI's server while a run is active, the
+  terminal shows the lines that the CLI prints for the same end of a run
+  (`gui.server.cancel_report`); and the page shows the result table also for
+  a run whose cancellation came after its output, when its result is known.
 
 ## Output shape
 
@@ -2456,7 +2512,14 @@ gives, for its entries and controls, are not in this table.
   `HANDOFF_INVALID` says to check first that the folder is the output of
   Run-All. `run-all`, `snapshot run-all`, and `snapshot build-input` keep
   the `OUTPUT_EXISTS` of v1.7.1 for the output `.` or `..`, which stage A5a
-  had made `OUTPUT_NAME_INVALID`.
+  had made `OUTPUT_NAME_INVALID`. From stage A5c, `Ctrl+C` ends every command
+  with `ERROR [RUN_CANCELLED]`, or `ERROR [RUN_CANCELLED_AFTER_OUTPUT]` when
+  the output was already written, and exit 130, where v1.7.1 printed a Python
+  traceback and ended as `SIGINT` does (exit 130 from a shell on POSIX,
+  0xC000013A on Windows); see [Cancellation](#cancellation). One `Ctrl+C` no
+  longer leaves the hidden staging folder of `snapshot build-input`, the
+  files that `normalize-activities` moved into an empty output folder, or the
+  hidden temporary file of `support-bundle`.
 - Python API: `DiscoveredAsset` is a plain class instead of a frozen
   dataclass. Its fields, its constructor, and the content that
   `discover_export` returns are unchanged, but dataclass equality, hashing,
@@ -2554,7 +2617,16 @@ gives, for its entries and controls, are not in this table.
   above; `stops` gains `SNAPSHOT_STORE_NOT_FOUND`, `SNAPSHOT_STORE_EMPTY`,
   and `SUPPORT_BUNDLE_EXISTS`; `output_location` gains `names_folder_itself`;
   `run_all` gains `ACTIVITIES_EMPTY_MESSAGE`; and `snapshot.store` gains
-  `STORE_NOT_FOUND_MESSAGE` and `INPUT_DISCOVERY_MESSAGE`.
+  `STORE_NOT_FOUND_MESSAGE` and `INPUT_DISCOVERY_MESSAGE`. From stage A5c,
+  `stops` gains `RUN_CANCELLED` and `RUN_CANCELLED_AFTER_OUTPUT`, and
+  `runner` `CANCELLED_EXIT_CODE`; `build_approved_input` removes its staging
+  folder, and `build_support_bundle` its temporary file, also when
+  `KeyboardInterrupt` passes through them, and `build_support_bundle` no
+  longer removes a file in the place of the bundle after it fails to put the
+  bundle there: it puts the bundle there in one step, so a file there then is
+  not its own; `gui.server.serve_until_stopped`
+  returns the status of the run that `Ctrl+C` cancelled, and the new
+  `gui.server.cancel_report` gives its lines.
 - Schema: the fields that a disagreement can leave empty are nullable (the
   Hill and Endurance `overall_score`, the four Race Prediction times,
   `vo2max`, and `training_status`), and so is `personal_records.activity_id`

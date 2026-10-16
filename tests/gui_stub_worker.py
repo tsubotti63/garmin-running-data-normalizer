@@ -50,10 +50,13 @@ def main() -> int:
     output = Path(args.output)
     progress = {"event": "progress", "stage": "normalizing", "step": "activities"}
 
-    if args.mode in {"wait", "publish-then-wait"}:
+    if args.mode in {"wait", "publish-then-wait", "fail-then-wait"}:
         follow_stop_signals()
         if args.mode == "publish-then-wait":
             output.mkdir()
+        if args.mode == "fail-then-wait":
+            # A failure that the manager reads before a cancellation arrives.
+            emit({"event": "failed", "code": "INPUT_ZIP_CORRUPT"})
         emit(progress)
         try:
             wait_forever()

@@ -269,6 +269,17 @@ STOPS: dict[str, Stop] = {
         "the input built from the Snapshot Store does not match the build", _DEFECT
     ),
     "COMMAND_UNSUPPORTED": Stop("the command is not supported", _DEFECT),
+    # Ctrl+C, which ends a command with exit 130 (stage A5c).
+    "RUN_CANCELLED": Stop(
+        "the command was cancelled with Ctrl+C before it finished",
+        "run the command again when you need its result, and when no command runs, "
+        "delete what the lines after this one name, if any",
+    ),
+    "RUN_CANCELLED_AFTER_OUTPUT": Stop(
+        "the command was cancelled with Ctrl+C after it wrote its output, which is complete",
+        "use the output as it is, and check it first with validate-handoff if it is the "
+        "output of a run; running the command again stops with OUTPUT_EXISTS",
+    ),
     # Stops that no code describes.
     "RUN_ALL_FAILED": Stop("Run-All stopped unexpectedly", _AGAIN),
     "GOLDEN_PATH_FAILED": Stop("normalize-activities stopped unexpectedly", _AGAIN),

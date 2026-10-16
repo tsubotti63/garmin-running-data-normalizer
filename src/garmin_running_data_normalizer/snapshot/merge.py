@@ -3054,7 +3054,8 @@ def build_approved_input(
             # into the public normalized payload or semantic digest.
             "processing_sequence": processing_labels,
         }
-    except Exception as exc:
+    except BaseException as exc:
+        # The build leaves no part of it, also on Ctrl+C (stage A5c).
         if stage.exists():
             shutil.rmtree(stage)
         # An error of writing the build: no free space, no permission, or a
