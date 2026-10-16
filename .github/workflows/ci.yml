@@ -87,6 +87,8 @@ jobs:
       - name: Run Windows synthetic workflows twice
         shell: powershell
         run: |
+          # The folder for the outputs must exist; no command makes it (stage A5a).
+          $null = New-Item -ItemType Directory -Force -Path .\workspace
           .\.venv\Scripts\python.exe -m garmin_running_data_normalizer normalize-activities --input .\examples\synthetic\garmin_export --output .\workspace\windows-golden
           if ($LASTEXITCODE -ne 0) { throw "Synthetic normalize-activities failed with exit code $LASTEXITCODE" }
           .\.venv\Scripts\python.exe .\scripts\compare_deterministic_outputs.py .\examples\synthetic\expected\golden_path .\workspace\windows-golden
@@ -147,6 +149,9 @@ jobs:
       - name: Verify Windows marks of filled values
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_filled_value_marks.py -q
+      - name: Verify Windows pre-run checks and warning totals
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_pre_run_checks.py -q
       - name: Verify Windows rows left out
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_rows_left_out.py -q
@@ -194,6 +199,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "isolated wheel version check failed with exit code $LASTEXITCODE" }
           .\.wheel-venv\Scripts\python.exe -c "from garmin_running_data_normalizer.gui.server import load_static_files; assert all(body for body, _ in load_static_files().values())"
           if ($LASTEXITCODE -ne 0) { throw "isolated wheel GUI static file check failed with exit code $LASTEXITCODE" }
+          # The folder for the outputs must exist; no command makes it (stage A5a).
+          $null = New-Item -ItemType Directory -Force -Path .\workspace
           .\.wheel-venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-wheel-run-all
           if ($LASTEXITCODE -ne 0) { throw "isolated wheel Synthetic Run-All failed with exit code $LASTEXITCODE" }
           .\.wheel-venv\Scripts\python.exe -c "import json, pathlib; p=pathlib.Path('workspace/windows-wheel-run-all/run_summary.json'); assert p.is_file(); s=json.loads(p.read_text(encoding='utf-8')); assert s['status'] == 'PASS_WITH_WARNINGS'; assert s['family_results']['activities']['detected_asset_count'] == 1; assert s['family_results']['activities']['processed_asset_count'] == 1"
@@ -212,6 +219,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "isolated sdist tzdata check failed with exit code $LASTEXITCODE" }
           .\.sdist-venv\Scripts\python.exe -m garmin_running_data_normalizer --version
           if ($LASTEXITCODE -ne 0) { throw "isolated sdist version check failed with exit code $LASTEXITCODE" }
+          # The folder for the outputs must exist; no command makes it (stage A5a).
+          $null = New-Item -ItemType Directory -Force -Path .\workspace
           .\.sdist-venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-sdist-run-all
           if ($LASTEXITCODE -ne 0) { throw "isolated sdist Synthetic Run-All failed with exit code $LASTEXITCODE" }
           .\.sdist-venv\Scripts\python.exe -c "import json, pathlib; p=pathlib.Path('workspace/windows-sdist-run-all/run_summary.json'); assert p.is_file(); s=json.loads(p.read_text(encoding='utf-8')); assert s['status'] == 'PASS_WITH_WARNINGS'; assert s['family_results']['activities']['detected_asset_count'] == 1; assert s['family_results']['activities']['processed_asset_count'] == 1"

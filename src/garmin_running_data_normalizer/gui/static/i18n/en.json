@@ -99,6 +99,7 @@
   "family_status.processed": "Processed",
   "family_status.processed_empty": "Processed, no records",
   "family_status.skipped_not_present": "Not in the export",
+  "finding.activities_empty": "The activity summary files (summarizedActivities) hold no activity that can be used, so the run would stop.",
   "finding.activities_missing": "No activity summary (summarizedActivities) was found.",
   "finding.activities_unreadable": "The activity summary files (summarizedActivities) cannot be read, such as a file that is too large.",
   "finding.files_left_out": "Some files cannot be read, such as a damaged ZIP or a file that is too large. The run will leave them out and go on.",

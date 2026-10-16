@@ -37,6 +37,7 @@ from .output_location import (
     check_output_location,
     output_path_too_long,
     path_error_code,
+    valid_output_name,
     write_error_code,
 )
 from .normalizers.activities import normalize_activities
@@ -131,6 +132,15 @@ def _validate_paths(input_path: str | Path, output_path: str | Path) -> tuple[Pa
     try:
         if requested_output.is_symlink():
             raise GoldenPathError("output directory must not be a symbolic link", "OUTPUT_SYMLINK")
+        # The name of an output folder that this command makes must be one
+        # that Run-All and the GUI take too (stage A5a). It is checked as it
+        # was given: Windows drops a dot or a space at the end of a name when
+        # it resolves a path. An empty folder that is there already keeps its
+        # name.
+        if not requested_output.exists() and not valid_output_name(requested_output.name):
+            raise GoldenPathError(
+                OUTPUT_LOCATION_MESSAGES["OUTPUT_NAME_INVALID"], "OUTPUT_NAME_INVALID"
+            )
         output_root = requested_output.resolve()
         if _is_within(output_root, input_root):
             raise GoldenPathError(
@@ -151,7 +161,8 @@ def _validate_paths(input_path: str | Path, output_path: str | Path) -> tuple[Pa
 def _check_output_place(output_root: Path) -> None:
     """Check now the place where the output will be written (stage A3d-3a):
     an empty output folder that is there already is written in, and a new
-    one is made next to the place of its staging folder."""
+    one is made next to the place of its staging folder, in a folder that
+    must exist (stage A5a)."""
     if not output_root.exists():
         try:
             check_output_location(
@@ -679,8 +690,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "run-all" or (
         args.command == "snapshot" and args.snapshot_command == "run-all"
     ):
+        totals = result["warning_totals"]
         print(f"STATUS: {result['status']}")
         print(f"exit: {result['exit_code']}")
+        # The total, the count of each family, and on their own line the
+        # warnings that belong to no family, as the GUI reports them (stage
+        # A5a); the last line is printed even when its counts are 0.
+        print(f"warnings: {totals['total']}")
         for family, details in result["family_results"].items():
             print(
                 f"{family}: detected={details['detected_asset_count']} "
@@ -689,6 +705,10 @@ def main(argv: list[str] | None = None) -> int:
                 f"records={details['record_count']} "
                 f"warnings={details['warning_count']} errors={details['error_count']}"
             )
+        print(
+            "other warnings: "
+            + " ".join(f"{name}={count}" for name, count in totals["other"].items())
+        )
         print(f"generated: {', '.join(result['generated_files'])}")
         print(f"digest: {result['deterministic_digest']}")
         return int(result["exit_code"])
@@ -710,6 +730,9 @@ def main(argv: list[str] | None = None) -> int:
         print("PASS")
         print(f"datasets: {result['dataset_count']}")
         print(f"relationships: {result['explicit_relationship_count']}")
+        # The total of the run's warnings, as the GUI's check of an output
+        # reports it (stage A5a).
+        print(f"warnings: {result['warning_count']}")
         print(f"first-read: {result['first_read']}")
         print(f"analysis-entry: {result['analysis_entry_point']}")
         return 0

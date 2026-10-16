@@ -348,19 +348,17 @@ class OutputPlaceTest(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertTrue(message.startswith("ERROR [OUTPUT_PARENT_NOT_WRITABLE]: "), message)
 
-    def test_missing_folders_above_the_output_are_made_only_when_it_is_written(self) -> None:
+    def test_a_folder_for_the_output_that_does_not_exist_is_not_made(self) -> None:
+        # Until stage A5a, Run-All made the missing folders above the output
+        # when it wrote; the folder for the output must exist now, as in the
+        # GUI, so that a mistyped path makes no folders.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = export(root, "export", files())
-            output = root / "new" / "deeper" / "output"
-            run_all(source, output)
-            self.assertTrue(output.is_dir())
-            self.assertEqual([path.name for path in (root / "new" / "deeper").iterdir()], ["output"])
-            self.assertEqual(sorted(path.name for path in root.iterdir()), ["export", "new"])
-            # A run that stops leaves no folder that it would have made.
-            with self.assertRaises(RunAllError):
-                run_all(root / "missing-input", root / "other" / "output")
-            self.assertFalse((root / "other").exists())
+            with self.assertRaises(RunAllError) as raised:
+                run_all(source, root / "new" / "deeper" / "output")
+            self.assertEqual(raised.exception.code, "OUTPUT_PARENT_NOT_FOUND")
+            self.assertEqual(sorted(path.name for path in root.iterdir()), ["export"])
 
     @unittest.skipIf(os.name == "nt", "Windows refuses such a name in other ways, which the GUI tests cover")
     def test_a_name_too_long_for_the_system(self) -> None:
