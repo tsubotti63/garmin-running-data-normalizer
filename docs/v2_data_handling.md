@@ -982,6 +982,35 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     Sleep duration fields, which stopped the run in v1.7.1; the audit record
     counts such rows in `direct_aliases_disagree_count`. Stage A4 applies it to
     the other fields.
+  - From stage A4d-1, this applies to the UDS date (`calendarDate` and
+    `date`), steps (`totalSteps` and `steps`), and distance
+    (`totalDistanceMeters` and `distanceMeters`); the Sleep score (the
+    `overallScore` and the `overall` value of `sleepScores`, `overallScore`,
+    and `sleepScore`), each Sleep stage and the time awake (for example
+    `deepSleepSeconds` and `deep_sleep_seconds`); and the Gear type
+    (`gearTypeName` and `gearType`). A field whose names disagree is empty
+    and listed in `disagreeing_fields`, the audit record keeps the values in
+    `disagreements`, and `VALUES_DISAGREE` names the family; the audit record
+    of UDS, Sleep, or Gear also counts such rows, by field, in
+    `aliases_disagree_counts`, only when there are any. Values are compared
+    as values, so 5 and 5.0 are one value, and dates as days, so
+    `2030-03-01` and `2030-03-01T00:00:00` are one day. A value of another
+    form is no value of the field: the audit record keeps it and
+    `DATA_VALUE_INVALID` names it, while the field can still hold the value
+    of another name. A UDS record whose names of the date give different
+    days has no one day, so it is left out with the reason
+    `calendar_date_aliases_disagree`, as a record without a usable date is.
+    When a Sleep stage disagrees, the stages give no sum, so the duration is
+    empty too, without being listed as disagreeing: the audit record counts
+    such rows as `stage_aliases_disagree` in `sleep_duration_source_counts`.
+    A Snapshot run reads the names as a one-shot run does. The build passes
+    every daily observation with all its names. Across the time points of a
+    store, a Gear record that uses both names of its type has them as one
+    field: the last time point that holds either name gives the names that
+    go on, with their value, the other name is not carried from an earlier
+    time point, and a change is an update listed once, under
+    `gearTypeName|gearType` (merge rules v2.16). A Gear record that uses one
+    name is merged as before.
   - Filled values are marked in the row: `sleep_day_source`,
     `sleep_duration_source`, and `start_time_source`.
   - HRV values that disagree follow
@@ -1494,6 +1523,12 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   candidates, only when there is something to count. Snapshot outputs give
   the merge rules version v2.15; the records that the build passes do not
   change.
+- Stage A4d-1 adds `aliases_disagree_counts` to the audit records of UDS,
+  Sleep, and Gear, only when the names of a field disagree. The UDS audit
+  record can count the reason `calendar_date_aliases_disagree`, and the Sleep
+  audit record the duration source `stage_aliases_disagree`. Snapshot outputs
+  give the merge rules version v2.16, and the updates of a Gear record whose
+  Snapshots use both names of its type list them as `gearTypeName|gearType`.
 - New error codes: `INPUT_ZIP_CORRUPT`, `INPUT_TOO_LARGE`, and
   `TEMP_SPACE_INSUFFICIENT` (stage A1), `INPUT_MULTIPLE_EXPORTS` (stage A3a),
   `INPUT_NOT_READABLE`, `OUTPUT_SPACE_INSUFFICIENT`,
@@ -1643,8 +1678,10 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   key of a link under a name of its own and writes the link with the fields
   of the Export only, and `garmin_snapshot_merge_rules:v2.15` from stage
   A4c-2, which counts for Run-All the fields of the daily rows and the
-  Lactate Threshold candidates that their dataset does not read,
-  in `config/garmin_snapshot_merge_rules_v2.json`. For these
+  Lactate Threshold candidates that their dataset does not read, and
+  `garmin_snapshot_merge_rules:v2.16` from stage A4d-1, which merges the two
+  names of the Gear type as one field across time points when a record uses
+  both, in `config/garmin_snapshot_merge_rules_v2.json`. For these
   datasets they replace the merge fields of the v1.0 registry; the other
   datasets follow the v1.0 registry until stage A3d. A build records
   `merge_rules_version` in `snapshot/snapshot_lineage.json`, the approved input
@@ -1860,6 +1897,15 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   and Endurance, and Run-All takes the counts from it, applying the rule of
   the names (merge rules v2.15). The records that it passes do not change,
   and neither do the counts of the merge summaries and of the copies.
+- Stage A4d-1: a Gear record whose Snapshots write its type under both
+  names, `gearTypeName` and `gearType`, has them as one field across time
+  points: the last time point that holds either name gives the names that
+  go on, with their value; the other name is neither carried from an earlier
+  time point nor written as a probe; and a change is listed once in the
+  record's updates, under `gearTypeName|gearType` (merge rules v2.16).
+  Before, the build carried the name that the last time point lacked, so
+  Run-All read both names in one row. A record that uses one name, and the
+  daily records, are merged as before.
 
 ## Golden outputs and tests
 
@@ -1939,7 +1985,16 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Records that no dataset reads, and the FIT audit counts the FIT messages
   and developer fields that no dataset reads, which v1.7.1 dropped without
   a count; from stage A4c-2, so do the audit records of the daily datasets
-  and of the Lactate Threshold candidates.
+  and of the Lactate Threshold candidates. From stage A4d-1, a value that a
+  later name holds while an earlier one is null, empty, or of another form
+  fills the field (v1.7.1 left the UDS steps and distance empty when
+  `totalSteps` or `totalDistanceMeters` was null, and read the Sleep score
+  and stages and the Gear type from the first name only), and values that
+  differ make the field disagree. A UDS record whose `calendarDate` cannot
+  be read but whose `date` can is kept with that day, where v1.7.1 left it
+  out, and one whose two dates differ is left out. `DATA_VALUE_INVALID` can
+  name a value of another form while its field holds the value of another
+  name. An Export without a second name gives the same output.
 - Snapshots: existing stores need no migration; rerun `snapshot run-all`.
   Daily values that differ across Snapshots no longer stop the build, the
   Endurance Score and UDS days that v1.7.1 removed come back with the
@@ -2001,8 +2056,10 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Export, which v1.7.1 read as a ZIP file of the Export and which could stop
   the run, and lists the files that a run does not read by Snapshot number.
   From stage A4c-1, the build writes a link with the fields of the Export
-  only, and from stage A4c-2, it counts for Run-All the fields that it
-  leaves out of the daily rows. The merge rules v2.15 are published in
+  only, from stage A4c-2, it counts for Run-All the fields that it leaves
+  out of the daily rows, and from stage A4d-1, it merges the two names of
+  the Gear type as one field across time points. The merge rules v2.16 are
+  published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around

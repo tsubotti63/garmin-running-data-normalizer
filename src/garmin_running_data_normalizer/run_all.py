@@ -1191,6 +1191,9 @@ def _record_audits(
         if merge.disagreements:
             audit["disagreement_key_count"] = len(merge.disagreements)
             audit["disagreements"] = list(merge.disagreements)
+        if merge.alias_disagreement_counts:
+            # The rows whose source names of a field disagree (stage A4d-1).
+            audit["aliases_disagree_counts"] = dict(merge.alias_disagreement_counts)
         left_out = Counter((rows_left_out or {}).get(name) or {})
         # Items that are empty values, counted apart and not announced, as the
         # daily audit records count their empty records (stage A3d-2c-2).

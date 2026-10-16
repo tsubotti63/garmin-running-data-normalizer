@@ -5,6 +5,7 @@ from typing import Any, Iterable
 from ..common.time import daily_calendar_date
 from ..common.values import ValueReader
 from ..intake.discovery import DiscoveredAsset
+from .aliases import ROW_VALUE_ALTERNATIVES, AliasDisagreements, alias_value, value_alternatives
 from .daily_metrics import (
     DailyMetricResult,
     RowsLeftOut,
@@ -61,13 +62,34 @@ UDS_FIELDS_WITHOUT_VALUES = ("calendar_date",)
 UDS_SOURCE_FIELDS = frozenset({"calendarDate", "date", *value_source_names(UDS_VALUE_SOURCES)})
 
 
+# The names of the date of a UDS record (stage A4d-1).
+UDS_DATE_NAMES = ("calendarDate", "date")
+
+
+def _calendar_dates(raw: dict[str, Any]) -> list[str]:
+    """The days that the names of the date give, each once, as dates are read:
+    the same day written in two forms is one day (stage A4d-1)."""
+    days: list[str] = []
+    for name in UDS_DATE_NAMES:
+        day = daily_calendar_date(raw.get(name))
+        if day is not None and day not in days:
+            days.append(day)
+    return days
+
+
 def _calendar_date(raw: dict[str, Any]) -> str | None:
-    return daily_calendar_date(raw.get("calendarDate") or raw.get("date"))
+    days = _calendar_dates(raw)
+    return days[0] if len(days) == 1 else None
 
 
 def uds_left_out_reason(raw: dict[str, Any]) -> str | None:
-    """Return why a UDS record is left out, or None when it is kept."""
-    if _calendar_date(raw) is None:
+    """Return why a UDS record is left out, or None when it is kept. A record
+    whose names of the date give different days has no one day: the key of
+    the record is not known (stage A4d-1)."""
+    days = _calendar_dates(raw)
+    if len(days) > 1:
+        return "calendar_date_aliases_disagree"
+    if not days:
         return "missing_or_invalid_calendar_date"
     return None
 
@@ -95,6 +117,7 @@ def normalize_uds(
     accepted = []
     left_out = RowsLeftOut(value_source_names(UDS_VALUE_SOURCES))
     unread = UnreadFields(UDS_SOURCE_FIELDS)
+    aliases = AliasDisagreements()
     for raw in rows:
         if left_out.add_mark(raw):
             continue
@@ -108,12 +131,23 @@ def normalize_uds(
         stress = raw.get("allDayStress")
         total = _total_stress(stress)
         values = ValueReader()
+        # The steps and the distance have two names each (stage A4d-1).
+        alternatives: dict[str, list[Any]] = {}
+        named: dict[str, Any] = {}
+        for field in ("steps", "distance_meters"):
+            named[field], held = alias_value(
+                values.number(raw.get(name), field) for name in UDS_VALUE_SOURCES[field]
+            )
+            if held:
+                alternatives[field] = held
+        aliases.add(alternatives, snapshot_numbers(raw))
         accepted.append(
             {
                 "_snapshot_numbers": snapshot_numbers(raw),
+                ROW_VALUE_ALTERNATIVES: alternatives,
                 "calendar_date": date,
-                "steps": values.number(raw.get("totalSteps") if "totalSteps" in raw else raw.get("steps"), "steps"),
-                "distance_meters": values.number(raw.get("totalDistanceMeters") if "totalDistanceMeters" in raw else raw.get("distanceMeters"), "distance_meters"),
+                "steps": named["steps"],
+                "distance_meters": named["distance_meters"],
                 "active_calories": values.number(raw.get("activeKilocalories"), "active_calories"),
                 "bmr_calories": values.number(raw.get("bmrKilocalories"), "bmr_calories"),
                 "resting_heart_rate": values.number(raw.get("restingHeartRate"), "resting_heart_rate"),
@@ -131,7 +165,7 @@ def normalize_uds(
                 "_value_problems": values.problems,
             }
         )
-    return finalize_daily(
+    result = finalize_daily(
         dataset="uds_daily",
         key_fields=("calendar_date",),
         selected_assets=selected,
@@ -145,11 +179,15 @@ def normalize_uds(
         presence_flags=frozenset(
             {"raw_has_body_battery", "raw_has_all_day_stress", "raw_has_body_battery_feedback"}
         ),
+        alternatives=value_alternatives,
         unread_fields=unread.audit_fields(),
     )
+    result.audit.update(aliases.audit_fields())
+    return result
 
 
 __all__ = [
+    "UDS_DATE_NAMES",
     "UDS_FIELDS",
     "UDS_FIELDS_WITHOUT_VALUES",
     "UDS_VALUE_SOURCES",
