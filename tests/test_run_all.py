@@ -666,7 +666,9 @@ class RunAllTest(unittest.TestCase):
             csv_header = (output / "analysis/activities.csv").read_text(encoding="utf-8").splitlines()[0]
             self.assertNotIn("activity_id", csv_header)
             self.assertNotIn("memo", csv_header)
-            self.assertNotIn("source", csv_header)
+            # No provenance: the only column that names a source is the source
+            # field of the start, whose values are field names (stage A4d-2).
+            self.assertEqual([column for column in csv_header.split(",") if "source" in column], ["start_time_source"])
             self.assertNotIn("sha", csv_header)
 
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")

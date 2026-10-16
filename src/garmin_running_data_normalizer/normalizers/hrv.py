@@ -344,7 +344,10 @@ def normalize_hrv_daily_assets(
             ),
             "parse_status_counts": dict(sorted(parse_status_counts.items())),
             "source_definition": "non-running FIT message 370 field 1 raw divided by 128",
-            "date_basis": "fit_end_jst_date_from_message_370_field_253_timestamp",
+            # The local date in the timezone of the run (stage A4d-2), which
+            # the name of the basis no longer names.
+            "date_basis": "fit_end_local_date_from_message_370_field_253_timestamp",
+            "date_timezone": timezone_name,
             "analysis_role": "analysis_reference_only",
             "source_of_truth": False,
             "daily_coach_use": False,

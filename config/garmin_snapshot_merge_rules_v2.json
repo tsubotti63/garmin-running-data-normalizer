@@ -110,8 +110,14 @@
     "policy": "passed_to_run_all_as_marks_without_a_key_and_left_out_as_in_a_one_shot_run",
     "same_content": "passed_once_with_one_snapshot_number_per_occurrence"
   },
-  "merge_rules_version": "garmin_snapshot_merge_rules:v2.16",
+  "merge_rules_version": "garmin_snapshot_merge_rules:v2.17",
   "names_of_one_field": {
+    "activities": [
+      [
+        "startTimeGmt",
+        "beginTimestamp"
+      ]
+    ],
     "change": "listed_once_under_the_names_joined_by_a_vertical_bar",
     "daily_datasets": "observations_passed_with_every_name_run_all_reads_the_names",
     "gear": [

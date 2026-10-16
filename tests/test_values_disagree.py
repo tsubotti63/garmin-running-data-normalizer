@@ -182,12 +182,15 @@ def write_agreeing_export(root: Path) -> Path:
 
 
 def values_digest(output: Path) -> str:
-    """Digest the normalized values and analysis tables without the stage A2a additions."""
-    new_columns = {"disagreeing_fields", "hill_disagreeing_fields", "endurance_disagreeing_fields"}
+    """Digest the normalized values and analysis tables without the stage A2a
+    additions, nor the marks of filled values and the number of a FIT
+    sub-sport that stage A4d-2 adds."""
+    new_fields = {"disagreeing_fields", "start_time_source", "sleep_day_source", "sleep_duration_source", "sub_sport_code"}
+    new_columns = {"disagreeing_fields", "hill_disagreeing_fields", "endurance_disagreeing_fields", "start_time_source"}
     digest = hashlib.sha256()
     for path in sorted((output / "normalized").glob("*.json")):
         rows = json.loads(path.read_text(encoding="utf-8"))
-        values = [{key: value for key, value in row.items() if key != "disagreeing_fields"} for row in rows]
+        values = [{key: value for key, value in row.items() if key not in new_fields} for row in rows]
         digest.update(path.name.encode() + b"\n" + json.dumps(values, sort_keys=True).encode() + b"\n")
     for path in sorted((output / "analysis").glob("*.csv")):
         reader = csv.DictReader(io.StringIO(path.read_text(encoding="utf-8")))

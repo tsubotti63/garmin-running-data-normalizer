@@ -221,8 +221,10 @@ class SleepContractRestorationTest(unittest.TestCase):
 
     def test_schema_and_dataset_invariants_are_unchanged(self) -> None:
         self.assertEqual(len(DATASET_TABLE), 17)
-        # Stage A4a adds the two reasons of an activity_gear link.
-        self.assertEqual(sum(len(fields) for fields in DATASET_FIELDS.values()), 243)
+        # Stage A4a adds the two reasons of an activity_gear link, and stage
+        # A4d-2 the marks of the start of an Activity and of the Sleep day and
+        # duration, and the number of a FIT sub-sport.
+        self.assertEqual(sum(len(fields) for fields in DATASET_FIELDS.values()), 247)
         self.assertEqual(SLEEP_DAILY_FIELDS[0], "sleep_day")
         descriptor = _field_descriptor("sleep_daily", "sleep_duration_minutes_ex_awake")
         self.assertEqual(descriptor["origin"], "derived")

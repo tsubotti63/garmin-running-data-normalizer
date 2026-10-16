@@ -269,6 +269,9 @@ SLEEP_DAILY_FIELDS = (
     "sleep_limitation_type",
     "sleep_reason_code",
     "sleep_source_available_for_analysis_flag",
+    # The marks of the values filled from another source field (stage A4d-2).
+    "sleep_day_source",
+    "sleep_duration_source",
 )
 
 # The source fields of each value field (stage A3d-1); the other fields are the
@@ -300,6 +303,8 @@ SLEEP_FIELDS_WITHOUT_VALUES = (
     "sleep_limitation_type",
     "sleep_reason_code",
     "sleep_source_available_for_analysis_flag",
+    "sleep_day_source",
+    "sleep_duration_source",
 )
 # The source fields that Sleep reads; the audit record counts the others by
 # name (stage A4c-2).
@@ -392,6 +397,8 @@ def _public_sleep_review_row(
         "sleep_limitation_type": "duplicate_sleep_day",
         "sleep_reason_code": "duplicate_sleep_day_no_automatic_selection",
         "sleep_source_available_for_analysis_flag": False,
+        "sleep_day_source": None,
+        "sleep_duration_source": None,
     }
 
 
@@ -435,8 +442,12 @@ def normalize_sleep_daily_assets(
             raw.get("sleepEndTimestampGMT"), timezone_name
         )
         sleep_day = daily_calendar_date(raw.get("calendarDate"))
+        # The day comes from the calendar date, or else from the end time
+        # (stage A4d-2 marks which).
+        sleep_day_source = "calendarDate"
         if sleep_day is None and end_local is not None:
             sleep_day = end_local[:10]
+            sleep_day_source = "sleepEndTimestampGMT"
         reason = sleep_left_out_reason(raw, timezone_name)
         if reason is not None:
             left_out.add(raw, reason)
@@ -506,7 +517,8 @@ def normalize_sleep_daily_assets(
                 "sleep_limitation_type": limitation,
                 "sleep_reason_code": reason,
                 "sleep_source_available_for_analysis_flag": available,
-                "_sleep_duration_source": duration_source,
+                "sleep_day_source": sleep_day_source,
+                "sleep_duration_source": duration_source,
                 "_sleep_duration_alternatives": [value / 60.0 for value in disagreeing],
                 "_value_problems": values.problems,
             }

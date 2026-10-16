@@ -123,10 +123,12 @@ class AnalysisTableColumnsTest(unittest.TestCase):
             header, rows = read_rows(output / "analysis/activities.csv")
             self.assertEqual(
                 header,
-                [*BASE_COLUMNS, *DURATION_COLUMNS, *FIT_COLUMNS, "disagreeing_fields"],
+                [*BASE_COLUMNS, *DURATION_COLUMNS, *FIT_COLUMNS, "disagreeing_fields", "start_time_source"],
             )
             self.assertEqual(tuple(header), ACTIVITIES_CSV_COLUMNS)
             self.assertEqual({row["disagreeing_fields"] for row in rows.values()}, {""})
+            # The start of these synthetic Activities comes from startTimeGmt (stage A4d-2).
+            self.assertEqual({row["start_time_source"] for row in rows.values()}, {"startTimeGmt"})
 
             activities = {
                 item["garmin_activity_key"]: item

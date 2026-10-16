@@ -144,6 +144,9 @@ jobs:
       - name: Verify Windows values that several source names give
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_aliases.py -q
+      - name: Verify Windows marks of filled values
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_filled_value_marks.py -q
       - name: Verify Windows rows left out
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_rows_left_out.py -q

@@ -36,6 +36,7 @@ from ..common.values import (
 )
 from .aliases import ROW_VALUE_ALTERNATIVES
 from .daily_metrics import (
+    FILLED_VALUE_MARKS,
     _value_order,
     copies_within_snapshots,
     merge_observations,
@@ -249,6 +250,9 @@ def merge_repeated_records(dataset: str, rows: list[dict[str, Any]]) -> RecordMe
         else:
             groups.setdefault(identity, []).append(row)
     naming = _NAMING_FIELDS[dataset]
+    # The marks of filled values, which copies are compared without and which
+    # take the best-ranked mark (stage A4d-2).
+    marks = FILLED_VALUE_MARKS.get(dataset, {})
     flags = _PRESENCE_FLAGS.get(dataset, frozenset())
     identifiers = _IDENTIFIER_FIELDS.get(dataset, frozenset())
 
@@ -285,15 +289,16 @@ def merge_repeated_records(dataset: str, rows: list[dict[str, Any]]) -> RecordMe
             and not _is_provenance(field)
             and field != "disagreeing_fields"
         ]
-        copies += _copy_count(public, numbers, fields, form)
+        compared = [field for field in fields if field not in marks]
+        copies += _copy_count(public, numbers, compared, form)
         row = dict(public[0])
         entry: dict[str, Any] | None = None
         if len(group) == 1 and not any(held):
             row["disagreeing_fields"] = []
         else:
-            entry = _merge_group(row, public, numbers, fields, flags, form, absent, held)
+            entry = _merge_group(row, public, numbers, fields, flags, form, absent, held, marks)
         for field_rows in probes.get(identity, {}).values():
-            entry = _apply_probes(row, field_rows, fields, flags, form, entry)
+            entry = _apply_probes(row, field_rows, compared, flags, form, entry)
         output.append(row)
         if entry is not None:
             entry["key"] = {field: row.get(field) for field in STABLE_KEYS[dataset]}
@@ -344,13 +349,15 @@ def _merge_group(
     form: Callable[[str, Any], str],
     absent: Counter[str],
     held: list[dict[str, list[Any]]] | None = None,
+    marks: Mapping[str, tuple[str, tuple[str, ...]]] | None = None,
 ) -> dict[str, Any] | None:
     """Merge the rows of one record into ``row``; return its disagreements, if any.
 
     An empty value (null, "", [], or {}) means that the row has no value, as
     a missing field does; when no row has a value, the first row's is kept.
     ``held`` gives, for each row, the values of its fields whose source names
-    disagree (stage A4d-1).
+    disagree (stage A4d-1); ``marks`` are the marks of filled values, which
+    take the best-ranked mark (stage A4d-2).
     """
     snapshots = numbers if any(number for items in numbers for number in items) else None
     merged = merge_observations(
@@ -362,6 +369,7 @@ def _merge_group(
         snapshots=snapshots,
         form=form,
         is_absent=is_empty,
+        marks=marks,
     )
     row.update(merged.row)
     row["disagreeing_fields"] = list(merged.disagreeing_fields)

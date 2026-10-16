@@ -296,6 +296,9 @@ ACTIVITIES_CSV_COLUMNS = (
     "fit_total_ascent_m",
     "fit_total_descent_m",
     "disagreeing_fields",
+    # The source field of the start, from which the date and time come
+    # (stage A4d-2).
+    "start_time_source",
 )
 # analysis/activities.csv columns converted from Activity millisecond fields.
 ACTIVITIES_CSV_DURATION_COLUMNS = (
@@ -1109,6 +1112,14 @@ def _invalid_value_counts(
     return [(name, int(count)) for name, count in counts.items() if count]
 
 
+def _activity_month(record: dict[str, Any]) -> str:
+    """The month of an Activity for the External-safe Pack; empty for an
+    Activity without a date, which v1.7.1 wrote as the text None (stage
+    A4d-2)."""
+    date = record.get("activity_date_local")
+    return "" if date is None else str(date)[:7]
+
+
 def _value_types(dataset: str) -> dict[str, str]:
     """The logical type of each value field of a normalized dataset: not
     ``disagreeing_fields``, which the merge of repeated records adds, nor the
@@ -1415,8 +1426,10 @@ def _external_safe_pack(
     writer.writeheader()
     for record in sorted(
         activities,
+        # The Activities without a date come last, as they did.
         key=lambda item: (
-            str(item.get("activity_date_local", ""))[:7],
+            item.get("activity_date_local") is None,
+            _activity_month(item),
             str(item.get("activity_type", "")),
             str(item.get("distance_m", "")),
             str(item.get("duration_sec", "")),
@@ -1425,7 +1438,7 @@ def _external_safe_pack(
         writer.writerow(
             {
                 **record,
-                "activity_month": str(record.get("activity_date_local", ""))[:7],
+                "activity_month": _activity_month(record),
             }
         )
     safe_schema = {

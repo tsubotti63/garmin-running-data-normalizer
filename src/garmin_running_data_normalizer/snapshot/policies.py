@@ -308,8 +308,9 @@ FUTURE_READY_DATASETS = ("health_status",)
 # v2.16, the build merges the source names of one field (the Gear type) as one
 # field across time points when a record uses more than one of them: the last
 # time point that holds any of them gives the names that go on, and a change
-# is listed once, under the names joined by "|" (stage A4d-1).
-MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.16"
+# is listed once, under the names joined by "|" (stage A4d-1). From v2.17, so
+# does it the two names of the start of an Activity (stage A4d-2).
+MERGE_RULES_VERSION = "garmin_snapshot_merge_rules:v2.17"
 MERGE_RULES: dict[str, Any] = {
     "merge_rules_version": MERGE_RULES_VERSION,
     "store_policy_registry_version": REGISTRY_VERSION,
@@ -472,6 +473,7 @@ MERGE_RULES: dict[str, Any] = {
     # The source names of one field of the records that the build merges
     # across time points (stage A4d-1).
     "names_of_one_field": {
+        "activities": [["startTimeGmt", "beginTimestamp"]],
         "gear": [["gearTypeName", "gearType"]],
         "records_using_two_or_more_names": "one_field_across_time_points_the_latest_time_point_holding_any_name_gives_the_names",
         "names_not_given_by_that_time_point": "not_carried_and_not_written_as_probes",

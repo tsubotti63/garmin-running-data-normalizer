@@ -1,6 +1,6 @@
 {
   "dataset": "activities",
-  "deterministic_digest": "30718efb955f05568178b6d9f2395a10a3dd44508d3658e3090ee6975d4cbaf6",
+  "deterministic_digest": "dffccc94e6eb21813d2f0e2fdc22d49d2d2eeabfa4642dc2485a2482465f039a",
   "format": "garmin-running-data-normalizer-golden-path-v1",
   "input_assets": [
     {
@@ -12,14 +12,14 @@
   "local_timezone": "Asia/Tokyo",
   "outputs": [
     {
-      "bytes": 1099,
+      "bytes": 1140,
       "path": "normalized_activities.json",
-      "sha256": "dc9d316b434aee1a87a287d1d57ed325589914d0ec3024bafa7518f53444a92a"
+      "sha256": "b78efdfcaad89d5e40d72bb16ea52e5dc6a60547ea93e63486bcbf7208701157"
     },
     {
       "bytes": 348,
       "path": "qa_summary.json",
-      "sha256": "b832be463ae0e1cb3b8353aa1eeb1727897dc9322ed3327af24d8f92214a417f"
+      "sha256": "bff2dcd043b558aebee6d677806b80a45240c97fa266c13fb6e9475f4edb7976"
     }
   ],
   "record_grain": "activity",

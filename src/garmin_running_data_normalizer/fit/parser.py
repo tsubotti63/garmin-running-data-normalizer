@@ -615,6 +615,8 @@ def parse_fit_export(
                 "start_datetime_local": session.get("start_time"),
                 "sport": fit_sport,
                 "sub_sport": fit_sub_sport,
+                # The number as recorded, also when it has no name (stage A4d-2).
+                "sub_sport_code": sub_code,
                 "distance_m": session.get("total_distance"),
                 "elapsed_time_sec": session.get("total_elapsed_time"),
                 "timer_time_sec": session.get("total_timer_time"),

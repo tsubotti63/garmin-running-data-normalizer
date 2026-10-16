@@ -23,10 +23,17 @@ from .daily_metrics import copies_within_snapshots
 ROW_VALUE_ALTERNATIVES = "_value_alternatives"
 # The names of the Gear type, in the order in which they are read.
 GEAR_TYPE_NAMES = ("gearTypeName", "gearType")
+# The names of the start of an Activity: the second fills the first (stage
+# A4d-2).
+ACTIVITY_START_NAMES = ("startTimeGmt", "beginTimestamp")
 # The groups of source names of one field of the datasets whose records a
 # Snapshot build merges across time points: a record that uses two or more
-# names of a group has them as one field there (merge rules v2.16).
-ENTITY_FIELD_NAMES: dict[str, tuple[tuple[str, ...], ...]] = {"gear": (GEAR_TYPE_NAMES,)}
+# names of a group has them as one field there (merge rules v2.16; the start
+# of an Activity from v2.17).
+ENTITY_FIELD_NAMES: dict[str, tuple[tuple[str, ...], ...]] = {
+    "activities": (ACTIVITY_START_NAMES,),
+    "gear": (GEAR_TYPE_NAMES,),
+}
 
 
 def alias_value(values: Iterable[Any]) -> tuple[Any, list[Any]]:
@@ -68,6 +75,7 @@ class AliasDisagreements:
 
 
 __all__ = [
+    "ACTIVITY_START_NAMES",
     "AliasDisagreements",
     "ENTITY_FIELD_NAMES",
     "GEAR_TYPE_NAMES",
