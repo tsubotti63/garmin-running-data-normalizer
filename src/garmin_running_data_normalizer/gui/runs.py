@@ -21,14 +21,16 @@ from pathlib import Path
 from typing import IO, Any
 
 from ..output_location import (
+    MAX_OUTPUT_NAME_BYTES,
     WINDOWS_MAX_FILE_PATH,
     WINDOWS_MAX_FOLDER_PATH,
     OutputLocationError,
     check_output_location,
+    valid_output_name,
 )
 from ..output_location import long_paths_enabled as _long_paths_enabled
 from ..output_location import windows_paths_too_long as _windows_paths_too_long
-from ..run_all import OUTPUT_PATHS, PROGRESS_STAGES, PROGRESS_STEPS
+from ..run_all import OTHER_WARNING_FIELDS, OUTPUT_PATHS, PROGRESS_STAGES, PROGRESS_STEPS
 from .run_worker import FAMILY_COUNT_FIELDS
 
 WORKER_MODULE = "garmin_running_data_normalizer.gui.run_worker"
@@ -42,17 +44,6 @@ FINISHED_STATES = ("finished", "finished_after_cancel")
 CODE = re.compile(r"[A-Z0-9_]{1,64}")
 FAMILY_NAME = re.compile(r"[a-z0-9_]{1,40}")
 FAMILY_STATUS = re.compile(r"[A-Z_]{1,40}")
-WINDOWS_RESERVED_NAMES = frozenset(
-    {"CON", "PRN", "AUX", "NUL"}
-    | {f"COM{number}" for number in range(1, 10)}
-    | {f"LPT{number}" for number in range(1, 10)}
-)
-INVALID_NAME_CHARACTERS = frozenset('<>:"/\\|?*')
-# Hidden names derived from the output name are longer: Run-All's staging
-# folder by 18 bytes, the write check by 22, and the Support Bundle's temporary
-# file by 29. Many file systems allow 255 bytes in one name, so 200 bytes leave
-# room on every system.
-MAX_OUTPUT_NAME_BYTES = 200
 
 
 class RunRequestError(ValueError):
@@ -92,25 +83,10 @@ def output_path_too_long(parent: Path, name: str) -> bool:
     return windows_paths_too_long(str(parent), name)
 
 
-def _utf8_size(text: str) -> int | None:
-    """Return the size of ``text`` in UTF-8, or None if it holds a lone surrogate."""
-    try:
-        return len(text.encode("utf-8"))
-    except UnicodeEncodeError:
-        return None
-
-
 def validate_output_name(name: Any) -> str:
-    """Accept one portable folder name that cannot be taken for a staging folder."""
-    size = _utf8_size(name) if isinstance(name, str) else None
-    if (
-        size is None
-        or not 0 < size <= MAX_OUTPUT_NAME_BYTES
-        or name.startswith(".")
-        or name.endswith((".", " "))
-        or any(character in INVALID_NAME_CHARACTERS or ord(character) < 32 for character in name)
-        or name.split(".", 1)[0].rstrip(" ").upper() in WINDOWS_RESERVED_NAMES
-    ):
+    """Accept one portable folder name that cannot be taken for a staging
+    folder, by the rule that the CLI takes too (stage A5a)."""
+    if not valid_output_name(name):
         raise RunRequestError("OUTPUT_NAME_INVALID")
     return name
 
@@ -177,17 +153,27 @@ def _valid_progress(message: dict[str, Any]) -> dict[str, Any] | None:
     return progress
 
 
+def _count(value: Any) -> bool:
+    return type(value) is int and value >= 0
+
+
 def _valid_result(message: dict[str, Any]) -> dict[str, Any] | None:
     status = message.get("status")
     exit_code = message.get("exit_code")
     file_count = message.get("generated_file_count")
     families = message.get("families")
+    warning_count = message.get("warning_count")
+    other_warnings = message.get("other_warning_counts")
     if (
         status not in RUN_STATUSES
         or exit_code not in (0, 3)
         or type(exit_code) is not int
         or type(file_count) is not int
         or not isinstance(families, dict)
+        or not _count(warning_count)
+        or not isinstance(other_warnings, dict)
+        or set(other_warnings) != {name for name, _field in OTHER_WARNING_FIELDS}
+        or not all(_count(value) for value in other_warnings.values())
     ):
         return None
     summary: dict[str, dict[str, Any]] = {}
@@ -210,6 +196,8 @@ def _valid_result(message: dict[str, Any]) -> dict[str, Any] | None:
         "exit_code": exit_code,
         "generated_file_count": file_count,
         "families": summary,
+        "warning_count": warning_count,
+        "other_warning_counts": {name: other_warnings[name] for name, _field in OTHER_WARNING_FIELDS},
     }
 
 
@@ -288,10 +276,8 @@ class RunManager:
         external_safe_pack = request.get("external_safe_pack", False)
         if not isinstance(external_safe_pack, bool):
             raise RunRequestError("REQUEST_INVALID")
-        # Run-All would create a missing parent; a mistyped parent must not
-        # leave new folders behind.
-        if not parent.is_dir():
-            raise RunRequestError("OUTPUT_PARENT_NOT_FOUND")
+        # A missing parent is refused below, by the check that Run-All makes
+        # too; neither creates folders for a mistyped parent (stage A5a).
         output = parent / name
         # Run-All checks this too. Checking it here also means that an output
         # found after a cancelled run was created by that run.

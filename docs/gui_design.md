@@ -306,6 +306,15 @@ Many cases that stop with exit 2 in v1.x finish with exit 0 or 3 in v2.0.0.
 - Warning totals report the total and the counts per family, with the warnings
   that belong to no family on a separate line.
 
+Stage A5a applies the rules for the output's name and its existing parent
+folder to `run-all`, `normalize-activities`, `snapshot build-input`, and
+`snapshot run-all`, prints the warning totals in the CLI, passes them to the
+GUI's run status, and makes the pre-run check read the Activities files as a
+run does (see [v2.0.0 Data Handling](v2_data_handling.md#reports-of-a-run-in-the-cli-and-the-gui)).
+Stage B sets the rules for the place of a new Snapshot Store and of a Support
+Bundle with the controls that choose them, and the page shows the warning
+totals.
+
 ## Security
 
 Requests:

@@ -46,6 +46,7 @@ from .output_location import (
     check_output_location,
     output_path_too_long,
     path_error_code,
+    valid_output_name,
     write_error_code,
 )
 from .normalizers.activities import ACTIVITY_SOURCE_FIELDS, normalize_activities
@@ -475,8 +476,12 @@ def _validate_paths(input_path: str | Path, output_path: str | Path) -> tuple[Pa
 
 
 def _requested_output(requested_output: Path) -> Path:
-    """Return the output's full path; it must be neither a symbolic link nor
-    there already."""
+    """Return the output's full path; its name must be one that the GUI
+    takes too (stage A5a), and it must be neither a symbolic link nor there
+    already. The name is checked as it was given: Windows drops a dot or a
+    space at the end of a name when it resolves a path."""
+    if not valid_output_name(requested_output.name):
+        raise RunAllError("OUTPUT_NAME_INVALID", OUTPUT_LOCATION_MESSAGES["OUTPUT_NAME_INVALID"])
     try:
         if requested_output.is_symlink():
             raise RunAllError("OUTPUT_SYMLINK", "output directory must not be a symbolic link")
@@ -2638,6 +2643,31 @@ def run_all(
         "family_results": family_results,
         "generated_files": generated_paths,
         "deterministic_digest": deterministic_digest,
+        "warning_totals": warning_totals(summary),
+    }
+
+
+# The warnings that belong to no family, as the run summary counts them:
+# Lactate Threshold candidates, relationships, and the input.
+OTHER_WARNING_FIELDS = (
+    ("candidate", "candidate_warning_count"),
+    ("relationship", "relationship_warning_count"),
+    ("input", "input_warning_count"),
+)
+
+
+def warning_totals(summary: dict[str, Any]) -> dict[str, Any]:
+    """The warnings of a run as the CLI and the GUI report them (stage A5a):
+    the total, the count of each family, and the counts of the warnings that
+    belong to no family. The total is the sum of the others, as the checks of
+    the output require."""
+    return {
+        "total": int(summary["warning_count"]),
+        "families": {
+            family: int(details["warning_count"])
+            for family, details in summary["family_results"].items()
+        },
+        "other": {name: int(summary.get(field, 0)) for name, field in OTHER_WARNING_FIELDS},
     }
 
 
@@ -2646,6 +2676,7 @@ __all__ = [
     "ACTIVITIES_CSV_DURATION_COLUMNS",
     "ACTIVITIES_CSV_FIT_SESSION_COLUMNS",
     "DATASET_TABLE",
+    "OTHER_WARNING_FIELDS",
     "OUTPUT_PATHS",
     "PROGRESS_STAGES",
     "PROGRESS_STEPS",
@@ -2655,4 +2686,5 @@ __all__ = [
     "RunAllError",
     "left_out_files",
     "run_all",
+    "warning_totals",
 ]

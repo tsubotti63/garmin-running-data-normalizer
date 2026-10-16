@@ -99,6 +99,7 @@
   "family_status.processed": "変換済み",
   "family_status.processed_empty": "変換済み（0 件）",
   "family_status.skipped_not_present": "エクスポートに無い",
+  "finding.activities_empty": "アクティビティの一覧（summarizedActivities）のファイルに、使えるアクティビティが 1 つも無いので、実行は止まります。",
   "finding.activities_missing": "アクティビティの一覧（summarizedActivities）が見つかりません。",
   "finding.activities_unreadable": "アクティビティの一覧（summarizedActivities）のファイルを読めません。大きすぎる、などです。",
   "finding.files_left_out": "読めないファイルがあります（壊れた ZIP、大きすぎるファイルなど）。実行では、そのファイルを除いて続けます。",

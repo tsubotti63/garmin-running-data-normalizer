@@ -506,9 +506,19 @@ class NoActivitiesLeftTest(unittest.TestCase):
                 "obtain a complete, readable Export",
                 console,
             )
-            # The pre-run check does not parse JSON content, so only the run
-            # can tell.
-            self.assertEqual(findings(check(source)), [("RUN_ALL_NOT_EVALUATED", "INFO")])
+            # The pre-run check reads the Activities files as the run reads
+            # them, and tells it before the run (stage A5a; until then only
+            # the run could tell).
+            self.assertEqual(
+                [
+                    (item["code"], item["severity"], item["safe_message_id"], item["next_action_id"])
+                    for item in check(source)["findings"]
+                ],
+                [
+                    ("DATA_FILE_LEFT_OUT", "WARNING", "INPUT_FILES_CANNOT_BE_READ_AND_WILL_BE_LEFT_OUT", "RUN_ALL"),
+                    ("ACTIVITIES_EMPTY", "ERROR", "ACTIVITIES_FILES_CANNOT_BE_READ", "OBTAIN_COMPLETE_READABLE_EXPORT"),
+                ],
+            )
 
     def test_activities_files_over_the_limit_are_reported_before_the_run(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

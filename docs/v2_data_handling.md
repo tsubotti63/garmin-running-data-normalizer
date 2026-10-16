@@ -71,6 +71,29 @@ These rules come from the Human maintainer's decisions of 2026-10-11:
 - Optional families that are absent keep the v1.x status `SKIPPED_NOT_PRESENT`
   and the warning `OPTIONAL_FAMILY_NOT_PRESENT`.
 
+## Reports of a run in the CLI and the GUI
+
+From stage A5a, the CLI and the GUI report the warnings of a run alike:
+
+- The total: the number of warnings of the run (`warning_count` in
+  `run_summary.json`), each a code with the count of what it names.
+- The count of each family, as in the family results.
+- On a line of their own, the warnings that belong to no family, by the
+  counts of the run summary: `candidate` (the Lactate Threshold candidates,
+  `candidate_warning_count`), `relationship` (`relationship_warning_count`),
+  and `input` (`input_warning_count`). The total is the sum of the counts of
+  the families and these three, as the checks of an output require.
+
+`run-all` and `snapshot run-all` print `warnings: N` after the exit code, and
+`other warnings: candidate=a relationship=b input=c` after the lines of the
+families, also when the counts are 0; `validate-handoff` prints
+`warnings: N`. Until stage A5a, the CLI printed the counts of the families
+only, and the GUI's page could show a sum of the families that was not the
+total of its check of the output. The GUI's run status carries the total and
+the three counts as `warning_count` and `other_warning_counts`, and the page
+shows them from stage B. `run_all` returns them as `warning_totals`. The
+output files do not change.
+
 ## Rules by situation
 
 Each item gives the v1.7.1 behavior and the v2.0.0 behavior.
@@ -482,10 +505,28 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     `DATA_FILE_LEFT_OUT`, the files that it can tell are unreadable without
     reading their content: the ZIP files and the files over the limit that
     the run leaves out. When every Activities file is among them, it reports
-    `ACTIVITIES_EMPTY` as an error. It does not parse JSON content, which
-    takes long for a large Export, so a JSON file that cannot be read is
-    reported by the run; when every Activities file is such a file, the check
-    passes and the run stops with `ACTIVITIES_EMPTY`.
+    `ACTIVITIES_EMPTY` as an error. Until stage A5a, it did not parse JSON
+    content, so when every Activities file was a JSON file that cannot be
+    read, the check passed and the run stopped with `ACTIVITIES_EMPTY`.
+  - From stage A5a, the pre-run check reads the Activities files as the run
+    reads them, and keeps only the number of their records, so that it tells
+    the stops of the run that need no Activities record:
+    - An Activities file that cannot be read, such as one that is not JSON,
+      is reported with warning `DATA_FILE_LEFT_OUT`, as the run leaves it out.
+    - When no Activities record can be kept, the check reports
+      `ACTIVITIES_EMPTY` as an error, as the run stops: with the message that
+      the Activities files cannot be read (`ACTIVITIES_FILES_CANNOT_BE_READ`)
+      when an Activities file was left out, and otherwise with the new message
+      that they hold no Activities record that can be used
+      (`ACTIVITIES_FILES_HOLD_NO_RECORDS`; the next step is to select an
+      Export with Activities), such as an empty list, or only rows without a
+      usable identifier.
+    - It does not read them for mixed Exports or without the timezone data,
+      which stop the run before it reads them. The files of the other
+      datasets are not parsed: the run leaves out what it cannot read of them
+      and goes on, so a JSON file of another dataset that cannot be read is
+      still reported by the run only. The GUI's check of the input gives the
+      same answer.
   - A damaged Export ZIP file stops the run (`INPUT_ZIP_CORRUPT`); see
     [An Export given as a ZIP file](#an-export-given-as-a-zip-file).
   - A folder or file of the input that this app may not open, such as a
@@ -1257,10 +1298,10 @@ as the GUI does, instead of after the whole run:
 
 | Problem | Code | Next step |
 |---|---|---|
-| The place for the output is not a folder | `OUTPUT_PARENT_NOT_FOUND` | Choose an existing folder |
+| The folder for the output does not exist or is not a folder | `OUTPUT_PARENT_NOT_FOUND` | Choose an existing folder, or create it first |
 | This app cannot write there | `OUTPUT_PARENT_NOT_WRITABLE` | Choose another folder, or allow writing |
 | No free space there | `OUTPUT_SPACE_INSUFFICIENT` | Free some space, or choose another folder |
-| The output name is too long | `OUTPUT_NAME_INVALID` | Choose a shorter name |
+| The output name is too long or cannot be used on every system | `OUTPUT_NAME_INVALID` | Choose another name that every system takes (see below) |
 | The output path is too long | `OUTPUT_PATH_TOO_LONG` | Choose a shorter folder or name; on Windows, or turn on long paths |
 | A folder or file of the input cannot be opened | `INPUT_NOT_READABLE` | Allow this app to read it, or select the Export folder itself |
 | The input changed during the run, for every family | `INPUT_CHANGED` | Run again when it no longer changes |
@@ -1273,6 +1314,29 @@ as the GUI does, instead of after the whole run:
   has no free space, for the output and the temporary folder alike.
 - `snapshot run-all` checks its output before it builds the Snapshots, which
   can take long.
+- From stage A5a, the CLI takes the GUI's rules for the place of a new output
+  folder, in `run-all`, `snapshot run-all`, `snapshot build-input`, and
+  `normalize-activities`:
+  - Its name must be one folder name that every system takes: at most 200
+    bytes in UTF-8, so that the hidden names made from it stay within the
+    255 bytes that many file systems allow, without a dot at its start, a dot
+    or a space at its end, a control character, or any of `<>:"/\|?*`, and
+    not a name of a Windows device such as `CON` or `nul.txt`. The name is
+    checked as it was given, before the system looks at the path, because
+    Windows drops a dot or a space at the end of a name when it resolves a
+    path. `normalize-activities` writes in an empty output folder that is
+    there already, as before, whatever its name.
+  - The folder for the output must exist: no command makes the folders above
+    its output any more, so that a mistyped path makes no folders. Until
+    stage A5a, the CLI made them when it wrote, while the GUI refused them.
+    The folder is checked before the run starts; if it is removed while the
+    run goes on, the run makes it again when it writes its output, so that
+    the work of a long run is not lost.
+  - The GUI and the CLI make these checks with the same functions
+    (`output_location.valid_output_name` and `check_output_location`).
+  - The place of a new Snapshot Store (`snapshot init`) and of a Support
+    Bundle (`support-bundle`) are not checked so yet; stage B sets their
+    rules with the controls that choose them.
 - `normalize-activities` (the Golden Path) gives every stop a code, with
   Run-All's code for the same problem: the problems above, `INPUT_SYMLINK`,
   `INPUT_NOT_DIRECTORY`, `OUTPUT_SYMLINK`, `OUTPUT_INSIDE_INPUT`,
@@ -2168,6 +2232,18 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Records whatever the case of their names, as the input is classified: a
   file named `summarizedactivities.json`, which v1.7.1 counted and passed
   over, stopping with `ACTIVITIES_EMPTY` when it was the only one, is read.
+  From stage A5a, `run-all`, `snapshot run-all`, `snapshot build-input`, and
+  `normalize-activities` (for an output folder that it makes) stop with
+  `OUTPUT_NAME_INVALID` for an output name that the GUI refuses, such as one
+  that starts with a dot or ends with a dot or a space, and with
+  `OUTPUT_PARENT_NOT_FOUND` when the folder for the output does not exist,
+  which v1.7.1 made; a script that relied on that makes the folder first.
+  `run-all` and `snapshot run-all` print the total of the warnings and the
+  warnings that belong to no family, and `validate-handoff` the total (see
+  [Reports of a run in the CLI and the GUI](#reports-of-a-run-in-the-cli-and-the-gui)).
+  `doctor --input` reads the Activities files and reports `ACTIVITIES_EMPTY`
+  when no Activities record can be kept, where v1.7.1 passed such an Export
+  and the run stopped.
 - Python API: `DiscoveredAsset` is a plain class instead of a frozen
   dataclass. Its fields, its constructor, and the content that
   `discover_export` returns are unchanged, but dataclass equality, hashing,
@@ -2242,7 +2318,15 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   `snapshot_presence`, and `observed_snapshots`; the per-Snapshot
   observations of `build_source_completeness` take the FIT rows from their
   `source_observation_counts` instead of the per-second records of the FIT
-  audit.
+  audit. From stage A5a, `run_all` (and `run_snapshot_all`) return
+  `warning_totals`, made by the new `run_all.warning_totals`;
+  `output_location` gains `valid_output_name`, `MAX_OUTPUT_NAME_BYTES`,
+  `INVALID_NAME_CHARACTERS`, and `WINDOWS_RESERVED_NAMES`, which
+  `gui.runs` gave until then and still imports; `check_output_location`
+  stops with `OUTPUT_NAME_INVALID` for a name that the GUI refuses and with
+  `OUTPUT_PARENT_NOT_FOUND` for a folder of the output that does not exist,
+  where it tried the nearest folder that existed; and `doctor_input` reads
+  the Activities files.
 - Schema: the fields that a disagreement can leave empty are nullable (the
   Hill and Endurance `overall_score`, the four Race Prediction times,
   `vo2max`, and `training_status`), and so is `personal_records.activity_id`

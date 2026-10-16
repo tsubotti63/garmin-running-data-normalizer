@@ -311,7 +311,13 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             self.server.stop_soon()
 
     def _api_status(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return {"languages": list(LANGUAGES), "product_version": __version__}
+        # The page takes the product's default timezone from here, so that
+        # it has no default of its own (stage A5a).
+        return {
+            "default_timezone": DEFAULT_TIMEZONE,
+            "languages": list(LANGUAGES),
+            "product_version": __version__,
+        }
 
     def _api_heartbeat(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {"status": "ok"}

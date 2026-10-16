@@ -30,7 +30,6 @@ const LAUNCH_KEY_STORAGE = "launchKey";
 const LANGUAGE_STORAGE = "language";
 const HEARTBEAT_INTERVAL_MS = 30000;
 const POLL_INTERVAL_MS = 1000;
-const DEFAULT_TIMEZONE = "Asia/Tokyo";
 
 const byId = (id) => document.getElementById(id);
 const ui = {
@@ -793,7 +792,6 @@ function connect() {
       return option;
     }),
   );
-  ui.timezone.value = DEFAULT_TIMEZONE;
   ui.outputName.value = defaultOutputName(new Date());
   ui.language.addEventListener("change", () => changeLanguage(ui.language.value));
   ui.quit.addEventListener("click", quit);
@@ -835,6 +833,10 @@ async function start() {
     const status = await callApi("/api/status");
     state.productVersion =
       typeof status.product_version === "string" ? status.product_version : null;
+    // The product's default, as the CLI takes it (stage A5a).
+    if (typeof status.default_timezone === "string" && ui.timezone.value === "") {
+      ui.timezone.value = status.default_timezone;
+    }
     state.connected = true;
     state.connectionKey = "status.connected";
     startHeartbeat();

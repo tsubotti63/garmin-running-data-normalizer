@@ -112,6 +112,7 @@ from ..output_location import (
     OutputLocationError,
     check_output_location,
     path_error_code,
+    valid_output_name,
     write_error_code,
 )
 from .policies import CONTRACT_VERSION, MERGE_RULES, MERGE_RULES_VERSION, REGISTRY_VERSION
@@ -2012,8 +2013,11 @@ def build_approved_input(
     processing_sequence: list[str] | None = None,
 ) -> dict[str, Any]:
     # The output is checked before the store, whose verification can take
-    # long (stage A3d-3b).
+    # long (stage A3d-3b). Its name is checked as it was given, as for a run
+    # (stage A5a).
     requested_output = Path(output_root)
+    if not valid_output_name(requested_output.name):
+        raise SnapshotBuildOutputError("OUTPUT_NAME_INVALID")
     try:
         if requested_output.is_symlink():
             raise SnapshotMergeError("canonical build output must not be a symbolic link")

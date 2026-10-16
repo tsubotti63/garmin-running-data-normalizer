@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,7 @@ from ..intake.source import (
     TempSpaceError,
     is_zip_input,
 )
+from ..normalizers.activities import normalize_activities
 from ..run_all import left_out_files
 from ..standalone import StandaloneHandoffError, validate_standalone_handoff
 from .contracts import (
@@ -33,6 +35,7 @@ from .contracts import (
     exit_code_for_status,
     interpretation_for_status,
 )
+from .detector import reads_record_file
 
 
 class DoctorError(ValueError):
@@ -143,7 +146,14 @@ def doctor_input(
     root: str | Path,
     timezone_name: str = DEFAULT_TIMEZONE,
 ) -> dict[str, Any]:
-    """Inspect bounded input readiness without normalizing or predicting a run."""
+    """Inspect bounded input readiness without predicting a run's warnings.
+
+    Every file is read for its digest, as at the start of a run, and the
+    Activities files are read as a run reads them (stage A5a), so that the
+    check tells when a run would stop because no Activities record can be
+    kept. The files of the other datasets are not read: a run leaves out
+    what it cannot read of them and goes on.
+    """
     try:
         timezone_name = resolve_timezone_name(timezone_name)
     except TimezoneNameInvalidError as exc:
@@ -165,9 +175,11 @@ def doctor_input(
             )
         )
     else:
+        timezone_ready = True
         try:
             require_timezone_data(timezone_name)
         except TimezoneDataUnavailableError:
+            timezone_ready = False
             findings.append(
                 _finding(
                     "TIMEZONE_DATA_UNAVAILABLE",
@@ -186,11 +198,31 @@ def doctor_input(
             with read_export(requested) as reading:
                 assets = reading.assets
                 same_export_count = reading.same_export_count
-                # Files that cannot be read without reading their content
-                # (a damaged ZIP, a file over the limit) are left out of the
-                # run, which goes on (stage A3c).
-                left_out = list(reading.left_out)
                 mixed_accounts = len(asset_accounts(assets)) > 1
+                activity_assets = [
+                    asset
+                    for asset in assets
+                    if asset.kind == "json"
+                    and reads_record_file(asset.member_path or asset.source_path, "activities")
+                ]
+                # The Activities files are read as a run reads them (stage
+                # A5a): a run stops when none of their records can be kept.
+                # A run of mixed Exports, or without the timezone data, stops
+                # before it reads them.
+                activity_record_count = None
+                if activity_assets and not mixed_accounts and timezone_ready:
+                    activity_record_count = len(
+                        normalize_activities(
+                            str(requested),
+                            timezone_name,
+                            assets=activity_assets,
+                            left_out=Counter(),
+                        )
+                    )
+                # Files that cannot be read are left out of the run, which
+                # goes on (stage A3c): a damaged ZIP, a file over the limit,
+                # and from stage A5a an Activities file that is not JSON.
+                left_out = list(reading.left_out)
             if mixed_accounts:
                 raise MixedExportsError()
         except MixedExportsError:
@@ -292,13 +324,7 @@ def doctor_input(
                         evidence_reference="diagnostic:source-discovery",
                     )
                 )
-            has_activities = any(
-                asset.kind == "json"
-                and (asset.member_path or asset.source_path).lower().endswith(
-                    "summarizedactivities.json"
-                )
-                for asset in assets
-            )
+            has_activities = bool(activity_assets)
             activities_left_out = any(
                 item["family"] == "activities" for item in left_out_files(left_out)
             )
@@ -323,6 +349,37 @@ def doctor_input(
                         severity="ERROR",
                         actionability="ACTION_REQUIRED",
                         safe_message_id="REQUIRED_ACTIVITIES_SOURCE_NOT_OBSERVED",
+                        next_action_id="SELECT_EXPORT_WITH_ACTIVITIES",
+                        authority_reference="product:run-all-required-input",
+                        evidence_reference="diagnostic:activities-presence",
+                    )
+                )
+            elif activity_record_count == 0 and activities_left_out:
+                # No Activities record can be kept, and Activities files
+                # could not be read: the run stops with ACTIVITIES_EMPTY and
+                # names the files that cannot be read (stage A5a).
+                findings.append(
+                    _finding(
+                        "ACTIVITIES_EMPTY",
+                        severity="ERROR",
+                        actionability="ACTION_REQUIRED",
+                        safe_message_id="ACTIVITIES_FILES_CANNOT_BE_READ",
+                        next_action_id="OBTAIN_COMPLETE_READABLE_EXPORT",
+                        authority_reference="product:run-all-required-input",
+                        evidence_reference="diagnostic:activities-presence",
+                    )
+                )
+            elif activity_record_count == 0:
+                # The Activities files can be read but hold no record that a
+                # run keeps, such as an empty list, or only rows without a
+                # usable identifier: the run stops with ACTIVITIES_EMPTY
+                # (stage A5a).
+                findings.append(
+                    _finding(
+                        "ACTIVITIES_EMPTY",
+                        severity="ERROR",
+                        actionability="ACTION_REQUIRED",
+                        safe_message_id="ACTIVITIES_FILES_HOLD_NO_RECORDS",
                         next_action_id="SELECT_EXPORT_WITH_ACTIVITIES",
                         authority_reference="product:run-all-required-input",
                         evidence_reference="diagnostic:activities-presence",

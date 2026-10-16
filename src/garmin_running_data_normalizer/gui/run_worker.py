@@ -112,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             _emit({"event": "failed", "code": "RUN_ALL_FAILED"})
             return FAILED_EXIT_CODE
+        totals = result["warning_totals"]
         _emit(
             {
                 "event": "finished",
@@ -119,6 +120,12 @@ def main(argv: list[str] | None = None) -> int:
                 "exit_code": int(result["exit_code"]),
                 "generated_file_count": len(result["generated_files"]),
                 "families": _family_summary(result["family_results"]),
+                # The total of the warnings, and those that belong to no
+                # family, as the CLI prints them (stage A5a).
+                "warning_count": int(totals["total"]),
+                "other_warning_counts": {
+                    name: int(count) for name, count in totals["other"].items()
+                },
             }
         )
         return int(result["exit_code"])

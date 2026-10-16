@@ -16,6 +16,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from garmin_running_data_normalizer import __version__
+from garmin_running_data_normalizer.common.time import DEFAULT_TIMEZONE
 from garmin_running_data_normalizer.gui import outputs
 from garmin_running_data_normalizer.gui.runs import RunManager
 from garmin_running_data_normalizer.gui.server import (
@@ -255,8 +256,14 @@ class GuiApiRequestTest(GuiServerTestCase):
 
         status, _, body = self.post_api("/api/status")
         self.assertEqual(status, 200)
+        # The page takes the product's default timezone from here (stage A5a).
         self.assertEqual(
-            json.loads(body), {"languages": ["en", "ja"], "product_version": __version__}
+            json.loads(body),
+            {
+                "default_timezone": DEFAULT_TIMEZONE,
+                "languages": ["en", "ja"],
+                "product_version": __version__,
+            },
         )
         status, _, body = self.post_api("/api/heartbeat")
         self.assertEqual((status, json.loads(body)), (200, {"status": "ok"}))
@@ -627,6 +634,42 @@ class GuiRunApiTest(GuiServerTestCase):
         ):
             with self.subTest(payload=payload):
                 self.assertEqual(self.call("/api/check-input", payload), (422, {"error": code}))
+
+    def test_the_input_check_reads_the_activities_as_a_run_does(self) -> None:
+        # The check reads the Activities files as the run reads them, so it
+        # tells before the run that the run would stop (stage A5a).
+        self.start_server(600.0)
+        for label, content, finding in (
+            (
+                "not JSON",
+                "{",
+                {
+                    "code": "ACTIVITIES_EMPTY",
+                    "severity": "ERROR",
+                    "message_id": "ACTIVITIES_FILES_CANNOT_BE_READ",
+                    "next_action_id": "OBTAIN_COMPLETE_READABLE_EXPORT",
+                },
+            ),
+            (
+                "no record",
+                json.dumps([{"summarizedActivitiesExport": []}]),
+                {
+                    "code": "ACTIVITIES_EMPTY",
+                    "severity": "ERROR",
+                    "message_id": "ACTIVITIES_FILES_HOLD_NO_RECORDS",
+                    "next_action_id": "SELECT_EXPORT_WITH_ACTIVITIES",
+                },
+            ),
+        ):
+            with self.subTest(label):
+                export = self.root / label
+                shutil.copytree(SYNTHETIC_EXPORT, export)
+                for path in export.rglob("*summarizedActivities.json"):
+                    path.write_text(content, encoding="utf-8")
+                status, answer = self.call("/api/check-input", {"input": str(export)})
+                self.assertEqual(status, 200)
+                self.assertFalse(answer["ready"])
+                self.assertEqual(answer["findings"][-1], finding)
 
     def test_the_input_check_reports_mixed_and_repeated_exports(self) -> None:
         self.start_server(600.0)

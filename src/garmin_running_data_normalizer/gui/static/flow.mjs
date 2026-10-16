@@ -155,6 +155,7 @@ export const FINDING_KEYS = {
   TEMP_FOLDER_SPACE_INSUFFICIENT: "finding.temp_space_insufficient",
   REQUIRED_ACTIVITIES_SOURCE_NOT_OBSERVED: "finding.activities_missing",
   ACTIVITIES_FILES_CANNOT_BE_READ: "finding.activities_unreadable",
+  ACTIVITIES_FILES_HOLD_NO_RECORDS: "finding.activities_empty",
   INPUT_READY_FOR_BOUNDED_RUN_ALL_ATTEMPT: "finding.ready",
 };
 export const ACTION_KEYS = {
