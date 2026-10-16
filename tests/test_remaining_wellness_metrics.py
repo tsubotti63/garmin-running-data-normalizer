@@ -218,9 +218,10 @@ class RemainingWellnessMetricsTest(unittest.TestCase):
         )
         # Values that disagree are not review items.
         self.assertNotIn("review_required_count", result["audit"])
+        # The basis names no timezone; the timezone is its own field (stage A4d-2).
         self.assertEqual(
-            result["audit"]["date_basis"],
-            "fit_end_jst_date_from_message_370_field_253_timestamp",
+            (result["audit"]["date_basis"], result["audit"]["date_timezone"]),
+            ("fit_end_local_date_from_message_370_field_253_timestamp", "Asia/Tokyo"),
         )
 
     def test_hrv_daily_excludes_fit_with_invalid_file_crc(self) -> None:

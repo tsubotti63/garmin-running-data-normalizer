@@ -309,7 +309,7 @@ class GearAcrossSnapshotsTest(unittest.TestCase):
 
         self.assertEqual(
             {dataset: [list(names) for names in groups] for dataset, groups in ENTITY_FIELD_NAMES.items()},
-            {"gear": MERGE_RULES["names_of_one_field"]["gear"]},
+            {dataset: MERGE_RULES["names_of_one_field"][dataset] for dataset in ("activities", "gear")},
         )
 
 

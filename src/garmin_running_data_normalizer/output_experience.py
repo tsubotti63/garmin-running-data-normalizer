@@ -631,7 +631,7 @@ DATASET_FIELDS = {
         "elapsed_duration_ms", "moving_duration_ms", "avg_hr", "max_hr",
         "avg_power", "max_power", "avg_run_cadence", "training_effect_label",
         "activity_training_load", "lap_count", "source_path", "source_sha256",
-        "source_confidence",
+        "source_confidence", "start_time_source",
         "disagreeing_fields",
     ),
     "gear": (
@@ -663,7 +663,7 @@ DATASET_FIELDS = {
         "total_descent", "avg_vertical_oscillation_mm", "avg_stance_time_ms",
         "avg_stance_time_percent", "avg_stance_time_balance_percent",
         "avg_vertical_ratio_percent", "avg_step_length_mm", "record_count",
-        "lap_count", "source_path", "source_sha256",
+        "lap_count", "source_path", "source_sha256", "sub_sport_code",
         "disagreeing_fields",
     ),
     "fit_laps": (
@@ -708,7 +708,8 @@ DATASET_FIELDS = {
         "sleep_stage_rem_minutes", "sleep_score", "sleep_awake_minutes",
         "sleep_stage_available_flag", "sleep_score_available_flag",
         "sleep_normalization_status", "sleep_limitation_type", "sleep_reason_code",
-        "sleep_source_available_for_analysis_flag",
+        "sleep_source_available_for_analysis_flag", "sleep_day_source",
+        "sleep_duration_source",
         "disagreeing_fields",
     ),
     "uds_daily": (
@@ -2464,7 +2465,7 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         "strength_score", "endurance_score", "classification_id",
         "feedback_phrase_id",
         "record_count_for_date", "source_file_count_for_date",
-        "source_activity_id",
+        "source_activity_id", "sub_sport_code",
     }
     numeric_fields = {
         "distance_m", "duration_sec", "avg_hr", "max_hr", "avg_power",
@@ -2572,7 +2573,8 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
             "match_rule", "match_basis",
             "match_score", "match_status", "ambiguous", "eligibility_status",
             "exclusion_reason", "time_delta_seconds", "distance_delta_m",
-            "duration_delta_seconds",
+            "duration_delta_seconds", "start_time_source", "sleep_day_source",
+            "sleep_duration_source",
         }
         else "source"
         )
@@ -2591,6 +2593,28 @@ def _field_descriptor(dataset: str, field: str) -> dict[str, Any]:
         else "personal"
     )
     notes = (
+        "Starting with v2.0.0: the source field that gives start_time_gmt_ms, "
+        "startTimeGmt or, when it holds no number, beginTimestamp; null when "
+        "neither does. Merged copies take startTimeGmt first, and null when "
+        "their start times disagree."
+        if field == "start_time_source"
+        else
+        "Starting with v2.0.0: the source field that gives sleep_day, "
+        "calendarDate or, when it cannot be read, sleepEndTimestampGMT in the "
+        "run's timezone. Merged copies take calendarDate first."
+        if field == "sleep_day_source"
+        else
+        "Starting with v2.0.0: how sleep_duration_minutes_ex_awake was made, as "
+        "the audit counts it: stage_derived, direct_fallback, null_fallback, "
+        "direct_aliases_disagree, or stage_aliases_disagree. Merged copies take "
+        "stage_derived first, and null when their durations disagree."
+        if field == "sleep_duration_source"
+        else
+        "Starting with v2.0.0: the FIT sub_sport number as recorded, also when "
+        "sub_sport has no name for it; null when the FIT session has none or "
+        "it is not a number."
+        if field == "sub_sport_code"
+        else
         "Observed non-null deep/light/REM stage minutes are summed when any "
         "finite stage is present. When all stages are absent, the approved "
         "direct source aliases are used when they agree; when they differ, the "

@@ -26,6 +26,45 @@ class DailyMetricResult:
     row_snapshot_numbers: list[tuple[int, ...]] = field(default_factory=list)
 
 
+# The marks of the values that a row fills from another source field (stage
+# A4d-2): for each mark of a dataset, the field whose source it names and its
+# sources in the order in which they rank, the source fields themselves first.
+FILLED_VALUE_MARKS: dict[str, dict[str, tuple[str, tuple[str, ...]]]] = {
+    "activities": {
+        "start_time_source": ("start_time_gmt_ms", ("startTimeGmt", "beginTimestamp")),
+    },
+    "sleep_daily": {
+        "sleep_day_source": ("sleep_day", ("calendarDate", "sleepEndTimestampGMT")),
+        "sleep_duration_source": (
+            "sleep_duration_minutes_ex_awake",
+            (
+                "stage_derived",
+                "direct_fallback",
+                "stage_aliases_disagree",
+                "direct_aliases_disagree",
+                "null_fallback",
+            ),
+        ),
+    },
+}
+
+
+def ranked_mark(values: Iterable[Any], ranking: tuple[str, ...]) -> Any:
+    """The mark of the merged row of several observations: the best-ranked
+    of their marks (stage A4d-2), so that the order of the observations does
+    not matter."""
+    given = [value for value in values if value is not None]
+    if not given:
+        return None
+    return min(given, key=lambda value: (ranking.index(value) if value in ranking else len(ranking), str(value)))
+
+
+def without_marks(row: dict[str, Any], marks: Mapping[str, Any]) -> dict[str, Any]:
+    """A row without its marks, which copies are compared without: a mark
+    comes from the values (stage A4d-2)."""
+    return {field: value for field, value in row.items() if field not in marks}
+
+
 def logical_basename(asset: DiscoveredAsset) -> str:
     return PurePosixPath(asset.member_path or asset.source_path).name.lower()
 
@@ -221,6 +260,7 @@ def merge_observations(
     snapshots: list[list[int] | None] | None = None,
     form: Callable[[str, Any], str] | None = None,
     is_absent: Callable[[Any], bool] | None = None,
+    marks: Mapping[str, tuple[str, tuple[str, ...]]] | None = None,
 ) -> MergedObservations:
     """Merge the observations of one stable key, field by field.
 
@@ -238,7 +278,10 @@ def merge_observations(
     compared; by default, their JSON text. The first value of each form is
     kept. ``is_absent`` tells the values that mean that the observation has
     no value; by default, null. When no observation has a value, the field
-    keeps the first observation's.
+    keeps the first observation's. ``marks`` are the marks of filled values,
+    which never disagree (stage A4d-2): a mark is the best-ranked of the marks
+    of the observations, or null when the field whose source it names
+    disagrees between observations; one observation keeps its mark.
     """
     merged: dict[str, Any] = {}
     disagreeing: list[str] = []
@@ -249,6 +292,10 @@ def merge_observations(
             merged[field] = rows[0].get(field)
             continue
         if field in recomputed_fields:
+            merged[field] = None
+            continue
+        if marks and field in marks:
+            # Set below, once the field whose source the mark names is merged.
             merged[field] = None
             continue
         if field in presence_flags:
@@ -301,6 +348,13 @@ def merge_observations(
             )
         else:
             merged[field] = next(iter(counts.values()))[0] if counts else rows[0].get(field)
+    for field, (named, ranking) in (marks or {}).items():
+        if field not in merged:
+            continue
+        if named in disagreeing and len(rows) > 1:
+            merged[field] = None
+        else:
+            merged[field] = ranked_mark((row.get(field) for row in rows), ranking)
     return MergedObservations(merged, disagreeing, disagreements, absent)
 
 
@@ -370,6 +424,7 @@ def finalize_daily(
     merged_different = False
     disagreements: list[dict[str, Any]] = []
     absent_values: Counter[str] = Counter()
+    marks = FILLED_VALUE_MARKS.get(dataset, {})
     for key in sorted(grouped):
         rows = [
             public_fields(strip_internal_fields(row) if strip_internal_fields else row)
@@ -379,7 +434,7 @@ def finalize_daily(
         numbers = [row.get("_snapshot_numbers") for row in grouped[key]]
         # Each key gives one output row, in this order.
         row_numbers.append(observed_snapshots(numbers))
-        signatures = {stable_json(row) for row in rows}
+        signatures = {stable_json(without_marks(row, marks)) for row in rows}
         copies = sum(copies_within_snapshots(items) for items in numbers)
         copy_count += copies
         same_value_duplicates += len(rows) - len(signatures) + copies
@@ -401,6 +456,9 @@ def finalize_daily(
             continue
         if len(signatures) == 1 and not any(held):
             row = dict(rows[0])
+            for field, (_named, ranking) in marks.items():
+                if field in row:
+                    row[field] = ranked_mark((item.get(field) for item in rows), ranking)
             row["disagreeing_fields"] = []
             output.append(row)
             collapsed_exact = collapsed_exact or len(rows) > 1
@@ -414,6 +472,7 @@ def finalize_daily(
             recomputed_fields=recomputed_fields,
             alternatives=held or None,
             snapshots=numbers if any(numbers) else None,
+            marks=marks,
         )
         if finalize_merged is not None:
             finalize_merged(merged.row, merged.disagreeing_fields)

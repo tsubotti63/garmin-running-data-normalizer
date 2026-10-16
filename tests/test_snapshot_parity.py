@@ -854,6 +854,10 @@ def scenarios(root: Path) -> dict[str, Path]:
     from tests.test_aliases import alias_export
 
     found["values that several source names give"] = alias_export(root, "aliases", days_that_disagree=True)
+    # Stage A4d-2: values filled from another source field, with their marks.
+    from tests.test_filled_value_marks import marks_export
+
+    found["values filled from another source field"] = marks_export(root, "marks")
     return found
 
 

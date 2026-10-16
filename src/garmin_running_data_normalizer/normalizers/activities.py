@@ -4,7 +4,7 @@ from collections import Counter
 from typing import Any, Iterable
 
 from ..common.identity import IDENTIFIER, MISSING, garmin_activity_key, identifier_value, read_identifier
-from ..common.values import read_value
+from ..common.values import is_empty, read_value
 from ..common.time import (
     DEFAULT_TIMEZONE,
     unix_ms_to_local_datetime,
@@ -35,8 +35,29 @@ ACTIVITY_SOURCE_FIELDS = frozenset(
 
 
 def _start(row: dict[str, Any]) -> Any:
+    """The start as the key of an Activity without an identifier takes it,
+    which stage A4d-2 leaves as it was, so that such keys do not change."""
     start_gmt = row.get("startTimeGmt")
     return row.get("beginTimestamp") if start_gmt is None else start_gmt
+
+
+def _start_and_source(row: dict[str, Any]) -> tuple[Any, str | None, list[tuple[str, Any]]]:
+    """The start, the name of the source field that gives it, and the start
+    of another form that it passes over (stage A4d-2).
+
+    ``startTimeGmt`` gives the start when it holds a number; otherwise
+    ``beginTimestamp`` fills it, when that one holds a number, and a value of
+    another form in ``startTimeGmt`` is kept for the audit record, as such
+    values are. When neither holds a number, the start is taken as before,
+    with no source.
+    """
+    first, second = row.get("startTimeGmt"), row.get("beginTimestamp")
+    if read_value(first, "number")[1] is not None:
+        return first, "startTimeGmt", []
+    if read_value(second, "number")[1] is not None:
+        passed = [] if is_empty(first) else [("start_time_gmt_ms", first)]
+        return second, "beginTimestamp", passed
+    return _start(row), None, []
 
 
 def _fallback_parts(row: dict[str, Any]) -> tuple[Any, ...]:
@@ -75,7 +96,7 @@ def _normalize(
     asset: DiscoveredAsset,
     timezone_name: str = DEFAULT_TIMEZONE,
 ) -> dict[str, Any]:
-    start_gmt = _start(row)
+    start_gmt, start_source, passed_over = _start_and_source(row)
     distance = row.get("distance")
     duration = row.get("duration")
     description = row.get("description")
@@ -87,7 +108,7 @@ def _normalize(
     duration_value = read_value(duration, "number")[1]
     start_value = read_value(start_gmt, "number")[1]
     local_datetime = unix_ms_to_local_datetime(start_value, timezone_name)
-    problems = (
+    problems = passed_over + (
         [("start_time_gmt_ms", start_gmt)]
         if start_value is not None and local_datetime is None
         else []
@@ -121,6 +142,8 @@ def _normalize(
         "source_path": asset.provenance_path,
         "source_sha256": asset.sha256,
         "source_confidence": "high",
+        # The source field of the start (stage A4d-2).
+        "start_time_source": start_source,
         **row_snapshot_marks(row),
         **({VALUE_PROBLEMS: problems} if problems else {}),
     }

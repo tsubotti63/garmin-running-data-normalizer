@@ -1012,16 +1012,55 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     `gearTypeName|gearType` (merge rules v2.16). A Gear record that uses one
     name is merged as before.
   - Filled values are marked in the row: `sleep_day_source`,
-    `sleep_duration_source`, and `start_time_source`.
+    `sleep_duration_source`, and `start_time_source`. From stage A4d-2, a mark
+    names the source field that actually gives the value: `sleep_day_source`
+    is `calendarDate`, or `sleepEndTimestampGMT` when the calendar date cannot
+    be read and the end time gives the day in the run's timezone;
+    `start_time_source` is `startTimeGmt`, or `beginTimestamp` when
+    `startTimeGmt` holds no number, and null when neither does; and
+    `sleep_duration_source` names how the duration was made, as the audit
+    record counts it (`stage_derived`, `direct_fallback`, `null_fallback`,
+    `direct_aliases_disagree`, or `stage_aliases_disagree`). A start of
+    another form in `startTimeGmt` is no value there: `beginTimestamp` fills
+    the start, and the audit record keeps the value of another form, as
+    `DATA_VALUE_INVALID` names it; the key of an Activity without an
+    identifier is made from its fields as before, so it does not change.
+    Copies of a record are compared without their marks, so they count as
+    before, and the merged row takes the best-ranked mark, the source field
+    itself first (`calendarDate`, `startTimeGmt`, then `stage_derived` and
+    `direct_fallback`); when the copies disagree in the field whose source a
+    mark names, that field is empty and listed in `disagreeing_fields`, and
+    the mark is null. Across the time points of a Snapshot store, the two
+    names of the start are one field, as the names of the Gear type are
+    (merge rules v2.17): the last time point that holds either gives the
+    start and its mark, and a change is an update listed once, under
+    `startTimeGmt|beginTimestamp`. `analysis/activities.csv` gains
+    `start_time_source` as its last column.
   - HRV values that disagree follow
     [Values that disagree](#values-that-disagree): the values are kept in the
     audit record, and Run Quality names the reason `VALUES_DISAGREE` instead of
     `CONFLICT_PRESERVED_NO_WINNER` (stage A2a). The HRV `date_basis` names the
-    timezone that was used.
+    timezone that was used: from stage A4d-2, the HRV audit record gives the
+    basis as `fit_end_local_date_from_message_370_field_253_timestamp` and the
+    timezone in `date_timezone`, also for the default timezone, where v1.7.1
+    wrote `fit_end_jst_date_from_message_370_field_253_timestamp` whatever the
+    timezone.
   - An unknown FIT sub-sport keeps its number in `sub_sport_code`; `sub_sport`
-    stays empty.
+    stays empty. From stage A4d-2, every FIT session gives `sub_sport_code`,
+    the number as recorded, also when `sub_sport` has a name for it; it is
+    null when the session has none or the number is of another form.
   - The External-safe Pack leaves the month empty for an Activity without a
-    date.
+    date (from stage A4d-2); such Activities come last, as before.
+
+### Daily dates
+
+- v1.7.1 and v2.0.0 read the date of a daily row the same way (stage A4d-2
+  writes this down): text gives the ISO date of its first ten characters
+  (`2030-03-01T06:00:00` is `2030-03-01`), and a number is a time in
+  milliseconds since 1970-01-01 UTC, whose UTC date is the date. A row whose
+  date can be read in neither way is left out (`DATA_ROW_LEFT_OUT` when it
+  holds a value). An eight-digit number written as a date, such as
+  `20300301`, is read as milliseconds, so it gives a date in January 1970.
 
 ### Files and fields that are not read
 
@@ -1523,6 +1562,12 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   candidates, only when there is something to count. Snapshot outputs give
   the merge rules version v2.15; the records that the build passes do not
   change.
+- Stage A4d-2 adds `start_time_source` to Activities and as the last column
+  of `analysis/activities.csv`, `sleep_day_source` and
+  `sleep_duration_source` to Sleep, and `sub_sport_code` to the FIT sessions:
+  the Schema Catalog goes from 243 to 247 fields. The HRV audit record gives
+  `date_basis` under a new name and `date_timezone`. Snapshot outputs give
+  the merge rules version v2.17.
 - Stage A4d-1 adds `aliases_disagree_counts` to the audit records of UDS,
   Sleep, and Gear, only when the names of a field disagree. The UDS audit
   record can count the reason `calendar_date_aliases_disagree`, and the Sleep
@@ -1681,7 +1726,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Lactate Threshold candidates that their dataset does not read, and
   `garmin_snapshot_merge_rules:v2.16` from stage A4d-1, which merges the two
   names of the Gear type as one field across time points when a record uses
-  both, in `config/garmin_snapshot_merge_rules_v2.json`. For these
+  both, and `garmin_snapshot_merge_rules:v2.17` from stage A4d-2, which does
+  so for the two names of the start of an Activity, in
+  `config/garmin_snapshot_merge_rules_v2.json`. For these
   datasets they replace the merge fields of the v1.0 registry; the other
   datasets follow the v1.0 registry until stage A3d. A build records
   `merge_rules_version` in `snapshot/snapshot_lineage.json`, the approved input
@@ -1906,6 +1953,12 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   Before, the build carried the name that the last time point lacked, so
   Run-All read both names in one row. A record that uses one name, and the
   daily records, are merged as before.
+- Stage A4d-2: the two names of the start of an Activity, `startTimeGmt` and
+  `beginTimestamp`, are one field across time points in the same way (merge
+  rules v2.17), so the last time point that holds either gives the start and
+  its mark. An Activity whose Snapshots hold both names changes its start in
+  one update, `startTimeGmt|beginTimestamp`, where it was two, one for each
+  name, so `updated_field_count` counts one.
 
 ## Golden outputs and tests
 
@@ -1994,7 +2047,16 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   be read but whose `date` can is kept with that day, where v1.7.1 left it
   out, and one whose two dates differ is left out. `DATA_VALUE_INVALID` can
   name a value of another form while its field holds the value of another
-  name. An Export without a second name gives the same output.
+  name. An Export without a second name gives the same output. From stage
+  A4d-2, Activities, Sleep, and the FIT sessions gain their marks and
+  `sub_sport_code`, and `analysis/activities.csv` gains `start_time_source`
+  as its last column, so their digests change for every Export; the Golden
+  Path output gains `start_time_source` too. An Activity whose
+  `startTimeGmt` is of another form takes its start from `beginTimestamp`,
+  where v1.7.1 left it empty, and keeps its key. The HRV audit record names
+  its timezone in `date_timezone` and its basis without one, also for the
+  default timezone. The External-safe Pack leaves the month of an Activity
+  without a date empty, where v1.7.1 wrote `None`.
 - Snapshots: existing stores need no migration; rerun `snapshot run-all`.
   Daily values that differ across Snapshots no longer stop the build, the
   Endurance Score and UDS days that v1.7.1 removed come back with the
@@ -2057,9 +2119,9 @@ Every stop has a specific code; errors that v1.7.1 reports only as
   the run, and lists the files that a run does not read by Snapshot number.
   From stage A4c-1, the build writes a link with the fields of the Export
   only, from stage A4c-2, it counts for Run-All the fields that it leaves
-  out of the daily rows, and from stage A4d-1, it merges the two names of
-  the Gear type as one field across time points. The merge rules v2.16 are
-  published in
+  out of the daily rows, from stage A4d-1, it merges the two names of the
+  Gear type as one field across time points, and from stage A4d-2, those of
+  the start of an Activity. The merge rules v2.17 are published in
   `config/garmin_snapshot_merge_rules_v2.json`; the v1.0 policy registry does
   not change.
 - Input: the downloaded Export ZIP file can be used directly. Folders around

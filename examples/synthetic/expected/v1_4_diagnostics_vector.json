@@ -1,14 +1,14 @@
 {
   "dataset_count": 17,
   "doctor_json_sha256": "3824fb69b6796a588264127bf116e2ca50321ddb45c977c1173d598144103b7d",
-  "field_count": 243,
+  "field_count": 247,
   "fixture": "examples/synthetic/garmin_export",
   "format": "garmin-running-data-normalizer-v1-4-diagnostics-expected-vector-v1",
   "generated_path_count": 50,
   "product_exit_code": 0,
   "product_version": "1.7.1",
   "relationship_count": 6,
-  "run_quality_sha256": "208a047d8b6401a28353664d477b5c88413a6d8b5223c21a6a732ebe680b5078",
+  "run_quality_sha256": "4761251b25d6dc3cd9765a0320cf79ac828195401dc428531485765319caf4b6",
   "run_status": "PASS_WITH_WARNINGS",
   "source_completeness_sha256": "4322612ae48a59b8fbd0ae4e2be86419d6be3c99ddbdde3ac28bffc4a8f2448c",
   "support_bundle": {

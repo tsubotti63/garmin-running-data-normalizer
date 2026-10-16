@@ -27,6 +27,7 @@
     "sport_type": "running",
     "start_time_gmt_ms": 1893456000000,
     "start_time_local_raw": "2030-01-01T09:00:00",
+    "start_time_source": "startTimeGmt",
     "training_effect_label": null
   }
 ]
