@@ -121,7 +121,7 @@ def store_not_readable_message(places: list[str] | None = None) -> str:
     first = places[0] if places and places[0] else "the Snapshot Store folder itself"
     more = len(places) - 1
     named = first if more <= 0 else f"{first} and {more} more"
-    return f"this app may not open a folder or file of the Snapshot Store: {named}"
+    return f"{STOPS['SNAPSHOT_STORE_NOT_READABLE'].what}: {named}"
 
 
 def shown_store_message(exc: SnapshotStoreError) -> str:

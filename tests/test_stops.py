@@ -430,6 +430,38 @@ class DoctorNextStepTest(unittest.TestCase):
         )
         self.assertIn(f"Next: CORRECT_PRE_RUN_CONDITION ({stops.NEXT_ACTIONS['CORRECT_PRE_RUN_CONDITION']})", human)
 
+    def test_a_finding_whose_code_is_a_stop_gives_the_next_step_of_the_stop(self) -> None:
+        # Stage B2b: the check and the run say the same about the same
+        # problem; the JSON report keeps the identifier of the next action.
+        # The words change for two findings only: an input that could not be
+        # read safely, and Activities files that hold no record that can be
+        # used.
+        stops = stops_module()
+        source = (PACKAGE / "diagnostics/doctor.py").read_text(encoding="utf-8")
+        start = source.index("def doctor_input(")
+        body = source[start : source.index("\ndef ", start)]
+        pairs = re.findall(r'_finding\(\s*"([A-Z_]+)",.*?next_action_id="([A-Z_]+)"', body, re.DOTALL)
+        self.assertEqual(len(pairs), body.count("_finding("))
+        with tempfile.TemporaryDirectory() as directory:
+            report = doctor_input(Path(directory))
+        report["findings"] = [{"code": code, "next_action_id": action} for code, action in pairs]
+        human = render_doctor_human(report)
+        changed = set()
+        for code, action in pairs:
+            step = stops.STOPS[code].next_step if code in stops.STOPS else stops.NEXT_ACTIONS[action]
+            with self.subTest(code=code, action=action):
+                self.assertEqual(stops.finding_next_step(code, action), step)
+                self.assertIn(f"Finding: {code} (next: {step})", human)
+            if step != stops.NEXT_ACTIONS[action]:
+                changed.add((code, action))
+        self.assertEqual(
+            changed,
+            {
+                ("INPUT_DISCOVERY_FAILED", "OBTAIN_COMPLETE_READABLE_EXPORT"),
+                ("ACTIVITIES_EMPTY", "SELECT_EXPORT_WITH_ACTIVITIES"),
+            },
+        )
+
     def test_every_next_action_of_the_reports_has_words(self) -> None:
         source = (PACKAGE / "diagnostics/doctor.py").read_text(encoding="utf-8")
         used = set(re.findall(r'next_action_id="([A-Z_]+)"', source))

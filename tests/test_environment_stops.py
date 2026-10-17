@@ -192,7 +192,7 @@ class InputNotReadableTest(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertEqual(
                 message,
-                "ERROR [INPUT_NOT_READABLE]: this app may not open a folder or file of the "
+                "ERROR [INPUT_NOT_READABLE]: this app is not allowed to open a folder or file of the "
                 f"input: {UDS_FOLDER}; {stop('INPUT_NOT_READABLE').next_step}",
             )
 

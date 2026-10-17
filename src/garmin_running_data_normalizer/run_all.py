@@ -129,11 +129,11 @@ def input_not_readable_message(places: list[str] | None = None) -> str:
     run is started, it names the first folder or file that cannot be opened
     and how many more; without them, it names none."""
     if places is None:
-        return "this app may not open a folder or file of the input"
+        return STOPS["INPUT_NOT_READABLE"].what
     first = places[0] if places and places[0] else "the input folder or ZIP file itself"
     more = len(places) - 1
     named = first if more <= 0 else f"{first} and {more} more"
-    return f"this app may not open a folder or file of the input: {named}"
+    return f"{STOPS['INPUT_NOT_READABLE'].what}: {named}"
 
 
 def shown_message(exc: RunAllError) -> str:

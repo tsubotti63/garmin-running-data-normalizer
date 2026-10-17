@@ -64,10 +64,12 @@ These rules come from the Human maintainer's decisions of 2026-10-11:
 - `PARTIAL_SUCCESS` takes precedence over `PASS_WITH_WARNINGS`. FIT files that
   cannot be read completely are left out as in v1.x, and the same status now
   covers every other left-out file or row.
-- Because `PARTIAL_SUCCESS` now covers more than FIT files, stage B reviews
-  the texts that describe it in v1.7.1 as complete Activities with some FIT
-  files left out: the page's result texts, and the Doctor's next step for a
-  completed run (`REVIEW_EXCLUDED_FIT_EVIDENCE`) and its text.
+- Because `PARTIAL_SUCCESS` now covers more than FIT files, stage B reviewed
+  the texts that described it in v1.7.1 as complete Activities with some FIT
+  files left out: stage B1a the page's result texts, and stage B2b the
+  Doctor's next step for a completed run (`REVIEW_EXCLUDED_FIT_EVIDENCE`,
+  whose identifier stays) and the sentence of its report for a person, which
+  now say that files, rows, or FIT data were left out.
 - Optional families that are absent keep the v1.x status `SKIPPED_NOT_PRESENT`
   and the warning `OPTIONAL_FAMILY_NOT_PRESENT`.
 
@@ -518,9 +520,10 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
       the Activities files cannot be read (`ACTIVITIES_FILES_CANNOT_BE_READ`)
       when an Activities file was left out, and otherwise with the new message
       that they hold no Activities record that can be used
-      (`ACTIVITIES_FILES_HOLD_NO_RECORDS`; the next step is to select an
-      Export with Activities), such as an empty list, or only rows without a
-      usable identifier.
+      (`ACTIVITIES_FILES_HOLD_NO_RECORDS`, with the next action
+      `SELECT_EXPORT_WITH_ACTIVITIES`), such as an empty list, or only rows
+      without a usable identifier. From stage B2b, the report for a person
+      gives the next step of the stop `ACTIVITIES_EMPTY` for both messages.
     - It does not read them for mixed Exports or without the timezone data,
       which stop the run before it reads them. The files of the other
       datasets are not parsed: the run leaves out what it cannot read of them
@@ -529,9 +532,9 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
       same answer.
   - A damaged Export ZIP file stops the run (`INPUT_ZIP_CORRUPT`); see
     [An Export given as a ZIP file](#an-export-given-as-a-zip-file).
-  - A folder or file of the input that this app may not open, such as a
-    folder that the operating system's privacy settings protect, is not a
-    problem of the data: its records would be missing without a word. From
+  - A folder or file of the input that this app is not allowed to open, such
+    as a folder that the operating system's privacy settings protect, is not
+    a problem of the data: its records would be missing without a word. From
     stage A3d-3a it stops the run, the pre-run check, `normalize-activities`,
     and `snapshot register` with `INPUT_NOT_READABLE` (exit 2), and so do the
     input itself and its Activities folder when they cannot be opened
@@ -1395,6 +1398,18 @@ step.
     example, `Finding: ACTIVITIES_NOT_FOUND (next: select an Export that
     contains your Activities)`); the identifiers stay first, and the JSON
     report does not change.
+  - From stage B2b, a finding whose code is a stop gives the next step of
+    that stop, as the run's `ERROR` line does, so that the check and the run
+    say the same about the same problem; the GUI's check of the input does
+    the same. The JSON report keeps the `next_action_id` of each finding, so
+    that two findings name there another step than their words:
+    `INPUT_DISCOVERY_FAILED` keeps `OBTAIN_COMPLETE_READABLE_EXPORT`, whose
+    words speak of an Export with Activities, and gives the next step of the
+    stop, to download or extract the Export again; and `ACTIVITIES_EMPTY` for
+    Activities files that hold no record that can be used
+    (`ACTIVITIES_FILES_HOLD_NO_RECORDS`) keeps
+    `SELECT_EXPORT_WITH_ACTIVITIES` and gives the next step of the stop, to
+    obtain a complete, readable Export that contains the Activities.
 - `normalize-activities` writes in an empty output folder that is there
   already by moving its three files into it; from stage A5b, when it cannot
   move one, it removes those that it moved, so that a stop leaves no part of
@@ -1407,15 +1422,15 @@ step.
     kept (`ACTIVITIES_EMPTY`).
   - `snapshot register` stops for an input that is a link (`INPUT_SYMLINK`),
     that is not an existing folder or ZIP file (`INPUT_NOT_DIRECTORY`), or
-    that this app may not look at (`INPUT_NOT_READABLE`). It reads the input
-    as a run reads it: a member of the Export ZIP file that fails a safety
-    check, a symbolic link inside the input, and a ZIP file inside the Export
-    that cannot be copied out or whose members cannot be read stop it with
-    `INPUT_DISCOVERY_FAILED`, or with `INPUT_CHANGED` when a file went away;
-    a member that cannot be read when it is copied, after it was read whole,
-    is a change of the input (`INPUT_CHANGED`); and an Export ZIP file that is
-    too large to read directly stops it with `INPUT_TOO_LARGE` also when it
-    holds the same Export twice, whose roots are read to compare them.
+    that this app is not allowed to open (`INPUT_NOT_READABLE`). It reads the
+    input as a run reads it: a member of the Export ZIP file that fails a
+    safety check, a symbolic link inside the input, and a ZIP file inside the
+    Export that cannot be copied out or whose members cannot be read stop it
+    with `INPUT_DISCOVERY_FAILED`, or with `INPUT_CHANGED` when a file went
+    away; a member that cannot be read when it is copied, after it was read
+    whole, is a change of the input (`INPUT_CHANGED`); and an Export ZIP file
+    that is too large to read directly stops it with `INPUT_TOO_LARGE` also
+    when it holds the same Export twice, whose roots are read to compare them.
   - A registration that meets a symbolic link inside the store, or a
     registered Snapshot whose identity does not match its content, stops
     with `SNAPSHOT_STORE_INVALID`, as for other damage; `snapshot verify`
@@ -1550,7 +1565,7 @@ gives, for its entries and controls, are not in this table.
 |---|---|---|
 | `INPUT_SYMLINK` | the input is a symbolic link | select the Export folder or ZIP file itself, not a link to it |
 | `INPUT_NOT_DIRECTORY` | the input is not an existing folder or ZIP file | select the Export folder, or the ZIP file downloaded from Garmin |
-| `INPUT_NOT_READABLE` | this app may not open a folder or file of the input | allow this app to read it (on a Mac, in System Settings > Privacy & Security; on Windows, in the Security tab of its Properties), or select the Export folder itself |
+| `INPUT_NOT_READABLE` | this app is not allowed to open a folder or file of the input | allow this app to read it (on a Mac, in System Settings > Privacy & Security; on Windows, in the Security tab of its Properties), or select the Export folder itself |
 | `INPUT_CHANGED` | the input changed while it was read | run the command again when no other program changes the input |
 | `INPUT_ZIP_CORRUPT` | the Export ZIP file is damaged or incomplete | download the Export ZIP file again; if it is damaged again, request a new Export from Garmin |
 | `INPUT_TOO_LARGE` | the Export ZIP file is too large to read directly | extract it, and select the extracted folder |
@@ -1575,7 +1590,7 @@ gives, for its entries and controls, are not in this table.
 | `SNAPSHOT_STORE_SPACE_INSUFFICIENT` | the drive of the Snapshot Store does not have enough free space | free some space, or for a new store choose another folder; then run the command again |
 | `SNAPSHOT_STORE_LOCKED` | the Snapshot Store has a lock file (.single-writer.lock): a registration is running, or one stopped before it ended | if no snapshot command is running, delete that file, then run the command again |
 | `SNAPSHOT_REGISTRATION_INCOMPLETE` | a registration in the Snapshot Store was interrupted | register the same Export, or another complete Export, again, which completes the store |
-| `SNAPSHOT_STORE_NOT_READABLE` | this app may not open a folder or file of the Snapshot Store | allow this app to read it (on a Mac, in System Settings > Privacy & Security; on Windows, in the Security tab of its Properties); this app must be able to read the whole store folder |
+| `SNAPSHOT_STORE_NOT_READABLE` | this app is not allowed to open a folder or file of the Snapshot Store | allow this app to read it (on a Mac, in System Settings > Privacy & Security; on Windows, in the Security tab of its Properties); this app must be able to read the whole store folder |
 | `SNAPSHOT_STORE_INVALID` | the Snapshot Store is damaged, or a Snapshot that it lists is missing | do not change the files inside the store; restore it from a backup that passed snapshot verify, or make a new store and register the Exports again |
 | `SNAPSHOT_STORE_VERSION_UNSUPPORTED` | a newer version of this app made the Snapshot Store | use a newer version of this app, and do not change the files inside the store |
 | `SNAPSHOT_STORE_NOT_FOUND` | there is no Snapshot Store in the folder given for it | check the folder given with --store; for a new store, run snapshot init first |
@@ -2547,7 +2562,13 @@ v1.7.1 with the CLI at the stage A checkpoint.
   0xC000013A on Windows); see [Cancellation](#cancellation). One `Ctrl+C` no
   longer leaves the hidden staging folder of `snapshot build-input`, the
   files that `normalize-activities` moved into an empty output folder, or the
-  hidden temporary file of `support-bundle`.
+  hidden temporary file of `support-bundle`. From stage B2b, `doctor`'s
+  report for a person gives a finding of a stop the next step of that stop
+  (see [Stops that remain](#stops-that-remain)), and its sentence and next
+  step for exit 3 no longer speak of FIT files only; the `ERROR` lines of
+  `INPUT_NOT_READABLE` and `SNAPSHOT_STORE_NOT_READABLE` say that this app is
+  not allowed to open a folder or file, where they said that it may not open
+  one. The JSON report does not change.
 - Python API: `DiscoveredAsset` is a plain class instead of a frozen
   dataclass. Its fields, its constructor, and the content that
   `discover_export` returns are unchanged, but dataclass equality, hashing,

@@ -20,7 +20,7 @@ from garmin_running_data_normalizer.diagnostics.doctor import doctor_input
 from garmin_running_data_normalizer.gui.runs import RUN_STATUSES
 from garmin_running_data_normalizer.gui.server import LANGUAGES, STATIC_FILES
 from garmin_running_data_normalizer.run_all import PROGRESS_STAGES, PROGRESS_STEPS, run_all
-from garmin_running_data_normalizer.stops import PAGE_STOPS, PAGE_WORDING, STOPS
+from garmin_running_data_normalizer.stops import NEXT_ACTIONS, PAGE_STOPS, PAGE_WORDING, STOPS
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,6 +86,28 @@ def flow_table(name: str) -> dict[str, str]:
     if match is None:
         raise AssertionError(f"flow.mjs has no table {name}")
     return dict(re.findall(r'^\s+(\w+): "([^"]+)",$', match.group(1), re.MULTILINE))
+
+
+def flow_entries(name: str) -> dict[str, str | None]:
+    """Return one table of flow.mjs with its entries that show nothing (null)."""
+    source = (STATIC_ROOT / "flow.mjs").read_text(encoding="utf-8")
+    match = re.search(rf"const {name} = \{{(.*?)\n\}};", source, re.DOTALL)
+    if match is None:
+        raise AssertionError(f"flow.mjs has no table {name}")
+    return {
+        key: None if value == "null" else value.strip('"')
+        for key, value in re.findall(r'^\s+(\w+): ("[^"]+"|null),$', match.group(1), re.MULTILINE)
+    }
+
+
+def pre_run_findings() -> list[tuple[str, str, str]]:
+    """The code, the message, and the next action of each finding that the
+    pre-run check can give."""
+    return re.findall(
+        r'_finding\(\s*"([A-Z_]+)",.*?safe_message_id="([A-Z_]+)",\s*next_action_id="([A-Z_]+)"',
+        inspect.getsource(doctor_input),
+        re.DOTALL,
+    )
 
 
 def codes_in(relative: str, pattern: str) -> set[str]:
@@ -241,15 +263,35 @@ class GuiMessageCoverageTest(unittest.TestCase):
         self.assertEqual(set(flow_table("STEP_KEYS")), set(PROGRESS_STEPS))
 
     def test_every_pre_run_finding_has_a_message(self) -> None:
+        # Stage B2b: a finding has words of its own message, and the next
+        # step of the stop of its code, as the CLI's Doctor gives it; only
+        # the findings whose code is not a stop take the next step of their
+        # next action.
+        findings = pre_run_findings()
         source = inspect.getsource(doctor_input)
+        self.assertEqual(len(findings), source.count("_finding("))
+        self.assertEqual({message for _code, message, _action in findings}, set(flow_entries("FINDING_KEYS")))
+        stop_steps = flow_table("STOP_NEXT_KEYS")
+        actions = flow_entries("ACTION_KEYS")
         self.assertEqual(
-            set(re.findall(r'safe_message_id="([A-Z_]+)"', source)),
-            set(flow_table("FINDING_KEYS")),
+            {action for code, _message, action in findings if code not in STOPS}, set(actions)
         )
-        self.assertEqual(
-            set(re.findall(r'next_action_id="([A-Z_]+)"', source)),
-            set(flow_table("ACTION_KEYS")),
-        )
+        english = load_catalog("en")
+        for code, message, action in findings:
+            with self.subTest(code=code, message=message):
+                if code in STOPS:
+                    self.assertIn(code, stop_steps)
+                elif actions[action] is not None:
+                    self.assertEqual(english[actions[action]], sentence(NEXT_ACTIONS[action]))
+        # A finding that is a stop says what the stop says, unless its code
+        # covers more than one finding.
+        whats = flow_table("STOP_KEYS")
+        messages = flow_table("FINDING_KEYS")
+        for code, message, _action in findings:
+            shared = sum(1 for other, *_rest in findings if other == code) > 1
+            if code in STOPS and not shared:
+                with self.subTest(message=message):
+                    self.assertEqual(messages[message], whats[code])
 
     def test_every_post_run_doctor_value_has_a_message(self) -> None:
         self.assertEqual(
@@ -266,6 +308,12 @@ class GuiMessageCoverageTest(unittest.TestCase):
         )
         self.assertEqual(set(next_actions), set(RUN_STATUSES))
         self.assertEqual(set(next_actions.values()), set(flow_table("NEXT_ACTION_KEYS")))
+        # The page gives the next step in the words of the CLI's Doctor
+        # (stage B2b).
+        english = load_catalog("en")
+        for action, key in flow_table("NEXT_ACTION_KEYS").items():
+            with self.subTest(action=action):
+                self.assertEqual(english[key], sentence(NEXT_ACTIONS[action]))
         self.assertEqual(set(SAFE_WARNING_CODES), set(flow_table("WARNING_KEYS")))
 
     def test_every_family_and_family_status_has_a_name(self) -> None:

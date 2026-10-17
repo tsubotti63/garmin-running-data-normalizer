@@ -28,7 +28,7 @@ from ..intake.source import (
 from ..normalizers.activities import normalize_activities
 from ..run_all import left_out_files
 from ..standalone import StandaloneHandoffError, validate_standalone_handoff
-from ..stops import NEXT_ACTIONS
+from ..stops import NEXT_ACTIONS, finding_next_step
 from .contracts import (
     DOCTOR_FORMAT,
     DOCTOR_SCHEMA_VERSION,
@@ -571,11 +571,12 @@ def render_doctor_human(report: dict[str, Any]) -> str:
                     "Completed with warnings. Outputs are available; review the warning "
                     "codes and affected scopes before use."
                 ),
+                # Exit 3 leaves out files and rows as well as FIT data (stage
+                # B2b).
                 "PARTIAL_SUCCESS": (
                     "Completed with bounded exclusions (PARTIAL_SUCCESS, exit 3). "
-                    "This is not a fatal run failure. Valid Activities output is "
-                    "available; review the excluded FIT evidence before using "
-                    "FIT-derived outputs."
+                    "This is not a fatal run failure. Outputs are available; review "
+                    "what was left out before use."
                 ),
             }[report["product_status"]]
         )
@@ -585,10 +586,11 @@ def render_doctor_human(report: dict[str, Any]) -> str:
             "Run Doctor on the input and correct the reported condition."
         )
     # Each finding and the report give their next step in words, as the GUI
-    # does (stage A5b); the identifiers stay first, for programs that read
-    # the lines.
+    # does (stage A5b); a finding whose code is a stop gives the next step of
+    # that stop, as the run does (stage B2b). The identifiers stay first, for
+    # programs that read the lines.
     for item in report["findings"]:
-        step = NEXT_ACTIONS.get(str(item.get("next_action_id")))
+        step = finding_next_step(str(item.get("code")), str(item.get("next_action_id")))
         lines.append(f"Finding: {item['code']}" + (f" (next: {step})" if step else ""))
     next_id = str(report["doctor_next_action_id"])
     step = NEXT_ACTIONS.get(next_id)
