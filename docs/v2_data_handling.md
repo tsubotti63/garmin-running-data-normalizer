@@ -1682,6 +1682,16 @@ code of a stop stays 2.
   `analysis/activities.csv` gains the last column `disagreeing_fields`, and
   `analysis/performance_metrics_daily.csv` the last columns
   `hill_disagreeing_fields` and `endurance_disagreeing_fields`.
+- The texts of every output, also of a one-shot run, explain these rules:
+  from stage A2a, `START_HERE.md` (Recommended Reading Order),
+  `DATASET_INVENTORY.md` (Interpretation Rules), and `ANALYSIS_HANDOFF.md`
+  (Receiving Rules) say what a field named in `disagreeing_fields` means,
+  and the notes of the fields of the daily datasets in the Schema Catalog say
+  that a value that differs between the observations of one stable key is
+  null and named in `disagreeing_fields`; from stage A2b-2, the same
+  documents say how a Snapshot run updates Activities, Gear, `activity_gear`,
+  and Personal Records. These files, and the digests that cover them, change
+  for every run.
 - A field that a disagreement can leave empty is nullable in the Schema
   Catalog. v1.7.1 declared these non-null: the Hill and Endurance
   `overall_score`, the four Race Prediction times, `vo2max`, and
@@ -1953,8 +1963,21 @@ code of a stop stays 2.
   numbers. Endurance Score and UDS no longer remove the day, and
   `snapshot/canonical_merge_summary.json` and `run_summary.json` no longer hold
   the observed values (`observed_variants`); the values stay only in the audit
-  records. The same Activity twice with different values in one Snapshot, or
-  in two Snapshots observed at the same time, stopped until stage A3b, which
+  records. With them, the merge summary of each dataset, wherever it is given
+  (also in `ANALYSIS_CONTEXT.json` and the files of a build), loses the
+  counters of the observed variants and the policy of the variants
+  (`observed_variant_count`, `single_variant_key_count`,
+  `multi_variant_key_count`, `canonicalization_unresolved_count`,
+  `malformed_count`, and `variant_policy`), and the summary of each daily
+  dataset gains `distinct_record_count` (its records with a stable key),
+  `exact_repeat_count`, and `automatic_winner`, which is false: no value is
+  chosen. In `canonical/record_provenance.json`, a record of a daily dataset
+  is kept whole as an observation (`observation_kept`, or `exact_duplicate`
+  for a copy of it), where v1.7.1 gave its fields to a merged record
+  (`field_contributor`), so `canonical/field_provenance.json` lists the
+  fields of the other datasets only. The same Activity twice with different
+  values in one Snapshot, or in two Snapshots observed at the same time,
+  stopped until stage A3b, which
   makes it a disagreement; a malformed Lactate Threshold candidate stopped
   until stage A3d-2a, which passes it to Run-All, and a JSON file that cannot
   be read stopped until stage A3c-2, which leaves it out. A Snapshot build
@@ -2252,9 +2275,14 @@ code of a stop stays 2.
   why. A golden output for an input that the change does not concern stays
   byte-identical.
 - At the stage A checkpoint, the CLI is checked on its own with the synthetic
-  golden outputs, and the migration notes are drafted.
+  golden outputs, and the migration notes are drafted
+  ([v2.0.0 Migration Notes Draft](v2_migration_notes_draft.md)).
 
 ## Migration notes outline (v1.7.1 to v2.0.0)
+
+The [v2.0.0 Migration Notes Draft](v2_migration_notes_draft.md) gives users
+what this outline means for their scripts and readers, from the comparison of
+v1.7.1 with the CLI at the stage A checkpoint.
 
 - Exit codes: runs that stopped with exit 2 for problems in the data now finish
   with exit 3 or 0, and the warnings say what was left out or kept. A daily
@@ -2573,9 +2601,15 @@ code of a stop stays 2.
   before the store and raises `SnapshotBuildOutputError`, with the code of
   the place of the output, when it cannot write the build; and the snapshot
   package gains `NOTICE_MESSAGES`, `shown_store_message`, and
-  `verification_error`. From stage A3d-4a, the build's result gains
-  `family_file_counts`, and from stage A3d-4b `lactate_threshold_counts`
-  and `private_field_counts`, which `run_snapshot_all` passes to Run-All.
+  `verification_error`. The build's result gains these keys, which
+  `run_snapshot_all` passes to Run-All and `snapshot build-input` prints with
+  the rest of the result: `fit_snapshot_numbers` (stage A2b-1),
+  `record_changes` (stage A2b-2), `files_left_out` and `files_not_read`
+  (stage A3c-2), `files_with_repaired_text` (stage A3d-2c-1),
+  `family_file_counts` (stage A3d-4a), `lactate_threshold_counts`, which
+  holds `family_asset_counts` and `family_source_record_counts`, and
+  `private_field_counts` (stage A3d-4b), `input_file_count` (stage
+  A3d-4c-1), and `unread_field_counts` (stage A4c-2).
   From stage A3d-4b, `load_json_assets` in `intake.discovery` takes a
   record `family`, which `normalize_activities`, `normalize_gear`, and
   `normalize_personal_records` pass instead of a name suffix;
