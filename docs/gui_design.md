@@ -68,8 +68,9 @@ output and exit contracts.
 ## Page
 
 The page has four areas, in order: 1 Export, 2 Snapshots, 3 Output, and
-4 Normalize. Screen texts and layout details are settled in stage B with screen
-mockups that the Human maintainer reviews.
+4 Normalize. Screen texts and layout details were settled in stage B0 with a
+screen mockup and a list of every text on the page, which the Human maintainer
+reviewed on 2026-10-17; the stage B pull requests follow them.
 
 - 1 Export: a downloaded ZIP file or an extracted folder. For a folder, the user
   confirms that the Export was extracted completely; for a ZIP file, the checks
@@ -82,6 +83,27 @@ mockups that the Human maintainer reviews.
   External-safe Pack.
 - 4 Normalize: the main button, progress, cancellation, the result table, the
   output check, and the Support Bundle.
+
+The four areas stand in a row as boxes, in two columns on a window narrower
+than 1280 pixels. One line above them says what to do now; a box with a
+problem holds its own next step, and the line points at that box. Under the
+boxes come the meaning of the colors and two tables: the steps of the run,
+with the seconds of each step, and the results by data family (stage B1a).
+
+- The main button is labeled "Run normalization".
+- The headline of a finished run says what its exit code means: "Normalized
+  with part of the input left out" (3), "Normalized" (0), or "Could not
+  normalize" (2), with the exit code under it. A run cancelled before its
+  output shows no exit code.
+- The page shows no percentage of progress, because the stages of Run-All give
+  none that is correct. It shows the current step and its number, and a bar
+  while FIT files are read.
+- Cancelling asks for confirmation in the fourth box, not in a dialog of the
+  browser.
+- "If something is wrong", with the output check and the Support Bundle, is
+  folded to one line until it is opened.
+- The page changes text with `textContent` only, never with HTML, so that a
+  path or a name from the computer is never read as markup.
 
 Progress through the areas:
 
@@ -103,9 +125,9 @@ check and Support Bundle. Before the External-safe Pack or the Support Bundle is
 created, the page shows the name and location of the file that will be
 created.
 
-Provisional until stage B: the label of the main button. Stage A settled
-`INPUT_ZIP_CORRUPT` (stage A1a), `INPUT_MULTIPLE_EXPORTS` (stage A3a), and
-`SNAPSHOT_STORE_LOCKED` (stage A3d-3b).
+Stage A settled the codes `INPUT_ZIP_CORRUPT` (stage A1a),
+`INPUT_MULTIPLE_EXPORTS` (stage A3a), and `SNAPSHOT_STORE_LOCKED` (stage
+A3d-3b).
 
 ## Architecture
 
@@ -145,7 +167,9 @@ Local Snapshot Store and new output folders
   FIT files with distinct content read out of the total, because a file
   repeated under another name is read once. Output is identical with and
   without the callback, and the callback must not raise. Snapshot runs add
-  their stages in stage B.
+  their stages in stage B. The server keeps the seconds of each stage, with the
+  stage's name and the number only, for the steps table of the page (stage
+  B1a).
 - Cancellation stops the child process and its process group: `SIGINT` on
   POSIX, and `CTRL_BREAK_EVENT` with `CREATE_NEW_PROCESS_GROUP` on Windows,
   followed by termination after 10 seconds and a kill 5 seconds later.
@@ -424,8 +448,10 @@ alone, and reduced motion.
   hidden live region speaks when the stage changes, when a run stalls or is
   being cancelled, and when it ends. Live regions change only when their text
   changes, so that screen readers do not repeat them.
-- When a run ends, focus moves to the result heading. When a button that had
-  focus stays disabled after its action, focus moves to the nearest heading.
+- When a run ends, focus moves to the result heading; when it stops, to the
+  heading of the stop in the box that it concerns (stage B1a). When a box is
+  confirmed, focus moves to the next box. When a button that had focus stays
+  disabled after its action, focus moves to the nearest heading.
 - Losing the server is shown as an alert at the top of the page.
 - Tests check labels, button names, heading order, live regions, focus
   targets, and the contrast of the stylesheet's colors. Keyboard-only use and

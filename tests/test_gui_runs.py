@@ -31,7 +31,7 @@ from garmin_running_data_normalizer.gui.runs import (
     validate_output_name,
     windows_paths_too_long,
 )
-from garmin_running_data_normalizer.run_all import OUTPUT_PATHS, run_all
+from garmin_running_data_normalizer.run_all import OUTPUT_PATHS, PROGRESS_STAGES, run_all
 from garmin_running_data_normalizer.standalone import validate_standalone_handoff
 from tests.fit_fixture_factory import synthetic_fit
 from tests.test_run_all_progress import export_with_fit, tree_bytes
@@ -295,6 +295,9 @@ class RunManagerTest(unittest.TestCase):
         self.assertEqual(status["state"], "failed")
         self.assertEqual(status["error_code"], "RUN_ALL_FAILED")
         self.assertEqual(status["progress"], {"stage": "normalizing", "step": "activities"})
+        # The seconds of each stage hold stage names and numbers only.
+        self.assertEqual(list(status["stage_seconds"]), ["normalizing"])
+        self.assertIsInstance(status["stage_seconds"]["normalizing"], float)
         self.assertIsNone(status["result"])
         self.assertNotIn(PRIVATE_TEXT, json.dumps(status))
         self.assertIsNone(manager.finished_output())
@@ -459,6 +462,41 @@ class RunManagerTest(unittest.TestCase):
         self.assertEqual(
             [path.name for path in self.parent.iterdir() if path.name.startswith(".")], []
         )
+
+
+class StageSecondsTest(unittest.TestCase):
+    """The seconds of each stage of Run-All, for the steps table of the page
+    (stage B1a). They are measured on the server, so that a page opened again
+    during a run still sees them."""
+
+    def setUp(self) -> None:
+        self.run = runs._Run(SimpleNamespace(), Path("output"), set())
+
+    def test_each_stage_adds_up_the_time_spent_in_it(self) -> None:
+        start = 100.0
+        self.run.enter_stage("discovering", start)
+        self.run.enter_stage("normalizing", start + 2)
+        self.run.enter_stage("normalizing", start + 3)
+        self.run.enter_stage("reading_fit", start + 5)
+        # A stage that comes again adds to its earlier time.
+        self.run.enter_stage("normalizing", start + 9)
+        self.assertEqual(
+            self.run.stage_seconds(start + 10),
+            {"discovering": 2.0, "normalizing": 4.0, "reading_fit": 4.0},
+        )
+
+    def test_the_last_stage_counts_until_the_run_ends(self) -> None:
+        self.run.enter_stage("writing_output", 10.0)
+        self.run.ended = 12.5
+        self.assertEqual(self.run.stage_seconds(99.0), {"writing_output": 2.5})
+
+    def test_a_run_without_a_stage_has_no_seconds(self) -> None:
+        self.assertEqual(self.run.stage_seconds(5.0), {})
+
+    def test_the_stages_come_in_the_order_of_run_all(self) -> None:
+        for offset, stage in enumerate(reversed(PROGRESS_STAGES)):
+            self.run.enter_stage(stage, float(offset))
+        self.assertEqual(list(self.run.stage_seconds(10.0)), list(PROGRESS_STAGES))
 
 
 def windows_parent(length: int) -> str:

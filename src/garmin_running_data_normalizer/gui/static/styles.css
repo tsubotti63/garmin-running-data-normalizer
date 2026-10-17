@@ -1,26 +1,62 @@
+/* The page of stage B1a: four boxes in a row, the line of what to do next,
+   and two tables under them. Colors have five meanings across the page:
+   blue is now, green is done, yellow is a warning, red is a problem to fix,
+   and gray is absent or not yet. Color is never the only signal. */
+
 :root {
   color-scheme: light dark;
-  --text: #1f2328;
-  --muted: #57606a;
-  --background: #ffffff;
-  --surface: #f6f8fa;
-  --border: #8c959f;
-  --accent: #0b57d0;
-  --accent-text: #ffffff;
-  font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI",
-    Meiryo, sans-serif;
-  line-height: 1.6;
+  --page: #e8ebf0;
+  --surface: #ffffff;
+  --group: #f6f7f9;
+  --line: #cdd2da;
+  --edge: #7a8290;
+  --text: #1c2330;
+  --sub: #566070;
+  --muted: #646c7c;
+  --dis: #9aa1ac;
+  --accent: #0b5fcc;
+  --accent-soft: #e3edfb;
+  --on-accent: #ffffff;
+  --ok: #17733f;
+  --ok-soft: #e1f2e7;
+  --warn: #7a5000;
+  --warn-soft: #ffefb0;
+  --warn-line: #f2b200;
+  --ng: #b3312a;
+  --ng-soft: #fae3df;
+  --ng-tint: #fdf3f1;
+  --none: #5f6878;
+  --none-soft: #eceef2;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo UI", "Noto Sans CJK JP", sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #e6edf3;
-    --muted: #9da7b3;
-    --background: #0d1117;
-    --surface: #161b22;
-    --border: #6e7681;
-    --accent: #8ab4f8;
-    --accent-text: #0d1117;
+    --page: #121418;
+    --surface: #1c1f24;
+    --group: #2a2d33;
+    --line: #3d414a;
+    --edge: #7b8494;
+    --text: #e8eaee;
+    --sub: #a9afba;
+    --muted: #9aa1ad;
+    --dis: #666d79;
+    --accent: #5b9bff;
+    --accent-soft: #1f2e48;
+    --on-accent: #0b1424;
+    --ok: #52c98a;
+    --ok-soft: #1b3326;
+    --warn: #f0c04a;
+    --warn-soft: #3a3120;
+    --warn-line: #e0a800;
+    --ng: #ff7b6e;
+    --ng-soft: #41241f;
+    --ng-tint: #2c2020;
+    --none: #a3a9b4;
+    --none-soft: #2d3036;
   }
 }
 
@@ -43,76 +79,278 @@
 
 body {
   margin: 0;
-  background: var(--background);
+  background: var(--page);
   color: var(--text);
 }
 
-main {
-  max-width: 48rem;
-  margin: 0 auto;
-  padding: 2rem 1rem;
-}
-
-h1 {
+h1,
+h2,
+h3,
+h4 {
   margin: 0;
-  font-size: 1.5rem;
+  line-height: 1.35;
 }
 
-h2 {
-  margin: 0 0 0.5rem;
-  font-size: 1.2rem;
+p {
+  margin: 0;
 }
 
-h3 {
-  margin: 1rem 0 0.25rem;
-  font-size: 1.05rem;
+/* The title, and the one line of what to do next. */
+.topbar {
+  padding: 12px 20px 10px;
 }
 
-section {
-  margin: 1.5rem 0;
-  padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+.topbar h1 {
+  font-size: 1.15rem;
 }
 
-label {
-  display: block;
-  margin: 0.75rem 0 0.25rem;
+.development {
+  margin-top: 2px;
+  color: var(--sub);
+  font-size: 0.86rem;
+}
+
+.next-line {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
   font-weight: 600;
 }
 
-.version,
-.help,
-.path {
-  margin: 0.25rem 0 0;
+.next-line.k-done {
+  border-left-color: var(--ok);
+}
+
+.next-line.k-warn {
+  border-left-color: var(--warn-line);
+}
+
+.next-line.k-error {
+  border-left-color: var(--ng);
+}
+
+.next-label {
+  color: var(--sub);
+}
+
+.app {
+  padding: 0 20px 16px;
+}
+
+/* The four boxes in a row, with an arrow between them. */
+.flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22px minmax(0, 1.15fr) 22px minmax(0, 1fr) 22px minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.arrow {
+  align-self: center;
+  justify-self: center;
+  width: 0;
+  height: 0;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-left: 10px solid var(--line);
+}
+
+/* A narrow window puts the boxes in two columns, so that nothing overflows. */
+@media (max-width: 1279px) {
+  .flow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .arrow {
+    display: none;
+  }
+}
+
+.box {
+  min-width: 0;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+/* The thick edges are drawn inside the box, so that its size stays. */
+.box.s-current {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  background: var(--surface);
+}
+
+.box.s-done {
+  box-shadow: inset 0 0 0 1px var(--ok);
+}
+
+.box.s-error {
+  box-shadow: inset 0 0 0 2px var(--ng);
+  background: var(--ng-tint);
+}
+
+.box.s-stopped {
+  box-shadow: inset 0 0 0 1px var(--ng);
+}
+
+.box h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 1.02rem;
+}
+
+.num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--none-soft);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.s-current .num {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.s-done .num {
+  background: var(--ok);
+  color: var(--surface);
+}
+
+.s-error .num,
+.s-stopped .num {
+  background: var(--ng);
+  color: var(--surface);
+}
+
+.badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge:empty {
+  display: none;
+}
+
+.s-current .badge {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.s-done .badge {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.s-error .badge,
+.s-stopped .badge {
+  background: var(--ng-soft);
+  color: var(--ng);
+}
+
+.box h2 .note {
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.summary {
+  margin-top: 6px;
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.summary::before {
+  content: "\2713\00a0";
+}
+
+label,
+.label-line,
+legend {
+  display: block;
+  margin: 10px 0 3px;
+  color: var(--sub);
+  font-size: 0.86rem;
+}
+
+fieldset {
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.choice label,
+.checkbox-row label {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.93rem;
+}
+
+.unused {
+  margin-top: 4px;
+  padding-left: 10px;
+  border-left: 3px solid var(--line);
+}
+
+.empty {
   color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.help,
+.note,
+.version,
+.path {
+  color: var(--sub);
+  font-size: 0.86rem;
+}
+
+.help,
+.note {
+  margin-top: 4px;
 }
 
 .path {
   overflow-wrap: anywhere;
 }
 
-.notice {
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-}
-
-input[type="text"] {
+input[type="text"],
+select {
   box-sizing: border-box;
   width: 100%;
-  padding: 0.375rem 0.5rem;
-  border: 1px solid var(--border);
+  padding: 5px 8px;
+  border: 1px solid var(--edge);
   border-radius: 6px;
-  background: var(--background);
+  background: var(--surface);
   color: var(--text);
   font: inherit;
 }
 
+.statusbar select {
+  width: auto;
+}
+
 .path-row {
   display: flex;
-  gap: 0.5rem;
+  gap: 6px;
 }
 
 .path-row input {
@@ -122,60 +360,225 @@ input[type="text"] {
 
 .checkbox-row {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
 }
 
-.checkbox-row label {
-  margin: 0;
-}
-
-.button-row,
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-}
-
-.controls label {
-  margin: 0;
-}
-
-.messages p {
-  margin: 0.5rem 0 0;
-  /* Messages can hold long paths, such as the output or Support Bundle path. */
+.made {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--group);
+  font-size: 0.86rem;
   overflow-wrap: anywhere;
 }
 
-select,
+.button-row,
+.decide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.decide {
+  margin-top: 12px;
+}
+
 button {
-  padding: 0.375rem 0.75rem;
-  border: 1px solid var(--border);
+  max-width: 100%;
+  padding: 5px 12px;
+  border: 1px solid var(--edge);
   border-radius: 6px;
   background: var(--surface);
   color: var(--text);
   font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
 button.primary {
   border-color: var(--accent);
   background: var(--accent);
-  color: var(--accent-text);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+button.big {
+  padding: 8px 18px;
+  font-size: 1rem;
 }
 
 button:disabled,
-input:disabled {
-  opacity: 0.6;
+input:disabled,
+select:disabled {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--dis);
   cursor: not-allowed;
+}
+
+button.primary:disabled {
+  font-weight: 400;
+}
+
+.messages p {
+  margin-top: 6px;
+  /* Messages can hold long paths, such as the output or Support Bundle path. */
+  overflow-wrap: anywhere;
+}
+
+/* A stop, in the box that it concerns. */
+.errbox {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--ng);
+  border-left-width: 5px;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.errbox h3 {
+  color: var(--ng);
+  font-size: 0.95rem;
+}
+
+/* The fourth box: the headline, the exit code, and the run. */
+.headline {
+  margin-top: 8px;
+  font-size: 1.1rem;
+}
+
+.exit-code,
+.sub {
+  margin-top: 2px;
+  color: var(--sub);
+  font-size: 0.86rem;
+}
+
+.progress-lines progress {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.confirm {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--group);
+}
+
+.next-actions {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--ok);
+  border-radius: 8px;
+}
+
+.next-actions h3,
+.tools-heading {
+  font-size: 0.95rem;
+}
+
+/* "If something is wrong" is folded to one line until it is opened. */
+.tools {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.tools-toggle {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-weight: 700;
+}
+
+.tools-toggle::before {
+  content: "\25B8\00a0";
+}
+
+.tools-toggle[aria-expanded="true"]::before {
+  content: "\25BE\00a0";
+}
+
+.tools h4 {
+  margin-top: 8px;
+  font-size: 0.9rem;
+}
+
+/* The colors and what they mean. */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin: 12px 0;
+  color: var(--sub);
+  font-size: 0.86rem;
+}
+
+.legend-title {
+  font-weight: 700;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.swatch.k-current {
+  background: var(--accent);
+}
+
+.swatch.k-done {
+  background: var(--ok);
+}
+
+.swatch.k-warn {
+  background: var(--warn-line);
+}
+
+.swatch.k-error {
+  background: var(--ng);
+}
+
+.swatch.k-none {
+  background: var(--none-soft);
+  box-shadow: inset 0 0 0 1px var(--edge);
+}
+
+/* The folder list, until the system's own dialog comes (stage B3). */
+.panel {
+  min-width: 0;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.panel h2 {
+  font-size: 1rem;
 }
 
 .folder-list {
   max-height: 18rem;
-  margin: 0.5rem 0 0;
+  margin: 8px 0 0;
   padding: 0;
   overflow-y: auto;
   list-style: none;
@@ -183,43 +586,171 @@ input:disabled {
 
 .folder-list button {
   width: 100%;
-  margin: 0.125rem 0;
-  text-align: left;
-  overflow-wrap: anywhere;
+  margin: 2px 0;
 }
 
-table {
+/* The steps and the results under the boxes. */
+.lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 14px;
+}
+
+.lower .panel {
+  margin-top: 0;
+}
+
+@media (max-width: 1279px) {
+  .lower {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.t {
   width: 100%;
-  margin-top: 0.75rem;
+  margin-top: 8px;
   border-collapse: collapse;
+  font-size: 0.9rem;
 }
 
-caption {
-  margin-bottom: 0.25rem;
-  font-weight: 600;
+.t th,
+.t td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
   text-align: left;
+  vertical-align: middle;
 }
 
-th,
-td {
-  padding: 0.25rem 0.5rem;
-  border-bottom: 1px solid var(--border);
-  text-align: left;
+.t thead th {
+  background: var(--group);
+  color: var(--sub);
+  font-size: 0.84rem;
 }
 
-td:nth-child(3),
-td:nth-child(4) {
+.t .n {
   text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.t tfoot th,
+.t tfoot td {
+  border-bottom: 0;
+  background: var(--group);
+  font-weight: 600;
+}
+
+/* Only a problem fills a row. A warning, a running step, and something
+   absent or not yet are marked by a bar, an icon, and words. */
+.t tr.r-warn > :first-child {
+  box-shadow: inset 4px 0 0 var(--warn-line);
+}
+
+.t tr.r-run > :first-child {
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.t tr.r-error > * {
+  background: var(--ng-tint);
+}
+
+.t tr.r-error > :first-child {
+  box-shadow: inset 4px 0 0 var(--ng);
+}
+
+.t tr.r-none > *,
+.t tr.r-todo > * {
+  color: var(--muted);
+}
+
+.pill {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pill.k-done {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.pill.k-done::before {
+  content: "\2713\00a0";
+}
+
+.pill.k-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.pill.k-warn::before {
+  content: "\26A0\00a0";
+}
+
+.pill.k-error {
+  background: var(--ng-soft);
+  color: var(--ng);
+}
+
+.pill.k-error::before {
+  content: "\2715\00a0";
+}
+
+.pill.k-run {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.pill.k-none,
+.pill.k-todo {
+  background: var(--none-soft);
+  color: var(--none);
+}
+
+.pill.k-none::before {
+  content: "\2212\00a0";
+}
+
+/* The bar at the bottom: privacy, version, language, and quit. */
+.statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 8px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--group);
+  color: var(--sub);
+  font-size: 0.86rem;
+}
+
+.statusbar label {
+  margin: 0;
+}
+
+.privacy {
+  flex: 1 1 24rem;
+}
+
+.status {
+  min-height: 1.5em;
+}
+
+.problem {
+  margin: 10px 20px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--ng);
+  border-left-width: 5px;
+  border-radius: 8px;
+  background: var(--ng-tint);
 }
 
 :focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
-}
-
-.status {
-  min-height: 1.6em;
-  margin: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

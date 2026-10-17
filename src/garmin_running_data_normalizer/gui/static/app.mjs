@@ -1,27 +1,37 @@
-// Page logic for the GUI: it connects the run page to the server API. Visible
+// Page logic for the GUI: it connects the page to the server API. Visible
 // text comes from the message catalogs. Message keys appear only as literal
 // strings, here and in flow.mjs, so that tests can check them against the
-// catalogs.
+// catalogs. The page changes text with textContent only, never with HTML, so
+// that a path or a name from the computer is never read as markup.
 
 import { DEFAULT_LANGUAGE, chooseLanguage, translate } from "./i18n.mjs";
 import {
   ACTIVE_STATES,
+  BOXES,
   FINISHED_STATES,
   TERMINAL_STATES,
   announcement,
+  boxStates,
+  boxSummary,
+  boxesToConfirm,
   connectionMessages,
   controls,
   defaultOutputName,
+  errorBox,
   errorMessages,
+  familyRows,
   findingMessages,
   formatElapsed,
+  nextLine,
   nextOutputName,
   outputCheckMessages,
-  shouldFocusResult,
   progressMessage,
-  resultMessages,
+  resultDetails,
   resultRows,
+  runSummary,
+  shouldFocusResult,
   stalledSeconds,
+  stepRows,
 } from "./flow.mjs";
 
 const LANGUAGES = ["en", "ja"];
@@ -36,13 +46,28 @@ const ui = {
   version: byId("product-version"),
   connection: byId("connection-status"),
   connectionProblem: byId("connection-problem"),
+  nextLine: byId("next-line"),
+  nextText: byId("next-text"),
   language: byId("language-select"),
   quit: byId("quit-button"),
+  boxes: {
+    export: byId("box-export"),
+    snapshot: byId("box-snapshot"),
+    output: byId("box-output"),
+    run: byId("box-run"),
+  },
+  errors: {
+    export: { area: byId("export-error"), heading: byId("export-error-heading"), lines: byId("export-error-lines") },
+    output: { area: byId("output-error"), heading: byId("output-error-heading"), lines: byId("output-error-lines") },
+    run: { area: byId("run-error"), heading: byId("run-error-heading"), lines: byId("run-error-lines") },
+  },
   inputHeading: byId("input-heading"),
   inputPath: byId("input-path"),
   inputBrowse: byId("input-browse"),
   check: byId("check-button"),
   checkResult: byId("check-result"),
+  snapshotDecide: byId("snapshot-decide"),
+  outputHeading: byId("output-heading"),
   browser: byId("browser"),
   browserHeading: byId("browser-heading"),
   browserPath: byId("browser-path"),
@@ -57,27 +82,43 @@ const ui = {
   timezone: byId("timezone"),
   timezoneList: byId("timezone-list"),
   safePack: byId("safe-pack"),
-  start: byId("start-button"),
-  cancel: byId("cancel-button"),
+  packFile: byId("pack-file"),
+  outputDecide: byId("output-decide"),
   runHeading: byId("run-heading"),
-  runSection: byId("run-heading").closest("section"),
-  runStatus: byId("run-status"),
-  runProgress: byId("run-progress"),
+  resultHeading: byId("result-heading"),
+  runExit: byId("run-exit"),
+  runSub: byId("run-sub"),
+  fitProgress: byId("fit-progress"),
+  fitProgressLabel: byId("fit-progress-label"),
+  runStalled: byId("run-stalled"),
   runElapsed: byId("run-elapsed"),
   runAnnouncer: byId("run-announcer"),
-  resultHeading: byId("result-heading"),
+  start: byId("start-button"),
+  cancel: byId("cancel-button"),
+  startReason: byId("start-reason"),
+  cancelConfirm: byId("cancel-confirm"),
+  cancelYes: byId("cancel-yes"),
+  cancelNo: byId("cancel-no"),
+  runStatus: byId("run-status"),
   runResult: byId("run-result"),
-  familyTable: byId("family-table"),
-  familyRows: byId("family-rows"),
-  outputActions: byId("output-actions"),
-  outputCheckHeading: byId("output-check-heading"),
-  outputCheck: byId("output-check"),
+  nextActions: byId("next-actions"),
   openFolder: byId("open-folder-button"),
   openStartHere: byId("open-start-here-button"),
   openResult: byId("open-result"),
+  toolsToggle: byId("tools-toggle"),
+  toolsBody: byId("tools-body"),
   bundleHeading: byId("bundle-heading"),
   bundle: byId("bundle-button"),
   bundleResult: byId("bundle-result"),
+  stepsCaption: byId("steps-caption"),
+  stepsRows: byId("steps-rows"),
+  stepsTotalLabel: byId("steps-total-label"),
+  stepsTotal: byId("steps-total"),
+  outputCheckArea: byId("output-check-area"),
+  outputCheckHeading: byId("output-check-heading"),
+  outputCheck: byId("output-check"),
+  resultsCaption: byId("results-caption"),
+  familyRows: byId("family-rows"),
 };
 
 const state = {
@@ -91,10 +132,19 @@ const state = {
   pollTimer: null,
   checking: false,
   check: null,
+  // The second and third boxes are confirmed with their buttons; a change
+  // in the third box asks for its confirmation again.
+  snapshotDecided: false,
+  outputDecided: false,
   starting: false,
+  // Whether a box changed after the last run ended; see boxStates().
+  editedSinceRun: false,
+  cancelAsked: false,
+  toolsOpen: false,
   run: { state: "idle" },
   // The id of what the hidden live region said last; see announcement().
   announced: null,
+  // The code of a refused run request, shown in the box that it concerns.
   runError: null,
   quitKey: null,
   browser: null,
@@ -131,8 +181,8 @@ function describe(message) {
   return t(message.key, params);
 }
 
-function errorLines(code) {
-  return errorMessages(code).map(describe);
+function errorLines(code, detail) {
+  return errorMessages(code, detail).map(describe);
 }
 
 // The page renders every second during a run. Rebuilding a live region
@@ -244,12 +294,60 @@ function connectionFailure(error) {
   return true;
 }
 
+// The check of the Export belongs to the first box only: the timezone of the
+// third box is checked when the run starts, as the run checks it.
 function isCheckCurrent() {
-  return (
-    state.check !== null &&
-    state.check.path === ui.inputPath.value.trim() &&
-    state.check.timezone === ui.timezone.value.trim()
-  );
+  return state.check !== null && state.check.path === ui.inputPath.value.trim();
+}
+
+// The check of the output after a run, as one state of the steps table.
+function outputCheckState() {
+  const output = state.output;
+  if (output === null) {
+    return null;
+  }
+  if (output.checking) {
+    return "running";
+  }
+  if (output.checkError !== null) {
+    return "error";
+  }
+  const doctor = output.check?.doctor;
+  const warned =
+    (Array.isArray(doctor?.warning_codes) && doctor.warning_codes.length > 0) ||
+    doctor?.usability_scope !== "FULL_WITHIN_DECLARED_CONTRACT";
+  return output.check === null ? null : warned ? "warn" : "done";
+}
+
+// One view of the page's state, for the rules in flow.mjs.
+function view() {
+  const run = state.run;
+  const checked = isCheckCurrent();
+  const failedBox = run.state === "failed" ? errorBox(run.error_code, ui.inputPath.value) : null;
+  const requestBox = state.runError !== null ? errorBox(state.runError, ui.inputPath.value) : null;
+  return {
+    connected: state.connected,
+    runState: run.state,
+    starting: state.starting,
+    checking: state.checking,
+    outputBusy: outputBusy(),
+    checkedReady: checked && state.check.ready === true,
+    exportReady: checked && state.check.ready === true && requestBox !== "export",
+    exportProblem:
+      (checked && (state.check.error !== undefined || state.check.ready !== true)) || requestBox === "export",
+    snapshotDecided: state.snapshotDecided,
+    outputDecided: state.outputDecided && requestBox !== "output",
+    editedSinceRun: state.editedSinceRun,
+    failedBox,
+    requestBox,
+    result: run.result,
+    outputPath: run.output_path,
+    inputFilled: ui.inputPath.value.trim() !== "",
+    inputPath: ui.inputPath.value,
+    outputParent: ui.outputParent.value,
+    outputName: ui.outputName.value,
+    timezone: ui.timezone.value,
+  };
 }
 
 function renderCheck() {
@@ -311,63 +409,204 @@ function renderBrowserList() {
   );
 }
 
+const BADGE_KEYS = {
+  current: "badge.current",
+  done: "badge.done",
+  error: "badge.error",
+  stopped: "badge.stopped",
+};
+
+// Each box: its color, its number or mark, its badge, and the green line
+// that sums up a confirmed box.
+function renderBoxes(states, current) {
+  BOXES.forEach((box, index) => {
+    const element = ui.boxes[box];
+    const boxState = states[box];
+    element.className = `box s-${boxState}`;
+    if (boxState === "current" || boxState === "error") {
+      element.setAttribute("aria-current", "step");
+    } else {
+      element.removeAttribute("aria-current");
+    }
+    const mark = boxState === "done" ? "✓" : boxState === "error" || boxState === "stopped" ? "✕" : String(index + 1);
+    setText(element.querySelector(".num"), mark);
+    const badge =
+      box === "run" && boxState === "done" ? "badge.done_run" : BADGE_KEYS[boxState] ?? null;
+    setText(element.querySelector(".badge"), badge === null ? "" : t(badge));
+    const summary = element.querySelector(".summary");
+    if (summary !== null) {
+      const words = boxState === "done" ? boxSummary(box, current) : null;
+      summary.hidden = words === null;
+      setText(summary, words === null ? "" : describe(words));
+    }
+  });
+}
+
+// The line of what to do now, with a color for its kind.
+function renderNextLine(states, current) {
+  const line = nextLine(current, states);
+  ui.nextLine.hidden = line === null;
+  if (line === null) {
+    return;
+  }
+  setText(ui.nextText, describe(line));
+  const kind = BOXES.some((box) => states[box] === "error")
+    ? "error"
+    : current.runState === "finished_after_cancel" ||
+        (current.runState === "finished" && (current.result?.warning_count ?? 0) > 0)
+      ? "warn"
+      : current.runState === "finished"
+        ? "done"
+        : "current";
+  ui.nextLine.className = `next-line k-${kind}`;
+}
+
+// A stop: its lines in the box that it concerns, and the other boxes clear.
+function renderErrors(current) {
+  const run = state.run;
+  let box = null;
+  let lines = [];
+  if (run.state === "failed") {
+    box = current.failedBox;
+    lines = errorLines(run.error_code, run.error_detail);
+  } else if (state.runError !== null) {
+    box = current.requestBox;
+    lines = errorLines(state.runError);
+  }
+  for (const [name, error] of Object.entries(ui.errors)) {
+    const shown = name === box || (box === "snapshot" && name === "run");
+    error.area.hidden = !shown;
+    replaceLines(error.lines, shown ? lines : []);
+  }
+}
+
 function familyRow(row) {
   const tableRow = document.createElement("tr");
-  const values = [
-    row.nameKey ? t(row.nameKey) : row.family,
-    t(row.statusKey),
-    formatNumber(row.records),
-    formatNumber(row.warnings),
-  ];
-  values.forEach((value, index) => {
-    const cell = document.createElement(index === 0 ? "th" : "td");
-    if (index === 0) {
-      cell.scope = "row";
-    }
-    cell.textContent = value;
-    tableRow.append(cell);
-  });
+  tableRow.className = `r-${row.kind}`;
+  const name = document.createElement("th");
+  name.scope = "row";
+  name.textContent = row.nameKey ? t(row.nameKey) : row.family;
+  const records = document.createElement("td");
+  records.className = "n";
+  records.textContent = formatNumber(row.records);
+  const status = document.createElement("td");
+  const pill = document.createElement("span");
+  pill.className = `pill k-${row.kind === "ok" ? "done" : row.kind}`;
+  pill.textContent = t(row.statusKey);
+  status.append(pill);
+  const warnings = document.createElement("td");
+  warnings.className = "n";
+  warnings.textContent = formatNumber(row.warnings);
+  tableRow.append(name, records, status, warnings);
   return tableRow;
 }
 
-function renderRun() {
+const STEP_STATE_KEYS = {
+  todo: "step_state.todo",
+  run: "step_state.run",
+  done: "step_state.done",
+  warn: "step_state.warn",
+  error: "step_state.error",
+  cancelled: "step_state.cancelled",
+  skipped: "step_state.skipped",
+};
+const STEP_ROW_KINDS = {
+  todo: "todo",
+  run: "run",
+  done: "done",
+  warn: "warn",
+  error: "error",
+  cancelled: "todo",
+  skipped: "todo",
+};
+
+function stepRow(row) {
+  const tableRow = document.createElement("tr");
+  const kind = STEP_ROW_KINDS[row.state];
+  tableRow.className = `r-${kind}`;
+  const name = document.createElement("th");
+  name.scope = "row";
+  name.textContent = t(row.key);
+  const status = document.createElement("td");
+  const pill = document.createElement("span");
+  pill.className = `pill k-${kind}`;
+  pill.textContent = t(STEP_STATE_KEYS[row.state]);
+  status.append(pill);
+  const time = document.createElement("td");
+  time.className = "n";
+  time.textContent = row.seconds === null ? "—" : formatElapsed(row.seconds);
+  tableRow.append(name, status, time);
+  return tableRow;
+}
+
+function renderSteps() {
   const run = state.run;
-  const lines = [];
-  if (state.runError !== null) {
-    lines.push(...errorLines(state.runError));
+  const rows = stepRows(run, outputCheckState(), state.output?.seconds ?? null);
+  ui.stepsRows.replaceChildren(...rows.map(stepRow));
+  const started = ACTIVE_STATES.includes(run.state) || TERMINAL_STATES.includes(run.state);
+  setText(ui.stepsCaption, started ? "" : t("steps.caption"));
+  setText(ui.stepsTotalLabel, t(FINISHED_STATES.includes(run.state) ? "steps.total" : "steps.elapsed"));
+  setText(ui.stepsTotal, started ? formatElapsed(run.elapsed_seconds) : "—");
+}
+
+function renderResults() {
+  const run = state.run;
+  const rows = resultRows(run);
+  ui.familyRows.replaceChildren(...rows.map(familyRow));
+  let caption = "results.before";
+  if (ACTIVE_STATES.includes(run.state)) {
+    caption = "results.running";
+  } else if (FINISHED_STATES.includes(run.state)) {
+    caption = "results.done";
+  } else if (run.state === "failed" || run.state === "cancelled") {
+    caption = "results.none";
   }
-  if (state.quitKey !== null) {
-    lines.push(t(state.quitKey));
-  }
-  replaceLines(ui.runStatus, lines);
+  setText(ui.resultsCaption, t(caption));
+}
+
+function renderRun(states, current) {
+  const run = state.run;
+  const summary = runSummary(run, states, current);
+  setText(ui.resultHeading, describe(summary.headline));
+  ui.runExit.hidden = summary.exitCode === null;
+  setText(ui.runExit, summary.exitCode === null ? "" : t("result.exit_code", { code: summary.exitCode }));
+  setText(ui.runSub, summary.sub === null ? "" : describe(summary.sub));
   // Progress changes every second, so it stays out of live regions; the
   // hidden announcer speaks only when the stage changes.
-  const progress = [];
-  if (run.state === "running") {
-    progress.push(describe(progressMessage(run.progress)));
-    const stalled = stalledSeconds(run);
-    if (stalled !== null) {
-      progress.push(t("run.stalled", { seconds: formatNumber(stalled) }));
-    }
-  } else if (run.state === "cancelling") {
-    progress.push(t("run.cancelling"));
+  const running = run.state === "running";
+  setText(ui.fitProgressLabel, running ? describe(progressMessage(run.progress)) : "");
+  const reading = running && run.progress?.stage === "reading_fit" && Number(run.progress.total) > 0;
+  ui.fitProgress.hidden = !reading;
+  if (reading) {
+    ui.fitProgress.max = Number(run.progress.total);
+    ui.fitProgress.value = Number(run.progress.done) || 0;
   }
-  replaceLines(ui.runProgress, progress);
+  const stalled = stalledSeconds(run);
+  setText(ui.runStalled, stalled === null ? "" : t("run.stalled", { seconds: formatNumber(stalled) }));
   const spoken = announcement(run);
   if (spoken !== null && spoken.id !== state.announced) {
     state.announced = spoken.id;
     ui.runAnnouncer.textContent = describe(spoken.message);
   }
   const shown = ACTIVE_STATES.includes(run.state) || TERMINAL_STATES.includes(run.state);
-  ui.runElapsed.textContent = shown
-    ? t("run.elapsed", { time: formatElapsed(run.elapsed_seconds) })
-    : "";
-  const terminal = TERMINAL_STATES.includes(run.state);
-  ui.resultHeading.hidden = !terminal;
-  replaceLines(ui.runResult, terminal ? resultMessages(run).map(describe) : []);
-  const rows = resultRows(run);
-  ui.familyTable.hidden = rows.length === 0;
-  ui.familyRows.replaceChildren(...rows.map(familyRow));
+  setText(ui.runElapsed, shown ? t("run.elapsed", { time: formatElapsed(run.elapsed_seconds) }) : "");
+  const waiting = boxesToConfirm(states);
+  setText(
+    ui.startReason,
+    !shown && waiting.length > 0
+      ? t("run.reason", {
+          boxes: new Intl.ListFormat(state.language, { type: "conjunction" }).format(waiting.map(String)),
+        })
+      : "",
+  );
+  ui.cancelConfirm.hidden = !(state.cancelAsked && run.state === "running");
+  const lines = [];
+  if (state.quitKey !== null) {
+    lines.push(t(state.quitKey));
+  }
+  replaceLines(ui.runStatus, lines);
+  replaceLines(ui.runResult, resultDetails(run).map(describe));
+  ui.nextActions.hidden = !FINISHED_STATES.includes(run.state);
 }
 
 function outputBusy() {
@@ -377,32 +616,30 @@ function outputBusy() {
 
 function renderOutput() {
   const output = state.output;
-  ui.outputActions.hidden = output === null || !FINISHED_STATES.includes(state.run.state);
-  if (ui.outputActions.hidden) {
-    return;
-  }
+  const finished = output !== null && FINISHED_STATES.includes(state.run.state);
+  ui.outputCheckArea.hidden = !finished;
   const checkLines = [];
-  if (output.checking) {
+  if (finished && output.checking) {
     checkLines.push(t("output_check.running"));
-  } else if (output.checkError !== null) {
+  } else if (finished && output.checkError !== null) {
     checkLines.push(...errorLines(output.checkError));
-  } else if (output.check !== null) {
+  } else if (finished && output.check !== null) {
     checkLines.push(...outputCheckMessages(output.check).map(describe));
   }
   replaceLines(ui.outputCheck, checkLines);
   const openLines = [];
-  if (output.openError !== null) {
+  if (finished && output.openError !== null) {
     openLines.push(...errorLines(output.openError));
-  } else if (output.opened) {
+  } else if (finished && output.opened) {
     openLines.push(t("open.requested"));
   }
   replaceLines(ui.openResult, openLines);
   const bundleLines = [];
-  if (output.bundling) {
+  if (finished && output.bundling) {
     bundleLines.push(t("bundle.creating"));
-  } else if (output.bundleError !== null) {
+  } else if (finished && output.bundleError !== null) {
     bundleLines.push(...errorLines(output.bundleError));
-  } else if (output.bundle !== null) {
+  } else if (finished && output.bundle !== null) {
     bundleLines.push(
       t("bundle.created", {
         count: formatNumber(output.bundle.member_count),
@@ -414,28 +651,31 @@ function renderOutput() {
     }
   }
   replaceLines(ui.bundleResult, bundleLines);
+  ui.toolsToggle.setAttribute("aria-expanded", String(state.toolsOpen));
+  ui.toolsBody.hidden = !state.toolsOpen;
 }
 
-function renderControls() {
-  const enabled = controls({
-    connected: state.connected,
-    runState: state.run.state,
-    starting: state.starting,
-    checking: state.checking,
-    outputBusy: outputBusy(),
-    checkedReady: isCheckCurrent() && state.check.ready === true,
-    inputPath: ui.inputPath.value,
-    outputParent: ui.outputParent.value,
-    outputName: ui.outputName.value,
-    timezone: ui.timezone.value,
-  });
+function renderPackFile() {
+  ui.packFile.hidden = !ui.safePack.checked;
+  setText(ui.packFile, ui.safePack.checked ? t("pack.file", { name: ui.outputName.value.trim() }) : "");
+}
+
+function renderControls(states, current) {
+  const enabled = controls(current, states);
   for (const field of [ui.inputPath, ui.outputParent, ui.outputName, ui.timezone, ui.safePack]) {
     field.disabled = !enabled.form;
   }
   ui.inputBrowse.disabled = !enabled.browse;
   ui.outputBrowse.disabled = !enabled.browse;
   ui.check.disabled = !enabled.check;
+  ui.snapshotDecide.disabled = !enabled.decideSnapshot;
+  ui.outputDecide.disabled = !enabled.decideOutput;
+  ui.snapshotDecide.hidden = states.snapshot === "done";
+  ui.outputDecide.hidden = states.output === "done";
   ui.start.disabled = !enabled.start;
+  // After a run, the main action is to open the output, so only that button
+  // is the primary one.
+  ui.start.classList.toggle("primary", !FINISHED_STATES.includes(state.run.state));
   ui.cancel.disabled = !enabled.cancel;
   ui.quit.disabled = !enabled.quit;
   ui.openFolder.disabled = !enabled.outputActions;
@@ -459,11 +699,19 @@ function render() {
     option.textContent = translate(state.catalogs, option.value, "language.name");
   }
   ui.language.value = state.language;
+  const current = view();
+  const states = boxStates(current);
+  renderBoxes(states, current);
+  renderNextLine(states, current);
   renderCheck();
   renderBrowser();
-  renderRun();
+  renderErrors(current);
+  renderRun(states, current);
+  renderSteps();
+  renderResults();
   renderOutput();
-  renderControls();
+  renderPackFile();
+  renderControls(states, current);
 }
 
 function stopHeartbeat() {
@@ -489,6 +737,16 @@ function stopPolling() {
   }
 }
 
+// Where focus goes at the end of a run: the headline of the fourth box, or
+// the heading of the stop in the box that it concerns.
+function endFocusTarget() {
+  if (state.run.state !== "failed") {
+    return ui.resultHeading;
+  }
+  const box = errorBox(state.run.error_code, ui.inputPath.value);
+  return (ui.errors[box] ?? ui.errors.run).heading;
+}
+
 async function pollRun() {
   let ended = false;
   try {
@@ -496,6 +754,8 @@ async function pollRun() {
     if (TERMINAL_STATES.includes(state.run.state)) {
       stopPolling();
       ended = true;
+      state.cancelAsked = false;
+      state.editedSinceRun = false;
       if (FINISHED_STATES.includes(state.run.state) && state.output === null) {
         // The name is taken now; propose another one for the next run.
         ui.outputName.value = nextOutputName(ui.outputName.value.trim(), new Date());
@@ -506,8 +766,8 @@ async function pollRun() {
     connectionFailure(error);
   }
   render();
-  if (ended && shouldFocusResult(document.activeElement, document.body, ui.runSection)) {
-    ui.resultHeading.focus();
+  if (ended && shouldFocusResult(document.activeElement, document.body, ui.boxes.run)) {
+    endFocusTarget().focus();
   }
 }
 
@@ -519,8 +779,11 @@ function startPolling() {
 // Check the finished output as the CLI's validate-handoff and doctor
 // --run-output would; the server knows which folder the run published.
 async function checkOutput() {
+  const started = performance.now();
   const output = {
     checking: true,
+    // The seconds of the check, for the last step of the steps table.
+    seconds: null,
     check: null,
     checkError: null,
     opening: false,
@@ -540,6 +803,7 @@ async function checkOutput() {
     }
   } finally {
     output.checking = false;
+    output.seconds = (performance.now() - started) / 1000;
     render();
   }
 }
@@ -563,7 +827,7 @@ async function openOutput(target) {
   } finally {
     output.opening = false;
     render();
-    returnFocus(target === "folder" ? ui.openFolder : ui.openStartHere, ui.outputCheckHeading);
+    returnFocus(target === "folder" ? ui.openFolder : ui.openStartHere, ui.resultHeading);
   }
 }
 
@@ -601,15 +865,14 @@ async function suggestOutputParent(inputPath) {
 
 async function runCheck() {
   const path = ui.inputPath.value.trim();
-  const timezone = ui.timezone.value.trim();
   state.checking = true;
   state.check = null;
+  state.runError = null;
   render();
   try {
-    const answer = await callApi("/api/check-input", { input: path, timezone });
+    const answer = await callApi("/api/check-input", { input: path });
     state.check = {
       path,
-      timezone,
       ready: answer.ready === true,
       findings: Array.isArray(answer.findings) ? answer.findings : [],
     };
@@ -618,7 +881,7 @@ async function runCheck() {
     }
   } catch (error) {
     if (!connectionFailure(error)) {
-      state.check = { path, timezone, error: error.code };
+      state.check = { path, error: error.code };
     }
   } finally {
     state.checking = false;
@@ -627,10 +890,22 @@ async function runCheck() {
   }
 }
 
+// Confirm a box and move to the next one, as the page asks on a first launch.
+function decide(box) {
+  if (box === "snapshot") {
+    state.snapshotDecided = true;
+  } else {
+    state.outputDecided = true;
+  }
+  render();
+  (box === "snapshot" ? ui.outputHeading : ui.runHeading).focus();
+}
+
 async function startRun() {
   state.starting = true;
   state.runError = null;
   state.quitKey = null;
+  state.cancelAsked = false;
   // The previous result would read as the answer to this attempt.
   state.run = { state: "idle" };
   state.output = null;
@@ -652,14 +927,30 @@ async function startRun() {
   } finally {
     state.starting = false;
     render();
-    returnFocus(ui.start, ui.runHeading);
+    if (state.runError !== null) {
+      const box = errorBox(state.runError, ui.inputPath.value);
+      (ui.errors[box] ?? ui.errors.run).heading.focus();
+    } else {
+      returnFocus(ui.start, ui.runHeading);
+    }
   }
 }
 
+// Cancelling asks first, in the box, instead of a dialog of the browser.
+function askCancel() {
+  state.cancelAsked = true;
+  render();
+  ui.cancelYes.focus();
+}
+
+function keepRunning() {
+  state.cancelAsked = false;
+  render();
+  returnFocus(ui.cancel, ui.runHeading);
+}
+
 async function cancelRun() {
-  if (!window.confirm(t("run.cancel_confirm"))) {
-    return;
-  }
+  state.cancelAsked = false;
   try {
     state.run = await callApi("/api/run/cancel");
   } catch (error) {
@@ -769,12 +1060,22 @@ function changeLanguage(language) {
   }
 }
 
-function fieldChanged() {
+// A change in a field clears a refused request, a stop or a cancellation
+// that the page showed, and the check that no longer matches; a change in
+// the third box asks for its confirmation again.
+function fieldChanged(event) {
   if (state.check !== null && !isCheckCurrent()) {
     state.check = null;
-    renderCheck();
   }
-  renderControls();
+  state.runError = null;
+  state.editedSinceRun = true;
+  if (state.run.state === "failed" || state.run.state === "cancelled") {
+    state.run = { state: "idle" };
+  }
+  if (event?.target !== ui.inputPath) {
+    state.outputDecided = false;
+  }
+  render();
 }
 
 function connect() {
@@ -796,11 +1097,19 @@ function connect() {
   ui.language.addEventListener("change", () => changeLanguage(ui.language.value));
   ui.quit.addEventListener("click", quit);
   ui.check.addEventListener("click", runCheck);
+  ui.snapshotDecide.addEventListener("click", () => decide("snapshot"));
+  ui.outputDecide.addEventListener("click", () => decide("output"));
   ui.start.addEventListener("click", startRun);
-  ui.cancel.addEventListener("click", cancelRun);
+  ui.cancel.addEventListener("click", askCancel);
+  ui.cancelYes.addEventListener("click", cancelRun);
+  ui.cancelNo.addEventListener("click", keepRunning);
   ui.openFolder.addEventListener("click", () => openOutput("folder"));
   ui.openStartHere.addEventListener("click", () => openOutput("start_here"));
   ui.bundle.addEventListener("click", makeBundle);
+  ui.toolsToggle.addEventListener("click", () => {
+    state.toolsOpen = !state.toolsOpen;
+    render();
+  });
   ui.inputBrowse.addEventListener("click", () => openBrowser("input", ui.inputBrowse));
   ui.outputBrowse.addEventListener("click", () => openBrowser("output", ui.outputBrowse));
   ui.browserUp.addEventListener("click", () => loadFolder(state.browser?.parent));
@@ -811,9 +1120,15 @@ function connect() {
       closeBrowser();
     }
   });
+  ui.cancelConfirm.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      keepRunning();
+    }
+  });
   for (const field of [ui.inputPath, ui.outputParent, ui.outputName, ui.timezone]) {
     field.addEventListener("input", fieldChanged);
   }
+  ui.safePack.addEventListener("change", fieldChanged);
 }
 
 async function start() {
