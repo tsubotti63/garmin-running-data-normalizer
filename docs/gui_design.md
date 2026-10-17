@@ -119,11 +119,26 @@ to fix, and gray is absent or not yet. Only red fills a table row; yellow and
 blue rows use a bar at the left edge, an icon, and words. Color is never the
 only signal.
 
-Explanations open from an information button (ⓘ) for the External-safe Pack
-contents, the timezone, how to normalize, the Snapshot Store, and the output
-check and Support Bundle. Before the External-safe Pack or the Support Bundle is
-created, the page shows the name and location of the file that will be
-created.
+Explanations open from an information button (ⓘ) under the control that they
+explain, and stay open until the button is pressed again or Escape is pressed;
+nothing opens on hover. Stage B1b places them at how to normalize, the
+timezone, the External-safe Pack contents, the exit code, and the output check
+and Support Bundle; the Snapshot Store and the default place follow in stage
+B4a. Before the External-safe Pack or the Support Bundle is created, the page
+shows the name and location of the file that will be created.
+
+The Help button at the top right opens a help panel at the right of the window
+(stage B1b). The panel pushes the page aside instead of covering it, and the
+boxes fold to two columns while it is open on a window narrower than 1680
+pixels. It has four parts: how to use, in which each step lights up its box;
+questions; words; and using the normalized data with an AI, with example
+questions that can be copied. Close or Escape closes it, and focus returns to
+the button that opened it, or to the Help button when that button is no longer
+shown. "Show tips" shows one line under each box heading. It is on at every
+launch until the settings of an earlier launch come in stage B4a, and the
+browser tab keeps the choice. The help panel, the tips, and the information
+buttons say only what the page can do at its stage; links to pages outside
+the app and the GitHub report come in stage B5.
 
 Stage A settled the codes `INPUT_ZIP_CORRUPT` (stage A1a),
 `INPUT_MULTIPLE_EXPORTS` (stage A3a), and `SNAPSHOT_STORE_LOCKED` (stage
@@ -405,7 +420,8 @@ Processing:
 ## Privacy
 
 - No outbound network access and no external resources. No analytics or
-  telemetry.
+  telemetry. Copying an example question of the help panel uses the clipboard
+  of this computer only.
 - Local paths are shown only to the local user. The server does not log
   requests, paths, or secrets, and errors are returned as codes.
 - The page explains that Run-All output and the Snapshot Store contain personal
@@ -453,6 +469,12 @@ alone, and reduced motion.
   confirmed, focus moves to the next box. When a button that had focus stays
   disabled after its action, focus moves to the nearest heading.
 - Losing the server is shown as an alert at the top of the page.
+- The help panel is a complementary landmark, not a dialog, because it does
+  not cover the page. Opening it, or one of its parts, moves focus to the
+  heading of that part; Escape inside it closes it (stage B1b).
+- An information button is a disclosure. Its name starts with its visible
+  word and adds what it explains, such as "About Timezone for local dates and
+  times".
 - Tests check labels, button names, heading order, live regions, focus
   targets, and the contrast of the stylesheet's colors. Keyboard-only use and
   a screen reader (VoiceOver on macOS) are checked by hand in stage C; a

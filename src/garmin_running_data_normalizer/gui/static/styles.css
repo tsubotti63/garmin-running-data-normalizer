@@ -1,5 +1,6 @@
 /* The page of stage B1a: four boxes in a row, the line of what to do next,
-   and two tables under them. Colors have five meanings across the page:
+   and two tables under them; stage B1b adds the help panel, the tips, and
+   the information buttons. Colors have five meanings across the page:
    blue is now, green is done, yellow is a warning, red is a problem to fix,
    and gray is absent or not yet. Color is never the only signal. */
 
@@ -269,6 +270,8 @@ p {
   margin-top: 6px;
   color: var(--ok);
   font-weight: 600;
+  /* The summary can hold a long folder name. */
+  overflow-wrap: anywhere;
 }
 
 .summary::before {
@@ -746,6 +749,403 @@ button.primary:disabled {
   border-left-width: 5px;
   border-radius: 8px;
   background: var(--ng-tint);
+}
+
+/* Stage B1b: the switch for the tips and the Help button, top right. */
+.title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.top-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.switch input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.switch label {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.help-button {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+}
+
+/* The mark is drawn, and screen readers skip it where the browser knows the
+   empty alternative text; older browsers show the mark from the first rule. */
+.help-button::before {
+  content: "?";
+  content: "?" / "";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 17px;
+  height: 17px;
+  margin-right: 6px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.help-button[aria-expanded="true"] {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--surface);
+}
+
+/* A tip under each box heading, while "Show tips" is on. */
+.hint {
+  margin-top: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--group);
+  color: var(--sub);
+  font-size: 0.84rem;
+}
+
+/* An information button and what it opens under it: it stays open until it
+   is closed, and nothing opens on hover. */
+.info-button {
+  margin-top: 4px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.84rem;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.info-button::before {
+  content: "\24D8\00a0";
+  content: "\24D8\00a0" / "";
+}
+
+.info-text {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  background: var(--group);
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.info-text dl {
+  margin: 0;
+}
+
+.info-text p + dl {
+  margin-top: 6px;
+}
+
+.info-text dt {
+  margin-top: 6px;
+  font-weight: 700;
+}
+
+.info-text dt:first-child {
+  margin-top: 0;
+}
+
+.info-text dd {
+  margin: 0;
+}
+
+.info-foot {
+  margin-top: 6px;
+  color: var(--sub);
+}
+
+.label-row,
+.exit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+}
+
+.label-row .info-button {
+  margin-top: 0;
+}
+
+/* The legend floats so that its information button sits beside it. */
+.choices > legend {
+  float: left;
+}
+
+.choices > .info-button {
+  margin: 10px 0 3px 8px;
+}
+
+.choices > .info-text,
+.choices > .choice {
+  clear: both;
+}
+
+/* The help panel opens at the right and pushes the page to the left; it does
+   not cover the page. */
+body.help-open {
+  margin-right: 400px;
+}
+
+.help-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 400px;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.help-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.help-head h2 {
+  font-size: 1.05rem;
+}
+
+#help-close {
+  margin-left: auto;
+}
+
+.help-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.help-nav button {
+  padding: 2px 12px;
+  border-radius: 999px;
+  font-size: 0.86rem;
+}
+
+.help-nav button[aria-current="true"] {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--surface);
+}
+
+.help-body {
+  flex: 1;
+  min-height: 0;
+  padding: 12px 16px 24px;
+  overflow-y: auto;
+}
+
+.help-section h3 {
+  font-size: 1rem;
+}
+
+.help-section h4 {
+  margin-top: 14px;
+  font-size: 0.92rem;
+}
+
+.lede {
+  margin-top: 4px;
+  color: var(--sub);
+}
+
+.walk {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.walk li {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--group);
+}
+
+.walk li + li {
+  margin-top: 6px;
+}
+
+.walk li.walk-current {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.walk button {
+  font-weight: 600;
+}
+
+.walk-state {
+  margin-left: 6px;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.walk-done .walk-state {
+  color: var(--ok);
+}
+
+.walk p {
+  margin-top: 4px;
+  color: var(--sub);
+  font-size: 0.86rem;
+}
+
+.qa {
+  border-top: 1px solid var(--line);
+}
+
+.qa:first-of-type {
+  margin-top: 8px;
+}
+
+.qa summary {
+  padding: 7px 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.qa p {
+  padding-bottom: 8px;
+}
+
+.words {
+  margin: 8px 0 0;
+}
+
+.words dt {
+  margin-top: 8px;
+  font-weight: 700;
+}
+
+.words dd {
+  margin: 0;
+}
+
+.ai-steps,
+.get-steps {
+  margin: 8px 0 0;
+  padding-left: 1.4em;
+}
+
+.ai-steps li + li,
+.get-steps li + li {
+  margin-top: 6px;
+}
+
+/* An address in the help panel is text to copy; it is not a link. */
+.get-steps li {
+  overflow-wrap: anywhere;
+}
+
+.ai-steps strong {
+  display: block;
+}
+
+.prompt {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--group);
+}
+
+.prompt-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.tag {
+  color: var(--sub);
+  font-size: 0.8rem;
+}
+
+.copy-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.copy-result {
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+/* With the help panel open, the page is 400 pixels narrower, so the boxes
+   fold to two columns as they do in a narrow window. */
+@media (max-width: 1679px) {
+  body.help-open .flow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  body.help-open .arrow {
+    display: none;
+  }
+
+  body.help-open .lower {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A step of "How to use" lights up its box for a moment. */
+.box.spot,
+.panel.spot {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  animation: spot 2s ease-out forwards;
+}
+
+@keyframes spot {
+  0%,
+  70% {
+    outline-color: var(--accent);
+  }
+
+  100% {
+    outline-color: transparent;
+  }
 }
 
 :focus-visible {

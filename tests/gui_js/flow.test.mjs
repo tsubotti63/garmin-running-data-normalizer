@@ -774,3 +774,52 @@ test("the end of a run moves focus only from where the run left it", () => {
   }
   assert.equal(shouldFocusResult(language, body, runSection), false);
 });
+
+test("the help panel has four parts, and its steps follow the boxes", () => {
+  assert.deepEqual(flow.HELP_SECTIONS, ["steps", "faq", "words", "ai"]);
+  assert.deepEqual(flow.HELP_STEPS, ["export", "snapshot", "output", "run", "results"]);
+  const first = { ...READY, exportReady: false, checkedReady: false, snapshotDecided: false, outputDecided: false };
+  assert.deepEqual(flow.helpSteps(boxStates(first), "idle"), {
+    export: "current",
+    snapshot: "todo",
+    output: "todo",
+    run: "todo",
+    results: "todo",
+  });
+  assert.deepEqual(flow.helpSteps(boxStates(READY), "idle"), {
+    export: "done",
+    snapshot: "done",
+    output: "done",
+    run: "current",
+    results: "todo",
+  });
+  const finished = { ...READY, runState: "finished" };
+  assert.deepEqual(flow.helpSteps(boxStates(finished), "finished"), {
+    export: "done",
+    snapshot: "done",
+    output: "done",
+    run: "done",
+    results: "done",
+  });
+  // A box that changed after the run is to be set again; the result is old.
+  const edited = { ...finished, editedSinceRun: true, outputDecided: false };
+  const editedSteps = flow.helpSteps(boxStates(edited), "finished");
+  assert.equal(editedSteps.output, "current");
+  assert.equal(editedSteps.results, "todo");
+  // A stop in the third box makes it the step to do; the fourth box waits.
+  const stopped = { ...READY, runState: "failed", failedBox: "output" };
+  assert.deepEqual(flow.helpSteps(boxStates(stopped), "failed"), {
+    export: "done",
+    snapshot: "done",
+    output: "current",
+    run: "todo",
+    results: "todo",
+  });
+});
+
+test("closing the help panel returns focus to its opener while it can take focus", () => {
+  assert.equal(flow.helpReturnTarget({ usable: true }), "opener");
+  assert.equal(flow.helpReturnTarget({ usable: false }), "help");
+  assert.equal(flow.helpReturnTarget(null), "help");
+  assert.equal(flow.helpReturnTarget(undefined), "help");
+});
