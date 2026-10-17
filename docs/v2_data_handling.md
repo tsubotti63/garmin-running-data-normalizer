@@ -96,6 +96,16 @@ the three counts as `warning_count` and `other_warning_counts`, and the page
 shows them from stage B. `run_all` returns them as `warning_totals`. The
 output files do not change.
 
+From stage B2c, `run_all` also returns each warning on its own as
+`warning_items`: its code, the family and the dataset that it concerns, and
+its count, without the words of its message; a warning of the input names no
+family, and `OPTIONAL_FAMILY_NOT_PRESENT` and `OPTIONAL_FAMILY_EMPTY` give no
+count. The GUI's run status carries them, and the page lists each with its
+count under the total, while the result table takes its totals from the
+counts above, never from the items. The GUI's server keeps only items of a
+registered code with plain names and counts, and leaves out any other item
+alone. The CLI prints the totals as before.
+
 ## Rules by situation
 
 Each item gives the v1.7.1 behavior and the v2.0.0 behavior.
@@ -2650,7 +2660,8 @@ v1.7.1 with the CLI at the stage A checkpoint.
   observations of `build_source_completeness` take the FIT rows from their
   `source_observation_counts` instead of the per-second records of the FIT
   audit. From stage A5a, `run_all` (and `run_snapshot_all`) return
-  `warning_totals`, made by the new `run_all.warning_totals`;
+  `warning_totals`, made by the new `run_all.warning_totals`, and from stage
+  B2c also `warning_items`, made by the new `run_all.warning_items`;
   `output_location` gains `valid_output_name`, `MAX_OUTPUT_NAME_BYTES`,
   `INVALID_NAME_CHARACTERS`, and `WINDOWS_RESERVED_NAMES`, which
   `gui.runs` gave until then and still imports; `check_output_location`

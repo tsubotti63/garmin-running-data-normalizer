@@ -366,9 +366,89 @@ export function findingMessages(finding) {
 
 // The rows of the result table: for a finished run, and for one whose
 // cancellation came after it wrote its output, when its result is known
-// (stage A5c).
+// (stage A5c). The last row holds the warnings that belong to no family
+// (stage B2c).
 export function resultRows(status) {
-  return FINISHED_STATES.includes(status?.state) ? familyRows(status.result) : [];
+  return FINISHED_STATES.includes(status?.state) && status.result
+    ? [...familyRows(status.result), otherRow(status.result)]
+    : [];
+}
+
+// The totals of the warnings of a run, from the counts that the run gives
+// (stage B2c): the warnings of the families and those of no family add up to
+// the total. The warnings one by one are not counted again.
+export function warningTotals(result) {
+  const families = Object.values(result?.families ?? {}).map((family) => family?.warning_count);
+  const sum = (values) => values.reduce((total, value) => total + (Number.isInteger(value) ? value : 0), 0);
+  return {
+    total: Number.isInteger(result?.warning_count) ? result.warning_count : 0,
+    families: sum(families),
+    kinds: families.filter((count) => Number.isInteger(count) && count > 0).length,
+    other: sum(Object.values(result?.other_warning_counts ?? {})),
+  };
+}
+
+// The row of the warnings that belong to no family: those of the Lactate
+// Threshold candidates, of the links between datasets, and of the input.
+export function otherRow(result) {
+  const warnings = warningTotals(result).other;
+  return {
+    family: null,
+    nameKey: "family.other",
+    statusKey: warnings > 0 ? "family_status.other_warnings" : "family_status.no_warnings",
+    kind: warnings > 0 ? "warn" : "none",
+    records: null,
+    warnings,
+  };
+}
+
+// The last line of the result table: the total of the warnings and what it
+// is made of, when the result is known.
+export function resultTotal(status) {
+  if (!FINISHED_STATES.includes(status?.state) || !status.result) {
+    return null;
+  }
+  const totals = warningTotals(status.result);
+  return message("result.total_warnings", { total: totals.total, families: totals.families, other: totals.other });
+}
+
+// The groups of the warnings that belong to no family, by the name that a
+// warning gives; a warning of the input gives none.
+const OTHER_GROUP_KEYS = {
+  lactate_threshold: "family.other_candidate",
+  relationships: "family.other_relationship",
+};
+const OTHER_GROUP_ORDER = ["lactate_threshold", "relationships", null];
+
+// The warnings of a finished run one by one, after their totals: the family
+// or the group of no family that each concerns, and what it says with its
+// count (stage B2c). The families come in the order of the result table, and
+// the warnings of no family last.
+export function warningMessages(result) {
+  const totals = warningTotals(result);
+  if (totals.total === 0) {
+    return [];
+  }
+  const messages = [message("output_check.warnings", { ...totals })];
+  const items = Array.isArray(result?.warning_items) ? result.warning_items : [];
+  const rank = (item) => OTHER_GROUP_ORDER.indexOf(item.family ?? null) + 1;
+  const sorted = [...items].sort(
+    (first, second) => rank(first) - rank(second) || String(first.family).localeCompare(String(second.family)),
+  );
+  for (const item of sorted) {
+    const name =
+      item.family === null || item.family === undefined
+        ? "family.other_input"
+        : (OTHER_GROUP_KEYS[item.family] ?? lookup(FAMILY_KEYS, item.family, null));
+    messages.push(
+      message(
+        lookup(WARNING_KEYS, item.code, "warning.other"),
+        { count: item.count ?? "—", code: String(item.code), ...(name === null ? { name: String(item.family) } : {}) },
+        name === null ? {} : { name },
+      ),
+    );
+  }
+  return messages;
 }
 
 export function familyRows(result) {
@@ -716,8 +796,8 @@ export function lastName(path) {
 }
 
 // Messages for the check of a finished output: the handoff counts, what the
-// Doctor says about using the output, and one line per kind of warning.
-export function outputCheckMessages(check) {
+// Doctor says about using the output, and the warnings of the run.
+export function outputCheckMessages(check, result) {
   const handoff = check?.handoff;
   const doctor = check?.doctor;
   const messages = [];
@@ -727,7 +807,6 @@ export function outputCheckMessages(check) {
       params: {
         datasets: handoff.dataset_count,
         relationships: handoff.relationship_count,
-        warnings: handoff.warning_count,
       },
       keyParams: {},
     });
@@ -741,14 +820,7 @@ export function outputCheckMessages(check) {
   if (next !== null) {
     messages.push(nextStep(next));
   }
-  const codes = Array.isArray(doctor?.warning_codes) ? doctor.warning_codes : [];
-  for (const code of codes) {
-    messages.push({
-      key: lookup(WARNING_KEYS, code, "warning.other"),
-      params: { code: String(code) },
-      keyParams: {},
-    });
-  }
+  messages.push(...warningMessages(result));
   if (doctor?.support_bundle_suggested === true) {
     messages.push({ key: "output_check.bundle_suggested", params: {}, keyParams: {} });
   }

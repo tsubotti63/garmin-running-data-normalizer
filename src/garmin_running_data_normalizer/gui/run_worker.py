@@ -126,6 +126,9 @@ def main(argv: list[str] | None = None) -> int:
                 "other_warning_counts": {
                     name: int(count) for name, count in totals["other"].items()
                 },
+                # Each warning by its code, names, and count, without its
+                # words, for the page's lists (stage B2c).
+                "warning_items": result["warning_items"],
             }
         )
         return int(result["exit_code"])

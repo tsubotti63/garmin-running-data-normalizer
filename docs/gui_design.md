@@ -262,12 +262,16 @@ adds `-2`, `-3`, and so on.
 ## After a run
 
 - The output is checked as `validate-handoff` and `doctor --run-output` check
-  it. The page shows the counts from the output (datasets, links between
-  datasets, and warnings, with the total and the counts per family, and the
-  warnings that belong to no family on a separate line), what the Doctor says
-  about using the output, the next action, and one line for each registered
-  warning code. A folder that changed after the run is reported by code. An
-  earlier output can also be selected for the check.
+  it. The page shows the counts from the output (datasets and links between
+  datasets), what the Doctor says about using the output, and the next
+  action. The warnings of the run follow, also while the check runs or after
+  it stopped: their total, made of the warnings of the families and those of
+  no family, and then each warning with the family that it concerns, or its
+  group of no family (the Lactate Threshold candidates, the links between
+  datasets, or the export), what it means with its count, and its code (stage
+  B2c). The result table ends with the row of the warnings of no family and
+  the total of the warnings. A folder that changed after the run is reported
+  by code. An earlier output can also be selected for the check.
 - The Support Bundle is written by default next to the output as
   `<output name>-support-bundle.zip`, because inside the output it would
   contradict the manifest; the user can choose another location. An existing

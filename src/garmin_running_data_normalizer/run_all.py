@@ -2639,6 +2639,7 @@ def run_all(
         "generated_files": generated_paths,
         "deterministic_digest": deterministic_digest,
         "warning_totals": warning_totals(summary),
+        "warning_items": warning_items(summary),
     }
 
 
@@ -2666,6 +2667,22 @@ def warning_totals(summary: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def warning_items(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    """The warnings of a run one by one, as the GUI shows them (stage B2c):
+    the code, the family and the dataset that each concerns, and its count,
+    without the words of its message. A warning that names no family, no
+    dataset, or no count has None there."""
+    return [
+        {
+            "code": str(item["code"]),
+            "family": item.get("family"),
+            "dataset": item.get("dataset"),
+            "count": item["count"] if isinstance(item.get("count"), int) else None,
+        }
+        for item in summary["warnings"]
+    ]
+
+
 __all__ = [
     "ACTIVITIES_CSV_COLUMNS",
     "ACTIVITIES_CSV_DURATION_COLUMNS",
@@ -2681,5 +2698,6 @@ __all__ = [
     "RunAllError",
     "left_out_files",
     "run_all",
+    "warning_items",
     "warning_totals",
 ]

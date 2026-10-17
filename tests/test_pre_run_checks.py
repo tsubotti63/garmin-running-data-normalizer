@@ -6,6 +6,7 @@ alike, and the pre-run check reads the Activities files as a run reads them
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -18,6 +19,7 @@ from typing import Any
 # Import the diagnostics package before the standalone module: importing
 # standalone first meets a circular import when this file runs on its own.
 from garmin_running_data_normalizer import diagnostics  # noqa: F401
+from garmin_running_data_normalizer.diagnostics.contracts import SAFE_WARNING_CODES
 from garmin_running_data_normalizer.diagnostics.doctor import doctor_input
 from garmin_running_data_normalizer.gui import runs
 from garmin_running_data_normalizer.gui.runs import RunManager, RunRequestError, validate_output_name
@@ -278,6 +280,29 @@ class WarningTotalsTest(unittest.TestCase):
                 ["candidate", "relationship", "input"],
             )
             self.assertGreater(sum(totals["families"].values()), 0)
+            # Each warning one by one, without its words (stage B2c).
+            self.assertEqual(result["warning_items"], run_all_module.warning_items(summary))
+            self.assertEqual(
+                result["warning_items"],
+                [
+                    {
+                        "code": item["code"],
+                        "family": item.get("family"),
+                        "dataset": item.get("dataset"),
+                        "count": item.get("count"),
+                    }
+                    for item in summary["warnings"]
+                ],
+            )
+
+    def test_every_warning_that_a_run_can_give_is_registered(self) -> None:
+        # The server keeps only registered codes (stage B2c), so a code that a
+        # run gives and the registry lacks would not show on the page.
+        source = Path(run_all_module.__file__).read_text(encoding="utf-8")
+        codes = set(re.findall(r'"code": "([A-Z_]+)"', source))
+        # The places where a run gives a warning; a new one comes here too.
+        self.assertEqual(len(re.findall(r'"code": "[A-Z_]+"', source)), 21)
+        self.assertLessEqual(codes, set(SAFE_WARNING_CODES))
 
     def test_the_cli_prints_the_total_and_the_warnings_of_no_family(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -345,6 +370,11 @@ class WarningTotalsTest(unittest.TestCase):
                 (result["warning_count"], result["other_warning_counts"]),
                 (totals["total"], totals["other"]),
             )
+            # The warnings one by one, as the run gives them (stage B2c).
+            items = run_all_module.warning_items(summary_of(output))
+            self.assertEqual(event["warning_items"], items)
+            self.assertEqual(result["warning_items"], items)
+            self.assertTrue(any(item["family"] is None for item in items))
 
     def test_the_run_manager_takes_only_counts(self) -> None:
         event = {
@@ -371,6 +401,43 @@ class WarningTotalsTest(unittest.TestCase):
         ):
             with self.subTest(label):
                 self.assertIsNone(runs._valid_result({**event, **change}))
+
+    def test_the_run_manager_leaves_out_a_warning_that_is_not_one(self) -> None:
+        # An item that is not a warning of a run is left out alone; the result
+        # of a run that finished stays (stage B2c).
+        good = {"code": "VALUES_DISAGREE", "family": "sleep", "dataset": None, "count": 3}
+        no_count = {"code": "OPTIONAL_FAMILY_NOT_PRESENT", "family": "gear", "dataset": None, "count": None}
+        no_family = {"code": "DATA_FILE_LEFT_OUT", "family": None, "dataset": None, "count": 1}
+        with_dataset = {"code": "DATA_ROW_LEFT_OUT", "family": "uds", "dataset": "uds_daily", "count": 2}
+        bad = [
+            {**good, "code": "NOT_REGISTERED"},
+            {**good, "family": "Sleep Data"},
+            {**good, "dataset": "/private/place"},
+            {**good, "count": -1},
+            {**good, "count": True},
+            {**good, "count": "3"},
+            "VALUES_DISAGREE",
+            None,
+        ]
+        event = {
+            "event": "finished",
+            "status": "PASS_WITH_WARNINGS",
+            "exit_code": 0,
+            "generated_file_count": 1,
+            "families": {},
+            "warning_count": 4,
+            "other_warning_counts": {"candidate": 0, "relationship": 0, "input": 1},
+            "warning_items": [good, *bad, no_count, no_family, with_dataset],
+        }
+        result = runs._valid_result(event)
+        assert result is not None
+        self.assertEqual(result["warning_items"], [good, no_count, no_family, with_dataset])
+        self.assertEqual(result["warning_count"], 4)
+        for items in (None, "VALUES_DISAGREE", {"code": "VALUES_DISAGREE"}):
+            with self.subTest(items=items):
+                kept = runs._valid_result({**event, "warning_items": items})
+                assert kept is not None
+                self.assertEqual(kept["warning_items"], [])
 
     def test_the_page_has_no_timezone_of_its_own(self) -> None:
         page = PAGE.read_text(encoding="utf-8")

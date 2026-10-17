@@ -105,15 +105,16 @@ returns for the same result:
 | `PASS_WITH_WARNINGS` | 0 | Finished; the output can be used after you review the warnings |
 | `PARTIAL_SUCCESS` | 3 | Normalized with part of the input left out, such as files that could not be read or rows without a required value; the output can be used |
 
-A table lists each data family with its status, record count, and warnings.
+A table lists each data family with its status, record count, and warnings,
+then the warnings that belong to no family, and the total of the warnings.
 
 **Output check** runs by itself after the run, with the same checks as the
 `validate-handoff` and `doctor --run-output` commands. It shows:
 
-- the handoff check, with the number of datasets, links between datasets, and
-  warnings;
+- the handoff check, with the number of datasets and links between datasets;
 - whether the output can be used, and the next step;
-- one line for each kind of warning, with its code.
+- the warnings of the run: their total, and each warning with the data that
+  it concerns, its count, and its code.
 
 **Show the output folder** shows the folder in Finder on macOS, in File
 Explorer on Windows, and with the file manager that `xdg-open` chooses on

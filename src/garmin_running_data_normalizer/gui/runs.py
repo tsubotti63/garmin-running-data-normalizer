@@ -20,6 +20,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import IO, Any
 
+from ..diagnostics.contracts import SAFE_WARNING_CODES
 from ..output_location import (
     MAX_OUTPUT_NAME_BYTES,
     WINDOWS_MAX_FILE_PATH,
@@ -198,7 +199,29 @@ def _valid_result(message: dict[str, Any]) -> dict[str, Any] | None:
         "families": summary,
         "warning_count": warning_count,
         "other_warning_counts": {name: other_warnings[name] for name, _field in OTHER_WARNING_FIELDS},
+        "warning_items": _warning_items(message.get("warning_items")),
     }
+
+
+def _name(value: Any) -> bool:
+    return value is None or (isinstance(value, str) and FAMILY_NAME.fullmatch(value) is not None)
+
+
+def _warning_items(items: Any) -> list[dict[str, Any]]:
+    """The warnings of a finished run one by one: a registered code, the
+    names of the family and the dataset, and a count (stage B2c). An item
+    that is not so is left out alone, never the result: the run finished,
+    and its totals come from their own counts."""
+    if not isinstance(items, list):
+        return []
+    kept = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        code, family, dataset, count = (item.get(key) for key in ("code", "family", "dataset", "count"))
+        if code in SAFE_WARNING_CODES and _name(family) and _name(dataset) and (count is None or _count(count)):
+            kept.append({"code": code, "family": family, "dataset": dataset, "count": count})
+    return kept
 
 
 def _staging_folders(output: Path) -> list[str]:

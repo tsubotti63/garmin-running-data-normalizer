@@ -32,10 +32,12 @@ import {
   progressMessage,
   resultDetails,
   resultRows,
+  resultTotal,
   runSummary,
   shouldFocusResult,
   stalledSeconds,
   stepRows,
+  warningMessages,
 } from "./flow.mjs";
 
 const LANGUAGES = ["en", "ja"];
@@ -128,6 +130,9 @@ const ui = {
   outputCheck: byId("output-check"),
   resultsCaption: byId("results-caption"),
   familyRows: byId("family-rows"),
+  familyTotal: byId("family-total"),
+  familyTotalText: byId("family-total-text"),
+  familyTotalCount: byId("family-total-count"),
   resultsPanel: byId("results-panel"),
   runExitRow: byId("run-exit-row"),
   hintsToggle: byId("hints-toggle"),
@@ -536,7 +541,7 @@ function familyRow(row) {
   name.textContent = row.nameKey ? t(row.nameKey) : row.family;
   const records = document.createElement("td");
   records.className = "n";
-  records.textContent = formatNumber(row.records);
+  records.textContent = row.records === null ? "—" : formatNumber(row.records);
   const status = document.createElement("td");
   const pill = document.createElement("span");
   pill.className = `pill k-${row.kind === "ok" ? "done" : row.kind}`;
@@ -601,6 +606,10 @@ function renderResults() {
   const run = state.run;
   const rows = resultRows(run);
   ui.familyRows.replaceChildren(...rows.map(familyRow));
+  const total = resultTotal(run);
+  ui.familyTotal.hidden = total === null;
+  setText(ui.familyTotalText, total === null ? "" : describe(total));
+  setText(ui.familyTotalCount, total === null ? "" : formatNumber(total.params.total));
   let caption = "results.before";
   if (ACTIVE_STATES.includes(run.state)) {
     caption = "results.running";
@@ -667,12 +676,15 @@ function renderOutput() {
   const finished = output !== null && FINISHED_STATES.includes(state.run.state);
   ui.outputCheckArea.hidden = !finished;
   const checkLines = [];
+  // The warnings of the run show also while the check runs or after it
+  // stopped (stage B2c).
+  const warnings = finished ? warningMessages(state.run.result).map(describe) : [];
   if (finished && output.checking) {
-    checkLines.push(t("output_check.running"));
+    checkLines.push(t("output_check.running"), ...warnings);
   } else if (finished && output.checkError !== null) {
-    checkLines.push(...errorLines(output.checkError));
+    checkLines.push(...errorLines(output.checkError), ...warnings);
   } else if (finished && output.check !== null) {
-    checkLines.push(...outputCheckMessages(output.check).map(describe));
+    checkLines.push(...outputCheckMessages(output.check, state.run.result).map(describe));
   }
   replaceLines(ui.outputCheck, checkLines);
   const openLines = [];
