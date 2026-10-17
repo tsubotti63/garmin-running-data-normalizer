@@ -57,6 +57,7 @@ test("run states are either active or terminal", () => {
 test("a checked export with confirmed boxes can start a run", () => {
   assert.deepEqual(enabled(READY), {
     form: true,
+    choose: true,
     browse: true,
     check: true,
     decideSnapshot: false,
@@ -76,6 +77,7 @@ test("nothing works without a connection", () => {
 test("a running job can only be cancelled", () => {
   assert.deepEqual(enabled({ ...READY, runState: "running" }), {
     form: false,
+    choose: false,
     browse: false,
     check: false,
     decideSnapshot: false,
@@ -105,6 +107,20 @@ test("a run needs a current successful check, confirmed boxes, and a complete fo
   for (const state of TERMINAL_STATES) {
     assert.equal(enabled({ ...READY, runState: state }).start, true, state);
   }
+});
+
+test("while a dialog to choose is open, only the fields can change", () => {
+  // Stage B3a: one dialog at a time; the page waits for its answer.
+  const choosing = enabled({ ...READY, choosing: true });
+  assert.equal(choosing.form, true);
+  assert.equal(choosing.choose, false);
+  assert.equal(choosing.browse, false);
+  assert.equal(choosing.check, false);
+  assert.equal(choosing.start, false);
+  assert.equal(choosing.quit, true);
+  assert.equal(enabled({ ...READY, checking: true }).choose, false);
+  assert.equal(enabled({ ...READY, runState: "finished", outputBusy: true }).choose, false);
+  assert.equal(enabled({ ...READY, inputPath: "" }).choose, true);
 });
 
 test("a box is confirmed with its button while it is the current one", () => {
@@ -600,6 +616,41 @@ test("the line of what to do next follows the boxes and the run", () => {
   assert.deepEqual(line({ ...READY, requestBox: "output" }), ["next_line.fix_box", { box: 3 }, {}]);
 });
 
+test("the line of what to do next follows the dialog, the check, and the extraction", () => {
+  // Stage B3a: the page checks a chosen Export by itself, and an extracted
+  // folder needs the confirmation that its extraction was complete.
+  const line = (view) => shape(flow.nextLine(view, boxStates(view)));
+  const fresh = { ...READY, exportReady: false, checkedReady: false, snapshotDecided: false, outputDecided: false };
+  assert.deepEqual(line({ ...fresh, choosing: true }), ["next_line.choosing", {}, {}]);
+  assert.deepEqual(line({ ...READY, choosing: true }), ["next_line.choosing", {}, {}]);
+  assert.deepEqual(line({ ...fresh, inputFilled: true, checking: true }), ["next_line.checking", {}, {}]);
+  const unconfirmed = { ...fresh, inputFilled: true, extractNeeded: true, extractConfirmed: false };
+  assert.deepEqual(line(unconfirmed), ["next_line.confirm_extract", {}, {}]);
+  assert.equal(boxStates(unconfirmed).export, "current");
+  // Confirmed, the export box is done as soon as its check is ready.
+  const confirmed = { ...unconfirmed, extractConfirmed: true, exportReady: true, checkedReady: true };
+  assert.deepEqual(line(confirmed), ["next_line.decide_snapshot", {}, {}]);
+  // A run stays as it is while a dialog is not open.
+  assert.deepEqual(line({ ...READY, runState: "running", choosing: false }), ["next_line.running", {}, {}]);
+});
+
+test("the color of the line under the title follows what the line says", () => {
+  // Stage B3a: after a change in a box, the line is about the boxes, so its
+  // color no longer shows the end of the last run.
+  const kind = (view) => flow.nextLineKind(view, boxStates(view));
+  const warned = { exit_code: 0, warning_count: 3 };
+  assert.equal(kind({ ...READY, runState: "finished", result: warned }), "warn");
+  assert.equal(kind({ ...READY, runState: "finished", result: { exit_code: 0, warning_count: 0 } }), "done");
+  assert.equal(kind({ ...READY, runState: "finished_after_cancel" }), "warn");
+  assert.equal(kind({ ...READY, runState: "finished", result: warned, editedSinceRun: true }), "current");
+  assert.equal(kind({ ...READY, runState: "finished_after_cancel", editedSinceRun: true }), "current");
+  assert.equal(kind({ ...READY, runState: "finished", result: warned, choosing: true }), "current");
+  assert.equal(kind({ ...READY, runState: "running" }), "current");
+  assert.equal(kind({ ...READY, runState: "failed", failedBox: "output" }), "error");
+  assert.equal(kind({ ...READY, runState: "finished", result: warned, editedSinceRun: true, exportProblem: true, exportReady: false }), "error");
+  assert.equal(kind(READY), "current");
+});
+
 test("a run request that the server refused marks the box that it concerns", () => {
   assert.deepEqual(boxStates({ ...READY, outputDecided: false, requestBox: "output" }), {
     export: "done",
@@ -677,6 +728,10 @@ test("a confirmed box is summed up in one line", () => {
     ["summary.output_done", { parent: "Garmin", name: "made" }, {}],
   );
   assert.equal(flow.boxSummary("run", view), null);
+  // After the page is loaded again, the field is empty: no summary without a
+  // name (stage B3a).
+  assert.equal(flow.boxSummary("export", { ...view, inputPath: "" }), null);
+  assert.equal(flow.boxSummary("export", { ...view, inputPath: "   " }), null);
   assert.equal(flow.lastName("/"), "/");
   assert.deepEqual(flow.boxesToConfirm({ export: "done", snapshot: "current", output: "todo", run: "todo" }), [2, 3]);
   assert.deepEqual(flow.boxesToConfirm(boxStates(READY)), []);

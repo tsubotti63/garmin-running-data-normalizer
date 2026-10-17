@@ -102,6 +102,9 @@ export const STOP_KEYS = {
   FOLDER_NOT_FOUND: "stop.folder_not_found",
   NOT_A_FOLDER: "stop.not_a_folder",
   FOLDER_NOT_READABLE: "stop.folder_not_readable",
+  CHOOSER_NOT_AVAILABLE: "stop.chooser_not_available",
+  CHOOSER_TIMEOUT: "stop.chooser_timeout",
+  CHOOSER_BUSY: "stop.chooser_busy",
 };
 
 // Several codes share a next step, as they share it in stops.py.
@@ -174,6 +177,9 @@ export const STOP_NEXT_KEYS = {
   FOLDER_NOT_FOUND: "stop_next.folder_not_found",
   NOT_A_FOLDER: "stop_next.not_a_folder",
   FOLDER_NOT_READABLE: "stop_next.folder_not_readable",
+  CHOOSER_NOT_AVAILABLE: "stop_next.chooser_not_available",
+  CHOOSER_TIMEOUT: "stop_next.chooser_timeout",
+  CHOOSER_BUSY: "stop_next.chooser_busy",
 };
 
 // A pre-run finding says what a run would stop with in the words of the stop
@@ -598,6 +604,10 @@ export function nextLine(view, states) {
   if (runState === "cancelling") {
     return message("next_line.cancelling");
   }
+  // A dialog of the system to choose the Export is open (stage B3a).
+  if (view.choosing === true) {
+    return message("next_line.choosing");
+  }
   if (runState === "finished_after_cancel" && !view.editedSinceRun) {
     return message("next_line.late");
   }
@@ -616,6 +626,13 @@ export function nextLine(view, states) {
     return message("next_line.fix_box", { box: boxNumber(red) });
   }
   if (states.export === "current") {
+    // The page checks a chosen Export by itself.
+    if (view.checking) {
+      return message("next_line.checking");
+    }
+    if (view.extractNeeded && !view.extractConfirmed) {
+      return message("next_line.confirm_extract");
+    }
     return message(view.inputFilled ? "next_line.check_export" : "next_line.choose_export");
   }
   if (states.snapshot === "current") {
@@ -628,6 +645,23 @@ export function nextLine(view, states) {
     return message("next_line.cancelled");
   }
   return message("next_line.start");
+}
+
+// The color of the line under the title, as the line reads: the run or the
+// dialog in blue, the end of the last run while no box changed since, red
+// while a box has a problem, and blue otherwise (stage B3a).
+export function nextLineKind(view, states) {
+  const runState = view.runState;
+  if (view.starting || ACTIVE_STATES.includes(runState) || view.choosing === true) {
+    return "current";
+  }
+  if (!view.editedSinceRun && runState === "finished_after_cancel") {
+    return "warn";
+  }
+  if (!view.editedSinceRun && runState === "finished") {
+    return (view.result?.warning_count ?? 0) > 0 ? "warn" : "done";
+  }
+  return BOXES.some((box) => states[box] === "error") ? "error" : "current";
 }
 
 // The steps of a run of one Export, and the stages of Run-All that each one
@@ -768,7 +802,10 @@ export function resultDetails(status) {
 // The words that sum up a confirmed box (a green line under its heading).
 export function boxSummary(box, view) {
   if (box === "export") {
-    return message("summary.export", { name: lastName(view.inputPath) });
+    // After the page is loaded again, the field is empty until the settings
+    // of an earlier launch come (stage B4a); the fourth box names the output.
+    const name = lastName(view.inputPath);
+    return name === "" ? null : message("summary.export", { name });
   }
   if (box === "snapshot") {
     return message("summary.snapshot_single");
@@ -927,12 +964,13 @@ export function shouldFocusResult(active, body, runSection) {
 // third box takes back its confirmation, and one in the first its check.
 export function controls(view, states) {
   const running = ACTIVE_STATES.includes(view.runState) || view.starting;
-  const busy = running || view.checking || view.outputBusy;
+  const busy = running || view.checking || view.outputBusy || view.choosing === true;
   const filled = (value) => typeof value === "string" && value.trim() !== "";
   const outputReady =
     filled(view.outputParent) && filled(view.timezone) && isValidOutputName(view.outputName);
   return {
     form: view.connected && !running,
+    choose: view.connected && !busy,
     browse: view.connected && !busy,
     check: view.connected && !busy && filled(view.inputPath),
     decideSnapshot: view.connected && !busy && states.snapshot === "current",

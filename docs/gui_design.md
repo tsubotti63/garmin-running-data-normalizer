@@ -206,17 +206,41 @@ Local Snapshot Store and new output folders
 
 ## Selecting an Export
 
-The page offers the operating system's own dialog to choose a folder or a ZIP
-file, and a path field where a path can be pasted.
+The first box has two buttons, "Choose ZIP file…" and "Choose extracted
+folder…", because the dialogs of the three systems choose either a file or a
+folder, not both (stage B3a). Each opens the operating system's own dialog,
+and the page checks the chosen place at once. A path can also be pasted in the
+field and checked with "Check the export". The page leaves out the spaces
+around a pasted path, and uses a chosen path as it is.
 
 - The dialog is opened with fixed scripts: `osascript` on macOS, PowerShell on
-  Windows, and `zenity` or `kdialog` on Linux. When none is available, the page
-  offers its own list of folder and ZIP file names, which leaves out hidden
-  items, symbolic links, and Windows junctions.
-- The scripts are fixed strings that never contain user input or paths. The
-  returned path is validated as an absolute path. A dialog opens only for an
-  API request with the launch key, only one dialog is open at a time, and a
-  dialog that is not answered within a time limit counts as no selection.
+  Windows (with `-STA` and output in UTF-8, so that names in Japanese reach
+  the server intact), and `zenity` or `kdialog` on Linux with a display. When
+  none is available (`CHOOSER_NOT_AVAILABLE`), the page offers its own list of
+  folder and ZIP file names instead, which leaves out hidden items, symbolic
+  links, and Windows junctions. A ZIP file in the list is chosen with one
+  press, and a folder with "Use this folder".
+- The scripts are fixed strings that never contain user input or paths; the
+  request names only the kind, `zip` or `folder`. The returned path is
+  validated as an absolute path on one line. A dialog opens only for an API
+  request with the launch key, and only one dialog is open at a time: another
+  request is refused at once (`CHOOSER_BUSY`).
+- The request returns when the dialog opens, and the page asks for its answer
+  every half second, so that no request waits for the user; browsers end a
+  request that waits for minutes. A dialog that is not answered within 10
+  minutes counts as no selection, and its program is stopped
+  (`CHOOSER_TIMEOUT`). A dialog that is still open when the server stops is
+  closed.
+- For an extracted folder, the user confirms that the Export was extracted
+  completely, with a check box that is empty again at every check. The page
+  tells a folder from a ZIP file by the answer of the check, not by the name.
+  Only the page asks for this confirmation, as help for the user: the server
+  does not, and neither does `run-all` of the CLI. The CLI's confirmation is
+  `snapshot register --confirm-complete`, for a Snapshot.
+- A stop of a run in the first box hides the lines of the check before it,
+  which would read as the answer to it. After the page is loaded again, the
+  first box shows no summary until its field holds a place; the settings of an
+  earlier launch come in stage B4a.
 
 A ZIP file is read directly:
 
@@ -481,7 +505,7 @@ these codes; the CLI never stops with them. The table is made from
 
 | Code | What it means | Next step |
 |---|---|---|
-| `PATH_NOT_ABSOLUTE` | the place is not a full path | choose it with Choose…, or paste a place that starts with / on a Mac or Linux, or with a drive such as C:\\ on Windows |
+| `PATH_NOT_ABSOLUTE` | the place is not a full path | choose it with a button that says Choose, or paste a place that starts with / on a Mac or Linux, or with a drive such as C:\\ on Windows |
 | `PATH_INVALID` | the entries could not be read | check the entries and press the button again |
 | `INPUT_PATH_INVALID` | the entries could not be read | check the entries and press the button again |
 | `OUTPUT_PARENT_INVALID` | the entries could not be read | check the entries and press the button again |
@@ -497,6 +521,9 @@ these codes; the CLI never stops with them. The table is made from
 | `SUPPORT_BUNDLE_NOT_WRITTEN` | the Support Bundle could not be written | check that the folder for it is still there and that this app can write in it |
 | `OPEN_NOT_AVAILABLE` | no program to open it (xdg-open) was found | open the output folder from your file manager, such as Finder or File Explorer |
 | `OPEN_FAILED` | the system could not open it | open the output folder from your file manager, such as Finder or File Explorer |
+| `CHOOSER_NOT_AVAILABLE` | this system's dialog to choose could not be opened | choose from the list below, or paste the place |
+| `CHOOSER_TIMEOUT` | the dialog to choose was not answered in time | press Choose ZIP file… or Choose extracted folder… again |
+| `CHOOSER_BUSY` | another dialog to choose is open | choose in it or close it, and press the button again |
 
 ## Accessibility
 

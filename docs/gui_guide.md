@@ -22,8 +22,8 @@ computer.
 - The package installed with Python 3.11 or later. The GUI adds no
   dependency.
 - A web browser on the same computer.
-- A Garmin Account Data Export, extracted from its ZIP into a folder. See
-  steps 1 and 2 of
+- A Garmin Account Data Export: the ZIP file downloaded from Garmin, or the
+  folder extracted from it. See steps 1 and 2 of
   [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
 - Free space for a new output folder.
 
@@ -43,24 +43,34 @@ The command prints the GUI's address and opens it in your default browser.
   and Japanese under **Language** at the bottom of the page; the choice is
   kept for that browser tab.
 
-## 1. Choose the export folder
+## 1. Choose the export
 
-1. In **Place of the Garmin export**, enter the full path of the extracted
-   Export folder, or choose **Choose…** to pick it. The folder browser shows
-   folder names only; hidden folders and links are not shown.
-2. Choose **Check the export**. This is the same check as the `doctor --input`
-   command. It says whether the export can be normalized, and what to do next
-   if it cannot. A large Export can take a while to check.
+1. Choose **Choose ZIP file…** for the ZIP file downloaded from Garmin, or
+   **Choose extracted folder…** for the folder that you extracted from it.
+   The system's own dialog opens. When the system has no such dialog, a list
+   on the page opens instead; it shows folders and ZIP files, but no hidden
+   items or links.
+2. The page checks what you chose right away. This is the same check as the
+   `doctor --input` command. It says whether the export can be normalized,
+   and what to do next if it cannot. A large Export can take a while to
+   check.
+3. For an extracted folder, check that the extraction finished, and tick
+   **I checked that the ZIP file was extracted completely and that nothing is missing**.
+   If the extraction stopped partway, files are missing and the results
+   change. A ZIP file needs no such check.
 
-Changing the place clears the check, so check again before you start. The
-timezone is checked when the run starts.
+You can also paste the full path in **Place of the Garmin export** and choose
+**Check the export**; the spaces around a pasted place are left out. Changing
+the place clears the check, so check again before you start. The timezone is
+checked when the run starts.
 
 ## 2. Choose the output
 
 - **Where to create the output**: after a successful check,
   this is filled in with the folder that contains the Export, if it is empty.
-  The folder must exist, and you must be able to write to it; the GUI checks
-  this before the run starts.
+  You can also pick a folder with **Choose…**; the list shows folder names
+  only. The folder must exist, and you must be able to write to it; the GUI
+  checks this before the run starts.
 - **Name of the new folder**: proposed as
   `garmin-run-all-YYYYMMDD-HHMM` in local time. Use a name that does not exist
   yet, with up to 200 letters and digits or 66 Japanese characters. It must
@@ -147,7 +157,7 @@ the code when you ask for help. Do not attach your Export or output.
 
 | Code | What happened | What to do |
 |---|---|---|
-| `PATH_NOT_ABSOLUTE` | The place is not a full path. | Choose it with Choose…, or paste a place that starts with / on a Mac or Linux, or with a drive such as C:\\ on Windows. |
+| `PATH_NOT_ABSOLUTE` | The place is not a full path. | Choose it with a button that says Choose, or paste a place that starts with / on a Mac or Linux, or with a drive such as C:\\ on Windows. |
 | `FOLDER_NOT_READABLE` | This app is not allowed to open this folder. | On a Mac, allow it when you are asked, or in System Settings > Privacy & Security. |
 | `ACTIVITIES_NOT_FOUND` | The input holds no Activities file. | Select an Export that contains your Activities. |
 | `OUTPUT_EXISTS` | The output folder is there already. | Choose another name for the output. |

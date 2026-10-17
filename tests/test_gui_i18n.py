@@ -232,6 +232,8 @@ class GuiMessageCoverageTest(unittest.TestCase):
             | codes_in("gui/runs.py", r'absolute_path\([^,]+, "([A-Z_]+)"\)')
             | codes_in("gui/server.py", r'absolute_path\([^,]+, "([A-Z_]+)"\)')
             | codes_in("gui/folders.py", r'FolderError\("([A-Z_]+)"\)')
+            | codes_in("gui/chooser.py", r'ChooserError\("([A-Z_]+)"\)')
+            | codes_in("gui/chooser.py", r'_failed\("([A-Z_]+)"\)')
             | codes_in("gui/server.py", r'ApiError\(HTTPStatus\.[A-Z_]+, "([A-Z_]+)"\)')
             | codes_in("gui/run_worker.py", r'"code": "([A-Z_]+)"')
             | codes_in("gui/outputs.py", r'OutputActionError\("([A-Z_]+)"\)')

@@ -31,14 +31,25 @@
       <h2 id="input-heading" tabindex="-1"><span class="num" aria-hidden="true"></span><span data-i18n="export.heading"></span><span class="badge"></span></h2>
       <p class="hint" data-i18n="hint.export"></p>
       <p class="summary" hidden></p>
+      <div class="button-row">
+        <button type="button" id="choose-zip" data-i18n="choose.zip" aria-describedby="choose-help" disabled></button>
+        <button type="button" id="choose-folder" data-i18n="choose.folder" aria-describedby="choose-help" disabled></button>
+      </div>
+      <p id="choose-help" class="help" data-i18n="choose.help"></p>
       <label for="input-path" data-i18n="input.label"></label>
       <input id="input-path" type="text" autocomplete="off" spellcheck="false" aria-describedby="input-help">
       <p id="input-help" class="help" data-i18n="input.help"></p>
       <div class="button-row">
-        <button type="button" id="input-browse" data-i18n="browse.button" disabled></button>
         <button type="button" id="check-button" data-i18n="check.button" disabled></button>
       </div>
       <div id="check-result" class="messages" role="status" aria-live="polite"></div>
+      <div id="extract-area" hidden>
+        <div class="checkbox-row">
+          <input id="extract-confirm" type="checkbox" aria-describedby="extract-help">
+          <label for="extract-confirm" data-i18n="extract.label"></label>
+        </div>
+        <p id="extract-help" class="help" data-i18n="extract.help"></p>
+      </div>
       <div id="export-error" class="errbox" hidden>
         <h3 id="export-error-heading" tabindex="-1" data-i18n="error.heading"></h3>
         <div id="export-error-lines" class="messages"></div>
@@ -230,9 +241,9 @@
   </div>
 
   <section id="browser" class="browser panel" aria-labelledby="browser-heading" hidden>
-    <h2 id="browser-heading" data-i18n="browser.heading" tabindex="-1"></h2>
+    <h2 id="browser-heading" tabindex="-1"></h2>
     <p id="browser-path" class="path"></p>
-    <p class="help" data-i18n="browser.hint"></p>
+    <p id="browser-hint" class="help"></p>
     <div class="button-row">
       <button type="button" id="browser-up" data-i18n="browser.up"></button>
       <button type="button" id="browser-choose" data-i18n="browser.choose"></button>
