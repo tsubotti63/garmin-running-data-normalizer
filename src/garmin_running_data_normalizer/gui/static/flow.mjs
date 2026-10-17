@@ -202,6 +202,11 @@ export const FINDING_KEYS = {
   ACTIVITIES_FILES_HOLD_NO_RECORDS: "finding.activities_empty",
   INPUT_READY_FOR_BOUNDED_RUN_ALL_ATTEMPT: null,
 };
+// A finding that gives a count of the check uses words with that count
+// (stage B3b): the key, and the count of the check that it takes.
+const COUNTED_FINDING_KEYS = {
+  INPUT_FILES_CANNOT_BE_READ_AND_WILL_BE_LEFT_OUT: ["finding.files_left_out_count", "files_left_out"],
+};
 // A finding's next step is that of the stop of its code (STOP_NEXT_KEYS), as
 // the CLI's Doctor gives it; these are the next actions of the findings whose
 // code is not a stop. The boxes say what to do when nothing stops a run, so
@@ -354,12 +359,23 @@ export function progressMessage(progress) {
 
 // A pre-run finding, and what to do next when it has a step. A finding that
 // keeps the run from starting also gives its code to quote, as a stop does.
-export function findingMessages(finding) {
+// A count of the check, or null when it is not a whole number.
+function countOf(value) {
+  return Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+export function findingMessages(finding, counts = {}) {
   const key = lookup(FINDING_KEYS, finding?.message_id, "error.unknown");
   if (key === null) {
     return [];
   }
-  const messages = [{ key, params: {}, keyParams: {} }];
+  const counted = lookup(COUNTED_FINDING_KEYS, finding?.message_id, null);
+  const count = counted === null ? null : countOf(counts?.[counted[1]]);
+  const messages = [
+    count !== null && count > 0
+      ? { key: counted[0], params: { count }, keyParams: {} }
+      : { key, params: {}, keyParams: {} },
+  ];
   const step = lookup(STOP_NEXT_KEYS, finding?.code, null) ?? lookup(ACTION_KEYS, finding?.next_action_id, null);
   if (step !== null) {
     messages.push(nextStep(step));
@@ -368,6 +384,63 @@ export function findingMessages(finding) {
     messages.push({ key: "error.code", params: { code: finding.code }, keyParams: {} });
   }
   return messages;
+}
+
+// The finding of the pre-run check that belongs to the third box: the
+// timezone data, which a run needs for the times of its records (stage B3b).
+// Without it, the check counts no Activities.
+const TIMEZONE_FINDING = "TIMEZONE_DATA_UNAVAILABLE";
+
+// A pre-run check as the boxes read it: the finding of the third box, the
+// other findings, and whether one of them stops a run.
+export function checkParts(check) {
+  const findings = Array.isArray(check?.findings) ? check.findings : [];
+  const timezone = findings.find((finding) => finding?.code === TIMEZONE_FINDING) ?? null;
+  const others = findings.filter((finding) => finding?.code !== TIMEZONE_FINDING);
+  return { timezone, others, stops: others.some((finding) => finding?.severity === "ERROR") };
+}
+
+// The lines of the first box for a pre-run check, each with its kind: "error"
+// (red), "warn" (yellow), "ok" (green), or "info". The red ones come first,
+// then the yellow ones, then what the check found (stage B3b). ``start`` marks
+// the first line of each group, which carries the mark of its kind.
+export function checkMessages(check) {
+  const lines = [];
+  const add = (kind, messages) =>
+    messages.forEach((line, index) => lines.push({ kind, start: index === 0, message: line }));
+  const { timezone, others, stops } = checkParts(check);
+  const counts = check?.counts ?? {};
+  if (stops) {
+    add("error", [message("check.not_ready")]);
+  }
+  for (const finding of others.filter((item) => item?.severity === "ERROR")) {
+    add("error", findingMessages(finding, counts));
+  }
+  for (const finding of others.filter((item) => item?.severity === "WARNING")) {
+    add("warn", findingMessages(finding, counts));
+  }
+  if (stops) {
+    return lines;
+  }
+  // What the check found is one group: a ZIP file was checked whole, also
+  // without the timezone data, and the counts follow.
+  const found = [];
+  const files = countOf(counts.files_read);
+  if (check?.kind === "zip" && files !== null) {
+    found.push(message("check.zip_ready", { files }));
+  } else if (timezone === null) {
+    found.push(message(check?.kind === "folder" ? "check.folder_ready" : "check.ready"));
+  }
+  const activities = countOf(counts.activity_records);
+  const fit = countOf(counts.fit_files);
+  if (timezone === null && activities !== null && fit !== null) {
+    found.push(message("check.counts", { activities, fit }));
+  }
+  add("ok", found);
+  if (timezone !== null) {
+    add("info", [message("check.counts_later")]);
+  }
+  return lines;
 }
 
 // The rows of the result table: for a finished run, and for one whose
@@ -563,6 +636,14 @@ export function boxStates(view) {
   }
   if (view.exportProblem) {
     states.export = "error";
+    return states;
+  }
+  // The timezone data that the pre-run check found missing belongs to the
+  // third box; the first box waits until the check can count the Activities
+  // (stage B3b).
+  if (view.timezoneProblem) {
+    states.export = "current";
+    states.output = "error";
     return states;
   }
   const done = [view.exportReady, view.snapshotDecided, view.outputDecided];

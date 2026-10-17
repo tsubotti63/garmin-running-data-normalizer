@@ -26,6 +26,7 @@ from ..intake.source import (
     is_zip_input,
 )
 from ..normalizers.activities import normalize_activities
+from ..normalizers.records import merge_repeated_records
 from ..run_all import left_out_files
 from ..standalone import StandaloneHandoffError, validate_standalone_handoff
 from ..stops import NEXT_ACTIONS, finding_next_step
@@ -154,6 +155,12 @@ def doctor_input(
     check tells when a run would stop because no Activities record can be
     kept. The files of the other datasets are not read: a run leaves out
     what it cannot read of them and goes on.
+
+    The report of the check also gives counts of the input
+    (``input_counts``, stage B3b): the Activities records that a run keeps,
+    the FIT files, the files that a run reads, those that the check found it
+    cannot read, and those that are not read. It is None when the Export
+    could not be read.
     """
     try:
         timezone_name = resolve_timezone_name(timezone_name)
@@ -163,6 +170,7 @@ def doctor_input(
         pass  # Reported below as the bounded timezone-data finding.
     requested = Path(root)
     findings: list[dict[str, Any]] = []
+    counts: dict[str, Any] | None = None
     if requested.is_symlink() or not (requested.is_dir() or is_zip_input(requested)):
         findings.append(
             _finding(
@@ -209,23 +217,44 @@ def doctor_input(
                 # The Activities files are read as a run reads them (stage
                 # A5a): a run stops when none of their records can be kept.
                 # A run of mixed Exports, or without the timezone data, stops
-                # before it reads them.
-                activity_record_count = None
+                # before it reads them, and the check does not count them.
+                activity_record_count: int | None = None
+                if not activity_assets:
+                    activity_record_count = 0
                 if activity_assets and not mixed_accounts and timezone_ready:
+                    # The run keeps one row of an activity that the files
+                    # give more than once (stage A3b), and counts the rows
+                    # after that (stage B3b).
                     activity_record_count = len(
-                        normalize_activities(
-                            str(requested),
-                            timezone_name,
-                            assets=activity_assets,
-                            left_out=Counter(),
-                        )
+                        merge_repeated_records(
+                            "activities",
+                            normalize_activities(
+                                str(requested),
+                                timezone_name,
+                                assets=activity_assets,
+                                left_out=Counter(),
+                            ),
+                        ).rows
                     )
                 # Files that cannot be read are left out of the run, which
                 # goes on (stage A3c): a damaged ZIP, a file over the limit,
                 # and from stage A5a an Activities file that is not JSON.
                 left_out = list(reading.left_out)
+                # The counts of the input, as the run counts them: the files
+                # that it reads are its input_asset_count, and those not read
+                # its files_not_read. A run also leaves out the JSON files of
+                # the other datasets that are not JSON, which the check does
+                # not read (stage B3b).
+                input_counts = {
+                    "activity_records": activity_record_count,
+                    "fit_files": sum(1 for asset in assets if asset.kind == "fit"),
+                    "files_read": len(assets),
+                    "files_left_out": len(left_out),
+                    "files_not_read": len(reading.not_read) + len(reading.outside_files),
+                }
             if mixed_accounts:
                 raise MixedExportsError()
+            counts = input_counts
         except MixedExportsError:
             findings.append(
                 _finding(
@@ -400,7 +429,7 @@ def doctor_input(
                     )
                 )
     actionable = any(item["actionability"] == "ACTION_REQUIRED" for item in findings)
-    return _base(
+    report = _base(
         product_version=__version__,
         mode="PRE_RUN",
         product_status=None,
@@ -414,6 +443,10 @@ def doctor_input(
         findings=findings,
         authority_references=["doctor_contract#pre-run-mode", "product:intake-discovery"],
     )
+    # Only the report of the check has counts; the report after a run keeps
+    # its fields, which the Support Bundle requires exactly (stage B3b).
+    report["input_counts"] = counts
+    return report
 
 
 def _json_object(root: Path, relative: str) -> dict[str, Any]:
@@ -562,6 +595,18 @@ def render_doctor_human(report: dict[str, Any]) -> str:
         f"Usability: {report['usability_scope']}",
         f"Action: {report['actionability']}",
     ]
+    # The counts of the input, before a run (stage B3b).
+    counts = report.get("input_counts")
+    if report["mode"] == "PRE_RUN" and isinstance(counts, dict):
+        activities = counts["activity_records"]
+        lines.append(
+            "Counts: "
+            f"activities={'not_counted' if activities is None else activities} "
+            f"fit_files={counts['fit_files']} "
+            f"files_read={counts['files_read']} "
+            f"files_left_out={counts['files_left_out']} "
+            f"files_not_read={counts['files_not_read']}"
+        )
     if report["product_status"] is not None:
         lines.append(f"Product result: {report['product_status']} / exit {report['product_exit_code']}")
         lines.append(

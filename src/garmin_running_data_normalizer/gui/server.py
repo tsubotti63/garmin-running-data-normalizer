@@ -387,9 +387,13 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             }
             for finding in report["findings"]
         ]
+        # The counts of the input, numbers only, as the CLI's Doctor gives
+        # them (stage B3b).
+        counts = report.get("input_counts")
         return {
             "ready": all(finding["severity"] != "ERROR" for finding in findings),
             "input_kind": kind,
+            "counts": dict(counts) if isinstance(counts, dict) else None,
             "findings": findings,
         }
 

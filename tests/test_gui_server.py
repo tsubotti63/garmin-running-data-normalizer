@@ -626,6 +626,14 @@ class GuiRunApiTest(GuiServerTestCase):
             {
                 "ready": True,
                 "input_kind": "folder",
+                # The counts of the input, numbers only (stage B3b).
+                "counts": {
+                    "activity_records": 1,
+                    "fit_files": 0,
+                    "files_read": 1,
+                    "files_left_out": 0,
+                    "files_not_read": 0,
+                },
                 "findings": [
                     {
                         "code": "RUN_ALL_NOT_EVALUATED",
@@ -641,6 +649,7 @@ class GuiRunApiTest(GuiServerTestCase):
         self.assertFalse(answer["ready"])
         self.assertEqual([item["code"] for item in answer["findings"]], ["INPUT_DIRECTORY_INVALID"])
         self.assertIsNone(answer["input_kind"])
+        self.assertIsNone(answer["counts"])
         self.assertNotIn(str(self.root), json.dumps(answer))
         for payload, code in (
             ({"input": "relative"}, "PATH_NOT_ABSOLUTE"),
@@ -715,6 +724,8 @@ class GuiRunApiTest(GuiServerTestCase):
             {
                 "ready": False,
                 "input_kind": "folder",
+                # Mixed Exports are not counted.
+                "counts": None,
                 "findings": [
                     {
                         "code": "INPUT_MULTIPLE_EXPORTS",
@@ -735,6 +746,14 @@ class GuiRunApiTest(GuiServerTestCase):
             {
                 "ready": True,
                 "input_kind": "folder",
+                # One copy of the same Export is read.
+                "counts": {
+                    "activity_records": 1,
+                    "fit_files": 0,
+                    "files_read": 1,
+                    "files_left_out": 0,
+                    "files_not_read": 0,
+                },
                 "findings": [
                     {
                         "code": "INPUT_DUPLICATE_SOURCES",
@@ -784,6 +803,8 @@ class GuiRunApiTest(GuiServerTestCase):
             self.assertEqual(
                 [item["code"] for item in check["findings"]], ["INPUT_MULTIPLE_EXPORTS"]
             )
+            # A mix of accounts is not counted (stage B3b).
+            self.assertIsNone(check["counts"])
             request = {**self.run_request("accounts-output"), "input": str(mixed)}
             self.assertEqual(self.call("/api/run/start", request)[0], 200)
             answer = self.wait_for_state({"failed"})

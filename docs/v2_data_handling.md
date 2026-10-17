@@ -106,6 +106,36 @@ counts above, never from the items. The GUI's server keeps only items of a
 registered code with plain names and counts, and leaves out any other item
 alone. The CLI prints the totals as before.
 
+From stage B3b, the pre-run check (`doctor --input`, which the GUI uses) also
+gives counts of the input, as numbers only, in `input_counts` of its JSON
+report and on a line of its report for a person (`Counts: activities=N
+fit_files=N files_read=N files_left_out=N files_not_read=N`):
+
+- `activity_records`: the Activities records that a run keeps, after it
+  keeps one row of an activity that the files give more than once, as the
+  run counts them; `null` without the timezone data, when the check counts
+  no Activities (`activities=not_counted`). Until stage B3b, the check
+  counted the rows before that, and did not report the count.
+- `fit_files`: the FIT files, as the run counts them for the family `fit`
+  (`detected_asset_count`).
+- `files_read`: the JSON and FIT files that the run reads
+  (`input_asset_count` in `run_summary.json`).
+- `files_left_out`: the files that the check finds it cannot read: a file
+  over the limit, a ZIP file inside the Export that cannot be opened, and an
+  Activities file that is not JSON. The run leaves out these, and also the
+  JSON files of the other datasets that are not JSON, which only the run
+  reads, so this number can be smaller than that of `files_left_out` in
+  `run_manifest.json`.
+- `files_not_read`: the files that are not read, as `files_not_read` in
+  `run_manifest.json` lists them.
+
+`input_counts` is `null` when the Export could not be read, such as a place
+that is not an Export, a damaged ZIP file, or mixed Exports. The report after
+a run (`doctor --run-output`) has no counts, so the Support Bundle, which
+takes that report, does not change, and the format and the schema version of
+the reports stay. The check does not count the families: whether the FIT
+files hold HRV readings is known only when the run reads them.
+
 ## Rules by situation
 
 Each item gives the v1.7.1 behavior and the v2.0.0 behavior.
@@ -2518,7 +2548,10 @@ v1.7.1 with the CLI at the stage A checkpoint.
   [Reports of a run in the CLI and the GUI](#reports-of-a-run-in-the-cli-and-the-gui)).
   `doctor --input` reads the Activities files and reports `ACTIVITIES_EMPTY`
   when no Activities record can be kept, where v1.7.1 passed such an Export
-  and the run stopped. From stage A5b, every `ERROR` line gives the next
+  and the run stopped, and from stage B3b it gives the counts of the input
+  in `input_counts` and on a `Counts:` line (see
+  [Reports of a run in the CLI and the GUI](#reports-of-a-run-in-the-cli-and-the-gui)).
+  From stage A5b, every `ERROR` line gives the next
   step of its code after what happened (see
   [Stops that remain](#stops-that-remain)): the messages of some stops are
   worded anew, such as that of `TIMEZONE_INVALID`, and those of

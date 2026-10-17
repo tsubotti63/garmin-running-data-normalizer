@@ -237,6 +237,17 @@ around a pasted path, and uses a chosen path as it is.
   Only the page asks for this confirmation, as help for the user: the server
   does not, and neither does `run-all` of the CLI. The CLI's confirmation is
   `snapshot register --confirm-complete`, for a Snapshot.
+- The first box gives the answer of the check red first, then yellow, then
+  green (stage B3b): the findings that stop a run, the notes that do not,
+  such as the files that cannot be read with their number, and what the
+  check found: for a ZIP file that it is not damaged, with the files to
+  read, for a folder that it can be normalized, and the numbers of
+  Activities and FIT files. Each line has a mark and a bar of its color.
+  The page does not count the families before a run: whether the FIT files
+  hold HRV readings is known only when the run reads them, and the result
+  table says which families the run found. Without the timezone data, the
+  check counts no Activities: the third box shows the missing data, and the
+  first box waits.
 - A stop of a run in the first box hides the lines of the check before it,
   which would read as the answer to it. After the page is loaded again, the
   first box shows no summary until its field holds a place; the settings of an

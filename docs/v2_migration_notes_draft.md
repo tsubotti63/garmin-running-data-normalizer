@@ -132,7 +132,10 @@ What can change:
   earlier value.
 - Doctor: `doctor --input` reads the Activities files and reports
   `ACTIVITIES_EMPTY` when no Activities record can be kept, where v1.7.1
-  passed such an Export and the run stopped. In the report for a person, a
+  passed such an Export and the run stopped. Its JSON report gains
+  `input_counts` (the Activities records, the FIT files, and the files read,
+  left out, and not read), and its report for a person a `Counts:` line; the
+  report of `doctor --run-output` does not change. In the report for a person, a
   finding whose code is a stop gives the next step of that stop, as the run
   does; the JSON report keeps the `next_action_id` of each finding. For a
   run with exit 3, the report for a person and the words of the next step

@@ -52,8 +52,8 @@ The command prints the GUI's address and opens it in your default browser.
    items or links.
 2. The page checks what you chose right away. This is the same check as the
    `doctor --input` command. It says whether the export can be normalized,
-   and what to do next if it cannot. A large Export can take a while to
-   check.
+   how many Activities and FIT files it holds, and what to do next if it
+   cannot. A large Export can take a while to check.
 3. For an extracted folder, check that the extraction finished, and tick
    **I checked that the ZIP file was extracted completely and that nothing is missing**.
    If the extraction stopped partway, files are missing and the results

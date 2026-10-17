@@ -15,6 +15,7 @@ import unittest
 import zipfile
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 # Import the diagnostics package before the standalone module: importing
 # standalone first meets a circular import when this file runs on its own.
@@ -559,6 +560,170 @@ class PreRunActivitiesTest(unittest.TestCase):
             self.assertEqual(
                 [item[0] for item in findings(mixed)], ["INPUT_MULTIPLE_EXPORTS"]
             )
+
+
+def manifest_of(output: Path) -> dict[str, Any]:
+    return json.loads((output / "run_manifest.json").read_text(encoding="utf-8"))
+
+
+def left_out_by_the_check(manifest: dict[str, Any]) -> int:
+    """The files of a run's list that the check also finds it cannot read: a
+    JSON file of another dataset that is not JSON is found only by the run,
+    which reads it (stage B3b)."""
+    return sum(
+        1
+        for item in manifest.get("files_left_out", [])
+        if not (item["reason"] == "json_not_readable" and item["family"] != "activities")
+    )
+
+
+class PreRunCountsTest(unittest.TestCase):
+    """The counts of the pre-run check are those of the run (stage B3b)."""
+
+    def test_the_counts_are_those_of_the_run(self) -> None:
+        from tests.test_snapshot_parity import scenarios
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "out").mkdir()
+            for name, source in scenarios(root / "exports").items():
+                with self.subTest(name):
+                    counts = doctor_input(source)["input_counts"]
+                    output = root / "out" / name
+                    result = run_all(source, output)
+                    manifest = manifest_of(output)
+                    families = result["family_results"]
+                    self.assertEqual(counts["activity_records"], families["activities"]["record_count"])
+                    self.assertEqual(counts["fit_files"], families["fit"]["detected_asset_count"])
+                    self.assertEqual(counts["files_read"], summary_of(output)["input_asset_count"])
+                    self.assertEqual(counts["files_not_read"], len(manifest.get("files_not_read", [])))
+                    self.assertEqual(counts["files_left_out"], left_out_by_the_check(manifest))
+                    self.assertEqual(
+                        sorted(counts),
+                        ["activity_records", "files_left_out", "files_not_read", "files_read", "fit_files"],
+                    )
+
+    def test_an_activity_given_twice_is_counted_once_as_the_run_keeps_it(self) -> None:
+        # Before stage B3b, the check counted the rows before the run kept
+        # one row of an activity that the files give twice.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = activities_export(root, None, None)
+            counts = doctor_input(source)["input_counts"]
+            result = run_all(source, root / "output")
+            self.assertEqual(counts["activity_records"], 1)
+            self.assertEqual(result["family_results"]["activities"]["record_count"], 1)
+            self.assertEqual(counts["files_read"], 2)
+
+    def test_a_json_file_of_another_dataset_that_is_not_json_is_found_by_the_run(self) -> None:
+        # The check reads the Activities files only: the run leaves out the
+        # sleep file that is not JSON, and the check counts it as read.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "export"
+            shutil.copytree(SYNTHETIC_EXPORT, source)
+            wellness = source / "DI-Connect-Wellness"
+            wellness.mkdir()
+            (wellness / "synthetic_sleepData.json").write_text("{", encoding="utf-8")
+            counts = doctor_input(source)["input_counts"]
+            run_all(source, root / "output")
+            manifest = manifest_of(root / "output")
+            self.assertEqual((counts["files_left_out"], len(manifest["files_left_out"])), (0, 1))
+            self.assertEqual(counts["files_read"], summary_of(root / "output")["input_asset_count"])
+
+    def test_without_the_timezone_data_the_activities_are_not_counted(self) -> None:
+        from garmin_running_data_normalizer.common.time import TimezoneDataUnavailableError
+        from garmin_running_data_normalizer.diagnostics import doctor as doctor_module
+        from garmin_running_data_normalizer.diagnostics.doctor import render_doctor_human
+
+        with patch.object(
+            doctor_module, "require_timezone_data", side_effect=TimezoneDataUnavailableError("Asia/Tokyo")
+        ):
+            report = doctor_input(SYNTHETIC_EXPORT)
+        self.assertIn("TIMEZONE_DATA_UNAVAILABLE", [item["code"] for item in report["findings"]])
+        self.assertEqual(
+            report["input_counts"],
+            {"activity_records": None, "fit_files": 0, "files_read": 1, "files_left_out": 0, "files_not_read": 0},
+        )
+        self.assertIn(
+            "Counts: activities=not_counted fit_files=0 files_read=1 files_left_out=0 files_not_read=0",
+            render_doctor_human(report).splitlines(),
+        )
+
+    def test_an_export_that_cannot_be_read_has_no_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            damaged = root / "damaged.zip"
+            damaged.write_bytes(b"PK\x03\x04 not a whole ZIP file")
+            mixed = root / "mixed"
+            for name, activity_id in (("export-a", "SYNTHETIC-A1"), ("export-b", "SYNTHETIC-B1")):
+                fitness = mixed / name / "DI_CONNECT" / ACTIVITIES
+                fitness.mkdir(parents=True)
+                (fitness / "synthetic_summarizedActivities.json").write_text(
+                    json.dumps(
+                        [{"summarizedActivitiesExport": [{"activityId": activity_id, "startTimeGmt": 1893456000000}]}]
+                    ),
+                    encoding="utf-8",
+                )
+            # One Export whose records name two accounts: the check reads its
+            # files before it finds the mix.
+            accounts = root / "accounts" / "DI_CONNECT" / ACTIVITIES
+            accounts.mkdir(parents=True)
+            (accounts / "synthetic_summarizedActivities.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "summarizedActivitiesExport": [
+                                {
+                                    "activityId": f"SYNTHETIC-A{index}",
+                                    "startTimeGmt": 1893456000000,
+                                    "userProfileId": account,
+                                }
+                                for index, account in enumerate((9876543210123, 1234509876543))
+                            ]
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            for label, source in (
+                ("missing", root / "missing"),
+                ("damaged", damaged),
+                ("mixed", mixed),
+                ("accounts", root / "accounts"),
+            ):
+                with self.subTest(label):
+                    report = doctor_input(source)
+                    self.assertIsNone(report["input_counts"])
+                    if label in ("mixed", "accounts"):
+                        self.assertEqual([item["code"] for item in report["findings"]], ["INPUT_MULTIPLE_EXPORTS"])
+
+    def test_only_the_report_of_the_check_has_counts(self) -> None:
+        # The Support Bundle takes the report after a run with its fields
+        # exactly; that report has no counts.
+        from garmin_running_data_normalizer.diagnostics.doctor import doctor_run_output, render_doctor_human
+
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "output"
+            run_all(SYNTHETIC_EXPORT, output)
+            report = doctor_run_output(output)
+        self.assertNotIn("input_counts", report)
+        self.assertEqual(len(report), 19)
+        self.assertFalse(any(line.startswith("Counts:") for line in render_doctor_human(report).splitlines()))
+
+    def test_the_cli_prints_the_counts(self) -> None:
+        completed = cli("doctor", "--input", SYNTHETIC_EXPORT)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        lines = completed.stdout.splitlines()
+        self.assertEqual(
+            lines[4], "Counts: activities=1 fit_files=0 files_read=1 files_left_out=0 files_not_read=0"
+        )
+        self.assertEqual(lines[3], "Action: NONE")
+        completed = cli("doctor", "--input", SYNTHETIC_EXPORT, "--format", "json")
+        self.assertEqual(
+            json.loads(completed.stdout)["input_counts"],
+            {"activity_records": 1, "fit_files": 0, "files_read": 1, "files_left_out": 0, "files_not_read": 0},
+        )
 
 
 if __name__ == "__main__":
