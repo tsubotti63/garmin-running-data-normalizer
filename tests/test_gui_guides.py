@@ -14,6 +14,9 @@ GUIDES = {"en": ROOT / "docs/gui_guide.md", "ja": ROOT / "docs/gui_guide.ja.md"}
 # The labels that the guides quote: bold in English, 「」 in Japanese.
 QUOTED_LABELS = (
     "language.label",
+    "choose.zip",
+    "choose.folder",
+    "extract.label",
     "input.label",
     "browse.button",
     "check.button",

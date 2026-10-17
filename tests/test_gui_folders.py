@@ -106,6 +106,39 @@ class GuiFolderListTest(unittest.TestCase):
         self.assertEqual(listing["folders"], ["alpha", "Beta"])
         self.assertTrue(listing["truncated"])
 
+    def test_zip_files_are_listed_on_request_only(self) -> None:
+        # Stage B3a: the list for the Export also names the ZIP files, when
+        # the system has no dialog to choose one; no other file shows.
+        for name in ("export-b.ZIP", "export-a.zip", ".hidden.zip", "notes.zip.txt"):
+            (self.root / name).write_bytes(b"synthetic")
+        (self.root / "folder.zip").mkdir()
+        self.assertNotIn("zips", list_folders(str(self.root)))
+        listing = list_folders(str(self.root), zips=True)
+        self.assertEqual(listing["folders"], ["alpha", "Beta", "folder.zip", "Gamma"])
+        self.assertEqual(listing["zips"], ["export-a.zip", "export-b.ZIP"])
+        self.assertFalse(listing["truncated"])
+
+    def test_links_to_zip_files_are_left_out(self) -> None:
+        (self.root / "export.zip").write_bytes(b"synthetic")
+        try:
+            (self.root / "link.zip").symlink_to(self.root / "export.zip")
+        except OSError:
+            self.skipTest("this system does not allow creating symbolic links")
+        self.assertEqual(list_folders(str(self.root), zips=True)["zips"], ["export.zip"])
+
+    def test_long_lists_of_zip_files_are_truncated(self) -> None:
+        for name in ("a.zip", "b.zip", "c.zip"):
+            (self.root / name).write_bytes(b"synthetic")
+        with patch.object(folders_module, "MAX_FOLDERS", 3):
+            listing = list_folders(str(self.root), zips=True)
+            self.assertEqual(listing["zips"], ["a.zip", "b.zip", "c.zip"])
+            self.assertFalse(listing["truncated"])
+            (self.root / "d.zip").write_bytes(b"synthetic")
+            listing = list_folders(str(self.root), zips=True)
+        self.assertEqual(listing["folders"], ["alpha", "Beta", "Gamma"])
+        self.assertEqual(listing["zips"], ["a.zip", "b.zip", "c.zip"])
+        self.assertTrue(listing["truncated"])
+
 
 if __name__ == "__main__":
     unittest.main()

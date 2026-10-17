@@ -27,6 +27,7 @@ import {
   helpReturnTarget,
   helpSteps,
   nextLine,
+  nextLineKind,
   nextOutputName,
   outputCheckMessages,
   progressMessage,
@@ -47,6 +48,8 @@ const LANGUAGE_STORAGE = "language";
 const HINTS_STORAGE = "hints";
 const HEARTBEAT_INTERVAL_MS = 30000;
 const POLL_INTERVAL_MS = 1000;
+// How often the page asks for the answer of the system's dialog (stage B3a).
+const CHOOSE_POLL_MS = 500;
 // How long a step of "How to use" lights up its box.
 const SPOT_MS = 2000;
 // The information buttons, by the names of their ids (stage B1b).
@@ -73,15 +76,19 @@ const ui = {
     run: { area: byId("run-error"), heading: byId("run-error-heading"), lines: byId("run-error-lines") },
   },
   inputHeading: byId("input-heading"),
+  chooseZip: byId("choose-zip"),
+  chooseFolder: byId("choose-folder"),
   inputPath: byId("input-path"),
-  inputBrowse: byId("input-browse"),
   check: byId("check-button"),
   checkResult: byId("check-result"),
+  extractArea: byId("extract-area"),
+  extractConfirm: byId("extract-confirm"),
   snapshotDecide: byId("snapshot-decide"),
   outputHeading: byId("output-heading"),
   browser: byId("browser"),
   browserHeading: byId("browser-heading"),
   browserPath: byId("browser-path"),
+  browserHint: byId("browser-hint"),
   browserUp: byId("browser-up"),
   browserChoose: byId("browser-choose"),
   browserClose: byId("browser-close"),
@@ -171,6 +178,14 @@ const state = {
   pollTimer: null,
   checking: false,
   check: null,
+  // The system's dialog that is open ("zip" or "folder"), the code of a
+  // dialog that did not work, whether this system has no dialog, so that the
+  // buttons open the folder list of the page instead, and the place that the
+  // last dialog or the folder list chose (stage B3a).
+  choosing: null,
+  chooserError: null,
+  chooserMissing: false,
+  chosenPath: null,
   // The second and third boxes are confirmed with their buttons; a change
   // in the third box asks for its confirmation again.
   snapshotDecided: false,
@@ -347,10 +362,18 @@ function connectionFailure(error) {
   return true;
 }
 
+// The place of the Export: a place that a dialog or the folder list chose is
+// used as it is, and the spaces around a place that was typed or pasted are
+// left out (stage B3a).
+function inputValue() {
+  const value = ui.inputPath.value;
+  return value === state.chosenPath ? value : value.trim();
+}
+
 // The check of the Export belongs to the first box only: the timezone of the
 // third box is checked when the run starts, as the run checks it.
 function isCheckCurrent() {
-  return state.check !== null && state.check.path === ui.inputPath.value.trim();
+  return state.check !== null && state.check.path === inputValue();
 }
 
 // The check of the output after a run, as one state of the steps table.
@@ -378,14 +401,22 @@ function view() {
   const checked = isCheckCurrent();
   const failedBox = run.state === "failed" ? errorBox(run.error_code, ui.inputPath.value) : null;
   const requestBox = state.runError !== null ? errorBox(state.runError, ui.inputPath.value) : null;
+  const ready = checked && state.check.ready === true;
+  // An extracted folder needs the confirmation that its extraction was
+  // complete; a ZIP file does not. Only the page asks for it (stage B3a).
+  const extractNeeded = ready && state.check.kind === "folder";
+  const checkedReady = ready && (!extractNeeded || ui.extractConfirm.checked);
   return {
     connected: state.connected,
     runState: run.state,
     starting: state.starting,
     checking: state.checking,
+    choosing: state.choosing !== null,
     outputBusy: outputBusy(),
-    checkedReady: checked && state.check.ready === true,
-    exportReady: checked && state.check.ready === true && requestBox !== "export",
+    checkedReady,
+    extractNeeded,
+    extractConfirmed: ui.extractConfirm.checked,
+    exportReady: checkedReady && requestBox !== "export",
     exportProblem:
       (checked && (state.check.error !== undefined || state.check.ready !== true)) || requestBox === "export",
     snapshotDecided: state.snapshotDecided,
@@ -403,9 +434,20 @@ function view() {
   };
 }
 
-function renderCheck() {
+function renderCheck(current) {
   const lines = [];
-  if (state.checking) {
+  if (state.choosing !== null) {
+    lines.push(t("choose.open"));
+  } else if (state.chooserError !== null) {
+    lines.push(...errorLines(state.chooserError));
+  }
+  // A stop in the first box shows in its own area; the lines of the check
+  // before it would read as the answer to it.
+  const stopped =
+    (state.run.state === "failed" && current.failedBox === "export") || current.requestBox === "export";
+  if (state.choosing !== null || stopped) {
+    // Nothing more.
+  } else if (state.checking) {
     lines.push(t("check.running"));
   } else if (state.check?.error !== undefined) {
     lines.push(...errorLines(state.check.error));
@@ -416,6 +458,7 @@ function renderCheck() {
     }
   }
   replaceLines(ui.checkResult, lines);
+  ui.extractArea.hidden = !current.extractNeeded;
 }
 
 function renderBrowser() {
@@ -424,18 +467,23 @@ function renderBrowser() {
   if (browser === null) {
     return;
   }
+  // For the Export, the list also shows ZIP files (stage B3a).
+  const exportList = browser.target === "input";
+  setText(ui.browserHeading, t(exportList ? "browser.heading_export" : "browser.heading"));
+  setText(ui.browserHint, t(exportList ? "browser.hint_export" : "browser.hint"));
   ui.browserPath.textContent = browser.path ?? "";
   ui.browserUp.disabled = browser.loading || !browser.parent;
   ui.browserChoose.disabled = browser.loading || !browser.path;
+  const count = Math.max(browser.folders.length, browser.zips.length);
   let message = "";
   if (browser.loading) {
     message = t("browser.loading");
   } else if (browser.error !== null) {
     message = errorLines(browser.error).join(" ");
-  } else if (browser.folders.length === 0) {
-    message = t("browser.empty");
+  } else if (count === 0) {
+    message = t(exportList ? "browser.empty_export" : "browser.empty");
   } else if (browser.truncated) {
-    message = t("browser.truncated", { count: formatNumber(browser.folders.length) });
+    message = t(exportList ? "browser.truncated_export" : "browser.truncated", { count: formatNumber(count) });
   }
   setText(ui.browserMessage, message);
 }
@@ -445,20 +493,26 @@ function childPath(parent, name) {
   return parent.endsWith(separator) ? `${parent}${name}` : `${parent}${separator}${name}`;
 }
 
+function listItem(name, kind, action) {
+  const item = document.createElement("li");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = kind;
+  button.textContent = name;
+  button.addEventListener("click", action);
+  item.append(button);
+  return item;
+}
+
+// A folder opens; a ZIP file is chosen as the Export at once.
 function renderBrowserList() {
   const browser = state.browser;
-  const folders = browser === null || browser.loading || browser.error !== null ? [] : browser.folders;
+  const shown = browser !== null && !browser.loading && browser.error === null;
+  const folders = shown ? browser.folders : [];
+  const zips = shown ? browser.zips : [];
   ui.browserList.replaceChildren(
-    ...folders.map((name) => {
-      const item = document.createElement("li");
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "folder";
-      button.textContent = name;
-      button.addEventListener("click", () => loadFolder(childPath(browser.path, name)));
-      item.append(button);
-      return item;
-    }),
+    ...folders.map((name) => listItem(name, "folder", () => loadFolder(childPath(browser.path, name)))),
+    ...zips.map((name) => listItem(name, "zip", () => chooseFromList(childPath(browser.path, name)))),
   );
 }
 
@@ -503,15 +557,7 @@ function renderNextLine(states, current) {
     return;
   }
   setText(ui.nextText, describe(line));
-  const kind = BOXES.some((box) => states[box] === "error")
-    ? "error"
-    : current.runState === "finished_after_cancel" ||
-        (current.runState === "finished" && (current.result?.warning_count ?? 0) > 0)
-      ? "warn"
-      : current.runState === "finished"
-        ? "done"
-        : "current";
-  ui.nextLine.className = `next-line k-${kind}`;
+  ui.nextLine.className = `next-line k-${nextLineKind(current, states)}`;
 }
 
 // A stop: its lines in the box that it concerns, and the other boxes clear.
@@ -766,10 +812,11 @@ function renderPackFile() {
 
 function renderControls(states, current) {
   const enabled = controls(current, states);
-  for (const field of [ui.inputPath, ui.outputParent, ui.outputName, ui.timezone, ui.safePack]) {
+  for (const field of [ui.inputPath, ui.extractConfirm, ui.outputParent, ui.outputName, ui.timezone, ui.safePack]) {
     field.disabled = !enabled.form;
   }
-  ui.inputBrowse.disabled = !enabled.browse;
+  ui.chooseZip.disabled = !enabled.choose;
+  ui.chooseFolder.disabled = !enabled.choose;
   ui.outputBrowse.disabled = !enabled.browse;
   ui.check.disabled = !enabled.check;
   ui.snapshotDecide.disabled = !enabled.decideSnapshot;
@@ -807,7 +854,7 @@ function render() {
   const states = boxStates(current);
   renderBoxes(states, current);
   renderNextLine(states, current);
-  renderCheck();
+  renderCheck(current);
   renderBrowser();
   renderErrors(current);
   renderRun(states, current);
@@ -970,17 +1017,30 @@ async function suggestOutputParent(inputPath) {
   }
 }
 
-async function runCheck() {
-  const path = ui.inputPath.value.trim();
+// Focus goes back to the button that started the check: the check button,
+// or the button that chose the Export.
+async function runCheck(focusTarget = ui.check) {
+  const path = inputValue();
   state.checking = true;
   state.check = null;
   state.runError = null;
+  state.chooserError = null;
+  // A new check is a change in the first box: a stop or a cancellation that
+  // the page showed gives way to it.
+  state.editedSinceRun = true;
+  if (state.run.state === "failed" || state.run.state === "cancelled") {
+    state.run = { state: "idle" };
+  }
+  // Each check asks again that an extracted folder is complete.
+  ui.extractConfirm.checked = false;
   render();
   try {
     const answer = await callApi("/api/check-input", { input: path });
     state.check = {
       path,
       ready: answer.ready === true,
+      // A ZIP file or a folder, as the server found it, not from the name.
+      kind: answer.input_kind === "zip" || answer.input_kind === "folder" ? answer.input_kind : null,
       findings: Array.isArray(answer.findings) ? answer.findings : [],
     };
     if (state.check.ready) {
@@ -993,7 +1053,58 @@ async function runCheck() {
   } finally {
     state.checking = false;
     render();
-    returnFocus(ui.check, ui.inputHeading);
+    returnFocus(focusTarget, ui.inputHeading);
+  }
+}
+
+const pause = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+
+// Put a chosen place in the field as it is and check it at once.
+function useChosenExport(path, focusTarget) {
+  ui.inputPath.value = path;
+  state.chosenPath = path;
+  ui.inputPath.dispatchEvent(new Event("input"));
+  runCheck(focusTarget);
+}
+
+// Open the system's dialog to choose a ZIP file or an extracted folder, and
+// ask for its answer until it closes (stage B3a). Without a dialog, the
+// folder list of the page opens instead, with the folders and the ZIP files.
+async function chooseExport(kind, button) {
+  if (state.chooserMissing) {
+    openBrowser("input", button);
+    return;
+  }
+  state.choosing = kind;
+  state.chooserError = null;
+  render();
+  let chosen = null;
+  try {
+    await callApi("/api/choose", { kind });
+    let answer = { state: "open" };
+    while (answer.state === "open" && state.connected) {
+      await pause(CHOOSE_POLL_MS);
+      answer = await callApi("/api/choose/status");
+    }
+    if (answer.state === "failed") {
+      state.chooserError = typeof answer.error_code === "string" ? answer.error_code : null;
+    } else if (answer.state === "closed" && typeof answer.path === "string") {
+      chosen = answer.path;
+    }
+  } catch (error) {
+    if (!connectionFailure(error)) {
+      state.chooserError = error.code;
+    }
+  }
+  state.choosing = null;
+  if (state.chooserError === "CHOOSER_NOT_AVAILABLE") {
+    state.chooserMissing = true;
+    openBrowser("input", button);
+  } else if (chosen !== null) {
+    useChosenExport(chosen, button);
+  } else {
+    render();
+    returnFocus(button, ui.inputHeading);
   }
 }
 
@@ -1021,7 +1132,7 @@ async function startRun() {
   render();
   try {
     state.run = await callApi("/api/run/start", {
-      input: ui.inputPath.value.trim(),
+      input: inputValue(),
       output_parent: ui.outputParent.value.trim(),
       output_name: ui.outputName.value.trim(),
       timezone: ui.timezone.value.trim(),
@@ -1090,8 +1201,16 @@ async function quit() {
   render();
 }
 
-// With startFromField, a path from a form field that cannot be listed falls
-// back to the home folder, so that the browser always has a place to start.
+// The folder that holds a place, from its text alone, or null at the top.
+function parentPath(path) {
+  const trimmed = path.replace(/[\\/]+$/, "");
+  const parent = trimmed.replace(/[\\/][^\\/]*$/, "");
+  return parent === "" || parent === trimmed ? null : parent;
+}
+
+// With startFromField, a path from a form field that cannot be listed, such
+// as a chosen ZIP file, falls back to the folder that holds it, and then to
+// the home folder, so that the browser always has a place to start.
 async function loadFolder(path, startFromField = false) {
   const browser = state.browser;
   if (browser === null) {
@@ -1102,19 +1221,25 @@ async function loadFolder(path, startFromField = false) {
   renderBrowserList();
   render();
   try {
-    const listing = await callApi("/api/folders", path ? { path } : {});
+    const request = path ? { path } : {};
+    if (browser.target === "input") {
+      request.zips = true;
+    }
+    const listing = await callApi("/api/folders", request);
     if (state.browser !== browser) {
       return;
     }
     browser.path = listing.path;
     browser.parent = listing.parent;
     browser.folders = Array.isArray(listing.folders) ? listing.folders : [];
+    browser.zips = Array.isArray(listing.zips) ? listing.zips : [];
     browser.truncated = listing.truncated === true;
   } catch (error) {
     if (connectionFailure(error)) {
       state.browser = null;
     } else if (startFromField && path) {
-      await loadFolder(null);
+      const parent = parentPath(path);
+      await loadFolder(parent, parent !== null);
       return;
     } else {
       browser.error = error.code;
@@ -1133,6 +1258,7 @@ function openBrowser(target, opener) {
     path: null,
     parent: null,
     folders: [],
+    zips: [],
     truncated: false,
     loading: true,
     error: null,
@@ -1150,14 +1276,22 @@ function closeBrowser() {
   opener?.focus();
 }
 
-function chooseFolder() {
+// A place chosen in the folder list: the folder for the output, or the
+// Export, which the page checks at once (stage B3a).
+function chooseFromList(path) {
   const browser = state.browser;
-  if (browser?.path) {
-    const field = browser.target === "input" ? ui.inputPath : ui.outputParent;
-    field.value = browser.path;
-    field.dispatchEvent(new Event("input"));
+  if (browser === null || !path) {
+    closeBrowser();
+    return;
   }
+  const opener = browser.opener;
   closeBrowser();
+  if (browser.target === "input") {
+    useChosenExport(path, opener);
+  } else {
+    ui.outputParent.value = path;
+    ui.outputParent.dispatchEvent(new Event("input"));
+  }
 }
 
 // Open the help panel at one of its parts; focus goes to that part's heading.
@@ -1274,7 +1408,9 @@ function fieldChanged(event) {
   if (state.run.state === "failed" || state.run.state === "cancelled") {
     state.run = { state: "idle" };
   }
-  if (event?.target !== ui.inputPath) {
+  if (event?.target === ui.inputPath) {
+    state.chooserError = null;
+  } else if (event?.target !== ui.extractConfirm) {
     state.outputDecided = false;
   }
   render();
@@ -1298,7 +1434,9 @@ function connect() {
   ui.outputName.value = defaultOutputName(new Date());
   ui.language.addEventListener("change", () => changeLanguage(ui.language.value));
   ui.quit.addEventListener("click", quit);
-  ui.check.addEventListener("click", runCheck);
+  ui.chooseZip.addEventListener("click", () => chooseExport("zip", ui.chooseZip));
+  ui.chooseFolder.addEventListener("click", () => chooseExport("folder", ui.chooseFolder));
+  ui.check.addEventListener("click", () => runCheck());
   ui.snapshotDecide.addEventListener("click", () => decide("snapshot"));
   ui.outputDecide.addEventListener("click", () => decide("output"));
   ui.start.addEventListener("click", startRun);
@@ -1312,10 +1450,9 @@ function connect() {
     state.toolsOpen = !state.toolsOpen;
     render();
   });
-  ui.inputBrowse.addEventListener("click", () => openBrowser("input", ui.inputBrowse));
   ui.outputBrowse.addEventListener("click", () => openBrowser("output", ui.outputBrowse));
   ui.browserUp.addEventListener("click", () => loadFolder(state.browser?.parent));
-  ui.browserChoose.addEventListener("click", chooseFolder);
+  ui.browserChoose.addEventListener("click", () => chooseFromList(state.browser?.path));
   ui.browserClose.addEventListener("click", closeBrowser);
   ui.browser.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
@@ -1331,6 +1468,7 @@ function connect() {
     field.addEventListener("input", fieldChanged);
   }
   ui.safePack.addEventListener("change", fieldChanged);
+  ui.extractConfirm.addEventListener("change", fieldChanged);
   ui.hintsToggle.addEventListener("change", changeHints);
   ui.helpButton.addEventListener("click", toggleHelp);
   ui.helpClose.addEventListener("click", closeHelp);

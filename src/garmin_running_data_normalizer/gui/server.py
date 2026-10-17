@@ -24,7 +24,9 @@ from typing import Any
 from .. import __version__
 from ..common.time import DEFAULT_TIMEZONE
 from ..diagnostics.doctor import DoctorError, doctor_input
+from ..intake.source import is_zip_input
 from ..stops import STOPS, stop_line
+from .chooser import Chooser, ChooserError
 from .folders import FolderError, list_folders
 from .outputs import OutputActionError, check_output, make_support_bundle, open_output
 from .runs import (
@@ -90,6 +92,8 @@ API_ROUTES = {
     "/api/heartbeat": "_api_heartbeat",
     "/api/shutdown": "_api_shutdown",
     "/api/folders": "_api_folders",
+    "/api/choose": "_api_choose",
+    "/api/choose/status": "_api_choose_status",
     "/api/check-input": "_api_check_input",
     "/api/run/start": "_api_run_start",
     "/api/run/status": "_api_run_status",
@@ -146,11 +150,13 @@ class GuiServer(ThreadingHTTPServer):
         *,
         idle_timeout: float = IDLE_TIMEOUT_SECONDS,
         runs: RunManager | None = None,
+        chooser: Chooser | None = None,
     ) -> None:
         if idle_timeout <= 0:
             raise ValueError("idle_timeout must be positive")
         self.static_files = load_static_files()
         self.runs = runs if runs is not None else RunManager()
+        self.chooser = chooser if chooser is not None else Chooser()
         self.launch_key = secrets.token_urlsafe(32)
         self.idle_timeout = idle_timeout
         self._last_request = time.monotonic()
@@ -337,9 +343,22 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
 
     def _api_folders(self, payload: dict[str, Any]) -> dict[str, Any]:
         try:
-            return list_folders(payload.get("path"))
+            return list_folders(payload.get("path"), zips=payload.get("zips") is True)
         except FolderError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+
+    def _api_choose(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The operating system's own dialog (stage B3a). The request returns
+        # once the dialog opens; the page asks for its answer.
+        try:
+            self.server.chooser.start(payload.get("kind"))
+        except ChooserError as exc:
+            status = HTTPStatus.CONFLICT if exc.code == "CHOOSER_BUSY" else HTTPStatus.UNPROCESSABLE_ENTITY
+            raise ApiError(status, exc.code) from exc
+        return {"state": "open"}
+
+    def _api_choose_status(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.server.chooser.status()
 
     def _api_check_input(self, payload: dict[str, Any]) -> dict[str, Any]:
         timezone_name = payload.get("timezone", DEFAULT_TIMEZONE)
@@ -356,6 +375,9 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
         except Exception as exc:
             raise _command_failed() from exc
+        # Whether the input is a ZIP file or a folder, for the confirmation
+        # that a folder was extracted completely (stage B3a).
+        kind = "zip" if is_zip_input(input_path) else "folder" if input_path.is_dir() else None
         findings = [
             {
                 "code": finding["code"],
@@ -367,6 +389,7 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         ]
         return {
             "ready": all(finding["severity"] != "ERROR" for finding in findings),
+            "input_kind": kind,
             "findings": findings,
         }
 
@@ -480,6 +503,8 @@ def serve_until_stopped(
         pass
     finally:
         finished.set()
+        # A dialog that is still open closes with the server.
+        server.chooser.stop()
         active = server.runs.active()
         server.runs.stop()
         if active:

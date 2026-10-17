@@ -331,8 +331,8 @@ _ENTRIES = Stop("the entries could not be read", "check the entries and press th
 PAGE_STOPS: dict[str, Stop] = {
     "PATH_NOT_ABSOLUTE": Stop(
         "the place is not a full path",
-        "choose it with Choose…, or paste a place that starts with / on a Mac or "
-        "Linux, or with a drive such as C:\\ on Windows",
+        "choose it with a button that says Choose, or paste a place that starts with / "
+        "on a Mac or Linux, or with a drive such as C:\\ on Windows",
     ),
     "PATH_INVALID": _ENTRIES,
     "INPUT_PATH_INVALID": _ENTRIES,
@@ -373,6 +373,18 @@ PAGE_STOPS: dict[str, Stop] = {
     "OPEN_FAILED": Stop(
         "the system could not open it",
         "open the output folder from your file manager, such as Finder or File Explorer",
+    ),
+    # The system's own dialog to choose an Export (stage B3a).
+    "CHOOSER_NOT_AVAILABLE": Stop(
+        "this system's dialog to choose could not be opened",
+        "choose from the list below, or paste the place",
+    ),
+    "CHOOSER_TIMEOUT": Stop(
+        "the dialog to choose was not answered in time",
+        "press Choose ZIP file… or Choose extracted folder… again",
+    ),
+    "CHOOSER_BUSY": Stop(
+        "another dialog to choose is open", "choose in it or close it, and press the button again"
     ),
 }
 

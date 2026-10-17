@@ -7,6 +7,8 @@ import json
 import os
 import shutil
 import socket
+import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -17,7 +19,8 @@ from unittest.mock import patch
 
 from garmin_running_data_normalizer import __version__
 from garmin_running_data_normalizer.common.time import DEFAULT_TIMEZONE
-from garmin_running_data_normalizer.gui import outputs
+from garmin_running_data_normalizer.gui import chooser, outputs
+from garmin_running_data_normalizer.gui.chooser import Chooser
 from garmin_running_data_normalizer.gui.runs import RunManager
 from garmin_running_data_normalizer.gui.server import (
     API_ROUTES,
@@ -118,8 +121,10 @@ class GuiServerTestCase(unittest.TestCase):
         if self.idle_timeout is not None:
             self.start_server(self.idle_timeout)
 
-    def start_server(self, idle_timeout: float, runs: RunManager | None = None) -> None:
-        self.server = GuiServer(idle_timeout=idle_timeout, runs=runs)
+    def start_server(
+        self, idle_timeout: float, runs: RunManager | None = None, dialogs: Chooser | None = None
+    ) -> None:
+        self.server = GuiServer(idle_timeout=idle_timeout, runs=runs, chooser=dialogs)
         self.port = self.server.server_port
         self.origin = f"http://{HOST}:{self.port}"
         self.thread = threading.Thread(
@@ -603,6 +608,14 @@ class GuiRunApiTest(GuiServerTestCase):
         self.assertEqual(answer["folders"], ["outputs", "Visible"])
         status, answer = self.call("/api/folders", {"path": "relative"})
         self.assertEqual((status, answer), (422, {"error": "PATH_NOT_ABSOLUTE"}))
+        # The list for the Export also names the ZIP files (stage B3a).
+        (self.root / "export.zip").write_bytes(b"synthetic")
+        status, answer = self.call("/api/folders", {"path": str(self.root), "zips": True})
+        self.assertEqual((status, answer["folders"], answer["zips"]), (200, ["outputs", "Visible"], ["export.zip"]))
+        for zips in (False, "true", 1):
+            with self.subTest(zips=zips):
+                status, answer = self.call("/api/folders", {"path": str(self.root), "zips": zips})
+                self.assertNotIn("zips", answer)
 
     def test_the_input_check_returns_codes_only(self) -> None:
         self.start_server(600.0)
@@ -612,6 +625,7 @@ class GuiRunApiTest(GuiServerTestCase):
             answer,
             {
                 "ready": True,
+                "input_kind": "folder",
                 "findings": [
                     {
                         "code": "RUN_ALL_NOT_EVALUATED",
@@ -626,6 +640,7 @@ class GuiRunApiTest(GuiServerTestCase):
         self.assertEqual(status, 200)
         self.assertFalse(answer["ready"])
         self.assertEqual([item["code"] for item in answer["findings"]], ["INPUT_DIRECTORY_INVALID"])
+        self.assertIsNone(answer["input_kind"])
         self.assertNotIn(str(self.root), json.dumps(answer))
         for payload, code in (
             ({"input": "relative"}, "PATH_NOT_ABSOLUTE"),
@@ -699,6 +714,7 @@ class GuiRunApiTest(GuiServerTestCase):
             answer,
             {
                 "ready": False,
+                "input_kind": "folder",
                 "findings": [
                     {
                         "code": "INPUT_MULTIPLE_EXPORTS",
@@ -718,6 +734,7 @@ class GuiRunApiTest(GuiServerTestCase):
             answer,
             {
                 "ready": True,
+                "input_kind": "folder",
                 "findings": [
                     {
                         "code": "INPUT_DUPLICATE_SOURCES",
@@ -966,6 +983,80 @@ class GuiRunApiTest(GuiServerTestCase):
         cli_output = self.root / "cli-output"
         self.assertEqual(run_cli("--input", str(SYNTHETIC_EXPORT), "--output", str(cli_output)).returncode, 0)
         self.assertEqual(tree_bytes(self.parent / "output"), tree_bytes(cli_output))
+
+
+
+class GuiChooserApiTest(GuiServerTestCase):
+    # Stage B3a: small programs stand in for the system's dialogs; no test
+    # opens a real one.
+    idle_timeout = None
+
+    def call(self, path: str, payload: dict[str, object]) -> tuple[int, dict[str, object]]:
+        body = json.dumps(payload).encode("utf-8")
+        status, _, answer = self.post_api(path, self.api_headers(body), body)
+        return status, json.loads(answer)
+
+    def serve(self, *command: str, **options: float) -> None:
+        self.start_server(
+            600.0, dialogs=Chooser(find_command=lambda kind, platform: list(command), **options)
+        )
+
+    def wait_for_answer(self) -> dict[str, object]:
+        result: dict[str, object] = {}
+
+        def closed() -> bool:
+            nonlocal result
+            status, result = self.call("/api/choose/status", {})
+            self.assertEqual(status, 200)
+            return result["state"] != "open"
+
+        self.assertTrue(wait_until(closed, 30))
+        return result
+
+    def test_the_request_returns_at_once_and_the_page_asks_for_the_answer(self) -> None:
+        place = os.path.join(os.path.abspath(tempfile.gettempdir()), "選んだ export.zip")
+        self.serve(
+            sys.executable, "-c", f"import sys, time; time.sleep(0.3); sys.stdout.buffer.write({(place + chr(10)).encode()!r})"
+        )
+        self.assertEqual(self.call("/api/choose/status", {}), (200, {"state": "idle"}))
+        self.assertEqual(self.call("/api/choose", {"kind": "zip"}), (200, {"state": "open"}))
+        self.assertEqual(self.wait_for_answer(), {"state": "closed", "path": place})
+        # The answer is given once.
+        self.assertEqual(self.call("/api/choose/status", {}), (200, {"state": "idle"}))
+
+    def test_requests_that_open_no_dialog_are_refused_with_codes(self) -> None:
+        self.serve(sys.executable, "-c", "import time; time.sleep(60)")
+        self.assertEqual(self.call("/api/choose", {"kind": "folder"}), (200, {"state": "open"}))
+        for payload, answer in (
+            ({"kind": "zip"}, (409, {"error": "CHOOSER_BUSY"})),
+            ({"kind": "other"}, (422, {"error": "REQUEST_INVALID"})),
+            ({}, (422, {"error": "REQUEST_INVALID"})),
+        ):
+            with self.subTest(payload=payload):
+                self.assertEqual(self.call("/api/choose", payload), answer)
+        self.assertEqual(self.call("/api/choose/status", {}), (200, {"state": "open"}))
+
+    def test_a_system_without_a_dialog_says_so(self) -> None:
+        self.start_server(600.0, dialogs=Chooser(find_command=lambda kind, platform: None))
+        self.assertEqual(self.call("/api/choose", {"kind": "zip"}), (422, {"error": "CHOOSER_NOT_AVAILABLE"}))
+
+    def test_a_dialog_that_is_still_open_closes_with_the_server(self) -> None:
+        started: list[subprocess.Popen[bytes]] = []
+        real_popen = subprocess.Popen
+
+        def recording_popen(*arguments: object, **options: object) -> subprocess.Popen[bytes]:
+            process = real_popen(*arguments, **options)  # type: ignore[call-overload]
+            started.append(process)
+            return process
+
+        self.serve(sys.executable, "-c", "import time; time.sleep(60)")
+        with patch.object(chooser.subprocess, "Popen", recording_popen):
+            self.assertEqual(self.call("/api/choose", {"kind": "zip"}), (200, {"state": "open"}))
+        self.server.shutdown()
+        self.thread.join(timeout=10)
+        self.assertFalse(self.thread.is_alive())
+        self.assertEqual(len(started), 1)
+        self.assertTrue(wait_until(lambda: started[0].poll() is not None, 10))
 
 
 if __name__ == "__main__":
