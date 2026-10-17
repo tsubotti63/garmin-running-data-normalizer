@@ -196,10 +196,18 @@ export const FAMILY_STATUS_KEYS = {
   SKIPPED_NOT_PRESENT: "family_status.skipped_not_present",
   PARTIAL: "family_status.partial",
 };
-const RESULT_KEYS = {
-  PASS: "result.pass",
-  PASS_WITH_WARNINGS: "result.pass_with_warnings",
-  PARTIAL_SUCCESS: "result.partial_success",
+// The color of a row of the result table: only a problem fills a row; a
+// warning or a family that the Export does not hold is marked otherwise.
+const FAMILY_STATUS_KINDS = {
+  PROCESSED: "ok",
+  PROCESSED_EMPTY: "ok",
+  SKIPPED_NOT_PRESENT: "none",
+  PARTIAL: "warn",
+};
+const RESULT_SUB_KEYS = {
+  PASS: "result.sub_pass",
+  PASS_WITH_WARNINGS: "result.sub_pass_with_warnings",
+  PARTIAL_SUCCESS: "result.sub_partial",
 };
 
 // Post-run Doctor values for a completed run, and the registered warnings.
@@ -307,12 +315,23 @@ export function progressMessage(progress) {
   return { key: STAGE_KEYS[stage], params: {}, keyParams: {} };
 }
 
+// The page says itself that an export can be normalized, and its line of
+// what to do next follows the boxes, so the finding that the input is ready
+// and the next step "run" are not shown (the text book of stage B0).
+const QUIET_FINDINGS = new Set(["INPUT_READY_FOR_BOUNDED_RUN_ALL_ATTEMPT"]);
+const QUIET_ACTIONS = new Set(["RUN_ALL"]);
+
 // A pre-run finding, and what to do next when the check names an action.
 export function findingMessages(finding) {
+  if (QUIET_FINDINGS.has(finding?.message_id)) {
+    return [];
+  }
   const messages = [
     { key: lookup(FINDING_KEYS, finding?.message_id, "error.unknown"), params: {}, keyParams: {} },
   ];
-  const action = lookup(ACTION_KEYS, finding?.next_action_id, null);
+  const action = QUIET_ACTIONS.has(finding?.next_action_id)
+    ? null
+    : lookup(ACTION_KEYS, finding?.next_action_id, null);
   if (action !== null) {
     messages.push(nextStep(action));
   }
@@ -330,42 +349,341 @@ export function familyRows(result) {
   const families = result?.families ?? {};
   return Object.keys(families)
     .sort()
-    .map((family) => ({
-      family,
-      nameKey: lookup(FAMILY_KEYS, family, null),
-      statusKey: lookup(FAMILY_STATUS_KEYS, families[family]?.status, "family_status.other"),
-      records: families[family]?.record_count ?? 0,
-      warnings: families[family]?.warning_count ?? 0,
-    }));
+    .map((family) => {
+      const status = families[family]?.status;
+      const warnings = families[family]?.warning_count ?? 0;
+      const kind = lookup(FAMILY_STATUS_KINDS, status, "ok");
+      return {
+        family,
+        nameKey: lookup(FAMILY_KEYS, family, null),
+        statusKey:
+          status === "PROCESSED" && warnings > 0
+            ? "family_status.processed_with_warnings"
+            : lookup(FAMILY_STATUS_KEYS, status, "family_status.other"),
+        kind: kind === "ok" && warnings > 0 ? "warn" : kind,
+        records: families[family]?.record_count ?? 0,
+        warnings,
+      };
+    });
 }
 
-// Messages for the result area of a finished, cancelled, or failed run.
-export function resultMessages(status) {
+const message = (key, params = {}, keyParams = {}) => ({ key, params, keyParams });
+
+// The four boxes of the page, in order (stage B1a): the Export, the
+// Snapshots, the output, and the run.
+export const BOXES = ["export", "snapshot", "output", "run"];
+
+// The box that a stop turns red, as the text book of stage B0 places it.
+// Codes of the output check, the Support Bundle, and opening the output show
+// under their action instead. PATH_INVALID comes from the folder list and
+// shows there. Other codes, such as REQUEST_INVALID, which names no field,
+// belong to the fourth box.
+const ERROR_BOXES = {
+  INPUT_PATH_INVALID: "export",
+  INPUT_NOT_DIRECTORY: "export",
+  INPUT_SYMLINK: "export",
+  INPUT_NOT_READABLE: "export",
+  INPUT_CHANGED: "export",
+  INPUT_ZIP_CORRUPT: "export",
+  INPUT_TOO_LARGE: "export",
+  INPUT_MULTIPLE_EXPORTS: "export",
+  INPUT_DISCOVERY_FAILED: "export",
+  TEMP_SPACE_INSUFFICIENT: "export",
+  ACTIVITIES_NOT_FOUND: "export",
+  ACTIVITIES_EMPTY: "export",
+  FOLDER_NOT_FOUND: "export",
+  NOT_A_FOLDER: "export",
+  FOLDER_NOT_READABLE: "export",
+  OUTPUT_PARENT_INVALID: "output",
+  OUTPUT_SYMLINK: "output",
+  OUTPUT_EXISTS: "output",
+  OUTPUT_INSIDE_INPUT: "output",
+  OUTPUT_PARENT_NOT_FOUND: "output",
+  OUTPUT_PARENT_NOT_WRITABLE: "output",
+  OUTPUT_NAME_INVALID: "output",
+  OUTPUT_PATH_TOO_LONG: "output",
+  OUTPUT_SPACE_INSUFFICIENT: "output",
+  OUTPUT_PUBLISH_FAILED: "output",
+  TIMEZONE_INVALID: "output",
+  TIMEZONE_DATA_UNAVAILABLE: "output",
+};
+
+// A path that the server reads as absolute: a POSIX path, a home path that it
+// expands, a Windows drive, or a network share.
+export function looksAbsolute(path) {
+  return typeof path === "string" && /^(\/|~|[A-Za-z]:[\\/]|\\\\)/.test(path.trim());
+}
+
+// PATH_NOT_ABSOLUTE names no field; the run request checks the Export first.
+export function errorBox(code, inputPath) {
+  if (code === "PATH_NOT_ABSOLUTE") {
+    return looksAbsolute(inputPath) ? "output" : "export";
+  }
+  return lookup(ERROR_BOXES, code, "run");
+}
+
+// The state of each box: "current" (blue, what to do now), "done" (green),
+// "todo", "error" (red, what to fix), or "stopped" (the fourth box when the
+// run stopped in another box). Until stage B4a the page has no settings from
+// an earlier launch, so the second and third boxes are confirmed one at a
+// time, as on a first launch. After a run that finished or stopped, a change
+// in a box (``editedSinceRun``) brings back the boxes as they are set.
+export function boxStates(view) {
+  const states = { export: "todo", snapshot: "todo", output: "todo", run: "todo" };
+  const runState = view.runState;
+  if (view.starting || ACTIVE_STATES.includes(runState)) {
+    states.export = states.snapshot = states.output = "done";
+    states.run = "current";
+    return states;
+  }
+  if (FINISHED_STATES.includes(runState) && !view.editedSinceRun) {
+    states.export = states.snapshot = states.output = states.run = "done";
+    return states;
+  }
+  if (runState === "failed" && !view.editedSinceRun) {
+    states.export = states.snapshot = states.output = "done";
+    const box = view.failedBox ?? "run";
+    states[box] = "error";
+    if (box !== "run") {
+      states.run = "stopped";
+    }
+    return states;
+  }
+  if (view.exportProblem) {
+    states.export = "error";
+    return states;
+  }
+  const done = [view.exportReady, view.snapshotDecided, view.outputDecided];
+  let current = null;
+  ["export", "snapshot", "output"].forEach((box, index) => {
+    if (current === null && done.slice(0, index + 1).every(Boolean)) {
+      states[box] = "done";
+    } else if (current === null) {
+      states[box] = "current";
+      current = box;
+    }
+  });
+  states.run = current === null ? "current" : "todo";
+  // A run request that the server refused marks the box that it concerns.
+  if (typeof view.requestBox === "string" && Object.hasOwn(states, view.requestBox)) {
+    states[view.requestBox] = "error";
+    if (view.requestBox !== "run") {
+      states.run = "todo";
+    }
+  }
+  return states;
+}
+
+// The number of a box, for the texts that name it.
+export function boxNumber(box) {
+  return BOXES.indexOf(box) + 1;
+}
+
+// The one line under the title: what to do now. A red box holds its own next
+// step, so the line only points at it.
+export function nextLine(view, states) {
+  const runState = view.runState;
+  if (!view.connected) {
+    return null;
+  }
+  if (view.starting || runState === "running") {
+    return message("next_line.running");
+  }
+  if (runState === "cancelling") {
+    return message("next_line.cancelling");
+  }
+  if (runState === "finished_after_cancel" && !view.editedSinceRun) {
+    return message("next_line.late");
+  }
+  if (runState === "finished" && !view.editedSinceRun) {
+    const result = view.result ?? {};
+    if (result.exit_code === 3) {
+      return message("next_line.done_partial", { warnings: result.warning_count ?? 0 });
+    }
+    if ((result.warning_count ?? 0) > 0) {
+      return message("next_line.done_warnings", { warnings: result.warning_count });
+    }
+    return message("next_line.done");
+  }
+  const red = BOXES.find((box) => states[box] === "error");
+  if (red !== undefined) {
+    return message("next_line.fix_box", { box: boxNumber(red) });
+  }
+  if (states.export === "current") {
+    return message(view.inputFilled ? "next_line.check_export" : "next_line.choose_export");
+  }
+  if (states.snapshot === "current") {
+    return message("next_line.decide_snapshot");
+  }
+  if (states.output === "current") {
+    return message("next_line.decide_output");
+  }
+  if (runState === "cancelled") {
+    return message("next_line.cancelled");
+  }
+  return message("next_line.start");
+}
+
+// The steps of a run of one Export, and the stages of Run-All that each one
+// covers. The last step is the page's check of the output after the run.
+export const RUN_STEPS = [
+  { key: "steps.check_export", stages: ["discovering"] },
+  { key: "steps.convert", stages: ["normalizing", "reading_fit", "verifying_input", "building_output"] },
+  { key: "steps.write", stages: ["writing_output"] },
+  { key: "steps.check_output", stages: [] },
+];
+const OUTPUT_CHECK_STEP = RUN_STEPS.length - 1;
+
+// The step that a stage of Run-All belongs to, or 0 before the first stage.
+function stepOf(stage) {
+  const index = RUN_STEPS.findIndex((step) => step.stages.includes(stage));
+  return index < 0 ? 0 : index;
+}
+
+function stepSeconds(step, stageSeconds) {
+  const seconds = step.stages
+    .map((stage) => stageSeconds?.[stage])
+    .filter((value) => typeof value === "number" && value >= 0);
+  return seconds.length === 0 ? null : seconds.reduce((sum, value) => sum + value, 0);
+}
+
+// The rows of the steps table: each step's state ("todo", "run", "done",
+// "warn", "error", "cancelled", or "skipped") and its seconds.
+// ``outputCheck`` is the page's check of the finished output: null before it
+// starts, "running", "done", "warn", or "error". The check is no stage of
+// Run-All, so the page measures its seconds (``outputCheckSeconds``).
+export function stepRows(status, outputCheck, outputCheckSeconds = null) {
+  const runState = status?.state;
+  const seconds = (index) =>
+    index === OUTPUT_CHECK_STEP
+      ? FINISHED_STATES.includes(runState) && typeof outputCheckSeconds === "number"
+        ? outputCheckSeconds
+        : null
+      : stepSeconds(RUN_STEPS[index], status?.stage_seconds);
+  const rows = RUN_STEPS.map((step, index) => ({ key: step.key, state: "todo", seconds: seconds(index) }));
+  if (ACTIVE_STATES.includes(runState)) {
+    const current = stepOf(status.progress?.stage);
+    rows.forEach((row, index) => {
+      row.state = index < current ? "done" : index === current ? "run" : "todo";
+    });
+  } else if (FINISHED_STATES.includes(runState)) {
+    rows.forEach((row) => {
+      row.state = "done";
+    });
+    if ((status.result?.warning_count ?? 0) > 0) {
+      rows[stepOf("normalizing")].state = "warn";
+    }
+    rows[OUTPUT_CHECK_STEP].state = outputCheck === "running" ? "run" : outputCheck ?? "todo";
+  } else if (runState === "failed" || runState === "cancelled") {
+    const last = stepOf(status.progress?.stage);
+    rows.forEach((row, index) => {
+      row.state = index < last ? "done" : index === last ? (runState === "failed" ? "error" : "cancelled") : "skipped";
+    });
+  }
+  return rows;
+}
+
+// Where a run is, for the line under the headline: the step and how many.
+export function currentStep(status) {
+  const index = stepOf(status?.progress?.stage);
+  return { key: RUN_STEPS[index].key, number: index + 1, total: RUN_STEPS.length };
+}
+
+// The headline of the fourth box, the exit code under it, and the line under
+// that. The exit code is the CLI's for the same run; a run cancelled before
+// its output shows none, because 130 means nothing on the page.
+export function runSummary(status, states, view = {}) {
+  const runState = status?.state;
+  const result = status?.result;
+  if (view.starting || runState === "running") {
+    const step = currentStep(status);
+    return {
+      headline: message("run.headline_running"),
+      exitCode: null,
+      sub: message("run.sub_running", { number: step.number, total: step.total }, { step: step.key }),
+    };
+  }
+  if (runState === "cancelling") {
+    return { headline: message("run.headline_cancelling"), exitCode: null, sub: null };
+  }
+  if (FINISHED_STATES.includes(runState) && result) {
+    // The headline says what the exit code means (decision 20261011-15):
+    // 3 left out part of the input, 0 kept every value.
+    const done = message(result.exit_code === 3 ? "result.headline_partial" : "result.headline_done");
+    if (runState === "finished_after_cancel") {
+      return {
+        headline: message("result.headline_late", {}, { headline: done.key }),
+        exitCode: result.exit_code,
+        sub: message("result.sub_late"),
+      };
+    }
+    return {
+      headline: done,
+      exitCode: result.exit_code,
+      sub: message(lookup(RESULT_SUB_KEYS, result.status, "result.sub_pass"), {
+        warnings: result.warning_count ?? 0,
+      }),
+    };
+  }
+  if (runState === "failed") {
+    return {
+      headline: message("result.headline_failed"),
+      exitCode: 2,
+      sub: message("result.sub_failed", { box: boxNumber(view.failedBox ?? "run") }),
+    };
+  }
+  if (runState === "cancelled") {
+    return { headline: message("result.headline_cancelled"), exitCode: null, sub: message("result.sub_cancelled") };
+  }
+  if (states?.run === "current") {
+    return { headline: message("run.headline_ready"), exitCode: null, sub: message("run.sub_ready") };
+  }
+  return { headline: message("run.headline_waiting"), exitCode: null, sub: null };
+}
+
+// What a finished, cancelled, or failed run also tells: the output folder,
+// and the staging folders that a forced stop left behind (stage A5c).
+export function resultDetails(status) {
   const messages = [];
   const state = status?.state;
-  if (state === "finished") {
-    messages.push({ key: lookup(RESULT_KEYS, status.result?.status, "error.unknown"), params: {}, keyParams: {} });
-  } else if (state === "finished_after_cancel") {
-    messages.push({ key: "result.finished_after_cancel", params: {}, keyParams: {} });
-  } else if (state === "cancelled") {
-    messages.push({ key: "result.cancelled", params: {}, keyParams: {} });
-    messages.push(nextStep("next.start_again"));
-  } else if (state === "failed") {
-    messages.push({ key: "result.failed", params: {}, keyParams: {} });
-    messages.push(...errorMessages(status.error_code, status.error_detail));
-  }
   if (FINISHED_STATES.includes(state) && status.output_path) {
-    messages.push({ key: "result.output", params: { path: status.output_path }, keyParams: {} });
+    messages.push(message("result.output", { path: status.output_path }));
   }
   if (Array.isArray(status?.staging_folders) && status.staging_folders.length > 0) {
-    messages.push({
-      key: "result.staging_left",
-      params: { names: status.staging_folders.join(", ") },
-      keyParams: {},
-    });
+    messages.push(message("result.staging_left", { names: status.staging_folders.join(", ") }));
     messages.push(nextStep("next.delete_staging"));
   }
   return messages;
+}
+
+// The words that sum up a confirmed box (a green line under its heading).
+export function boxSummary(box, view) {
+  if (box === "export") {
+    return message("summary.export", { name: lastName(view.inputPath) });
+  }
+  if (box === "snapshot") {
+    return message("summary.snapshot_single");
+  }
+  if (box === "output") {
+    // After a run, the output that it made; the name field already holds
+    // the name proposed for the next run.
+    if (FINISHED_STATES.includes(view.runState) && typeof view.outputPath === "string") {
+      const parent = view.outputPath.trim().replace(/[\\/]+$/, "").replace(/[\\/][^\\/]*$/, "");
+      return message("summary.output_done", { parent: lastName(parent), name: lastName(view.outputPath) });
+    }
+    return message("summary.output", {
+      parent: lastName(view.outputParent),
+      name: typeof view.outputName === "string" ? view.outputName.trim() : "",
+    });
+  }
+  return null;
+}
+
+// The last name of a path, for the summaries: a folder, or the drive itself.
+export function lastName(path) {
+  const trimmed = typeof path === "string" ? path.trim().replace(/[\\/]+$/, "") : "";
+  const parts = trimmed.split(/[\\/]/);
+  return parts[parts.length - 1] || (typeof path === "string" ? path.trim() : "");
 }
 
 // Messages for the check of a finished output: the handoff counts, what the
@@ -489,7 +807,7 @@ export function announcement(status) {
     return { id: "cancelling", message: { key: "run.cancelling", params: {}, keyParams: {} } };
   }
   if (TERMINAL_STATES.includes(state)) {
-    return { id: `end:${state}`, message: resultMessages(status)[0] };
+    return { id: `end:${state}`, message: runSummary(status, null).headline };
   }
   return null;
 }
@@ -501,24 +819,39 @@ export function shouldFocusResult(active, body, runSection) {
   return active === null || active === body || runSection.contains(active);
 }
 
-// Which controls the page enables, from one view of its state.
-export function controls(view) {
+// Which controls the page enables, from one view of its state and the states
+// of the boxes. A box is confirmed with its button while it is the current
+// one. A run starts when the fourth box is current, and again after a run
+// that finished or stopped, with the same confirmed boxes; a change in the
+// third box takes back its confirmation, and one in the first its check.
+export function controls(view, states) {
   const running = ACTIVE_STATES.includes(view.runState) || view.starting;
   const busy = running || view.checking || view.outputBusy;
   const filled = (value) => typeof value === "string" && value.trim() !== "";
+  const outputReady =
+    filled(view.outputParent) && filled(view.timezone) && isValidOutputName(view.outputName);
   return {
     form: view.connected && !running,
     browse: view.connected && !busy,
     check: view.connected && !busy && filled(view.inputPath),
+    decideSnapshot: view.connected && !busy && states.snapshot === "current",
+    decideOutput: view.connected && !busy && states.output === "current" && outputReady,
     start:
       view.connected &&
       !busy &&
       view.checkedReady &&
-      filled(view.outputParent) &&
-      filled(view.timezone) &&
-      isValidOutputName(view.outputName),
+      outputReady &&
+      (states.run === "current" ||
+        ((FINISHED_STATES.includes(view.runState) || view.runState === "failed") &&
+          view.snapshotDecided &&
+          view.outputDecided)),
     cancel: view.connected && view.runState === "running",
     quit: view.connected && !running && !view.outputBusy,
     outputActions: view.connected && !busy && FINISHED_STATES.includes(view.runState),
   };
+}
+
+// Which boxes must still be confirmed before a run can start, by number.
+export function boxesToConfirm(states) {
+  return ["export", "snapshot", "output"].filter((box) => states[box] !== "done").map(boxNumber);
 }

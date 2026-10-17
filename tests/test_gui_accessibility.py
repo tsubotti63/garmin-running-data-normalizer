@@ -20,15 +20,40 @@ LANGUAGES = ("en", "ja")
 # Colors that the stylesheet puts together, with the WCAG 2.1 AA minimum:
 # 4.5:1 for text, and 3:1 for the parts that identify a control or its focus.
 TEXT_PAIRS = (
-    ("text", "background"),  # body text and fields
-    ("text", "surface"),  # notices and buttons
-    ("muted", "background"),  # help, paths, and the version
-    ("muted", "surface"),
-    ("accent-text", "accent"),  # the primary button
+    ("text", "surface"),  # the boxes, fields, buttons, and tables
+    ("text", "page"),  # the title area
+    ("text", "group"),  # table heads and the bar at the bottom
+    ("text", "ng-tint"),  # a box that needs a fix
+    ("sub", "surface"),  # help, notes, and labels
+    ("sub", "page"),
+    ("sub", "group"),
+    ("sub", "ng-tint"),
+    ("muted", "surface"),  # steps that are not run yet, absent data
+    ("muted", "group"),
+    ("on-accent", "accent"),  # the primary button and the current number
+    ("accent", "surface"),  # links and the current badge
+    ("accent", "accent-soft"),
+    ("ok", "surface"),  # the summary of a confirmed box
+    ("ok", "ok-soft"),  # a done badge or pill
+    ("warn", "warn-soft"),  # a warning pill
+    ("ng", "surface"),  # the heading of a stop
+    ("ng", "ng-soft"),
+    ("ng", "ng-tint"),
+    ("none", "none-soft"),  # an absent or not-yet pill
+    ("surface", "ok"),  # the mark in a confirmed box's number
+    ("surface", "ng"),  # the mark in a red box's number
 )
+# The bar beside a warning row is decoration: the icon and the words carry
+# the meaning, so it is not a pair here.
 CONTROL_PAIRS = (
-    ("border", "background"),  # the edges of fields and buttons
-    ("accent", "background"),  # the focus outline and the primary button
+    ("edge", "surface"),  # the edges of fields and buttons
+    ("edge", "page"),
+    ("edge", "ng-tint"),
+    ("accent", "surface"),  # the focus outline, the current box, and the primary button
+    ("accent", "page"),
+    ("accent", "ng-tint"),
+    ("ng", "surface"),  # the edge of a box that needs a fix, and of a stop
+    ("ok", "surface"),  # the edge of a confirmed box
 )
 
 
@@ -186,18 +211,41 @@ class GuiPageStructureTest(unittest.TestCase):
         self.assertEqual(alerts, ["connection-problem"])
 
     def test_focus_targets_after_actions_can_take_focus(self) -> None:
-        # The page moves focus to these headings at the end of a run, or when
-        # the button that had focus stays disabled.
+        # The page moves focus to these headings at the end of a run, to the
+        # stop in the box that it concerns, to the next box when one is
+        # confirmed, or when the button that had focus stays disabled.
         for identifier in (
             "input-heading",
+            "output-heading",
             "run-heading",
             "result-heading",
+            "export-error-heading",
+            "output-error-heading",
+            "run-error-heading",
             "output-check-heading",
             "bundle-heading",
             "browser-heading",
         ):
             with self.subTest(heading=identifier):
                 self.assertEqual(by_id(self.elements, identifier).get("tabindex"), "-1")
+
+
+    def test_the_snapshot_parts_that_cannot_be_used_yet_say_why(self) -> None:
+        # Until stage B4 the second box offers only one way; the parts that
+        # cannot be used are disabled and point at the line that says why.
+        reason = by_id(self.elements, "snapshot-not-yet")
+        self.assertEqual(reason.get("data-i18n"), "snapshot.not_yet")
+        for identifier in ("how-snapshots", "store-path", "store-create", "store-open"):
+            with self.subTest(part=identifier):
+                part = by_id(self.elements, identifier)
+                self.assertIn("disabled", part.attributes)
+                self.assertEqual(part.get("aria-describedby"), "snapshot-not-yet")
+
+    def test_folded_help_says_whether_it_is_open(self) -> None:
+        toggle = by_id(self.elements, "tools-toggle")
+        self.assertEqual(toggle.get("aria-expanded"), "false")
+        self.assertEqual(toggle.get("aria-controls"), "tools-body")
+        self.assertIn("hidden", by_id(self.elements, "tools-body").attributes)
 
 
 class GuiStyleTest(unittest.TestCase):

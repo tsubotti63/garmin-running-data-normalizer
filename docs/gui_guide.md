@@ -45,30 +45,31 @@ The command prints the GUI's address and opens it in your default browser.
 
 ## 1. Choose the export folder
 
-1. In **Export folder (full path)**, enter the full path of the extracted
-   Export folder, or choose **Browse…** to pick it. The folder browser shows
+1. In **Place of the Garmin export**, enter the full path of the extracted
+   Export folder, or choose **Choose…** to pick it. The folder browser shows
    folder names only; hidden folders and links are not shown.
-2. Choose **Check the folder**. This is the same check as the `doctor --input`
-   command. It says whether a run can start, and what to do next if it
-   cannot. A large Export can take a while to check.
+2. Choose **Check the export**. This is the same check as the `doctor --input`
+   command. It says whether the export can be normalized, and what to do next
+   if it cannot. A large Export can take a while to check.
 
-Changing the folder or the timezone clears the check, so check again before
-you start.
+Changing the place clears the check, so check again before you start. The
+timezone is checked when the run starts.
 
 ## 2. Choose the output
 
-- **Folder to create the output in (full path)**: after a successful check,
+- **Where to create the output**: after a successful check,
   this is filled in with the folder that contains the Export, if it is empty.
   The folder must exist, and you must be able to write to it; the GUI checks
   this before the run starts.
-- **Name of the new output folder**: proposed as
+- **Name of the new folder**: proposed as
   `garmin-run-all-YYYYMMDD-HHMM` in local time. Use a name that does not exist
   yet, with up to 200 letters and digits or 66 Japanese characters. It must
   not start with a dot or contain characters such as `/` or `:`.
 - **Timezone for local dates and times**: `Asia/Tokyo` by default. Use an
   IANA name such as `Europe/London`.
-- **Also create the External-safe Pack**: off by default. It is the same
-  Activities-only pack as the command line's `--external-safe-pack`. Review it
+- **Also create a summary that can be given to an AI (dates to the month, distance, time, and so on)**:
+  off by default. It is the same Activities-only pack, the External-safe Pack,
+  as the command line's `--external-safe-pack`. Review it
   before you share it.
 
 On Windows, keep the location and the name short. Unless long paths are
@@ -81,7 +82,7 @@ works in a hidden working folder next to it.
 
 ## 3. Run
 
-- Choose **Start Run-All**. Only one run can be active at a time.
+- Choose **Run normalization**. Only one run can be active at a time.
 - The page shows the stage of the run and the elapsed time. While FIT files
   are read, it shows how many have been read; files with the same content are
   read once. If nothing changes for 30 seconds, a note says so. Large Exports
@@ -102,7 +103,7 @@ returns for the same result:
 |---|---|---|
 | `PASS` | 0 | Finished without warnings |
 | `PASS_WITH_WARNINGS` | 0 | Finished; the output can be used after you review the warnings |
-| `PARTIAL_SUCCESS` | 3 | Finished; the activities are complete, but some FIT files could not be read completely and were left out |
+| `PARTIAL_SUCCESS` | 3 | Normalized with part of the input left out, such as files that could not be read or rows without a required value; the output can be used |
 
 A table lists each data family with its status, record count, and warnings.
 
@@ -123,8 +124,9 @@ After a run, the page proposes a new name for the next one.
 
 ## 5. Make a Support Bundle when you need help
 
-**Make the Support Bundle** writes `<output name>-support-bundle.zip` next to
-the output folder, as the `support-bundle` command does.
+Under **If something is wrong**, **Make the Support Bundle** writes
+`<output name>-support-bundle.zip` next to the output folder, as the
+`support-bundle` command does.
 
 - It holds six summary files. It contains no rows of your records, paths, file
   names, identifiers, exact times, or coordinates. Nothing is uploaded.
@@ -158,7 +160,7 @@ the code when you ask for help. Do not attach your Export or output.
 
 For other codes, follow the next step on the page.
 
-If the page says that the GUI is not responding, the GUI may have stopped, for
+If the page says that this app is not responding, the GUI may have stopped, for
 example because the terminal was closed. Start it again with the same command
 and open the new address; each launch has a new address and key.
 

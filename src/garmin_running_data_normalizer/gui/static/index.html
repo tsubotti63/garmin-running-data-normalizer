@@ -8,30 +8,146 @@
 <script type="module" src="/app.mjs"></script>
 </head>
 <body>
-<main>
-  <header>
-    <h1 data-i18n="app.title"></h1>
-    <p id="product-version" class="version"></p>
-  </header>
-  <p class="notice" data-i18n="app.development"></p>
-  <p class="notice" data-i18n="app.privacy"></p>
-  <div id="connection-problem" class="notice messages" role="alert" hidden></div>
+<div id="connection-problem" class="problem messages" role="alert" hidden></div>
+<header class="topbar">
+  <h1 data-i18n="app.title"></h1>
+  <p class="development" data-i18n="app.development"></p>
+  <p id="next-line" class="next-line" aria-live="polite"><span class="next-label" data-i18n="next_line.label"></span> <span id="next-text"></span></p>
+</header>
+<main class="app">
+  <div class="flow">
+    <section id="box-export" class="box" aria-labelledby="input-heading">
+      <h2 id="input-heading" tabindex="-1"><span class="num" aria-hidden="true"></span><span data-i18n="export.heading"></span><span class="badge"></span></h2>
+      <p class="summary" hidden></p>
+      <label for="input-path" data-i18n="input.label"></label>
+      <input id="input-path" type="text" autocomplete="off" spellcheck="false" aria-describedby="input-help">
+      <p id="input-help" class="help" data-i18n="input.help"></p>
+      <div class="button-row">
+        <button type="button" id="input-browse" data-i18n="browse.button" disabled></button>
+        <button type="button" id="check-button" data-i18n="check.button" disabled></button>
+      </div>
+      <div id="check-result" class="messages" role="status" aria-live="polite"></div>
+      <div id="export-error" class="errbox" hidden>
+        <h3 id="export-error-heading" tabindex="-1" data-i18n="error.heading"></h3>
+        <div id="export-error-lines" class="messages"></div>
+      </div>
+    </section>
+    <div class="arrow" aria-hidden="true"></div>
+    <section id="box-snapshot" class="box" aria-labelledby="snapshot-heading">
+      <h2 id="snapshot-heading" tabindex="-1"><span class="num" aria-hidden="true"></span><span data-i18n="snapshot.heading"></span><span class="note" data-i18n="snapshot.subtitle"></span><span class="badge"></span></h2>
+      <p class="summary" hidden></p>
+      <fieldset class="choices">
+        <legend data-i18n="how.legend"></legend>
+        <div class="choice">
+          <input type="radio" name="how" id="how-snapshots" value="snapshots" disabled aria-describedby="snapshot-not-yet">
+          <label for="how-snapshots" data-i18n="how.snapshots"></label>
+        </div>
+        <div class="choice">
+          <input type="radio" name="how" id="how-single" value="single" checked>
+          <label for="how-single" data-i18n="how.single"></label>
+        </div>
+      </fieldset>
+      <p id="snapshot-not-yet" class="note" data-i18n="snapshot.not_yet"></p>
+      <div class="unused">
+        <p class="label-line" data-i18n="snapshot.list_label"></p>
+        <p class="empty" data-i18n="snapshot.empty"></p>
+        <label for="store-path" data-i18n="store.label"></label>
+        <input id="store-path" type="text" disabled aria-describedby="snapshot-not-yet">
+        <div class="button-row">
+          <button type="button" id="store-create" data-i18n="store.create" disabled aria-describedby="snapshot-not-yet"></button>
+          <button type="button" id="store-open" data-i18n="store.open" disabled aria-describedby="snapshot-not-yet"></button>
+        </div>
+      </div>
+      <div class="decide">
+        <button type="button" id="snapshot-decide" data-i18n="decide.button" disabled></button>
+      </div>
+    </section>
+    <div class="arrow" aria-hidden="true"></div>
+    <section id="box-output" class="box" aria-labelledby="output-heading">
+      <h2 id="output-heading" tabindex="-1"><span class="num" aria-hidden="true"></span><span data-i18n="output.heading"></span><span class="badge"></span></h2>
+      <p class="summary" hidden></p>
+      <label for="output-parent" data-i18n="output.parent"></label>
+      <div class="path-row">
+        <input id="output-parent" type="text" autocomplete="off" spellcheck="false">
+        <button type="button" id="output-browse" data-i18n="browse.button" disabled></button>
+      </div>
+      <label for="output-name" data-i18n="output.name"></label>
+      <input id="output-name" type="text" autocomplete="off" spellcheck="false" aria-describedby="output-name-help">
+      <p id="output-name-help" class="help" data-i18n="output.name_help"></p>
+      <label for="timezone" data-i18n="timezone.label"></label>
+      <input id="timezone" type="text" list="timezone-list" autocomplete="off" spellcheck="false" aria-describedby="timezone-help">
+      <datalist id="timezone-list"></datalist>
+      <p id="timezone-help" class="help" data-i18n="timezone.help"></p>
+      <div class="checkbox-row">
+        <input id="safe-pack" type="checkbox" aria-describedby="safe-pack-help">
+        <label for="safe-pack" data-i18n="pack.label"></label>
+      </div>
+      <p id="safe-pack-help" class="help" data-i18n="pack.help"></p>
+      <p id="pack-file" class="made" hidden></p>
+      <div id="output-error" class="errbox" hidden>
+        <h3 id="output-error-heading" tabindex="-1" data-i18n="error.heading"></h3>
+        <div id="output-error-lines" class="messages"></div>
+      </div>
+      <div class="decide">
+        <button type="button" id="output-decide" data-i18n="decide.button" disabled></button>
+      </div>
+    </section>
+    <div class="arrow" aria-hidden="true"></div>
+    <section id="box-run" class="box" aria-labelledby="run-heading">
+      <h2 id="run-heading" tabindex="-1"><span class="num" aria-hidden="true"></span><span data-i18n="run.heading"></span><span class="badge"></span></h2>
+      <h3 id="result-heading" class="headline" tabindex="-1"></h3>
+      <p id="run-exit" class="exit-code" hidden></p>
+      <p id="run-sub" class="sub"></p>
+      <div id="run-progress" class="progress-lines">
+        <p id="fit-progress-label" class="help"></p>
+        <progress id="fit-progress" aria-labelledby="fit-progress-label" hidden></progress>
+        <p id="run-stalled" class="help"></p>
+      </div>
+      <p id="run-elapsed" class="help"></p>
+      <p id="run-announcer" class="visually-hidden" role="status" aria-live="polite"></p>
+      <div class="button-row">
+        <button type="button" id="start-button" class="primary big" data-i18n="run.start" disabled></button>
+        <button type="button" id="cancel-button" class="big" data-i18n="run.cancel" disabled></button>
+      </div>
+      <p id="start-reason" class="help"></p>
+      <div id="cancel-confirm" class="confirm" hidden>
+        <p data-i18n="run.cancel_confirm"></p>
+        <div class="button-row">
+          <button type="button" id="cancel-yes" data-i18n="run.cancel_yes"></button>
+          <button type="button" id="cancel-no" data-i18n="run.cancel_no"></button>
+        </div>
+      </div>
+      <div id="run-status" class="messages" role="status" aria-live="polite"></div>
+      <div id="run-result" class="messages"></div>
+      <div id="run-error" class="errbox" hidden>
+        <h3 id="run-error-heading" tabindex="-1" data-i18n="error.heading"></h3>
+        <div id="run-error-lines" class="messages"></div>
+      </div>
+      <div id="next-actions" class="next-actions" hidden>
+        <h3 data-i18n="next_actions.heading"></h3>
+        <div class="button-row">
+          <button type="button" id="open-folder-button" class="primary" data-i18n="open.folder" disabled></button>
+          <button type="button" id="open-start-here-button" data-i18n="open.start_here" disabled></button>
+        </div>
+        <div id="open-result" class="messages" role="status" aria-live="polite"></div>
+      </div>
+      <div class="tools">
+        <h3 class="tools-heading"><button type="button" id="tools-toggle" class="tools-toggle" aria-expanded="false" aria-controls="tools-body" data-i18n="tools.heading"></button></h3>
+        <p class="note" data-i18n="tools.summary"></p>
+        <div id="tools-body" hidden>
+          <h4 id="bundle-heading" tabindex="-1" data-i18n="bundle.heading"></h4>
+          <p class="help" data-i18n="bundle.help"></p>
+          <p class="help" data-i18n="bundle.review_help"></p>
+          <div class="button-row">
+            <button type="button" id="bundle-button" data-i18n="bundle.button" disabled></button>
+          </div>
+          <div id="bundle-result" class="messages" role="status" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+  </div>
 
-  <section aria-labelledby="input-heading">
-    <h2 id="input-heading" data-i18n="input.heading" tabindex="-1"></h2>
-    <p class="help" data-i18n="input.help"></p>
-    <label for="input-path" data-i18n="input.label"></label>
-    <div class="path-row">
-      <input id="input-path" type="text" autocomplete="off" spellcheck="false">
-      <button type="button" id="input-browse" data-i18n="browse.button" disabled></button>
-    </div>
-    <div class="button-row">
-      <button type="button" id="check-button" data-i18n="check.button" disabled></button>
-    </div>
-    <div id="check-result" class="messages" role="status" aria-live="polite"></div>
-  </section>
-
-  <section id="browser" class="browser" aria-labelledby="browser-heading" hidden>
+  <section id="browser" class="browser panel" aria-labelledby="browser-heading" hidden>
     <h2 id="browser-heading" data-i18n="browser.heading" tabindex="-1"></h2>
     <p id="browser-path" class="path"></p>
     <p class="help" data-i18n="browser.hint"></p>
@@ -44,75 +160,65 @@
     <ul id="browser-list" class="folder-list"></ul>
   </section>
 
-  <section aria-labelledby="output-heading">
-    <h2 id="output-heading" data-i18n="output.heading"></h2>
-    <label for="output-parent" data-i18n="output.parent"></label>
-    <div class="path-row">
-      <input id="output-parent" type="text" autocomplete="off" spellcheck="false">
-      <button type="button" id="output-browse" data-i18n="browse.button" disabled></button>
-    </div>
-    <label for="output-name" data-i18n="output.name"></label>
-    <input id="output-name" type="text" autocomplete="off" spellcheck="false" aria-describedby="output-name-help">
-    <p id="output-name-help" class="help" data-i18n="output.name_help"></p>
-    <label for="timezone" data-i18n="timezone.label"></label>
-    <input id="timezone" type="text" list="timezone-list" autocomplete="off" spellcheck="false" aria-describedby="timezone-help">
-    <datalist id="timezone-list"></datalist>
-    <p id="timezone-help" class="help" data-i18n="timezone.help"></p>
-    <div class="checkbox-row">
-      <input id="safe-pack" type="checkbox" aria-describedby="safe-pack-help">
-      <label for="safe-pack" data-i18n="pack.label"></label>
-    </div>
-    <p id="safe-pack-help" class="help" data-i18n="pack.help"></p>
-  </section>
+  <div class="legend">
+    <span class="legend-title" data-i18n="legend.title"></span>
+    <span class="legend-item"><span class="swatch k-current" aria-hidden="true"></span><span data-i18n="legend.current"></span></span>
+    <span class="legend-item"><span class="swatch k-done" aria-hidden="true"></span><span data-i18n="legend.done"></span></span>
+    <span class="legend-item"><span class="swatch k-warn" aria-hidden="true"></span><span data-i18n="legend.warn"></span></span>
+    <span class="legend-item"><span class="swatch k-error" aria-hidden="true"></span><span data-i18n="legend.error"></span></span>
+    <span class="legend-item"><span class="swatch k-none" aria-hidden="true"></span><span data-i18n="legend.none"></span></span>
+  </div>
 
-  <section aria-labelledby="run-heading">
-    <h2 id="run-heading" data-i18n="run.heading" tabindex="-1"></h2>
-    <div class="button-row">
-      <button type="button" id="start-button" class="primary" data-i18n="run.start" disabled></button>
-      <button type="button" id="cancel-button" data-i18n="run.cancel" disabled></button>
-    </div>
-    <div id="run-status" class="messages" role="status" aria-live="polite"></div>
-    <div id="run-progress" class="messages"></div>
-    <p id="run-elapsed" class="help"></p>
-    <p id="run-announcer" class="visually-hidden" role="status" aria-live="polite"></p>
-    <h3 id="result-heading" data-i18n="result.heading" tabindex="-1" hidden></h3>
-    <div id="run-result" class="messages"></div>
-    <table id="family-table" hidden>
-      <caption data-i18n="result.caption"></caption>
-      <thead>
-        <tr>
-          <th scope="col" data-i18n="result.column_data"></th>
-          <th scope="col" data-i18n="result.column_status"></th>
-          <th scope="col" data-i18n="result.column_records"></th>
-          <th scope="col" data-i18n="result.column_warnings"></th>
-        </tr>
-      </thead>
-      <tbody id="family-rows"></tbody>
-    </table>
-    <div id="output-actions" hidden>
-      <h3 id="output-check-heading" data-i18n="output_check.heading" tabindex="-1"></h3>
-      <div id="output-check" class="messages" role="status" aria-live="polite"></div>
-      <div class="button-row">
-        <button type="button" id="open-folder-button" data-i18n="open.folder" disabled></button>
-        <button type="button" id="open-start-here-button" data-i18n="open.start_here" disabled></button>
+  <div class="lower">
+    <section class="panel" aria-labelledby="steps-heading">
+      <h2 id="steps-heading" data-i18n="steps.heading"></h2>
+      <p id="steps-caption" class="help"></p>
+      <table class="t">
+        <thead>
+          <tr>
+            <th scope="col" data-i18n="steps.column_step"></th>
+            <th scope="col" data-i18n="steps.column_state"></th>
+            <th scope="col" class="n" data-i18n="steps.column_time"></th>
+          </tr>
+        </thead>
+        <tbody id="steps-rows"></tbody>
+        <tfoot>
+          <tr>
+            <th scope="row" id="steps-total-label"></th>
+            <td></td>
+            <td id="steps-total" class="n"></td>
+          </tr>
+        </tfoot>
+      </table>
+      <div id="output-check-area" hidden>
+        <h3 id="output-check-heading" data-i18n="output_check.heading" tabindex="-1"></h3>
+        <div id="output-check" class="messages" role="status" aria-live="polite"></div>
       </div>
-      <div id="open-result" class="messages" role="status" aria-live="polite"></div>
-      <h3 id="bundle-heading" data-i18n="bundle.heading" tabindex="-1"></h3>
-      <p class="help" data-i18n="bundle.help"></p>
-      <p class="help" data-i18n="bundle.review_help"></p>
-      <div class="button-row">
-        <button type="button" id="bundle-button" data-i18n="bundle.button" disabled></button>
-      </div>
-      <div id="bundle-result" class="messages" role="status" aria-live="polite"></div>
-    </div>
-  </section>
-
-  <footer class="controls">
-    <label for="language-select" data-i18n="language.label"></label>
-    <select id="language-select"></select>
-    <button type="button" id="quit-button" data-i18n="quit.button" disabled></button>
-    <p id="connection-status" class="status" role="status" aria-live="polite"></p>
-  </footer>
+    </section>
+    <section class="panel" aria-labelledby="results-heading">
+      <h2 id="results-heading" data-i18n="result.caption"></h2>
+      <p id="results-caption" class="help"></p>
+      <table id="family-table" class="t">
+        <thead>
+          <tr>
+            <th scope="col" data-i18n="result.column_data"></th>
+            <th scope="col" class="n" data-i18n="result.column_records"></th>
+            <th scope="col" data-i18n="result.column_status"></th>
+            <th scope="col" class="n" data-i18n="result.column_warnings"></th>
+          </tr>
+        </thead>
+        <tbody id="family-rows"></tbody>
+      </table>
+    </section>
+  </div>
 </main>
+<footer class="statusbar">
+  <p class="privacy" data-i18n="app.privacy"></p>
+  <p id="product-version" class="version"></p>
+  <label for="language-select" data-i18n="language.label"></label>
+  <select id="language-select"></select>
+  <button type="button" id="quit-button" data-i18n="quit.button" disabled></button>
+  <p id="connection-status" class="status" role="status" aria-live="polite"></p>
+</footer>
 </body>
 </html>

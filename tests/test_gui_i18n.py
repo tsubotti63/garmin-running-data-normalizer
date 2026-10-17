@@ -134,6 +134,15 @@ class GuiCatalogTest(unittest.TestCase):
         self.assertEqual(parsed.styles, [])
         self.assertEqual(parsed.event_handlers, [])
 
+    def test_page_scripts_change_text_without_markup(self) -> None:
+        # Paths and names from the computer reach the page; it sets them with
+        # textContent only, so that none of them is read as HTML (stage B1a).
+        for script in sorted(STATIC_ROOT.glob("*.mjs")):
+            source = script.read_text(encoding="utf-8")
+            for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write"):
+                with self.subTest(script=script.name, sink=sink):
+                    self.assertNotIn(sink, source)
+
 
 class GuiMessageCoverageTest(unittest.TestCase):
     def test_every_error_code_has_a_message(self) -> None:

@@ -225,6 +225,12 @@ class _Run:
         self.ended: float | None = None
         self.state = "running"
         self.progress: dict[str, Any] = {}
+        # The seconds spent in each stage of Run-All, for the steps table of
+        # the page (stage B1a): the stage now, since when, and the totals of
+        # the stages that it left.
+        self.stage: str | None = None
+        self.stage_since = self.started
+        self.stage_totals: dict[str, float] = {}
         self.result: dict[str, Any] | None = None
         self.error_code: str | None = None
         self.error_detail: dict[str, Any] | None = None
@@ -236,6 +242,23 @@ class _Run:
     @property
     def active(self) -> bool:
         return self.ended is None
+
+    def enter_stage(self, stage: str, now: float) -> None:
+        if stage == self.stage:
+            return
+        if self.stage is not None:
+            self.stage_totals[self.stage] = self.stage_totals.get(self.stage, 0.0) + now - self.stage_since
+        self.stage = stage
+        self.stage_since = now
+
+    def stage_seconds(self, now: float) -> dict[str, float]:
+        """Return the seconds of each stage so far: names from PROGRESS_STAGES
+        and numbers only. The stage that a run ended in counts until its end."""
+        totals = dict(self.stage_totals)
+        if self.stage is not None:
+            end = self.ended if self.ended is not None else now
+            totals[self.stage] = totals.get(self.stage, 0.0) + end - self.stage_since
+        return {stage: round(totals[stage], 1) for stage in PROGRESS_STAGES if stage in totals}
 
 
 class RunManager:
@@ -336,6 +359,7 @@ class RunManager:
                     round(now - run.last_progress, 1) if run.active else None
                 ),
                 "progress": dict(run.progress),
+                "stage_seconds": run.stage_seconds(now),
                 "output_path": str(run.output),
                 "result": json.loads(json.dumps(run.result)) if run.result else None,
                 "error_code": run.error_code,
@@ -417,6 +441,7 @@ class RunManager:
             if progress is not None:
                 run.progress = progress
                 run.last_progress = time.monotonic()
+                run.enter_stage(progress["stage"], run.last_progress)
         elif event == "finished":
             run.result = _valid_result(message)
         elif event == "failed":
