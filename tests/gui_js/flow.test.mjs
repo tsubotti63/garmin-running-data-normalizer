@@ -651,6 +651,57 @@ test("the color of the line under the title follows what the line says", () => {
   assert.equal(kind(READY), "current");
 });
 
+test("the lines of the check come red first, then yellow, then what the check found", () => {
+  // Stage B3b: each line has its kind, and the first line of each group the
+  // mark of that kind.
+  const counts = { activity_records: 3506, fit_files: 3498, files_read: 3561, files_left_out: 2, files_not_read: 4 };
+  const ready = { code: "RUN_ALL_NOT_EVALUATED", severity: "INFO", message_id: "INPUT_READY_FOR_BOUNDED_RUN_ALL_ATTEMPT", next_action_id: "RUN_ALL" };
+  const leftOut = { code: "DATA_FILE_LEFT_OUT", severity: "WARNING", message_id: "INPUT_FILES_CANNOT_BE_READ_AND_WILL_BE_LEFT_OUT", next_action_id: "RUN_ALL" };
+  const corrupt = { code: "INPUT_ZIP_CORRUPT", severity: "ERROR", message_id: "INPUT_ZIP_DAMAGED_OR_INCOMPLETE", next_action_id: "DOWNLOAD_EXPORT_AGAIN" };
+  const lines = (check) => flow.checkMessages(check).map((line) => [line.kind, line.start, line.message.key, line.message.params]);
+  assert.deepEqual(lines({ kind: "zip", counts, findings: [leftOut, ready] }), [
+    ["warn", true, "finding.files_left_out_count", { count: 2 }],
+    ["ok", true, "check.zip_ready", { files: 3561 }],
+    ["ok", false, "check.counts", { activities: 3506, fit: 3498 }],
+  ]);
+  assert.deepEqual(lines({ kind: "folder", counts: { ...counts, files_left_out: 0 }, findings: [ready] }), [
+    ["ok", true, "check.folder_ready", {}],
+    ["ok", false, "check.counts", { activities: 3506, fit: 3498 }],
+  ]);
+  // A stop comes first, even when the check gives it after a note.
+  assert.deepEqual(lines({ kind: "zip", counts: null, findings: [leftOut, corrupt] }), [
+    ["error", true, "check.not_ready", {}],
+    ["error", true, "stop.input_zip_corrupt", {}],
+    ["error", false, "next.label", {}],
+    ["error", false, "error.code", { code: "INPUT_ZIP_CORRUPT" }],
+    ["warn", true, "finding.files_left_out", {}],
+  ]);
+  // Without counts, the words of the check need no number.
+  assert.deepEqual(lines({ kind: null, counts: null, findings: [ready] }), [["ok", true, "check.ready", {}]]);
+});
+
+test("the timezone data that the check found missing belongs to the third box", () => {
+  // Stage B3b: the first box waits, as the check counts no Activities.
+  const timezone = { code: "TIMEZONE_DATA_UNAVAILABLE", severity: "ERROR", message_id: "INSTALL_REQUIRED_TIMEZONE_DATA", next_action_id: "REPAIR_RUNTIME_ENVIRONMENT" };
+  const ready = { code: "RUN_ALL_NOT_EVALUATED", severity: "INFO", message_id: "INPUT_READY_FOR_BOUNDED_RUN_ALL_ATTEMPT", next_action_id: "RUN_ALL" };
+  const counts = { activity_records: null, fit_files: 0, files_read: 12, files_left_out: 0, files_not_read: 0 };
+  const parts = flow.checkParts({ findings: [timezone, ready] });
+  assert.equal(parts.timezone, timezone);
+  assert.equal(parts.stops, false);
+  const lines = (check) => flow.checkMessages(check).map((line) => [line.kind, line.message.key]);
+  assert.deepEqual(lines({ kind: "zip", counts, findings: [timezone, ready] }), [
+    ["ok", "check.zip_ready"],
+    ["info", "check.counts_later"],
+  ]);
+  assert.deepEqual(lines({ kind: "folder", counts, findings: [timezone, ready] }), [["info", "check.counts_later"]]);
+  const view = { ...READY, exportReady: false, checkedReady: false, snapshotDecided: false, outputDecided: false, timezoneProblem: true };
+  assert.deepEqual(boxStates(view), { export: "current", snapshot: "todo", output: "error", run: "todo" });
+  assert.deepEqual(shape(flow.nextLine(view, boxStates(view))), ["next_line.fix_box", { box: 3 }, {}]);
+  assert.equal(enabled(view).start, false);
+  // A stop of the first box comes first.
+  assert.equal(boxStates({ ...view, exportProblem: true }).export, "error");
+});
+
 test("a run request that the server refused marks the box that it concerns", () => {
   assert.deepEqual(boxStates({ ...READY, outputDecided: false, requestBox: "output" }), {
     export: "done",

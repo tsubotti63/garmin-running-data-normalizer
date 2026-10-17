@@ -16,6 +16,8 @@ import {
   boxStates,
   boxSummary,
   boxesToConfirm,
+  checkMessages,
+  checkParts,
   connectionMessages,
   controls,
   defaultOutputName,
@@ -254,16 +256,23 @@ function errorLines(code, detail) {
 }
 
 // The page renders every second during a run. Rebuilding a live region
-// makes screen readers repeat it, so text changes only when it differs.
+// makes screen readers repeat it, so text changes only when it differs. A
+// line is its text, or its text with a kind that gives it a mark and a color
+// (stage B3b).
 function replaceLines(container, lines) {
-  const current = Array.from(container.children, (line) => line.textContent);
-  if (current.length === lines.length && current.every((text, index) => text === lines[index])) {
+  const items = lines.map((line) => (typeof line === "string" ? { text: line, className: "" } : line));
+  const current = Array.from(container.children, (line) => [line.textContent, line.className]);
+  if (
+    current.length === items.length &&
+    current.every(([text, className], index) => text === items[index].text && className === items[index].className)
+  ) {
     return;
   }
   container.replaceChildren(
-    ...lines.map((text) => {
+    ...items.map((item) => {
       const line = document.createElement("p");
-      line.textContent = text;
+      line.textContent = item.text;
+      line.className = item.className;
       return line;
     }),
   );
@@ -401,7 +410,11 @@ function view() {
   const checked = isCheckCurrent();
   const failedBox = run.state === "failed" ? errorBox(run.error_code, ui.inputPath.value) : null;
   const requestBox = state.runError !== null ? errorBox(state.runError, ui.inputPath.value) : null;
-  const ready = checked && state.check.ready === true;
+  // The timezone data that the check found missing belongs to the third box,
+  // and the first box is not ready without it (stage B3b).
+  const parts = checked && state.check.error === undefined ? checkParts(state.check) : null;
+  const timezoneProblem = parts !== null && parts.timezone !== null;
+  const ready = parts !== null && !parts.stops && !timezoneProblem;
   // An extracted folder needs the confirmation that its extraction was
   // complete; a ZIP file does not. Only the page asks for it (stage B3a).
   const extractNeeded = ready && state.check.kind === "folder";
@@ -417,8 +430,8 @@ function view() {
     extractNeeded,
     extractConfirmed: ui.extractConfirm.checked,
     exportReady: checkedReady && requestBox !== "export",
-    exportProblem:
-      (checked && (state.check.error !== undefined || state.check.ready !== true)) || requestBox === "export",
+    exportProblem: (checked && (state.check.error !== undefined || parts.stops)) || requestBox === "export",
+    timezoneProblem,
     snapshotDecided: state.snapshotDecided,
     outputDecided: state.outputDecided && requestBox !== "output",
     editedSinceRun: state.editedSinceRun,
@@ -452,9 +465,10 @@ function renderCheck(current) {
   } else if (state.check?.error !== undefined) {
     lines.push(...errorLines(state.check.error));
   } else if (state.check) {
-    lines.push(t(state.check.ready ? "check.ready" : "check.not_ready"));
-    for (const finding of state.check.findings) {
-      lines.push(...findingMessages(finding).map(describe));
+    // Red, then yellow, then what the check found, each with its mark
+    // (stage B3b).
+    for (const line of checkMessages(state.check)) {
+      lines.push({ text: describe(line.message), className: `m-${line.kind}${line.start ? " start" : ""}` });
     }
   }
   replaceLines(ui.checkResult, lines);
@@ -561,20 +575,28 @@ function renderNextLine(states, current) {
 }
 
 // A stop: its lines in the box that it concerns, and the other boxes clear.
+// The timezone data that the pre-run check found missing shows in the third
+// box, as what keeps a run from starting (stage B3b).
 function renderErrors(current) {
   const run = state.run;
   let box = null;
   let lines = [];
+  let heading = "error.heading";
   if (run.state === "failed") {
     box = current.failedBox;
     lines = errorLines(run.error_code, run.error_detail);
   } else if (state.runError !== null) {
     box = current.requestBox;
     lines = errorLines(state.runError);
+  } else if (current.timezoneProblem && !current.exportProblem) {
+    box = "output";
+    lines = findingMessages(checkParts(state.check).timezone).map(describe);
+    heading = "error.heading_check";
   }
   for (const [name, error] of Object.entries(ui.errors)) {
     const shown = name === box || (box === "snapshot" && name === "run");
     error.area.hidden = !shown;
+    setText(error.heading, t(heading));
     replaceLines(error.lines, shown ? lines : []);
   }
 }
@@ -1041,6 +1063,8 @@ async function runCheck(focusTarget = ui.check) {
       ready: answer.ready === true,
       // A ZIP file or a folder, as the server found it, not from the name.
       kind: answer.input_kind === "zip" || answer.input_kind === "folder" ? answer.input_kind : null,
+      // The counts of the input, numbers only (stage B3b).
+      counts: answer.counts !== null && typeof answer.counts === "object" ? answer.counts : null,
       findings: Array.isArray(answer.findings) ? answer.findings : [],
     };
     if (state.check.ready) {

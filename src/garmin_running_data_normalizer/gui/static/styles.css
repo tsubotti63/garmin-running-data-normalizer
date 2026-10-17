@@ -435,6 +435,52 @@ button.primary:disabled {
   overflow-wrap: anywhere;
 }
 
+/* The lines of the check of the Export: a bar at the left in the color of
+   their kind, and a mark on the first line of each group, so that color is
+   never the only signal (stage B3b). */
+.messages p.m-error,
+.messages p.m-warn,
+.messages p.m-ok,
+.messages p.m-info {
+  margin-top: 2px;
+  padding-left: 9px;
+}
+
+.messages p.start {
+  margin-top: 6px;
+}
+
+.messages p.m-error {
+  box-shadow: inset 3px 0 0 var(--ng);
+}
+
+.messages p.m-warn {
+  box-shadow: inset 3px 0 0 var(--warn-line);
+}
+
+.messages p.m-ok {
+  box-shadow: inset 3px 0 0 var(--ok);
+}
+
+.messages p.m-info {
+  box-shadow: inset 3px 0 0 var(--line);
+}
+
+.messages p.m-error.start::before {
+  content: "\2715\00a0";
+  color: var(--ng);
+}
+
+.messages p.m-warn.start::before {
+  content: "\26A0\00a0";
+  color: var(--warn);
+}
+
+.messages p.m-ok.start::before {
+  content: "\2713\00a0";
+  color: var(--ok);
+}
+
 /* A stop, in the box that it concerns. */
 .errbox {
   margin-top: 10px;
