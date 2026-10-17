@@ -47,7 +47,7 @@ STOPS: dict[str, Stop] = {
         "select the Export folder, or the ZIP file downloaded from Garmin",
     ),
     "INPUT_NOT_READABLE": Stop(
-        "this app may not open a folder or file of the input",
+        "this app is not allowed to open a folder or file of the input",
         f"{_NOT_READABLE}, or select the Export folder itself",
     ),
     "INPUT_CHANGED": Stop(
@@ -159,7 +159,7 @@ STOPS: dict[str, Stop] = {
         "the store",
     ),
     "SNAPSHOT_STORE_NOT_READABLE": Stop(
-        "this app may not open a folder or file of the Snapshot Store",
+        "this app is not allowed to open a folder or file of the Snapshot Store",
         f"{_NOT_READABLE}; this app must be able to read the whole store folder",
     ),
     "SNAPSHOT_STORE_INVALID": Stop(
@@ -287,7 +287,8 @@ STOPS: dict[str, Stop] = {
 }
 
 # The next steps of the pre-run check and of the check of an output, by the
-# identifier that their reports give (stage A5b).
+# identifier that their reports give (stage A5b). A finding whose code is a
+# stop gives the next step of that stop instead (``finding_next_step``).
 NEXT_ACTIONS: dict[str, str] = {
     "SELECT_VALID_EXPORT_DIRECTORY": "select the Export folder, or the ZIP file downloaded from Garmin",
     "REPAIR_RUNTIME_ENVIRONMENT": STOPS["TIMEZONE_DATA_UNAVAILABLE"].next_step,
@@ -314,8 +315,11 @@ NEXT_ACTIONS: dict[str, str] = {
     "REVIEW_WARNING_CODES_AND_AFFECTED_SCOPES": (
         "before you use the outputs, read the warnings and check which data they affect"
     ),
+    # Exit 3 leaves out files and rows as well as FIT data (stage B2b); the
+    # identifier stays, as the JSON report gives it.
     "REVIEW_EXCLUDED_FIT_EVIDENCE": (
-        "before you use the outputs made from FIT files, check the files that were left out"
+        "before you use the outputs, check what was left out, such as files, rows, or FIT "
+        "data, in START_HERE.md"
     ),
 }
 
@@ -439,6 +443,15 @@ def stop_line(code: str, message: str) -> str:
     return f"ERROR [{code}]: {message}; {STOPS[code].next_step}"
 
 
+def finding_next_step(code: str, next_action_id: str) -> str | None:
+    """The next step of a Doctor finding in words: that of the stop of its
+    code, so that the check and the run say the same about the same problem
+    (stage B2b), or else that of its next action. The JSON report keeps the
+    identifier of the next action."""
+    stop = STOPS.get(code)
+    return stop.next_step if stop is not None else NEXT_ACTIONS.get(next_action_id)
+
+
 def stop_text(code: str) -> str:
     """What a code means and what to do next, as one text, for a notice of
     the same problem that does not stop a command."""
@@ -452,6 +465,7 @@ __all__ = [
     "PAGE_WORDING",
     "STOPS",
     "Stop",
+    "finding_next_step",
     "stop_line",
     "stop_text",
 ]

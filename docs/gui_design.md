@@ -451,6 +451,14 @@ Processing:
   yet. The Japanese words come from the text book of stage B0. Tests check the
   catalogs against the tables, and the stops that the GUI guides quote against
   the catalogs.
+- A finding of the check of the Export says what a run would stop with in the
+  words of the stop of its code, and gives the next step of that stop, as the
+  CLI's `doctor --input` does in its report for a person (stage B2b). A
+  finding whose code is not a stop, or that does not stop a run, has words of
+  its own, and the page shows nothing for the finding that the Export is
+  ready, since it says so itself. The check of the output gives what the
+  Doctor says about using the output, and the next step in the words of the
+  CLI's Doctor; tests check the English against the CLI's table of next steps.
 - The Japanese catalog uses these terms: 正規化, 取り込む, 既存のスナップショット,
   正規化のしかた, 問い合わせ用ファイル (the English term Support Bundle appears
   only inside its explanation), 目印のファイル (`.single-writer.lock`), 出力の確認

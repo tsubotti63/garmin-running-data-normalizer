@@ -51,11 +51,11 @@ What can change:
 
 - Runs that finished now stop with exit 2: an input that holds different
   Exports or the records of more than one account (`INPUT_MULTIPLE_EXPORTS`;
-  v1.7.1 made one output of both), a folder of the input that this app may
-  not open (`INPUT_NOT_READABLE`; v1.7.1 passed it over), a folder for the
-  output that does not exist (`OUTPUT_PARENT_NOT_FOUND`; v1.7.1 made it), and
-  an output name that starts with a dot or ends with a dot or a space, among
-  others (`OUTPUT_NAME_INVALID`).
+  v1.7.1 made one output of both), a folder of the input that this app is
+  not allowed to open (`INPUT_NOT_READABLE`; v1.7.1 passed it over), a
+  folder for the output that does not exist (`OUTPUT_PARENT_NOT_FOUND`;
+  v1.7.1 made it), and an output name that starts with a dot or ends with a
+  dot or a space, among others (`OUTPUT_NAME_INVALID`).
 - Runs that ended with exit 0 can end with exit 3: a daily row without its
   date that holds a value, which v1.7.1 left out with a count only, is now
   announced with `DATA_ROW_LEFT_OUT`.
@@ -86,7 +86,9 @@ What can change:
   `other warnings: candidate=a relationship=b input=c` after the lines of the
   families; `validate-handoff` prints `warnings: N`. `snapshot status` and
   `snapshot verify` can print `NOTE` lines about the store, and `doctor`'s
-  report for a person gives each finding and the next step in words.
+  report for a person gives each finding and the next step in words. The
+  `ERROR` lines of `INPUT_NOT_READABLE` and `SNAPSHOT_STORE_NOT_READABLE`
+  say that this app is not allowed to open a folder or file.
 - Outputs of every run, also without any problem in the data:
   `disagreeing_fields` in every row of every dataset (`;` between names in the
   CSV files); `start_time_source` in Activities, `sleep_day_source` and
@@ -130,9 +132,12 @@ What can change:
   earlier value.
 - Doctor: `doctor --input` reads the Activities files and reports
   `ACTIVITIES_EMPTY` when no Activities record can be kept, where v1.7.1
-  passed such an Export and the run stopped. For a run with exit 3, the next
-  step `REVIEW_EXCLUDED_FIT_EVIDENCE` and its text speak of FIT files also
-  when only rows were left out; stage B reviews it.
+  passed such an Export and the run stopped. In the report for a person, a
+  finding whose code is a stop gives the next step of that stop, as the run
+  does; the JSON report keeps the `next_action_id` of each finding. For a
+  run with exit 3, the report for a person and the words of the next step
+  `REVIEW_EXCLUDED_FIT_EVIDENCE`, whose identifier stays, say that files,
+  rows, or FIT data were left out, where v1.7.1 spoke of FIT files only.
 - Earlier outputs: `validate-handoff`, `doctor --run-output`, and
   `support-bundle` refuse an output of v1.7.1, and those of v1.7.1 refuse an
   output of v2.0.0.

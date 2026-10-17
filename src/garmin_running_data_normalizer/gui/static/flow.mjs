@@ -176,34 +176,33 @@ export const STOP_NEXT_KEYS = {
   FOLDER_NOT_READABLE: "stop_next.folder_not_readable",
 };
 
-// Pre-run Doctor message and next-action identifiers.
+// A pre-run finding says what a run would stop with in the words of the stop
+// of its code, or in words of its own when its code is not a stop or when it
+// does not stop a run (stage B2b). The page says itself that an Export can be
+// normalized, so the ready finding shows nothing (null).
 export const FINDING_KEYS = {
   INPUT_DIRECTORY_MUST_BE_LOCAL_DIRECTORY: "finding.input_directory",
-  INSTALL_REQUIRED_TIMEZONE_DATA: "finding.timezone_data",
-  INPUT_COULD_NOT_BE_SAFELY_DISCOVERED: "finding.input_unreadable",
-  INPUT_FOLDER_OR_FILE_CANNOT_BE_OPENED: "finding.input_not_readable",
-  INPUT_ZIP_DAMAGED_OR_INCOMPLETE: "finding.zip_corrupt",
-  INPUT_HOLDS_MORE_THAN_ONE_EXPORT: "finding.input_multiple_exports",
+  INSTALL_REQUIRED_TIMEZONE_DATA: "stop.timezone_data_unavailable",
+  INPUT_COULD_NOT_BE_SAFELY_DISCOVERED: "stop.input_discovery_failed",
+  INPUT_FOLDER_OR_FILE_CANNOT_BE_OPENED: "stop.input_not_readable",
+  INPUT_ZIP_DAMAGED_OR_INCOMPLETE: "stop.input_zip_corrupt",
+  INPUT_HOLDS_MORE_THAN_ONE_EXPORT: "stop.input_multiple_exports",
   INPUT_HOLDS_THE_SAME_EXPORT_MORE_THAN_ONCE: "finding.input_duplicate_sources",
   INPUT_FILES_CANNOT_BE_READ_AND_WILL_BE_LEFT_OUT: "finding.files_left_out",
-  INPUT_ZIP_TOO_LARGE_TO_READ_DIRECTLY: "finding.zip_too_large",
-  TEMP_FOLDER_SPACE_INSUFFICIENT: "finding.temp_space_insufficient",
-  REQUIRED_ACTIVITIES_SOURCE_NOT_OBSERVED: "finding.activities_missing",
+  INPUT_ZIP_TOO_LARGE_TO_READ_DIRECTLY: "stop.input_too_large",
+  TEMP_FOLDER_SPACE_INSUFFICIENT: "stop.temp_space_insufficient",
+  REQUIRED_ACTIVITIES_SOURCE_NOT_OBSERVED: "stop.activities_not_found",
   ACTIVITIES_FILES_CANNOT_BE_READ: "finding.activities_unreadable",
   ACTIVITIES_FILES_HOLD_NO_RECORDS: "finding.activities_empty",
-  INPUT_READY_FOR_BOUNDED_RUN_ALL_ATTEMPT: "finding.ready",
+  INPUT_READY_FOR_BOUNDED_RUN_ALL_ATTEMPT: null,
 };
+// A finding's next step is that of the stop of its code (STOP_NEXT_KEYS), as
+// the CLI's Doctor gives it; these are the next actions of the findings whose
+// code is not a stop. The boxes say what to do when nothing stops a run, so
+// the step "run" shows nothing (null).
 export const ACTION_KEYS = {
-  SELECT_VALID_EXPORT_DIRECTORY: "action.select_folder",
-  REPAIR_RUNTIME_ENVIRONMENT: "action.repair_python",
-  OBTAIN_COMPLETE_READABLE_EXPORT: "action.get_new_export",
-  ALLOW_INPUT_ACCESS_OR_SELECT_EXPORT_FOLDER: "action.allow_input_access",
-  DOWNLOAD_EXPORT_AGAIN: "action.download_again",
-  EXTRACT_EXPORT_AND_SELECT_FOLDER: "action.extract_and_choose_folder",
-  FREE_TEMP_SPACE_OR_SELECT_EXTRACTED_FOLDER: "action.free_temp_space",
-  SELECT_EXPORT_WITH_ACTIVITIES: "action.select_export_with_activities",
-  SELECT_ONE_EXPORT_OR_USE_SNAPSHOTS: "action.select_one_export",
-  RUN_ALL: "action.run_all",
+  SELECT_VALID_EXPORT_DIRECTORY: "stop_next.input_not_directory",
+  RUN_ALL: null,
 };
 
 export const FAMILY_KEYS = {
@@ -251,7 +250,7 @@ export const USABILITY_KEYS = {
 export const NEXT_ACTION_KEYS = {
   OPTIONAL_CONFIRMATION: "doctor.next_optional",
   REVIEW_WARNING_CODES_AND_AFFECTED_SCOPES: "doctor.next_review_warnings",
-  REVIEW_EXCLUDED_FIT_EVIDENCE: "doctor.next_review_fit",
+  REVIEW_EXCLUDED_FIT_EVIDENCE: "doctor.next_review_left_out",
 };
 export const WARNING_KEYS = {
   ACTIVITY_FIT_LINK_AMBIGUOUS: "warning.activity_fit_link_ambiguous",
@@ -347,25 +346,20 @@ export function progressMessage(progress) {
   return { key: STAGE_KEYS[stage], params: {}, keyParams: {} };
 }
 
-// The page says itself that an export can be normalized, and its line of
-// what to do next follows the boxes, so the finding that the input is ready
-// and the next step "run" are not shown (the text book of stage B0).
-const QUIET_FINDINGS = new Set(["INPUT_READY_FOR_BOUNDED_RUN_ALL_ATTEMPT"]);
-const QUIET_ACTIONS = new Set(["RUN_ALL"]);
-
-// A pre-run finding, and what to do next when the check names an action.
+// A pre-run finding, and what to do next when it has a step. A finding that
+// keeps the run from starting also gives its code to quote, as a stop does.
 export function findingMessages(finding) {
-  if (QUIET_FINDINGS.has(finding?.message_id)) {
+  const key = lookup(FINDING_KEYS, finding?.message_id, "error.unknown");
+  if (key === null) {
     return [];
   }
-  const messages = [
-    { key: lookup(FINDING_KEYS, finding?.message_id, "error.unknown"), params: {}, keyParams: {} },
-  ];
-  const action = QUIET_ACTIONS.has(finding?.next_action_id)
-    ? null
-    : lookup(ACTION_KEYS, finding?.next_action_id, null);
-  if (action !== null) {
-    messages.push(nextStep(action));
+  const messages = [{ key, params: {}, keyParams: {} }];
+  const step = lookup(STOP_NEXT_KEYS, finding?.code, null) ?? lookup(ACTION_KEYS, finding?.next_action_id, null);
+  if (step !== null) {
+    messages.push(nextStep(step));
+  }
+  if (finding?.severity === "ERROR" && typeof finding.code === "string") {
+    messages.push({ key: "error.code", params: { code: finding.code }, keyParams: {} });
   }
   return messages;
 }

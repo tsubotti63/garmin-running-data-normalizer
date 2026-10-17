@@ -283,26 +283,54 @@ test("an unexpected stop of an action has words of its own", () => {
   ]);
 });
 
-test("pre-run findings show the finding and then the next step", () => {
+test("pre-run findings say what a run would stop with, and its next step", () => {
+  // Stage B2b: a finding whose code is a stop has the words and the next
+  // step of that stop, as the CLI's Doctor gives the next step, and one that
+  // keeps the run from starting gives its code, as a stop does.
+  const finding = (code, message_id, next_action_id, severity = "ERROR") =>
+    findingMessages({ code, severity, message_id, next_action_id }).map(shape);
   assert.deepEqual(
-    findingMessages({
-      message_id: "REQUIRED_ACTIVITIES_SOURCE_NOT_OBSERVED",
-      next_action_id: "SELECT_EXPORT_WITH_ACTIVITIES",
-    }).map(shape),
+    finding("ACTIVITIES_NOT_FOUND", "REQUIRED_ACTIVITIES_SOURCE_NOT_OBSERVED", "SELECT_EXPORT_WITH_ACTIVITIES"),
     [
-      ["finding.activities_missing", {}, {}],
-      ["next.label", {}, { step: "action.select_export_with_activities" }],
+      ["stop.activities_not_found", {}, {}],
+      ["next.label", {}, { step: "stop_next.activities_not_found" }],
+      ["error.code", { code: "ACTIVITIES_NOT_FOUND" }, {}],
+    ],
+  );
+  // Two findings have a next action that names another step; they take the
+  // next step of the stop of their code.
+  assert.deepEqual(
+    finding("INPUT_DISCOVERY_FAILED", "INPUT_COULD_NOT_BE_SAFELY_DISCOVERED", "OBTAIN_COMPLETE_READABLE_EXPORT"),
+    [
+      ["stop.input_discovery_failed", {}, {}],
+      ["next.label", {}, { step: "stop_next.input_discovery_failed" }],
+      ["error.code", { code: "INPUT_DISCOVERY_FAILED" }, {}],
+    ],
+  );
+  assert.deepEqual(
+    finding("ACTIVITIES_EMPTY", "ACTIVITIES_FILES_HOLD_NO_RECORDS", "SELECT_EXPORT_WITH_ACTIVITIES"),
+    [
+      ["finding.activities_empty", {}, {}],
+      ["next.label", {}, { step: "stop_next.activities_empty" }],
+      ["error.code", { code: "ACTIVITIES_EMPTY" }, {}],
+    ],
+  );
+  // A finding whose code is not a stop takes the next step of its action.
+  assert.deepEqual(
+    finding("INPUT_DIRECTORY_INVALID", "INPUT_DIRECTORY_MUST_BE_LOCAL_DIRECTORY", "SELECT_VALID_EXPORT_DIRECTORY"),
+    [
+      ["finding.input_directory", {}, {}],
+      ["next.label", {}, { step: "stop_next.input_not_directory" }],
+      ["error.code", { code: "INPUT_DIRECTORY_INVALID" }, {}],
     ],
   );
   assert.deepEqual(findingMessages({}).map(shape), [["error.unknown", {}, {}]]);
   // The page says itself that the export is ready, and the boxes say what to
   // do next, so neither the ready finding nor the step "run" is shown.
+  assert.deepEqual(finding("RUN_ALL_NOT_EVALUATED", "INPUT_READY_FOR_BOUNDED_RUN_ALL_ATTEMPT", "RUN_ALL", "INFO"), []);
+  // A note that does not stop the run has no next step and no code.
   assert.deepEqual(
-    findingMessages({ message_id: "INPUT_READY_FOR_BOUNDED_RUN_ALL_ATTEMPT", next_action_id: "RUN_ALL" }),
-    [],
-  );
-  assert.deepEqual(
-    findingMessages({ message_id: "INPUT_HOLDS_THE_SAME_EXPORT_MORE_THAN_ONCE", next_action_id: "RUN_ALL" }).map(shape),
+    finding("INPUT_DUPLICATE_SOURCES", "INPUT_HOLDS_THE_SAME_EXPORT_MORE_THAN_ONCE", "RUN_ALL", "WARNING"),
     [["finding.input_duplicate_sources", {}, {}]],
   );
 });

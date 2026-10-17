@@ -299,7 +299,8 @@ class V14DiagnosticsTest(unittest.TestCase):
         cases = (
             (True, False, "Completed. Outputs are available within the declared Product contract."),
             (False, False, "Completed with warnings. Outputs are available"),
-            (True, True, "This is not a fatal run failure. Valid Activities output is available"),
+            # Exit 3 leaves out files and rows as well as FIT data (stage B2b).
+            (True, True, "This is not a fatal run failure. Outputs are available; review what was left out"),
         )
         for optional, bad_fit, wording in cases:
             with self.subTest(wording=wording), tempfile.TemporaryDirectory() as directory:
