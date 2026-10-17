@@ -405,8 +405,9 @@ test("family rows are sorted, fall back for unknown names, and say their color",
 });
 
 test("the result table shows a run whose cancellation came after its output, when its result is known", () => {
-  // Until stage A5c, the table was shown for a finished run only.
-  const rows = familyRows(FINISHED.result);
+  // Until stage A5c, the table was shown for a finished run only. Its last
+  // row holds the warnings of no family (stage B2c).
+  const rows = [...familyRows(FINISHED.result), flow.otherRow(FINISHED.result)];
   assert.deepEqual(flow.resultRows(FINISHED), rows);
   assert.deepEqual(flow.resultRows({ ...FINISHED, state: "finished_after_cancel" }), rows);
   assert.deepEqual(flow.resultRows({ state: "finished_after_cancel", result: null }), []);
@@ -692,37 +693,86 @@ const CHECKED = {
   },
 };
 
-test("the output check shows the returned counts and one line per kind of warning", () => {
+// A run with warnings of two families and of no family, one by one as the
+// run gives them (stage B2c).
+const WARNED = {
+  status: "PASS_WITH_WARNINGS",
+  exit_code: 0,
+  warning_count: 5,
+  families: {
+    fit: { status: "PARTIAL", record_count: 3, warning_count: 1 },
+    gear: { status: "SKIPPED_NOT_PRESENT", record_count: 0, warning_count: 2 },
+  },
+  other_warning_counts: { candidate: 0, relationship: 1, input: 1 },
+  warning_items: [
+    { code: "DATA_FILE_LEFT_OUT", family: null, dataset: null, count: 2 },
+    { code: "RELATIONSHIP_UNRESOLVED_VALID_LINK", family: "relationships", dataset: null, count: 4 },
+    { code: "OPTIONAL_FAMILY_NOT_PRESENT", family: "gear", dataset: null, count: null },
+    { code: "FIT_PARSE_INCOMPLETE", family: "fit", dataset: null, count: 3 },
+    { code: "VALUES_DISAGREE", family: "gear", dataset: null, count: 1234 },
+  ],
+};
+
+test("the output check shows the returned counts and the warnings of the run with their counts", () => {
+  // The handoff line no longer counts the warnings; the warnings of the run
+  // follow, one by one, under their total (stage B2c).
   assert.deepEqual(
-    outputCheckMessages(CHECKED).map(shape),
+    outputCheckMessages(CHECKED, WARNED).map(shape),
     [
-      ["output_check.handoff_pass", { datasets: 17, relationships: 6, warnings: 3 }, {}],
+      ["output_check.handoff_pass", { datasets: 17, relationships: 6 }, {}],
       ["doctor.usability_warnings", {}, {}],
       ["next.label", {}, { step: "doctor.next_review_warnings" }],
-      ["warning.fit_parse_incomplete", { code: "FIT_PARSE_INCOMPLETE" }, {}],
-      ["warning.optional_family_not_present", { code: "OPTIONAL_FAMILY_NOT_PRESENT" }, {}],
+      ["output_check.warnings", { total: 5, families: 3, kinds: 2, other: 2 }, {}],
+      ["warning.fit_parse_incomplete", { count: 3, code: "FIT_PARSE_INCOMPLETE" }, { name: "family.fit" }],
+      ["warning.optional_family_not_present", { count: "—", code: "OPTIONAL_FAMILY_NOT_PRESENT" }, { name: "family.gear" }],
+      ["warning.values_disagree", { count: 1234, code: "VALUES_DISAGREE" }, { name: "family.gear" }],
+      ["warning.relationship_unresolved", { count: 4, code: "RELATIONSHIP_UNRESOLVED_VALID_LINK" }, { name: "family.other_relationship" }],
+      ["warning.data_file_left_out", { count: 2, code: "DATA_FILE_LEFT_OUT" }, { name: "family.other_input" }],
       ["output_check.bundle_suggested", {}, {}],
     ],
   );
-  const counts = outputCheckMessages({ ...CHECKED, handoff: { ...CHECKED.handoff, dataset_count: 5 } });
+  const counts = outputCheckMessages({ ...CHECKED, handoff: { ...CHECKED.handoff, dataset_count: 5 } }, WARNED);
   assert.equal(counts[0].params.datasets, 5);
 });
 
-test("the relationship warnings of an output check have their own lines", () => {
-  const checked = {
-    ...CHECKED,
-    doctor: {
-      ...CHECKED.doctor,
-      warning_codes: ["ACTIVITY_FIT_LINK_AMBIGUOUS", "RELATIONSHIP_UNRESOLVED_VALID_LINK"],
-    },
-  };
-  assert.deepEqual(
-    outputCheckMessages(checked).map(shape).slice(3, 5),
-    [
-      ["warning.activity_fit_link_ambiguous", { code: "ACTIVITY_FIT_LINK_AMBIGUOUS" }, {}],
-      ["warning.relationship_unresolved", { code: "RELATIONSHIP_UNRESOLVED_VALID_LINK" }, {}],
-    ],
-  );
+test("the warnings of no family come last, and their totals come from the counts of the run", () => {
+  // The totals are the counts that the run gives, never the items counted
+  // again: an item that the server left out does not change them.
+  const fewer = { ...WARNED, warning_items: WARNED.warning_items.slice(1, 2) };
+  assert.deepEqual(flow.warningTotals(fewer), { total: 5, families: 3, kinds: 2, other: 2 });
+  assert.deepEqual(flow.warningMessages(fewer).map(shape), [
+    ["output_check.warnings", { total: 5, families: 3, kinds: 2, other: 2 }, {}],
+    ["warning.relationship_unresolved", { count: 4, code: "RELATIONSHIP_UNRESOLVED_VALID_LINK" }, { name: "family.other_relationship" }],
+  ]);
+  const candidate = { ...WARNED, warning_items: [{ code: "LACTATE_CANDIDATE_AUTHORITY_UNRESOLVED", family: "lactate_threshold", dataset: null, count: 2 }] };
+  assert.deepEqual(flow.warningMessages(candidate).map(shape)[1][2], { name: "family.other_candidate" });
+  // A family that the page does not know keeps its own name.
+  const unknown = { ...WARNED, warning_items: [{ code: "NEW_CODE", family: "future_family", dataset: null, count: 1 }] };
+  assert.deepEqual(flow.warningMessages(unknown).map(shape)[1], ["warning.other", { count: 1, code: "NEW_CODE", name: "future_family" }, {}]);
+  // A run without warnings has no warning lines.
+  assert.deepEqual(flow.warningMessages(FINISHED.result), []);
+  assert.deepEqual(flow.warningMessages(null), []);
+});
+
+test("the result table ends with the warnings of no family and the total", () => {
+  assert.deepEqual(flow.otherRow(WARNED), {
+    family: null,
+    nameKey: "family.other",
+    statusKey: "family_status.other_warnings",
+    kind: "warn",
+    records: null,
+    warnings: 2,
+  });
+  assert.deepEqual(flow.otherRow(FINISHED.result).statusKey, "family_status.no_warnings");
+  assert.deepEqual(flow.otherRow(FINISHED.result).kind, "none");
+  assert.deepEqual(shape(flow.resultTotal({ ...FINISHED, result: WARNED })), [
+    "result.total_warnings",
+    { total: 5, families: 3, other: 2 },
+    {},
+  ]);
+  assert.equal(flow.resultTotal({ ...FINISHED, state: "failed" }), null);
+  assert.equal(flow.resultTotal({ state: "finished_after_cancel", result: null }), null);
+  assert.equal(flow.resultTotal(null), null);
 });
 
 test("a clean output check has no warning lines and no bundle suggestion", () => {
@@ -751,14 +801,11 @@ test("unknown output check values fall back without failing", () => {
       handoff: { status: "NOT_PASS" },
       doctor: { usability_scope: "toString", next_action_id: "__proto__", warning_codes: ["NEW_CODE"] },
     }).map((message) => [message.key, message.params]),
-    [
-      ["error.unknown", {}],
-      ["warning.other", { code: "NEW_CODE" }],
-    ],
+    [["error.unknown", {}]],
   );
   assert.deepEqual(outputCheckMessages(null).map((message) => message.key), ["error.unknown"]);
   assert.deepEqual(
-    outputCheckMessages({ doctor: { warning_codes: "FIT_PARSE_INCOMPLETE" } }).map((message) => message.key),
+    outputCheckMessages(null, { warning_count: "5", warning_items: "VALUES_DISAGREE" }).map((message) => message.key),
     ["error.unknown"],
   );
 });

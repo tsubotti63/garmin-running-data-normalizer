@@ -316,6 +316,30 @@ class GuiMessageCoverageTest(unittest.TestCase):
                 self.assertEqual(english[key], sentence(NEXT_ACTIONS[action]))
         self.assertEqual(set(SAFE_WARNING_CODES), set(flow_table("WARNING_KEYS")))
 
+    def test_a_warning_says_a_count_only_where_the_run_gives_one(self) -> None:
+        # Stage B2c: the words of a warning hold its count only for a code
+        # whose every warning in a run has one; each names its family or
+        # group and its code.
+        source = (SOURCE / "run_all.py").read_text(encoding="utf-8")
+        blocks = re.findall(r"warnings\.append\(\s*\{(.*?)\}\s*\)", source, re.DOTALL)
+        counted: dict[str, set[bool]] = {}
+        for block in blocks:
+            code = re.search(r'"code": "([A-Z_]+)"', block)
+            assert code is not None, block
+            counted.setdefault(code.group(1), set()).add('"count":' in block)
+        self.assertEqual(sum(1 for _block in blocks), 21)
+        catalogs = {language: load_catalog(language) for language in LANGUAGES}
+        keys = flow_table("WARNING_KEYS")
+        for code, key in keys.items():
+            for language, catalog in catalogs.items():
+                with self.subTest(code=code, language=language):
+                    self.assertIn("{name}", catalog[key])
+                    self.assertIn("{code}", catalog[key])
+                    if "{count}" in catalog[key]:
+                        self.assertEqual(counted.get(code, {True}), {True})
+        for language, catalog in catalogs.items():
+            self.assertIn("{name}", catalog["warning.other"])
+
     def test_every_family_and_family_status_has_a_name(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             result = run_all(ROOT / "examples/synthetic/garmin_export", Path(directory) / "output")
