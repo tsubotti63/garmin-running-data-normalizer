@@ -20,6 +20,7 @@ from garmin_running_data_normalizer.diagnostics.doctor import doctor_input
 from garmin_running_data_normalizer.gui.runs import RUN_STATUSES
 from garmin_running_data_normalizer.gui.server import LANGUAGES, STATIC_FILES
 from garmin_running_data_normalizer.run_all import PROGRESS_STAGES, PROGRESS_STEPS, run_all
+from garmin_running_data_normalizer.stops import PAGE_STOPS, PAGE_WORDING, STOPS
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -163,6 +164,39 @@ class GuiCatalogTest(unittest.TestCase):
                     self.assertNotIn(sink, source)
 
 
+def sentence(text: str) -> str:
+    """The words of a table as the page writes them: a capital first, and a
+    full stop at the end."""
+    text = text[0].upper() + text[1:]
+    return text if text.endswith((".", "!", "?")) else f"{text}."
+
+
+class GuiStopWordsTest(unittest.TestCase):
+    # Stage B2a: the English words of every stop on the page come from the
+    # tables of stops.py; the Japanese words come from the text book of B0.
+
+    def test_each_code_of_the_page_is_in_one_table(self) -> None:
+        codes = set(flow_table("STOP_KEYS"))
+        self.assertEqual(set(STOPS) & set(PAGE_STOPS), set())
+        for code in codes:
+            with self.subTest(code=code):
+                self.assertTrue((code in STOPS) != (code in PAGE_STOPS))
+        # The page's tables hold only codes that the page shows, and its
+        # wording only codes of the CLI's table.
+        self.assertLessEqual(set(PAGE_STOPS), codes)
+        self.assertLessEqual(set(PAGE_WORDING), set(STOPS) & codes)
+
+    def test_the_english_words_of_the_page_come_from_the_tables(self) -> None:
+        english = load_catalog("en")
+        whats = flow_table("STOP_KEYS")
+        next_steps = flow_table("STOP_NEXT_KEYS")
+        for code in whats:
+            stop = PAGE_WORDING.get(code) or STOPS.get(code) or PAGE_STOPS[code]
+            with self.subTest(code=code):
+                self.assertEqual(english[whats[code]], sentence(stop.what))
+                self.assertEqual(english[next_steps[code]], sentence(stop.next_step))
+
+
 class GuiMessageCoverageTest(unittest.TestCase):
     def test_every_error_code_has_a_message(self) -> None:
         codes = (
@@ -183,14 +217,14 @@ class GuiMessageCoverageTest(unittest.TestCase):
             | codes_in("diagnostics/support_bundle.py", r'SupportBundleError\(\s*"([A-Z_]+)"')
         )
         # Exactly the codes that can occur: none without a message, none stale.
-        self.assertEqual(sorted(codes), sorted(flow_table("ERROR_KEYS")))
+        self.assertEqual(sorted(codes), sorted(flow_table("STOP_KEYS")))
 
     def test_every_error_message_has_a_next_step(self) -> None:
-        messages = {key.removeprefix("error.") for key in flow_table("ERROR_KEYS").values()}
-        next_steps = flow_table("ERROR_NEXT_KEYS")
-        # Exactly the messages in use, and the fallback for unknown codes.
-        self.assertEqual(sorted(next_steps), sorted(messages | {"unknown"}))
-        self.assertTrue(all(step.startswith("next.") for step in next_steps.values()))
+        whats = flow_table("STOP_KEYS")
+        next_steps = flow_table("STOP_NEXT_KEYS")
+        self.assertEqual(sorted(next_steps), sorted(whats))
+        self.assertTrue(all(key.startswith("stop.") for key in whats.values()))
+        self.assertTrue(all(step.startswith("stop_next.") for step in next_steps.values()))
 
     def test_output_actions_pass_on_codes_from_doctor_and_the_bundle_only(self) -> None:
         # The test above collects the codes of these two errors; any other

@@ -785,6 +785,20 @@ class DocumentTableTest(unittest.TestCase):
         ]
         self.assertEqual(rows, expected, "\n" + "\n".join(expected))
 
+    def test_the_gui_design_gives_the_table_of_the_codes_of_the_gui(self) -> None:
+        # The codes that only the GUI gives are not in the CLI's table; the
+        # GUI design lists them, made from stops.PAGE_STOPS (stage B2a).
+        text = (ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8")
+        heading = "\n### Codes that only the GUI gives\n"
+        self.assertTrue(heading in text, "the GUI design has no table of the codes of the GUI")
+        section = text.split(heading, 1)[1].split("\n#", 1)[0]
+        rows = [line for line in section.splitlines() if line.startswith("| `")]
+        expected = [
+            f"| `{code}` | {cell(stop.what)} | {cell(stop.next_step)} |"
+            for code, stop in stops_module().PAGE_STOPS.items()
+        ]
+        self.assertEqual(rows, expected, "\n" + "\n".join(expected))
+
 
 if __name__ == "__main__":
     unittest.main()

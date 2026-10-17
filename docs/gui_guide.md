@@ -146,17 +146,17 @@ the code when you ask for help. Do not attach your Export or output.
 
 | Code | What happened | What to do |
 |---|---|---|
-| `PATH_NOT_ABSOLUTE` | The path is not a full path. | Enter a full path: it starts with `/` on macOS and Linux, and with a drive such as `C:\` on Windows. |
-| `FOLDER_NOT_READABLE` | The folder cannot be opened. | On a Mac, allow access when asked, or in System Settings > Privacy & Security. |
-| `ACTIVITIES_NOT_FOUND` | No activities were found. | Choose the folder extracted from the Export ZIP. |
-| `OUTPUT_EXISTS` | A folder with this name already exists. | Choose another name. |
-| `OUTPUT_NAME_INVALID` | The name cannot be used, or the path is too long. | Follow the name rules, or use a shorter name. |
-| `OUTPUT_PARENT_NOT_WRITABLE` | The output location cannot be written. | Choose another folder, or check its permissions. |
-| `OUTPUT_PATH_TOO_LONG` | The output's paths would be too long for Windows. | Choose a location closer to the top of the drive, or a shorter name. |
-| `INPUT_CHANGED` | Files in the Export changed during the run. | Run again when no other program is changing the folder. |
-| `OUTPUT_PUBLISH_FAILED` | The output folder could not be written. | Check the free space and the permissions. On Windows, use a shorter location and name. |
-| `HANDOFF_INVALID` | The output folder does not match what the run wrote. | If you did not change it, report the code. |
-| `SUPPORT_BUNDLE_EXISTS` | A Support Bundle with this name already exists. | Move or rename the existing file. |
+| `PATH_NOT_ABSOLUTE` | The place is not a full path. | Choose it with Choose…, or paste a place that starts with / on a Mac or Linux, or with a drive such as C:\\ on Windows. |
+| `FOLDER_NOT_READABLE` | This app is not allowed to open this folder. | On a Mac, allow it when you are asked, or in System Settings > Privacy & Security. |
+| `ACTIVITIES_NOT_FOUND` | The input holds no Activities file. | Select an Export that contains your Activities. |
+| `OUTPUT_EXISTS` | The output folder is there already. | Choose another name for the output. |
+| `OUTPUT_NAME_INVALID` | The output folder name is too long or cannot be used on every system. | Choose a name of at most 200 bytes that does not start with a dot, end with a dot or a space, hold any of <>:"/\\\|?*, or name a device of Windows. |
+| `OUTPUT_PARENT_NOT_WRITABLE` | This app cannot write in the folder for the output. | Choose another folder, or allow this app to write in it. |
+| `OUTPUT_PATH_TOO_LONG` | The output path is too long. | Choose a shorter folder or name, or on Windows turn on long paths. |
+| `INPUT_CHANGED` | The input changed while it was read. | Press Run normalization again when no other app changes the Export. |
+| `OUTPUT_PUBLISH_FAILED` | The output could not be written. | Check the free space and the permissions of the folder for the output, and press Run normalization again. |
+| `HANDOFF_INVALID` | The files of the output do not pass their checks. | Do not change the files of an output; normalize again into a new folder. |
+| `SUPPORT_BUNDLE_EXISTS` | A file or a link is there already in the place of the Support Bundle. | Move or rename it, and press the button again. |
 
 For other codes, follow the next step on the page.
 

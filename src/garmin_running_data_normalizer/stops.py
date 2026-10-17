@@ -320,6 +320,119 @@ NEXT_ACTIONS: dict[str, str] = {
 }
 
 
+# The codes that only the GUI gives: its server, its folder list, and the
+# actions on a finished output (stage B2a). The CLI never stops with them.
+# The page shows their words, as it shows those of STOPS.
+_ENTRIES = Stop("the entries could not be read", "check the entries and press the button again")
+PAGE_STOPS: dict[str, Stop] = {
+    "PATH_NOT_ABSOLUTE": Stop(
+        "the place is not a full path",
+        "choose it with Choose…, or paste a place that starts with / on a Mac or "
+        "Linux, or with a drive such as C:\\ on Windows",
+    ),
+    "PATH_INVALID": _ENTRIES,
+    "INPUT_PATH_INVALID": _ENTRIES,
+    "OUTPUT_PARENT_INVALID": _ENTRIES,
+    "REQUEST_INVALID": _ENTRIES,
+    "FOLDER_NOT_FOUND": Stop(
+        "the folder does not exist", "check the place, or choose the folder with Choose…"
+    ),
+    "NOT_A_FOLDER": Stop("this is a file, not a folder", "choose a folder"),
+    "FOLDER_NOT_READABLE": Stop(
+        "this app is not allowed to open this folder",
+        "on a Mac, allow it when you are asked, or in System Settings > Privacy & Security",
+    ),
+    "RUN_ACTIVE": Stop(
+        "a normalization is running in another tab or window", "wait for it to finish, or cancel it"
+    ),
+    "RUN_START_FAILED": Stop(
+        "the normalization could not be started",
+        "press Run normalization again; if it stops again, please report the code",
+    ),
+    "NO_FINISHED_OUTPUT": Stop("there is no finished output to check yet", "normalize first"),
+    "OUTPUT_CHANGED": Stop(
+        "the output folder does not match what the normalization wrote",
+        "if you did not change the folder, please report the code; if you did, normalize again",
+    ),
+    "OUTPUT_NOT_AVAILABLE": Stop(
+        "the output folder or a file in it is missing, or was replaced by a link",
+        "check that the output folder is still where it was",
+    ),
+    "SUPPORT_BUNDLE_NOT_WRITTEN": Stop(
+        "the Support Bundle could not be written",
+        "check that the folder for it is still there and that this app can write in it",
+    ),
+    "OPEN_NOT_AVAILABLE": Stop(
+        "no program to open it (xdg-open) was found",
+        "open the output folder from your file manager, such as Finder or File Explorer",
+    ),
+    "OPEN_FAILED": Stop(
+        "the system could not open it",
+        "open the output folder from your file manager, such as Finder or File Explorer",
+    ),
+}
+
+# The words of the page for codes of STOPS whose words name what the CLI does
+# (its commands, Run-All, registering, or a file to give) or what the page
+# cannot do yet (stage B2a). The meaning is the same as in STOPS.
+PAGE_WORDING: dict[str, Stop] = {
+    "INPUT_CHANGED": Stop(
+        "the input changed while it was read",
+        "press Run normalization again when no other app changes the Export",
+    ),
+    # Snapshots cannot be used on the page until stage B4.
+    "INPUT_MULTIPLE_EXPORTS": Stop(
+        "the input holds more than one Export, or Exports of more than one account",
+        "select one Export to normalize",
+    ),
+    "OUTPUT_PUBLISH_FAILED": Stop(
+        "the output could not be written",
+        "check the free space and the permissions of the folder for the output, and press "
+        "Run normalization again",
+    ),
+    "RUN_ALL_FAILED": Stop(
+        "the normalization stopped unexpectedly",
+        "press Run normalization again; if it stops again, please report the code",
+    ),
+    "COMMAND_FAILED": Stop(
+        "this app stopped unexpectedly while it did this",
+        "press the button again; if it stops again, please report the code",
+    ),
+    # The page checks the output that it made; it does not take another folder.
+    "HANDOFF_INVALID": Stop(
+        "the files of the output do not pass their checks",
+        "do not change the files of an output; normalize again into a new folder",
+    ),
+    "DOCTOR_AUTHORITY_INVALID": Stop(
+        "the diagnostics of the output are missing, invalid, or disagree",
+        "do not change the files of an output; normalize again into a new folder",
+    ),
+    "DOCTOR_UNREGISTERED_DIAGNOSTIC": Stop(
+        "the output holds a diagnostic code that this version of the app does not know",
+        "use the version of this app that made the output, or normalize again into a new folder",
+    ),
+    "DOCTOR_VERSION_UNSUPPORTED": Stop(
+        "a version of this app that this version does not know made the output",
+        "use the version of this app that made the output, or normalize again into a new folder",
+    ),
+    "SUPPORT_BUNDLE_AUTHORITY_INVALID": Stop(
+        "the diagnostics of the output do not allow a Support Bundle",
+        "normalize again into a new folder, and make the Support Bundle from that output",
+    ),
+    # The page makes the Support Bundle next to the output; it does not take
+    # another place until stage B5.
+    "SUPPORT_BUNDLE_EXISTS": Stop(
+        "a file or a link is there already in the place of the Support Bundle",
+        "move or rename it, and press the button again",
+    ),
+    "SUPPORT_BUNDLE_PATH_UNSAFE": Stop(
+        "the output folder is a link or is no longer there",
+        "check that the output folder is still where it was",
+    ),
+}
+
+
+
 def stop_line(code: str, message: str) -> str:
     """The CLI's line for a stop: what happened, as ``message`` says it, and
     the next step of ``code``."""
@@ -333,4 +446,12 @@ def stop_text(code: str) -> str:
     return f"{stop.what}; {stop.next_step}"
 
 
-__all__ = ["NEXT_ACTIONS", "STOPS", "Stop", "stop_line", "stop_text"]
+__all__ = [
+    "NEXT_ACTIONS",
+    "PAGE_STOPS",
+    "PAGE_WORDING",
+    "STOPS",
+    "Stop",
+    "stop_line",
+    "stop_text",
+]
