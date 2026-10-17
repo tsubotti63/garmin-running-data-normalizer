@@ -3,7 +3,6 @@ import { test } from "node:test";
 
 import {
   ACTIVE_STATES,
-  ERROR_KEYS,
   FINISHED_STATES,
   TERMINAL_STATES,
   announcement,
@@ -208,13 +207,13 @@ test("progress events become messages", () => {
 
 test("an error shows what happened, the next step, and its code", () => {
   assert.deepEqual(errorMessages("OUTPUT_EXISTS").map(shape), [
-    ["error.output_exists", {}, {}],
-    ["next.label", {}, { step: "next.choose_another_name" }],
+    ["stop.output_exists", {}, {}],
+    ["next.label", {}, { step: "stop_next.output_exists" }],
     ["error.code", { code: "OUTPUT_EXISTS" }, {}],
   ]);
   assert.deepEqual(errorMessages("RUN_ALL_FAILED").map(shape), [
-    ["error.internal", {}, {}],
-    ["next.label", {}, { step: "next.report_code" }],
+    ["stop.run_all_failed", {}, {}],
+    ["next.label", {}, { step: "stop_next.run_again" }],
     ["error.code", { code: "RUN_ALL_FAILED" }, {}],
   ]);
   for (const code of ["NOT_A_CODE", "__proto__", "toString"]) {
@@ -234,49 +233,54 @@ test("a folder or file that cannot be opened is named after the error", () => {
   assert.deepEqual(
     errorMessages("INPUT_NOT_READABLE", { place: "DI_CONNECT/DI-Connect-Fitness", more: 2 }).map(shape),
     [
-      ["error.input_not_readable", {}, {}],
+      ["stop.input_not_readable", {}, {}],
       ["error.place", { place: "DI_CONNECT/DI-Connect-Fitness" }, {}],
       ["error.place_more", { more: 2 }, {}],
-      ["next.label", {}, { step: "next.allow_input_access" }],
+      ["next.label", {}, { step: "stop_next.input_not_readable" }],
       ["error.code", { code: "INPUT_NOT_READABLE" }, {}],
     ],
   );
   assert.deepEqual(
     errorMessages("INPUT_NOT_READABLE", { place: "", more: 0 }).map((message) => message.key),
-    ["error.input_not_readable", "error.place_input_itself", "next.label", "error.code"],
+    ["stop.input_not_readable", "error.place_input_itself", "next.label", "error.code"],
   );
   // A detail of another form names nothing.
   for (const detail of [undefined, null, {}, { place: 3 }, "DI_CONNECT"]) {
     assert.deepEqual(
       errorMessages("INPUT_NOT_READABLE", detail).map((message) => message.key),
-      ["error.input_not_readable", "next.label", "error.code"],
+      ["stop.input_not_readable", "next.label", "error.code"],
     );
   }
 });
 
-test("every known error code has its own next step and shows its code", () => {
-  for (const code of Object.keys(ERROR_KEYS)) {
+test("every known stop code has words of its own, a next step, and shows its code", () => {
+  // Each code says what happened in words of its own (stage B2a); codes
+  // share a next step only as they share it in stops.py.
+  const whats = new Set();
+  for (const code of Object.keys(flow.STOP_KEYS)) {
     const [what, next, quoted] = errorMessages(code);
-    assert.equal(what.key, ERROR_KEYS[code], code);
+    assert.equal(what.key, flow.STOP_KEYS[code], code);
+    assert.match(what.key, /^stop\./, code);
     assert.equal(next.key, "next.label", code);
-    assert.match(next.keyParams.step, /^next\./, code);
-    // An unexpected error of a check is shown as an error that the page does
-    // not know, whose next step says what the CLI's says (stage A5b-2).
-    if (code !== "COMMAND_FAILED") {
-      assert.notEqual(next.keyParams.step, "next.reload_page", code);
-    }
+    assert.equal(next.keyParams.step, flow.STOP_NEXT_KEYS[code], code);
+    assert.match(next.keyParams.step, /^stop_next\./, code);
     assert.deepEqual(shape(quoted), ["error.code", { code }, {}], code);
+    whats.add(what.key);
   }
+  assert.deepEqual(Object.keys(flow.STOP_NEXT_KEYS).sort(), Object.keys(flow.STOP_KEYS).sort());
+  // Only the four codes of entries that could not be read share their words.
+  assert.equal(whats.size, Object.keys(flow.STOP_KEYS).length - 3);
 });
 
-test("an unexpected error of a check is shown as an error that the page does not know", () => {
-  assert.deepEqual(
-    errorMessages("COMMAND_FAILED").map(shape),
-    errorMessages("SOMETHING_NEW").map(shape).map((item) =>
-      item[0] === "error.code" ? ["error.code", { code: "COMMAND_FAILED" }, {}] : item,
-    ),
-  );
-  assert.equal(errorMessages("COMMAND_FAILED")[1].keyParams.step, "next.reload_page");
+test("an unexpected stop of an action has words of its own", () => {
+  // COMMAND_FAILED says that this app stopped while it did the action, as the
+  // CLI says it of a command (stage B2a); only a code that the page does not
+  // know reads as an error that it does not know.
+  assert.deepEqual(errorMessages("COMMAND_FAILED").map(shape), [
+    ["stop.command_failed", {}, {}],
+    ["next.label", {}, { step: "stop_next.command_failed" }],
+    ["error.code", { code: "COMMAND_FAILED" }, {}],
+  ]);
 });
 
 test("pre-run findings show the finding and then the next step", () => {
@@ -430,7 +434,11 @@ test("the headline of the fourth box says what the exit code means", () => {
 });
 
 test("the details of a run name its output and the staging folders it left", () => {
-  assert.deepEqual(flow.resultDetails(FINISHED).map(shape), [["result.output", { path: "/path/to/output" }, {}]]);
+  // The place has a line of its own, after its label (stage B2a).
+  assert.deepEqual(flow.resultDetails(FINISHED).map(shape), [
+    ["result.output_label", {}, {}],
+    ["result.path", { path: "/path/to/output" }, {}],
+  ]);
   assert.deepEqual(flow.resultDetails({ state: "cancelled", staging_folders: [".output.run-all-1"] }).map(shape), [
     ["result.staging_left", { names: ".output.run-all-1" }, {}],
     ["next.label", {}, { step: "next.delete_staging" }],
@@ -728,13 +736,14 @@ test("unknown output check values fall back without failing", () => {
 });
 
 test("output action codes have their own messages", () => {
-  assert.equal(errorMessages("OUTPUT_PARENT_NOT_WRITABLE")[0].key, "error.output_parent_not_writable");
-  assert.equal(errorMessages("HANDOFF_INVALID")[0].key, "error.output_changed");
-  assert.equal(errorMessages("SUPPORT_BUNDLE_EXISTS")[0].key, "error.bundle_exists");
-  assert.equal(errorMessages("SUPPORT_BUNDLE_PRIVACY_SCAN_FAILED")[0].key, "error.bundle_refused");
-  assert.equal(errorMessages("OPEN_FAILED")[0].key, "error.open_failed");
+  assert.equal(errorMessages("OUTPUT_PARENT_NOT_WRITABLE")[0].key, "stop.output_parent_not_writable");
+  assert.equal(errorMessages("HANDOFF_INVALID")[0].key, "stop.handoff_invalid");
+  assert.equal(errorMessages("SUPPORT_BUNDLE_EXISTS")[0].key, "stop.support_bundle_exists");
+  assert.equal(errorMessages("SUPPORT_BUNDLE_PRIVACY_SCAN_FAILED")[0].key, "stop.support_bundle_privacy_scan_failed");
+  assert.equal(errorMessages("SUPPORT_BUNDLE_PRIVACY_SCAN_FAILED")[1].keyParams.step, "stop_next.bundle_defect");
+  assert.equal(errorMessages("OPEN_FAILED")[0].key, "stop.open_failed");
   assert.equal(errorMessages("PUBLISH_FAILED")[0].key, "error.unknown");
-  assert.equal(errorMessages("OUTPUT_PUBLISH_FAILED")[1].keyParams.step, "next.check_space_and_path");
+  assert.equal(errorMessages("OUTPUT_PUBLISH_FAILED")[1].keyParams.step, "stop_next.output_publish_failed");
 });
 
 test("the announcer speaks at a new stage, a stall, a cancellation, and the end", () => {

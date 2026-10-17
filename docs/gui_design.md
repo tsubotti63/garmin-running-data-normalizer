@@ -443,7 +443,14 @@ Processing:
   checks the name that is entered.
 - The server returns error codes, and the page turns them into messages in the
   selected language. Every error shows what happened, the next step, and the
-  code to quote in a support request.
+  code to quote in a support request. Each code has words of its own (stage
+  B2a). The English words come from the tables of `stops.py`: the CLI's
+  table of stops, the table of the codes that only the GUI gives (below), and
+  the page's wording for the codes whose words in the CLI's table name a
+  command, Run-All, registering, a file to give, or what the page cannot do
+  yet. The Japanese words come from the text book of stage B0. Tests check the
+  catalogs against the tables, and the stops that the GUI guides quote against
+  the catalogs.
 - The Japanese catalog uses these terms: 正規化, 取り込む, 既存のスナップショット,
   正規化のしかた, 問い合わせ用ファイル (the English term Support Bundle appears
   only inside its explanation), 目印のファイル (`.single-writer.lock`), 出力の確認
@@ -453,6 +460,31 @@ Processing:
 - CLI output and the generated Run-All documents stay in English.
 - The GUI guide is written in English and Japanese:
   [GUI Guide](gui_guide.md) and [GUI の手引き](gui_guide.ja.md).
+
+### Codes that only the GUI gives
+
+The GUI's server, its folder list, and the actions on a finished output give
+these codes; the CLI never stops with them. The table is made from
+`stops.PAGE_STOPS`.
+
+| Code | What it means | Next step |
+|---|---|---|
+| `PATH_NOT_ABSOLUTE` | the place is not a full path | choose it with Choose…, or paste a place that starts with / on a Mac or Linux, or with a drive such as C:\\ on Windows |
+| `PATH_INVALID` | the entries could not be read | check the entries and press the button again |
+| `INPUT_PATH_INVALID` | the entries could not be read | check the entries and press the button again |
+| `OUTPUT_PARENT_INVALID` | the entries could not be read | check the entries and press the button again |
+| `REQUEST_INVALID` | the entries could not be read | check the entries and press the button again |
+| `FOLDER_NOT_FOUND` | the folder does not exist | check the place, or choose the folder with Choose… |
+| `NOT_A_FOLDER` | this is a file, not a folder | choose a folder |
+| `FOLDER_NOT_READABLE` | this app is not allowed to open this folder | on a Mac, allow it when you are asked, or in System Settings > Privacy & Security |
+| `RUN_ACTIVE` | a normalization is running in another tab or window | wait for it to finish, or cancel it |
+| `RUN_START_FAILED` | the normalization could not be started | press Run normalization again; if it stops again, please report the code |
+| `NO_FINISHED_OUTPUT` | there is no finished output to check yet | normalize first |
+| `OUTPUT_CHANGED` | the output folder does not match what the normalization wrote | if you did not change the folder, please report the code; if you did, normalize again |
+| `OUTPUT_NOT_AVAILABLE` | the output folder or a file in it is missing, or was replaced by a link | check that the output folder is still where it was |
+| `SUPPORT_BUNDLE_NOT_WRITTEN` | the Support Bundle could not be written | check that the folder for it is still there and that this app can write in it |
+| `OPEN_NOT_AVAILABLE` | no program to open it (xdg-open) was found | open the output folder from your file manager, such as Finder or File Explorer |
+| `OPEN_FAILED` | the system could not open it | open the output folder from your file manager, such as Finder or File Explorer |
 
 ## Accessibility
 
