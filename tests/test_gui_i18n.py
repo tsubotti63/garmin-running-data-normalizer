@@ -123,6 +123,25 @@ class GuiCatalogTest(unittest.TestCase):
         self.assertEqual(sorted(used - catalog_keys), [], "keys missing from the catalogs")
         self.assertEqual(sorted(catalog_keys - used), [], "catalog keys that are never used")
 
+    def test_texts_keep_the_corrections_of_the_mockup(self) -> None:
+        # Stage B1b, from the checker's review of the mockup texts: exit code 0
+        # does not say that every value is in the output, since files that no
+        # dataset reads are not; and Snapshots are ordered by the times of
+        # their Exports, not by when they were imported (merge rules v2.1).
+        catalogs = {language: load_catalog(language) for language in LANGUAGES}
+        for key in ("result.sub_pass_with_warnings", "info.exit_0"):
+            with self.subTest(key=key):
+                self.assertNotIn("値はすべて", catalogs["ja"][key])
+                self.assertNotIn("every value", catalogs["en"][key])
+        self.assertIn("エクスポートの日時の順", catalogs["ja"]["words.snapshot_text"])
+        self.assertIn("ordered by the times of their exports", catalogs["en"]["words.snapshot_text"])
+        # Only the fields whose values differ are left empty (stage A2), and
+        # exit code 3 also comes from rows out of range (stage A3d-2a).
+        self.assertIn("値の違う項目だけ", catalogs["ja"]["faq.values_a"])
+        self.assertIn("only the fields whose values differ", catalogs["en"]["faq.values_a"])
+        self.assertIn("範囲の外の行", catalogs["ja"]["info.exit_foot"])
+        self.assertIn("out of range", catalogs["en"]["info.exit_foot"])
+
     def test_language_names_are_written_in_their_own_language(self) -> None:
         self.assertEqual(load_catalog("en")["language.name"], "English")
         self.assertEqual(load_catalog("ja")["language.name"], "日本語")

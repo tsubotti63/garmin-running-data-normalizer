@@ -9,6 +9,8 @@ import {
   ACTIVE_STATES,
   BOXES,
   FINISHED_STATES,
+  HELP_SECTIONS,
+  HELP_STEPS,
   TERMINAL_STATES,
   announcement,
   boxStates,
@@ -22,6 +24,8 @@ import {
   familyRows,
   findingMessages,
   formatElapsed,
+  helpReturnTarget,
+  helpSteps,
   nextLine,
   nextOutputName,
   outputCheckMessages,
@@ -38,8 +42,13 @@ const LANGUAGES = ["en", "ja"];
 const LAUNCH_KEY_HEADER = "X-Launch-Key";
 const LAUNCH_KEY_STORAGE = "launchKey";
 const LANGUAGE_STORAGE = "language";
+const HINTS_STORAGE = "hints";
 const HEARTBEAT_INTERVAL_MS = 30000;
 const POLL_INTERVAL_MS = 1000;
+// How long a step of "How to use" lights up its box.
+const SPOT_MS = 2000;
+// The information buttons, by the names of their ids (stage B1b).
+const INFOS = ["how", "timezone", "pack", "exit", "tools"];
 
 const byId = (id) => document.getElementById(id);
 const ui = {
@@ -119,6 +128,31 @@ const ui = {
   outputCheck: byId("output-check"),
   resultsCaption: byId("results-caption"),
   familyRows: byId("family-rows"),
+  resultsPanel: byId("results-panel"),
+  runExitRow: byId("run-exit-row"),
+  hintsToggle: byId("hints-toggle"),
+  hints: document.querySelectorAll(".hint"),
+  helpButton: byId("help-button"),
+  helpPanel: byId("help-panel"),
+  helpClose: byId("help-close"),
+  helpSections: Object.fromEntries(
+    HELP_SECTIONS.map((name) => [
+      name,
+      { nav: byId(`help-nav-${name}`), section: byId(`help-${name}`), heading: byId(`help-${name}-heading`) },
+    ]),
+  ),
+  walk: Object.fromEntries(
+    HELP_STEPS.map((step) => [
+      step,
+      { button: byId(`walk-${step}`), state: byId(`walk-${step}-state`) },
+    ]),
+  ),
+  copyButtons: document.querySelectorAll(".copy-button"),
+  aiHelp: byId("ai-help-button"),
+  faqHelp: byId("faq-help-button"),
+  infos: Object.fromEntries(
+    INFOS.map((name) => [name, { button: byId(`${name}-info-button`), region: byId(`${name}-info`) }]),
+  ),
 };
 
 const state = {
@@ -150,6 +184,20 @@ const state = {
   browser: null,
   // The check of the finished run's output and the actions on it.
   output: null,
+  // The open part of the help panel, or null when it is closed, and the
+  // button that opened it, to return focus to (stage B1b).
+  help: null,
+  helpOpener: null,
+  // Whether the tips under the box headings show; kept for this tab only,
+  // until the settings of an earlier launch come (stage B4a).
+  hintsOn: true,
+  // The information buttons that are open.
+  infos: new Set(),
+  // The message beside the example question that was copied last.
+  copy: null,
+  // The step of "How to use" whose box lights up, and its timer.
+  spot: null,
+  spotTimer: null,
 };
 
 class ApiError extends Error {
@@ -422,7 +470,7 @@ function renderBoxes(states, current) {
   BOXES.forEach((box, index) => {
     const element = ui.boxes[box];
     const boxState = states[box];
-    element.className = `box s-${boxState}`;
+    element.className = `box s-${boxState}${state.spot === box ? " spot" : ""}`;
     if (boxState === "current" || boxState === "error") {
       element.setAttribute("aria-current", "step");
     } else {
@@ -568,7 +616,7 @@ function renderRun(states, current) {
   const run = state.run;
   const summary = runSummary(run, states, current);
   setText(ui.resultHeading, describe(summary.headline));
-  ui.runExit.hidden = summary.exitCode === null;
+  ui.runExitRow.hidden = summary.exitCode === null;
   setText(ui.runExit, summary.exitCode === null ? "" : t("result.exit_code", { code: summary.exitCode }));
   setText(ui.runSub, summary.sub === null ? "" : describe(summary.sub));
   // Progress changes every second, so it stays out of live regions; the
@@ -655,6 +703,50 @@ function renderOutput() {
   ui.toolsBody.hidden = !state.toolsOpen;
 }
 
+// The help panel: open or closed, its part, and the steps of "How to use".
+function renderHelp(states, current) {
+  const open = state.help !== null;
+  ui.helpPanel.hidden = !open;
+  document.body.classList.toggle("help-open", open);
+  ui.helpButton.setAttribute("aria-expanded", String(open));
+  for (const [name, part] of Object.entries(ui.helpSections)) {
+    part.section.hidden = name !== state.help;
+    if (name === state.help) {
+      part.nav.setAttribute("aria-current", "true");
+    } else {
+      part.nav.removeAttribute("aria-current");
+    }
+  }
+  const steps = helpSteps(states, current.runState);
+  for (const [step, walk] of Object.entries(ui.walk)) {
+    walk.button.parentElement.className = `walk-${steps[step]}`;
+    const words = steps[step] === "done" ? "step_state.done" : steps[step] === "current" ? "badge.current" : null;
+    setText(walk.state, words === null ? "" : t(words));
+  }
+  ui.resultsPanel.classList.toggle("spot", state.spot === "results");
+  for (const button of ui.copyButtons) {
+    const copied = state.copy !== null && state.copy.id === button.id;
+    setText(byId(`${button.id}-result`), copied ? t(state.copy.key) : "");
+  }
+}
+
+function renderHints() {
+  ui.hintsToggle.checked = state.hintsOn;
+  for (const hint of ui.hints) {
+    hint.hidden = !state.hintsOn;
+  }
+}
+
+// An information button opens what it explains under it. The meaning of the
+// exit code shows only while the exit code shows.
+function renderInfos() {
+  for (const [name, info] of Object.entries(ui.infos)) {
+    const open = state.infos.has(name) && (name !== "exit" || !ui.runExitRow.hidden);
+    info.button.setAttribute("aria-expanded", String(open));
+    info.region.hidden = !open;
+  }
+}
+
 function renderPackFile() {
   ui.packFile.hidden = !ui.safePack.checked;
   setText(ui.packFile, ui.safePack.checked ? t("pack.file", { name: ui.outputName.value.trim() }) : "");
@@ -712,6 +804,9 @@ function render() {
   renderOutput();
   renderPackFile();
   renderControls(states, current);
+  renderHelp(states, current);
+  renderHints();
+  renderInfos();
 }
 
 function stopHeartbeat() {
@@ -903,6 +998,7 @@ function decide(box) {
 
 async function startRun() {
   state.starting = true;
+  state.infos.delete("exit");
   state.runError = null;
   state.quitKey = null;
   state.cancelAsked = false;
@@ -1052,6 +1148,100 @@ function chooseFolder() {
   closeBrowser();
 }
 
+// Open the help panel at one of its parts; focus goes to that part's heading.
+function openHelp(section, opener) {
+  state.help = section;
+  state.helpOpener = opener;
+  state.copy = null;
+  render();
+  ui.helpSections[section].heading.focus();
+}
+
+// A button can take focus back while it is on the page, shown, and enabled.
+function canTakeFocus(element) {
+  return element.isConnected && !element.disabled && element.closest("[hidden]") === null;
+}
+
+function closeHelp() {
+  const opener = state.helpOpener;
+  state.help = null;
+  state.helpOpener = null;
+  state.copy = null;
+  render();
+  const target = helpReturnTarget(opener === null ? null : { usable: canTakeFocus(opener) });
+  (target === "opener" ? opener : ui.helpButton).focus();
+}
+
+// Closed with the Help button itself, the panel leaves focus on that button.
+function toggleHelp() {
+  if (state.help === null) {
+    openHelp("steps", ui.helpButton);
+  } else {
+    state.helpOpener = ui.helpButton;
+    closeHelp();
+  }
+}
+
+function showHelpSection(section) {
+  state.help = section;
+  state.copy = null;
+  render();
+  ui.helpSections[section].heading.focus();
+}
+
+// Light up the box of a step for a moment; focus stays in the help panel.
+function spot(step) {
+  window.clearTimeout(state.spotTimer);
+  state.spot = step;
+  render();
+  const target = step === "results" ? ui.resultsPanel : ui.boxes[step];
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  target.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+  state.spotTimer = window.setTimeout(() => {
+    state.spot = null;
+    state.spotTimer = null;
+    render();
+  }, SPOT_MS);
+}
+
+// Copy an example question on this computer only. Safari accepts writeText
+// only right after the click, so nothing is awaited before it. The line beside
+// the button is emptied first, so that a second copy is announced again.
+async function copyExample(button) {
+  const text = byId(button.dataset.copy)?.textContent ?? "";
+  state.copy = null;
+  render();
+  try {
+    await navigator.clipboard.writeText(text);
+    state.copy = { id: button.id, key: "ai.copied" };
+  } catch {
+    state.copy = { id: button.id, key: "ai.copy_failed" };
+  }
+  render();
+}
+
+function toggleInfo(name) {
+  if (state.infos.has(name)) {
+    state.infos.delete(name);
+  } else {
+    state.infos.add(name);
+  }
+  render();
+}
+
+function closeInfo(name) {
+  if (state.infos.delete(name)) {
+    render();
+    ui.infos[name].button.focus();
+  }
+}
+
+function changeHints() {
+  state.hintsOn = ui.hintsToggle.checked;
+  writeStorage(HINTS_STORAGE, state.hintsOn ? "on" : "off");
+  render();
+}
+
 function changeLanguage(language) {
   if (LANGUAGES.includes(language)) {
     state.language = language;
@@ -1129,6 +1319,35 @@ function connect() {
     field.addEventListener("input", fieldChanged);
   }
   ui.safePack.addEventListener("change", fieldChanged);
+  ui.hintsToggle.addEventListener("change", changeHints);
+  ui.helpButton.addEventListener("click", toggleHelp);
+  ui.helpClose.addEventListener("click", closeHelp);
+  ui.helpPanel.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeHelp();
+    }
+  });
+  for (const [name, part] of Object.entries(ui.helpSections)) {
+    part.nav.addEventListener("click", () => showHelpSection(name));
+  }
+  for (const [step, walk] of Object.entries(ui.walk)) {
+    walk.button.addEventListener("click", () => spot(step));
+  }
+  for (const button of ui.copyButtons) {
+    button.addEventListener("click", () => copyExample(button));
+  }
+  ui.aiHelp.addEventListener("click", () => openHelp("ai", ui.aiHelp));
+  ui.faqHelp.addEventListener("click", () => openHelp("faq", ui.faqHelp));
+  for (const [name, info] of Object.entries(ui.infos)) {
+    info.button.addEventListener("click", () => toggleInfo(name));
+    for (const element of [info.button, info.region]) {
+      element.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          closeInfo(name);
+        }
+      });
+    }
+  }
 }
 
 async function start() {
@@ -1142,6 +1361,8 @@ async function start() {
     readStorage(LANGUAGE_STORAGE),
     navigator.languages ?? [navigator.language],
   );
+  // The tips show unless this tab turned them off.
+  state.hintsOn = readStorage(HINTS_STORAGE) !== "off";
   connect();
   render();
   try {

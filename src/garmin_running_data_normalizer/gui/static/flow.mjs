@@ -855,3 +855,31 @@ export function controls(view, states) {
 export function boxesToConfirm(states) {
   return ["export", "snapshot", "output"].filter((box) => states[box] !== "done").map(boxNumber);
 }
+
+// The parts of the help panel, in the order of its buttons (stage B1b).
+export const HELP_SECTIONS = ["steps", "faq", "words", "ai"];
+
+// The steps of "How to use": the four boxes, then reading the result, which
+// lights up the results table.
+export const HELP_STEPS = [...BOXES, "results"];
+
+// The state of each step of "How to use", from the states of the boxes:
+// "done", "current" (what to do now, or a box to fix), or "todo". Reading the
+// result is done once a run has finished and no box has changed since.
+export function helpSteps(states, runState) {
+  const steps = {};
+  for (const box of BOXES) {
+    const boxState = states[box];
+    steps[box] =
+      boxState === "done" ? "done" : boxState === "current" || boxState === "error" ? "current" : "todo";
+  }
+  steps.results = FINISHED_STATES.includes(runState) && states.run === "done" ? "done" : "todo";
+  return steps;
+}
+
+// Where focus goes when the help panel closes: back to the button that opened
+// it, or to the Help button when that button is gone, hidden, or disabled by
+// then, as the fourth box's button is after a new run starts.
+export function helpReturnTarget(opener) {
+  return opener?.usable === true ? "opener" : "help";
+}

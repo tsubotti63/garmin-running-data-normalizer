@@ -10,14 +10,26 @@
 <body>
 <div id="connection-problem" class="problem messages" role="alert" hidden></div>
 <header class="topbar">
-  <h1 data-i18n="app.title"></h1>
-  <p class="development" data-i18n="app.development"></p>
+  <div class="title-row">
+    <div class="title">
+      <h1 data-i18n="app.title"></h1>
+      <p class="development" data-i18n="app.development"></p>
+    </div>
+    <div class="top-tools">
+      <div class="switch">
+        <input id="hints-toggle" type="checkbox" role="switch" checked>
+        <label for="hints-toggle" data-i18n="hints.toggle"></label>
+      </div>
+      <button type="button" id="help-button" class="help-button" aria-expanded="false" aria-controls="help-panel" data-i18n="help.button"></button>
+    </div>
+  </div>
   <p id="next-line" class="next-line" aria-live="polite"><span class="next-label" data-i18n="next_line.label"></span> <span id="next-text"></span></p>
 </header>
 <main class="app">
   <div class="flow">
     <section id="box-export" class="box" aria-labelledby="input-heading">
       <h2 id="input-heading" tabindex="-1"><span class="num" aria-hidden="true"></span><span data-i18n="export.heading"></span><span class="badge"></span></h2>
+      <p class="hint" data-i18n="hint.export"></p>
       <p class="summary" hidden></p>
       <label for="input-path" data-i18n="input.label"></label>
       <input id="input-path" type="text" autocomplete="off" spellcheck="false" aria-describedby="input-help">
@@ -35,9 +47,20 @@
     <div class="arrow" aria-hidden="true"></div>
     <section id="box-snapshot" class="box" aria-labelledby="snapshot-heading">
       <h2 id="snapshot-heading" tabindex="-1"><span class="num" aria-hidden="true"></span><span data-i18n="snapshot.heading"></span><span class="note" data-i18n="snapshot.subtitle"></span><span class="badge"></span></h2>
+      <p class="hint" data-i18n="hint.snapshot"></p>
       <p class="summary" hidden></p>
       <fieldset class="choices">
-        <legend data-i18n="how.legend"></legend>
+        <legend id="how-legend" data-i18n="how.legend"></legend>
+        <button type="button" id="how-info-button" class="info-button" aria-expanded="false" aria-controls="how-info" aria-labelledby="how-info-button how-legend" data-i18n="info.explain"></button>
+        <div id="how-info" class="info-text" hidden>
+          <dl>
+            <dt data-i18n="how.snapshots"></dt>
+            <dd data-i18n="info.how_snapshots"></dd>
+            <dt data-i18n="how.single"></dt>
+            <dd data-i18n="info.how_single"></dd>
+          </dl>
+          <p class="info-foot" data-i18n="info.how_foot"></p>
+        </div>
         <div class="choice">
           <input type="radio" name="how" id="how-snapshots" value="snapshots" disabled aria-describedby="snapshot-not-yet">
           <label for="how-snapshots" data-i18n="how.snapshots"></label>
@@ -65,6 +88,7 @@
     <div class="arrow" aria-hidden="true"></div>
     <section id="box-output" class="box" aria-labelledby="output-heading">
       <h2 id="output-heading" tabindex="-1"><span class="num" aria-hidden="true"></span><span data-i18n="output.heading"></span><span class="badge"></span></h2>
+      <p class="hint" data-i18n="hint.output"></p>
       <p class="summary" hidden></p>
       <label for="output-parent" data-i18n="output.parent"></label>
       <div class="path-row">
@@ -74,15 +98,41 @@
       <label for="output-name" data-i18n="output.name"></label>
       <input id="output-name" type="text" autocomplete="off" spellcheck="false" aria-describedby="output-name-help">
       <p id="output-name-help" class="help" data-i18n="output.name_help"></p>
-      <label for="timezone" data-i18n="timezone.label"></label>
+      <div class="label-row">
+        <label id="timezone-label" for="timezone" data-i18n="timezone.label"></label>
+        <button type="button" id="timezone-info-button" class="info-button" aria-expanded="false" aria-controls="timezone-info" aria-labelledby="timezone-info-button timezone-label" data-i18n="info.explain"></button>
+      </div>
+      <div id="timezone-info" class="info-text" hidden>
+        <p data-i18n="info.timezone_text"></p>
+        <dl>
+          <dt data-i18n="info.care"></dt>
+          <dd data-i18n="info.timezone_care1"></dd>
+          <dd data-i18n="info.timezone_care2"></dd>
+        </dl>
+        <p class="info-foot" data-i18n="info.timezone_foot"></p>
+      </div>
       <input id="timezone" type="text" list="timezone-list" autocomplete="off" spellcheck="false" aria-describedby="timezone-help">
       <datalist id="timezone-list"></datalist>
       <p id="timezone-help" class="help" data-i18n="timezone.help"></p>
       <div class="checkbox-row">
         <input id="safe-pack" type="checkbox" aria-describedby="safe-pack-help">
-        <label for="safe-pack" data-i18n="pack.label"></label>
+        <label id="safe-pack-label" for="safe-pack" data-i18n="pack.label"></label>
       </div>
       <p id="safe-pack-help" class="help" data-i18n="pack.help"></p>
+      <button type="button" id="pack-info-button" class="info-button" aria-expanded="false" aria-controls="pack-info" aria-labelledby="pack-info-button safe-pack-label" data-i18n="info.contents"></button>
+      <div id="pack-info" class="info-text" hidden>
+        <dl>
+          <dt data-i18n="info.pack_in_label"></dt>
+          <dd data-i18n="info.pack_in"></dd>
+          <dt data-i18n="info.pack_out_label"></dt>
+          <dd data-i18n="info.pack_out"></dd>
+          <dt data-i18n="info.pack_use_label"></dt>
+          <dd data-i18n="info.pack_use"></dd>
+          <dt data-i18n="info.note"></dt>
+          <dd data-i18n="info.pack_note"></dd>
+        </dl>
+        <p class="info-foot" data-i18n="info.pack_foot"></p>
+      </div>
       <p id="pack-file" class="made" hidden></p>
       <div id="output-error" class="errbox" hidden>
         <h3 id="output-error-heading" tabindex="-1" data-i18n="error.heading"></h3>
@@ -95,8 +145,24 @@
     <div class="arrow" aria-hidden="true"></div>
     <section id="box-run" class="box" aria-labelledby="run-heading">
       <h2 id="run-heading" tabindex="-1"><span class="num" aria-hidden="true"></span><span data-i18n="run.heading"></span><span class="badge"></span></h2>
+      <p class="hint" data-i18n="hint.run"></p>
       <h3 id="result-heading" class="headline" tabindex="-1"></h3>
-      <p id="run-exit" class="exit-code" hidden></p>
+      <div id="run-exit-row" class="exit-row" hidden>
+        <p id="run-exit" class="exit-code"></p>
+        <button type="button" id="exit-info-button" class="info-button" aria-expanded="false" aria-controls="exit-info" aria-labelledby="exit-info-button run-exit" data-i18n="info.meaning"></button>
+      </div>
+      <div id="exit-info" class="info-text" hidden>
+        <p data-i18n="info.exit_text"></p>
+        <dl>
+          <dt data-i18n="info.exit_0_label"></dt>
+          <dd data-i18n="info.exit_0"></dd>
+          <dt data-i18n="info.exit_3_label"></dt>
+          <dd data-i18n="info.exit_3"></dd>
+          <dt data-i18n="info.exit_2_label"></dt>
+          <dd data-i18n="info.exit_2"></dd>
+        </dl>
+        <p class="info-foot" data-i18n="info.exit_foot"></p>
+      </div>
       <p id="run-sub" class="sub"></p>
       <div id="run-progress" class="progress-lines">
         <p id="fit-progress-label" class="help"></p>
@@ -128,13 +194,29 @@
         <div class="button-row">
           <button type="button" id="open-folder-button" class="primary" data-i18n="open.folder" disabled></button>
           <button type="button" id="open-start-here-button" data-i18n="open.start_here" disabled></button>
+          <button type="button" id="ai-help-button" data-i18n="next_actions.ai"></button>
         </div>
         <div id="open-result" class="messages" role="status" aria-live="polite"></div>
       </div>
       <div class="tools">
         <h3 class="tools-heading"><button type="button" id="tools-toggle" class="tools-toggle" aria-expanded="false" aria-controls="tools-body" data-i18n="tools.heading"></button></h3>
         <p class="note" data-i18n="tools.summary"></p>
+        <button type="button" id="tools-info-button" class="info-button" aria-expanded="false" aria-controls="tools-info" aria-labelledby="tools-info-button tools-toggle" data-i18n="info.explain"></button>
+        <div id="tools-info" class="info-text" hidden>
+          <dl>
+            <dt data-i18n="output_check.heading"></dt>
+            <dd data-i18n="info.tools_check"></dd>
+            <dt data-i18n="bundle.heading"></dt>
+            <dd data-i18n="info.tools_bundle"></dd>
+            <dt data-i18n="info.note"></dt>
+            <dd data-i18n="info.tools_note"></dd>
+          </dl>
+          <p class="info-foot" data-i18n="info.tools_foot"></p>
+        </div>
         <div id="tools-body" hidden>
+          <div class="button-row">
+            <button type="button" id="faq-help-button" data-i18n="tools.faq"></button>
+          </div>
           <h4 id="bundle-heading" tabindex="-1" data-i18n="bundle.heading"></h4>
           <p class="help" data-i18n="bundle.help"></p>
           <p class="help" data-i18n="bundle.review_help"></p>
@@ -170,7 +252,7 @@
   </div>
 
   <div class="lower">
-    <section class="panel" aria-labelledby="steps-heading">
+    <section id="steps-panel" class="panel" aria-labelledby="steps-heading">
       <h2 id="steps-heading" data-i18n="steps.heading"></h2>
       <p id="steps-caption" class="help"></p>
       <table class="t">
@@ -195,7 +277,7 @@
         <div id="output-check" class="messages" role="status" aria-live="polite"></div>
       </div>
     </section>
-    <section class="panel" aria-labelledby="results-heading">
+    <section id="results-panel" class="panel" aria-labelledby="results-heading">
       <h2 id="results-heading" data-i18n="result.caption"></h2>
       <p id="results-caption" class="help"></p>
       <table id="family-table" class="t">
@@ -212,6 +294,119 @@
     </section>
   </div>
 </main>
+
+<aside id="help-panel" class="help-panel" aria-labelledby="help-heading" hidden>
+  <div class="help-head">
+    <h2 id="help-heading" tabindex="-1" data-i18n="help.heading"></h2>
+    <button type="button" id="help-close" data-i18n="help.close"></button>
+  </div>
+  <nav class="help-nav" aria-labelledby="help-nav-label">
+    <span id="help-nav-label" class="visually-hidden" data-i18n="help.nav"></span>
+    <button type="button" id="help-nav-steps" data-section="steps" data-i18n="help.steps"></button>
+    <button type="button" id="help-nav-faq" data-section="faq" data-i18n="help.faq"></button>
+    <button type="button" id="help-nav-words" data-section="words" data-i18n="help.words"></button>
+    <button type="button" id="help-nav-ai" data-section="ai" data-i18n="help.ai"></button>
+  </nav>
+  <div class="help-body">
+    <section id="help-steps" class="help-section" aria-labelledby="help-steps-heading">
+      <h3 id="help-steps-heading" tabindex="-1" data-i18n="help.steps"></h3>
+      <h4 data-i18n="help.get_heading"></h4>
+      <ol class="get-steps">
+        <li data-i18n="help.get_step1"></li>
+        <li data-i18n="help.get_step2"></li>
+        <li data-i18n="help.get_step3"></li>
+      </ol>
+      <p class="note" data-i18n="help.get_note"></p>
+      <h4 data-i18n="help.boxes_heading"></h4>
+      <p class="lede" data-i18n="help.steps_lede"></p>
+      <ol class="walk">
+        <li>
+          <button type="button" id="walk-export" data-step="export" aria-describedby="walk-export-state walk-export-text" data-i18n="help.step_export"></button>
+          <span id="walk-export-state" class="walk-state"></span>
+          <p id="walk-export-text" data-i18n="help.step_export_text"></p>
+        </li>
+        <li>
+          <button type="button" id="walk-snapshot" data-step="snapshot" aria-describedby="walk-snapshot-state walk-snapshot-text" data-i18n="help.step_snapshot"></button>
+          <span id="walk-snapshot-state" class="walk-state"></span>
+          <p id="walk-snapshot-text" data-i18n="help.step_snapshot_text"></p>
+        </li>
+        <li>
+          <button type="button" id="walk-output" data-step="output" aria-describedby="walk-output-state walk-output-text" data-i18n="help.step_output"></button>
+          <span id="walk-output-state" class="walk-state"></span>
+          <p id="walk-output-text" data-i18n="help.step_output_text"></p>
+        </li>
+        <li>
+          <button type="button" id="walk-run" data-step="run" aria-describedby="walk-run-state walk-run-text" data-i18n="help.step_run"></button>
+          <span id="walk-run-state" class="walk-state"></span>
+          <p id="walk-run-text" data-i18n="help.step_run_text"></p>
+        </li>
+        <li>
+          <button type="button" id="walk-results" data-step="results" aria-describedby="walk-results-state walk-results-text" data-i18n="help.step_results"></button>
+          <span id="walk-results-state" class="walk-state"></span>
+          <p id="walk-results-text" data-i18n="help.step_results_text"></p>
+        </li>
+      </ol>
+    </section>
+    <section id="help-faq" class="help-section" aria-labelledby="help-faq-heading" hidden>
+      <h3 id="help-faq-heading" tabindex="-1" data-i18n="help.faq"></h3>
+      <details class="qa"><summary data-i18n="faq.zip_q"></summary><p data-i18n="faq.zip_a"></p></details>
+      <details class="qa"><summary data-i18n="faq.exit_q"></summary><p data-i18n="faq.exit_a"></p></details>
+      <details class="qa"><summary data-i18n="faq.send_q"></summary><p data-i18n="faq.send_a"></p></details>
+      <details class="qa"><summary data-i18n="faq.values_q"></summary><p data-i18n="faq.values_a"></p></details>
+      <details class="qa"><summary data-i18n="faq.date_q"></summary><p data-i18n="faq.date_a"></p></details>
+      <details class="qa"><summary data-i18n="faq.window_q"></summary><p data-i18n="faq.window_a"></p></details>
+    </section>
+    <section id="help-words" class="help-section" aria-labelledby="help-words-heading" hidden>
+      <h3 id="help-words-heading" tabindex="-1" data-i18n="help.words"></h3>
+      <dl class="words">
+        <dt data-i18n="words.normalize"></dt>
+        <dd data-i18n="words.normalize_text"></dd>
+        <dt data-i18n="words.snapshot"></dt>
+        <dd data-i18n="words.snapshot_text"></dd>
+        <dt data-i18n="words.how"></dt>
+        <dd data-i18n="words.how_text"></dd>
+        <dt data-i18n="words.exit"></dt>
+        <dd data-i18n="words.exit_text"></dd>
+        <dt data-i18n="words.output_check"></dt>
+        <dd data-i18n="words.output_check_text"></dd>
+        <dt data-i18n="words.bundle"></dt>
+        <dd data-i18n="words.bundle_text"></dd>
+        <dt data-i18n="words.pack"></dt>
+        <dd data-i18n="words.pack_text"></dd>
+        <dt data-i18n="words.start_here"></dt>
+        <dd data-i18n="words.start_here_text"></dd>
+      </dl>
+    </section>
+    <section id="help-ai" class="help-section" aria-labelledby="help-ai-heading" hidden>
+      <h3 id="help-ai-heading" tabindex="-1" data-i18n="help.ai_heading"></h3>
+      <p class="lede" data-i18n="ai.lede"></p>
+      <ol class="ai-steps">
+        <li><strong data-i18n="ai.step1_title"></strong><span data-i18n="ai.step1"></span></li>
+        <li><strong data-i18n="ai.step2_title"></strong><span data-i18n="ai.step2"></span></li>
+        <li><strong data-i18n="ai.step3_title"></strong><span data-i18n="ai.step3"></span></li>
+        <li><strong data-i18n="ai.step4_title"></strong><span data-i18n="ai.step4"></span></li>
+        <li><strong data-i18n="ai.step5_title"></strong><span data-i18n="ai.step5"></span></li>
+      </ol>
+      <h4 data-i18n="ai.examples"></h4>
+      <div class="prompt">
+        <p id="ai-example-1" data-i18n="ai.example1"></p>
+        <div class="prompt-row"><span class="tag" data-i18n="ai.tag_local"></span><span class="copy-row"><span id="copy-1-result" class="copy-result" aria-live="polite"></span><button type="button" id="copy-1" class="copy-button" data-copy="ai-example-1" aria-describedby="ai-example-1" data-i18n="ai.copy"></button></span></div>
+      </div>
+      <div class="prompt">
+        <p id="ai-example-2" data-i18n="ai.example2"></p>
+        <div class="prompt-row"><span class="tag" data-i18n="ai.tag_local"></span><span class="copy-row"><span id="copy-2-result" class="copy-result" aria-live="polite"></span><button type="button" id="copy-2" class="copy-button" data-copy="ai-example-2" aria-describedby="ai-example-2" data-i18n="ai.copy"></button></span></div>
+      </div>
+      <div class="prompt">
+        <p id="ai-example-3" data-i18n="ai.example3"></p>
+        <div class="prompt-row"><span class="tag" data-i18n="ai.tag_local"></span><span class="copy-row"><span id="copy-3-result" class="copy-result" aria-live="polite"></span><button type="button" id="copy-3" class="copy-button" data-copy="ai-example-3" aria-describedby="ai-example-3" data-i18n="ai.copy"></button></span></div>
+      </div>
+      <div class="prompt">
+        <p id="ai-example-4" data-i18n="ai.example4"></p>
+        <div class="prompt-row"><span class="tag" data-i18n="ai.tag_external"></span><span class="copy-row"><span id="copy-4-result" class="copy-result" aria-live="polite"></span><button type="button" id="copy-4" class="copy-button" data-copy="ai-example-4" aria-describedby="ai-example-4" data-i18n="ai.copy"></button></span></div>
+      </div>
+    </section>
+  </div>
+</aside>
 <footer class="statusbar">
   <p class="privacy" data-i18n="app.privacy"></p>
   <p id="product-version" class="version"></p>

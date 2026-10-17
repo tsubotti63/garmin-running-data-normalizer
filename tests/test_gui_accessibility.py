@@ -33,8 +33,11 @@ TEXT_PAIRS = (
     ("on-accent", "accent"),  # the primary button and the current number
     ("accent", "surface"),  # links and the current badge
     ("accent", "accent-soft"),
+    ("accent", "group"),  # "Now" in the steps of the help panel
+    ("accent", "ng-tint"),  # an information button in a box that needs a fix
     ("ok", "surface"),  # the summary of a confirmed box
     ("ok", "ok-soft"),  # a done badge or pill
+    ("ok", "group"),  # "Done" in the steps of the help panel
     ("warn", "warn-soft"),  # a warning pill
     ("ng", "surface"),  # the heading of a stop
     ("ng", "ng-soft"),
@@ -42,6 +45,7 @@ TEXT_PAIRS = (
     ("none", "none-soft"),  # an absent or not-yet pill
     ("surface", "ok"),  # the mark in a confirmed box's number
     ("surface", "ng"),  # the mark in a red box's number
+    ("surface", "text"),  # the open part of the help panel, and Help while it is open
 )
 # The bar beside a warning row is decoration: the icon and the words carry
 # the meaning, so it is not a pair here.
@@ -49,6 +53,7 @@ CONTROL_PAIRS = (
     ("edge", "surface"),  # the edges of fields and buttons
     ("edge", "page"),
     ("edge", "ng-tint"),
+    ("edge", "group"),  # the buttons on the gray parts of the help panel
     ("accent", "surface"),  # the focus outline, the current box, and the primary button
     ("accent", "page"),
     ("accent", "ng-tint"),
@@ -225,6 +230,11 @@ class GuiPageStructureTest(unittest.TestCase):
             "output-check-heading",
             "bundle-heading",
             "browser-heading",
+            "help-heading",
+            "help-steps-heading",
+            "help-faq-heading",
+            "help-words-heading",
+            "help-ai-heading",
         ):
             with self.subTest(heading=identifier):
                 self.assertEqual(by_id(self.elements, identifier).get("tabindex"), "-1")
@@ -246,6 +256,65 @@ class GuiPageStructureTest(unittest.TestCase):
         self.assertEqual(toggle.get("aria-expanded"), "false")
         self.assertEqual(toggle.get("aria-controls"), "tools-body")
         self.assertIn("hidden", by_id(self.elements, "tools-body").attributes)
+
+    def test_the_help_panel_is_a_closed_side_panel_with_four_parts(self) -> None:
+        # Stage B1b: the panel pushes the page aside instead of covering it,
+        # so it is a complementary landmark, not a dialog.
+        button = by_id(self.elements, "help-button")
+        self.assertEqual(button.get("aria-expanded"), "false")
+        self.assertEqual(button.get("aria-controls"), "help-panel")
+        panel = by_id(self.elements, "help-panel")
+        self.assertEqual(panel.tag, "aside")
+        self.assertIsNone(panel.get("role"))
+        self.assertEqual(panel.get("aria-labelledby"), "help-heading")
+        self.assertIn("hidden", panel.attributes)
+        nav = [element for element in self.elements if element.tag == "nav"]
+        self.assertEqual(len(nav), 1)
+        self.assertEqual(by_id(self.elements, nav[0].get("aria-labelledby")).get("data-i18n"), "help.nav")
+        for name in ("steps", "faq", "words", "ai"):
+            with self.subTest(part=name):
+                self.assertEqual(by_id(self.elements, f"help-nav-{name}").get("data-section"), name)
+                section = by_id(self.elements, f"help-{name}")
+                self.assertEqual(section.get("aria-labelledby"), f"help-{name}-heading")
+                self.assertEqual("hidden" in section.attributes, name != "steps")
+        for element in self.elements:
+            if element.get("class") == "copy-button":
+                with self.subTest(copy=element.get("id")):
+                    described = by_id(self.elements, str(element.get("aria-describedby")))
+                    self.assertEqual(described.get("id"), element.get("data-copy"))
+
+    def test_information_buttons_open_a_part_under_them(self) -> None:
+        # Stage B1b: an information button is a disclosure, named by its own
+        # word first and then by what it explains (WCAG 2.5.3).
+        buttons = [element for element in self.elements if element.get("class") == "info-button"]
+        self.assertEqual(
+            [button.get("id") for button in buttons],
+            [
+                "how-info-button",
+                "timezone-info-button",
+                "pack-info-button",
+                "exit-info-button",
+                "tools-info-button",
+            ],
+        )
+        for button in buttons:
+            with self.subTest(button=button.get("id")):
+                self.assertEqual(button.get("aria-expanded"), "false")
+                region = by_id(self.elements, str(button.get("aria-controls")))
+                self.assertIn("hidden", region.attributes)
+                self.assertIsNone(region.get("role"))
+                own, named = str(button.get("aria-labelledby")).split()
+                self.assertEqual(own, button.get("id"))
+                # The exit code is written by the page; the others are labels.
+                self.assertTrue(by_id(self.elements, named).get("data-i18n") or named == "run-exit")
+
+    def test_tips_show_under_every_box_heading_with_a_switch(self) -> None:
+        switch = by_id(self.elements, "hints-toggle")
+        self.assertEqual(switch.get("type"), "checkbox")
+        self.assertEqual(switch.get("role"), "switch")
+        self.assertIn("checked", switch.attributes)
+        hints = [element.get("data-i18n") for element in self.elements if element.get("class") == "hint"]
+        self.assertEqual(hints, ["hint.export", "hint.snapshot", "hint.output", "hint.run"])
 
 
 class GuiStyleTest(unittest.TestCase):
