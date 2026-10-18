@@ -278,6 +278,28 @@ class GuiPageStructureTest(unittest.TestCase):
         self.assertEqual(len(labels), 1)
         self.assertEqual(by_id(self.elements, "lock-remove").tag, "button")
 
+    def test_the_remembered_settings_are_forgotten_after_a_question(self) -> None:
+        # Stage B4c: the button in the bar says whether its question is open,
+        # the question is hidden until it is asked, and its two buttons are
+        # described by the question and what it forgets.
+        button = by_id(self.elements, "forget-button")
+        self.assertEqual(
+            (button.tag, button.get("aria-expanded"), button.get("aria-controls")),
+            ("button", "false", "forget-confirm"),
+        )
+        self.assertIn("hidden", by_id(self.elements, "forget-confirm").attributes)
+        for identifier in ("forget-yes", "forget-no"):
+            with self.subTest(button=identifier):
+                answer = by_id(self.elements, identifier)
+                self.assertEqual((answer.tag, answer.get("aria-describedby")), ("button", "forget-question forget-text"))
+        self.assertEqual(by_id(self.elements, "settings-status").get("role"), "status")
+        # Looking again for a remembered store or folder that is not found.
+        for identifier in ("store-search", "output-search"):
+            with self.subTest(button=identifier):
+                search = by_id(self.elements, identifier)
+                self.assertEqual((search.tag, search.get("data-i18n")), ("button", "remembered.search_again"))
+                self.assertIn("hidden", search.attributes)
+
     def test_folded_help_says_whether_it_is_open(self) -> None:
         toggle = by_id(self.elements, "tools-toggle")
         self.assertEqual(toggle.get("aria-expanded"), "false")

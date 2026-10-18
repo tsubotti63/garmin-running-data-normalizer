@@ -858,6 +858,23 @@ button.primary:disabled {
   margin: 0;
 }
 
+/* Looking again for a remembered folder for the output, under its lines
+   (stage B4c). */
+.search-again {
+  margin-top: 6px;
+}
+
+/* Forgetting the remembered settings asks first, above the bar (stage B4c). */
+.statusbar .confirm {
+  flex: 1 1 100%;
+  margin-top: 0;
+  color: var(--text);
+}
+
+.confirm .question {
+  font-weight: 600;
+}
+
 .privacy {
   flex: 1 1 24rem;
 }

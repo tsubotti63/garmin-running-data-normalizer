@@ -1466,3 +1466,225 @@ test("a dialog for a folder of the store or the output says so in the line above
   assert.equal(flow.nextLine({ ...READY, choosing: true, choosingFolder: true }, states).key, "next_line.choosing_folder");
   assert.equal(flow.nextLine({ ...READY, choosing: true }, states).key, "next_line.choosing");
 });
+
+// The settings of an earlier launch (stage B4c).
+test("the settings of an earlier launch: a later launch needs a place, and the tips follow them", () => {
+  assert.deepEqual(flow.launchSettings({}), { launch: "first", store: null, outputParent: null, hints: null, notice: null });
+  assert.deepEqual(
+    flow.launchSettings({
+      settings: { launch: "later", store: "/path/to/store", output_parent: "/path/to", hints: false, notice: "SETTINGS_INVALID" },
+    }),
+    { launch: "later", store: "/path/to/store", outputParent: "/path/to", hints: false, notice: "SETTINGS_INVALID" },
+  );
+  // A later launch without a place, and values of another form, are not taken.
+  assert.equal(flow.launchSettings({ settings: { launch: "later", store: null, output_parent: "" } }).launch, "first");
+  assert.deepEqual(
+    flow.launchSettings({
+      settings: { launch: "later", store: 3, output_parent: "/path/to", hints: "no", notice: "/path/to/private" },
+    }),
+    { launch: "later", store: null, outputParent: "/path/to", hints: null, notice: null },
+  );
+  // The tips: as the person last switched them, otherwise on at a first
+  // launch and off at a later one (the mockup v10).
+  assert.equal(flow.hintsShown({ launch: "first", hints: null }), true);
+  assert.equal(flow.hintsShown({ launch: "later", hints: null }), false);
+  assert.equal(flow.hintsShown({ launch: "later", hints: true }), true);
+  assert.equal(flow.hintsShown({ launch: "first", hints: false }), false);
+});
+
+test("on a later launch, the boxes that hold the remembered places are set by themselves", () => {
+  const later = { ...READY, snapshotDecided: false, outputDecided: false, snapshotAuto: true, outputAuto: true };
+  assert.deepEqual(boxStates(later), { export: "done", snapshot: "done", output: "done", run: "current" });
+  assert.equal(enabled(later).start, true);
+  // The Export is chosen each time.
+  assert.deepEqual(boxStates({ ...later, exportReady: false }), {
+    export: "current",
+    snapshot: "todo",
+    output: "todo",
+    run: "todo",
+  });
+  // A box that changed is confirmed again.
+  assert.deepEqual(boxStates({ ...later, snapshotAuto: false }), {
+    export: "done",
+    snapshot: "current",
+    output: "todo",
+    run: "todo",
+  });
+  assert.deepEqual(boxStates({ ...later, outputAuto: false }), {
+    export: "done",
+    snapshot: "done",
+    output: "current",
+    run: "todo",
+  });
+  // A problem of the store, and a remembered folder that is not found, are red.
+  assert.equal(boxStates({ ...later, snapshotAuto: false, storeProblem: true }).snapshot, "error");
+  assert.deepEqual(boxStates({ ...later, outputAuto: false, outputProblem: true }), {
+    export: "done",
+    snapshot: "done",
+    output: "error",
+    run: "todo",
+  });
+  assert.equal(flow.nextLine({ ...later, outputAuto: false, outputProblem: true }, boxStates({ ...later, outputAuto: false, outputProblem: true })).key, "next_line.fix_box");
+  // After a run, a run starts again with the boxes that the settings set.
+  const ran = { ...later, runState: "finished" };
+  assert.equal(enabled(ran).start, true);
+  assert.equal(enabled({ ...ran, outputAuto: false }).start, false);
+});
+
+test("a box that the settings set says so in its summary, until a run", () => {
+  const view = {
+    inputPath: "/path/to/export",
+    outputParent: "/path/to/GarminRunningData",
+    outputName: "out",
+    runState: "idle",
+    how: "snapshots",
+    snapshotCount: 2,
+    snapshotAuto: true,
+    outputAuto: true,
+  };
+  const snapshot = flow.boxSummary("snapshot", view);
+  assert.equal(snapshot.key, "summary.as_last_time");
+  assert.deepEqual(shape(snapshot.keyParams.summary), ["summary.snapshot_import", { count: 2 }, {}]);
+  assert.deepEqual(shape(flow.boxSummary("output", view).keyParams.summary), [
+    "summary.output",
+    { parent: "GarminRunningData", name: "out" },
+    {},
+  ]);
+  // The first box is never set by the settings.
+  assert.equal(flow.boxSummary("export", view).key, "summary.export_import");
+  assert.equal(flow.boxSummary("snapshot", { ...view, snapshotAuto: false }).key, "summary.snapshot_import");
+  // After a run, the summary says what the run did.
+  assert.equal(
+    flow.boxSummary("output", { ...view, runState: "finished", outputPath: "/path/to/GarminRunningData/out" }).key,
+    "summary.output_done",
+  );
+});
+
+test("a remembered store that is not found is not made again, and the page offers the ways on", () => {
+  const remembered = "/Volumes/External/snapshots";
+  const missing = {
+    busy: false,
+    checked: null,
+    remembered,
+    answer: { state: "error", path: remembered, error_code: "SNAPSHOT_STORE_NOT_FOUND" },
+  };
+  assert.equal(flow.storeMissingRemembered(missing), true);
+  const lines = flow.storeMessages(missing, "snapshots");
+  assert.deepEqual(lineShapes(lines), [
+    ["error", true, "remembered.store_missing"],
+    ["error", false, "next.label"],
+    ["error", false, "error.code"],
+  ]);
+  assert.equal(lines[1].message.keyParams.step, "remembered.store_missing_next");
+  assert.deepEqual(lines[2].message.params, { code: "SNAPSHOT_STORE_NOT_FOUND" });
+  // Another place, or another problem, has the words of its code.
+  for (const store of [
+    { ...missing, remembered: null },
+    { ...missing, answer: { ...missing.answer, path: "/elsewhere" } },
+    { ...missing, answer: { ...missing.answer, error_code: "SNAPSHOT_STORE_NOT_READABLE" } },
+  ]) {
+    assert.equal(flow.storeMissingRemembered(store), false);
+    assert.notEqual(flow.storeMessages(store, "snapshots")[0].message.key, "remembered.store_missing");
+  }
+  assert.equal(flow.storeMissingRemembered({ ...missing, answer: { state: "store", path: remembered, snapshots: [] } }), false);
+});
+
+test("a remembered folder for the output that is not found is red, but the default place is made", () => {
+  const remembered = "/Volumes/External/outputs";
+  const place = { path: remembered, default: false, exists: false, cloud: null };
+  assert.equal(flow.outputMissingRemembered(place, remembered, remembered), true);
+  const lines = flow.placeMessages(place, remembered, remembered);
+  assert.deepEqual(lineShapes(lines), [
+    ["error", true, "remembered.output_missing"],
+    ["error", false, "next.label"],
+    ["error", false, "error.code"],
+  ]);
+  assert.equal(lines[1].message.keyParams.step, "remembered.output_missing_next");
+  assert.deepEqual(lines[2].message.params, { code: "OUTPUT_PARENT_NOT_FOUND" });
+  // A folder that is not remembered is refused when the run starts, as before.
+  assert.deepEqual(flow.placeMessages(place, remembered, null), []);
+  assert.equal(flow.outputMissingRemembered(place, remembered, "/elsewhere"), false);
+  // The remembered default place is made by a run, as on a first launch.
+  const home = { path: "/path/to/GarminRunningData", default: true, exists: false, cloud: null };
+  assert.equal(flow.outputMissingRemembered(home, home.path, home.path), false);
+  assert.deepEqual(lineShapes(flow.placeMessages(home, home.path, home.path)), [["info", true, "output.parent_new"]]);
+  // Where an output can go without a question.
+  assert.equal(flow.outputPlaceUsable({ ...place, exists: true }, remembered), true);
+  assert.equal(flow.outputPlaceUsable(home, home.path), true);
+  assert.equal(flow.outputPlaceUsable(place, remembered), false);
+  assert.equal(flow.outputPlaceUsable({ ...place, exists: null }, remembered), false);
+  assert.equal(flow.outputPlaceUsable({ ...place, exists: true }, "/elsewhere"), false);
+  assert.equal(flow.outputPlaceUsable(null, remembered), false);
+});
+
+test("the page tells what it could not do with the settings", () => {
+  const keys = (messages) => messages.map((item) => item.key);
+  assert.deepEqual(keys(flow.settingsMessages("SETTINGS_INVALID")), ["settings.invalid"]);
+  assert.deepEqual(keys(flow.settingsMessages("SETTINGS_NEWER")), ["settings.newer"]);
+  assert.deepEqual(keys(flow.settingsMessages("SETTINGS_NEWER", true)), ["settings.newer_kept"]);
+  assert.deepEqual(keys(flow.settingsMessages("SETTINGS_NOT_WRITTEN")), ["settings.not_written"]);
+  assert.deepEqual(keys(flow.settingsMessages("SETTINGS_NOT_WRITTEN", true)), ["settings.not_written"]);
+  assert.deepEqual(keys(flow.settingsMessages("SETTINGS_NOT_REMOVED")), ["settings.not_removed"]);
+  assert.deepEqual(flow.settingsMessages("SETTINGS_NOT_REMOVED", true), []);
+  assert.deepEqual(flow.settingsMessages("/path/to/private"), []);
+  assert.deepEqual(flow.settingsMessages(null), []);
+  // A run that made its output says when its places could not be remembered.
+  const finished = { state: "finished", output_path: "/path/to/out", settings_notice: "SETTINGS_NOT_WRITTEN" };
+  assert.ok(keys(flow.resultDetails(finished)).includes("settings.not_written"));
+  assert.ok(keys(flow.resultDetails({ ...finished, settings_notice: "SETTINGS_NEWER" })).includes("settings.newer_kept"));
+  assert.ok(!keys(flow.resultDetails({ ...finished, settings_notice: null })).some((key) => key.startsWith("settings.")));
+  assert.ok(!keys(flow.resultDetails({ ...finished, state: "failed" })).some((key) => key.startsWith("settings.")));
+});
+
+test("the settings set the boxes of a later launch, and a change in a box takes that back", () => {
+  // Which boxes the settings set when the page starts.
+  assert.deepEqual(flow.boxesSetBySettings({ launch: "later", store: "/path/to/store", outputParent: "/path/to" }), {
+    snapshotAuto: true,
+    outputAuto: true,
+  });
+  assert.deepEqual(flow.boxesSetBySettings({ launch: "later", store: null, outputParent: "/path/to" }), {
+    snapshotAuto: false,
+    outputAuto: true,
+  });
+  assert.deepEqual(flow.boxesSetBySettings({ launch: "first", store: "/path/to/store", outputParent: "/path/to" }), {
+    snapshotAuto: false,
+    outputAuto: false,
+  });
+  // A box is set while its place has no problem.
+  const store = { busy: false, checked: null, answer: { state: "store", path: "/path/to/store", snapshots: [], notices: [] } };
+  assert.equal(flow.storeSetBySettings(true, "snapshots", store), true);
+  assert.equal(flow.storeSetBySettings(false, "snapshots", store), false);
+  assert.equal(flow.storeSetBySettings(true, "snapshots", { ...store, busy: true }), false);
+  assert.equal(
+    flow.storeSetBySettings(true, "snapshots", { ...store, answer: { ...store.answer, notices: ["SNAPSHOT_STORE_LOCKED"] } }),
+    false,
+  );
+  assert.equal(flow.storeSetBySettings(true, "snapshots", { ...store, answer: { state: "error", path: "/path/to/store", error_code: "SNAPSHOT_STORE_NOT_READABLE" } }), false);
+  assert.equal(flow.storeSetBySettings(true, "snapshots", { ...store, answer: { state: "new", path: "/path/to/store" } }), false);
+  const place = { path: "/path/to", default: false, exists: true, cloud: null };
+  assert.equal(flow.outputSetBySettings(true, place, "/path/to"), true);
+  assert.equal(flow.outputSetBySettings(true, { ...place, exists: false }, "/path/to"), false);
+  assert.equal(flow.outputSetBySettings(false, place, "/path/to"), false);
+  // Choosing another store or the place of a new one, or another way, is a
+  // change of the second box; the folder for the output, of the third.
+  assert.equal(flow.changedBox("store-open"), "snapshot");
+  assert.equal(flow.changedBox("store-place"), "snapshot");
+  assert.equal(flow.changedBox("how"), "snapshot");
+  assert.equal(flow.changedBox("output"), "output");
+  assert.equal(flow.changedBox("input"), null);
+  const set = { snapshotDecided: true, snapshotAuto: true, outputDecided: true, outputAuto: true };
+  assert.deepEqual(flow.afterChange("snapshot", set), { ...set, snapshotDecided: false, snapshotAuto: false });
+  assert.deepEqual(flow.afterChange("output", set), { ...set, outputDecided: false, outputAuto: false });
+  assert.deepEqual(flow.afterChange(null, set), set);
+  // A box that the settings set shows no button to confirm it until it
+  // changes, as in the mockup v10.
+  assert.equal(flow.decideHidden("todo", true), true);
+  assert.equal(flow.decideHidden("error", true), true);
+  assert.equal(flow.decideHidden("todo", false), false);
+  assert.equal(flow.decideHidden("current", false), false);
+  assert.equal(flow.decideHidden("done", false), true);
+  // Opening another store after the second box was confirmed asks for its
+  // confirmation again, also on a first launch.
+  const view = { ...READY, ...flow.afterChange(flow.changedBox("store-open"), { ...set, snapshotAuto: false }) };
+  assert.equal(boxStates(view).snapshot, "current");
+});

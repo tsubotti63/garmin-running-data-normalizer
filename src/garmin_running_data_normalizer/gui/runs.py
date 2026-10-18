@@ -50,6 +50,7 @@ from ..snapshot.store import (
 )
 from ..stops import MIX_KINDS
 from .places import default_folder, default_store, make_default_folder
+from .settings import SETTINGS_NOT_WRITTEN, remember_run
 from .run_worker import FAMILY_COUNT_FIELDS, HOWS
 
 WORKER_MODULE = "garmin_running_data_normalizer.gui.run_worker"
@@ -314,6 +315,14 @@ class _Run:
         self.store: Path | None = None
         self.lock_before = False
         self.store_notices: list[str] = []
+        # The store of a Snapshot run, which the settings remember when the
+        # run makes its output, and what to tell when they could not be
+        # written (stage B4c).
+        self.used_store: Path | None = None
+        self.settings_notice: str | None = None
+        # Set when the child has ended and its outcome is being recorded: a
+        # cancellation asked for from then on changes nothing.
+        self.closing = False
         self.error_code: str | None = None
         self.error_detail: dict[str, Any] | None = None
         self.cancel_requested = False
@@ -399,6 +408,30 @@ def _check_new_store(store: Path) -> None:
         check_new_store_place(store)
     except SnapshotStoreError as exc:
         raise _store_request_error(exc) from exc
+
+
+def _remember(run: _Run) -> str | None:
+    """Remember the places of a run that made its output (stage B4c); the end
+    of a run never waits on its settings."""
+    try:
+        return remember_run(run.output, run.used_store)
+    except Exception:
+        return SETTINGS_NOT_WRITTEN
+
+
+def _end_state(run: _Run, returncode: int, output_exists: bool) -> str:
+    """How a run ended, from what its child reported and left."""
+    if run.error_code is not None and run.result is None:
+        # A failure that the child reported comes first, also when a
+        # cancellation was asked for after it (stage A5c).
+        return "failed"
+    if run.cancel_requested or run.reported_cancel:
+        # Run-All checked that the output was absent before it started, so an
+        # output now means the run finished before the stop.
+        return "finished_after_cancel" if output_exists else "cancelled"
+    if run.result is not None and returncode in (0, 3):
+        return "finished"
+    return "failed"
 
 
 class RunManager:
@@ -516,6 +549,7 @@ class RunManager:
             )
             run = _Run(process, output, staging_before)
             run.how = how
+            run.used_store = store
             if how == "snapshots" and store is not None:
                 run.store = store
                 run.lock_before = lock_before
@@ -550,12 +584,14 @@ class RunManager:
                 # The notices of the store that a cancelled import left
                 # (stage B4b-2): codes only.
                 "store_notices": list(run.store_notices),
+                # Settings that could not be remembered (stage B4c).
+                "settings_notice": run.settings_notice,
             }
 
     def cancel(self) -> dict[str, Any]:
         with self._lock:
             run = self._run
-            if run is None or not run.active or run.cancel_requested:
+            if run is None or not run.active or run.cancel_requested or run.closing:
                 run = None
             else:
                 run.cancel_requested = True
@@ -655,19 +691,17 @@ class RunManager:
             else []
         )
         with self._lock:
+            run.closing = True
+            state = _end_state(run, returncode, output_exists)
+        # A run that made its output is the earlier launch of the next one:
+        # its places are remembered before the page learns that it ended, so
+        # that the page can tell when they could not be (stage B4c).
+        settings_notice = _remember(run) if state in FINISHED_STATES else None
+        with self._lock:
             run.ended = time.monotonic()
-            if run.error_code is not None and run.result is None:
-                # A failure that the child reported comes first, also when a
-                # cancellation was asked for after it (stage A5c).
-                run.state = "failed"
-            elif run.cancel_requested or run.reported_cancel:
-                # Run-All checked that the output was absent before it started,
-                # so an output now means the run finished before the stop.
-                run.state = "finished_after_cancel" if output_exists else "cancelled"
-            elif run.result is not None and returncode in (0, 3):
-                run.state = "finished"
-            else:
-                run.state = "failed"
+            run.state = state
+            run.settings_notice = settings_notice
+            if state == "failed":
                 run.error_code = run.error_code or "RUN_ALL_FAILED"
             if run.state != "finished":
                 run.staging_folders = staging_folders
