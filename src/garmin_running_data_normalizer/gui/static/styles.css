@@ -308,14 +308,25 @@ fieldset {
 }
 
 /* The Snapshots of the store (stage B4a): a long name wraps, and a long
-   list scrolls inside the box. */
+   list scrolls inside the box, under its label and above its note. From
+   stage B4b-1, with their state: as in the mockup v10, a narrow box leaves
+   out the times of the Exports, and a narrower one the numbers of files. */
 #store-list {
+  container-type: inline-size;
+}
+
+.snap-wrap {
   max-height: 18rem;
-  overflow-y: auto;
+  overflow: auto;
 }
 
 .snap {
   font-size: 0.86rem;
+}
+
+.snap th,
+.snap td {
+  padding: 4px 6px;
 }
 
 .snap td {
@@ -324,6 +335,48 @@ fieldset {
 
 .snap .nowrap {
   white-space: nowrap;
+}
+
+.snap .kept {
+  color: var(--sub);
+}
+
+@container (max-width: 470px) {
+  .snap .time-col {
+    display: none;
+  }
+}
+
+@container (max-width: 300px) {
+  .snap .n {
+    display: none;
+  }
+}
+
+/* The parts that the chosen way to normalize does not use (stage B4b-1). */
+.unused {
+  opacity: 0.6;
+}
+
+/* Normalizing the Snapshots again, at the foot of the first box. */
+.rerun {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link-button:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
 }
 
 .help,

@@ -631,6 +631,32 @@ class SameProblemTest(StopLines, unittest.TestCase):
             self.assertEqual(sorted(path.name for path in root.iterdir()), ["damaged", "folder", "store"])
             self.assertEqual([path.name for path in folder.iterdir()], ["notes.txt"])
 
+    def test_the_stops_of_a_registration_have_their_own_codes(self) -> None:
+        # Until stage B4b-1 these four stopped with SNAPSHOT_LIFECYCLE_FAILED;
+        # the GUI checks the same with the same functions before a run.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = root / "store"
+            registered(store, SYNTHETIC_EXPORT)
+            other = root / "other"
+            shutil.copytree(SYNTHETIC_EXPORT, other)
+            (other / "DI-Connect-Fitness" / "synthetic_gear.json").write_text("[]", encoding="utf-8")
+            late = "2030-01-01T03:00:00+00:00"
+            cases = [
+                ("SNAPSHOT_LABEL_INVALID", register_args(store, other, "S 2")),
+                ("SNAPSHOT_LABEL_EXISTS", register_args(store, other, "S1")),
+                ("SNAPSHOT_TIME_INVALID", (*register_args(store, other, "S2")[:-1], "--observed-at", "2030-01-01 02:00", "--confirm-complete")),
+                ("SNAPSHOT_TIME_INVALID", (*register_args(store, other, "S2")[:-1], "--requested-at", late, "--confirm-complete")),
+                ("SNAPSHOT_INPUT_INSIDE_STORE", register_args(store, store, "S2")),
+                ("SNAPSHOT_INPUT_INSIDE_STORE", register_args(store, store / "snapshots", "S2")),
+            ]
+            for code, args in cases:
+                with self.subTest(code=code, args=args[-4:]):
+                    self.assert_stop(code, args, root)
+            # The same Export again is not a new Snapshot under any label,
+            # one that the store has included (stage A3a).
+            self.assertEqual(cli(*register_args(store, SYNTHETIC_EXPORT, "S1"))[0], 0)
+
     def test_a_registration_that_meets_a_damaged_store(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

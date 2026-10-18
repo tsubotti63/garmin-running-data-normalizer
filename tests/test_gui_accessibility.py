@@ -240,24 +240,33 @@ class GuiPageStructureTest(unittest.TestCase):
                 self.assertEqual(by_id(self.elements, identifier).get("tabindex"), "-1")
 
 
-    def test_the_snapshot_parts_that_cannot_be_used_yet_say_why(self) -> None:
-        # Until stage B4b the second box offers only one way to normalize; the
-        # way that cannot be used is disabled and points at the line that says
-        # why. From stage B4a the parts of the Snapshot Store can be used: they
-        # wait for the server, as every button does, and point at no reason.
-        reason = by_id(self.elements, "snapshot-not-yet")
-        self.assertEqual(reason.get("data-i18n"), "snapshot.not_yet")
-        part = by_id(self.elements, "how-snapshots")
-        self.assertIn("disabled", part.attributes)
-        self.assertEqual(part.get("aria-describedby"), "snapshot-not-yet")
+    def test_the_ways_to_normalize_and_the_fields_of_an_import(self) -> None:
+        # From stage B4b-1 both ways to normalize can be chosen, the Snapshots
+        # first; the note that the other way does not use the store is shown
+        # when that way is chosen. The parts of the Snapshot Store wait for
+        # the server, as every button does, and point at no reason.
+        snapshots = by_id(self.elements, "how-snapshots")
+        single = by_id(self.elements, "how-single")
+        self.assertEqual(("disabled" in snapshots.attributes, "disabled" in single.attributes), (False, False))
+        self.assertEqual(("checked" in snapshots.attributes, "checked" in single.attributes), (True, False))
+        self.assertIn("hidden", by_id(self.elements, "how-note").attributes)
         for identifier in ("store-create", "store-open", "store-open-other", "store-create-new", "store-check"):
             with self.subTest(part=identifier):
                 button = by_id(self.elements, identifier)
                 self.assertEqual(button.tag, "button")
                 self.assertIsNone(button.get("aria-describedby"))
-        # The lines of the store are spoken when they change.
-        result = by_id(self.elements, "store-result")
-        self.assertEqual((result.get("role"), result.get("aria-live")), ("status", "polite"))
+        # The fields of an import have a label each and say what they take.
+        for identifier in ("snapshot-label", "downloaded-at"):
+            with self.subTest(field=identifier):
+                field = by_id(self.elements, identifier)
+                self.assertEqual(field.get("aria-describedby"), f"{identifier}-help")
+                labels = [element for element in self.elements if element.tag == "label" and element.get("for") == identifier]
+                self.assertEqual(len(labels), 1)
+        # The lines of the store and of an import are spoken when they change.
+        for identifier in ("store-result", "import-result"):
+            with self.subTest(lines=identifier):
+                result = by_id(self.elements, identifier)
+                self.assertEqual((result.get("role"), result.get("aria-live")), ("status", "polite"))
 
     def test_folded_help_says_whether_it_is_open(self) -> None:
         toggle = by_id(self.elements, "tools-toggle")

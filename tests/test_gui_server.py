@@ -14,7 +14,9 @@ import threading
 import time
 import unittest
 from collections.abc import Iterable
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 from garmin_running_data_normalizer import __version__
@@ -622,12 +624,25 @@ class GuiRunApiTest(GuiServerTestCase):
                 status, answer = self.call("/api/folders", {"path": str(self.root), "zips": zips})
                 self.assertNotIn("zips", answer)
 
+    def without_download_time(self, answer: dict[str, Any], source: str | None) -> dict[str, Any]:
+        """The answer without the download time that an import proposes,
+        after checking that it is a time in UTC from the source given (stage
+        B4b-1)."""
+        answer = dict(answer)
+        downloaded_at = answer.pop("downloaded_at")
+        self.assertEqual(answer.pop("downloaded_from"), source)
+        if source is None:
+            self.assertIsNone(downloaded_at)
+        else:
+            self.assertEqual(datetime.fromisoformat(downloaded_at).utcoffset(), timedelta(0))
+        return answer
+
     def test_the_input_check_returns_codes_only(self) -> None:
         self.start_server(600.0)
         status, answer = self.call("/api/check-input", {"input": str(SYNTHETIC_EXPORT)})
         self.assertEqual(status, 200)
         self.assertEqual(
-            answer,
+            self.without_download_time(answer, "newest_file"),
             {
                 "ready": True,
                 "input_kind": "folder",
@@ -657,6 +672,7 @@ class GuiRunApiTest(GuiServerTestCase):
         self.assertEqual([item["code"] for item in answer["findings"]], ["INPUT_DIRECTORY_INVALID"])
         self.assertIsNone(answer["input_kind"])
         self.assertIsNone(answer["counts"])
+        self.without_download_time(answer, None)
         self.assertNotIn(str(self.root), json.dumps(answer))
         for payload, code in (
             ({"input": "relative"}, "PATH_NOT_ABSOLUTE"),
@@ -727,7 +743,7 @@ class GuiRunApiTest(GuiServerTestCase):
         status, answer = self.call("/api/check-input", {"input": str(mixed)})
         self.assertEqual(status, 200)
         self.assertEqual(
-            answer,
+            self.without_download_time(answer, "newest_file"),
             {
                 "ready": False,
                 "input_kind": "folder",
@@ -756,7 +772,7 @@ class GuiRunApiTest(GuiServerTestCase):
         status, answer = self.call("/api/check-input", {"input": str(repeated)})
         self.assertEqual(status, 200)
         self.assertEqual(
-            answer,
+            self.without_download_time(answer, "newest_file"),
             {
                 "ready": True,
                 "input_kind": "folder",

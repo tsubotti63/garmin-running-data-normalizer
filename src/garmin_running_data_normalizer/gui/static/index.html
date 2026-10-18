@@ -51,9 +51,22 @@
         </div>
         <p id="extract-help" class="help" data-i18n="extract.help"></p>
       </div>
+      <div id="import-area" hidden>
+        <label for="snapshot-label" data-i18n="import.label"></label>
+        <input id="snapshot-label" type="text" autocomplete="off" spellcheck="false" aria-describedby="snapshot-label-help">
+        <p id="snapshot-label-help" class="help" data-i18n="import.label_help"></p>
+        <label for="downloaded-at" data-i18n="import.time"></label>
+        <input id="downloaded-at" type="text" autocomplete="off" spellcheck="false" aria-describedby="downloaded-at-help">
+        <p id="downloaded-at-help" class="help"></p>
+        <div id="import-result" class="messages" role="status" aria-live="polite"></div>
+      </div>
       <div id="export-error" class="errbox" hidden>
         <h3 id="export-error-heading" tabindex="-1"></h3>
         <div id="export-error-lines" class="messages"></div>
+      </div>
+      <div id="rerun-area" class="rerun" hidden>
+        <p id="rerun-text" class="help"></p>
+        <button type="button" id="rerun-toggle" class="link-button" data-i18n="rerun.button"></button>
       </div>
     </section>
     <div class="arrow" aria-hidden="true"></div>
@@ -74,16 +87,16 @@
           <p class="info-foot" data-i18n="info.how_foot"></p>
         </div>
         <div class="choice">
-          <input type="radio" name="how" id="how-snapshots" value="snapshots" disabled aria-describedby="snapshot-not-yet">
+          <input type="radio" name="how" id="how-snapshots" value="snapshots" checked>
           <label for="how-snapshots" data-i18n="how.snapshots"></label>
         </div>
         <div class="choice">
-          <input type="radio" name="how" id="how-single" value="single" checked>
+          <input type="radio" name="how" id="how-single" value="single">
           <label for="how-single" data-i18n="how.single"></label>
         </div>
       </fieldset>
-      <p id="snapshot-not-yet" class="note" data-i18n="snapshot.not_yet"></p>
-      <div class="store-area">
+      <p id="how-note" class="note" hidden></p>
+      <div id="store-area" class="store-area">
         <div class="label-row">
           <p id="store-label" class="label-line" data-i18n="store.label"></p>
           <button type="button" id="store-info-button" class="info-button" aria-expanded="false" aria-controls="store-info" aria-labelledby="store-info-button store-label" data-i18n="info.explain"></button>
@@ -109,17 +122,20 @@
         <div id="store-result" class="messages" role="status" aria-live="polite"></div>
         <div id="store-list" hidden>
           <p id="store-list-label" class="label-line" data-i18n="snapshot.list_label"></p>
-          <table class="t snap" aria-labelledby="store-list-label">
-            <thead>
-              <tr>
-                <th scope="col" data-i18n="store.col_order"></th>
-                <th scope="col" data-i18n="store.col_label"></th>
-                <th scope="col" data-i18n="store.col_time"></th>
-                <th scope="col" class="n" data-i18n="store.col_files"></th>
-              </tr>
-            </thead>
-            <tbody id="store-rows"></tbody>
-          </table>
+          <div class="snap-wrap">
+            <table class="t snap" aria-labelledby="store-list-label">
+              <thead>
+                <tr>
+                  <th scope="col" data-i18n="store.col_order"></th>
+                  <th scope="col" data-i18n="store.col_label"></th>
+                  <th scope="col" class="time-col" data-i18n="store.col_time"></th>
+                  <th scope="col" class="n" data-i18n="store.col_files"></th>
+                  <th scope="col" data-i18n="store.col_state"></th>
+                </tr>
+              </thead>
+              <tbody id="store-rows"></tbody>
+            </table>
+          </div>
           <p class="help" data-i18n="store.list_note"></p>
         </div>
       </div>
@@ -415,6 +431,7 @@
     <section id="help-faq" class="help-section" aria-labelledby="help-faq-heading" hidden>
       <h3 id="help-faq-heading" tabindex="-1" data-i18n="help.faq"></h3>
       <details class="qa"><summary data-i18n="faq.zip_q"></summary><p data-i18n="faq.zip_a"></p></details>
+      <details class="qa"><summary data-i18n="faq.time_q"></summary><p data-i18n="faq.time_a"></p></details>
       <details class="qa"><summary data-i18n="faq.place_q"></summary><p data-i18n="faq.place_a"></p></details>
       <details class="qa"><summary data-i18n="faq.exit_q"></summary><p data-i18n="faq.exit_a"></p></details>
       <details class="qa"><summary data-i18n="faq.send_q"></summary><p data-i18n="faq.send_a"></p></details>

@@ -217,8 +217,16 @@ GUI は、次のコマンドと同じ正規化を行います。
 garmin-running-data-normalizer run-all --input /path/to/export --output /path/to/new-output --timezone Asia/Tokyo
 ```
 
-自動で動かすとき、Snapshot を使うとき、前に作った出力を確かめるときは、
-コマンドラインを使ってください。
+エクスポートをスナップショットに取り込むときは、次のコマンドと同じです。
+エクスポートの日時には、どれもダウンロードした日時を使います。
+
+```bash
+garmin-running-data-normalizer snapshot register --store /path/to/store --input /path/to/export --label 2030-01-01 --requested-at 2030-01-01T02:00:00+00:00 --downloaded-at 2030-01-01T02:00:00+00:00 --observed-at 2030-01-01T02:00:00+00:00 --confirm-complete
+garmin-running-data-normalizer snapshot run-all --store /path/to/store --output /path/to/new-output --timezone Asia/Tokyo
+```
+
+自動で動かすとき、前に作った出力を確かめるときは、コマンドラインを
+使ってください。
 
 ```bash
 garmin-running-data-normalizer validate-handoff --input /path/to/output
