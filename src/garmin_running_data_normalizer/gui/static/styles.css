@@ -481,6 +481,14 @@ button.primary:disabled {
   color: var(--ok);
 }
 
+/* The buttons that choose one of the Exports of a mixed input: a long name
+   wraps inside the box (stage B3c). */
+#check-choices button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
 /* A stop, in the box that it concerns. */
 .errbox {
   margin-top: 10px;

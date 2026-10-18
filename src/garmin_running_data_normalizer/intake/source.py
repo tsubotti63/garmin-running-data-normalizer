@@ -25,6 +25,7 @@ import hashlib
 import os
 import shutil
 import tempfile
+import unicodedata
 import zlib
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -76,6 +77,30 @@ class InputNotReadableError(Exception):
     def __init__(self, places: list[str]) -> None:
         super().__init__("a folder or file of the input cannot be opened")
         self.places = sorted(set(places))
+
+
+# The longest place inside the input that the check and the run show
+# (stage B3c).
+MAX_SHOWN_PLACE_LENGTH = 4096
+# The characters that turn the direction of the text, which could make a
+# name read otherwise than it is (stage B3c).
+DIRECTION_CHARACTERS = frozenset(chr(code) for code in (*range(0x202A, 0x202F), *range(0x2066, 0x206A)))
+HIDDEN_PLACE = "(a name that cannot be shown)"
+
+
+def place_can_be_shown(place: object) -> bool:
+    """Whether a place inside the input can be shown on a line of its own:
+    a name with a control character or a line break could change the lines
+    around it, and one that turns the direction of the text could read
+    otherwise; it is shown as a name that cannot be shown (stage B3c)."""
+    return (
+        isinstance(place, str)
+        and len(place) <= MAX_SHOWN_PLACE_LENGTH
+        and not any(
+            unicodedata.category(character) in ("Cc", "Zl", "Zp") or character in DIRECTION_CHARACTERS
+            for character in place
+        )
+    )
 
 
 # Folders that an operating system keeps at the top of a drive and that its

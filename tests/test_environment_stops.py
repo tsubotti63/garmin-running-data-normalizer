@@ -513,8 +513,12 @@ class GuiDetailTest(unittest.TestCase):
         for message, detail in (
             ({"event": "failed", "code": "INPUT_NOT_READABLE", "place": "DI_CONNECT/x", "more": 2}, {"place": "DI_CONNECT/x", "more": 2}),
             ({"event": "failed", "code": "INPUT_NOT_READABLE", "place": "", "more": 0}, {"place": "", "more": 0}),
-            ({"event": "failed", "code": "INPUT_NOT_READABLE", "place": "a\nb", "more": 0}, None),
-            ({"event": "failed", "code": "INPUT_NOT_READABLE", "place": "x" * 5000, "more": 0}, None),
+            # A name that cannot be shown goes to the page as None, so that
+            # the page says so, as the check does (stage B3c).
+            ({"event": "failed", "code": "INPUT_NOT_READABLE", "place": "a\nb", "more": 0}, {"place": None, "more": 0}),
+            ({"event": "failed", "code": "INPUT_NOT_READABLE", "place": "x" * 5000, "more": 1}, {"place": None, "more": 1}),
+            ({"event": "failed", "code": "INPUT_NOT_READABLE", "place": "a\u202eb", "more": 0}, {"place": None, "more": 0}),
+            ({"event": "failed", "code": "INPUT_NOT_READABLE", "place": 5, "more": 0}, None),
             ({"event": "failed", "code": "INPUT_NOT_READABLE", "place": "x", "more": True}, None),
             ({"event": "failed", "code": "INPUT_CHANGED"}, None),
         ):

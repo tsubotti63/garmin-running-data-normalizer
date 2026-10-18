@@ -21,9 +21,11 @@ from ..intake.roots import MixedExportsError
 from ..intake.source import (
     CorruptArchiveError,
     ExportTooLargeError,
+    HIDDEN_PLACE,
     InputNotReadableError,
     TempSpaceError,
     is_zip_input,
+    place_can_be_shown,
 )
 from ..normalizers.activities import normalize_activities
 from ..normalizers.records import merge_repeated_records
@@ -147,6 +149,7 @@ def _base(
 def doctor_input(
     root: str | Path,
     timezone_name: str = DEFAULT_TIMEZONE,
+    details: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Inspect bounded input readiness without predicting a run's warnings.
 
@@ -161,6 +164,11 @@ def doctor_input(
     the FIT files, the files that a run reads, those that the check found it
     cannot read, and those that are not read. It is None when the Export
     could not be read.
+
+    With ``details``, the check puts there, for where it is started only, the
+    places inside the input that its report never holds (stage B3c): the
+    Exports of a mixed input (``exports_found``) and the folders and files
+    that cannot be opened (``not_readable_places``).
     """
     try:
         timezone_name = resolve_timezone_name(timezone_name)
@@ -255,7 +263,12 @@ def doctor_input(
             if mixed_accounts:
                 raise MixedExportsError()
             counts = input_counts
-        except MixedExportsError:
+        except MixedExportsError as exc:
+            if details is not None and exc.found:
+                details["exports_found"] = [
+                    {"place": item.place, "zip": item.is_zip, "same_as": item.same_as}
+                    for item in exc.found
+                ]
             findings.append(
                 _finding(
                     "INPUT_MULTIPLE_EXPORTS",
@@ -291,9 +304,12 @@ def doctor_input(
                     evidence_reference="diagnostic:source-discovery",
                 )
             )
-        except (InputNotReadableError, PermissionError):
+        except (InputNotReadableError, PermissionError) as exc:
             # A folder or file that this app may not open stops a run
-            # (stage A3d-3a); which one, the run says where it is started.
+            # (stage A3d-3a); which one, the run says where it is started,
+            # and from stage B3c the check too.
+            if details is not None and isinstance(exc, InputNotReadableError) and exc.places:
+                details["not_readable_places"] = list(exc.places)
             findings.append(
                 _finding(
                     "INPUT_NOT_READABLE",
@@ -587,8 +603,49 @@ def doctor_run_output(root: str | Path) -> dict[str, Any]:
     )
 
 
-def render_doctor_human(report: dict[str, Any]) -> str:
-    """Render fixed, privacy-safe human output from the machine report."""
+# The Exports of a mixed input that the report for a person names at most.
+MAX_EXPORTS_SHOWN = 20
+
+
+def _shown(place: Any, itself: str) -> str:
+    """A place inside the input on a line of the report for a person."""
+    if not place_can_be_shown(place):
+        return HIDDEN_PLACE
+    return place or itself
+
+
+def _place_lines(code: str, details: dict[str, Any]) -> list[str]:
+    """The places that the check found for a finding, for a person only
+    (stage B3c): the Exports of a mixed input, and the first folder or file
+    that cannot be opened with how many more, as a run names them."""
+    lines = []
+    if code == "INPUT_MULTIPLE_EXPORTS":
+        found = details.get("exports_found") or []
+        for item in found[:MAX_EXPORTS_SHOWN]:
+            line = f"Export found: {_shown(item['place'], 'the input itself')}"
+            if item["zip"]:
+                line += " (ZIP file)"
+            if item["same_as"] is not None:
+                line += f" (the same Export as {_shown(item['same_as'], 'the input itself')})"
+            lines.append(line)
+        if len(found) > MAX_EXPORTS_SHOWN:
+            lines.append(f"Export found: and {len(found) - MAX_EXPORTS_SHOWN} more")
+    elif code == "INPUT_NOT_READABLE":
+        places = details.get("not_readable_places") or []
+        if places:
+            first = _shown(places[0], "the input folder or ZIP file itself")
+            more = len(places) - 1
+            lines.append(f"Cannot be opened: {first}" + (f" and {more} more" if more > 0 else ""))
+    return lines
+
+
+def render_doctor_human(report: dict[str, Any], details: dict[str, Any] | None = None) -> str:
+    """Render fixed, privacy-safe human output from the machine report.
+
+    With the ``details`` of the check, the report for a person also names
+    the places that the check found (stage B3c); the machine report never
+    holds them.
+    """
     lines = [
         f"Doctor: {report['mode']}",
         f"Completion: {report['completion_state']}",
@@ -637,6 +694,8 @@ def render_doctor_human(report: dict[str, Any]) -> str:
     for item in report["findings"]:
         step = finding_next_step(str(item.get("code")), str(item.get("next_action_id")))
         lines.append(f"Finding: {item['code']}" + (f" (next: {step})" if step else ""))
+        if details:
+            lines.extend(_place_lines(str(item.get("code")), details))
     next_id = str(report["doctor_next_action_id"])
     step = NEXT_ACTIONS.get(next_id)
     lines.append(f"Next: {next_id}" + (f" ({step})" if step else ""))

@@ -680,6 +680,75 @@ test("the lines of the check come red first, then yellow, then what the check fo
   assert.deepEqual(lines({ kind: null, counts: null, findings: [ready] }), [["ok", true, "check.ready", {}]]);
 });
 
+test("the Exports of a mixed input are named after what happened, and can be chosen", () => {
+  // Stage B3c: the Exports with the same files are counted once.
+  const mixed = { code: "INPUT_MULTIPLE_EXPORTS", severity: "ERROR", message_id: "INPUT_HOLDS_MORE_THAN_ONE_EXPORT", next_action_id: "SELECT_ONE_EXPORT_OR_USE_SNAPSHOTS" };
+  const exportsFound = [
+    { place: "export-a", zip: false, same_as: null, path: "/in/export-a" },
+    { place: "export-a.zip", zip: true, same_as: 0, path: "/in/export-a.zip" },
+    { place: null, zip: false, same_as: null, path: null },
+    { place: "", zip: false, same_as: null, path: null },
+  ];
+  const lines = flow
+    .checkMessages({ kind: "folder", counts: null, exportsFound, findings: [mixed] })
+    .map((line) => [line.kind, line.start, line.message.key, line.message.params, line.message.keyParams]);
+  assert.deepEqual(lines, [
+    ["error", true, "check.not_ready", {}, {}],
+    ["error", true, "stop.input_multiple_exports", {}, {}],
+    ["error", false, "check.found_count", { count: 3 }, {}],
+    ["error", false, "check.found_place", { place: "export-a" }, {}],
+    ["error", false, "check.found_place_same", { place: "export-a.zip", same: "export-a" }, {}],
+    ["error", false, "check.found_place", {}, { place: "check.name_hidden" }],
+    ["error", false, "check.found_place", {}, { place: "check.name_itself" }],
+    ["error", false, "next.label", {}, { step: "stop_next.input_multiple_exports" }],
+    ["error", false, "error.code", { code: "INPUT_MULTIPLE_EXPORTS" }, {}],
+  ]);
+  // Only the places in the chosen folder have a button.
+  assert.deepEqual(
+    flow.foundChoices({ exportsFound }).map((choice) => [choice.message.key, choice.message.params, choice.path]),
+    [
+      ["check.choose_found", { name: "export-a" }, "/in/export-a"],
+      ["check.choose_found", { name: "export-a.zip" }, "/in/export-a.zip"],
+    ],
+  );
+  // A long name is cut on its button, and many Exports are named up to 20.
+  const long = "x".repeat(130);
+  assert.equal(flow.foundChoices({ exportsFound: [{ place: long, zip: false, same_as: null, path: "/in/x" }] })[0].message.params.name, `${"x".repeat(120)}…`);
+  const many = Array.from({ length: 23 }, (_, index) => ({ place: `export-${index}`, zip: false, same_as: null, path: `/in/export-${index}` }));
+  const named = flow.checkMessages({ kind: "folder", counts: null, exportsFound: many, findings: [mixed] }).map((line) => line.message.key);
+  assert.equal(named.filter((key) => key === "check.found_place").length, 20);
+  assert.ok(named.includes("check.found_more"));
+  assert.equal(flow.foundChoices({ exportsFound: many }).length, 20);
+  // A mix without places names none.
+  assert.deepEqual(
+    flow.checkMessages({ kind: "folder", counts: null, exportsFound: [], findings: [mixed] }).map((line) => line.message.key),
+    ["check.not_ready", "stop.input_multiple_exports", "next.label", "error.code"],
+  );
+});
+
+test("a run names a folder that cannot be shown as the check does", () => {
+  // Stage B3c: the server gives such a name as null.
+  assert.deepEqual(
+    flow.errorMessages("INPUT_NOT_READABLE", { place: null, more: 2 }).map((line) => line.key),
+    ["stop.input_not_readable", "error.place_hidden", "error.place_more", "next.label", "error.code"],
+  );
+});
+
+test("the check names the first folder that cannot be opened, as a run does", () => {
+  // Stage B3c.
+  const closed = { code: "INPUT_NOT_READABLE", severity: "ERROR", message_id: "INPUT_FOLDER_OR_FILE_CANNOT_BE_OPENED", next_action_id: "ALLOW_INPUT_ACCESS_OR_SELECT_EXPORT_FOLDER" };
+  const keys = (notReadable) =>
+    flow.checkMessages({ kind: "folder", counts: null, notReadable, findings: [closed] }).map((line) => [line.message.key, line.message.params]);
+  assert.deepEqual(keys({ place: "DI_CONNECT/closed", more: 2 }).slice(1, 4), [
+    ["stop.input_not_readable", {}],
+    ["error.place", { place: "DI_CONNECT/closed" }],
+    ["error.place_more", { more: 2 }],
+  ]);
+  assert.deepEqual(keys({ place: null, more: 0 })[2], ["error.place_hidden", {}]);
+  assert.deepEqual(keys({ place: "", more: 0 })[2], ["error.place_input_itself", {}]);
+  assert.deepEqual(keys(null)[2][0], "next.label");
+});
+
 test("the timezone data that the check found missing belongs to the third box", () => {
   // Stage B3b: the first box waits, as the check counts no Activities.
   const timezone = { code: "TIMEZONE_DATA_UNAVAILABLE", severity: "ERROR", message_id: "INSTALL_REQUIRED_TIMEZONE_DATA", next_action_id: "REPAIR_RUNTIME_ENVIRONMENT" };

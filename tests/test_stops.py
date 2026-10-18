@@ -254,6 +254,13 @@ class TableTest(unittest.TestCase):
         from garmin_running_data_normalizer.run_all import input_not_readable_message
         from garmin_running_data_normalizer.snapshot.store import NOTICE_MESSAGES, store_not_readable_message
 
+        # A name that could change the line or read otherwise is not written
+        # (stage B3c).
+        for function in (input_not_readable_message, store_not_readable_message):
+            for name in ("a\nb", "a\u2028b", "a\u202eb", "x" * 5000):
+                with self.subTest(function=function.__name__, name=name[:8]):
+                    message = function([name, "c"])
+                    self.assertTrue(message.endswith(": (a name that cannot be shown) and 1 more"), message)
         for message in (
             *MESSAGES.values(),
             input_not_readable_message(),

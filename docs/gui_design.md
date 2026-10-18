@@ -248,6 +248,15 @@ around a pasted path, and uses a chosen path as it is.
   table says which families the run found. Without the timezone data, the
   check counts no Activities: the third box shows the missing data, and the
   first box waits.
+- When the input holds different Exports, the first box names each one by
+  its place inside the input, counting those with the same files once, and
+  offers a button to choose each one that is in the selected folder; the
+  page checks the chosen one at once (stage B3c). The two buttons at the top
+  of the box choose anything else, so the box has no other button for that.
+  The first folder or file that cannot be opened is named as after a run.
+  A name with a control character, a line break, or a character that turns
+  the direction of the text shows as a name that cannot be shown, without a
+  button, in the check and after a run alike.
 - A stop of a run in the first box hides the lines of the check before it,
   which would read as the answer to it. After the page is loaded again, the
   first box shows no summary until its field holds a place; the settings of an

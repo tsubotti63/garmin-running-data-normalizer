@@ -634,6 +634,8 @@ class GuiRunApiTest(GuiServerTestCase):
                     "files_left_out": 0,
                     "files_not_read": 0,
                 },
+                "exports_found": [],
+                "not_readable": None,
                 "findings": [
                     {
                         "code": "RUN_ALL_NOT_EVALUATED",
@@ -726,6 +728,13 @@ class GuiRunApiTest(GuiServerTestCase):
                 "input_kind": "folder",
                 # Mixed Exports are not counted.
                 "counts": None,
+                # The Exports found, each with the full place to choose it,
+                # for the page only (stage B3c).
+                "exports_found": [
+                    {"place": "export-a", "zip": False, "same_as": None, "path": str(mixed / "export-a")},
+                    {"place": "export-b", "zip": False, "same_as": None, "path": str(mixed / "export-b")},
+                ],
+                "not_readable": None,
                 "findings": [
                     {
                         "code": "INPUT_MULTIPLE_EXPORTS",
@@ -754,6 +763,8 @@ class GuiRunApiTest(GuiServerTestCase):
                     "files_left_out": 0,
                     "files_not_read": 0,
                 },
+                "exports_found": [],
+                "not_readable": None,
                 "findings": [
                     {
                         "code": "INPUT_DUPLICATE_SOURCES",
@@ -771,6 +782,57 @@ class GuiRunApiTest(GuiServerTestCase):
             },
         )
         self.assertNotIn(str(self.root), json.dumps(answer))
+
+    def test_the_exports_found_can_be_chosen_only_in_a_chosen_folder(self) -> None:
+        # Stage B3c: in a ZIP file, the page names the Exports found and
+        # offers none to choose.
+        from tests.test_mixed_and_duplicate_exports import activity, other_export
+        from tests.test_zip_input import zip_export
+
+        self.start_server(600.0)
+        mixed = self.root / "mixed"
+        other_export(mixed / "export-a", activity("A1"))
+        other_export(mixed / "export-b", activity("B1"))
+        archive = zip_export(mixed, self.root / "mixed.zip")
+        status, answer = self.call("/api/check-input", {"input": str(archive)})
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            answer["exports_found"],
+            [
+                {"place": "export-a", "zip": False, "same_as": None, "path": None},
+                {"place": "export-b", "zip": False, "same_as": None, "path": None},
+            ],
+        )
+
+    def test_a_full_place_is_made_inside_the_chosen_folder_only(self) -> None:
+        from garmin_running_data_normalizer.gui.server import _choosable_path
+
+        folder = self.root
+        self.assertEqual(_choosable_path(folder, "export-a"), str(folder / "export-a"))
+        self.assertEqual(_choosable_path(folder, "inner/export.zip"), str(folder / "inner" / "export.zip"))
+        for place in ("", "/export", "../export", "a/../export", "a//b", "./a"):
+            with self.subTest(place=place):
+                self.assertIsNone(_choosable_path(folder, place))
+        self.assertIsNone(_choosable_path(folder / "missing", "export-a"))
+
+    def test_a_name_that_cannot_be_shown_goes_to_the_page_as_none(self) -> None:
+        # Stage B3c: the page shows it as a name that cannot be shown, with
+        # no button; the counts stay.
+        from garmin_running_data_normalizer.gui.server import _exports_found, _not_readable
+
+        found = [
+            {"place": "line\nbreak", "zip": False, "same_as": None},
+            {"place": "export-b", "zip": True, "same_as": "line\nbreak"},
+        ]
+        self.assertEqual(
+            _exports_found(self.root, found),
+            [
+                {"place": None, "zip": False, "same_as": None, "path": None},
+                {"place": "export-b", "zip": True, "same_as": 0, "path": str(self.root / "export-b")},
+            ],
+        )
+        self.assertEqual(_not_readable(["a\u2028b", "c"]), {"place": None, "more": 1})
+        self.assertEqual(_not_readable([]), None)
 
     def test_a_mix_of_accounts_is_reported_without_their_values(self) -> None:
         self.start_server(600.0)
@@ -820,8 +882,9 @@ class GuiRunApiTest(GuiServerTestCase):
         "permission bits do not stop this user here",
     )
     def test_a_folder_that_cannot_be_opened_is_named_on_the_page_only(self) -> None:
-        # The run stops, and the page names the folder; the check before the
-        # run and the server's log do not (stage A3d-3a).
+        # The run stops, and the page names the folder; the server's log does
+        # not (stage A3d-3a). From stage B3c, the check before the run names
+        # it to the page too, as the run does.
         self.start_server(600.0)
         source = self.root / "closed"
         shutil.copytree(SYNTHETIC_EXPORT, source)
@@ -842,7 +905,10 @@ class GuiRunApiTest(GuiServerTestCase):
             answer["error_detail"],
             {"place": "DI-Connect-Fitness/synthetic-private-folder", "more": 0},
         )
-        self.assertNotIn("synthetic-private-folder", json.dumps(check))
+        self.assertEqual(
+            check["not_readable"], {"place": "DI-Connect-Fitness/synthetic-private-folder", "more": 0}
+        )
+        self.assertNotIn("synthetic-private-folder", json.dumps(check["findings"]))
         self.assertNotIn("synthetic-private-folder", stdout.getvalue())
 
     def test_a_run_blocks_a_second_run_and_shutdown_until_it_ends(self) -> None:

@@ -34,11 +34,13 @@ from .intake.discovery import (
 )
 from .intake.roots import MIXED_INPUT_MESSAGE, OUTSIDE_EXPORT_ROOT, MixedExportsError
 from .intake.source import (
+    HIDDEN_PLACE,
     CorruptArchiveError,
     ExportTooLargeError,
     InputNotReadableError,
     TempSpaceError,
     is_zip_input,
+    place_can_be_shown,
 )
 from .output_location import (
     MESSAGES as OUTPUT_LOCATION_MESSAGES,
@@ -131,6 +133,9 @@ def input_not_readable_message(places: list[str] | None = None) -> str:
     if places is None:
         return STOPS["INPUT_NOT_READABLE"].what
     first = places[0] if places and places[0] else "the input folder or ZIP file itself"
+    # A name that could change the line, as the check shows it (stage B3c).
+    if not place_can_be_shown(first):
+        first = HIDDEN_PLACE
     more = len(places) - 1
     named = first if more <= 0 else f"{first} and {more} more"
     return f"{STOPS['INPUT_NOT_READABLE'].what}: {named}"

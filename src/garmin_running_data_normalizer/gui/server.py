@@ -24,7 +24,7 @@ from typing import Any
 from .. import __version__
 from ..common.time import DEFAULT_TIMEZONE
 from ..diagnostics.doctor import DoctorError, doctor_input
-from ..intake.source import is_zip_input
+from ..intake.source import is_zip_input, place_can_be_shown
 from ..stops import STOPS, stop_line
 from .chooser import Chooser, ChooserError
 from .folders import FolderError, list_folders
@@ -111,6 +111,51 @@ class ApiError(Exception):
         super().__init__(code)
         self.status = status
         self.code = code
+
+
+def _choosable_path(input_path: Path, place: str) -> str | None:
+    """The full place of an Export found in a chosen folder, which the page
+    can offer to choose (stage B3c): never in a ZIP file, never the input
+    itself, and never outside the input. Links are not followed; choosing it
+    checks it as any chosen place."""
+    if not input_path.is_dir() or not place:
+        return None
+    parts = place.split("/")
+    if place.startswith("/") or any(part in ("", ".", "..") for part in parts):
+        return None
+    return str(input_path.joinpath(*parts))
+
+
+def _exports_found(input_path: Path, found: Any) -> list[dict[str, Any]]:
+    """The Exports of a mixed input for the page: each place, or None for a
+    name that cannot be shown, whether it is a ZIP file, the number of the
+    first one with the same files, and the full place to choose it."""
+    if not isinstance(found, list):
+        return []
+    places = [item["place"] for item in found]
+    exports = []
+    for item in found:
+        place = item["place"]
+        shown = place_can_be_shown(place)
+        same = item["same_as"]
+        exports.append(
+            {
+                "place": place if shown else None,
+                "zip": bool(item["zip"]),
+                "same_as": places.index(same) if same in places else None,
+                "path": _choosable_path(input_path, place) if shown else None,
+            }
+        )
+    return exports
+
+
+def _not_readable(places: Any) -> dict[str, Any] | None:
+    """The first folder or file that cannot be opened, and how many more, as
+    the page shows them after a run (stage B3c)."""
+    if not isinstance(places, list) or not places:
+        return None
+    first = places[0]
+    return {"place": first if place_can_be_shown(first) else None, "more": len(places) - 1}
 
 
 def _command_failed() -> ApiError:
@@ -368,9 +413,11 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             or len(timezone_name) > MAX_TIMEZONE_LENGTH
         ):
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "TIMEZONE_INVALID")
+        # The places that the check found, for the page only (stage B3c).
+        details: dict[str, Any] = {}
         try:
             input_path = absolute_path(payload.get("input"), "INPUT_PATH_INVALID")
-            report = doctor_input(input_path, timezone_name=timezone_name)
+            report = doctor_input(input_path, timezone_name=timezone_name, details=details)
         except (RunRequestError, DoctorError) as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
         except Exception as exc:
@@ -394,6 +441,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             "ready": all(finding["severity"] != "ERROR" for finding in findings),
             "input_kind": kind,
             "counts": dict(counts) if isinstance(counts, dict) else None,
+            "exports_found": _exports_found(input_path, details.get("exports_found")),
+            "not_readable": _not_readable(details.get("not_readable_places")),
             "findings": findings,
         }
 
