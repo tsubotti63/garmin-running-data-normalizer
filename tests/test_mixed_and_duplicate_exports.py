@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import tempfile
 import unittest
@@ -35,6 +36,7 @@ from garmin_running_data_normalizer.intake.archive import ArchiveLimits
 from garmin_running_data_normalizer.intake.roots import (
     MIXED_STORE_MESSAGE,
     OTHER_ACCOUNT_MESSAGE,
+    FoundExport,
     MixedExportsError,
     open_export,
 )
@@ -286,6 +288,141 @@ class MixedExportsTest(unittest.TestCase):
                 with self.subTest(file=path.name), zipfile.ZipFile(path) as archive:
                     content = b"".join(archive.read(name) for name in archive.namelist())
                     self.assertNotIn(b"Outside-private", content)
+
+
+class MixedExportPlacesTest(unittest.TestCase):
+    """The Exports of a mixed input are named where the check is started:
+    in the report for a person and on the page, never in the JSON report or
+    an output (stage B3c)."""
+
+    def mixed(self, root: Path) -> Path:
+        """Two different Exports, and a ZIP file of the first one."""
+        parent = root / "input"
+        other_export(parent / "export-a", activity("A1"))
+        zip_export(parent / "export-a", parent / "export-a.zip")
+        other_export(parent / "export-b", activity("B1"))
+        return parent
+
+    def test_the_exports_found_are_named_with_the_same_files(self) -> None:
+        from garmin_running_data_normalizer.diagnostics.doctor import render_doctor_human
+
+        with tempfile.TemporaryDirectory() as directory:
+            parent = self.mixed(Path(directory))
+            with self.assertRaises(MixedExportsError) as raised:
+                with open_export(parent):
+                    pass
+            self.assertEqual(
+                raised.exception.found,
+                [
+                    FoundExport("export-a", False, None),
+                    FoundExport("export-a.zip", True, "export-a"),
+                    FoundExport("export-b", False, None),
+                ],
+            )
+            details: dict[str, object] = {}
+            report = doctor_input(parent, details=details)
+            self.assertEqual(
+                details["exports_found"],
+                [
+                    {"place": "export-a", "zip": False, "same_as": None},
+                    {"place": "export-a.zip", "zip": True, "same_as": "export-a"},
+                    {"place": "export-b", "zip": False, "same_as": None},
+                ],
+            )
+            # The report holds no place, as before.
+            for name in ("export-a", "export-b"):
+                self.assertNotIn(name, json.dumps(report))
+            lines = render_doctor_human(report, details).splitlines()
+            index = lines.index(next(line for line in lines if line.startswith("Finding: INPUT_MULTIPLE_EXPORTS")))
+            self.assertEqual(
+                lines[index + 1 : index + 4],
+                [
+                    "Export found: export-a",
+                    "Export found: export-a.zip (ZIP file) (the same Export as export-a)",
+                    "Export found: export-b",
+                ],
+            )
+            self.assertNotIn("Export found", render_doctor_human(report))
+            # The CLI names them in the report for a person only.
+            exit_code, console = run_cli("doctor", "--input", str(parent))
+            self.assertEqual(exit_code, 0)
+            self.assertIn("Export found: export-a.zip (ZIP file) (the same Export as export-a)", console)
+            exit_code, console = run_cli("doctor", "--input", str(parent), "--format", "json")
+            self.assertEqual(exit_code, 0)
+            for name in ("export-a", "export-b"):
+                self.assertNotIn(name, console)
+
+    def test_a_mix_without_places_names_no_export(self) -> None:
+        from garmin_running_data_normalizer.diagnostics.doctor import render_doctor_human
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = other_export(
+                Path(directory) / "accounts",
+                activity("A1", userProfileId=FIRST_ACCOUNT),
+                activity("A2", userProfileId=OTHER_ACCOUNT),
+            )
+            details: dict[str, object] = {}
+            report = doctor_input(source, details=details)
+            self.assertEqual([item["code"] for item in report["findings"]], ["INPUT_MULTIPLE_EXPORTS"])
+            self.assertEqual(details, {})
+            self.assertNotIn("Export found", render_doctor_human(report, details))
+            self.assertEqual(MixedExportsError().found, [])
+
+    @unittest.skipIf(os.name == "nt", "Windows takes no line break in a name")
+    def test_a_name_that_cannot_be_shown_is_not_written(self) -> None:
+        from garmin_running_data_normalizer.diagnostics.doctor import render_doctor_human
+
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory) / "input"
+            other_export(parent / "export-a", activity("A1"))
+            other_export(parent / "line\nbreak", activity("B1"))
+            other_export(parent / "turned\u202eexport", activity("C1"))
+            zip_export(parent / "line\nbreak", parent / "same\tcontent.zip")
+            details: dict[str, object] = {}
+            report = doctor_input(parent, details=details)
+            text = render_doctor_human(report, details)
+            self.assertIn("Export found: (a name that cannot be shown)\n", text + "\n")
+            self.assertIn(
+                "Export found: (a name that cannot be shown) (ZIP file) (the same Export as (a name that cannot be shown))",
+                text,
+            )
+            self.assertNotIn("line\nbreak", text)
+            self.assertNotIn("same\tcontent", text)
+            self.assertNotIn("\u202e", text)
+
+    def test_many_exports_are_named_up_to_twenty(self) -> None:
+        from garmin_running_data_normalizer.diagnostics.doctor import render_doctor_human
+
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory) / "input"
+            for number in range(22):
+                other_export(parent / f"export-{number:02d}", activity(f"A{number}"))
+            details: dict[str, object] = {}
+            report = doctor_input(parent, details=details)
+            lines = [line for line in render_doctor_human(report, details).splitlines() if line.startswith("Export found: ")]
+            self.assertEqual(len(details["exports_found"]), 22)
+            self.assertEqual(len(lines), 21)
+            self.assertEqual(lines[-1], "Export found: and 2 more")
+
+    @unittest.skipIf(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0), "needs a folder that cannot be opened")
+    def test_a_folder_that_cannot_be_opened_is_named_by_the_check(self) -> None:
+        from garmin_running_data_normalizer.diagnostics.doctor import render_doctor_human
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = write_export(Path(directory) / "export")
+            closed = source / "DI_CONNECT" / "DI-Connect-Fitness" / "synthetic-private-folder"
+            closed.mkdir()
+            closed.chmod(0)
+            details: dict[str, object] = {}
+            try:
+                report = doctor_input(source, details=details)
+            finally:
+                closed.chmod(0o700)
+            self.assertEqual([item["code"] for item in report["findings"]], ["INPUT_NOT_READABLE"])
+            self.assertEqual(details["not_readable_places"], ["DI_CONNECT/DI-Connect-Fitness/synthetic-private-folder"])
+            self.assertNotIn("synthetic-private-folder", json.dumps(report))
+            lines = render_doctor_human(report, details).splitlines()
+            self.assertIn("Cannot be opened: DI_CONNECT/DI-Connect-Fitness/synthetic-private-folder", lines)
 
 
 class SnapshotRegistrationTest(unittest.TestCase):

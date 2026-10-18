@@ -135,7 +135,13 @@ What can change:
   passed such an Export and the run stopped. Its JSON report gains
   `input_counts` (the Activities records, the FIT files, and the files read,
   left out, and not read), and its report for a person a `Counts:` line; the
-  report of `doctor --run-output` does not change. In the report for a person, a
+  report of `doctor --run-output` does not change. Its report for a person
+  also names the Exports of a mixed input (`Export found:` lines) and the
+  first folder or file that cannot be opened (`Cannot be opened:`), which
+  its JSON report never holds. A name with a control character, a line
+  break, or a character that turns the direction of the text is written as
+  `(a name that cannot be shown)` there and in the `ERROR` lines of
+  `INPUT_NOT_READABLE` and `SNAPSHOT_STORE_NOT_READABLE`. In the report for a person, a
   finding whose code is a stop gives the next step of that stop, as the run
   does; the JSON report keeps the `next_action_id` of each finding. For a
   run with exit 3, the report for a person and the words of the next step

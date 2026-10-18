@@ -39,6 +39,7 @@ from ..intake.roots import (
 )
 from ..intake.source import (
     DAMAGED_ZIP_ERRORS,
+    HIDDEN_PLACE,
     CorruptArchiveError,
     ExportFile,
     ExportTooLargeError,
@@ -46,6 +47,7 @@ from ..intake.source import (
     TempSpaceError,
     is_disk_full,
     is_zip_input,
+    place_can_be_shown,
     walk_paths,
 )
 from ..stops import STOPS, stop_text
@@ -119,6 +121,9 @@ def store_not_readable_message(places: list[str] | None = None) -> str:
     if places is None:
         return STOPS["SNAPSHOT_STORE_NOT_READABLE"].what
     first = places[0] if places and places[0] else "the Snapshot Store folder itself"
+    # A name that could change the line, as the check shows it (stage B3c).
+    if not place_can_be_shown(first):
+        first = HIDDEN_PLACE
     more = len(places) - 1
     named = first if more <= 0 else f"{first} and {more} more"
     return f"{STOPS['SNAPSHOT_STORE_NOT_READABLE'].what}: {named}"

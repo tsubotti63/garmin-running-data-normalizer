@@ -26,6 +26,7 @@ import {
   familyRows,
   findingMessages,
   formatElapsed,
+  foundChoices,
   helpReturnTarget,
   helpSteps,
   nextLine,
@@ -83,6 +84,7 @@ const ui = {
   inputPath: byId("input-path"),
   check: byId("check-button"),
   checkResult: byId("check-result"),
+  checkChoices: byId("check-choices"),
   extractArea: byId("extract-area"),
   extractConfirm: byId("extract-confirm"),
   snapshotDecide: byId("snapshot-decide"),
@@ -473,6 +475,31 @@ function renderCheck(current) {
   }
   replaceLines(ui.checkResult, lines);
   ui.extractArea.hidden = !current.extractNeeded;
+  // The Exports of a mixed input that can be chosen, each with its button
+  // (stage B3c).
+  const shown = state.choosing === null && !stopped && !state.checking && isCheckCurrent();
+  renderChoices(shown ? foundChoices(state.check) : []);
+}
+
+// The buttons change only when the Exports change, so that focus stays.
+function renderChoices(choices) {
+  const key = JSON.stringify(choices.map((choice) => [describe(choice.message), choice.path]));
+  ui.checkChoices.hidden = choices.length === 0;
+  if (ui.checkChoices.dataset.key === key) {
+    return;
+  }
+  ui.checkChoices.dataset.key = key;
+  ui.checkChoices.replaceChildren(
+    ...choices.map((choice) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = describe(choice.message);
+      // The page checks the chosen Export at once; focus goes to the heading
+      // of the box, as this button goes away with the new check.
+      button.addEventListener("click", () => useChosenExport(choice.path, ui.inputHeading));
+      return button;
+    }),
+  );
 }
 
 function renderBrowser() {
@@ -839,6 +866,9 @@ function renderControls(states, current) {
   }
   ui.chooseZip.disabled = !enabled.choose;
   ui.chooseFolder.disabled = !enabled.choose;
+  for (const button of ui.checkChoices.children) {
+    button.disabled = !enabled.choose;
+  }
   ui.outputBrowse.disabled = !enabled.browse;
   ui.check.disabled = !enabled.check;
   ui.snapshotDecide.disabled = !enabled.decideSnapshot;
@@ -1065,6 +1095,9 @@ async function runCheck(focusTarget = ui.check) {
       kind: answer.input_kind === "zip" || answer.input_kind === "folder" ? answer.input_kind : null,
       // The counts of the input, numbers only (stage B3b).
       counts: answer.counts !== null && typeof answer.counts === "object" ? answer.counts : null,
+      // The places that the check found, for this page only (stage B3c).
+      exportsFound: Array.isArray(answer.exports_found) ? answer.exports_found : [],
+      notReadable: answer.not_readable !== null && typeof answer.not_readable === "object" ? answer.not_readable : null,
       findings: Array.isArray(answer.findings) ? answer.findings : [],
     };
     if (state.check.ready) {

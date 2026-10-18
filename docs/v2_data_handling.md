@@ -485,6 +485,16 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     `INPUT_DUPLICATE_SOURCES` as a warning that does not block the run. It
     does not parse the content of JSON files; see
     [Files that cannot be read](#files-that-cannot-be-read).
+  - From stage B3c, the pre-run check names the Exports of an input that
+    holds different ones, by their places inside the input, in its report
+    for a person (`Export found: <place>`, with `(ZIP file)`, and
+    `(the same Export as <place>)` for a root that holds the same files as an
+    earlier one; the first 20, then `and N more`) and on the GUI's page,
+    which offers to choose each one that is in the selected folder. Its JSON
+    report, the run's outputs, the Support Bundle, and the server's log never
+    name them, and a mix of accounts names none. A name with a control
+    character, a line break, or a character that turns the direction of the
+    text is written as a name that cannot be shown.
   - `normalize-activities` and `snapshot register` choose the Export in the
     same way; see [Snapshot Stores](#snapshot-stores) for registration.
   - Warnings and errors name no folder or file. The accounts are compared
@@ -583,9 +593,16 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     `Path.rglob` passes over it, and its family was reported as not present.
     - The CLI's message names the first folder or file that cannot be opened,
       by its path inside the input, and how many more there are; the GUI's
-      page names them in the same way. The pre-run check, the run's outputs,
-      the Support Bundle, the server's log, and the error's message itself
-      never name them.
+      page names them in the same way. From stage B3c, the pre-run check
+      names them too, in the same way, in its report for a person
+      (`Cannot be opened: <place> and N more`) and on the GUI's page; its JSON
+      report does not. The run's outputs, the Support Bundle, the server's
+      log, and the error's message itself never name them. A name with a
+      control character, a line break, or a character that turns the
+      direction of the text is written as a name that cannot be shown, so
+      that it cannot change the lines around it or read otherwise; from
+      stage B3c, so is it in the run's `ERROR` line of `INPUT_NOT_READABLE`
+      and `SNAPSHOT_STORE_NOT_READABLE` and on the GUI's page after a run.
     - The next step: allow this app to read the input (on a Mac, in System
       Settings > Privacy & Security; on Windows, in the Security tab of the
       folder's Properties), or select the Export folder itself.

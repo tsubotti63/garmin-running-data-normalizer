@@ -739,6 +739,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _main(args: argparse.Namespace, watch: _Watch, interrupts: _Interrupts) -> int:
+    doctor_details: dict[str, Any] = {}
     try:
         if args.command == "normalize-activities":
             result = run_activities(args.input, args.output, args.timezone)
@@ -789,8 +790,10 @@ def _main(args: argparse.Namespace, watch: _Watch, interrupts: _Interrupts) -> i
         elif args.command == "validate-handoff":
             result = validate_standalone_handoff(args.input)
         elif args.command == "doctor":
+            # The places that the check found go to the report for a person
+            # only, never to the JSON report (stage B3c).
             result = (
-                doctor_input(args.input, timezone_name=args.timezone)
+                doctor_input(args.input, timezone_name=args.timezone, details=doctor_details)
                 if args.input is not None
                 else doctor_run_output(args.run_output)
             )
@@ -905,7 +908,7 @@ def _main(args: argparse.Namespace, watch: _Watch, interrupts: _Interrupts) -> i
         if args.format == "json":
             print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
         else:
-            print(render_doctor_human(result))
+            print(render_doctor_human(result, doctor_details))
         return 0
 
     if args.command == "support-bundle":

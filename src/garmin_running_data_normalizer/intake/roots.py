@@ -50,18 +50,37 @@ OTHER_ACCOUNT_MESSAGE = (
 MIXED_STORE_MESSAGE = "the Snapshot Store holds the Exports of more than one account"
 
 
+@dataclass(frozen=True)
+class FoundExport:
+    """One Export that a mixed input holds (stage B3c).
+
+    ``place`` is where it sits in the input, as ``ExportRoot.location``
+    names it ("" is the input itself), and ``same_as`` the place of the first
+    Export found with the same files, or None.
+    """
+
+    place: str
+    is_zip: bool
+    same_as: str | None = None
+
+
 class MixedExportsError(ValueError):
     """Raised when an input holds different Exports, or Exports of different accounts.
 
     ``safe_message`` says where the mix was found; the CLI adds the next
-    step of its code (stage A5b).
+    step of its code (stage A5b). ``found`` lists the Exports of an input
+    that holds different ones, for where the check is started only, never
+    written to an output; a mix of accounts names none (stage B3c).
     """
 
     code = "INPUT_MULTIPLE_EXPORTS"
 
-    def __init__(self, safe_message: str = MIXED_INPUT_MESSAGE) -> None:
+    def __init__(
+        self, safe_message: str = MIXED_INPUT_MESSAGE, found: list[FoundExport] | None = None
+    ) -> None:
         super().__init__(safe_message)
         self.safe_message = safe_message
+        self.found = list(found or [])
 
 
 @dataclass(frozen=True, order=True)
@@ -250,7 +269,15 @@ def open_export(root: str | Path, limits: ArchiveLimits = ArchiveLimits()) -> It
         if len(views) > 1:
             fingerprints = [_fingerprint(view) for view in views]
             if any(value != fingerprints[0] for value in fingerprints[1:]):
-                raise MixedExportsError()
+                # Every root, with the first one that holds the same files.
+                first: dict[tuple[tuple[str, tuple[int, str | None]], ...], str] = {}
+                found = []
+                for item, fingerprint in zip(roots, fingerprints):
+                    same = first.setdefault(fingerprint, item.location)
+                    found.append(
+                        FoundExport(item.location, item.is_zip, None if same == item.location else same)
+                    )
+                raise MixedExportsError(found=found)
         yield OpenedExport(
             views[0],
             same_export_count=len(views) - 1,
@@ -261,6 +288,7 @@ def open_export(root: str | Path, limits: ArchiveLimits = ArchiveLimits()) -> It
 __all__ = [
     "ExportRoot",
     "ExportView",
+    "FoundExport",
     "MIXED_INPUT_MESSAGE",
     "MIXED_STORE_MESSAGE",
     "MixedExportsError",

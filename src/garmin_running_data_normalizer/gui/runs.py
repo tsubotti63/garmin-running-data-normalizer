@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import IO, Any
 
 from ..diagnostics.contracts import SAFE_WARNING_CODES
+from ..intake.source import place_can_be_shown
 from ..output_location import (
     MAX_OUTPUT_NAME_BYTES,
     WINDOWS_MAX_FILE_PATH,
@@ -92,25 +93,15 @@ def validate_output_name(name: Any) -> str:
     return name
 
 
-# The longest place inside the input that a failed run may name.
-MAX_PLACE_LENGTH = 4096
-
-
 def _valid_detail(message: dict[str, Any]) -> dict[str, Any] | None:
     """Return where the input cannot be opened, as the worker named it, or
-    None (stage A3d-3a). It goes to the page only, never to a log."""
+    None (stage A3d-3a). It goes to the page only, never to a log. A name
+    that cannot be shown goes as None, as the check gives it (stage B3c)."""
     place = message.get("place")
     more = message.get("more")
-    if (
-        not isinstance(place, str)
-        or len(place) > MAX_PLACE_LENGTH
-        or any(ord(character) < 32 for character in place)
-        or not isinstance(more, int)
-        or isinstance(more, bool)
-        or more < 0
-    ):
+    if not isinstance(place, str) or not isinstance(more, int) or isinstance(more, bool) or more < 0:
         return None
-    return {"place": place, "more": more}
+    return {"place": place if place_can_be_shown(place) else None, "more": more}
 
 
 def _process_group_options() -> dict[str, Any]:

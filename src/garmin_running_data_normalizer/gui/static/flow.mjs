@@ -305,11 +305,15 @@ function nextStep(step) {
 export function errorMessages(code, detail) {
   const key = lookup(STOP_KEYS, code, "error.unknown");
   const messages = [{ key, params: {}, keyParams: {} }];
-  if (typeof detail?.place === "string") {
+  // A name that cannot be shown comes as null, as the check gives it (stage
+  // B3c).
+  if (typeof detail?.place === "string" || detail?.place === null) {
     messages.push(
-      detail.place === ""
-        ? { key: "error.place_input_itself", params: {}, keyParams: {} }
-        : { key: "error.place", params: { place: detail.place }, keyParams: {} },
+      detail.place === null
+        ? { key: "error.place_hidden", params: {}, keyParams: {} }
+        : detail.place === ""
+          ? { key: "error.place_input_itself", params: {}, keyParams: {} }
+          : { key: "error.place", params: { place: detail.place }, keyParams: {} },
     );
     if (Number.isInteger(detail.more) && detail.more > 0) {
       messages.push({ key: "error.place_more", params: { more: detail.more }, keyParams: {} });
@@ -400,6 +404,86 @@ export function checkParts(check) {
   return { timezone, others, stops: others.some((finding) => finding?.severity === "ERROR") };
 }
 
+// The Exports of a mixed input that the page names at most, and the longest
+// name on the button that chooses one (stage B3c).
+const MAX_EXPORTS_SHOWN = 20;
+const MAX_NAME_LENGTH = 120;
+
+// A place inside the input as a parameter of a message: its name, or the
+// words for the input itself or for a name that cannot be shown.
+function placeParam(name, place) {
+  if (place === null || typeof place !== "string") {
+    return { params: {}, keyParams: { [name]: "check.name_hidden" } };
+  }
+  if (place === "") {
+    return { params: {}, keyParams: { [name]: "check.name_itself" } };
+  }
+  return { params: { [name]: place }, keyParams: {} };
+}
+
+// The lines of the Exports that a mixed input holds: how many different ones,
+// then each place, with the first one that holds the same files (stage B3c).
+function foundExportMessages(found) {
+  if (!Array.isArray(found) || found.length === 0) {
+    return [];
+  }
+  const count = found.filter((item) => !Number.isInteger(item?.same_as)).length;
+  const lines = [message("check.found_count", { count })];
+  for (const item of found.slice(0, MAX_EXPORTS_SHOWN)) {
+    const place = placeParam("place", item?.place);
+    const same = Number.isInteger(item?.same_as) ? found[item.same_as] : undefined;
+    if (same === undefined) {
+      lines.push(message("check.found_place", place.params, place.keyParams));
+    } else {
+      const other = placeParam("same", same?.place);
+      lines.push(
+        message(
+          "check.found_place_same",
+          { ...place.params, ...other.params },
+          { ...place.keyParams, ...other.keyParams },
+        ),
+      );
+    }
+  }
+  if (found.length > MAX_EXPORTS_SHOWN) {
+    lines.push(message("check.found_more", { more: found.length - MAX_EXPORTS_SHOWN }));
+  }
+  return lines;
+}
+
+// The first folder or file that cannot be opened and how many more, as the
+// page names them after a run (stage B3c).
+function notReadableMessages(detail) {
+  if (detail === null || typeof detail !== "object") {
+    return [];
+  }
+  const lines = [];
+  if (detail.place === null) {
+    lines.push(message("error.place_hidden"));
+  } else if (detail.place === "") {
+    lines.push(message("error.place_input_itself"));
+  } else if (typeof detail.place === "string") {
+    lines.push(message("error.place", { place: detail.place }));
+  }
+  if (Number.isInteger(detail.more) && detail.more > 0) {
+    lines.push(message("error.place_more", { more: detail.more }));
+  }
+  return lines;
+}
+
+// The Exports of a mixed input that the page can choose, each with the words
+// of its button and its full place (stage B3c).
+export function foundChoices(check) {
+  const found = Array.isArray(check?.exportsFound) ? check.exportsFound : [];
+  return found
+    .slice(0, MAX_EXPORTS_SHOWN)
+    .filter((item) => typeof item?.path === "string" && typeof item?.place === "string" && item.place !== "")
+    .map((item) => {
+      const name = item.place.length > MAX_NAME_LENGTH ? `${item.place.slice(0, MAX_NAME_LENGTH)}…` : item.place;
+      return { message: message("check.choose_found", { name }), path: item.path };
+    });
+}
+
 // The lines of the first box for a pre-run check, each with its kind: "error"
 // (red), "warn" (yellow), "ok" (green), or "info". The red ones come first,
 // then the yellow ones, then what the check found (stage B3b). ``start`` marks
@@ -414,7 +498,14 @@ export function checkMessages(check) {
     add("error", [message("check.not_ready")]);
   }
   for (const finding of others.filter((item) => item?.severity === "ERROR")) {
-    add("error", findingMessages(finding, counts));
+    // The places that the check found follow what happened (stage B3c).
+    const messages = findingMessages(finding, counts);
+    if (finding?.code === "INPUT_MULTIPLE_EXPORTS") {
+      messages.splice(1, 0, ...foundExportMessages(check?.exportsFound));
+    } else if (finding?.code === "INPUT_NOT_READABLE") {
+      messages.splice(1, 0, ...notReadableMessages(check?.notReadable));
+    }
+    add("error", messages);
   }
   for (const finding of others.filter((item) => item?.severity === "WARNING")) {
     add("warn", findingMessages(finding, counts));
