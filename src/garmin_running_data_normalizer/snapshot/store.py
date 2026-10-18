@@ -116,6 +116,15 @@ LABEL_INVALID_MESSAGE = STOPS["SNAPSHOT_LABEL_INVALID"].what
 LABEL_EXISTS_MESSAGE = STOPS["SNAPSHOT_LABEL_EXISTS"].what
 TIME_INVALID_MESSAGE = STOPS["SNAPSHOT_TIME_INVALID"].what
 INPUT_INSIDE_STORE_MESSAGE = STOPS["SNAPSHOT_INPUT_INSIDE_STORE"].what
+# The lock file of a registration holds the number of its process and a line
+# break, which Windows writes as CR LF, and nothing while it is being made; a
+# file of another form or size is not this app's lock, and is never removed
+# (stage B4b-2).
+MAX_LOCK_BYTES = 64
+LOCK_CONTENT_RE = re.compile(rb"[0-9]{0,20}\r?\n?")
+UNLOCK_NOT_CONFIRMED_MESSAGE = STOPS["SNAPSHOT_UNLOCK_NOT_CONFIRMED"].what
+LOCK_NOT_FOUND_MESSAGE = STOPS["SNAPSHOT_LOCK_NOT_FOUND"].what
+LOCK_INVALID_MESSAGE = STOPS["SNAPSHOT_LOCK_INVALID"].what
 # The input of a registration that cannot be read safely, as a run says it
 # (stage A5b-2).
 INPUT_DISCOVERY_MESSAGE = STOPS["INPUT_DISCOVERY_FAILED"].what
@@ -662,6 +671,109 @@ def _store_lock(root: Path) -> Iterator[None]:
         except OSError:
             pass
         lock_path.unlink(missing_ok=True)
+
+
+def lock_created_at(store_root: str | Path) -> str | None:
+    """When the lock file of a store was written, in UTC to the second, for
+    the person who decides whether a registration still runs (stage B4b-2);
+    None when the store has none, or one that is not a regular file."""
+    try:
+        status = os.lstat(Path(store_root) / LOCK_NAME)
+    except OSError:
+        return None
+    if not stat.S_ISREG(status.st_mode):
+        return None
+    return datetime.fromtimestamp(status.st_mtime, timezone.utc).isoformat(timespec="seconds")
+
+
+def _same_file(first: os.stat_result, second: os.stat_result) -> bool:
+    """Whether two looks at a lock file saw the same file: its kind, size, and
+    time, and its identity where the system gives one in both (some ways of
+    looking on Windows give none)."""
+    if (stat.S_IFMT(first.st_mode), first.st_size, first.st_mtime_ns) != (
+        stat.S_IFMT(second.st_mode),
+        second.st_size,
+        second.st_mtime_ns,
+    ):
+        return False
+    if first.st_ino and second.st_ino:
+        return (first.st_dev, first.st_ino) == (second.st_dev, second.st_ino)
+    return True
+
+
+def remove_lock(store_root: str | Path, *, confirmed: bool) -> dict[str, Any]:
+    """Remove the lock file that a stopped registration left (stage B4b-2),
+    for ``snapshot unlock`` and the GUI alike: only when the person confirmed
+    that no snapshot command uses the store, only in a store, and only a
+    regular file of this app's form, which is looked at once more just before
+    it is removed. Nothing else of the store is touched; the next
+    registration completes one that was interrupted."""
+    if confirmed is not True:
+        raise SnapshotStoreError(UNLOCK_NOT_CONFIRMED_MESSAGE, "SNAPSHOT_UNLOCK_NOT_CONFIRMED")
+    root, _metadata = load_store(store_root)
+    path = root / LOCK_NAME
+    try:
+        before = os.lstat(path)
+    except FileNotFoundError as exc:
+        raise SnapshotStoreError(LOCK_NOT_FOUND_MESSAGE, "SNAPSHOT_LOCK_NOT_FOUND") from exc
+    except PermissionError as exc:
+        raise not_readable_error(root, path) from exc
+    if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_LOCK_BYTES:
+        raise SnapshotStoreError(LOCK_INVALID_MESSAGE, "SNAPSHOT_LOCK_INVALID")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except FileNotFoundError as exc:
+        raise SnapshotStoreError(LOCK_NOT_FOUND_MESSAGE, "SNAPSHOT_LOCK_NOT_FOUND") from exc
+    except PermissionError as exc:
+        raise not_readable_error(root, path) from exc
+    except OSError as exc:
+        # A link put in its place since, which O_NOFOLLOW refuses.
+        raise SnapshotStoreError(LOCK_INVALID_MESSAGE, "SNAPSHOT_LOCK_INVALID") from exc
+    try:
+        opened = os.fstat(descriptor)
+        content = os.read(descriptor, MAX_LOCK_BYTES + 1)
+    finally:
+        os.close(descriptor)
+    if not _same_file(before, opened) or not LOCK_CONTENT_RE.fullmatch(content):
+        raise SnapshotStoreError(LOCK_INVALID_MESSAGE, "SNAPSHOT_LOCK_INVALID")
+    # Once more just before it is removed: a file put in its place since,
+    # such as the lock of a registration that started, is not removed.
+    try:
+        again = os.lstat(path)
+    except FileNotFoundError as exc:
+        raise SnapshotStoreError(LOCK_NOT_FOUND_MESSAGE, "SNAPSHOT_LOCK_NOT_FOUND") from exc
+    if not _same_file(before, again):
+        raise SnapshotStoreError(LOCK_INVALID_MESSAGE, "SNAPSHOT_LOCK_INVALID")
+    with _writing():
+        os.unlink(path)
+    return {"status": "PASS", "removed": LOCK_NAME}
+
+
+def _there(path: Path) -> bool:
+    try:
+        return path.exists()
+    except OSError:
+        return False
+
+
+def lock_exists(store_root: str | Path) -> bool:
+    """Whether a store has a lock file now, as a command looks before it
+    starts, to tell later of one that it left (stage A5c)."""
+    return _there(Path(store_root) / LOCK_NAME)
+
+
+def cancel_notices(store_root: str | Path, lock_before: bool) -> list[str]:
+    """The notices of a store that a cancelled registration leaves (stage
+    A5c, shared with the GUI from stage B4b-2): an interrupted registration,
+    and a lock file that was not there before it started. Codes only."""
+    root = Path(store_root)
+    found = []
+    if _there(root / "journal" / "registration.json"):
+        found.append("SNAPSHOT_REGISTRATION_INCOMPLETE")
+    if not lock_before and lock_exists(root):
+        found.append("SNAPSHOT_STORE_LOCKED")
+    return found
 
 
 def _registered_ids(root: Path) -> set[str]:
@@ -1436,7 +1548,7 @@ def register_snapshot(
         if accounts and manifests:
             latest_accounts = _snapshot_accounts(root, manifests[-1])
             if latest_accounts and latest_accounts != accounts:
-                raise MixedExportsError(OTHER_ACCOUNT_MESSAGE)
+                raise MixedExportsError(OTHER_ACCOUNT_MESSAGE, kind="other_account")
         content_id = _inventory_content_id(inventory)
         snapshot_digest = _sha256_bytes(
             _stable_json_bytes(
@@ -1807,6 +1919,7 @@ def verification_error(
 __all__ = [
     "NOTICE_MESSAGES",
     "SnapshotStoreError",
+    "cancel_notices",
     "check_input_apart",
     "check_label_free",
     "check_new_store_place",
@@ -1815,10 +1928,13 @@ __all__ = [
     "invalid_store_error",
     "load_manifests",
     "load_store",
+    "lock_created_at",
+    "lock_exists",
     "new_snapshot_label",
     "not_readable_error",
     "register_snapshot",
     "registration_times",
+    "remove_lock",
     "sha256_file",
     "shown_store_message",
     "snapshot_status",

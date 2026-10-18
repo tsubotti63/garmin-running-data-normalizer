@@ -41,6 +41,7 @@ from garmin_running_data_normalizer.intake.roots import (
     open_export,
 )
 from garmin_running_data_normalizer.intake.source import ExportSource
+from garmin_running_data_normalizer.stops import MIX_STOPS
 from tests.test_snapshot_store_v1_7_1 import extract_store
 from tests.test_zip_input import SYNTHETIC_NOT_READ, run_cli, write_export, zip_export
 
@@ -559,7 +560,12 @@ class SnapshotRegistrationTest(unittest.TestCase):
                 "--observed-at", "2030-01-02T02:00:00+00:00", "--confirm-complete",
             )
             self.assertEqual(exit_code, 2)
-            self.assertIn(f"ERROR [INPUT_MULTIPLE_EXPORTS]: {OTHER_ACCOUNT_MESSAGE}", console)
+            # Each case of a mix says what to do (stage B4b-2).
+            self.assertEqual(refused.exception.kind, "other_account")
+            self.assertIn(
+                f"ERROR [INPUT_MULTIPLE_EXPORTS]: {OTHER_ACCOUNT_MESSAGE}; {MIX_STOPS['other_account'].next_step}",
+                console,
+            )
             # A store that already holds two accounts, as one registered before
             # stage A3a could, stops the build.
             with mock.patch(
@@ -571,7 +577,11 @@ class SnapshotRegistrationTest(unittest.TestCase):
                 build_approved_input(store, root / "build")
             exit_code, console = run_cli("snapshot", "run-all", "--store", str(store), "--output", str(root / "out"))
             self.assertEqual(exit_code, 2)
-            self.assertIn(f"ERROR [INPUT_MULTIPLE_EXPORTS]: {MIXED_STORE_MESSAGE}", console)
+            self.assertEqual(stopped.exception.kind, "store")
+            self.assertIn(
+                f"ERROR [INPUT_MULTIPLE_EXPORTS]: {MIXED_STORE_MESSAGE}; {MIX_STOPS['store'].next_step}",
+                console,
+            )
             for value in (FIRST_ACCOUNT, OTHER_ACCOUNT):
                 self.assertNotIn(str(value), console)
                 self.assertNotIn(str(value), str(refused.exception))

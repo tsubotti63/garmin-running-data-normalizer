@@ -133,6 +133,10 @@ export const STOP_KEYS = {
   SNAPSHOT_STORE_SPACE_INSUFFICIENT: "stop.snapshot_store_space_insufficient",
   SNAPSHOT_STORE_EMPTY: "stop.snapshot_store_empty",
   SNAPSHOT_LIFECYCLE_FAILED: "stop.snapshot_lifecycle_failed",
+  // Removing a lock file (stage B4b-2).
+  SNAPSHOT_UNLOCK_NOT_CONFIRMED: "stop.snapshot_unlock_not_confirmed",
+  SNAPSHOT_LOCK_NOT_FOUND: "stop.snapshot_lock_not_found",
+  SNAPSHOT_LOCK_INVALID: "stop.snapshot_lock_invalid",
 };
 
 // Several codes share a next step, as they share it in stops.py.
@@ -226,7 +230,27 @@ export const STOP_NEXT_KEYS = {
   SNAPSHOT_STORE_SPACE_INSUFFICIENT: "stop_next.snapshot_store_space_insufficient",
   SNAPSHOT_STORE_EMPTY: "stop_next.snapshot_store_empty",
   SNAPSHOT_LIFECYCLE_FAILED: "stop_next.snapshot_lifecycle_failed",
+  SNAPSHOT_UNLOCK_NOT_CONFIRMED: "stop_next.snapshot_unlock_not_confirmed",
+  SNAPSHOT_LOCK_NOT_FOUND: "stop_next.snapshot_lock_not_found",
+  SNAPSHOT_LOCK_INVALID: "stop_next.snapshot_lock_invalid",
 };
+
+// The cases of INPUT_MULTIPLE_EXPORTS that have words of their own (stage
+// B4b-2), as stops.PAGE_MIX_WORDING gives them; the input itself has those
+// of the code. The code stays the same.
+const MIX_KEYS = {
+  other_account: "stop.mix_other_account",
+  store: "stop.mix_store",
+};
+
+const MIX_NEXT_KEYS = {
+  other_account: "stop_next.mix_other_account",
+  store: "stop_next.mix_store",
+};
+
+function mixOf(code, detail) {
+  return code === "INPUT_MULTIPLE_EXPORTS" && Object.hasOwn(MIX_KEYS, detail?.mix ?? "") ? detail.mix : null;
+}
 
 // A pre-run finding says what a run would stop with in the words of the stop
 // of its code, or in words of its own when its code is not a stop or when it
@@ -351,7 +375,8 @@ function nextStep(step) {
 // one of a Snapshot Store, ``store`` is true, and "" is the store's folder
 // itself (stage B4a).
 export function errorMessages(code, detail) {
-  const key = lookup(STOP_KEYS, code, "error.unknown");
+  const mix = mixOf(code, detail);
+  const key = mix === null ? lookup(STOP_KEYS, code, "error.unknown") : MIX_KEYS[mix];
   const messages = [{ key, params: {}, keyParams: {} }];
   // A name that cannot be shown comes as null, as the check gives it (stage
   // B3c).
@@ -368,7 +393,7 @@ export function errorMessages(code, detail) {
       messages.push({ key: "error.place_more", params: { more: detail.more }, keyParams: {} });
     }
   }
-  messages.push(nextStep(lookup(STOP_NEXT_KEYS, code, "next.reload_page")));
+  messages.push(nextStep(mix === null ? lookup(STOP_NEXT_KEYS, code, "next.reload_page") : MIX_NEXT_KEYS[mix]));
   if (typeof code === "string" && code !== "") {
     messages.push({ key: "error.code", params: { code }, keyParams: {} });
   }
@@ -646,6 +671,12 @@ export function storeMessages(store, how = "single") {
   if (answer === null || typeof answer !== "object") {
     return lines;
   }
+  // Removing the lock file (stage B4b-2): done, or the stop of it.
+  if (store?.unlocked === true) {
+    add("ok", [message("lock.removed")]);
+  } else if (typeof store?.unlockError === "string") {
+    add("error", errorMessages(store.unlockError));
+  }
   const checked = store.checked !== null && typeof store.checked === "object" ? store.checked : null;
   // A check that found a notice gives it with the notices, in their order;
   // any other problem of the store or of its check is red.
@@ -684,6 +715,39 @@ export function storeMessages(store, how = "single") {
     }
   }
   return lines;
+}
+
+// When the lock file of a store was written (stage B4b-2): how long ago, so
+// that the person can tell a lock that an import holds now from one that a
+// stopped import left. ``nowMs`` is the time of the page; null for a time
+// that cannot be read.
+export function lockAge(createdAt, nowMs) {
+  const made = typeof createdAt === "string" ? new Date(createdAt).getTime() : NaN;
+  if (!Number.isFinite(made) || !Number.isFinite(nowMs)) {
+    return null;
+  }
+  const minutes = Math.max(0, Math.floor((nowMs - made) / 60000));
+  if (minutes < 1) {
+    return message("lock.made_now");
+  }
+  if (minutes < 120) {
+    return message("lock.made_minutes", { count: minutes });
+  }
+  const hours = Math.floor(minutes / 60);
+  return hours < 48 ? message("lock.made_hours", { count: hours }) : message("lock.made_days", { count: Math.floor(hours / 24) });
+}
+
+// Whether the page offers to remove the lock file: for an import, of an
+// open store that has one, while no run is active (stage B4b-2).
+export function lockOffered(how, store, active = false) {
+  const answer = store?.answer;
+  return (
+    how === "snapshots" &&
+    !active &&
+    answer?.state === "store" &&
+    Array.isArray(answer.notices) &&
+    answer.notices.includes("SNAPSHOT_STORE_LOCKED")
+  );
 }
 
 // Whether the store keeps the chosen way from starting (stage B4b-1): a
@@ -1021,6 +1085,9 @@ const ERROR_BOXES = {
   SNAPSHOT_STORE_SPACE_INSUFFICIENT: "snapshot",
   SNAPSHOT_STORE_EMPTY: "snapshot",
   SNAPSHOT_LIFECYCLE_FAILED: "snapshot",
+  SNAPSHOT_UNLOCK_NOT_CONFIRMED: "snapshot",
+  SNAPSHOT_LOCK_NOT_FOUND: "snapshot",
+  SNAPSHOT_LOCK_INVALID: "snapshot",
 };
 
 // A path that the server reads as absolute: a POSIX path, a home path that it
@@ -1030,9 +1097,14 @@ export function looksAbsolute(path) {
 }
 
 // PATH_NOT_ABSOLUTE names no field; the run request checks the Export first.
-export function errorBox(code, inputPath) {
+export function errorBox(code, inputPath, detail = null) {
   if (code === "PATH_NOT_ABSOLUTE") {
     return looksAbsolute(inputPath) ? "output" : "export";
+  }
+  // An Export of another account, and a store of more than one, are the
+  // second box's (stage B4b-2).
+  if (mixOf(code, detail) !== null) {
+    return "snapshot";
   }
   return lookup(ERROR_BOXES, code, "run");
 }
@@ -1385,6 +1457,14 @@ export function resultDetails(status) {
   if (Array.isArray(status?.staging_folders) && status.staging_folders.length > 0) {
     messages.push(message("result.staging_left", { names: status.staging_folders.join(", ") }));
     messages.push(nextStep("next.delete_staging"));
+  }
+  // What a cancelled import left in the store, as the CLI says it after a
+  // cancelled registration (stage B4b-2).
+  if (status?.state === "cancelled" && Array.isArray(status.store_notices)) {
+    for (const code of STORE_NOTICE_CODES.filter((item) => status.store_notices.includes(item))) {
+      messages.push(message(STOP_KEYS[code]));
+      messages.push(nextStep(STOP_NEXT_KEYS[code]));
+    }
   }
   return messages;
 }

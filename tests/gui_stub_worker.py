@@ -46,6 +46,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--store")
     args, _ = parser.parse_known_args()
     output = Path(args.output)
     progress = {"event": "progress", "stage": "normalizing", "step": "activities"}
@@ -82,6 +83,15 @@ def main() -> int:
         emit({"event": "failed", "code": "bad code /path/to/private"})
         sys.stderr.write("Traceback (most recent call last): /path/to/private\n")
         return 2
+    if args.mode == "import-then-hang":
+        # An import that a forced stop ends (stage B4b-2): it leaves the lock
+        # file and the record of an interrupted registration in the store.
+        ignore_stop_signals()
+        store = Path(args.store)
+        (store / ".single-writer.lock").write_text("424242\n", encoding="ascii")
+        (store / "journal" / "registration.json").write_text("{}", encoding="utf-8")
+        emit({"event": "progress", "stage": "importing", "done": 1, "total": 2})
+        wait_forever()
     if args.mode == "snapshot-noise":
         # The messages of a Snapshot run (stage B4b-1): only the valid ones,
         # without their other fields, reach the status, and the messages
@@ -95,6 +105,11 @@ def main() -> int:
         emit({"event": "imported", "order": 3, "same_content": False, "snapshot_count": 2})
         emit({"event": "imported", "order": 1, "same_content": "no", "snapshot_count": 2})
         emit({"event": "failed", "code": "SNAPSHOT_STORE_NOT_READABLE", "place": "snapshots", "more": 0})
+        return 2
+    if args.mode in ("mix-store", "mix-noise"):
+        # The case of a mix (stage B4b-2): only one of the three reaches the
+        # status.
+        emit({"event": "failed", "code": "INPUT_MULTIPLE_EXPORTS", "mix": "store" if args.mode == "mix-store" else "/path/to/private"})
         return 2
     return 1
 

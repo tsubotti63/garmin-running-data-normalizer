@@ -2434,7 +2434,7 @@ def build_approved_input(
                         }
                     )
         if len(accounts) > 1:
-            raise MixedExportsError(MIXED_STORE_MESSAGE)
+            raise MixedExportsError(MIXED_STORE_MESSAGE, kind="store")
 
         canonical_by_dataset: dict[str, list[dict[str, Any]]] = {}
         all_provenance: list[dict[str, Any]] = []

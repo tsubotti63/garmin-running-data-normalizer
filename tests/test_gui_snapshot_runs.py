@@ -354,6 +354,30 @@ class SnapshotWorkerTest(unittest.TestCase):
         code, messages, text = self.snapshots(older_export(self.root / "older-2"), "output", "S0", EARLIER)
         self.assertEqual(messages[-1], {"event": "failed", "code": "SNAPSHOT_STORE_LOCKED"})
 
+    def test_the_child_names_the_case_of_a_mix(self) -> None:
+        # Stage B4b-2: the code stays the same, and the child says which of
+        # the three cases it is, for the page's words and box.
+        from tests.test_mixed_and_duplicate_exports import FIRST_ACCOUNT, OTHER_ACCOUNT
+
+        initialize_store(self.store, ACCOUNT)
+        register(self.store, other_export(self.root / "first", activity("A1", userProfileId=FIRST_ACCOUNT)), "S1", EARLIER)
+        other = other_export(self.root / "other", activity("B1", userProfileId=OTHER_ACCOUNT))
+        code, messages, text = self.snapshots(other, "output", "S2", STAMP)
+        self.assertEqual(messages[-1], {"event": "failed", "code": "INPUT_MULTIPLE_EXPORTS", "mix": "other_account"})
+        # A store of two accounts, as one registered before stage A3a could
+        # hold, stops the build, also when the Snapshots are normalized again.
+        with patch("garmin_running_data_normalizer.snapshot.store._snapshot_accounts", return_value=set()):
+            register(self.store, other, "S2", STAMP)
+        code, messages, rerun_text = worker("--how=rerun", f"--output={self.root / 'rerun'}", f"--store={self.store}")
+        self.assertEqual(messages[-1], {"event": "failed", "code": "INPUT_MULTIPLE_EXPORTS", "mix": "store"})
+        mixed = self.root / "mixed"
+        other_export(mixed / "export-a", activity("A1"))
+        other_export(mixed / "export-b", activity("B1"))
+        code, messages, single_text = worker(f"--input={mixed}", f"--output={self.root / 'single'}")
+        self.assertEqual(messages[-1], {"event": "failed", "code": "INPUT_MULTIPLE_EXPORTS", "mix": "input"})
+        for value in (FIRST_ACCOUNT, OTHER_ACCOUNT):
+            self.assertNotIn(str(value), text + rerun_text + single_text)
+
     def test_an_error_that_no_code_describes_is_that_of_the_phase(self) -> None:
         # As the CLI's commands say: the registration, or Run-All.
         args = [
@@ -546,6 +570,45 @@ class SnapshotRunRequestTest(unittest.TestCase):
             ["creating_store", "reading_export", "importing", "checking_store", "building_snapshots"],
         )
         self.assertNotIn(str(self.root), json.dumps({key: value for key, value in status.items() if key != "output_path"}))
+
+    def test_a_cancelled_import_tells_of_what_it_left_in_the_store(self) -> None:
+        # Stage B4b-2: as the CLI after a cancelled registration, also when
+        # the import was stopped by force; a lock that was there before the
+        # run is not one that it left.
+        for lock_before, notices in (
+            (False, ["SNAPSHOT_REGISTRATION_INCOMPLETE", "SNAPSHOT_STORE_LOCKED"]),
+            (True, ["SNAPSHOT_REGISTRATION_INCOMPLETE"]),
+        ):
+            with self.subTest(lock_before=lock_before):
+                for name in (LOCK_NAME, "journal/registration.json"):
+                    (self.store / name).unlink(missing_ok=True)
+                if lock_before:
+                    (self.store / LOCK_NAME).write_text("41872\n", encoding="ascii")
+                manager = stub_manager("import-then-hang", cancel_grace=0.5, kill_grace=10.0)
+                self.addCleanup(manager.stop)
+                manager.start(self.snapshot_request(f"output-{lock_before}"))
+                self.assertTrue(wait_until(lambda: bool(manager.status()["progress"])))
+                manager.cancel()
+                self.assertTrue(wait_until(lambda: not manager.active(), 30.0))
+                status = manager.status()
+                self.assertEqual((status["state"], status["store_notices"]), ("cancelled", notices))
+        # A run of this Export alone tells of no store.
+        manager = stub_manager("wait")
+        self.addCleanup(manager.stop)
+        manager.start(request(SYNTHETIC_EXPORT, self.parent, "single"))
+        self.assertEqual(manager.status()["store_notices"], [])
+
+    def test_only_a_case_of_a_mix_reaches_the_status(self) -> None:
+        for mode, detail in (("mix-store", {"mix": "store"}), ("mix-noise", None)):
+            with self.subTest(mode=mode):
+                manager = stub_manager(mode)
+                self.addCleanup(manager.stop)
+                manager.start(self.snapshot_request(mode))
+                self.assertTrue(wait_until(lambda: not manager.active()))
+                status = manager.status()
+                self.assertEqual(status["error_code"], "INPUT_MULTIPLE_EXPORTS")
+                self.assertEqual(status.get("error_detail"), detail)
+                self.assertNotIn("/path/to/private", json.dumps(status))
 
     def test_only_validated_snapshot_messages_reach_the_status(self) -> None:
         manager = stub_manager("snapshot-noise")

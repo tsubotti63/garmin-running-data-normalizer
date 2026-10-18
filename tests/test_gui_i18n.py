@@ -22,7 +22,7 @@ from garmin_running_data_normalizer.gui.server import LANGUAGES, STATIC_FILES
 from garmin_running_data_normalizer.gui.stores import ANSWER_CODES
 from garmin_running_data_normalizer.run_all import PROGRESS_STAGES, PROGRESS_STEPS, run_all
 from garmin_running_data_normalizer.snapshot.lifecycle import SNAPSHOT_PROGRESS_STAGES
-from garmin_running_data_normalizer.stops import NEXT_ACTIONS, PAGE_STOPS, PAGE_WORDING, STOPS
+from garmin_running_data_normalizer.stops import NEXT_ACTIONS, PAGE_MIX_WORDING, PAGE_STOPS, PAGE_WORDING, STOPS
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -219,6 +219,14 @@ class GuiStopWordsTest(unittest.TestCase):
             with self.subTest(code=code):
                 self.assertEqual(english[whats[code]], sentence(stop.what))
                 self.assertEqual(english[next_steps[code]], sentence(stop.next_step))
+        # The cases of a mix that have words of their own (stage B4b-2).
+        mixes, mix_steps = flow_table("MIX_KEYS"), flow_table("MIX_NEXT_KEYS")
+        self.assertEqual(set(mixes), set(PAGE_MIX_WORDING))
+        self.assertEqual(set(mix_steps), set(PAGE_MIX_WORDING))
+        for kind, stop in PAGE_MIX_WORDING.items():
+            with self.subTest(mix=kind):
+                self.assertEqual(english[mixes[kind]], sentence(stop.what))
+                self.assertEqual(english[mix_steps[kind]], sentence(stop.next_step))
 
 
 class GuiMessageCoverageTest(unittest.TestCase):

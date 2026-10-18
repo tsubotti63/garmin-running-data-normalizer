@@ -151,7 +151,8 @@ STOPS: dict[str, Stop] = {
     "SNAPSHOT_STORE_LOCKED": Stop(
         "the Snapshot Store has a lock file (.single-writer.lock): a registration is "
         "running, or one stopped before it ended",
-        "if no snapshot command is running, delete that file, then run the command again",
+        "if no snapshot command is running, remove that file with snapshot unlock "
+        "--confirm-no-other-command, then run the command again",
     ),
     "SNAPSHOT_REGISTRATION_INCOMPLETE": Stop(
         "a registration in the Snapshot Store was interrupted",
@@ -198,6 +199,22 @@ STOPS: dict[str, Stop] = {
         "give a place outside the other store with --store",
     ),
     # A registration (stage B4b-1).
+    # Removing the lock file that a stopped registration left (stage B4b-2).
+    "SNAPSHOT_UNLOCK_NOT_CONFIRMED": Stop(
+        "the lock file is removed only when no snapshot command uses the Snapshot Store",
+        "check that no normalization or snapshot command uses the store, then run snapshot "
+        "unlock again with --confirm-no-other-command",
+    ),
+    "SNAPSHOT_LOCK_NOT_FOUND": Stop(
+        "the Snapshot Store has no lock file",
+        "nothing needs to be removed; run the command that stopped again",
+    ),
+    "SNAPSHOT_LOCK_INVALID": Stop(
+        "the lock file of the Snapshot Store is not one that this app writes, or it changed "
+        "while it was checked",
+        "check that no snapshot command is running, and look at the file .single-writer.lock "
+        "in the store; this app removes only its own lock file",
+    ),
     "SNAPSHOT_LABEL_INVALID": Stop(
         "the label of the Snapshot is not one that this app takes",
         "give a label of 1 to 64 letters, digits, dots, underscores, or hyphens that starts "
@@ -514,8 +531,23 @@ PAGE_WORDING: dict[str, Stop] = {
     "SNAPSHOT_STORE_LOCKED": Stop(
         "the Snapshot Store has a lock file (.single-writer.lock): an import is running, "
         "or one stopped before it ended",
-        "if no snapshot command is running, delete that file before the next import; only "
-        "that file is deleted, and the Snapshots stay",
+        "if no other normalization or snapshot command is running, check the box below and "
+        "press Remove the lock file; only that file is removed, and the Snapshots stay",
+    ),
+    # Removing the lock file from the page (stage B4b-2).
+    "SNAPSHOT_UNLOCK_NOT_CONFIRMED": Stop(
+        "the lock file is removed only when no other normalization or snapshot command uses "
+        "the store",
+        "check that none is running, then check the box",
+    ),
+    "SNAPSHOT_LOCK_NOT_FOUND": Stop(
+        "the lock file is not there any more",
+        "press Run normalization to import",
+    ),
+    "SNAPSHOT_LOCK_INVALID": Stop(
+        "the lock file is not one that this app writes, or it changed while it was checked",
+        "check that no other normalization or snapshot command is running; this app removes "
+        "only its own lock file, so remove the file .single-writer.lock in the store by hand",
     ),
     "SNAPSHOT_REGISTRATION_INCOMPLETE": Stop(
         "an import into the Snapshot Store was interrupted",
@@ -561,11 +593,37 @@ PAGE_WORDING: dict[str, Stop] = {
 }
 
 
+# The three cases of INPUT_MULTIPLE_EXPORTS (stage B4b-2): the code stays the
+# same, and what happened and the next step say which. The input itself is
+# the case of the table above; the Export of another account than the
+# Snapshots of a store stops a registration, and a store that holds the
+# Exports of more than one account stops its build.
+MIX_KINDS = ("input", "other_account", "store")
+MIX_STOPS: dict[str, Stop] = {
+    "other_account": Stop(
+        "the Export belongs to another account than the Snapshots in this Snapshot Store",
+        "choose an Export of this account, or make another Snapshot Store for this Export",
+    ),
+    "store": Stop(
+        "the Snapshot Store holds the Exports of more than one account",
+        "make a new Snapshot Store for each account, and register each Export into it again",
+    ),
+}
+# The page's words of the three cases, which name no command.
+PAGE_MIX_WORDING: dict[str, Stop] = {
+    "other_account": MIX_STOPS["other_account"],
+    "store": Stop(
+        MIX_STOPS["store"].what,
+        "make a new Snapshot Store for each account, and import each Export into it again",
+    ),
+}
 
-def stop_line(code: str, message: str) -> str:
+
+def stop_line(code: str, message: str, next_step: str | None = None) -> str:
     """The CLI's line for a stop: what happened, as ``message`` says it, and
-    the next step of ``code``."""
-    return f"ERROR [{code}]: {message}; {STOPS[code].next_step}"
+    the next step of ``code``, or ``next_step`` for a case of the code that
+    has its own (stage B4b-2)."""
+    return f"ERROR [{code}]: {message}; {next_step or STOPS[code].next_step}"
 
 
 def finding_next_step(code: str, next_action_id: str) -> str | None:
@@ -585,7 +643,10 @@ def stop_text(code: str) -> str:
 
 
 __all__ = [
+    "MIX_KINDS",
+    "MIX_STOPS",
     "NEXT_ACTIONS",
+    "PAGE_MIX_WORDING",
     "PAGE_STOPS",
     "PAGE_WORDING",
     "STOPS",

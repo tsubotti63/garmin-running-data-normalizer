@@ -34,6 +34,8 @@ import {
   helpSteps,
   importProblem,
   localTimeIso,
+  lockAge,
+  lockOffered,
   nextLine,
   nextLineKind,
   nextOutputName,
@@ -115,6 +117,12 @@ const ui = {
   howSingle: byId("how-single"),
   howNote: byId("how-note"),
   storeArea: byId("store-area"),
+  // Removing the lock file that a stopped import left (stage B4b-2).
+  lockArea: byId("lock-area"),
+  lockTime: byId("lock-time"),
+  lockConfirm: byId("lock-confirm"),
+  lockRemove: byId("lock-remove"),
+  cancelConfirmText: byId("cancel-confirm-text"),
   snapshotDecide: byId("snapshot-decide"),
   snapshotHeading: byId("snapshot-heading"),
   storePath: byId("store-path"),
@@ -239,7 +247,7 @@ const state = {
   // The Snapshot Store of the second box (stage B4a): the error of the last
   // dialog for it, whether the page is asking the server, the answer of the
   // store or of the place for a new one, and the answer of its check.
-  store: { chooserError: null, busy: false, answer: null, checked: null },
+  store: { chooserError: null, busy: false, answer: null, checked: null, unlocked: false, unlockError: null },
   // The way to normalize: "snapshots" (the default, decision 20261011-10),
   // "single", or "rerun"; where the download time of the Export came from;
   // whether the user changed the proposed label or time; and the label of
@@ -495,7 +503,7 @@ function view() {
   const snapshotCount =
     answer?.state === "store" && Array.isArray(answer.snapshots) ? answer.snapshots.length : 0;
   const checked = !rerun && isCheckCurrent();
-  const failedBox = run.state === "failed" ? errorBox(run.error_code, ui.inputPath.value) : null;
+  const failedBox = run.state === "failed" ? errorBox(run.error_code, ui.inputPath.value, run.error_detail) : null;
   const requestBox = state.runError !== null ? errorBox(state.runError, ui.inputPath.value) : null;
   // The timezone data that the check found missing belongs to the third box,
   // and the first box is not ready without it (stage B3b).
@@ -716,6 +724,16 @@ function renderStore(current) {
       return tableRow;
     }),
   );
+}
+
+// The lock file that a stopped import left (stage B4b-2): when it was
+// written, the person's check that no other command uses the store, and the
+// button that removes it.
+function renderLock(current) {
+  const offered = lockOffered(current.how, state.store, ACTIVE_STATES.includes(state.run.state) || state.starting);
+  ui.lockArea.hidden = !offered;
+  const age = offered ? lockAge(state.store.answer?.lock_created_at, Date.now()) : null;
+  setText(ui.lockTime, age === null ? "" : describe(age));
 }
 
 // The fields of an import in the first box: the label and the download time,
@@ -1139,6 +1157,9 @@ function renderControls(states, current) {
   for (const button of [ui.storeCreate, ui.storeOpen, ui.storeOpenOther, ui.storeCreateNew, ui.storeCheck]) {
     button.disabled = !enabled.choose || state.store.busy || state.how === "single";
   }
+  // The lock file is removed only after the person's check (stage B4b-2).
+  ui.lockConfirm.disabled = !enabled.choose || state.store.busy;
+  ui.lockRemove.disabled = !enabled.choose || state.store.busy || !ui.lockConfirm.checked;
   ui.check.disabled = !enabled.check || rerun;
   ui.snapshotDecide.disabled = !enabled.decideSnapshot;
   ui.outputDecide.disabled = !enabled.decideOutput;
@@ -1149,6 +1170,10 @@ function renderControls(states, current) {
   // is the primary one.
   ui.start.classList.toggle("primary", !FINISHED_STATES.includes(state.run.state));
   ui.cancel.disabled = !enabled.cancel;
+  // Cancelling an import also says that the store is completed by the next
+  // one (stage B4b-2).
+  const importing = (state.run.how ?? state.how) === "snapshots";
+  setText(ui.cancelConfirmText, t(importing ? "run.cancel_confirm_import" : "run.cancel_confirm"));
   ui.quit.disabled = !enabled.quit;
   ui.openFolder.disabled = !enabled.outputActions;
   ui.openStartHere.disabled = !enabled.outputActions;
@@ -1179,6 +1204,7 @@ function render() {
   renderImport(current);
   renderRerun(current);
   renderStore(current);
+  renderLock(current);
   renderPlace();
   renderBrowser();
   renderErrors(current);
@@ -1510,11 +1536,29 @@ async function storeAction(action, path, focusTarget) {
   const store = state.store;
   store.busy = true;
   store.chooserError = null;
+  store.unlocked = false;
+  store.unlockError = null;
   if (action !== "check") {
     store.checked = null;
   }
   render();
   try {
+    if (action === "unlock") {
+      // The lock file that a stopped import left (stage B4b-2): removed
+      // only with the person's check; a stop leaves the store as it is, and
+      // the store is opened again.
+      const answer = await callApi("/api/store/unlock", { path, confirmed: ui.lockConfirm.checked });
+      ui.lockConfirm.checked = false;
+      if (answer.unlocked === true) {
+        const { unlocked: _done, ...opened } = answer;
+        store.answer = opened;
+        store.unlocked = true;
+      } else {
+        store.unlockError = answer.error_code;
+        store.answer = await callApi("/api/store/open", { path });
+      }
+      return;
+    }
     const answer = await callApi(`/api/store/${action}`, { path });
     if (action === "check") {
       store.checked = answer;
@@ -1524,7 +1568,9 @@ async function storeAction(action, path, focusTarget) {
   } catch (error) {
     if (!connectionFailure(error)) {
       const failed = { state: "error", path, error_code: error.code };
-      if (action === "check") {
+      if (action === "unlock") {
+        store.unlockError = error.code;
+      } else if (action === "check") {
         store.checked = failed;
       } else {
         store.answer = failed;
@@ -1598,6 +1644,10 @@ async function startRun() {
   state.starting = true;
   state.infos.delete("exit");
   state.runError = null;
+  // The line of a removed lock file says to press Run normalization
+  // (stage B4b-2).
+  state.store.unlocked = false;
+  state.store.unlockError = null;
   state.quitKey = null;
   state.cancelAsked = false;
   // The previous result would read as the answer to this attempt.
@@ -1942,6 +1992,8 @@ function connect() {
   ui.storeCreate.addEventListener("click", () => chooseWithDialog("folder", "store-place", ui.storeCreate));
   ui.storeCreateNew.addEventListener("click", () => chooseWithDialog("folder", "store-place", ui.storeCreateNew));
   ui.storeCheck.addEventListener("click", () => storeAction("check", state.store.answer?.path, ui.storeCheck));
+  ui.lockConfirm.addEventListener("change", render);
+  ui.lockRemove.addEventListener("click", () => storeAction("unlock", state.store.answer?.path, ui.lockRemove));
   ui.check.addEventListener("click", () => runCheck());
   // The way to normalize, and normalizing the Snapshots again (stage B4b-1).
   for (const radio of [ui.howSnapshots, ui.howSingle]) {

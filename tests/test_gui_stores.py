@@ -15,6 +15,7 @@ import shutil
 import stat
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -456,6 +457,37 @@ class StoreApiTest(GuiServerTestCase):
                     self.assertEqual(self.post(route, payload), (422, {"error": code}))
         with patch.object(stores, "snapshot_status", side_effect=RuntimeError("unexpected")):
             self.assertEqual(self.post("/api/store/open", {"path": str(store)}), (500, {"error": "COMMAND_FAILED"}))
+
+    def test_the_lock_file_that_a_stopped_import_left(self) -> None:
+        # Stage B4b-2: the answer tells when the lock file was written; the
+        # page removes it with the function of snapshot unlock, only with the
+        # person's check, and never while a run of this app is active.
+        store = self.root / "store"
+        initialize_store(store, ACCOUNT)
+        lock = store / LOCK_NAME
+        lock.write_bytes(b"424242\n")
+        stamp = datetime(2030, 1, 1, 2, 3, 4, tzinfo=timezone.utc).timestamp()
+        os.utime(lock, (stamp, stamp))
+        status, answer = self.post("/api/store/open", {"path": str(store)})
+        self.assertEqual((answer["notices"], answer["lock_created_at"]), (["SNAPSHOT_STORE_LOCKED"], "2030-01-01T02:03:04+00:00"))
+        for confirmed in (None, False, "yes"):
+            with self.subTest(confirmed=confirmed):
+                status, answer = self.post("/api/store/unlock", {"path": str(store), "confirmed": confirmed})
+                self.assertEqual((status, answer["state"], answer["error_code"]), (200, "error", "SNAPSHOT_UNLOCK_NOT_CONFIRMED"))
+        with patch.object(self.server.runs, "active", return_value=True):
+            self.assertEqual(self.post("/api/store/unlock", {"path": str(store), "confirmed": True}), (409, {"error": "RUN_ACTIVE"}))
+        self.assertTrue(lock.exists())
+        status, answer = self.post("/api/store/unlock", {"path": str(store), "confirmed": True})
+        self.assertEqual(
+            (status, answer.get("state"), answer.get("unlocked"), answer.get("notices")), (200, "store", True, []), answer
+        )
+        self.assertNotIn("lock_created_at", answer)
+        self.assertFalse(lock.exists())
+        status, answer = self.post("/api/store/unlock", {"path": str(store), "confirmed": True})
+        self.assertEqual(answer["error_code"], "SNAPSHOT_LOCK_NOT_FOUND")
+        for payload, code in (({"confirmed": True}, "PATH_INVALID"), ({"path": "relative", "confirmed": True}, "PATH_NOT_ABSOLUTE")):
+            with self.subTest(code=code):
+                self.assertEqual(self.post("/api/store/unlock", payload), (422, {"error": code}))
 
     def test_the_folder_for_the_output(self) -> None:
         folder = self.home / "GarminRunningData"

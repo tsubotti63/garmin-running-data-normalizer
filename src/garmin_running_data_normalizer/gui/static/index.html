@@ -120,6 +120,14 @@
           <button type="button" id="store-check" data-i18n="store.check" disabled hidden></button>
         </div>
         <div id="store-result" class="messages" role="status" aria-live="polite"></div>
+        <div id="lock-area" class="lock-area" hidden>
+          <p id="lock-time" class="help"></p>
+          <div class="checkbox-row">
+            <input type="checkbox" id="lock-confirm" aria-describedby="lock-time">
+            <label for="lock-confirm" data-i18n="lock.confirm"></label>
+          </div>
+          <button type="button" id="lock-remove" data-i18n="lock.remove"></button>
+        </div>
         <div id="store-list" hidden>
           <p id="store-list-label" class="label-line" data-i18n="snapshot.list_label"></p>
           <div class="snap-wrap">
@@ -250,7 +258,7 @@
       </div>
       <p id="start-reason" class="help"></p>
       <div id="cancel-confirm" class="confirm" hidden>
-        <p data-i18n="run.cancel_confirm"></p>
+        <p id="cancel-confirm-text" data-i18n="run.cancel_confirm"></p>
         <div class="button-row">
           <button type="button" id="cancel-yes" data-i18n="run.cancel_yes"></button>
           <button type="button" id="cancel-no" data-i18n="run.cancel_no"></button>
