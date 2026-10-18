@@ -23,6 +23,7 @@ from pathlib import Path, PurePosixPath
 from typing import BinaryIO, ContextManager, Iterator, Union
 from zipfile import ZipFile
 
+from ..stops import MIX_KINDS, MIX_STOPS
 from .archive import ArchiveLimits, MemberTooLargeError
 from .source import (
     DAMAGED_ZIP_ERRORS,
@@ -44,10 +45,9 @@ OUTSIDE_EXPORT_ROOT = "outside_export_root"
 MIXED_INPUT_MESSAGE = (
     "the input holds more than one Export, or Exports of more than one account"
 )
-OTHER_ACCOUNT_MESSAGE = (
-    "the Export belongs to another account than the Snapshots in this Snapshot Store"
-)
-MIXED_STORE_MESSAGE = "the Snapshot Store holds the Exports of more than one account"
+# The other two cases of a mix, with their own next steps (stage B4b-2).
+OTHER_ACCOUNT_MESSAGE = MIX_STOPS["other_account"].what
+MIXED_STORE_MESSAGE = MIX_STOPS["store"].what
 
 
 @dataclass(frozen=True)
@@ -71,16 +71,26 @@ class MixedExportsError(ValueError):
     step of its code (stage A5b). ``found`` lists the Exports of an input
     that holds different ones, for where the check is started only, never
     written to an output; a mix of accounts names none (stage B3c).
+    ``kind`` is the case of the mix, one of ``MIX_KINDS`` (stage B4b-2): the
+    input itself, an Export of another account than the Snapshots of a
+    store, or a store that holds the Exports of more than one account.
     """
 
     code = "INPUT_MULTIPLE_EXPORTS"
 
     def __init__(
-        self, safe_message: str = MIXED_INPUT_MESSAGE, found: list[FoundExport] | None = None
+        self,
+        safe_message: str = MIXED_INPUT_MESSAGE,
+        found: list[FoundExport] | None = None,
+        *,
+        kind: str = "input",
     ) -> None:
+        if kind not in MIX_KINDS:
+            raise ValueError(f"unknown kind of mix: {kind}")
         super().__init__(safe_message)
         self.safe_message = safe_message
         self.found = list(found or [])
+        self.kind = kind
 
 
 @dataclass(frozen=True, order=True)

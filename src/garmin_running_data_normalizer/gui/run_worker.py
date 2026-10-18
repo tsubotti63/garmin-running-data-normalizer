@@ -90,6 +90,10 @@ def _failure(exc: Exception, phase: str) -> dict[str, Any]:
     known = stop_of(exc)
     code = known[0] if known is not None else ("RUN_ALL_FAILED" if phase == "run" else "COMMAND_FAILED")
     message: dict[str, Any] = {"event": "failed", "code": code}
+    # The case of a mix, which the page says in its own words (stage B4b-2):
+    # a mix that Run-All found is one of the input.
+    if code == "INPUT_MULTIPLE_EXPORTS":
+        message["mix"] = getattr(exc, "kind", "input")
     places = getattr(exc, "places", None)
     # Where the input or the store cannot be opened is shown on the page
     # only (stage A3d-3a); "" is the input or the store itself.

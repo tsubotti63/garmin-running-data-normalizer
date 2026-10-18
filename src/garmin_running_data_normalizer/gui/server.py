@@ -37,7 +37,7 @@ from .runs import (
     RunRequestError,
     absolute_path,
 )
-from .stores import check_store, download_time, open_store, store_place
+from .stores import check_store, download_time, open_store, store_place, unlock_store
 
 
 HOST = "127.0.0.1"
@@ -100,6 +100,7 @@ API_ROUTES = {
     "/api/store/open": "_api_store_open",
     "/api/store/place": "_api_store_place",
     "/api/store/check": "_api_store_check",
+    "/api/store/unlock": "_api_store_unlock",
     "/api/place": "_api_place",
     "/api/run/start": "_api_run_start",
     "/api/run/status": "_api_run_status",
@@ -481,6 +482,14 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
 
     def _api_store_check(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._store_answer(payload, check_store)
+
+    def _api_store_unlock(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The lock file that a stopped import left (stage B4b-2): never while
+        # a run of this app could hold it, and only with the person's check
+        # that no other command uses the store.
+        if self.server.runs.active():
+            raise ApiError(HTTPStatus.CONFLICT, "RUN_ACTIVE")
+        return self._store_answer(payload, lambda path: unlock_store(path, payload.get("confirmed")))
 
     def _api_place(self, payload: dict[str, Any]) -> dict[str, Any]:
         # The folder for the output: whether it is there, whether it is the

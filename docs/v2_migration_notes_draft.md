@@ -24,7 +24,7 @@ folder; earlier outputs are not converted.
 
 | Contract | v2.0.0 position |
 |---|---|
-| CLI commands and options | The same commands and options; `--input` also takes the downloaded Export ZIP file; for `run-all`, `snapshot run-all`, `snapshot build-input`, and `normalize-activities`, the folder for the output must exist and the name of a new output must be one that every system accepts; for `snapshot init`, the folder that holds the new store must exist, while `support-bundle` still makes the folders above its own |
+| CLI commands and options | The same commands and options; `--input` also takes the downloaded Export ZIP file; for `run-all`, `snapshot run-all`, `snapshot build-input`, and `normalize-activities`, the folder for the output must exist and the name of a new output must be one that every system accepts; for `snapshot init`, the folder that holds the new store must exist, while `support-bundle` still makes the folders above its own; the new `snapshot unlock --store <store> --confirm-no-other-command` removes the lock file that a stopped registration left |
 | Exit codes | The same `0 / 0 / 3 / 2` Product mapping; `PARTIAL_SUCCESS` (exit 3) covers every file or row left out, and many problems that stopped with exit 2 now finish with exit 3 or 0; `Ctrl+C` ends a command with exit 130 |
 | Stops | Every `ERROR` line says what happened and then the next step of its code; some codes change (below) |
 | Datasets, schemas, and stable keys | 17 datasets; 247 fields (224 in v1.7.1); ten fields become nullable; stable keys unchanged |
@@ -95,7 +95,11 @@ What can change:
   `snapshot verify` can print `NOTE` lines about the store, and `doctor`'s
   report for a person gives each finding and the next step in words. The
   `ERROR` lines of `INPUT_NOT_READABLE` and `SNAPSHOT_STORE_NOT_READABLE`
-  say that this app is not allowed to open a folder or file.
+  say that this app is not allowed to open a folder or file. The next step
+  of `SNAPSHOT_STORE_LOCKED` names `snapshot unlock`, and the `ERROR` lines
+  of `INPUT_MULTIPLE_EXPORTS` for an Export of another account than the
+  Snapshots of a store, and for a store that holds the Exports of more than
+  one account, give next steps of their own; the code is the same.
 - Outputs of every run, also without any problem in the data:
   `disagreeing_fields` in every row of every dataset (`;` between names in the
   CSV files); `start_time_source` in Activities, `sleep_day_source` and

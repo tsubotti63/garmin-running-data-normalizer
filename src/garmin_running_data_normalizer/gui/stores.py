@@ -19,6 +19,8 @@ from ..intake.source import place_can_be_shown
 from ..snapshot.store import (
     SnapshotStoreError,
     check_new_store_place,
+    lock_created_at,
+    remove_lock,
     snapshot_status,
     verification_error,
     verify_store,
@@ -39,6 +41,11 @@ ANSWER_CODES = (
     "SNAPSHOT_STORE_INSIDE_STORE",
     "SNAPSHOT_STORE_LOCKED",
     "SNAPSHOT_REGISTRATION_INCOMPLETE",
+    # Removing a lock file (stage B4b-2).
+    "SNAPSHOT_UNLOCK_NOT_CONFIRMED",
+    "SNAPSHOT_LOCK_NOT_FOUND",
+    "SNAPSHOT_LOCK_INVALID",
+    "SNAPSHOT_STORE_NOT_WRITABLE",
 )
 
 
@@ -75,6 +82,13 @@ def _opened(path: Path, status: dict[str, Any]) -> dict[str, Any]:
             for item in status["snapshots"]
         ],
         "notices": list(status.get("notices", [])),
+        # When the lock file was written, for the person who decides whether
+        # an import still runs (stage B4b-2).
+        **(
+            {"lock_created_at": lock_created_at(path)}
+            if "SNAPSHOT_STORE_LOCKED" in status.get("notices", [])
+            else {}
+        ),
         "cloud": cloud_kind(path),
     }
 
@@ -108,6 +122,19 @@ def open_store(folder: Path) -> dict[str, Any]:
     if found is not None:
         return found
     return {"state": "error", "path": str(folder), "error_code": "SNAPSHOT_STORE_NOT_FOUND"}
+
+
+def unlock_store(path: Path, confirmed: Any) -> dict[str, Any]:
+    """Remove the lock file of the store at ``path`` with the function of
+    snapshot unlock (stage B4b-2), and answer as opening the store does, with
+    ``unlocked``; a stop is an answer with its code."""
+    try:
+        remove_lock(path, confirmed=confirmed is True)
+    except SnapshotStoreError as exc:
+        return _problem(path, exc)
+    answer = open_store(path)
+    answer["unlocked"] = True
+    return answer
 
 
 def store_place(folder: Path) -> dict[str, Any]:
@@ -182,4 +209,12 @@ def _proposed(timestamp: float | None, source: str) -> tuple[str | None, str | N
         return None, None
 
 
-__all__ = ["ANSWER_CODES", "check_store", "download_time", "not_readable_detail", "open_store", "store_place"]
+__all__ = [
+    "ANSWER_CODES",
+    "check_store",
+    "download_time",
+    "not_readable_detail",
+    "open_store",
+    "store_place",
+    "unlock_store",
+]

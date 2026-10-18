@@ -38,14 +38,17 @@ from ..run_all import OTHER_WARNING_FIELDS, OUTPUT_PATHS, PROGRESS_STAGES, PROGR
 from ..snapshot.lifecycle import SNAPSHOT_PROGRESS_STAGES
 from ..snapshot.store import (
     SnapshotStoreError,
+    cancel_notices,
     check_input_apart,
     check_label_free,
     check_new_store_place,
     load_manifests,
     load_store,
+    lock_exists,
     new_snapshot_label,
     registration_times,
 )
+from ..stops import MIX_KINDS
 from .places import default_folder, default_store, make_default_folder
 from .run_worker import FAMILY_COUNT_FIELDS, HOWS
 
@@ -124,6 +127,15 @@ def _valid_detail(message: dict[str, Any]) -> dict[str, Any] | None:
     if message.get("code") == "SNAPSHOT_STORE_NOT_READABLE":
         detail["store"] = True
     return detail
+
+
+def _valid_mix(message: dict[str, Any]) -> dict[str, Any] | None:
+    """The case of a mix that the child named, one of MIX_KINDS (stage
+    B4b-2), or None."""
+    mix = message.get("mix")
+    if message.get("code") == "INPUT_MULTIPLE_EXPORTS" and isinstance(mix, str) and mix in MIX_KINDS:
+        return {"mix": mix}
+    return None
 
 
 def _process_group_options() -> dict[str, Any]:
@@ -297,6 +309,11 @@ class _Run:
         # The way of the run and the result of its import (stage B4b-1).
         self.how = "single"
         self.imported: dict[str, Any] | None = None
+        # The store of an import, whether it had a lock file before, and the
+        # notices of the store that a cancelled import left (stage B4b-2).
+        self.store: Path | None = None
+        self.lock_before = False
+        self.store_notices: list[str] = []
         self.error_code: str | None = None
         self.error_detail: dict[str, Any] | None = None
         self.cancel_requested = False
@@ -474,6 +491,9 @@ class RunManager:
             check_output_location(output, output_path_too_long)
         except OutputLocationError as exc:
             raise RunRequestError(exc.code) from exc
+        # What the store holds before an import, to tell after a cancellation
+        # of what it left, as the CLI does (stage B4b-2).
+        lock_before = how == "snapshots" and store is not None and lock_exists(store)
         command = [
             *self._prefix,
             *([f"--input={input_path}"] if input_path is not None else []),
@@ -496,6 +516,9 @@ class RunManager:
             )
             run = _Run(process, output, staging_before)
             run.how = how
+            if how == "snapshots" and store is not None:
+                run.store = store
+                run.lock_before = lock_before
             self._run = run
         run.follower = threading.Thread(target=self._follow, args=(run,), daemon=True)
         run.follower.start()
@@ -524,6 +547,9 @@ class RunManager:
                 # The way of the run and the result of its import (stage B4b-1).
                 "how": run.how,
                 "imported": dict(run.imported) if run.imported else None,
+                # The notices of the store that a cancelled import left
+                # (stage B4b-2): codes only.
+                "store_notices": list(run.store_notices),
             }
 
     def cancel(self) -> dict[str, Any]:
@@ -612,7 +638,7 @@ class RunManager:
             code = message.get("code")
             if isinstance(code, str) and CODE.fullmatch(code):
                 run.error_code = code
-                run.error_detail = _valid_detail(message)
+                run.error_detail = _valid_detail(message) or _valid_mix(message)
         elif event == "cancelled":
             run.reported_cancel = True
 
@@ -621,6 +647,13 @@ class RunManager:
         staging_folders = [
             name for name in _staging_folders(run.output) if name not in run.staging_before
         ]
+        # A cancelled import, also one that was stopped by force, may leave
+        # the record of an interrupted import or a lock file (stage B4b-2).
+        store_notices = (
+            cancel_notices(run.store, run.lock_before)
+            if run.store is not None and (run.cancel_requested or run.reported_cancel)
+            else []
+        )
         with self._lock:
             run.ended = time.monotonic()
             if run.error_code is not None and run.result is None:
@@ -638,6 +671,8 @@ class RunManager:
                 run.error_code = run.error_code or "RUN_ALL_FAILED"
             if run.state != "finished":
                 run.staging_folders = staging_folders
+            if run.state == "cancelled":
+                run.store_notices = store_notices
 
 
 __all__ = [

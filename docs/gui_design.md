@@ -174,6 +174,22 @@ the next registration completes an interrupted one; a lock file that a forced
 stop left stops the next import with `SNAPSHOT_STORE_LOCKED`, and the store's
 lines say how to remove it, as `snapshot status` does.
 
+When things go wrong with the store (stage B4b-2): under the stop of a lock
+file, for an import, the page says when the lock file was written, so that a
+lock that an import holds now can be told from one that a stopped import left,
+and offers "Remove the lock file" after the person checks "I checked that no
+other normalization or snapshot command is running". It removes the lock file
+only, with the function of `snapshot unlock`, never while a run of this app is
+active, and the import starts again with "Run normalization", so that it never
+starts before the third box is set (the mockup's button also started the
+import). Cancelling an import asks with the words of the text book (the next
+import completes the store), and a cancelled import, also one that was stopped
+by force, tells in the fourth box what it left in the store, as the CLI does
+after a cancelled registration. The three cases of a mix have the words of the
+text book: the input itself in the first box, and an Export of another account
+than the Snapshots, or a store that holds the Exports of more than one
+account, in the second box.
+
 Colors have five meanings across the page: blue is the current step or a
 running task, green is done or confirmed, yellow is a warning, red is a problem
 to fix, and gray is absent or not yet. Only red fills a table row; yellow and
@@ -236,7 +252,8 @@ Local Snapshot Store and new output folders
   names, counts, statuses, and error codes from them, and discards the child's
   standard error. Short operations (Doctor, handoff validation, and Support
   Bundle, and from stage B4a opening, listing, and checking a Snapshot Store
-  and checking the place of a new one) run in the server process.
+  and checking the place of a new one, and from stage B4b-2 removing its
+  lock file) run in the server process.
 - From stage B4b-1 the child has three ways: this Export only (`run_all`),
   importing it (`initialize_store` for a new store, `register_snapshot`, then
   `run_snapshot_all`), and normalizing the Snapshots again
@@ -245,7 +262,11 @@ Local Snapshot Store and new output folders
   Snapshots, before the run goes on. It stops with the codes with which the
   CLI stops (`runner.stop_of`), and for an error that no code describes, with
   `COMMAND_FAILED` during the import and `RUN_ALL_FAILED` after it, as the
-  CLI's commands do. The server checks the request before the child starts
+  CLI's commands do. From stage B4b-2 a stop of `INPUT_MULTIPLE_EXPORTS`
+  names its case (the input, an Export of another account, or a store of
+  more than one account), and after a cancelled import the server gives the
+  notices of the store with the function of the CLI's cancelled
+  registration: codes only. The server checks the request before the child starts
   with the functions that the registration and the store use, so that each
   rule is written once: the name of the Snapshot, the time, the Export and
   the store apart, the name free in the store, a store with Snapshots to

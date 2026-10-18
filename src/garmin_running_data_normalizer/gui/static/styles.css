@@ -353,6 +353,15 @@ fieldset {
   }
 }
 
+/* Removing the lock file that a stopped import left (stage B4b-2). */
+.lock-area {
+  margin-top: 6px;
+}
+
+.lock-area button {
+  margin-top: 6px;
+}
+
 /* The parts that the chosen way to normalize does not use (stage B4b-1). */
 .unused {
   opacity: 0.6;

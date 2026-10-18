@@ -12,7 +12,7 @@ import threading
 from collections import Counter
 from contextlib import ExitStack, contextmanager, suppress
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, NamedTuple
 
 from . import __version__
 from .common.time import (
@@ -71,9 +71,9 @@ from .snapshot import (
     shown_store_message,
     verification_error,
 )
-from .snapshot.store import LOCK_NAME
+from .snapshot.store import cancel_notices, lock_exists, remove_lock
 from .standalone import StandaloneHandoffError, validate_standalone_handoff
-from .stops import STOPS, stop_line
+from .stops import MIX_STOPS, STOPS, stop_line
 
 
 OUTPUT_FILES = (
@@ -448,6 +448,15 @@ def _is_there(path: Path) -> bool:
         return False
 
 
+class KnownStop(NamedTuple):
+    """A stop that a code describes: its code, its message, and the next
+    step of its case when it has its own (stage B4b-2)."""
+
+    code: str
+    message: str
+    next_step: str | None = None
+
+
 class _Watch:
     """What a command may leave if Ctrl+C cancels it (stage A5c): its new
     output, the hidden names made from the output's name next to it and, for
@@ -464,7 +473,7 @@ class _Watch:
         self.next_to_before = self._next_to()
         self.inside_before = _names(self.output) if self.output_was_there else set()
         self.store_before = _names(store) if store is not None else set()
-        self.lock_before = store is not None and _is_there(store / LOCK_NAME)
+        self.lock_before = store is not None and lock_exists(store)
 
     @classmethod
     def of(cls, args: argparse.Namespace) -> "_Watch":
@@ -509,15 +518,11 @@ class _Watch:
         return lines
 
     def notices(self) -> list[str]:
-        """The notices of the store that a cancelled registration leaves."""
+        """The notices of the store that a cancelled registration leaves, as
+        the GUI gives them after an import (stage B4b-2)."""
         if self.name != "snapshot register" or self.store is None:
             return []
-        found = []
-        if _is_there(self.store / "journal" / "registration.json"):
-            found.append("SNAPSHOT_REGISTRATION_INCOMPLETE")
-        if not self.lock_before and _is_there(self.store / LOCK_NAME):
-            found.append("SNAPSHOT_STORE_LOCKED")
-        return found
+        return cancel_notices(self.store, self.lock_before)
 
 
 class _Interrupts:
@@ -544,40 +549,43 @@ class _Interrupts:
         self.saved.clear()
 
 
-def stop_of(exc: BaseException) -> tuple[str, str] | None:
+def stop_of(exc: BaseException) -> KnownStop | None:
     """The code and the message of a known stop: what the CLI prints for it,
-    and what the GUI's child reports for the same functions (stage B4b-1).
+    and what the GUI's child reports for the same functions (stage B4b-1),
+    with the next step of a case of the code that has its own (stage B4b-2).
     None for an error that no code describes, for which each caller has its
     own code."""
     if isinstance(exc, GoldenPathError):
-        return exc.code, str(exc)
+        return KnownStop(exc.code, str(exc))
     # A folder or file of the input that this app may not open, met while a
     # Snapshot is registered (stage A3d-3a).
     if isinstance(exc, InputNotReadableError):
-        return "INPUT_NOT_READABLE", input_not_readable_message(exc.places)
+        return KnownStop("INPUT_NOT_READABLE", input_not_readable_message(exc.places))
     if isinstance(exc, (TimezoneDataUnavailableError, TimezoneNameInvalidError)):
-        return exc.code, exc.safe_message
+        return KnownStop(exc.code, exc.safe_message)
     if isinstance(exc, RunAllError):
-        return exc.code, shown_message(exc)
+        return KnownStop(exc.code, shown_message(exc))
     # Each stop of the Snapshot Store has its code (stage A3d-3b); the stops
     # of the store's contract keep SNAPSHOT_LIFECYCLE_FAILED.
     if isinstance(exc, SnapshotLifecycleError):
-        return exc.code, shown_store_message(exc)
+        return KnownStop(exc.code, shown_store_message(exc))
     if isinstance(exc, StandaloneHandoffError):
-        return "HANDOFF_INVALID", str(exc)
+        return KnownStop("HANDOFF_INVALID", str(exc))
     if isinstance(exc, (DoctorError, SupportBundleError)):
-        return exc.code, exc.safe_message
+        return KnownStop(exc.code, exc.safe_message)
     # The same codes as Run-All, for the commands that read an Export without
     # Run-All (normalize-activities and snapshot register) and for a Snapshot
     # Store that holds the Exports of more than one account.
     if isinstance(exc, MixedExportsError):
-        return exc.code, exc.safe_message
+        # Each case of a mix says what to do (stage B4b-2).
+        case = MIX_STOPS.get(exc.kind)
+        return KnownStop(exc.code, exc.safe_message, case.next_step if case else None)
     if isinstance(exc, CorruptArchiveError):
-        return "INPUT_ZIP_CORRUPT", STOPS["INPUT_ZIP_CORRUPT"].what
+        return KnownStop("INPUT_ZIP_CORRUPT", STOPS["INPUT_ZIP_CORRUPT"].what)
     if isinstance(exc, ExportTooLargeError):
-        return "INPUT_TOO_LARGE", STOPS["INPUT_TOO_LARGE"].what
+        return KnownStop("INPUT_TOO_LARGE", STOPS["INPUT_TOO_LARGE"].what)
     if isinstance(exc, TempSpaceError):
-        return "TEMP_SPACE_INSUFFICIENT", TEMP_SPACE_MESSAGE
+        return KnownStop("TEMP_SPACE_INSUFFICIENT", TEMP_SPACE_MESSAGE)
     return None
 
 
@@ -611,10 +619,10 @@ def _cancel(code: str, message: str, left: list[str], notices: list[str]) -> int
     return CANCELLED_EXIT_CODE
 
 
-def _stop(code: str, message: str) -> int:
-    """Print the line of a stop, with the next step of its code, and return
-    the exit code of a stop (stage A5b)."""
-    print(stop_line(code, message), file=sys.stderr)
+def _stop(code: str, message: str, next_step: str | None = None) -> int:
+    """Print the line of a stop, with the next step of its code or of its
+    case, and return the exit code of a stop (stage A5b)."""
+    print(stop_line(code, message, next_step), file=sys.stderr)
     return 2
 
 
@@ -700,6 +708,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--confirm-complete",
         action="store_true",
         help="Confirm the Export copy is complete before immutable registration.",
+    )
+    snapshot_unlock = snapshot_commands.add_parser(
+        "unlock",
+        help="Remove the lock file that a stopped registration left, once no snapshot "
+        "command uses the store.",
+    )
+    snapshot_unlock.add_argument("--store", required=True)
+    snapshot_unlock.add_argument(
+        "--confirm-no-other-command",
+        action="store_true",
+        help="Confirm that no normalization or snapshot command uses the store.",
     )
     snapshot_status_parser = snapshot_commands.add_parser(
         "status",
@@ -809,6 +828,8 @@ def _main(args: argparse.Namespace, watch: _Watch, interrupts: _Interrupts) -> i
                     export_observed_at=args.export_observed_at,
                     confirm_complete=args.confirm_complete,
                 )
+            elif args.snapshot_command == "unlock":
+                result = remove_lock(args.store, confirmed=args.confirm_no_other_command)
             elif args.snapshot_command == "status":
                 result = snapshot_status(args.store)
             elif args.snapshot_command == "verify":
@@ -935,4 +956,4 @@ def _main(args: argparse.Namespace, watch: _Watch, interrupts: _Interrupts) -> i
     return 0
 
 
-__all__ = ["GoldenPathError", "OUTPUT_FILES", "build_parser", "main", "run_activities", "stop_of"]
+__all__ = ["GoldenPathError", "KnownStop", "OUTPUT_FILES", "build_parser", "main", "run_activities", "stop_of"]

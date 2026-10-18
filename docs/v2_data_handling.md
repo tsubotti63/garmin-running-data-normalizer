@@ -1630,6 +1630,28 @@ Snapshot, under any label, one that the store has included.
 `SNAPSHOT_LIFECYCLE_FAILED` remains for a registration without
 `--confirm-complete` and the other stops of the store's contract.
 
+From stage B4b-2, `snapshot unlock --store <store> --confirm-no-other-command`
+removes the lock file that a stopped registration left, which until then had
+to be deleted by hand, and the next step of `SNAPSHOT_STORE_LOCKED` names it.
+It removes the lock file only, with the function that the GUI uses too:
+without `--confirm-no-other-command` it stops with
+`SNAPSHOT_UNLOCK_NOT_CONFIRMED`; a folder that is not a store stops as every
+snapshot command does; a store without a lock file stops with
+`SNAPSHOT_LOCK_NOT_FOUND`; and a file that is not of this app's form (a
+regular file of at most 64 bytes that holds the number of a process and a line
+break, or nothing while it is being written), a link, a folder, or a file put
+in its place while it is checked stops with `SNAPSHOT_LOCK_INVALID` and stays.
+It does not look at whether the process of the number still runs: a store can
+be used from another computer, and the standard library of Windows offers no
+such look; the person's confirmation decides. The notices that a cancelled
+registration leaves come from one function for the CLI and the GUI. The three
+cases of `INPUT_MULTIPLE_EXPORTS` keep their code and get next steps of their
+own: an Export of another account than the Snapshots of a store (choose an
+Export of this account, or make another Snapshot Store for this Export), and a
+store that holds the Exports of more than one account (make a new Snapshot
+Store for each account, and register each Export into it again); the input
+itself keeps the next step of the table.
+
 The problems:
 
 - Safety: members of the Export ZIP file that fail a safety check (paths
@@ -1691,7 +1713,7 @@ gives, for its entries and controls, are not in this table.
 | `OUTPUT_PUBLISH_FAILED` | the output could not be written | check the free space and the permissions of the folder for the output, and run the command again |
 | `SNAPSHOT_STORE_NOT_WRITABLE` | this app cannot write in the Snapshot Store, or create it there | allow this app to write in its folder, or for a new store choose another folder; then run the command again |
 | `SNAPSHOT_STORE_SPACE_INSUFFICIENT` | the drive of the Snapshot Store does not have enough free space | free some space, or for a new store choose another folder; then run the command again |
-| `SNAPSHOT_STORE_LOCKED` | the Snapshot Store has a lock file (.single-writer.lock): a registration is running, or one stopped before it ended | if no snapshot command is running, delete that file, then run the command again |
+| `SNAPSHOT_STORE_LOCKED` | the Snapshot Store has a lock file (.single-writer.lock): a registration is running, or one stopped before it ended | if no snapshot command is running, remove that file with snapshot unlock --confirm-no-other-command, then run the command again |
 | `SNAPSHOT_REGISTRATION_INCOMPLETE` | a registration in the Snapshot Store was interrupted | register the same Export, or another complete Export, again, which completes the store |
 | `SNAPSHOT_STORE_NOT_READABLE` | this app is not allowed to open a folder or file of the Snapshot Store | allow this app to read it (on a Mac, in System Settings > Privacy & Security; on Windows, in the Security tab of its Properties); this app must be able to read the whole store folder |
 | `SNAPSHOT_STORE_INVALID` | the Snapshot Store is damaged, or a Snapshot that it lists is missing | do not change the files inside the store; restore it from a backup that passed snapshot verify, or make a new store and register the Exports again |
@@ -1702,6 +1724,9 @@ gives, for its entries and controls, are not in this table.
 | `SNAPSHOT_STORE_PARENT_NOT_FOUND` | the folder that should hold the new Snapshot Store does not exist | check the place given with --store, or make the folder that holds it first; no folder is made above a new store |
 | `SNAPSHOT_STORE_NOT_EMPTY` | the place given for a new Snapshot Store is a file, or a folder that holds other files | give the place of a new folder, or of an empty one, with --store; to use a store, give the folder of the store itself |
 | `SNAPSHOT_STORE_INSIDE_STORE` | the place given for a new Snapshot Store is inside another Snapshot Store | give a place outside the other store with --store |
+| `SNAPSHOT_UNLOCK_NOT_CONFIRMED` | the lock file is removed only when no snapshot command uses the Snapshot Store | check that no normalization or snapshot command uses the store, then run snapshot unlock again with --confirm-no-other-command |
+| `SNAPSHOT_LOCK_NOT_FOUND` | the Snapshot Store has no lock file | nothing needs to be removed; run the command that stopped again |
+| `SNAPSHOT_LOCK_INVALID` | the lock file of the Snapshot Store is not one that this app writes, or it changed while it was checked | check that no snapshot command is running, and look at the file .single-writer.lock in the store; this app removes only its own lock file |
 | `SNAPSHOT_LABEL_INVALID` | the label of the Snapshot is not one that this app takes | give a label of 1 to 64 letters, digits, dots, underscores, or hyphens that starts with a letter or a digit, with --label |
 | `SNAPSHOT_LABEL_EXISTS` | another Snapshot in the store has this label | give another label with --label |
 | `SNAPSHOT_TIME_INVALID` | a time of the Export cannot be read, or the times are not in order | give each time with its offset from UTC, such as 2030-01-01T02:00:00+00:00, with the request no later than the download, and the download no later than the observation |

@@ -268,6 +268,16 @@ class GuiPageStructureTest(unittest.TestCase):
                 result = by_id(self.elements, identifier)
                 self.assertEqual((result.get("role"), result.get("aria-live")), ("status", "polite"))
 
+    def test_the_lock_file_is_removed_only_after_a_labelled_check(self) -> None:
+        # Stage B4b-2: the check has its label and is described by the age of
+        # the lock file; the part is hidden until a store has a lock file.
+        self.assertIn("hidden", by_id(self.elements, "lock-area").attributes)
+        check = by_id(self.elements, "lock-confirm")
+        self.assertEqual((check.get("type"), check.get("aria-describedby")), ("checkbox", "lock-time"))
+        labels = [element for element in self.elements if element.tag == "label" and element.get("for") == "lock-confirm"]
+        self.assertEqual(len(labels), 1)
+        self.assertEqual(by_id(self.elements, "lock-remove").tag, "button")
+
     def test_folded_help_says_whether_it_is_open(self) -> None:
         toggle = by_id(self.elements, "tools-toggle")
         self.assertEqual(toggle.get("aria-expanded"), "false")

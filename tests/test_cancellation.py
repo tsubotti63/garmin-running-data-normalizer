@@ -324,6 +324,11 @@ class CancelledCommandTest(UsualCtrlC):
                 [line.split(":", 1)[0] for line in lines],
                 ["NOTE [SNAPSHOT_REGISTRATION_INCOMPLETE]", "NOTE [SNAPSHOT_STORE_LOCKED]"],
             )
+            # A lock file that was there before the registration is not one
+            # that it left (stage B4b-2, the function of the GUI too).
+            with mock.patch("garmin_running_data_normalizer.snapshot.register_snapshot", side_effect=interrupt):
+                lines = self.assert_cancelled(register_args(store), root, "snapshot register")
+            self.assertEqual([line.split(":", 1)[0] for line in lines], ["NOTE [SNAPSHOT_REGISTRATION_INCOMPLETE]"])
 
     def test_ctrl_c_is_ignored_while_a_command_reports_how_it_ended(self) -> None:
         seen: list[Any] = []

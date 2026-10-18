@@ -1382,6 +1382,68 @@ test("the summaries of the first two boxes say what the last run did, as the moc
   assert.deepEqual(summary("snapshot", { ...ran, editedSinceRun: true }), ["summary.snapshot_import", { count: 3 }]);
 });
 
+test("the three cases of a mix have words and boxes of their own", () => {
+  // A next step is a line of its own that holds the key of its words.
+  const keys = (detail) =>
+    flow.errorMessages("INPUT_MULTIPLE_EXPORTS", detail).map((line) => line.keyParams?.step ?? line.key);
+  assert.deepEqual(keys({ mix: "other_account" }), [
+    "stop.mix_other_account",
+    "stop_next.mix_other_account",
+    "error.code",
+  ]);
+  assert.deepEqual(keys({ mix: "store" }), ["stop.mix_store", "stop_next.mix_store", "error.code"]);
+  // The input itself, and a case that the page does not know, have the words
+  // of the code.
+  for (const detail of [{ mix: "input" }, { mix: "toString" }, null]) {
+    assert.deepEqual(keys(detail), ["stop.input_multiple_exports", "stop_next.input_multiple_exports", "error.code"]);
+  }
+  assert.equal(flow.errorBox("INPUT_MULTIPLE_EXPORTS", "/x", { mix: "other_account" }), "snapshot");
+  assert.equal(flow.errorBox("INPUT_MULTIPLE_EXPORTS", "/x", { mix: "store" }), "snapshot");
+  assert.equal(flow.errorBox("INPUT_MULTIPLE_EXPORTS", "/x", { mix: "input" }), "export");
+  assert.equal(flow.errorBox("INPUT_MULTIPLE_EXPORTS", "/x"), "export");
+});
+
+test("the lock file that a stopped import left: its age, the offer to remove it, and the lines", () => {
+  const made = "2030-01-01T00:00:00+00:00";
+  const at = (minutes) => Date.parse(made) + minutes * 60000;
+  const age = (minutes) => {
+    const words = flow.lockAge(made, at(minutes));
+    return [words.key, words.params];
+  };
+  assert.deepEqual(age(0.5), ["lock.made_now", {}]);
+  assert.deepEqual(age(5), ["lock.made_minutes", { count: 5 }]);
+  assert.deepEqual(age(119), ["lock.made_minutes", { count: 119 }]);
+  assert.deepEqual(age(180), ["lock.made_hours", { count: 3 }]);
+  assert.deepEqual(age(3 * 24 * 60), ["lock.made_days", { count: 3 }]);
+  assert.equal(flow.lockAge("soon", at(5)), null);
+  assert.equal(flow.lockAge(undefined, at(5)), null);
+  const locked = { answer: { state: "store", path: "/path/to/store", snapshots: [], notices: ["SNAPSHOT_STORE_LOCKED"] } };
+  assert.equal(flow.lockOffered("snapshots", locked), true);
+  assert.equal(flow.lockOffered("snapshots", locked, true), false);
+  assert.equal(flow.lockOffered("single", locked), false);
+  assert.equal(flow.lockOffered("rerun", locked), false);
+  assert.equal(flow.lockOffered("snapshots", { answer: { ...locked.answer, notices: [] } }), false);
+  // After the lock file was removed, and after a stop of the removal.
+  const first = (store) => flow.storeMessages(store, "snapshots")[0];
+  assert.deepEqual([first({ ...locked, answer: { ...locked.answer, notices: [] }, unlocked: true }).kind, first({ ...locked, unlocked: true }).message.key], ["ok", "lock.removed"]);
+  const stopped = first({ ...locked, unlockError: "SNAPSHOT_LOCK_INVALID" });
+  assert.deepEqual([stopped.kind, stopped.message.key], ["error", "stop.snapshot_lock_invalid"]);
+});
+
+test("a cancelled import tells of what it left in the store", () => {
+  const status = {
+    state: "cancelled",
+    store_notices: ["SNAPSHOT_STORE_LOCKED", "SNAPSHOT_REGISTRATION_INCOMPLETE", "/path/to/private"],
+  };
+  assert.deepEqual(flow.resultDetails(status).map((line) => line.keyParams?.step ?? line.key), [
+    "stop.snapshot_store_locked",
+    "stop_next.snapshot_store_locked",
+    "stop.snapshot_registration_incomplete",
+    "stop_next.snapshot_registration_incomplete",
+  ]);
+  assert.deepEqual(flow.resultDetails({ ...status, state: "failed" }), []);
+});
+
 test("the folder for the output: the default place that a run makes, and a cloud", () => {
   const place = { path: "/path/to/GarminRunningData", default: true, exists: false, cloud: null };
   assert.deepEqual(lineShapes(flow.placeMessages(place, "/path/to/GarminRunningData")), [
