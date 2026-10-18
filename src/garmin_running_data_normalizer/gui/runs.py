@@ -106,6 +106,32 @@ def output_path_too_long(parent: Path, name: str) -> bool:
     return windows_paths_too_long(str(parent), name)
 
 
+def output_taken(output: Path) -> str | None:
+    """The code with which a run refuses an output that is there already: a
+    link, or anything else of its name (stage B5a, from the start of a run)."""
+    if output.is_symlink():
+        return "OUTPUT_SYMLINK"
+    if output.exists():
+        return "OUTPUT_EXISTS"
+    return None
+
+
+def output_name_problem(parent: Path, name: Any) -> str | None:
+    """What keeps ``name`` from being a new output in ``parent``, as the
+    start of a run checks it (stage B5a): the code of a name that the rule
+    refuses, before anything is looked at, so that no place outside the
+    folder is told of; the code of something of that name there already;
+    or None, also when that cannot be told."""
+    try:
+        valid = validate_output_name(name)
+    except RunRequestError as exc:
+        return exc.code
+    try:
+        return output_taken(parent / valid)
+    except OSError:
+        return None
+
+
 def validate_output_name(name: Any) -> str:
     """Accept one portable folder name that cannot be taken for a staging
     folder, by the rule that the CLI takes too (stage A5a)."""
@@ -320,6 +346,9 @@ class _Run:
         # written (stage B4c).
         self.used_store: Path | None = None
         self.settings_notice: str | None = None
+        # Whether the run makes the External-safe Pack, which the page may
+        # show in its folder (stage B5a).
+        self.safe_pack = False
         # Set when the child has ended and its outcome is being recorded: a
         # cancellation asked for from then on changes nothing.
         self.closing = False
@@ -513,10 +542,9 @@ class RunManager:
         output = parent / name
         # Run-All checks this too. Checking it here also means that an output
         # found after a cancelled run was created by that run.
-        if output.is_symlink():
-            raise RunRequestError("OUTPUT_SYMLINK")
-        if output.exists():
-            raise RunRequestError("OUTPUT_EXISTS")
+        taken = output_taken(output)
+        if taken is not None:
+            raise RunRequestError(taken)
         # Run-All writes to the parent only at the end, by creating a staging
         # folder there; try the same now instead of failing after a long run.
         # Run-All makes the same check (stage A3d-3a).
@@ -550,6 +578,7 @@ class RunManager:
             run = _Run(process, output, staging_before)
             run.how = how
             run.used_store = store
+            run.safe_pack = external_safe_pack
             if how == "snapshots" and store is not None:
                 run.store = store
                 run.lock_before = lock_before
@@ -586,6 +615,7 @@ class RunManager:
                 "store_notices": list(run.store_notices),
                 # Settings that could not be remembered (stage B4c).
                 "settings_notice": run.settings_notice,
+                "safe_pack": run.safe_pack,
             }
 
     def cancel(self) -> dict[str, Any]:
@@ -721,7 +751,9 @@ __all__ = [
     "WINDOWS_MAX_FILE_PATH",
     "WINDOWS_MAX_FOLDER_PATH",
     "absolute_path",
+    "output_name_problem",
     "output_path_too_long",
+    "output_taken",
     "validate_output_name",
     "windows_paths_too_long",
 ]

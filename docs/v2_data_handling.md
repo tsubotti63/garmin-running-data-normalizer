@@ -1396,8 +1396,18 @@ step.
   - The GUI and the CLI make these checks with the same functions
     (`output_location.valid_output_name` and `check_output_location`).
   - The place of a new Snapshot Store follows the same idea from stage B4a
-    (below). The place of a Support Bundle (`support-bundle`) is not checked
-    so yet; stage B sets its rules with the control that chooses it.
+    (below), and that of a Support Bundle from stage B5a: `support-bundle`
+    and the GUI write it only where its folder exists
+    (`SUPPORT_BUNDLE_PARENT_NOT_FOUND`; until then, `support-bundle` made
+    the missing folders above it), never inside the run output, where the
+    output would then fail its checks (`SUPPORT_BUNDLE_INSIDE_OUTPUT`, with
+    both places compared as the system finds them, through links), and
+    never in the place of a file or a link (`SUPPORT_BUNDLE_EXISTS`), also
+    one put there while the bundle is written: the bundle is given its name
+    with a hard link, or, where the disk makes none, copied into a new file
+    that only a new name can be. A folder that cannot be written stops with
+    `SUPPORT_BUNDLE_NOT_WRITTEN` in the CLI and the GUI alike (until then,
+    `COMMAND_FAILED` in the CLI).
 - `normalize-activities` (the Golden Path) gives every stop a code, with
   Run-All's code for the same problem: the problems above, `INPUT_SYMLINK`,
   `INPUT_NOT_DIRECTORY`, `OUTPUT_SYMLINK`, `OUTPUT_INSIDE_INPUT`,
@@ -1739,6 +1749,9 @@ gives, for its entries and controls, are not in this table.
 | `DOCTOR_VERSION_UNSUPPORTED` | a version of this app that this version does not know made the output | use the version of this app that made the output, or run Run-All again into a new folder |
 | `SUPPORT_BUNDLE_PATH_UNSAFE` | the run output is a link or not an existing folder | give the folder of a completed run |
 | `SUPPORT_BUNDLE_EXISTS` | a file or a link is there already in the place of the Support Bundle | move or rename it, or give another file for the Support Bundle |
+| `SUPPORT_BUNDLE_PARENT_NOT_FOUND` | the folder for the Support Bundle does not exist or is not a folder | give a file in an existing folder for the Support Bundle, or create the folder first |
+| `SUPPORT_BUNDLE_INSIDE_OUTPUT` | the place of the Support Bundle is inside the run output | give a file outside the run output for the Support Bundle, such as next to it |
+| `SUPPORT_BUNDLE_NOT_WRITTEN` | the Support Bundle could not be written | check that the folder for it is still there and that this app can write in it |
 | `SUPPORT_BUNDLE_AUTHORITY_INVALID` | the diagnostics of the run output do not allow a Support Bundle | run Run-All again into a new folder, and make the Support Bundle from it |
 | `SUPPORT_BUNDLE_ARCHIVE_VALIDATION_FAILED` | the Support Bundle did not pass its check after it was written | the Support Bundle was not made; please report the code |
 | `SUPPORT_BUNDLE_MEMBER_SET_INVALID` | the Support Bundle would not hold exactly its six members | the Support Bundle was not made; please report the code |

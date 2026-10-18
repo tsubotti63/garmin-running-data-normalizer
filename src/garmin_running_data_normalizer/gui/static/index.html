@@ -179,8 +179,9 @@
       <div id="output-parent-note" class="messages" role="status" aria-live="polite"></div>
       <button type="button" id="output-search" class="search-again" data-i18n="remembered.search_again" disabled hidden></button>
       <label for="output-name" data-i18n="output.name"></label>
-      <input id="output-name" type="text" autocomplete="off" spellcheck="false" aria-describedby="output-name-help">
+      <input id="output-name" type="text" autocomplete="off" spellcheck="false" aria-describedby="output-name-help output-name-note">
       <p id="output-name-help" class="help" data-i18n="output.name_help"></p>
+      <div id="output-name-note" class="messages" role="status" aria-live="polite"></div>
       <div class="label-row">
         <label id="timezone-label" for="timezone" data-i18n="timezone.label"></label>
         <button type="button" id="timezone-info-button" class="info-button" aria-expanded="false" aria-controls="timezone-info" aria-labelledby="timezone-info-button timezone-label" data-i18n="info.explain"></button>
@@ -217,6 +218,9 @@
         <p class="info-foot" data-i18n="info.pack_foot"></p>
       </div>
       <p id="pack-file" class="made" hidden></p>
+      <div id="pack-made" class="messages"></div>
+      <button type="button" id="pack-reveal" class="search-again" data-i18n="reveal.button" aria-labelledby="pack-reveal pack-made" hidden disabled></button>
+      <div id="pack-result" class="messages" role="status" aria-live="polite"></div>
       <div id="output-error" class="errbox" hidden>
         <h3 id="output-error-heading" tabindex="-1"></h3>
         <div id="output-error-lines" class="messages"></div>
@@ -303,10 +307,18 @@
           <h4 id="bundle-heading" tabindex="-1" data-i18n="bundle.heading"></h4>
           <p class="help" data-i18n="bundle.help"></p>
           <p class="help" data-i18n="bundle.review_help"></p>
+          <p id="bundle-place-label" class="label-line" data-i18n="bundle.place_label"></p>
+          <div class="path-row">
+            <p id="bundle-place" class="path"></p>
+            <button type="button" id="bundle-choose" data-i18n="browse.button" aria-labelledby="bundle-choose bundle-place-label" disabled></button>
+          </div>
+          <div id="bundle-plan" class="messages"></div>
           <div class="button-row">
             <button type="button" id="bundle-button" data-i18n="bundle.button" disabled></button>
           </div>
           <div id="bundle-result" class="messages" role="status" aria-live="polite"></div>
+          <button type="button" id="bundle-reveal" class="search-again" data-i18n="reveal.button" aria-labelledby="bundle-reveal bundle-heading" hidden disabled></button>
+          <div id="bundle-reveal-result" class="messages" role="status" aria-live="polite"></div>
         </div>
       </div>
     </section>

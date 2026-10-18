@@ -505,6 +505,42 @@ class StoreApiTest(GuiServerTestCase):
             (200, {"default": False, "exists": True, "cloud": None}),
         )
 
+    def test_the_name_of_the_output_is_checked_before_the_run(self) -> None:
+        # Stage B5a: with a name, the server says what keeps it from being a
+        # new output there, as the start of a run checks it; the rule of the
+        # name comes first, so that nothing outside the folder is told of.
+        parent = self.root / "outputs"
+        parent.mkdir()
+        (parent / "taken").mkdir()
+        (self.root / "outside").mkdir()
+
+        def problem(name: object, where: Path = parent) -> object:
+            status, answer = self.post("/api/place", {"path": str(where), "name": name})
+            self.assertEqual(status, 200)
+            return answer["name_problem"]
+
+        self.assertIsNone(problem("free"))
+        self.assertEqual(problem("taken"), "OUTPUT_EXISTS")
+        (parent / "a-file").write_bytes(b"synthetic")
+        self.assertEqual(problem("a-file"), "OUTPUT_EXISTS")
+        for name in ("../outside", "a/b", "", ".hidden", "CON", 3, ["x"]):
+            with self.subTest(name=name):
+                self.assertEqual(problem(name), "OUTPUT_NAME_INVALID")
+        with patch.object(runs, "output_taken") as taken:
+            self.assertEqual(problem("../outside"), "OUTPUT_NAME_INVALID")
+        taken.assert_not_called()
+        # A folder that is not there holds nothing of the name.
+        self.assertIsNone(problem("taken", self.root / "missing"))
+        # Without a name, the answer is as before.
+        self.assertNotIn("name_problem", self.post("/api/place", {"path": str(parent)})[1])
+
+    @REAL_SYMLINKS
+    def test_a_link_of_the_name_of_the_output_is_refused_before_the_run(self) -> None:
+        parent = self.root / "outputs"
+        parent.mkdir()
+        (parent / "link").symlink_to(self.root / "missing", target_is_directory=True)
+        self.assertEqual(self.post("/api/place", {"path": str(parent), "name": "link"})[1]["name_problem"], "OUTPUT_SYMLINK")
+
 
 if __name__ == "__main__":
     unittest.main()

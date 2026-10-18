@@ -36,6 +36,7 @@ from .runs import (
     RunManager,
     RunRequestError,
     absolute_path,
+    output_name_problem,
 )
 from .settings import forget_settings, launch_settings, remember_hints
 from .stores import check_store, download_time, open_store, store_place, unlock_store
@@ -213,6 +214,9 @@ class GuiServer(ThreadingHTTPServer):
         self.runs = runs if runs is not None else RunManager()
         self.chooser = chooser if chooser is not None else Chooser()
         self.launch_key = secrets.token_urlsafe(32)
+        # The Support Bundle that this server made last, which the page may
+        # show in its folder (stage B5a).
+        self.bundle: Path | None = None
         self.idle_timeout = idle_timeout
         self._last_request = time.monotonic()
         self._lock = threading.Lock()
@@ -500,13 +504,20 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
 
     def _api_place(self, payload: dict[str, Any]) -> dict[str, Any]:
         # The folder for the output: whether it is there, whether it is the
-        # default place, which a run makes, and whether a cloud may copy it.
+        # default place, which a run makes, and whether a cloud may copy it;
+        # with a name, what keeps it from being a new output there, as the
+        # start of a run checks it (stage B5a).
+        name = payload.get("name")
+
         def look(path: Path) -> dict[str, Any]:
             try:
                 exists: bool | None = path.is_dir()
             except OSError:
                 exists = None
-            return {"default": path == default_folder(), "exists": exists, "cloud": cloud_kind(path)}
+            answer: dict[str, Any] = {"default": path == default_folder(), "exists": exists, "cloud": cloud_kind(path)}
+            if name is not None:
+                answer["name_problem"] = output_name_problem(path, name)
+            return answer
 
         return self._store_answer(payload, look)
 
@@ -544,18 +555,28 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise _command_failed() from exc
 
     def _api_support_bundle(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # Next to the output, or in the folder that the person chose, which the
+        # CLI's checks of the place of a Support Bundle take (stage B5a).
         output = self._finished_output()
+        folder: Path | None = None
+        if payload.get("folder") is not None:
+            try:
+                folder = absolute_path(payload.get("folder"), "PATH_INVALID")
+            except RunRequestError as exc:
+                raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
         try:
-            return make_support_bundle(output)
+            answer = make_support_bundle(output, folder)
         except OutputActionError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
         except Exception as exc:
             raise _command_failed() from exc
+        self.server.bundle = Path(answer["path"])
+        return answer
 
     def _api_open_output(self, payload: dict[str, Any]) -> dict[str, Any]:
         output = self._finished_output()
         try:
-            open_output(output, payload.get("target"))
+            open_output(output, payload.get("target"), self.server.bundle)
         except OutputActionError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
         except Exception as exc:

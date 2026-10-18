@@ -17,7 +17,7 @@ from collections.abc import Iterable
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import patch, call
 
 from garmin_running_data_normalizer import __version__
 from garmin_running_data_normalizer.common.time import DEFAULT_TIMEZONE
@@ -1055,7 +1055,7 @@ class GuiRunApiTest(GuiServerTestCase):
             for payload in ({}, {"target": "x"}, {"target": str(self.root)}, {"path": str(self.root)}):
                 with self.subTest(payload=payload):
                     self.assertEqual(self.call("/api/open-output", payload), (422, {"error": "REQUEST_INVALID"}))
-        launch.assert_called_once_with(self.parent / "output", folder=True)
+        launch.assert_called_once_with(self.parent / "output", folder=True, reveal=False)
         self.assertEqual(sorted(path.name for path in self.parent.iterdir()), ["output"])
 
     def test_a_real_run_can_be_checked_bundled_and_opened(self) -> None:
@@ -1081,7 +1081,41 @@ class GuiRunApiTest(GuiServerTestCase):
                 self.call("/api/open-output", {"target": "start_here"}),
                 (200, {"status": "opened"}),
             )
-        launch.assert_called_once_with(output / "START_HERE.md", folder=False)
+            # The bundle that this server made, shown where it is saved; the
+            # page sends no place (stage B5a). The run made no pack.
+            self.assertEqual(self.call("/api/open-output", {"target": "bundle"}), (200, {"status": "opened"}))
+            self.assertEqual(self.call("/api/open-output", {"target": "safe_pack"}), (422, {"error": "OUTPUT_NOT_AVAILABLE"}))
+            self.assertEqual(
+                self.call("/api/open-output", {"target": "bundle", "path": str(self.root)}),
+                (200, {"status": "opened"}),
+            )
+        self.assertEqual(
+            launch.call_args_list,
+            [
+                call(output / "START_HERE.md", folder=False, reveal=False),
+                call(bundle, folder=False, reveal=True),
+                call(bundle, folder=False, reveal=True),
+            ],
+        )
+        # In a chosen folder, which the CLI's checks of the place take.
+        chosen = self.root / "chosen"
+        chosen.mkdir()
+        status, answer = self.call("/api/support-bundle", {"folder": str(chosen)})
+        self.assertEqual((status, answer["path"]), (200, str(chosen / "output-support-bundle.zip")))
+        with patch.object(outputs, "_launch") as launch:
+            self.call("/api/open-output", {"target": "bundle"})
+        launch.assert_called_once_with(chosen / "output-support-bundle.zip", folder=False, reveal=True)
+        for folder, code in (
+            (output, "SUPPORT_BUNDLE_INSIDE_OUTPUT"),
+            (output / "analysis", "SUPPORT_BUNDLE_INSIDE_OUTPUT"),
+            (self.root / "missing", "SUPPORT_BUNDLE_PARENT_NOT_FOUND"),
+        ):
+            with self.subTest(code=code, folder=folder.name):
+                self.assertEqual(self.call("/api/support-bundle", {"folder": str(folder)}), (422, {"error": code}))
+        for folder, code in (("relative", "PATH_NOT_ABSOLUTE"), (3, "PATH_INVALID"), ("", "PATH_INVALID")):
+            with self.subTest(code=code, folder=folder):
+                self.assertEqual(self.call("/api/support-bundle", {"folder": folder}), (422, {"error": code}))
+        self.assertFalse((self.root / "missing").exists())
 
     def test_a_real_run_through_the_api_matches_the_cli(self) -> None:
         self.start_server(600.0)

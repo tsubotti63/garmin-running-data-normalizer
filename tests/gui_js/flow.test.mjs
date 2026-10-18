@@ -1688,3 +1688,66 @@ test("the settings set the boxes of a later launch, and a change in a box takes 
   const view = { ...READY, ...flow.afterChange(flow.changedBox("store-open"), { ...set, snapshotAuto: false }) };
   assert.equal(boxStates(view).snapshot, "current");
 });
+
+// The name of the output and the place of the Support Bundle (stage B5a).
+test("a name of something that is there already is red before the run, and the page's own proposal moves on", () => {
+  const place = { path: "/path/to", name: "garmin-run-all-20261018-1637", default: false, exists: true, cloud: null, name_problem: "OUTPUT_EXISTS" };
+  assert.equal(flow.outputNameProblem(place, "/path/to", "garmin-run-all-20261018-1637"), "OUTPUT_EXISTS");
+  // An answer for another place or another name says nothing.
+  assert.equal(flow.outputNameProblem(place, "/elsewhere", "garmin-run-all-20261018-1637"), null);
+  assert.equal(flow.outputNameProblem(place, "/path/to", "another"), null);
+  assert.equal(flow.outputNameProblem({ ...place, name_problem: null }, "/path/to", place.name), null);
+  assert.equal(flow.outputNameProblem({ ...place, name_problem: "/path/to/private" }, "/path/to", place.name), null);
+  assert.equal(flow.outputNameProblem(null, "/path/to", place.name), null);
+  for (const code of ["OUTPUT_SYMLINK", "OUTPUT_NAME_INVALID"]) {
+    assert.equal(flow.outputNameProblem({ ...place, name_problem: code }, "/path/to", place.name), code);
+  }
+  // Only the page's own proposal moves on to a free name, as the name of a
+  // Snapshot does; a name that the person gave stays and is red.
+  assert.equal(flow.movesProposedName("OUTPUT_EXISTS", true), true);
+  assert.equal(flow.movesProposedName("OUTPUT_SYMLINK", true), true);
+  assert.equal(flow.movesProposedName("OUTPUT_EXISTS", false), false);
+  assert.equal(flow.movesProposedName("OUTPUT_NAME_INVALID", true), false);
+  assert.equal(flow.movesProposedName(null, true), false);
+  assert.equal(flow.nextOutputName("garmin-run-all-20261018-1637", new Date(2026, 9, 18, 16, 37)), "garmin-run-all-20261018-1637-2");
+  assert.deepEqual(lineShapes(flow.nameMessages("OUTPUT_EXISTS")), [
+    ["error", true, "stop.output_exists"],
+    ["error", false, "next.label"],
+    ["error", false, "error.code"],
+  ]);
+  assert.deepEqual(flow.nameMessages(null), []);
+  // The third box is red, and no run starts.
+  const red = { ...READY, outputProblem: true };
+  assert.equal(boxStates(red).output, "error");
+  assert.equal(enabled(red).start, false);
+});
+
+test("the Support Bundle shows its file and its place before it is made", () => {
+  const keys = (messages) => messages.map((item) => [item.key, item.params]);
+  assert.deepEqual(keys(flow.bundlePlan("/path/to/GarminRunningData/garmin-run-all-20261018-1637", null)), [
+    ["bundle.file", { name: "garmin-run-all-20261018-1637-support-bundle.zip" }],
+    ["bundle.place_default", { folder: "/path/to/GarminRunningData" }],
+  ]);
+  assert.deepEqual(keys(flow.bundlePlan("C:\\Garmin\\out\\", "D:\\Shared")), [
+    ["bundle.file", { name: "out-support-bundle.zip" }],
+    ["bundle.place_chosen", { folder: "D:\\Shared" }],
+  ]);
+  // The External-safe Pack that a run made is named by its output, apart
+  // from the line of the file of the next run.
+  assert.deepEqual(keys(flow.packMade("/path/to/GarminRunningData/garmin-run-all-20261018-1637-2")), [
+    ["pack.made", { path: "garmin-run-all-20261018-1637-2/analysis/external_safe_handoff.zip" }],
+  ]);
+  assert.deepEqual(keys(flow.packMade("C:\\Garmin\\out")), [["pack.made", { path: "out/analysis/external_safe_handoff.zip" }]]);
+  assert.deepEqual(flow.packMade(null), []);
+  // An output at the root of a disk.
+  assert.deepEqual(keys(flow.bundlePlan("/out", null))[1], ["bundle.place_default", { folder: "/" }]);
+  assert.deepEqual(keys(flow.bundlePlan("C:\\out", null))[1], ["bundle.place_default", { folder: "C:\\" }]);
+  assert.deepEqual(flow.bundlePlan(null, null), []);
+  assert.deepEqual(flow.bundlePlan("", "/path/to"), []);
+  // The stops of its place have words of their own.
+  for (const code of ["SUPPORT_BUNDLE_PARENT_NOT_FOUND", "SUPPORT_BUNDLE_INSIDE_OUTPUT", "SUPPORT_BUNDLE_NOT_WRITTEN"]) {
+    const messages = flow.errorMessages(code);
+    assert.notEqual(messages[0].key, "error.unknown", code);
+    assert.notEqual(messages[1].keyParams.step, "next.reload_page", code);
+  }
+});

@@ -30,6 +30,8 @@ QUOTED_LABELS = (
     "open.folder",
     "open.start_here",
     "bundle.button",
+    "bundle.place_label",
+    "reveal.button",
     "quit.button",
 )
 

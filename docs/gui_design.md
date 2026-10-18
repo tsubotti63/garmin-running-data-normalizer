@@ -452,7 +452,15 @@ limit of 260 characters for a file or 248 for a folder is refused before it
 starts (`OUTPUT_PATH_TOO_LONG`). These checks move to shared code in stage A, so
 that the CLI applies them too. The proposed name is
 `garmin-run-all-YYYYMMDD-HHMM` in local time; a second run in the same minute
-adds `-2`, `-3`, and so on.
+adds `-2`, `-3`, and so on. From stage B5a, the page asks the server about
+the name before the run, with the checks that the start of a run makes: the
+name's rule first, so that nothing outside the folder is told of, and then
+whether something of that name is there. The page's own proposal moves on to
+a free name with `-2`, `-3`, as the name of a Snapshot does (decision
+20261018-10), so that a launch again within the same minute is not stopped;
+a name that the person gave and that is there already makes the third box
+red with the words of `OUTPUT_EXISTS` before the run. The start of the run
+checks again.
 
 The parent defaults to the folder `GarminRunningData` in the home folder
 (stage B4a; until then, the folder that contains the Export), which also
@@ -489,14 +497,26 @@ the page's own folder list without one (stage B4a).
   by code. An earlier output can also be selected for the check.
 - The Support Bundle is written by default next to the output as
   `<output name>-support-bundle.zip`, because inside the output it would
-  contradict the manifest; the user can choose another location. An existing
-  file is never replaced. The page explains the six members, that nothing is
-  uploaded, and that the bundle needs review before it is shared.
+  contradict the manifest; the user can choose another folder with
+  "Choose…" (stage B5a). Before it is made, the page shows the file and its
+  place; its place follows the CLI's rules (see
+  [v2.0.0 Data Handling](v2_data_handling.md#stops-and-next-steps)): a
+  folder that is there, outside the output, and nothing to replace. The page
+  explains the six members, that nothing is uploaded, and that the bundle
+  needs review before it is shared.
 - The page can show the output folder or open its `START_HERE.md` with the
-  default application. The server checks that neither was replaced by a link
-  or a junction and passes an absolute path without a shell: `open -R` for the
-  folder and `open` for the file on macOS, `os.startfile` with the `explore`
-  and `open` verbs on Windows, and `xdg-open` elsewhere.
+  default application, and show the Support Bundle that this launch made, or
+  the External-safe Pack of the output, in its folder ("Show where it is
+  saved", stage B5a); the third box names the pack that the run made, apart
+  from the file of the next run. The server checks that none was replaced by
+  a link or a junction and passes an absolute path without a shell: `open -R`
+  for the folder and the files that it shows and `open` for `START_HERE.md`
+  on macOS; `os.startfile` with the `explore` and `open` verbs, and
+  `explorer.exe` with `/select,"<file>"` for the files that it shows, on
+  Windows, as one command line with the place alone in quotes, which is how
+  File Explorer reads it (a list of arguments would quote the whole
+  `/select` of a place with a space); and `xdg-open` elsewhere, with the
+  folder that holds a file that it shows. The page sends no place to open.
 
 ## Data handling in 2.0.0
 
@@ -573,9 +593,10 @@ folder to `run-all`, `normalize-activities`, `snapshot build-input`, and
 GUI's run status, and makes the pre-run check read the Activities files as a
 run does (see [v2.0.0 Data Handling](v2_data_handling.md#reports-of-a-run-in-the-cli-and-the-gui)).
 Stage B sets the rules for the place of a new Snapshot Store and of a Support
-Bundle with the controls that choose them, and the page shows the warning
-totals. Stage B4a sets those of a new store: `snapshot init` and the page
-make a new store only where the folder that holds it exists
+Bundle with the controls that choose them (stage B5a for the Support Bundle),
+and the page shows the warning totals. Stage B4a sets those of a new store:
+`snapshot init` and the page make a new store only where the folder that
+holds it exists
 (`SNAPSHOT_STORE_PARENT_NOT_FOUND`; until then, `snapshot init` made the
 missing folders above it), in a new or empty folder (`SNAPSHOT_STORE_NOT_EMPTY`
 for a file or a folder that holds other files; `SNAPSHOT_STORE_INVALID` for
@@ -642,7 +663,9 @@ Processing:
 - ZIP files are read with the limits and checks in
   [Selecting an Export](#selecting-an-export).
 - Output folders go through the same checks as the CLI.
-- The page can open only an output folder and its `START_HERE.md`.
+- The page can open only an output folder and its `START_HERE.md`, and show
+  the Support Bundle that this launch made or the External-safe Pack of the
+  output in its folder (stage B5a); any other place is refused.
 - The settings of an earlier launch (stage B4c) are read without following a
   link, up to 64 KiB, and only in their form; the places in them are absolute
   places without control characters, and the server checks them again as it
@@ -735,7 +758,6 @@ these codes; the CLI never stops with them. The table is made from
 | `NO_FINISHED_OUTPUT` | there is no finished output to check yet | normalize first |
 | `OUTPUT_CHANGED` | the output folder does not match what the normalization wrote | if you did not change the folder, please report the code; if you did, normalize again |
 | `OUTPUT_NOT_AVAILABLE` | the output folder or a file in it is missing, or was replaced by a link | check that the output folder is still where it was |
-| `SUPPORT_BUNDLE_NOT_WRITTEN` | the Support Bundle could not be written | check that the folder for it is still there and that this app can write in it |
 | `OPEN_NOT_AVAILABLE` | no program to open it (xdg-open) was found | open the output folder from your file manager, such as Finder or File Explorer |
 | `OPEN_FAILED` | the system could not open it | open the output folder from your file manager, such as Finder or File Explorer |
 | `CHOOSER_NOT_AVAILABLE` | this system's dialog to choose could not be opened | choose from the list below, or paste the place |

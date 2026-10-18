@@ -92,6 +92,9 @@ export const STOP_KEYS = {
   OUTPUT_NOT_AVAILABLE: "stop.output_not_available",
   SUPPORT_BUNDLE_PATH_UNSAFE: "stop.support_bundle_path_unsafe",
   SUPPORT_BUNDLE_EXISTS: "stop.support_bundle_exists",
+  // The place of a Support Bundle (stage B5a).
+  SUPPORT_BUNDLE_PARENT_NOT_FOUND: "stop.support_bundle_parent_not_found",
+  SUPPORT_BUNDLE_INSIDE_OUTPUT: "stop.support_bundle_inside_output",
   SUPPORT_BUNDLE_NOT_WRITTEN: "stop.support_bundle_not_written",
   SUPPORT_BUNDLE_ARCHIVE_VALIDATION_FAILED: "stop.support_bundle_archive_validation_failed",
   SUPPORT_BUNDLE_MEMBER_SET_INVALID: "stop.support_bundle_member_set_invalid",
@@ -191,6 +194,8 @@ export const STOP_NEXT_KEYS = {
   OUTPUT_NOT_AVAILABLE: "stop_next.output_where",
   SUPPORT_BUNDLE_PATH_UNSAFE: "stop_next.output_where",
   SUPPORT_BUNDLE_EXISTS: "stop_next.support_bundle_exists",
+  SUPPORT_BUNDLE_PARENT_NOT_FOUND: "stop_next.support_bundle_parent_not_found",
+  SUPPORT_BUNDLE_INSIDE_OUTPUT: "stop_next.support_bundle_inside_output",
   SUPPORT_BUNDLE_NOT_WRITTEN: "stop_next.support_bundle_not_written",
   SUPPORT_BUNDLE_ARCHIVE_VALIDATION_FAILED: "stop_next.bundle_defect",
   SUPPORT_BUNDLE_MEMBER_SET_INVALID: "stop_next.bundle_defect",
@@ -950,6 +955,62 @@ export function placeMessages(place, outputParent, remembered = null) {
     lines.push({ kind: "warn", start: index === 0, message: line }),
   );
   return lines;
+}
+
+// What keeps the name of the output from being a new folder (stage B5a): the
+// server's answer for the place and the name in the fields, as the start of
+// a run checks it; an answer for another place or name says nothing.
+const NAME_PROBLEMS = ["OUTPUT_EXISTS", "OUTPUT_SYMLINK", "OUTPUT_NAME_INVALID"];
+
+export function outputNameProblem(place, outputParent, outputName) {
+  if (place === null || typeof place !== "object" || place.path !== outputParent || place.name !== outputName) {
+    return null;
+  }
+  return NAME_PROBLEMS.includes(place.name_problem) ? place.name_problem : null;
+}
+
+// Whether the page moves its own proposed name on to a free one: something
+// of that name is there already, and the person did not change the name, as
+// for the name of a Snapshot (decision 20261018-10). A name that the person
+// gave is shown red instead.
+export function movesProposedName(problem, proposed) {
+  return proposed === true && (problem === "OUTPUT_EXISTS" || problem === "OUTPUT_SYMLINK");
+}
+
+// The red lines under the name of the output, in the words of its code.
+export function nameMessages(problem) {
+  return typeof problem === "string"
+    ? errorMessages(problem).map((line, index) => ({ kind: "error", start: index === 0, message: line }))
+    : [];
+}
+
+// The Support Bundle before it is made (stage B5a): the file that the button
+// makes and its place, next to the output unless the person chose a folder,
+// as the server names them (decision 20261011-14).
+export function bundlePlan(outputPath, folder) {
+  const output = typeof outputPath === "string" ? outputPath.trim().replace(/[\\/]+$/, "") : "";
+  const name = lastName(output);
+  if (name === "") {
+    return [];
+  }
+  // The folder that holds the output, with the root of a disk as the server
+  // names it ("/" or "C:\\").
+  const above = output.slice(0, output.length - name.length);
+  const trimmed = above.replace(/[\\/]+$/, "");
+  const parent = trimmed === "" || /^[A-Za-z]:$/.test(trimmed) ? above : trimmed;
+  const chosen = typeof folder === "string" && folder !== "";
+  return [
+    message("bundle.file", { name: `${name}-support-bundle.zip` }),
+    chosen ? message("bundle.place_chosen", { folder }) : message("bundle.place_default", { folder: parent }),
+  ];
+}
+
+// The External-safe Pack that a run made, by the name of its output (stage
+// B5a): the line beside the button that shows it, apart from the line of the
+// file of the next run.
+export function packMade(outputPath) {
+  const name = lastName(typeof outputPath === "string" ? outputPath : "");
+  return name === "" ? [] : [message("pack.made", { path: `${name}/analysis/external_safe_handoff.zip` })];
 }
 
 // Whether the folder for the output is the one that the settings remembered,

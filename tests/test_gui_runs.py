@@ -183,6 +183,15 @@ class RunManagerTest(unittest.TestCase):
         self.assertTrue(wait_until(lambda: not manager.active(), timeout))
         return manager.status()
 
+    def test_the_status_says_whether_the_run_makes_the_external_safe_pack(self) -> None:
+        # Stage B5a: the page shows the pack where it is saved.
+        for pack in (False, True):
+            with self.subTest(pack=pack):
+                manager = stub_manager("wait", cancel_grace=60.0)
+                self.start(manager, f"pack-{pack}", external_safe_pack=pack)
+                self.assertIs(manager.status()["safe_pack"], pack)
+                manager.stop()
+
     def test_a_signal_cancels_the_run(self) -> None:
         manager = stub_manager("wait", cancel_grace=60.0)
         self.assertIsNone(manager.finished_output())

@@ -778,6 +778,41 @@ class SameProblemTest(StopLines, unittest.TestCase):
                 )
             self.assertEqual(cli("snapshot", "status", "--store", store)[0], 0)
 
+    def test_the_place_of_a_support_bundle_is_checked_as_for_the_output(self) -> None:
+        # Stage B5a: the folder of the bundle must be there, and outside the
+        # run output, which the bundle would otherwise break; a folder that
+        # cannot be written has the code that the GUI gives too.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            done = root / "done"
+            self.assertEqual(cli("run-all", "--input", SYNTHETIC_EXPORT, "--output", done)[0], 0)
+            bundle = ("support-bundle", "--run-output", done, "--output")
+            self.assert_stop("SUPPORT_BUNDLE_PARENT_NOT_FOUND", (*bundle, root / "missing" / "b.zip"), root)
+            self.assertFalse((root / "missing").exists())
+            places = [done / "b.zip", done / "analysis" / "b.zip"]
+            if can_symlink(root):
+                link = root / "link"
+                link.symlink_to(done, target_is_directory=True)
+                places.append(link / "b.zip")
+            for place in places:
+                with self.subTest(place=place.relative_to(root).as_posix()):
+                    self.assert_stop("SUPPORT_BUNDLE_INSIDE_OUTPUT", (*bundle, place), root)
+            self.assertEqual(cli("validate-handoff", "--input", done)[0], 0)
+            with mock.patch(
+                "garmin_running_data_normalizer.diagnostics.support_bundle.tempfile.mkstemp",
+                side_effect=PermissionError("denied"),
+            ):
+                self.assert_stop("SUPPORT_BUNDLE_NOT_WRITTEN", (*bundle, root / "b.zip"), root)
+            # Also when the bundle cannot be given its name or copied.
+            with mock.patch(
+                "garmin_running_data_normalizer.diagnostics.support_bundle._put_in_place",
+                side_effect=OSError(errno.ENOSPC, "no space left"),
+            ):
+                self.assert_stop("SUPPORT_BUNDLE_NOT_WRITTEN", (*bundle, root / "b.zip"), root)
+            self.assertEqual(sorted(path.name for path in root.iterdir()), ["done"] + (["link"] if can_symlink(root) else []))
+            self.assertEqual(cli(*bundle, root / "b.zip")[0], 0)
+            self.assertTrue((root / "b.zip").is_file())
+
     def test_the_support_bundle_never_replaces_a_file_or_a_link(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -431,6 +431,14 @@ select {
   min-width: 0;
 }
 
+/* The place of the Support Bundle beside its button (stage B5a). */
+.path-row .path {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  align-self: center;
+}
+
 .checkbox-row {
   display: flex;
   align-items: flex-start;
