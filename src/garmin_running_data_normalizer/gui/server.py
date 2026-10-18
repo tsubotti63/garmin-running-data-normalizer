@@ -29,6 +29,7 @@ from ..stops import STOPS, stop_line
 from .chooser import Chooser, ChooserError
 from .folders import FolderError, list_folders
 from .outputs import OutputActionError, check_output, make_support_bundle, open_output
+from .places import cloud_kind, default_folder, default_store
 from .runs import (
     MAX_TIMEZONE_LENGTH,
     RunActiveError,
@@ -36,6 +37,7 @@ from .runs import (
     RunRequestError,
     absolute_path,
 )
+from .stores import check_store, open_store, store_place
 
 
 HOST = "127.0.0.1"
@@ -95,6 +97,10 @@ API_ROUTES = {
     "/api/choose": "_api_choose",
     "/api/choose/status": "_api_choose_status",
     "/api/check-input": "_api_check_input",
+    "/api/store/open": "_api_store_open",
+    "/api/store/place": "_api_store_place",
+    "/api/store/check": "_api_store_check",
+    "/api/place": "_api_place",
     "/api/run/start": "_api_run_start",
     "/api/run/status": "_api_run_status",
     "/api/run/cancel": "_api_run_cancel",
@@ -372,7 +378,10 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
     def _api_status(self, payload: dict[str, Any]) -> dict[str, Any]:
         # The page takes the product's default timezone from here, so that
         # it has no default of its own (stage A5a).
+        # The default places, which only the GUI has (stage B4a).
         return {
+            "default_output_parent": str(default_folder()),
+            "default_store": str(default_store()),
             "default_timezone": DEFAULT_TIMEZONE,
             "languages": list(LANGUAGES),
             "product_version": __version__,
@@ -445,6 +454,40 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             "not_readable": _not_readable(details.get("not_readable_places")),
             "findings": findings,
         }
+
+    def _store_answer(self, payload: dict[str, Any], action: Any) -> dict[str, Any]:
+        # The Snapshot Store (stage B4a): a problem of the store is an
+        # answer, which the page shows beside the store; only a request that
+        # is not valid, or an unexpected error, is refused.
+        try:
+            path = absolute_path(payload.get("path"), "PATH_INVALID")
+        except RunRequestError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+        try:
+            return action(path)
+        except Exception as exc:
+            raise _command_failed() from exc
+
+    def _api_store_open(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._store_answer(payload, open_store)
+
+    def _api_store_place(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._store_answer(payload, store_place)
+
+    def _api_store_check(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._store_answer(payload, check_store)
+
+    def _api_place(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The folder for the output: whether it is there, whether it is the
+        # default place, which a run makes, and whether a cloud may copy it.
+        def look(path: Path) -> dict[str, Any]:
+            try:
+                exists: bool | None = path.is_dir()
+            except OSError:
+                exists = None
+            return {"default": path == default_folder(), "exists": exists, "cloud": cloud_kind(path)}
+
+        return self._store_answer(payload, look)
 
     def _api_run_start(self, payload: dict[str, Any]) -> dict[str, Any]:
         try:

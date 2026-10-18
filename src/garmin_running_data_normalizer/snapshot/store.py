@@ -101,6 +101,15 @@ SNAPSHOT_MISSING_MESSAGE = (
 )
 STORE_VERSION_MESSAGE = "the Snapshot Store was made by a newer version of this app"
 STORE_NOT_FOUND_MESSAGE = STOPS["SNAPSHOT_STORE_NOT_FOUND"].what
+# The place of the store (stage B4a): every snapshot command refuses a link,
+# and ``snapshot init`` makes no folder above a new store.
+STORE_SYMLINK_MESSAGE = STOPS["SNAPSHOT_STORE_SYMLINK"].what
+NEW_STORE_PARENT_MESSAGE = STOPS["SNAPSHOT_STORE_PARENT_NOT_FOUND"].what
+NEW_STORE_NOT_EMPTY_MESSAGE = STOPS["SNAPSHOT_STORE_NOT_EMPTY"].what
+NEW_STORE_INSIDE_STORE_MESSAGE = STOPS["SNAPSHOT_STORE_INSIDE_STORE"].what
+# The store.json of a store above a new one is read up to this size; a
+# larger file is not one that this app wrote.
+MAX_STORE_METADATA_BYTES = 64 * 1024
 # The input of a registration that cannot be read safely, as a run says it
 # (stage A5b-2).
 INPUT_DISCOVERY_MESSAGE = STOPS["INPUT_DISCOVERY_FAILED"].what
@@ -354,7 +363,8 @@ def _store_root(store_root: str | Path) -> Path:
             store_not_readable_message(), "SNAPSHOT_STORE_NOT_READABLE", places=[""]
         ) from exc
     if is_link:
-        raise SnapshotStoreError("snapshot store must not be a symbolic link")
+        # Until stage B4a, SNAPSHOT_LIFECYCLE_FAILED.
+        raise SnapshotStoreError(STORE_SYMLINK_MESSAGE, "SNAPSHOT_STORE_SYMLINK")
     return requested.resolve()
 
 
@@ -418,10 +428,13 @@ _STORE_FILE_NAMES = (
     "snapshot_family_coverage.json",
 )
 _STORE_FOLDERS = ("blobs/sha256", "blobs", "snapshots", "journal")
-# What a store holds at its top besides store.json (stage A5b-2).
+# What a store holds at its top besides store.json (stage A5b-2), which tells
+# a damaged store from a folder without one. The folder snapshots does not
+# count from stage B4a: a folder that holds a store in its folder snapshots,
+# as the GUI's default place does, is not a store itself.
 _STORE_ENTRY_NAMES = frozenset(
     {name for name in _STORE_FILE_NAMES if name != "store.json"}
-    | {relative.split("/", 1)[0] for relative in _STORE_FOLDERS}
+    | {relative.split("/", 1)[0] for relative in _STORE_FOLDERS if relative != "snapshots"}
     | {LOCK_NAME}
 )
 
@@ -443,6 +456,68 @@ def _remove_new_store(root: Path, made_root: bool) -> None:
             root.rmdir()
 
 
+def _store_above(root: Path) -> bool:
+    """Whether a folder above ``root`` holds a store of this app. The walk
+    ends at the top of the file system. A folder that cannot be opened is
+    passed over, and a store.json counts only when it is a regular file of
+    at most MAX_STORE_METADATA_BYTES whose format is one of this app's
+    stores."""
+    for folder in root.parents:
+        path = folder / "store.json"
+        try:
+            status = os.lstat(path)
+            if not stat.S_ISREG(status.st_mode) or status.st_size > MAX_STORE_METADATA_BYTES:
+                continue
+            with open(path, "rb") as handle:
+                data = handle.read(MAX_STORE_METADATA_BYTES + 1)
+        except OSError:
+            continue
+        if len(data) > MAX_STORE_METADATA_BYTES:
+            continue
+        try:
+            value = json.loads(data.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError, RecursionError):
+            continue
+        if isinstance(value, dict) and str(value.get("format", "")).startswith(STORE_FORMAT_FAMILY):
+            return True
+    return False
+
+
+def check_new_store_place(store_root: str | Path) -> Path:
+    """Check, without writing, that a new store can be made at
+    ``store_root``, and return its place (stage B4a). ``snapshot init`` and
+    the GUI share these rules: the place is not a link, it is not inside
+    another store, the folder that holds it exists, so that a mistyped place
+    makes no folders, and it is new or an empty folder. A folder that holds
+    what a store writes, but not store.json, is a damaged store. The caller
+    has found no store.json at the place."""
+    root = _store_root(store_root)
+    if _store_above(root):
+        raise SnapshotStoreError(NEW_STORE_INSIDE_STORE_MESSAGE, "SNAPSHOT_STORE_INSIDE_STORE")
+    try:
+        parent_is_folder = stat.S_ISDIR(os.stat(root.parent).st_mode)
+    except (FileNotFoundError, NotADirectoryError):
+        parent_is_folder = False
+    except PermissionError as exc:
+        raise not_readable_error(root, root) from exc
+    if not parent_is_folder:
+        raise SnapshotStoreError(NEW_STORE_PARENT_MESSAGE, "SNAPSHOT_STORE_PARENT_NOT_FOUND")
+    try:
+        mode = os.stat(root).st_mode
+    except (FileNotFoundError, NotADirectoryError):
+        return root
+    except PermissionError as exc:
+        raise not_readable_error(root, root) from exc
+    if not stat.S_ISDIR(mode):
+        raise SnapshotStoreError(NEW_STORE_NOT_EMPTY_MESSAGE, "SNAPSHOT_STORE_NOT_EMPTY")
+    entries = _open_folder(root, root)
+    if any(entry.name in _STORE_ENTRY_NAMES for entry in entries):
+        raise invalid_store_error("store.json is missing")
+    if entries:
+        raise SnapshotStoreError(NEW_STORE_NOT_EMPTY_MESSAGE, "SNAPSHOT_STORE_NOT_EMPTY")
+    return root
+
+
 def initialize_store(
     store_root: str | Path,
     account_store_id: str,
@@ -460,15 +535,11 @@ def initialize_store(
             "account_store_id": account_id,
             "snapshot_count": len(load_manifests(existing_root)),
         }
-    try:
-        root_mode: int | None = os.stat(root).st_mode
-    except (FileNotFoundError, NotADirectoryError):
-        root_mode = None
-    except PermissionError as exc:
-        raise not_readable_error(root, root) from exc
-    made_root = root_mode is None
-    if root_mode is not None and (not stat.S_ISDIR(root_mode) or _open_folder(root, root)):
-        raise SnapshotStoreError("new snapshot store directory must be absent or empty")
+    # Until stage B4a, a non-empty place stopped with
+    # SNAPSHOT_LIFECYCLE_FAILED, and the missing folders above a new store
+    # were made.
+    check_new_store_place(root)
+    made_root = not _exists(root, root)
     metadata = {
         "format": STORE_FORMAT,
         "format_version": STORE_FORMAT_VERSION,
@@ -482,7 +553,14 @@ def initialize_store(
     }
     try:
         with _writing(new_store=True):
-            ensure_private_directory(root)
+            if made_root:
+                # The folder that holds it was there when it was checked.
+                try:
+                    root.mkdir(mode=PRIVATE_DIRECTORY_MODE)
+                except FileNotFoundError as exc:
+                    raise SnapshotStoreError(
+                        NEW_STORE_PARENT_MESSAGE, "SNAPSHOT_STORE_PARENT_NOT_FOUND"
+                    ) from exc
             root.chmod(PRIVATE_DIRECTORY_MODE)
             for relative in ("blobs/sha256", "snapshots", "journal"):
                 ensure_private_directory(root / relative)
@@ -1661,6 +1739,7 @@ def verification_error(
 __all__ = [
     "NOTICE_MESSAGES",
     "SnapshotStoreError",
+    "check_new_store_place",
     "content_multiset",
     "initialize_store",
     "invalid_store_error",

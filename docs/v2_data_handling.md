@@ -1395,9 +1395,9 @@ step.
     the work of a long run is not lost.
   - The GUI and the CLI make these checks with the same functions
     (`output_location.valid_output_name` and `check_output_location`).
-  - The place of a new Snapshot Store (`snapshot init`) and of a Support
-    Bundle (`support-bundle`) are not checked so yet; stage B sets their
-    rules with the controls that choose them.
+  - The place of a new Snapshot Store follows the same idea from stage B4a
+    (below). The place of a Support Bundle (`support-bundle`) is not checked
+    so yet; stage B sets its rules with the control that chooses it.
 - `normalize-activities` (the Golden Path) gives every stop a code, with
   Run-All's code for the same problem: the problems above, `INPUT_SYMLINK`,
   `INPUT_NOT_DIRECTORY`, `OUTPUT_SYMLINK`, `OUTPUT_INSIDE_INPUT`,
@@ -1498,7 +1498,10 @@ step.
     `SNAPSHOT_STORE_NOT_FOUND`, whose next step says to check `--store` or to
     run `snapshot init` first; a store that lost `store.json` but holds the
     rest is damaged (`SNAPSHOT_STORE_INVALID`, "store.json is missing"), so
-    that it is never sent to `snapshot init`. A store without a Snapshot
+    that it is never sent to `snapshot init`. From stage B4a, a folder named
+    `snapshots` does not count among what a store writes: a folder that holds
+    a store in its folder `snapshots`, as the GUI's default place
+    `GarminRunningData` does, holds no store itself. A store without a Snapshot
     stops `snapshot build-input` and `snapshot run-all` with
     `SNAPSHOT_STORE_EMPTY`, whose next step says to register an Export first;
     `snapshot status` and `snapshot verify` show it with no Snapshot and do
@@ -1541,6 +1544,34 @@ and the output of `snapshot build-input` with the codes of the place of an
 output. For `snapshot init`, the codes of writing and of free space are those
 of the place of the new store, for which another folder can be chosen.
 [Stops and next steps](#stops-and-next-steps) gives their next steps.
+
+From stage B4a, the place of a store has rules of its own, which `snapshot
+init` and the GUI check with one function (`check_new_store_place`) before
+anything is written:
+
+- Every snapshot command refuses a store that is a symbolic link with
+  `SNAPSHOT_STORE_SYMLINK`, as the input and the output refuse a link with
+  `INPUT_SYMLINK` and `OUTPUT_SYMLINK`; until then, it was
+  `SNAPSHOT_LIFECYCLE_FAILED`. The folders above a store may be links.
+- A place that holds `store.json` is a store, and `snapshot init` uses it as
+  before: one of the same account boundary is passed, another stops with
+  `SNAPSHOT_LIFECYCLE_FAILED`.
+- A new store is not made inside another store
+  (`SNAPSHOT_STORE_INSIDE_STORE`). The folders above the place are looked
+  at up to the top of the file system; a folder that cannot be opened is
+  passed over, and a `store.json` above counts only when it is a regular
+  file of at most 64 KiB whose format is one of this app's stores.
+- The folder that holds a new store must exist
+  (`SNAPSHOT_STORE_PARENT_NOT_FOUND`), so that a mistyped place makes no
+  folders, as for an output from stage A5a; until then, `snapshot init`
+  made the missing folders above the store. Only the store's own folder is
+  made.
+- The place must be new or an empty folder: a file, or a folder that holds
+  other files, stops with `SNAPSHOT_STORE_NOT_EMPTY` (until then,
+  `SNAPSHOT_LIFECYCLE_FAILED`), and a folder that holds what a store writes
+  but not `store.json` is damaged (`SNAPSHOT_STORE_INVALID`).
+- A folder of the place that cannot be opened stops with
+  `SNAPSHOT_STORE_NOT_READABLE` where the place is read.
 
 - A registration finds that the store cannot be written when it creates its
   lock, before it reads the Export. Before it writes, it compares the free
@@ -1652,6 +1683,10 @@ gives, for its entries and controls, are not in this table.
 | `SNAPSHOT_STORE_VERSION_UNSUPPORTED` | a newer version of this app made the Snapshot Store | use a newer version of this app, and do not change the files inside the store |
 | `SNAPSHOT_STORE_NOT_FOUND` | there is no Snapshot Store in the folder given for it | check the folder given with --store; for a new store, run snapshot init first |
 | `SNAPSHOT_STORE_EMPTY` | the Snapshot Store holds no Snapshot yet | register an Export with snapshot register first |
+| `SNAPSHOT_STORE_SYMLINK` | the Snapshot Store is a symbolic link | give the folder of the store itself with --store, not a link to it |
+| `SNAPSHOT_STORE_PARENT_NOT_FOUND` | the folder that should hold the new Snapshot Store does not exist | check the place given with --store, or make the folder that holds it first; no folder is made above a new store |
+| `SNAPSHOT_STORE_NOT_EMPTY` | the place given for a new Snapshot Store is a file, or a folder that holds other files | give the place of a new folder, or of an empty one, with --store; to use a store, give the folder of the store itself |
+| `SNAPSHOT_STORE_INSIDE_STORE` | the place given for a new Snapshot Store is inside another Snapshot Store | give a place outside the other store with --store |
 | `SNAPSHOT_LIFECYCLE_FAILED` | a snapshot command cannot do what it was asked | correct the command or its input as the message says, and run it again |
 | `HANDOFF_INVALID` | the folder is not the output of a run, or the files of the output do not pass their checks | check that the folder is the output of Run-All; if it is, do not change its files, and run Run-All again into a new folder |
 | `DOCTOR_AUTHORITY_INVALID` | the diagnostics of the output are missing, invalid, or disagree | do not change the files of an output; run Run-All again into a new folder |

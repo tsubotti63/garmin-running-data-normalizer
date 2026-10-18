@@ -33,14 +33,17 @@ import {
   nextLineKind,
   nextOutputName,
   outputCheckMessages,
+  placeMessages,
   progressMessage,
   resultDetails,
   resultRows,
   resultTotal,
   runSummary,
   shouldFocusResult,
+  snapshotRows,
   stalledSeconds,
   stepRows,
+  storeMessages,
   warningMessages,
 } from "./flow.mjs";
 
@@ -55,8 +58,12 @@ const POLL_INTERVAL_MS = 1000;
 const CHOOSE_POLL_MS = 500;
 // How long a step of "How to use" lights up its box.
 const SPOT_MS = 2000;
-// The information buttons, by the names of their ids (stage B1b).
-const INFOS = ["how", "timezone", "pack", "exit", "tools"];
+// How long the page waits after the folder for the output is typed before it
+// asks the server about it (stage B4a).
+const PLACE_DELAY_MS = 300;
+// The information buttons, by the names of their ids (stage B1b), with the
+// Snapshot Store and the default place (stage B4a).
+const INFOS = ["how", "timezone", "pack", "exit", "tools", "store", "place"];
 
 const byId = (id) => document.getElementById(id);
 const ui = {
@@ -88,6 +95,16 @@ const ui = {
   extractArea: byId("extract-area"),
   extractConfirm: byId("extract-confirm"),
   snapshotDecide: byId("snapshot-decide"),
+  snapshotHeading: byId("snapshot-heading"),
+  storePath: byId("store-path"),
+  storeCreate: byId("store-create"),
+  storeOpen: byId("store-open"),
+  storeOpenOther: byId("store-open-other"),
+  storeCreateNew: byId("store-create-new"),
+  storeCheck: byId("store-check"),
+  storeResult: byId("store-result"),
+  storeList: byId("store-list"),
+  storeRows: byId("store-rows"),
   outputHeading: byId("output-heading"),
   browser: byId("browser"),
   browserHeading: byId("browser-heading"),
@@ -100,6 +117,7 @@ const ui = {
   browserList: byId("browser-list"),
   outputParent: byId("output-parent"),
   outputBrowse: byId("output-browse"),
+  outputParentNote: byId("output-parent-note"),
   outputName: byId("output-name"),
   timezone: byId("timezone"),
   timezoneList: byId("timezone-list"),
@@ -190,6 +208,22 @@ const state = {
   chooserError: null,
   chooserMissing: false,
   chosenPath: null,
+  // What the open dialog, or the folder list, chooses: "input", the store to
+  // open ("store-open"), the place of a new store ("store-place"), or the
+  // folder for the output ("output") (stage B4a).
+  choosingFor: null,
+  // The default place of the outputs, from the server, which holds the
+  // default place of the store (stage B4a).
+  defaultFolder: null,
+  // The Snapshot Store of the second box (stage B4a): the error of the last
+  // dialog for it, whether the page is asking the server, the answer of the
+  // store or of the place for a new one, and the answer of its check.
+  store: { chooserError: null, busy: false, answer: null, checked: null },
+  // The server's answer for the folder for the output, the error of the last
+  // dialog for it, and the timer of the next question (stage B4a).
+  place: null,
+  placeChooserError: null,
+  placeTimer: null,
   // The second and third boxes are confirmed with their buttons; a change
   // in the third box asks for its confirmation again.
   snapshotDecided: false,
@@ -427,6 +461,7 @@ function view() {
     starting: state.starting,
     checking: state.checking,
     choosing: state.choosing !== null,
+    choosingFolder: state.choosing !== null && state.choosingFor !== "input",
     outputBusy: outputBusy(),
     checkedReady,
     extractNeeded,
@@ -451,7 +486,9 @@ function view() {
 
 function renderCheck(current) {
   const lines = [];
-  if (state.choosing !== null) {
+  // The dialog for the store or the output speaks in its own box (stage B4a).
+  const choosingExport = state.choosing !== null && state.choosingFor === "input";
+  if (choosingExport) {
     lines.push(t("choose.open"));
   } else if (state.chooserError !== null) {
     lines.push(...errorLines(state.chooserError));
@@ -460,7 +497,7 @@ function renderCheck(current) {
   // before it would read as the answer to it.
   const stopped =
     (state.run.state === "failed" && current.failedBox === "export") || current.requestBox === "export";
-  if (state.choosing !== null || stopped) {
+  if (choosingExport || stopped) {
     // Nothing more.
   } else if (state.checking) {
     lines.push(t("check.running"));
@@ -477,7 +514,7 @@ function renderCheck(current) {
   ui.extractArea.hidden = !current.extractNeeded;
   // The Exports of a mixed input that can be chosen, each with its button
   // (stage B3c).
-  const shown = state.choosing === null && !stopped && !state.checking && isCheckCurrent();
+  const shown = !choosingExport && !stopped && !state.checking && isCheckCurrent();
   renderChoices(shown ? foundChoices(state.check) : []);
 }
 
@@ -500,6 +537,70 @@ function renderChoices(choices) {
       return button;
     }),
   );
+}
+
+// Lines with a kind, as the check of the Export gives them (stage B3b).
+function kindLines(lines) {
+  return lines.map((line) => ({
+    text: describe(line.message),
+    className: `m-${line.kind}${line.start ? " start" : ""}`,
+  }));
+}
+
+// The Snapshot Store of the second box (stage B4a): its place, the buttons
+// for a store that is open or not, its lines, and its Snapshots.
+function renderStore() {
+  const store = state.store;
+  const answer = store.answer;
+  const opened = answer?.state === "store";
+  setText(ui.storePath, typeof answer?.path === "string" ? answer.path : "");
+  ui.storeCreate.hidden = opened;
+  ui.storeOpen.hidden = opened;
+  ui.storeOpenOther.hidden = !opened;
+  ui.storeCreateNew.hidden = !opened;
+  ui.storeCheck.hidden = !opened;
+  const choosing = state.choosing !== null && String(state.choosingFor).startsWith("store");
+  replaceLines(ui.storeResult, kindLines(storeMessages({ ...store, choosing })));
+  const rows = snapshotRows(answer);
+  ui.storeList.hidden = rows.length === 0;
+  const key = JSON.stringify([state.language, rows]);
+  if (ui.storeRows.dataset.key === key) {
+    return;
+  }
+  ui.storeRows.dataset.key = key;
+  ui.storeRows.replaceChildren(
+    ...rows.map((row) => {
+      const tableRow = document.createElement("tr");
+      const order = document.createElement("th");
+      order.scope = "row";
+      order.className = "nowrap";
+      order.textContent = row.order === null ? "—" : t("store.row_order", { order: formatNumber(row.order) });
+      const label = document.createElement("td");
+      label.textContent = row.label;
+      const time = document.createElement("td");
+      time.className = "nowrap";
+      time.textContent = row.time;
+      const files = document.createElement("td");
+      files.className = "n";
+      files.textContent = row.files === null ? "—" : formatNumber(row.files);
+      tableRow.append(order, label, time, files);
+      return tableRow;
+    }),
+  );
+}
+
+// The lines under the folder for the output: its dialog, the default place
+// that a run makes, and a cloud that may copy it (stage B4a).
+function renderPlace() {
+  const lines = [];
+  if (state.choosing !== null && state.choosingFor === "output") {
+    lines.push({ text: t("choose.open"), className: "m-info start" });
+  } else if (state.placeChooserError !== null) {
+    const messages = errorMessages(state.placeChooserError);
+    lines.push(...kindLines(messages.map((line, index) => ({ kind: "error", start: index === 0, message: line }))));
+  }
+  lines.push(...kindLines(placeMessages(state.place, ui.outputParent.value.trim())));
+  replaceLines(ui.outputParentNote, lines);
 }
 
 function renderBrowser() {
@@ -870,6 +971,9 @@ function renderControls(states, current) {
     button.disabled = !enabled.choose;
   }
   ui.outputBrowse.disabled = !enabled.browse;
+  for (const button of [ui.storeCreate, ui.storeOpen, ui.storeOpenOther, ui.storeCreateNew, ui.storeCheck]) {
+    button.disabled = !enabled.choose || state.store.busy;
+  }
   ui.check.disabled = !enabled.check;
   ui.snapshotDecide.disabled = !enabled.decideSnapshot;
   ui.outputDecide.disabled = !enabled.decideOutput;
@@ -907,6 +1011,8 @@ function render() {
   renderBoxes(states, current);
   renderNextLine(states, current);
   renderCheck(current);
+  renderStore();
+  renderPlace();
   renderBrowser();
   renderErrors(current);
   renderRun(states, current);
@@ -967,6 +1073,8 @@ async function pollRun() {
         ui.outputName.value = nextOutputName(ui.outputName.value.trim(), new Date());
         checkOutput();
       }
+      // A run may have made the default place (stage B4a).
+      lookPlace();
     }
   } catch (error) {
     connectionFailure(error);
@@ -1058,17 +1166,6 @@ async function makeBundle() {
   }
 }
 
-async function suggestOutputParent(inputPath) {
-  try {
-    const listing = await callApi("/api/folders", { path: inputPath });
-    if (typeof listing.parent === "string" && ui.outputParent.value.trim() === "") {
-      ui.outputParent.value = listing.parent;
-    }
-  } catch (error) {
-    connectionFailure(error);
-  }
-}
-
 // Focus goes back to the button that started the check: the check button,
 // or the button that chose the Export.
 async function runCheck(focusTarget = ui.check) {
@@ -1100,9 +1197,6 @@ async function runCheck(focusTarget = ui.check) {
       notReadable: answer.not_readable !== null && typeof answer.not_readable === "object" ? answer.not_readable : null,
       findings: Array.isArray(answer.findings) ? answer.findings : [],
     };
-    if (state.check.ready) {
-      await suggestOutputParent(path);
-    }
   } catch (error) {
     if (!connectionFailure(error)) {
       state.check = { path, error: error.code };
@@ -1124,18 +1218,55 @@ function useChosenExport(path, focusTarget) {
   runCheck(focusTarget);
 }
 
-// Open the system's dialog to choose a ZIP file or an extracted folder, and
-// ask for its answer until it closes (stage B3a). Without a dialog, the
-// folder list of the page opens instead, with the folders and the ZIP files.
-async function chooseExport(kind, button) {
+// The heading that takes focus after a dialog for ``purpose``, when its
+// button cannot.
+function purposeHeading(purpose) {
+  return purpose === "input" ? ui.inputHeading : purpose === "output" ? ui.outputHeading : ui.snapshotHeading;
+}
+
+// The error of the last dialog, shown in the box of its purpose.
+function setChooserError(purpose, code) {
+  if (purpose === "input") {
+    state.chooserError = code;
+  } else if (purpose === "output") {
+    state.placeChooserError = code;
+  } else {
+    state.store.chooserError = code;
+  }
+}
+
+// Use a place that a dialog or the folder list chose: the Export, which the
+// page checks at once (stage B3a), the store to open, the folder for a new
+// store, or the folder for the output (stage B4a).
+function usePlace(purpose, path, focusTarget) {
+  if (purpose === "input") {
+    useChosenExport(path, focusTarget);
+  } else if (purpose === "store-open") {
+    storeAction("open", path, focusTarget);
+  } else if (purpose === "store-place") {
+    storeAction("place", path, focusTarget);
+  } else {
+    ui.outputParent.value = path;
+    ui.outputParent.dispatchEvent(new Event("input"));
+    returnFocus(focusTarget, ui.outputHeading);
+  }
+}
+
+// Open the system's dialog to choose a ZIP file or a folder, and ask for its
+// answer until it closes (stage B3a); the store and the output choose
+// folders with it too (stage B4a). Without a dialog, the folder list of the
+// page opens instead.
+async function chooseWithDialog(kind, purpose, button) {
   if (state.chooserMissing) {
-    openBrowser("input", button);
+    openBrowser(purpose, button);
     return;
   }
   state.choosing = kind;
-  state.chooserError = null;
+  state.choosingFor = purpose;
+  setChooserError(purpose, null);
   render();
   let chosen = null;
+  let failure = null;
   try {
     await callApi("/api/choose", { kind });
     let answer = { state: "open" };
@@ -1144,25 +1275,92 @@ async function chooseExport(kind, button) {
       answer = await callApi("/api/choose/status");
     }
     if (answer.state === "failed") {
-      state.chooserError = typeof answer.error_code === "string" ? answer.error_code : null;
+      failure = typeof answer.error_code === "string" ? answer.error_code : null;
     } else if (answer.state === "closed" && typeof answer.path === "string") {
       chosen = answer.path;
     }
   } catch (error) {
     if (!connectionFailure(error)) {
-      state.chooserError = error.code;
+      failure = error.code;
     }
   }
   state.choosing = null;
-  if (state.chooserError === "CHOOSER_NOT_AVAILABLE") {
+  state.choosingFor = null;
+  setChooserError(purpose, failure);
+  if (failure === "CHOOSER_NOT_AVAILABLE") {
     state.chooserMissing = true;
-    openBrowser("input", button);
+    openBrowser(purpose, button);
   } else if (chosen !== null) {
-    useChosenExport(chosen, button);
+    usePlace(purpose, chosen, button);
   } else {
     render();
-    returnFocus(button, ui.inputHeading);
+    returnFocus(button, purposeHeading(purpose));
   }
+}
+
+// Open a store, check the place for a new one, or check the open store, as
+// the CLI's snapshot commands do (stage B4a). The page writes nothing in a
+// store; a problem of the store is an answer that it shows beside it.
+async function storeAction(action, path, focusTarget) {
+  const store = state.store;
+  store.busy = true;
+  store.chooserError = null;
+  if (action !== "check") {
+    store.checked = null;
+  }
+  render();
+  try {
+    const answer = await callApi(`/api/store/${action}`, { path });
+    if (action === "check") {
+      store.checked = answer;
+    } else {
+      store.answer = answer;
+    }
+  } catch (error) {
+    if (!connectionFailure(error)) {
+      const failed = { state: "error", path, error_code: error.code };
+      if (action === "check") {
+        store.checked = failed;
+      } else {
+        store.answer = failed;
+      }
+    }
+  } finally {
+    store.busy = false;
+    render();
+    // The buttons of a store that is open differ from those without one, so
+    // the button that was pressed may be gone.
+    if (focusTarget !== null) {
+      returnFocus(canTakeFocus(focusTarget) ? focusTarget : ui.snapshotHeading, ui.snapshotHeading);
+    }
+  }
+}
+
+// Ask the server about the folder for the output: whether it is there, and
+// whether a cloud may copy it (stage B4a).
+async function lookPlace() {
+  window.clearTimeout(state.placeTimer);
+  state.placeTimer = null;
+  const path = ui.outputParent.value.trim();
+  if (path === "" || !state.connected) {
+    state.place = null;
+    render();
+    return;
+  }
+  try {
+    const answer = await callApi("/api/place", { path });
+    state.place = { ...answer, path };
+  } catch (error) {
+    if (!connectionFailure(error)) {
+      state.place = null;
+    }
+  }
+  render();
+}
+
+function schedulePlace() {
+  window.clearTimeout(state.placeTimer);
+  state.placeTimer = window.setTimeout(lookPlace, PLACE_DELAY_MS);
 }
 
 // Confirm a box and move to the next one, as the page asks on a first launch.
@@ -1308,7 +1506,14 @@ async function loadFolder(path, startFromField = false) {
 }
 
 function openBrowser(target, opener) {
-  const field = target === "input" ? ui.inputPath : ui.outputParent;
+  // The list starts at the place of its purpose: the Export, the store
+  // (stage B4a), or the folder for the output.
+  const start =
+    target === "input"
+      ? ui.inputPath.value
+      : target === "output"
+        ? ui.outputParent.value
+        : state.store.answer?.path ?? state.defaultFolder ?? "";
   state.browser = {
     target,
     opener,
@@ -1322,7 +1527,7 @@ function openBrowser(target, opener) {
   };
   render();
   ui.browserHeading.focus();
-  loadFolder(field.value.trim() || null, true);
+  loadFolder(start.trim() || null, true);
 }
 
 function closeBrowser() {
@@ -1333,8 +1538,9 @@ function closeBrowser() {
   opener?.focus();
 }
 
-// A place chosen in the folder list: the folder for the output, or the
-// Export, which the page checks at once (stage B3a).
+// A place chosen in the folder list, for the purpose that opened it: the
+// Export, which the page checks at once (stage B3a), the store, or the folder
+// for the output (stage B4a).
 function chooseFromList(path) {
   const browser = state.browser;
   if (browser === null || !path) {
@@ -1343,12 +1549,7 @@ function chooseFromList(path) {
   }
   const opener = browser.opener;
   closeBrowser();
-  if (browser.target === "input") {
-    useChosenExport(path, opener);
-  } else {
-    ui.outputParent.value = path;
-    ui.outputParent.dispatchEvent(new Event("input"));
-  }
+  usePlace(browser.target, path, opener);
 }
 
 // Open the help panel at one of its parts; focus goes to that part's heading.
@@ -1470,6 +1671,10 @@ function fieldChanged(event) {
   } else if (event?.target !== ui.extractConfirm) {
     state.outputDecided = false;
   }
+  if (event?.target === ui.outputParent) {
+    state.placeChooserError = null;
+    schedulePlace();
+  }
   render();
 }
 
@@ -1491,8 +1696,14 @@ function connect() {
   ui.outputName.value = defaultOutputName(new Date());
   ui.language.addEventListener("change", () => changeLanguage(ui.language.value));
   ui.quit.addEventListener("click", quit);
-  ui.chooseZip.addEventListener("click", () => chooseExport("zip", ui.chooseZip));
-  ui.chooseFolder.addEventListener("click", () => chooseExport("folder", ui.chooseFolder));
+  ui.chooseZip.addEventListener("click", () => chooseWithDialog("zip", "input", ui.chooseZip));
+  ui.chooseFolder.addEventListener("click", () => chooseWithDialog("folder", "input", ui.chooseFolder));
+  // The store and the folder for the output are folders (stage B4a).
+  ui.storeOpen.addEventListener("click", () => chooseWithDialog("folder", "store-open", ui.storeOpen));
+  ui.storeOpenOther.addEventListener("click", () => chooseWithDialog("folder", "store-open", ui.storeOpenOther));
+  ui.storeCreate.addEventListener("click", () => chooseWithDialog("folder", "store-place", ui.storeCreate));
+  ui.storeCreateNew.addEventListener("click", () => chooseWithDialog("folder", "store-place", ui.storeCreateNew));
+  ui.storeCheck.addEventListener("click", () => storeAction("check", state.store.answer?.path, ui.storeCheck));
   ui.check.addEventListener("click", () => runCheck());
   ui.snapshotDecide.addEventListener("click", () => decide("snapshot"));
   ui.outputDecide.addEventListener("click", () => decide("output"));
@@ -1507,7 +1718,7 @@ function connect() {
     state.toolsOpen = !state.toolsOpen;
     render();
   });
-  ui.outputBrowse.addEventListener("click", () => openBrowser("output", ui.outputBrowse));
+  ui.outputBrowse.addEventListener("click", () => chooseWithDialog("folder", "output", ui.outputBrowse));
   ui.browserUp.addEventListener("click", () => loadFolder(state.browser?.parent));
   ui.browserChoose.addEventListener("click", () => chooseFromList(state.browser?.path));
   ui.browserClose.addEventListener("click", closeBrowser);
@@ -1580,6 +1791,14 @@ async function start() {
     if (typeof status.default_timezone === "string" && ui.timezone.value === "") {
       ui.timezone.value = status.default_timezone;
     }
+    // The default place, which only the GUI has (stage B4a): the outputs go
+    // in it, and the store in its folder snapshots.
+    if (typeof status.default_output_parent === "string") {
+      state.defaultFolder = status.default_output_parent;
+      if (ui.outputParent.value === "") {
+        ui.outputParent.value = status.default_output_parent;
+      }
+    }
     state.connected = true;
     state.connectionKey = "status.connected";
     startHeartbeat();
@@ -1591,6 +1810,12 @@ async function start() {
     } else if (FINISHED_STATES.includes(state.run.state)) {
       checkOutput();
     }
+    // The store at the default place, if there is one, and the folder for
+    // the output (stage B4a).
+    if (state.defaultFolder !== null) {
+      storeAction("place", state.defaultFolder, null);
+    }
+    lookPlace();
   } catch (error) {
     connectionFailure(error);
   }

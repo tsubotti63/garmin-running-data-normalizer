@@ -19,6 +19,7 @@ from garmin_running_data_normalizer.diagnostics.contracts import (
 from garmin_running_data_normalizer.diagnostics.doctor import doctor_input
 from garmin_running_data_normalizer.gui.runs import RUN_STATUSES
 from garmin_running_data_normalizer.gui.server import LANGUAGES, STATIC_FILES
+from garmin_running_data_normalizer.gui.stores import ANSWER_CODES
 from garmin_running_data_normalizer.run_all import PROGRESS_STAGES, PROGRESS_STEPS, run_all
 from garmin_running_data_normalizer.stops import NEXT_ACTIONS, PAGE_STOPS, PAGE_WORDING, STOPS
 
@@ -239,6 +240,8 @@ class GuiMessageCoverageTest(unittest.TestCase):
             | codes_in("gui/outputs.py", r'OutputActionError\("([A-Z_]+)"\)')
             | codes_in("diagnostics/doctor.py", r'DoctorError\(\s*"([A-Z_]+)"')
             | codes_in("diagnostics/support_bundle.py", r'SupportBundleError\(\s*"([A-Z_]+)"')
+            # The answers of the Snapshot Store (stage B4a).
+            | set(ANSWER_CODES)
         )
         # Exactly the codes that can occur: none without a message, none stale.
         self.assertEqual(sorted(codes), sorted(flow_table("STOP_KEYS")))

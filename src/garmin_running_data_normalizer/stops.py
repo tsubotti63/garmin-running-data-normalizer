@@ -178,6 +178,25 @@ STOPS: dict[str, Stop] = {
         "the Snapshot Store holds no Snapshot yet",
         "register an Export with snapshot register first",
     ),
+    # The place of the store (stage B4a).
+    "SNAPSHOT_STORE_SYMLINK": Stop(
+        "the Snapshot Store is a symbolic link",
+        "give the folder of the store itself with --store, not a link to it",
+    ),
+    "SNAPSHOT_STORE_PARENT_NOT_FOUND": Stop(
+        "the folder that should hold the new Snapshot Store does not exist",
+        "check the place given with --store, or make the folder that holds it first; no "
+        "folder is made above a new store",
+    ),
+    "SNAPSHOT_STORE_NOT_EMPTY": Stop(
+        "the place given for a new Snapshot Store is a file, or a folder that holds other files",
+        "give the place of a new folder, or of an empty one, with --store; to use a store, "
+        "give the folder of the store itself",
+    ),
+    "SNAPSHOT_STORE_INSIDE_STORE": Stop(
+        "the place given for a new Snapshot Store is inside another Snapshot Store",
+        "give a place outside the other store with --store",
+    ),
     # The stops of the store's contract that no code above describes, such
     # as an argument that is not valid; a damaged store is always
     # SNAPSHOT_STORE_INVALID (stage A5b-2).
@@ -444,6 +463,44 @@ PAGE_WORDING: dict[str, Stop] = {
     "SUPPORT_BUNDLE_PATH_UNSAFE": Stop(
         "the output folder is a link or is no longer there",
         "check that the output folder is still where it was",
+    ),
+    # The Snapshot Store, which the page opens, lists, and checks, and for
+    # which it chooses the place of a new one (stage B4a). The page does not
+    # import into a store until stage B4b.
+    "SNAPSHOT_STORE_NOT_FOUND": Stop(
+        "there is no Snapshot Store in the chosen folder",
+        "choose the folder of the store, or choose where to create a new one",
+    ),
+    "SNAPSHOT_STORE_INVALID": Stop(
+        "the Snapshot Store is damaged, or a Snapshot that it lists is missing",
+        "do not change the files inside the store; restore it from a backup that passed "
+        "Check the Snapshots",
+    ),
+    "SNAPSHOT_STORE_SYMLINK": Stop(
+        "the Snapshot Store is a symbolic link",
+        "choose the folder of the store itself, not a link to it",
+    ),
+    "SNAPSHOT_STORE_PARENT_NOT_FOUND": Stop(
+        "the folder that should hold the new Snapshot Store does not exist",
+        "choose a folder that exists",
+    ),
+    "SNAPSHOT_STORE_NOT_EMPTY": Stop(
+        "the place for the new Snapshot Store is a file, or a folder that holds other files",
+        "choose another folder for the new store",
+    ),
+    "SNAPSHOT_STORE_INSIDE_STORE": Stop(
+        "the place for the new Snapshot Store is inside another Snapshot Store",
+        "choose a folder outside the other store",
+    ),
+    "SNAPSHOT_STORE_LOCKED": Stop(
+        "the Snapshot Store has a lock file (.single-writer.lock): an import is running, "
+        "or one stopped before it ended",
+        "if no snapshot command is running, delete that file before the next import; only "
+        "that file is deleted, and the Snapshots stay",
+    ),
+    "SNAPSHOT_REGISTRATION_INCOMPLETE": Stop(
+        "an import into the Snapshot Store was interrupted",
+        "the next import completes the store",
     ),
 }
 

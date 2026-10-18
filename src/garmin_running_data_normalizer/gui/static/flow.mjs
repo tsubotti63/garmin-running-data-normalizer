@@ -105,6 +105,17 @@ export const STOP_KEYS = {
   CHOOSER_NOT_AVAILABLE: "stop.chooser_not_available",
   CHOOSER_TIMEOUT: "stop.chooser_timeout",
   CHOOSER_BUSY: "stop.chooser_busy",
+  // The Snapshot Store, which the page opens and checks (stage B4a).
+  SNAPSHOT_STORE_NOT_FOUND: "stop.snapshot_store_not_found",
+  SNAPSHOT_STORE_INVALID: "stop.snapshot_store_invalid",
+  SNAPSHOT_STORE_VERSION_UNSUPPORTED: "stop.snapshot_store_version_unsupported",
+  SNAPSHOT_STORE_NOT_READABLE: "stop.snapshot_store_not_readable",
+  SNAPSHOT_STORE_SYMLINK: "stop.snapshot_store_symlink",
+  SNAPSHOT_STORE_PARENT_NOT_FOUND: "stop.snapshot_store_parent_not_found",
+  SNAPSHOT_STORE_NOT_EMPTY: "stop.snapshot_store_not_empty",
+  SNAPSHOT_STORE_INSIDE_STORE: "stop.snapshot_store_inside_store",
+  SNAPSHOT_STORE_LOCKED: "stop.snapshot_store_locked",
+  SNAPSHOT_REGISTRATION_INCOMPLETE: "stop.snapshot_registration_incomplete",
 };
 
 // Several codes share a next step, as they share it in stops.py.
@@ -180,6 +191,16 @@ export const STOP_NEXT_KEYS = {
   CHOOSER_NOT_AVAILABLE: "stop_next.chooser_not_available",
   CHOOSER_TIMEOUT: "stop_next.chooser_timeout",
   CHOOSER_BUSY: "stop_next.chooser_busy",
+  SNAPSHOT_STORE_NOT_FOUND: "stop_next.snapshot_store_not_found",
+  SNAPSHOT_STORE_INVALID: "stop_next.snapshot_store_invalid",
+  SNAPSHOT_STORE_VERSION_UNSUPPORTED: "stop_next.snapshot_store_version_unsupported",
+  SNAPSHOT_STORE_NOT_READABLE: "stop_next.snapshot_store_not_readable",
+  SNAPSHOT_STORE_SYMLINK: "stop_next.snapshot_store_symlink",
+  SNAPSHOT_STORE_PARENT_NOT_FOUND: "stop_next.snapshot_store_parent_not_found",
+  SNAPSHOT_STORE_NOT_EMPTY: "stop_next.snapshot_store_not_empty",
+  SNAPSHOT_STORE_INSIDE_STORE: "stop_next.snapshot_store_inside_store",
+  SNAPSHOT_STORE_LOCKED: "stop_next.snapshot_store_locked",
+  SNAPSHOT_REGISTRATION_INCOMPLETE: "stop_next.snapshot_registration_incomplete",
 };
 
 // A pre-run finding says what a run would stop with in the words of the stop
@@ -301,18 +322,21 @@ function nextStep(step) {
 
 // What happened, what to do next, and the code to quote when asking for help.
 // ``detail`` names, for a folder or file of the input that cannot be opened,
-// its place inside the input ("" is the input itself) and how many more.
+// its place inside the input ("" is the input itself) and how many more; for
+// one of a Snapshot Store, ``store`` is true, and "" is the store's folder
+// itself (stage B4a).
 export function errorMessages(code, detail) {
   const key = lookup(STOP_KEYS, code, "error.unknown");
   const messages = [{ key, params: {}, keyParams: {} }];
   // A name that cannot be shown comes as null, as the check gives it (stage
   // B3c).
   if (typeof detail?.place === "string" || detail?.place === null) {
+    const itself = detail.store === true ? "error.place_store_itself" : "error.place_input_itself";
     messages.push(
       detail.place === null
         ? { key: "error.place_hidden", params: {}, keyParams: {} }
         : detail.place === ""
-          ? { key: "error.place_input_itself", params: {}, keyParams: {} }
+          ? { key: itself, params: {}, keyParams: {} }
           : { key: "error.place", params: { place: detail.place }, keyParams: {} },
     );
     if (Number.isInteger(detail.more) && detail.more > 0) {
@@ -531,6 +555,135 @@ export function checkMessages(check) {
   if (timezone !== null) {
     add("info", [message("check.counts_later")]);
   }
+  return lines;
+}
+
+// The words for a place that a cloud may copy (stage B4a): a folder that a
+// cloud app keeps, or the Desktop or Documents of a Mac, which iCloud copies
+// when its setting for them is on.
+const CLOUD_KEYS = {
+  cloud: "place.cloud",
+  desktop_documents: "place.cloud_desktop",
+};
+
+export function cloudMessages(kind) {
+  const key = lookup(CLOUD_KEYS, kind, null);
+  return key === null ? [] : [message(key)];
+}
+
+// An interrupted import does not stop anything: the next import completes
+// the store, so it is yellow, as the notices of a store are (stage B4a).
+const STORE_NOTICE_CODES = ["SNAPSHOT_STORE_LOCKED", "SNAPSHOT_REGISTRATION_INCOMPLETE"];
+const storeProblemKind = (code) => (STORE_NOTICE_CODES.includes(code) ? "warn" : "error");
+
+// The lines of the Snapshot Store in the second box, each with its kind, in
+// the order of the first box (stage B4a): what the page is doing, a problem
+// of the store or of the place for a new one, the notices of the store and a
+// cloud that may copy it, and then the number of its Snapshots or what the
+// check found. ``store`` holds the dialog that is open for it, its error,
+// whether the page is asking the server, the answer of the store or of the
+// place for a new one, and the answer of the check.
+export function storeMessages(store) {
+  const lines = [];
+  const add = (kind, messages) =>
+    messages.forEach((line, index) => lines.push({ kind, start: index === 0, message: line }));
+  if (store?.choosing === true) {
+    add("info", [message("choose.open")]);
+    return lines;
+  }
+  // Without the system's dialog, the page's own folder list opens: the store
+  // has no field to paste a place in (stage B4a).
+  if (store?.chooserError === "CHOOSER_NOT_AVAILABLE") {
+    add("info", [message("choose.list_instead")]);
+  } else if (typeof store?.chooserError === "string") {
+    add("error", errorMessages(store.chooserError));
+  }
+  if (store?.busy === true) {
+    add("info", [message("store.checking")]);
+    return lines;
+  }
+  const answer = store?.answer;
+  if (answer === null || typeof answer !== "object") {
+    return lines;
+  }
+  const checked = store.checked !== null && typeof store.checked === "object" ? store.checked : null;
+  // A check that found a notice gives it with the notices, in their order;
+  // any other problem of the store or of its check is red.
+  const checkedNotice =
+    answer.state === "store" && checked?.state === "error" && STORE_NOTICE_CODES.includes(checked.error_code);
+  const problem =
+    answer.state === "error"
+      ? answer
+      : answer.state === "store" && checked?.state === "error" && !checkedNotice
+        ? checked
+        : null;
+  if (problem !== null) {
+    add(storeProblemKind(problem.error_code), errorMessages(problem.error_code, problem.detail));
+  }
+  if (answer.state === "store") {
+    const notices = new Set([...(answer.notices ?? []), ...(checked?.notices ?? [])]);
+    if (checkedNotice) {
+      notices.add(checked.error_code);
+    }
+    for (const code of STORE_NOTICE_CODES.filter((item) => notices.has(item))) {
+      add("warn", errorMessages(code));
+    }
+  }
+  add("warn", cloudMessages(answer.cloud));
+  if (answer.state === "new") {
+    add("info", [message("store.new")]);
+  } else if (answer.state === "store" && checked?.state !== "error") {
+    // The count is green while no check failed.
+    const count = Array.isArray(answer.snapshots) ? answer.snapshots.length : 0;
+    if (checked?.state === "checked") {
+      add("ok", [message("store.checked", { count: checked.snapshot_count })]);
+    } else {
+      add("ok", [count === 0 ? message("snapshot.empty") : message("store.count", { count })]);
+    }
+  }
+  return lines;
+}
+
+// The time of an Export, which orders the Snapshots, in the local time of
+// this computer, to the minute; a dash for one that cannot be read.
+export function exportTime(value) {
+  const date = typeof value === "string" ? new Date(value) : null;
+  if (date === null || Number.isNaN(date.getTime())) {
+    return "—";
+  }
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// The rows of the Snapshots of an opened store, in their order: the number,
+// the label, the time of the Export, and the number of files (stage B4a).
+export function snapshotRows(answer) {
+  if (answer?.state !== "store" || !Array.isArray(answer.snapshots)) {
+    return [];
+  }
+  return answer.snapshots.map((item) => ({
+    order: Number.isInteger(item?.order) ? item.order : null,
+    label: typeof item?.label === "string" ? item.label : "",
+    time: exportTime(item?.observed_at),
+    files: Number.isInteger(item?.files) ? item.files : null,
+  }));
+}
+
+// The lines under the folder for the output (stage B4a): the default place,
+// which a run makes when it is not there, and a cloud that may copy the
+// place. ``place`` is the server's answer for the place in the field; an
+// answer for another place says nothing.
+export function placeMessages(place, outputParent) {
+  if (place === null || typeof place !== "object" || place.path !== outputParent) {
+    return [];
+  }
+  const lines = [];
+  if (place.default === true && place.exists === false) {
+    lines.push({ kind: "info", start: true, message: message("output.parent_new") });
+  }
+  cloudMessages(place.cloud).forEach((line, index) =>
+    lines.push({ kind: "warn", start: index === 0, message: line }),
+  );
   return lines;
 }
 
@@ -776,9 +929,10 @@ export function nextLine(view, states) {
   if (runState === "cancelling") {
     return message("next_line.cancelling");
   }
-  // A dialog of the system to choose the Export is open (stage B3a).
+  // A dialog of the system to choose the Export is open (stage B3a), or one
+  // to choose a folder for the store or the output (stage B4a).
   if (view.choosing === true) {
-    return message("next_line.choosing");
+    return message(view.choosingFolder === true ? "next_line.choosing_folder" : "next_line.choosing");
   }
   if (runState === "finished_after_cancel" && !view.editedSinceRun) {
     return message("next_line.late");

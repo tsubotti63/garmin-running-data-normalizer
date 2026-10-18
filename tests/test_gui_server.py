@@ -19,7 +19,7 @@ from unittest.mock import patch
 
 from garmin_running_data_normalizer import __version__
 from garmin_running_data_normalizer.common.time import DEFAULT_TIMEZONE
-from garmin_running_data_normalizer.gui import chooser, outputs
+from garmin_running_data_normalizer.gui import chooser, outputs, places
 from garmin_running_data_normalizer.gui.chooser import Chooser
 from garmin_running_data_normalizer.gui.runs import RunManager
 from garmin_running_data_normalizer.gui.server import (
@@ -259,12 +259,17 @@ class GuiApiRequestTest(GuiServerTestCase):
                     self.assertEqual(status, 403)
                     self.assertEqual(json.loads(body), {"error": "FORBIDDEN"})
 
-        status, _, body = self.post_api("/api/status")
+        home = Path(tempfile.gettempdir()).resolve() / "synthetic-home"
+        with patch.object(places, "home", lambda: home):
+            status, _, body = self.post_api("/api/status")
         self.assertEqual(status, 200)
-        # The page takes the product's default timezone from here (stage A5a).
+        # The page takes the product's default timezone from here (stage A5a),
+        # and the default places, which only the GUI has (stage B4a).
         self.assertEqual(
             json.loads(body),
             {
+                "default_output_parent": str(home / "GarminRunningData"),
+                "default_store": str(home / "GarminRunningData" / "snapshots"),
                 "default_timezone": DEFAULT_TIMEZONE,
                 "languages": ["en", "ja"],
                 "product_version": __version__,
