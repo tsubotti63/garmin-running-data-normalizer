@@ -1,0 +1,413 @@
+"""The settings of an earlier launch of the GUI (stage B4c).
+
+The GUI remembers the store and the folder for the output of the last run that
+made its output, the latest outputs, and whether the tips show, in one
+owner-only file in the place that the system keeps for each person's
+application data. The file is written whole, read with care, never written
+over when a newer version wrote it, and forgotten on request. Every test
+keeps it in its own folder (``tests/conftest.py``); synthetic data only.
+"""
+from __future__ import annotations
+
+import json
+import os
+import stat
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from typing import Any
+from unittest.mock import patch
+
+from garmin_running_data_normalizer import diagnostics  # noqa: F401
+from garmin_running_data_normalizer.gui import places, runs, settings
+from garmin_running_data_normalizer.gui.places import makeable_settings_folders, settings_file_for
+from garmin_running_data_normalizer.snapshot import initialize_store
+from garmin_running_data_normalizer.gui.settings import (
+    MAX_RECENT_OUTPUTS,
+    SETTINGS_FORMAT,
+    SETTINGS_INVALID,
+    SETTINGS_NEWER,
+    SETTINGS_NOT_REMOVED,
+    SETTINGS_NOT_WRITTEN,
+    launch_answer,
+    read_settings,
+    remember_hints_at,
+    remember_run_at,
+    remove_settings,
+    write_settings,
+)
+from tests.test_environment_stops import REAL_SYMLINKS
+from tests.test_gui_runs import SYNTHETIC_EXPORT, child_environment, request, stub_manager, wait_until
+from tests.test_gui_server import GuiServerTestCase
+from tests.test_gui_snapshot_runs import ACCOUNT, STAMP, register
+
+APP = places.SETTINGS_FOLDER_NAME
+NAME = places.SETTINGS_FILE_NAME
+POSIX_MODES = unittest.skipIf(os.name == "nt", "Windows keeps no POSIX modes")
+
+
+class SettingsPlaceTest(unittest.TestCase):
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.home = Path(directory.name).resolve() / "home"
+        self.elsewhere = Path(directory.name).resolve() / "elsewhere"
+
+    def test_each_system_keeps_the_settings_in_its_place_for_application_data(self) -> None:
+        self.assertEqual(
+            settings_file_for("darwin", {}, self.home),
+            self.home / "Library" / "Application Support" / APP / NAME,
+        )
+        self.assertEqual(settings_file_for("win32", {"LOCALAPPDATA": str(self.elsewhere)}, self.home), self.elsewhere / APP / NAME)
+        self.assertEqual(settings_file_for("linux", {"XDG_STATE_HOME": str(self.elsewhere)}, self.home), self.elsewhere / APP / NAME)
+        # A variable that is missing, empty, or not absolute counts as not
+        # given, as the XDG Base Directory Specification says.
+        for value in (None, "", "relative/state"):
+            environ = {} if value is None else {"LOCALAPPDATA": value, "XDG_STATE_HOME": value}
+            with self.subTest(value=value):
+                self.assertEqual(settings_file_for("win32", environ, self.home), self.home / "AppData" / "Local" / APP / NAME)
+                self.assertEqual(settings_file_for("linux", environ, self.home), self.home / ".local" / "state" / APP / NAME)
+
+    def test_only_the_folders_of_the_xdg_state_home_in_the_home_folder_may_be_made(self) -> None:
+        with patch.object(places, "home", lambda: self.home):
+            state = self.home / ".local" / "state"
+            self.assertEqual(makeable_settings_folders(state / APP / NAME, "linux"), (self.home / ".local", state))
+            self.assertEqual(makeable_settings_folders(self.elsewhere / APP / NAME, "linux"), ())
+            for platform in ("darwin", "win32"):
+                with self.subTest(platform=platform):
+                    self.assertEqual(makeable_settings_folders(state / APP / NAME, platform), ())
+
+    def test_every_test_has_its_own_settings(self) -> None:
+        # The shared preparation replaces the function that names the file.
+        path = places.settings_file()
+        self.assertEqual(path.name, NAME)
+        self.assertNotEqual(path, settings_file_for(sys.platform, os.environ, Path.home()))
+        self.assertTrue(path.parent.parent.is_dir())
+
+
+class SettingsFileTest(unittest.TestCase):
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name).resolve()
+        self.base = self.root / "base"
+        self.base.mkdir()
+        self.path = self.base / APP / NAME
+        self.store = str(self.root / "store")
+        self.parent = str(self.root / "outputs")
+
+    def written(self) -> dict[str, Any]:
+        return json.loads(self.path.read_bytes().decode("utf-8"))
+
+    def test_the_settings_are_written_whole_and_read_back(self) -> None:
+        self.assertEqual(read_settings(self.path), ({}, None))
+        values = {"store": self.store, "output_parent": self.parent, "recent_outputs": [self.parent + "-1"], "hints": False}
+        self.assertIsNone(write_settings(self.path, values))
+        self.assertEqual(read_settings(self.path), (values, None))
+        self.assertEqual(self.written(), {"format": SETTINGS_FORMAT, **values})
+        # Nothing else is left in this app's folder.
+        self.assertEqual([item.name for item in self.path.parent.iterdir()], [NAME])
+        # The next settings replace the file whole.
+        self.assertIsNone(write_settings(self.path, {"hints": True}))
+        self.assertEqual(read_settings(self.path), ({"hints": True}, None))
+
+    @POSIX_MODES
+    def test_the_folder_and_the_file_are_the_persons_own(self) -> None:
+        # The umask cannot widen them.
+        previous = os.umask(0)
+        try:
+            self.assertIsNone(write_settings(self.path, {"hints": True}))
+        finally:
+            os.umask(previous)
+        self.assertEqual(stat.S_IMODE(self.path.parent.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE(self.path.stat().st_mode), 0o600)
+
+    def test_only_this_apps_folder_is_made(self) -> None:
+        missing = self.root / "missing" / APP / NAME
+        self.assertEqual(write_settings(missing, {"hints": True}), SETTINGS_NOT_WRITTEN)
+        self.assertFalse((self.root / "missing").exists())
+
+    @POSIX_MODES
+    def test_the_xdg_state_home_is_made_when_it_is_missing_and_kept_as_it_is_when_it_is_there(self) -> None:
+        home = self.root / "home"
+        home.mkdir()
+        state = home / ".local" / "state"
+        path = state / APP / NAME
+        self.assertIsNone(write_settings(path, {"hints": True}, (home / ".local", state)))
+        for folder in (home / ".local", state, state / APP):
+            with self.subTest(folder=folder.name):
+                self.assertEqual(stat.S_IMODE(folder.stat().st_mode), 0o700)
+        # Folders that are there keep their permissions; they are shared.
+        other = self.root / "other-home"
+        (other / ".local" / "state").mkdir(parents=True)
+        for folder in (other / ".local", other / ".local" / "state"):
+            folder.chmod(0o755)
+        path = other / ".local" / "state" / APP / NAME
+        self.assertIsNone(write_settings(path, {"hints": True}, (other / ".local", other / ".local" / "state")))
+        for folder in (other / ".local", other / ".local" / "state"):
+            with self.subTest(folder=str(folder)):
+                self.assertEqual(stat.S_IMODE(folder.stat().st_mode), 0o755)
+
+    def test_files_that_are_not_of_this_form_are_not_used(self) -> None:
+        good = {"format": SETTINGS_FORMAT, "store": self.store}
+        cases = {
+            "not JSON": b"{not json",
+            "not UTF-8": b"\xff\xfe",
+            "a list": b"[]",
+            "no format": json.dumps({"store": self.store}).encode(),
+            "another format": json.dumps({**good, "format": "another-format-v1"}).encode(),
+            "an older format": json.dumps({**good, "format": "garmin-running-data-normalizer-gui-settings-v0"}).encode(),
+            "a relative place": json.dumps({**good, "store": "relative/store"}).encode(),
+            "a control character": json.dumps({**good, "store": self.store + "\x01"}).encode(),
+            "a place that is not text": json.dumps({**good, "output_parent": 3}).encode(),
+            "tips that are not true or false": json.dumps({**good, "hints": "yes"}).encode(),
+            "outputs that are not a list": json.dumps({**good, "recent_outputs": self.parent}).encode(),
+            "too many outputs": json.dumps(
+                {**good, "recent_outputs": [f"{self.parent}-{number}" for number in range(MAX_RECENT_OUTPUTS + 1)]}
+            ).encode(),
+            "the same output twice": json.dumps({**good, "recent_outputs": [self.parent, self.parent]}).encode(),
+            # 64 KiB at most, as the file promises.
+            "too large": json.dumps({**good, "padding": "x" * 64 * 1024}).encode(),
+            "deeply nested": b"[" * 30000 + b"]" * 30000,
+        }
+        self.path.parent.mkdir()
+        for name, content in cases.items():
+            with self.subTest(name):
+                self.path.write_bytes(content)
+                self.assertEqual(read_settings(self.path), ({}, SETTINGS_INVALID))
+        self.path.unlink()
+        self.path.mkdir()
+        self.assertEqual(read_settings(self.path), ({}, SETTINGS_INVALID))
+
+    @REAL_SYMLINKS
+    def test_a_link_is_not_followed(self) -> None:
+        target = self.root / "target.json"
+        target.write_bytes(json.dumps({"format": SETTINGS_FORMAT, "store": self.store}).encode())
+        self.path.parent.mkdir()
+        self.path.symlink_to(target)
+        self.assertEqual(read_settings(self.path), ({}, SETTINGS_INVALID))
+        # This app's folder may not be a link either.
+        link = self.root / "linked" / APP
+        link.parent.mkdir()
+        link.symlink_to(self.root / "target-folder", target_is_directory=True)
+        (self.root / "target-folder").mkdir()
+        self.assertEqual(write_settings(link / NAME, {"hints": True}), SETTINGS_NOT_WRITTEN)
+        self.assertEqual(list((self.root / "target-folder").iterdir()), [])
+
+    def test_keys_that_this_version_does_not_know_are_left_out(self) -> None:
+        self.path.parent.mkdir()
+        self.path.write_bytes(json.dumps({"format": SETTINGS_FORMAT, "store": self.store, "later": [1, 2]}).encode())
+        self.assertEqual(read_settings(self.path), ({"store": self.store}, None))
+        self.assertIsNone(remember_hints_at(self.path, True))
+        self.assertEqual(self.written(), {"format": SETTINGS_FORMAT, "store": self.store, "hints": True})
+
+    def test_a_file_of_a_newer_version_is_neither_used_nor_written_over(self) -> None:
+        self.path.parent.mkdir()
+        newer = json.dumps({"format": "garmin-running-data-normalizer-gui-settings-v2", "store": 7}).encode()
+        self.path.write_bytes(newer)
+        self.assertEqual(read_settings(self.path), ({}, SETTINGS_NEWER))
+        self.assertEqual(remember_hints_at(self.path, True), SETTINGS_NEWER)
+        self.assertEqual(remember_run_at(self.path, self.root / "outputs" / "o1", Path(self.store)), SETTINGS_NEWER)
+        self.assertEqual(self.path.read_bytes(), newer)
+        # Forgetting removes it.
+        self.assertIsNone(remove_settings(self.path))
+        self.assertFalse(self.path.exists())
+
+    def test_a_file_that_is_not_used_is_replaced_by_the_next_settings(self) -> None:
+        self.path.parent.mkdir()
+        self.path.write_bytes(b"{not json")
+        self.assertIsNone(remember_run_at(self.path, self.root / "outputs" / "o1", None))
+        self.assertEqual(read_settings(self.path)[1], None)
+
+    def test_a_run_remembers_its_places_and_the_latest_outputs(self) -> None:
+        outputs = self.root / "outputs"
+        self.assertIsNone(remember_run_at(self.path, outputs / "o1", Path(self.store)))
+        self.assertEqual(
+            read_settings(self.path)[0],
+            {"store": self.store, "output_parent": str(outputs), "recent_outputs": [str(outputs / "o1")]},
+        )
+        # A run of this Export alone keeps the store that was remembered.
+        other = self.root / "other-outputs"
+        self.assertIsNone(remember_run_at(self.path, other / "o2", None))
+        values = read_settings(self.path)[0]
+        self.assertEqual((values["store"], values["output_parent"]), (self.store, str(other)))
+        self.assertEqual(values["recent_outputs"], [str(other / "o2"), str(outputs / "o1")])
+        # The latest first, each once, ten at most; the tips stay.
+        self.assertIsNone(remember_hints_at(self.path, False))
+        for number in range(3, 15):
+            remember_run_at(self.path, outputs / f"o{number}", None)
+        remember_run_at(self.path, outputs / "o10", None)
+        values = read_settings(self.path)[0]
+        self.assertEqual(len(values["recent_outputs"]), MAX_RECENT_OUTPUTS)
+        self.assertEqual(values["recent_outputs"][:3], [str(outputs / "o10"), str(outputs / "o14"), str(outputs / "o13")])
+        self.assertEqual(len(set(values["recent_outputs"])), MAX_RECENT_OUTPUTS)
+        self.assertIs(values["hints"], False)
+
+    def test_settings_that_cannot_be_written_leave_nothing_behind(self) -> None:
+        with patch("os.replace", side_effect=PermissionError("denied")):
+            self.assertEqual(write_settings(self.path, {"hints": True}), SETTINGS_NOT_WRITTEN)
+        self.assertEqual(list(self.path.parent.iterdir()), [])
+        # A place that cannot be kept in the file is not written, and raises
+        # nothing.
+        self.assertEqual(remember_run_at(self.path, Path(self.parent) / "\udcff", None), SETTINGS_NOT_WRITTEN)
+        self.assertFalse(self.path.exists())
+        self.assertEqual(write_settings(self.path, {"store": "relative"}), SETTINGS_NOT_WRITTEN)
+
+    def test_forgetting_removes_the_file_and_the_empty_folder(self) -> None:
+        self.assertIsNone(remove_settings(self.path))
+        self.assertIsNone(write_settings(self.path, {"hints": True}))
+        self.assertIsNone(remove_settings(self.path))
+        self.assertFalse(self.path.parent.exists())
+        self.assertTrue(self.base.is_dir())
+        self.path.mkdir(parents=True)
+        self.assertEqual(remove_settings(self.path), SETTINGS_NOT_REMOVED)
+        self.assertTrue(self.path.is_dir())
+
+    @REAL_SYMLINKS
+    def test_forgetting_a_link_removes_the_link_only(self) -> None:
+        target = self.root / "target.json"
+        target.write_bytes(b"{}")
+        self.path.parent.mkdir()
+        self.path.symlink_to(target)
+        self.assertIsNone(remove_settings(self.path))
+        self.assertFalse(os.path.lexists(self.path))
+        self.assertEqual(target.read_bytes(), b"{}")
+
+    def test_a_later_launch_needs_a_remembered_place(self) -> None:
+        self.assertEqual(
+            launch_answer({}, None),
+            {"launch": "first", "store": None, "output_parent": None, "hints": None, "notice": None},
+        )
+        self.assertEqual(launch_answer({"hints": False}, None)["launch"], "first")
+        self.assertEqual(launch_answer({"store": self.store}, None)["launch"], "later")
+        self.assertEqual(launch_answer({"output_parent": self.parent}, None)["launch"], "later")
+        self.assertEqual(launch_answer({}, SETTINGS_INVALID)["notice"], SETTINGS_INVALID)
+
+
+class SettingsApiTest(GuiServerTestCase):
+    def post(self, path: str, payload: dict[str, Any] | None = None) -> tuple[int, dict[str, Any]]:
+        body = json.dumps(payload or {}).encode("utf-8")
+        status, _, answer = self.post_api(path, body=body)
+        return status, json.loads(answer)
+
+    def test_the_page_reads_the_settings_when_it_starts(self) -> None:
+        path = places.settings_file()
+        store = str(path.parent.parent / "store")
+        self.assertIsNone(remember_run_at(path, path.parent.parent / "outputs" / "o1", Path(store)))
+        status, answer = self.post("/api/status")
+        self.assertEqual(
+            (status, answer["settings"]),
+            (
+                200,
+                {
+                    "launch": "later",
+                    "store": store,
+                    "output_parent": str(path.parent.parent / "outputs"),
+                    "hints": None,
+                    "notice": None,
+                },
+            ),
+        )
+        path.write_bytes(b"{not json")
+        self.assertEqual(self.post("/api/status")[1]["settings"]["notice"], SETTINGS_INVALID)
+
+    def test_the_tips_are_remembered_as_they_are_switched(self) -> None:
+        for on in (False, True):
+            with self.subTest(on=on):
+                self.assertEqual(self.post("/api/settings/hints", {"on": on}), (200, {"remembered": True, "notice": None}))
+                self.assertIs(read_settings(places.settings_file())[0]["hints"], on)
+        for payload in ({}, {"on": "yes"}, {"on": 1}):
+            with self.subTest(payload=payload):
+                self.assertEqual(self.post("/api/settings/hints", payload), (422, {"error": "REQUEST_INVALID"}))
+        with patch.object(settings, "write_settings", return_value=SETTINGS_NOT_WRITTEN):
+            self.assertEqual(
+                self.post("/api/settings/hints", {"on": True}),
+                (200, {"remembered": False, "notice": SETTINGS_NOT_WRITTEN}),
+            )
+
+    def test_the_settings_are_forgotten_on_request_and_never_while_a_run_is_active(self) -> None:
+        path = places.settings_file()
+        self.assertIsNone(remember_hints_at(path, False))
+        with patch.object(self.server.runs, "active", return_value=True):
+            self.assertEqual(self.post("/api/settings/forget"), (409, {"error": "RUN_ACTIVE"}))
+        self.assertTrue(path.exists())
+        self.assertEqual(self.post("/api/settings/forget"), (200, {"forgotten": True, "notice": None}))
+        self.assertFalse(path.exists())
+        self.assertEqual(self.post("/api/status")[1]["settings"]["launch"], "first")
+        path.mkdir(parents=True)
+        self.assertEqual(self.post("/api/settings/forget"), (200, {"forgotten": False, "notice": SETTINGS_NOT_REMOVED}))
+
+
+class RunRemembersTest(unittest.TestCase):
+    def setUp(self) -> None:
+        patcher = patch.dict(os.environ, child_environment())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name).resolve()
+        self.parent = self.root / "outputs"
+        self.parent.mkdir()
+        self.path = places.settings_file()
+
+    def end(self, manager: runs.RunManager, cancel: bool = False) -> dict[str, Any]:
+        if cancel:
+            self.assertTrue(wait_until(lambda: bool(manager.status()["progress"])))
+            manager.cancel()
+        self.assertTrue(wait_until(lambda: not manager.active(), 120))
+        return manager.status()
+
+    def test_a_finished_run_remembers_its_places(self) -> None:
+        manager = runs.RunManager()
+        self.addCleanup(manager.stop)
+        manager.start(request(SYNTHETIC_EXPORT, self.parent, "o1"))
+        status = self.end(manager)
+        self.assertEqual((status["state"], status["settings_notice"]), ("finished", None))
+        self.assertEqual(
+            read_settings(self.path)[0],
+            {"output_parent": str(self.parent), "recent_outputs": [str(self.parent / "o1")]},
+        )
+
+    def test_the_store_of_a_snapshot_run_is_remembered_with_an_output_that_a_late_cancellation_left(self) -> None:
+        store = self.root / "store"
+        initialize_store(store, ACCOUNT)
+        register(store, SYNTHETIC_EXPORT, "S1", STAMP)
+        manager = stub_manager("publish-then-wait", cancel_grace=60.0)
+        self.addCleanup(manager.stop)
+        rerun = {**request(SYNTHETIC_EXPORT, self.parent, "o2"), "how": "rerun", "store": str(store)}
+        del rerun["input"]
+        manager.start(rerun)
+        status = self.end(manager, cancel=True)
+        self.assertEqual(status["state"], "finished_after_cancel")
+        values = read_settings(self.path)[0]
+        self.assertEqual((values["store"], values["recent_outputs"]), (str(store), [str(self.parent / "o2")]))
+
+    def test_a_run_without_its_output_remembers_nothing(self) -> None:
+        for mode, cancel, state in (("wait", True, "cancelled"), ("fail-then-wait", True, "failed")):
+            with self.subTest(mode=mode):
+                manager = stub_manager(mode, cancel_grace=60.0)
+                self.addCleanup(manager.stop)
+                manager.start(request(SYNTHETIC_EXPORT, self.parent, mode))
+                status = self.end(manager, cancel=cancel)
+                self.assertEqual((status["state"], status["settings_notice"]), (state, None))
+                self.assertFalse(self.path.exists())
+
+    def test_settings_that_cannot_be_remembered_are_told_and_never_hold_the_end_of_a_run(self) -> None:
+        cases = (
+            patch.object(runs, "remember_run", return_value=SETTINGS_NOT_WRITTEN),
+            patch.object(runs, "remember_run", return_value=SETTINGS_NEWER),
+            patch.object(runs, "remember_run", side_effect=RuntimeError("unexpected")),
+        )
+        for number, (patcher, notice) in enumerate(zip(cases, (SETTINGS_NOT_WRITTEN, SETTINGS_NEWER, SETTINGS_NOT_WRITTEN))):
+            with self.subTest(notice=notice, number=number):
+                with patcher:
+                    manager = stub_manager("publish-then-wait", cancel_grace=60.0)
+                    self.addCleanup(manager.stop)
+                    manager.start(request(SYNTHETIC_EXPORT, self.parent, f"o{number}"))
+                    status = self.end(manager, cancel=True)
+                self.assertEqual((status["state"], status["settings_notice"]), ("finished_after_cancel", notice))
+
+
+if __name__ == "__main__":
+    unittest.main()

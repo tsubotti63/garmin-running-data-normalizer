@@ -17,7 +17,7 @@ from unittest.mock import Mock, call, patch
 # the other order meets a circular import when this file runs on its own.
 from garmin_running_data_normalizer import diagnostics  # noqa: F401
 from garmin_running_data_normalizer.diagnostics.doctor import DoctorError, doctor_run_output
-from garmin_running_data_normalizer.gui import outputs
+from garmin_running_data_normalizer.gui import outputs, places
 from garmin_running_data_normalizer.gui.outputs import (
     MACOS_OPEN,
     OPEN_TARGETS,
@@ -28,6 +28,7 @@ from garmin_running_data_normalizer.gui.outputs import (
     open_output,
     support_bundle_path,
 )
+from garmin_running_data_normalizer.gui.settings import remember_run_at
 from garmin_running_data_normalizer.run_all import run_all
 from garmin_running_data_normalizer.standalone import validate_standalone_handoff
 from tests.test_gui_runs import SYNTHETIC_EXPORT, child_environment, wait_until
@@ -196,6 +197,21 @@ class SupportBundleTest(OutputTestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertEqual(destination.read_bytes(), cli_bundle.read_bytes())
+
+    def test_the_bundle_holds_no_settings_of_the_gui(self) -> None:
+        # Stage B4c: the settings remember places on this computer, which the
+        # bundle never holds; it is made from the output alone.
+        settings_path = places.settings_file()
+        store = self.root / "remembered-store-of-this-test"
+        self.assertIsNone(remember_run_at(settings_path, self.output, store))
+        make_support_bundle(self.output)
+        with zipfile.ZipFile(self.root / "output-support-bundle.zip") as archive:
+            for name in archive.namelist():
+                with self.subTest(member=name):
+                    content = archive.read(name)
+                    self.assertNotIn(places.SETTINGS_FILE_NAME, name)
+                    self.assertNotIn(store.name.encode("utf-8"), content)
+                    self.assertNotIn(str(settings_path.parent).encode("utf-8"), content)
 
     def test_an_existing_bundle_is_never_replaced(self) -> None:
         make_support_bundle(self.output)

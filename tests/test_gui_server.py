@@ -266,7 +266,8 @@ class GuiApiRequestTest(GuiServerTestCase):
             status, _, body = self.post_api("/api/status")
         self.assertEqual(status, 200)
         # The page takes the product's default timezone from here (stage A5a),
-        # and the default places, which only the GUI has (stage B4a).
+        # the default places, which only the GUI has (stage B4a), and the
+        # settings of an earlier launch, none in a test's own place (stage B4c).
         self.assertEqual(
             json.loads(body),
             {
@@ -275,6 +276,7 @@ class GuiApiRequestTest(GuiServerTestCase):
                 "default_timezone": DEFAULT_TIMEZONE,
                 "languages": ["en", "ja"],
                 "product_version": __version__,
+                "settings": {"launch": "first", "store": None, "output_parent": None, "hints": None, "notice": None},
             },
         )
         status, _, body = self.post_api("/api/heartbeat")

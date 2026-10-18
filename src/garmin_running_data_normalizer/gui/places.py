@@ -10,17 +10,28 @@ output and nothing is there.
 A place may be copied to a cloud when it is in a folder that a cloud app
 keeps. Only fixed names are compared: no program is asked and nothing is
 sent, so the answer means "may be", not "is".
+
+The settings of an earlier launch are one file in this app's folder in the
+place that the system keeps for each person's application data (stage B4c):
+Application Support in the Library of a Mac, LOCALAPPDATA on Windows, and the
+XDG state home elsewhere. Only ``settings_file`` names it, and the tests
+replace that function, so that no test reads or writes the settings of the
+person who runs them.
 """
 from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 from ..common.private_files import PRIVATE_DIRECTORY_MODE
 
 DEFAULT_FOLDER_NAME = "GarminRunningData"
 STORE_FOLDER_NAME = "snapshots"
+# This app's folder of settings and its one file (stage B4c).
+SETTINGS_FOLDER_NAME = "garmin-running-data-normalizer"
+SETTINGS_FILE_NAME = "gui-settings.json"
 # Folders that cloud apps keep under these names, wherever they are.
 _CLOUD_FOLDER_NAMES = frozenset({"dropbox", "onedrive", "google drive", "icloud drive", "iclouddrive"})
 # OneDrive for work or school names its folder "OneDrive - <organization>".
@@ -56,6 +67,51 @@ def make_default_folder(parent: Path) -> None:
         return
     # As the private folders of this app: the umask cannot widen it.
     folder.chmod(PRIVATE_DIRECTORY_MODE)
+
+
+def _absolute_value(value: str | None) -> Path | None:
+    """A place that a variable of the environment gives, when it is absolute;
+    an empty or relative one counts as not given, as the XDG Base Directory
+    Specification says."""
+    if not value:
+        return None
+    place = Path(value)
+    return place if place.is_absolute() else None
+
+
+def settings_file_for(platform: str, environ: Mapping[str, str], home_folder: Path) -> Path:
+    """Where the settings of an earlier launch are, for a system (stage
+    B4c): in this app's folder in Application Support on a Mac, in
+    LOCALAPPDATA on Windows (or AppData/Local in the home folder), and in
+    XDG_STATE_HOME elsewhere (or .local/state in the home folder)."""
+    if platform == "darwin":
+        base = home_folder / "Library" / "Application Support"
+    elif platform == "win32":
+        base = _absolute_value(environ.get("LOCALAPPDATA")) or home_folder / "AppData" / "Local"
+    else:
+        base = _absolute_value(environ.get("XDG_STATE_HOME")) or home_folder / ".local" / "state"
+    return base / SETTINGS_FOLDER_NAME / SETTINGS_FILE_NAME
+
+
+def settings_file() -> Path:
+    """The file of the settings of an earlier launch on this computer (stage
+    B4c). Tests replace this function."""
+    return settings_file_for(sys.platform, os.environ, home())
+
+
+def makeable_settings_folders(path: Path, platform: str = sys.platform) -> tuple[Path, ...]:
+    """The folders above this app's folder of settings that may be made when
+    they are missing (stage B4c): on systems other than a Mac and Windows,
+    .local and .local/state in the home folder, which the XDG Base Directory
+    Specification asks an app to make, when the file is in that state home;
+    no other folder, as the place that the system keeps is there or is not
+    this app's to make."""
+    if platform in ("darwin", "win32"):
+        return ()
+    state = home() / ".local" / "state"
+    if path.parent.parent != state:
+        return ()
+    return (state.parent, state)
 
 
 def _key(path: Path, platform: str) -> tuple[str, ...]:
@@ -108,10 +164,15 @@ def cloud_kind(path: Path, platform: str = sys.platform) -> str | None:
 
 __all__ = [
     "DEFAULT_FOLDER_NAME",
+    "SETTINGS_FILE_NAME",
+    "SETTINGS_FOLDER_NAME",
     "STORE_FOLDER_NAME",
     "cloud_kind",
     "default_folder",
     "default_store",
     "home",
     "make_default_folder",
+    "makeable_settings_folders",
+    "settings_file",
+    "settings_file_for",
 ]

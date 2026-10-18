@@ -37,6 +37,7 @@ from .runs import (
     RunRequestError,
     absolute_path,
 )
+from .settings import forget_settings, launch_settings, remember_hints
 from .stores import check_store, download_time, open_store, store_place, unlock_store
 
 
@@ -108,6 +109,8 @@ API_ROUTES = {
     "/api/check-output": "_api_check_output",
     "/api/support-bundle": "_api_support_bundle",
     "/api/open-output": "_api_open_output",
+    "/api/settings/hints": "_api_settings_hints",
+    "/api/settings/forget": "_api_settings_forget",
 }
 
 
@@ -380,12 +383,16 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         # The page takes the product's default timezone from here, so that
         # it has no default of its own (stage A5a).
         # The default places, which only the GUI has (stage B4a).
+        # The settings of an earlier launch (stage B4c), read when the page
+        # starts: the places of the last run that made its output, whether
+        # the tips show, and what to tell of the file.
         return {
             "default_output_parent": str(default_folder()),
             "default_store": str(default_store()),
             "default_timezone": DEFAULT_TIMEZONE,
             "languages": list(LANGUAGES),
             "product_version": __version__,
+            "settings": launch_settings(),
         }
 
     def _api_heartbeat(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -554,6 +561,24 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             raise _command_failed() from exc
         return {"status": "opened"}
+
+    def _api_settings_hints(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The person switched the tips; the next launch shows them so too
+        # (stage B4c).
+        on = payload.get("on")
+        if not isinstance(on, bool):
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+        notice = remember_hints(on)
+        return {"remembered": notice is None, "notice": notice}
+
+    def _api_settings_forget(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # Forget the remembered settings (stage B4c): never while a run of
+        # this page is active, which remembers its places when it ends. The
+        # stores and the outputs stay.
+        if self.server.runs.active():
+            raise ApiError(HTTPStatus.CONFLICT, "RUN_ACTIVE")
+        notice = forget_settings()
+        return {"forgotten": notice is None, "notice": notice}
 
     def _method_not_allowed(self, allow: str) -> None:
         self._send_json(

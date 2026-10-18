@@ -116,6 +116,7 @@
           <button type="button" id="store-create" data-i18n="store.create" disabled></button>
           <button type="button" id="store-open" data-i18n="store.open" disabled></button>
           <button type="button" id="store-open-other" data-i18n="store.open_other" disabled hidden></button>
+          <button type="button" id="store-search" data-i18n="remembered.search_again" disabled hidden></button>
           <button type="button" id="store-create-new" data-i18n="store.create_new" disabled hidden></button>
           <button type="button" id="store-check" data-i18n="store.check" disabled hidden></button>
         </div>
@@ -176,6 +177,7 @@
         <button type="button" id="output-browse" data-i18n="browse.button" disabled></button>
       </div>
       <div id="output-parent-note" class="messages" role="status" aria-live="polite"></div>
+      <button type="button" id="output-search" class="search-again" data-i18n="remembered.search_again" disabled hidden></button>
       <label for="output-name" data-i18n="output.name"></label>
       <input id="output-name" type="text" autocomplete="off" spellcheck="false" aria-describedby="output-name-help">
       <p id="output-name-help" class="help" data-i18n="output.name_help"></p>
@@ -441,6 +443,7 @@
       <details class="qa"><summary data-i18n="faq.zip_q"></summary><p data-i18n="faq.zip_a"></p></details>
       <details class="qa"><summary data-i18n="faq.time_q"></summary><p data-i18n="faq.time_a"></p></details>
       <details class="qa"><summary data-i18n="faq.place_q"></summary><p data-i18n="faq.place_a"></p></details>
+      <details class="qa"><summary data-i18n="faq.remember_q"></summary><p data-i18n="faq.remember_a"></p></details>
       <details class="qa"><summary data-i18n="faq.exit_q"></summary><p data-i18n="faq.exit_a"></p></details>
       <details class="qa"><summary data-i18n="faq.send_q"></summary><p data-i18n="faq.send_a"></p></details>
       <details class="qa"><summary data-i18n="faq.values_q"></summary><p data-i18n="faq.values_a"></p></details>
@@ -501,7 +504,17 @@
   </div>
 </aside>
 <footer class="statusbar">
+  <div id="forget-confirm" class="confirm" hidden>
+    <p id="forget-question" class="question" data-i18n="forget.question"></p>
+    <p id="forget-text" data-i18n="forget.text"></p>
+    <div class="button-row">
+      <button type="button" id="forget-yes" data-i18n="forget.yes" aria-describedby="forget-question forget-text"></button>
+      <button type="button" id="forget-no" data-i18n="forget.no" aria-describedby="forget-question forget-text"></button>
+    </div>
+  </div>
   <p class="privacy" data-i18n="app.privacy"></p>
+  <p id="settings-status" class="status" role="status" aria-live="polite"></p>
+  <button type="button" id="forget-button" data-i18n="forget.button" aria-expanded="false" aria-controls="forget-confirm" disabled></button>
   <p id="product-version" class="version"></p>
   <label for="language-select" data-i18n="language.label"></label>
   <select id="language-select"></select>

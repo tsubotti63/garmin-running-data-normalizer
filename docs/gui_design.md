@@ -110,10 +110,43 @@ Progress through the areas:
 - On the first launch, the user confirms areas 2 and 3 one at a time with a
   button that accepts their settings.
 - On later launches, areas 2 and 3 are confirmed automatically while they keep
-  their defaults. An area whose settings change becomes the current step again
-  and must be confirmed before the run can start. The page remembers the
-  settings of an earlier launch from stage B4c, after the import of stage B4b;
-  until then every launch is a first launch.
+  the places that the settings of the earlier launch remembered (stage B4c):
+  area 2 when the remembered store opens without a problem, and area 3 when
+  the remembered folder is there or is the default place; their summaries end
+  with "(as last time)". An area whose settings change, also when another
+  store is opened or the place of a new one is chosen, becomes the current
+  step again and must be confirmed before the run can start. A launch is a
+  later one when its settings remember a store or a folder for the output.
+  Without a remembered store, area 2 is confirmed as on a first launch, so
+  that no store is made unseen.
+
+The settings of an earlier launch (stage B4c, decision 20261017-15): the GUI
+remembers, in one file, the store and the folder for the output of the last
+run that made its output (also one whose cancellation came after it), the
+outputs that runs made (the latest ten, for the check of an earlier output in
+stage B5), and whether the tips show, as the person last switched them. Only
+the names of places are kept, never what is in them, and never the place of an
+Export; the output name, the timezone, the language, and the way to normalize
+are not remembered. Places are remembered when a run makes its output, not
+when they are chosen, so that a place opened by mistake does not come back.
+The file is `gui-settings.json` in this app's folder
+`garmin-running-data-normalizer`, in the place that the system keeps for each
+person's application data: `Library/Application Support` in the home folder
+on a Mac, `LOCALAPPDATA` on Windows (or `AppData/Local` in the home folder),
+and `XDG_STATE_HOME` elsewhere (or `.local/state` in the home folder, which
+is made with `.local` when they are missing, as the XDG Base Directory
+Specification asks; folders that are there keep their permissions). Only this
+app's folder is made besides, owner-only. A remembered store that is not
+found makes area 2 red with "Open another store…", "Look again", and "Create
+a new store…", and a remembered folder for the output that is not found makes
+area 3 red with "Choose…" and "Look again"; neither is made again, except the
+default place `GarminRunningData`, which a run makes as on a first launch,
+since an output is always a new folder. "Forget the remembered settings…" in
+the bar at the bottom asks first, and then removes the file only, never while
+a run is active; the stores and the outputs stay, and the next launch is a
+first one. A file that cannot be used is told in the bar, and the launch is a
+first one: one of another form is replaced by the next settings, and one of a
+newer version is never written over. The CLI remembers nothing.
 
 The Snapshot Store (stage B4a): the second box shows the place of the store
 and its Snapshots, in the order of the times of their Exports, with the
@@ -211,9 +244,9 @@ pixels. It has four parts: how to use, in which each step lights up its box;
 questions; words; and using the normalized data with an AI, with example
 questions that can be copied. Close or Escape closes it, and focus returns to
 the button that opened it, or to the Help button when that button is no longer
-shown. "Show tips" shows one line under each box heading. It is on at every
-launch until the settings of an earlier launch come in stage B4c, and the
-browser tab keeps the choice. The help panel, the tips, and the information
+shown. "Show tips" shows one line under each box heading. It is on at a
+first launch and off at later ones, and the settings remember the person's
+choice (stage B4c). The help panel, the tips, and the information
 buttons say only what the page can do at its stage; links to pages outside
 the app and the GitHub report come in stage B5.
 
@@ -378,8 +411,8 @@ around a pasted path, and uses a chosen path as it is.
   button, in the check and after a run alike.
 - A stop of a run in the first box hides the lines of the check before it,
   which would read as the answer to it. After the page is loaded again, the
-  first box shows no summary until its field holds a place; the settings of an
-  earlier launch come in stage B4c.
+  first box shows no summary until its field holds a place; the settings never
+  remember the Export (stage B4c).
 
 A ZIP file is read directly:
 
@@ -436,7 +469,8 @@ or a missing home folder, is left to the checks above, and any other parent
 that is not there is refused (`OUTPUT_PARENT_NOT_FOUND`), as before. A
 parent that cannot be made has the codes of a parent that cannot be written.
 The folder stays when the run then stops before its output, empty, and the
-next run uses it.
+next run uses it. On a later launch, the field holds the folder that the
+settings remembered (stage B4c).
 "Choose…" opens the system's dialog for a folder, as the first box does, or
 the page's own folder list without one (stage B4a).
 
@@ -609,6 +643,12 @@ Processing:
   [Selecting an Export](#selecting-an-export).
 - Output folders go through the same checks as the CLI.
 - The page can open only an output folder and its `START_HERE.md`.
+- The settings of an earlier launch (stage B4c) are read without following a
+  link, up to 64 KiB, and only in their form; the places in them are absolute
+  places without control characters, and the server checks them again as it
+  checks the places that the page sends. They are written whole through a
+  temporary file in an owner-only folder and file. Only the tests' own place
+  is used by the tests.
 
 ## Privacy
 
@@ -622,6 +662,9 @@ Processing:
   before it is shared, and what the Support Bundle contains.
 - Snapshot labels given by users stay out of the Support Bundle and the
   External-safe Pack.
+- The settings of an earlier launch hold the names of places only (stage
+  B4c), stay on this computer, and are never part of the Support Bundle;
+  "Forget the remembered settings…" removes them, as on a shared computer.
 - A Snapshot Store or a folder for the output in a folder that a cloud may
   copy is marked in yellow, without a stop (stage B4a): a folder that a cloud
   app keeps (on a Mac, iCloud Drive in `Library/Mobile Documents` and the

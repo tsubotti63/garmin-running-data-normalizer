@@ -689,7 +689,12 @@ export function storeMessages(store, how = "single") {
         ? checked
         : null;
   if (problem !== null) {
-    add(storeProblemKind(problem.error_code), errorMessages(problem.error_code, problem.detail));
+    // The store that the settings remembered says so, and that this app does
+    // not make it again (stage B4c).
+    add(
+      storeProblemKind(problem.error_code),
+      storeMissingRemembered(store) ? rememberedMessages("store", problem.error_code) : errorMessages(problem.error_code, problem.detail),
+    );
   }
   if (answer.state === "store") {
     const notices = new Set([...(answer.notices ?? []), ...(checked?.notices ?? [])]);
@@ -715,6 +720,31 @@ export function storeMessages(store, how = "single") {
     }
   }
   return lines;
+}
+
+// The words of a place that the settings of an earlier launch remembered and
+// that is not found (stage B4c): what happened, what to do next, and the code.
+const REMEMBERED_KEYS = {
+  store: ["remembered.store_missing", "remembered.store_missing_next"],
+  output: ["remembered.output_missing", "remembered.output_missing_next"],
+};
+
+function rememberedMessages(kind, code) {
+  const [what, next] = REMEMBERED_KEYS[kind];
+  return [message(what), nextStep(next), message("error.code", { code })];
+}
+
+// Whether the store of the second box is the one that the settings
+// remembered, and is not found (stage B4c): then the page offers to open
+// another, to look again, and to make a new one, and makes none by itself.
+export function storeMissingRemembered(store) {
+  const answer = store?.answer;
+  return (
+    typeof store?.remembered === "string" &&
+    answer?.state === "error" &&
+    answer.error_code === "SNAPSHOT_STORE_NOT_FOUND" &&
+    answer.path === store.remembered
+  );
 }
 
 // When the lock file of a store was written (stage B4b-2): how long ago, so
@@ -900,21 +930,153 @@ export function downloadSourceMessage(source) {
 }
 
 // The lines under the folder for the output (stage B4a): the default place,
-// which a run makes when it is not there, and a cloud that may copy the
-// place. ``place`` is the server's answer for the place in the field; an
-// answer for another place says nothing.
-export function placeMessages(place, outputParent) {
+// which a run makes when it is not there, a remembered place that is not
+// found (stage B4c), and a cloud that may copy the place. ``place`` is the
+// server's answer for the place in the field; an answer for another place
+// says nothing.
+export function placeMessages(place, outputParent, remembered = null) {
   if (place === null || typeof place !== "object" || place.path !== outputParent) {
     return [];
   }
   const lines = [];
   if (place.default === true && place.exists === false) {
     lines.push({ kind: "info", start: true, message: message("output.parent_new") });
+  } else if (outputMissingRemembered(place, outputParent, remembered)) {
+    rememberedMessages("output", "OUTPUT_PARENT_NOT_FOUND").forEach((line, index) =>
+      lines.push({ kind: "error", start: index === 0, message: line }),
+    );
   }
   cloudMessages(place.cloud).forEach((line, index) =>
     lines.push({ kind: "warn", start: index === 0, message: line }),
   );
   return lines;
+}
+
+// Whether the folder for the output is the one that the settings remembered,
+// and is not found (stage B4c). The default place is made by a run as on a
+// first launch, since an output is always a new folder; any other one is not
+// made by this app.
+export function outputMissingRemembered(place, outputParent, remembered) {
+  return (
+    typeof remembered === "string" &&
+    remembered === outputParent &&
+    place !== null &&
+    typeof place === "object" &&
+    place.path === outputParent &&
+    place.exists === false &&
+    place.default !== true
+  );
+}
+
+// Whether the folder for the output can take an output without a question:
+// a folder that is there, or the default place, which a run makes (stage
+// B4c).
+export function outputPlaceUsable(place, outputParent) {
+  return (
+    place !== null &&
+    typeof place === "object" &&
+    place.path === outputParent &&
+    (place.exists === true || (place.default === true && place.exists === false))
+  );
+}
+
+// What the page says of the settings (stage B4c), codes only from the server.
+const SETTINGS_KEYS = {
+  SETTINGS_INVALID: "settings.invalid",
+  SETTINGS_NEWER: "settings.newer",
+  SETTINGS_NOT_WRITTEN: "settings.not_written",
+  SETTINGS_NOT_REMOVED: "settings.not_removed",
+};
+// When a run or the tips could not be remembered, the words say so.
+const SETTINGS_WRITE_KEYS = {
+  SETTINGS_NEWER: "settings.newer_kept",
+  SETTINGS_NOT_WRITTEN: "settings.not_written",
+};
+
+// Which boxes the settings of an earlier launch set when the page starts
+// (stage B4c): on a later launch, the second box with a remembered store and
+// the third with a remembered folder. Without a remembered store, the second
+// box is confirmed as on a first launch, so that no store is made unseen.
+export function boxesSetBySettings(settings) {
+  const later = settings?.launch === "later";
+  return {
+    snapshotAuto: later && typeof settings.store === "string",
+    outputAuto: later && typeof settings.outputParent === "string",
+  };
+}
+
+// Whether a box that the settings set is set now: it still holds the
+// remembered place, and the place has no problem (stage B4c).
+export function storeSetBySettings(remembered, how, store) {
+  return remembered === true && store?.answer?.state === "store" && storeReady(how, store);
+}
+
+export function outputSetBySettings(remembered, place, outputParent) {
+  return remembered === true && outputPlaceUsable(place, outputParent);
+}
+
+// Whether a box hides its button that confirms it: once it is confirmed, and
+// while the settings of an earlier launch set it, until it changes (the
+// mockup v10, stage B4c).
+export function decideHidden(boxState, auto) {
+  return boxState === "done" || auto === true;
+}
+
+// The box that a choice changes (stage B4c): the store to open or the place
+// of a new one, and the way to normalize, are the second box's; the folder
+// for the output is the third's; the Export is the first's, which confirms
+// itself.
+const CHANGED_BOXES = {
+  "store-open": "snapshot",
+  "store-place": "snapshot",
+  how: "snapshot",
+  output: "output",
+};
+
+export function changedBox(purpose) {
+  return lookup(CHANGED_BOXES, purpose, null);
+}
+
+// What a change in a box takes back: its confirmation, and the remembered
+// place that set it on a later launch; the box is confirmed again.
+export function afterChange(box, confirmations) {
+  const next = { ...confirmations };
+  if (box === "snapshot") {
+    next.snapshotDecided = false;
+    next.snapshotAuto = false;
+  } else if (box === "output") {
+    next.outputDecided = false;
+    next.outputAuto = false;
+  }
+  return next;
+}
+
+// The settings of an earlier launch, as the page takes them from the server
+// (stage B4c): a later launch only with a remembered place, places as text,
+// the tips as true or false, and the code of what to tell of the file.
+export function launchSettings(status) {
+  const settings = status?.settings;
+  const text = (value) => (typeof value === "string" && value !== "" ? value : null);
+  const store = text(settings?.store);
+  const outputParent = text(settings?.output_parent);
+  return {
+    launch: settings?.launch === "later" && (store !== null || outputParent !== null) ? "later" : "first",
+    store,
+    outputParent,
+    hints: typeof settings?.hints === "boolean" ? settings.hints : null,
+    notice: lookup(SETTINGS_KEYS, settings?.notice, null) === null ? null : settings.notice,
+  };
+}
+
+// Whether the tips show (the mockup v10): as the person last switched them,
+// otherwise on at a first launch and off at a later one (stage B4c).
+export function hintsShown(settings) {
+  return typeof settings?.hints === "boolean" ? settings.hints : settings?.launch !== "later";
+}
+
+export function settingsMessages(code, writing = false) {
+  const key = lookup(writing ? SETTINGS_WRITE_KEYS : SETTINGS_KEYS, code, null);
+  return key === null ? [] : [message(key)];
 }
 
 // The rows of the result table: for a finished run, and for one whose
@@ -1111,9 +1273,11 @@ export function errorBox(code, inputPath, detail = null) {
 
 // The state of each box: "current" (blue, what to do now), "done" (green),
 // "todo", "error" (red, what to fix), or "stopped" (the fourth box when the
-// run stopped in another box). Until stage B4a the page has no settings from
-// an earlier launch, so the second and third boxes are confirmed one at a
-// time, as on a first launch. After a run that finished or stopped, a change
+// run stopped in another box). On a first launch the second and third boxes
+// are confirmed one at a time; on a later launch, a box that holds what the
+// settings of the earlier launch remembered is set by itself while it has no
+// problem (``snapshotAuto``, ``outputAuto``), and a box that changed is
+// confirmed again (stage B4c). After a run that finished or stopped, a change
 // in a box (``editedSinceRun``) brings back the boxes as they are set.
 export function boxStates(view) {
   const states = { export: "todo", snapshot: "todo", output: "todo", run: "todo" };
@@ -1148,7 +1312,11 @@ export function boxStates(view) {
     states.output = "error";
     return states;
   }
-  const done = [view.exportReady, view.snapshotDecided, view.outputDecided];
+  const done = [
+    view.exportReady,
+    view.snapshotDecided || view.snapshotAuto === true,
+    view.outputDecided || view.outputAuto === true,
+  ];
   let current = null;
   ["export", "snapshot", "output"].forEach((box, index) => {
     if (current === null && done.slice(0, index + 1).every(Boolean)) {
@@ -1166,6 +1334,11 @@ export function boxStates(view) {
     if (states.output === "current") {
       states.output = "todo";
     }
+    states.run = "todo";
+  }
+  // A remembered folder for the output that is not found (stage B4c).
+  if (view.outputProblem === true) {
+    states.output = "error";
     states.run = "todo";
   }
   // A run request that the server refused marks the box that it concerns.
@@ -1458,6 +1631,11 @@ export function resultDetails(status) {
     messages.push(message("result.staging_left", { names: status.staging_folders.join(", ") }));
     messages.push(nextStep("next.delete_staging"));
   }
+  // The places of a run that made its output are the settings of the next
+  // launch; the page says when they could not be remembered (stage B4c).
+  if (FINISHED_STATES.includes(state)) {
+    messages.push(...settingsMessages(status.settings_notice, true));
+  }
   // What a cancelled import left in the store, as the CLI says it after a
   // cancelled registration (stage B4b-2).
   if (status?.state === "cancelled" && Array.isArray(status.store_notices)) {
@@ -1470,7 +1648,15 @@ export function resultDetails(status) {
 }
 
 // The words that sum up a confirmed box (a green line under its heading).
+// A box that the settings of an earlier launch set says so (stage B4c).
 export function boxSummary(box, view) {
+  const words = confirmedWords(box, view);
+  const auto = box === "snapshot" ? view.snapshotAuto === true : box === "output" ? view.outputAuto === true : false;
+  const ran = FINISHED_STATES.includes(view.runState) && !view.editedSinceRun;
+  return words !== null && auto && !ran ? message("summary.as_last_time", {}, { summary: words }) : words;
+}
+
+function confirmedWords(box, view) {
   // What the last run did, while no box changed since (stage B4b-1), as the
   // mockup v10 says it.
   const ran = FINISHED_STATES.includes(view.runState) && !view.editedSinceRun;
@@ -1479,8 +1665,8 @@ export function boxSummary(box, view) {
     if (view.how === "rerun") {
       return message("summary.export_rerun");
     }
-    // After the page is loaded again, the field is empty until the settings
-    // of an earlier launch come (stage B4c); the fourth box names the output.
+    // After the page is loaded again, the field is empty, as the settings
+    // never remember the Export (stage B4c); the fourth box names the output.
     const name = lastName(view.inputPath);
     if (name === "") {
       return null;
@@ -1681,8 +1867,8 @@ export function controls(view, states) {
       view.storeReady !== false &&
       (states.run === "current" ||
         ((FINISHED_STATES.includes(view.runState) || view.runState === "failed") &&
-          view.snapshotDecided &&
-          view.outputDecided)),
+          (view.snapshotDecided || view.snapshotAuto === true) &&
+          (view.outputDecided || view.outputAuto === true))),
     cancel: view.connected && view.runState === "running",
     quit: view.connected && !running && !view.outputBusy,
     outputActions: view.connected && !busy && FINISHED_STATES.includes(view.runState),

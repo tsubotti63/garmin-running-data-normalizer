@@ -12,11 +12,15 @@ import {
   HELP_SECTIONS,
   HELP_STEPS,
   TERMINAL_STATES,
+  afterChange,
   announcement,
   boxStates,
   boxSummary,
+  boxesSetBySettings,
   boxesToConfirm,
+  changedBox,
   checkMessages,
+  decideHidden,
   checkParts,
   connectionMessages,
   controls,
@@ -32,7 +36,9 @@ import {
   foundChoices,
   helpReturnTarget,
   helpSteps,
+  hintsShown,
   importProblem,
+  launchSettings,
   localTimeIso,
   lockAge,
   lockOffered,
@@ -40,6 +46,8 @@ import {
   nextLineKind,
   nextOutputName,
   outputCheckMessages,
+  outputMissingRemembered,
+  outputSetBySettings,
   placeMessages,
   progressBar,
   progressMessage,
@@ -47,13 +55,16 @@ import {
   resultRows,
   resultTotal,
   runSummary,
+  settingsMessages,
   shouldFocusResult,
   snapshotRows,
   stalledSeconds,
   stepRows,
   storeMessages,
+  storeMissingRemembered,
   storeProblem,
   storeReady,
+  storeSetBySettings,
   warningMessages,
 } from "./flow.mjs";
 
@@ -61,7 +72,6 @@ const LANGUAGES = ["en", "ja"];
 const LAUNCH_KEY_HEADER = "X-Launch-Key";
 const LAUNCH_KEY_STORAGE = "launchKey";
 const LANGUAGE_STORAGE = "language";
-const HINTS_STORAGE = "hints";
 const HEARTBEAT_INTERVAL_MS = 30000;
 const POLL_INTERVAL_MS = 1000;
 // How often the page asks for the answer of the system's dialog (stage B3a).
@@ -129,6 +139,9 @@ const ui = {
   storeCreate: byId("store-create"),
   storeOpen: byId("store-open"),
   storeOpenOther: byId("store-open-other"),
+  // Looking again for a remembered store or folder that is not found
+  // (stage B4c).
+  storeSearch: byId("store-search"),
   storeCreateNew: byId("store-create-new"),
   storeCheck: byId("store-check"),
   storeResult: byId("store-result"),
@@ -146,6 +159,7 @@ const ui = {
   browserList: byId("browser-list"),
   outputParent: byId("output-parent"),
   outputBrowse: byId("output-browse"),
+  outputSearch: byId("output-search"),
   outputParentNote: byId("output-parent-note"),
   outputName: byId("output-name"),
   timezone: byId("timezone"),
@@ -194,6 +208,12 @@ const ui = {
   resultsPanel: byId("results-panel"),
   runExitRow: byId("run-exit-row"),
   hintsToggle: byId("hints-toggle"),
+  // The settings of an earlier launch, and forgetting them (stage B4c).
+  settingsStatus: byId("settings-status"),
+  forgetButton: byId("forget-button"),
+  forgetConfirm: byId("forget-confirm"),
+  forgetYes: byId("forget-yes"),
+  forgetNo: byId("forget-no"),
   hints: document.querySelectorAll(".hint"),
   helpButton: byId("help-button"),
   helpPanel: byId("help-panel"),
@@ -285,9 +305,20 @@ const state = {
   // button that opened it, to return focus to (stage B1b).
   help: null,
   helpOpener: null,
-  // Whether the tips under the box headings show; kept for this tab only,
-  // until the settings of an earlier launch come (stage B4a).
+  // Whether the tips under the box headings show: on at a first launch,
+  // off at a later one, and as the person last switched them, which the
+  // settings remember (stage B4c).
   hintsOn: true,
+  // The settings of an earlier launch (stage B4c): the places that they
+  // remembered, what to tell of them (a code, and whether it came from
+  // writing them), whether the second and third boxes still hold the
+  // remembered places on a later launch, and the question that forgets them,
+  // which says when they are forgotten.
+  remembered: { store: null, outputParent: null },
+  settingsNotice: null,
+  snapshotAuto: false,
+  outputAuto: false,
+  forget: { asked: false, busy: false, done: false },
   // The information buttons that are open.
   infos: new Set(),
   // The message beside the example question that was copied last.
@@ -543,6 +574,11 @@ function view() {
     timezoneProblem,
     snapshotDecided: state.snapshotDecided,
     outputDecided: state.outputDecided && requestBox !== "output",
+    // A box that holds the remembered place is set by itself while it has no
+    // problem (stage B4c).
+    snapshotAuto: storeSetBySettings(state.snapshotAuto, how, state.store),
+    outputAuto: outputSetBySettings(state.outputAuto, state.place, ui.outputParent.value.trim()) && requestBox !== "output",
+    outputProblem: outputMissingRemembered(state.place, ui.outputParent.value.trim(), state.remembered.outputParent),
     editedSinceRun: state.editedSinceRun,
     failedBox,
     requestBox,
@@ -676,13 +712,18 @@ function renderStore(current) {
   ui.howNote.hidden = !single;
   setText(ui.howNote, single ? t("how.single_note") : "");
   setText(ui.storePath, typeof answer?.path === "string" ? answer.path : "");
-  ui.storeCreate.hidden = opened;
-  ui.storeOpen.hidden = opened;
-  ui.storeOpenOther.hidden = !opened;
-  ui.storeCreateNew.hidden = !opened;
+  // A remembered store that is not found: another one, a look again, or a
+  // new one, as for an open store (stage B4c).
+  const remembered = { ...store, remembered: state.remembered.store };
+  const missing = storeMissingRemembered(remembered);
+  ui.storeCreate.hidden = opened || missing;
+  ui.storeOpen.hidden = opened || missing;
+  ui.storeOpenOther.hidden = !opened && !missing;
+  ui.storeSearch.hidden = !missing;
+  ui.storeCreateNew.hidden = !opened && !missing;
   ui.storeCheck.hidden = !opened;
   const choosing = state.choosing !== null && String(state.choosingFor).startsWith("store");
-  replaceLines(ui.storeResult, kindLines(storeMessages({ ...store, choosing }, current.how)));
+  replaceLines(ui.storeResult, kindLines(storeMessages({ ...remembered, choosing }, current.how)));
   // The Export that the run will import, in its place (stage B4b-1).
   const rows = snapshotRows(answer, pendingImport(current), state.lastImported);
   ui.storeList.hidden = rows.length === 0;
@@ -769,8 +810,24 @@ function renderPlace() {
     const messages = errorMessages(state.placeChooserError);
     lines.push(...kindLines(messages.map((line, index) => ({ kind: "error", start: index === 0, message: line }))));
   }
-  lines.push(...kindLines(placeMessages(state.place, ui.outputParent.value.trim())));
+  const parent = ui.outputParent.value.trim();
+  lines.push(...kindLines(placeMessages(state.place, parent, state.remembered.outputParent)));
   replaceLines(ui.outputParentNote, lines);
+  ui.outputSearch.hidden = !outputMissingRemembered(state.place, parent, state.remembered.outputParent);
+}
+
+// The bar at the bottom (stage B4c): what to tell of the settings, the
+// question that forgets them, and its answer.
+function renderSettings() {
+  const lines = [];
+  if (state.forget.done) {
+    lines.push(t("forget.done"));
+  } else if (state.settingsNotice !== null) {
+    lines.push(...settingsMessages(state.settingsNotice.code, state.settingsNotice.writing).map(describe));
+  }
+  replaceLines(ui.settingsStatus, lines);
+  ui.forgetConfirm.hidden = !state.forget.asked;
+  ui.forgetButton.setAttribute("aria-expanded", String(state.forget.asked));
 }
 
 function renderBrowser() {
@@ -1154,7 +1211,13 @@ function renderControls(states, current) {
     button.disabled = !enabled.choose;
   }
   ui.outputBrowse.disabled = !enabled.browse;
-  for (const button of [ui.storeCreate, ui.storeOpen, ui.storeOpenOther, ui.storeCreateNew, ui.storeCheck]) {
+  ui.outputSearch.disabled = !enabled.browse;
+  // The settings are not forgotten while a run, which remembers its places
+  // when it ends, is active (stage B4c).
+  const running = ACTIVE_STATES.includes(state.run.state) || state.starting;
+  ui.forgetButton.disabled = !state.connected || running || state.forget.busy;
+  ui.forgetYes.disabled = !state.connected || running || state.forget.busy;
+  for (const button of [ui.storeCreate, ui.storeOpen, ui.storeOpenOther, ui.storeSearch, ui.storeCreateNew, ui.storeCheck]) {
     button.disabled = !enabled.choose || state.store.busy || state.how === "single";
   }
   // The lock file is removed only after the person's check (stage B4b-2).
@@ -1163,8 +1226,10 @@ function renderControls(states, current) {
   ui.check.disabled = !enabled.check || rerun;
   ui.snapshotDecide.disabled = !enabled.decideSnapshot;
   ui.outputDecide.disabled = !enabled.decideOutput;
-  ui.snapshotDecide.hidden = states.snapshot === "done";
-  ui.outputDecide.hidden = states.output === "done";
+  // A box that the settings set needs no confirmation until it changes
+  // (stage B4c).
+  ui.snapshotDecide.hidden = decideHidden(states.snapshot, state.snapshotAuto);
+  ui.outputDecide.hidden = decideHidden(states.output, state.outputAuto);
   ui.start.disabled = !enabled.start;
   // After a run, the main action is to open the output, so only that button
   // is the primary one.
@@ -1206,6 +1271,7 @@ function render() {
   renderStore(current);
   renderLock(current);
   renderPlace();
+  renderSettings();
   renderBrowser();
   renderErrors(current);
   renderRun(states, current);
@@ -1472,10 +1538,11 @@ function setChooserError(purpose, code) {
 function usePlace(purpose, path, focusTarget) {
   if (purpose === "input") {
     useChosenExport(path, focusTarget);
-  } else if (purpose === "store-open") {
-    storeAction("open", path, focusTarget);
-  } else if (purpose === "store-place") {
-    storeAction("place", path, focusTarget);
+  } else if (purpose === "store-open" || purpose === "store-place") {
+    // Another store, or the place of a new one, is a change of the second
+    // box, which asks for its confirmation again (stage B4c).
+    changeBox(purpose);
+    storeAction(purpose === "store-open" ? "open" : "place", path, focusTarget);
   } else {
     ui.outputParent.value = path;
     ui.outputParent.dispatchEvent(new Event("input"));
@@ -1620,13 +1687,27 @@ function schedulePlace() {
 // (stage B4b-1).
 function setHow(how) {
   state.how = how;
-  state.snapshotDecided = false;
+  changeBox("how");
   state.runError = null;
   state.editedSinceRun = true;
   if (state.run.state === "failed" || state.run.state === "cancelled") {
     state.run = { state: "idle" };
   }
   render();
+}
+
+// A change in a box takes back its confirmation, and the remembered place
+// that set it (stage B4c).
+function changeBox(purpose) {
+  Object.assign(
+    state,
+    afterChange(changedBox(purpose), {
+      snapshotDecided: state.snapshotDecided,
+      snapshotAuto: state.snapshotAuto,
+      outputDecided: state.outputDecided,
+      outputAuto: state.outputAuto,
+    }),
+  );
 }
 
 // Confirm a box and move to the next one, as the page asks on a first launch.
@@ -1927,10 +2008,52 @@ function closeInfo(name) {
   }
 }
 
-function changeHints() {
+// The person switched the tips: the next launch shows them so too
+// (stage B4c).
+async function changeHints() {
   state.hintsOn = ui.hintsToggle.checked;
-  writeStorage(HINTS_STORAGE, state.hintsOn ? "on" : "off");
+  state.forget.done = false;
   render();
+  try {
+    const answer = await callApi("/api/settings/hints", { on: state.hintsOn });
+    state.settingsNotice = answer?.remembered === true ? null : { code: answer?.notice, writing: true };
+  } catch (error) {
+    connectionFailure(error);
+  }
+  render();
+}
+
+// Forgetting the remembered settings asks first, above the bar (stage B4c).
+function askForget() {
+  state.forget.asked = true;
+  state.forget.done = false;
+  render();
+  ui.forgetNo.focus();
+}
+
+function keepSettings() {
+  state.forget.asked = false;
+  render();
+  ui.forgetButton.focus();
+}
+
+async function forgetSettings() {
+  state.forget.busy = true;
+  render();
+  try {
+    const answer = await callApi("/api/settings/forget");
+    state.forget.done = answer?.forgotten === true;
+    state.settingsNotice = state.forget.done ? null : { code: "SETTINGS_NOT_REMOVED", writing: false };
+  } catch (error) {
+    if (!connectionFailure(error) && error.code !== "RUN_ACTIVE") {
+      state.settingsNotice = { code: "SETTINGS_NOT_REMOVED", writing: false };
+    }
+  } finally {
+    state.forget.busy = false;
+    state.forget.asked = false;
+    render();
+    returnFocus(ui.forgetButton, ui.runHeading);
+  }
 }
 
 function changeLanguage(language) {
@@ -1956,8 +2079,9 @@ function fieldChanged(event) {
   if (event?.target === ui.inputPath) {
     state.chooserError = null;
   } else if (![ui.extractConfirm, ui.snapshotLabel, ui.downloadedAt].includes(event?.target)) {
-    // The fields of the first box leave the third box as it was decided.
-    state.outputDecided = false;
+    // The fields of the first box leave the third box as it was decided, or
+    // as it was set by the settings (stage B4c).
+    changeBox("output");
   }
   if (event?.target === ui.outputParent) {
     state.placeChooserError = null;
@@ -1992,6 +2116,17 @@ function connect() {
   ui.storeCreate.addEventListener("click", () => chooseWithDialog("folder", "store-place", ui.storeCreate));
   ui.storeCreateNew.addEventListener("click", () => chooseWithDialog("folder", "store-place", ui.storeCreateNew));
   ui.storeCheck.addEventListener("click", () => storeAction("check", state.store.answer?.path, ui.storeCheck));
+  // Looking again for the remembered store or folder (stage B4c).
+  ui.storeSearch.addEventListener("click", () => storeAction("open", state.remembered.store, ui.storeSearch));
+  ui.outputSearch.addEventListener("click", lookPlace);
+  ui.forgetButton.addEventListener("click", askForget);
+  ui.forgetYes.addEventListener("click", forgetSettings);
+  ui.forgetNo.addEventListener("click", keepSettings);
+  ui.forgetConfirm.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      keepSettings();
+    }
+  });
   ui.lockConfirm.addEventListener("change", render);
   ui.lockRemove.addEventListener("click", () => storeAction("unlock", state.store.answer?.path, ui.lockRemove));
   ui.check.addEventListener("click", () => runCheck());
@@ -2083,8 +2218,6 @@ async function start() {
     readStorage(LANGUAGE_STORAGE),
     navigator.languages ?? [navigator.language],
   );
-  // The tips show unless this tab turned them off.
-  state.hintsOn = readStorage(HINTS_STORAGE) !== "off";
   connect();
   render();
   try {
@@ -2094,6 +2227,17 @@ async function start() {
     // The product's default, as the CLI takes it (stage A5a).
     if (typeof status.default_timezone === "string" && ui.timezone.value === "") {
       ui.timezone.value = status.default_timezone;
+    }
+    // The settings of an earlier launch (stage B4c): the places that it
+    // remembered, which set the second and third boxes by themselves, and
+    // the tips.
+    const settings = launchSettings(status);
+    state.remembered = { store: settings.store, outputParent: settings.outputParent };
+    state.settingsNotice = settings.notice === null ? null : { code: settings.notice, writing: false };
+    state.hintsOn = hintsShown(settings);
+    Object.assign(state, boxesSetBySettings(settings));
+    if (settings.outputParent !== null && ui.outputParent.value === "") {
+      ui.outputParent.value = settings.outputParent;
     }
     // The default place, which only the GUI has (stage B4a): the outputs go
     // in it, and the store in its folder snapshots.
@@ -2114,9 +2258,11 @@ async function start() {
     } else if (FINISHED_STATES.includes(state.run.state)) {
       checkOutput();
     }
-    // The store at the default place, if there is one, and the folder for
-    // the output (stage B4a).
-    if (state.defaultFolder !== null) {
+    // The remembered store (stage B4c), or the store at the default place,
+    // if there is one, and the folder for the output (stage B4a).
+    if (state.remembered.store !== null) {
+      storeAction("open", state.remembered.store, null);
+    } else if (state.defaultFolder !== null) {
       storeAction("place", state.defaultFolder, null);
     }
     lookPlace();
