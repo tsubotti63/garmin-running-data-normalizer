@@ -32,6 +32,12 @@ QUOTED_LABELS = (
     "bundle.button",
     "bundle.place_label",
     "reveal.button",
+    "target.heading",
+    "target.run",
+    "target.earlier",
+    "target.other",
+    "target.check",
+    "result.column_change",
     "quit.button",
 )
 

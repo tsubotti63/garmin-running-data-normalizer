@@ -72,7 +72,7 @@ from .snapshot import (
     verification_error,
 )
 from .snapshot.store import cancel_notices, lock_exists, remove_lock
-from .standalone import StandaloneHandoffError, validate_standalone_handoff
+from .standalone import OtherVersionError, StandaloneHandoffError, validate_standalone_handoff
 from .stops import MIX_STOPS, STOPS, stop_line
 
 
@@ -569,6 +569,9 @@ def stop_of(exc: BaseException) -> KnownStop | None:
     # of the store's contract keep SNAPSHOT_LIFECYCLE_FAILED.
     if isinstance(exc, SnapshotLifecycleError):
         return KnownStop(exc.code, shown_store_message(exc))
+    # An output that another version made (stage B5b).
+    if isinstance(exc, OtherVersionError):
+        return KnownStop("OUTPUT_OTHER_VERSION", str(exc))
     if isinstance(exc, StandaloneHandoffError):
         return KnownStop("HANDOFF_INVALID", str(exc))
     if isinstance(exc, (DoctorError, SupportBundleError)):

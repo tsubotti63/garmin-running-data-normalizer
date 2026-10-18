@@ -192,6 +192,14 @@ class RunManagerTest(unittest.TestCase):
                 self.assertIs(manager.status()["safe_pack"], pack)
                 manager.stop()
 
+    def test_the_status_says_the_timezone_of_the_run(self) -> None:
+        # Stage B5b: the page compares the run with the output before it.
+        manager = stub_manager("wait", cancel_grace=60.0)
+        self.assertNotIn("timezone", manager.status())
+        self.start(manager, "zone", timezone="Europe/London")
+        self.assertEqual(manager.status()["timezone"], "Europe/London")
+        manager.stop()
+
     def test_a_signal_cancels_the_run(self) -> None:
         manager = stub_manager("wait", cancel_grace=60.0)
         self.assertIsNone(manager.finished_output())

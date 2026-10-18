@@ -28,7 +28,15 @@ from ..intake.source import is_zip_input, place_can_be_shown
 from ..stops import STOPS, stop_line
 from .chooser import Chooser, ChooserError
 from .folders import FolderError, list_folders
-from .outputs import OutputActionError, check_output, make_support_bundle, open_output
+from ..run_all import RUN_ALL_VERSION
+from .outputs import (
+    OutputActionError,
+    check_output,
+    earlier_outputs,
+    make_support_bundle,
+    open_output,
+    output_summary,
+)
 from .places import cloud_kind, default_folder, default_store
 from .runs import (
     MAX_TIMEZONE_LENGTH,
@@ -38,7 +46,7 @@ from .runs import (
     absolute_path,
     output_name_problem,
 )
-from .settings import forget_settings, launch_settings, remember_hints
+from .settings import forget_settings, launch_settings, recent_outputs, remember_hints
 from .stores import check_store, download_time, open_store, store_place, unlock_store
 
 
@@ -107,6 +115,7 @@ API_ROUTES = {
     "/api/run/start": "_api_run_start",
     "/api/run/status": "_api_run_status",
     "/api/run/cancel": "_api_run_cancel",
+    "/api/outputs": "_api_outputs",
     "/api/check-output": "_api_check_output",
     "/api/support-bundle": "_api_support_bundle",
     "/api/open-output": "_api_open_output",
@@ -116,12 +125,14 @@ API_ROUTES = {
 
 
 class ApiError(Exception):
-    """An API answer other than 200, given to the page as a short code."""
+    """An API answer other than 200, given to the page as a short code, and
+    for an output that another version made, that version (stage B5b)."""
 
-    def __init__(self, status: int, code: str) -> None:
+    def __init__(self, status: int, code: str, version: str | None = None) -> None:
         super().__init__(code)
         self.status = status
         self.code = code
+        self.version = version
 
 
 def _choosable_path(input_path: Path, place: str) -> str | None:
@@ -217,6 +228,10 @@ class GuiServer(ThreadingHTTPServer):
         # The Support Bundle that this server made last, which the page may
         # show in its folder (stage B5a).
         self.bundle: Path | None = None
+        # The outputs of earlier runs that the page may choose, by their
+        # number in the last list that it was given, and the mark of that list
+        # (stage B5b).
+        self.earlier: tuple[int, list[Path]] = (0, [])
         self.idle_timeout = idle_timeout
         self._last_request = time.monotonic()
         self._lock = threading.Lock()
@@ -374,7 +389,10 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         try:
             result = getattr(self, API_ROUTES[self.path])(payload)
         except ApiError as exc:
-            self._send_json(exc.status, {"error": exc.code})
+            answer: dict[str, Any] = {"error": exc.code}
+            if exc.version is not None:
+                answer["version"] = exc.version
+            self._send_json(exc.status, answer)
             return
         except Exception:
             self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR)
@@ -545,19 +563,69 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.CONFLICT, "NO_FINISHED_OUTPUT")
         return output
 
+    def _api_outputs(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The outputs that earlier runs made, which the page may choose for the
+        # check and the Support Bundle, by their number in this list and its
+        # mark; and the output before the last run, with the counts that the
+        # page compares a run with (stage B5b). A list given to another tab
+        # since then makes a number of this one refused.
+        found = earlier_outputs(recent_outputs(), self.server.runs.finished_output())
+        with self.server._lock:
+            mark = self.server.earlier[0] + 1
+            self.server.earlier = (mark, found)
+        previous = None
+        for index, output in enumerate(found):
+            summary = output_summary(output)
+            if summary is not None:
+                previous = {"index": index, **summary}
+                break
+        return {
+            "list": mark,
+            "outputs": [{"index": index, "name": output.name, "path": str(output)} for index, output in enumerate(found)],
+            "previous": previous,
+            "current": {"version": __version__, "run_all_version": RUN_ALL_VERSION},
+        }
+
+    def _target_output(self, payload: dict[str, Any]) -> Path:
+        # The output of an action (stage B5b): the one that this server's last
+        # run published (the default), one of the list of earlier outputs by
+        # its number and the list's mark, or a folder that the person chose,
+        # which the check of the output then takes or refuses.
+        kind = payload.get("output", "run")
+        if kind == "run":
+            return self._finished_output()
+        if kind == "earlier":
+            index, mark = payload.get("index"), payload.get("list")
+            with self.server._lock:
+                current, found = self.server.earlier
+            if not isinstance(index, int) or isinstance(index, bool) or not isinstance(mark, int) or isinstance(mark, bool):
+                raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+            if mark != current:
+                raise ApiError(HTTPStatus.CONFLICT, "OUTPUT_LIST_CHANGED")
+            if not 0 <= index < len(found):
+                raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+            return found[index]
+        if kind == "chosen":
+            try:
+                return absolute_path(payload.get("path"), "PATH_INVALID")
+            except RunRequestError as exc:
+                raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+        raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+
     def _api_check_output(self, payload: dict[str, Any]) -> dict[str, Any]:
-        output = self._finished_output()
+        output = self._target_output(payload)
         try:
             return check_output(output)
         except OutputActionError as exc:
-            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code, exc.version) from exc
         except Exception as exc:
             raise _command_failed() from exc
 
     def _api_support_bundle(self, payload: dict[str, Any]) -> dict[str, Any]:
         # Next to the output, or in the folder that the person chose, which the
-        # CLI's checks of the place of a Support Bundle take (stage B5a).
-        output = self._finished_output()
+        # CLI's checks of the place of a Support Bundle take (stage B5a); for
+        # the output of the action (stage B5b).
+        output = self._target_output(payload)
         folder: Path | None = None
         if payload.get("folder") is not None:
             try:
@@ -567,7 +635,7 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         try:
             answer = make_support_bundle(output, folder)
         except OutputActionError as exc:
-            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code, exc.version) from exc
         except Exception as exc:
             raise _command_failed() from exc
         self.server.bundle = Path(answer["path"])

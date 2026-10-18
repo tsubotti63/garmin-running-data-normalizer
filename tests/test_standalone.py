@@ -7,11 +7,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
+# Import the diagnostics package before the standalone module: importing
+# standalone first meets a circular import when this file runs on its own.
+from garmin_running_data_normalizer import diagnostics  # noqa: F401
 from garmin_running_data_normalizer.run_all import run_all
 from garmin_running_data_normalizer.standalone import (
+    OtherVersionError,
     StandaloneHandoffError,
     validate_standalone_handoff,
 )
+from tests.v1_3_outputs import V1_3_SHAPES, as_v1_3
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,66 +51,6 @@ class StandaloneHandoffTest(unittest.TestCase):
             json.dumps(summary, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-    def _convert_completed_output_to_legacy_v133(self, output: Path) -> None:
-        diagnostic_paths = {
-            "diagnostics/source_completeness.json",
-            "diagnostics/run_quality.json",
-        }
-        for relative in diagnostic_paths:
-            (output / relative).unlink()
-        context_path = output / "ANALYSIS_CONTEXT.json"
-        context = json.loads(context_path.read_text(encoding="utf-8"))
-        context["product_version"] = "1.3.3"
-        context_path.write_text(
-            json.dumps(context, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        inventory_path = output / "artifact_inventory.json"
-        inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
-        inventory["artifacts"] = [
-            item
-            for item in inventory["artifacts"]
-            if item["path"] not in diagnostic_paths
-        ]
-        inventory_path.write_text(
-            json.dumps(inventory, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        manifest_path = output / "run_manifest.json"
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        manifest["product_version"] = "1.3.3"
-        manifest["outputs"] = [
-            item for item in manifest["outputs"] if item["path"] not in diagnostic_paths
-        ]
-        for item in manifest["outputs"]:
-            data = (output / item["path"]).read_bytes()
-            item["bytes"] = len(data)
-            item["sha256"] = hashlib.sha256(data).hexdigest()
-        canonical = "\n".join(
-            f"{item['path']}:{item['sha256']}"
-            for item in sorted(manifest["outputs"], key=lambda value: value["path"])
-        )
-        digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-        manifest["deterministic_output_digest"] = digest
-        manifest_path.write_text(
-            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        summary_path = output / "run_summary.json"
-        summary = json.loads(summary_path.read_text(encoding="utf-8"))
-        summary["product_version"] = "1.3.3"
-        summary["generated_paths"] = [
-            path for path in summary["generated_paths"] if path not in diagnostic_paths
-        ]
-        summary["deterministic_output_digest"] = digest
-        summary["manifest_sha256"] = hashlib.sha256(
-            manifest_path.read_bytes()
-        ).hexdigest()
-        summary_path.write_text(
-            json.dumps(summary, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-
     def test_completed_output_is_self_describing_without_repository_files(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)
@@ -184,10 +129,11 @@ class StandaloneHandoffTest(unittest.TestCase):
                 validate_standalone_handoff(output)
 
     def test_v133_completed_handoff_remains_valid_without_v14_diagnostics(self) -> None:
+        # With the files that the 1.3 releases wrote (stage B5b).
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "handoff"
             run_all(SYNTHETIC_EXPORT, output)
-            self._convert_completed_output_to_legacy_v133(output)
+            self.assertEqual(as_v1_3(output), V1_3_SHAPES["plain"])
             result = validate_standalone_handoff(output)
             self.assertEqual(result["status"], "PASS")
             self.assertEqual(
@@ -293,11 +239,11 @@ class StandaloneHandoffTest(unittest.TestCase):
                     encoding="utf-8",
                 )
             self._rehash_completed_output(output)
-            with self.assertRaisesRegex(
-                StandaloneHandoffError,
-                "installed Product",
-            ):
+            # Another version made the output (stage B5b); until then, a
+            # version that did not match the installed Product.
+            with self.assertRaisesRegex(OtherVersionError, "made by version 1.4.2 of this app") as caught:
                 validate_standalone_handoff(output)
+            self.assertEqual(caught.exception.version, "1.4.2")
 
 
 if __name__ == "__main__":

@@ -85,6 +85,7 @@ What can change:
   | `support-bundle`: a folder of the bundle that is not there | The folders are made | `SUPPORT_BUNDLE_PARENT_NOT_FOUND` |
   | `support-bundle`: a place inside the run output | The bundle is written there, and the output then fails `validate-handoff` | `SUPPORT_BUNDLE_INSIDE_OUTPUT` |
   | `support-bundle`: a folder that cannot be written | `COMMAND_FAILED` | `SUPPORT_BUNDLE_NOT_WRITTEN` |
+  | `validate-handoff`, `doctor --run-output`, `support-bundle`: an output of 1.1 to 1.2, or one with `diagnostics/` of another version, such as any v1.4.0 to v1.7.1 output (an output of 1.0 names no version and stays as before) | `HANDOFF_INVALID`, `DOCTOR_AUTHORITY_INVALID`, `SUPPORT_BUNDLE_AUTHORITY_INVALID` | `OUTPUT_OTHER_VERSION`, with the version that made it |
   | Every command: `Ctrl+C` | A Python traceback | `RUN_CANCELLED` or `RUN_CANCELLED_AFTER_OUTPUT`, exit 130 |
 
   The [table of the stops](v2_data_handling.md#stops-and-next-steps) gives

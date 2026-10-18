@@ -247,6 +247,14 @@ STOPS: dict[str, Stop] = {
         "check that the folder is the output of Run-All; if it is, do not change its "
         "files, and run Run-All again into a new folder",
     ),
+    # An output that another version of this app made (stage B5b): one of 1.0
+    # to 1.2, or of 1.4 or later that is not this version; until then,
+    # HANDOFF_INVALID, DOCTOR_AUTHORITY_INVALID, or
+    # SUPPORT_BUNDLE_AUTHORITY_INVALID.
+    "OUTPUT_OTHER_VERSION": Stop(
+        "the output was made by another version of this app, which this version cannot check",
+        "normalize again with this version into a new folder",
+    ),
     "DOCTOR_AUTHORITY_INVALID": Stop(
         "the diagnostics of the output are missing, invalid, or disagree", _NEW_OUTPUT
     ),
@@ -421,7 +429,14 @@ PAGE_STOPS: dict[str, Stop] = {
         "the normalization could not be started",
         "press Run normalization again; if it stops again, please report the code",
     ),
-    "NO_FINISHED_OUTPUT": Stop("there is no finished output to check yet", "normalize first"),
+    "NO_FINISHED_OUTPUT": Stop(
+        "there is no finished output to check yet", "normalize first, or choose an earlier output"
+    ),
+    # The list of earlier outputs that another tab was given since (stage B5b).
+    "OUTPUT_LIST_CHANGED": Stop(
+        "the list of earlier outputs changed since the page showed it",
+        "choose the output again from the list",
+    ),
     "OUTPUT_CHANGED": Stop(
         "the output folder does not match what the normalization wrote",
         "if you did not change the folder, please report the code; if you did, normalize again",
@@ -478,10 +493,13 @@ PAGE_WORDING: dict[str, Stop] = {
         "this app stopped unexpectedly while it did this",
         "press the button again; if it stops again, please report the code",
     ),
-    # The page checks the output that it made; it does not take another folder.
+    # The page checks the output that it made, and from stage B5b one that the
+    # person chose.
     "HANDOFF_INVALID": Stop(
-        "the files of the output do not pass their checks",
-        "do not change the files of an output; normalize again into a new folder",
+        "the folder is not the output of a normalization, or the files of the output do "
+        "not pass their checks",
+        "choose the folder of an output; if it is one, do not change its files, and "
+        "normalize again into a new folder",
     ),
     "DOCTOR_AUTHORITY_INVALID": Stop(
         "the diagnostics of the output are missing, invalid, or disagree",

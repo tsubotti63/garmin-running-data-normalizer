@@ -182,6 +182,9 @@ jobs:
       - name: Verify Windows Snapshot parity
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_snapshot_parity.py -q
+      - name: Verify Windows outputs of other versions
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_earlier_outputs.py .\tests\test_standalone.py .\tests\test_major_version_acceptance.py -q
       - name: Build distributions
         shell: powershell
         run: |

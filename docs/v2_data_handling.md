@@ -1744,6 +1744,7 @@ gives, for its entries and controls, are not in this table.
 | `SNAPSHOT_INPUT_INSIDE_STORE` | the Export and the Snapshot Store are the same folder, or one is inside the other | keep the Export and the store in separate folders |
 | `SNAPSHOT_LIFECYCLE_FAILED` | a snapshot command cannot do what it was asked | correct the command or its input as the message says, and run it again |
 | `HANDOFF_INVALID` | the folder is not the output of a run, or the files of the output do not pass their checks | check that the folder is the output of Run-All; if it is, do not change its files, and run Run-All again into a new folder |
+| `OUTPUT_OTHER_VERSION` | the output was made by another version of this app, which this version cannot check | normalize again with this version into a new folder |
 | `DOCTOR_AUTHORITY_INVALID` | the diagnostics of the output are missing, invalid, or disagree | do not change the files of an output; run Run-All again into a new folder |
 | `DOCTOR_UNREGISTERED_DIAGNOSTIC` | the output holds a diagnostic code that this version of the app does not know | use the version of this app that made the output, or run Run-All again into a new folder |
 | `DOCTOR_VERSION_UNSUPPORTED` | a version of this app that this version does not know made the output | use the version of this app that made the output, or run Run-All again into a new folder |
@@ -2061,9 +2062,31 @@ code of a stop stays 2.
 - `validate-handoff`, `doctor --run-output`, and `support-bundle` accept an
   output with `run_all_version` 2 when the installed version produced it
   (stage A2a).
-- An output that contains `diagnostics/` and was produced by another version,
-  including every v1.x output from v1.4.0 on, is rejected as in v1.x; rerun
-  Run-All. Outputs produced before v1.4 keep the legacy handling.
+- From stage B5b, the version that an output's `run_summary.json` names
+  decides first, before its files are compared, in the three commands and in
+  the GUI alike:
+  - An output of 1.3 (1.3.0 to 1.3.3), which has no `diagnostics/`, is
+    checked against the files that the 1.3 releases wrote, in each of their
+    four shapes (44 files, 45 with the External-safe Pack, 47 of a Snapshot
+    run, and 48 of both), as v1.4 through v1.7.1 checked it:
+    `validate-handoff` passes, `doctor --run-output` says that the
+    diagnostics of v1.4 are not available and that the result that the
+    output recorded is the one to use (`USE_RECORDED_LEGACY_RESULT`), and
+    `support-bundle` refuses it for the diagnostics that it lacks
+    (`SUPPORT_BUNDLE_AUTHORITY_INVALID`). Before stage B5b, the files of a
+    1.3 output were compared with those of this version, which stage A2b-2
+    made longer, so that every 1.3 output was refused; no published version
+    did so.
+  - An output of 1.0 to 1.2, which no version since v1.4 has taken, and an
+    output that contains `diagnostics/` and was produced by another version,
+    including every v1.x output from v1.4.0 on, are refused as in v1.x, now
+    with `OUTPUT_OTHER_VERSION` and the version that the output names, when
+    it is in the form of a version (until then, `HANDOFF_INVALID`,
+    `DOCTOR_AUTHORITY_INVALID`, or `SUPPORT_BUNDLE_AUTHORITY_INVALID`);
+    rerun Run-All. An output whose summary names another version is told
+    only that it cannot be checked, and is never taken. An output of 1.0,
+    whose summary names no version, is refused as before
+    (`HANDOFF_INVALID`; `DOCTOR_VERSION_UNSUPPORTED` from the Doctor).
 
 ## Snapshot Stores
 

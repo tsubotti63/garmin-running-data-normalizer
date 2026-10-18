@@ -30,7 +30,7 @@ from ..intake.source import (
 from ..normalizers.activities import normalize_activities
 from ..normalizers.records import merge_repeated_records
 from ..run_all import left_out_files
-from ..standalone import StandaloneHandoffError, validate_standalone_handoff
+from ..standalone import OtherVersionError, StandaloneHandoffError, validate_standalone_handoff
 from ..stops import NEXT_ACTIONS, finding_next_step
 from .contracts import (
     DOCTOR_FORMAT,
@@ -526,6 +526,10 @@ def doctor_run_output(root: str | Path) -> dict[str, Any]:
         raise DoctorError("DOCTOR_VERSION_UNSUPPORTED", "handoff Product version is not recognized")
     try:
         validate_standalone_handoff(output_root)
+    except OtherVersionError as exc:
+        # Another version made the output, which this version cannot check
+        # (stage B5b); until then, DOCTOR_AUTHORITY_INVALID.
+        raise DoctorError("OUTPUT_OTHER_VERSION", str(exc)) from exc
     except StandaloneHandoffError as exc:
         raise DoctorError("DOCTOR_AUTHORITY_INVALID", "completed handoff integrity validation failed") from exc
     status = str(summary.get("status"))

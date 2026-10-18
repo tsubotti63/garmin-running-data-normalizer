@@ -494,7 +494,34 @@ the page's own folder list without one (stage B4a).
   datasets, or the export), what it means with its count, and its code (stage
   B2c). The result table ends with the row of the warnings of no family and
   the total of the warnings. A folder that changed after the run is reported
-  by code. An earlier output can also be selected for the check.
+  by code.
+- The check and the Support Bundle of "If something is wrong" are for the
+  output that the person chooses there (stage B5b): the output of this run,
+  once it is made, or an earlier output, from the outputs that the settings
+  remember that are there as plain folders, newest first, or from another
+  folder chosen with the system's dialog ("Choose another output…"). The
+  server keeps the list and gives each output a number in it, with a mark of
+  the list; the page sends the number and the mark, or the place that the
+  dialog gave, and a mark that is not the last one is refused
+  (`OUTPUT_LIST_CHANGED`), so that a list given to another tab never makes a
+  number name another output. An output that is not found is not listed,
+  and stays remembered. An output of 1.3 is checked as v1.4 through v1.7.1
+  checked it, and the page says that it has none of the diagnostics of this
+  version and that the result that it recorded is the one to use; an output
+  of another version is told by its code and its version
+  (`OUTPUT_OTHER_VERSION`, see
+  [v2.0.0 Data Handling](v2_data_handling.md#checks-of-earlier-outputs)).
+- Before a run on a later launch, the result table shows the counts of the
+  output before: the newest earlier output whose summary can be read. After
+  a run, it has a column of the change of the records of each family since
+  that output, and the fourth box says the change of the activities, but
+  only when both were normalized the same way (Snapshots, or this Export
+  alone), by the same version, and with the same timezone, as the Human
+  maintainer decided on 2026-10-18; otherwise a line says which of them
+  differ. A line says that it is the change when both were normalized from
+  the same Snapshot Store, which an output does not record. The CLI shows no
+  change: it remembers no output to compare with, and each output's
+  `run_summary.json` holds its counts.
 - The Support Bundle is written by default next to the output as
   `<output name>-support-bundle.zip`, because inside the output it would
   contradict the manifest; the user can choose another folder with
@@ -755,7 +782,8 @@ these codes; the CLI never stops with them. The table is made from
 | `FOLDER_NOT_READABLE` | this app is not allowed to open this folder | on a Mac, allow it when you are asked, or in System Settings > Privacy & Security |
 | `RUN_ACTIVE` | a normalization is running in another tab or window | wait for it to finish, or cancel it |
 | `RUN_START_FAILED` | the normalization could not be started | press Run normalization again; if it stops again, please report the code |
-| `NO_FINISHED_OUTPUT` | there is no finished output to check yet | normalize first |
+| `NO_FINISHED_OUTPUT` | there is no finished output to check yet | normalize first, or choose an earlier output |
+| `OUTPUT_LIST_CHANGED` | the list of earlier outputs changed since the page showed it | choose the output again from the list |
 | `OUTPUT_CHANGED` | the output folder does not match what the normalization wrote | if you did not change the folder, please report the code; if you did, normalize again |
 | `OUTPUT_NOT_AVAILABLE` | the output folder or a file in it is missing, or was replaced by a link | check that the output folder is still where it was |
 | `OPEN_NOT_AVAILABLE` | no program to open it (xdg-open) was found | open the output folder from your file manager, such as Finder or File Explorer |

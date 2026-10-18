@@ -24,14 +24,17 @@ from garmin_running_data_normalizer.gui.outputs import (
     OPEN_TARGETS,
     OutputActionError,
     check_output,
+    earlier_outputs,
     make_support_bundle,
     open_command,
     open_output,
+    output_summary,
     support_bundle_path,
 )
 from garmin_running_data_normalizer.gui.settings import remember_run_at
 from garmin_running_data_normalizer.run_all import run_all
 from garmin_running_data_normalizer.standalone import validate_standalone_handoff
+from tests.v1_3_outputs import as_release, as_v1_3
 from tests.test_gui_runs import SYNTHETIC_EXPORT, child_environment, wait_until
 from tests.test_run_all_progress import tree_bytes
 
@@ -92,6 +95,9 @@ class OutputCheckTest(OutputTestCase):
                     "next_action_id": report["doctor_next_action_id"],
                     "support_bundle_suggested": True,
                     "warning_codes": ["OPTIONAL_FAMILY_NOT_PRESENT"],
+                    # An output of 1.3 is told by its version (stage B5b).
+                    "legacy": False,
+                    "product_version": report["product_version"],
                 },
             },
         )
@@ -151,7 +157,7 @@ class OutputCheckTest(OutputTestCase):
         with patch.object(
             outputs,
             "doctor_run_output",
-            return_value={"completion_state": "COMPLETED", "diagnostic_contract_availability": "LEGACY_NOT_AVAILABLE"},
+            return_value={"completion_state": "NOT_COMPLETED", "diagnostic_contract_availability": "LEGACY_NOT_AVAILABLE"},
         ):
             self.assert_code("OUTPUT_CHANGED", check_output, self.output)
         with patch.object(
@@ -351,6 +357,89 @@ class SupportBundleTest(OutputTestCase):
             side_effect=PermissionError("denied"),
         ):
             self.assert_code("SUPPORT_BUNDLE_NOT_WRITTEN", make_support_bundle, self.output)
+        self.assertFalse(support_bundle_path(self.output).exists())
+
+
+class EarlierOutputTest(OutputTestCase):
+    """Outputs of earlier runs and of other versions (stage B5b)."""
+
+    def test_the_earlier_outputs_are_those_that_are_there(self) -> None:
+        other = self.root / "other"
+        shutil.copytree(self.output, other)
+        (self.root / "a-file").write_bytes(b"synthetic")
+        remembered = [str(other), str(self.root / "gone"), str(self.root / "a-file"), str(self.output)]
+        if can_symlink(self.root):
+            link = self.root / "link"
+            link.symlink_to(self.output, target_is_directory=True)
+            remembered.insert(1, str(link))
+        # Newest first; not found, not a folder, a link, and this launch's
+        # output are left out.
+        self.assertEqual(earlier_outputs(remembered, None), [other, self.output])
+        self.assertEqual(earlier_outputs(remembered, self.output), [other])
+        self.assertEqual(earlier_outputs([], None), [])
+
+    def test_the_summary_of_an_output_gives_what_a_run_is_compared_with(self) -> None:
+        summary = json.loads((self.output / "run_summary.json").read_text(encoding="utf-8"))
+        answer = output_summary(self.output)
+        self.assertEqual(
+            answer,
+            {
+                "name": "output",
+                "families": {family: details["record_count"] for family, details in summary["family_results"].items()},
+                "snapshots": False,
+                "version": summary["product_version"],
+                "run_all_version": summary["run_all_version"],
+                "timezone": "Asia/Tokyo",
+            },
+        )
+        self.assertEqual(answer["families"]["activities"], 1)
+        path = self.output / "run_summary.json"
+        # Words in the place of a version or a timezone are not passed on.
+        for key, value in (("product_version", "1.7.1\nsynthetic"), ("local_timezone", "../synthetic"), ("run_all_version", True)):
+            with self.subTest(key=key):
+                path.write_text(json.dumps({**summary, key: value}), encoding="utf-8")
+                answer = output_summary(self.output)
+                self.assertIsNone(answer[{"product_version": "version", "local_timezone": "timezone", "run_all_version": "run_all_version"}[key]])
+        path.write_text(json.dumps({**summary, "snapshot_lifecycle": {}}), encoding="utf-8")
+        self.assertTrue(output_summary(self.output)["snapshots"])
+        # A summary that is not of this form gives nothing.
+        broken = (
+            b"not json",
+            json.dumps([summary]).encode("utf-8"),
+            json.dumps({**summary, "family_results": []}).encode("utf-8"),
+            json.dumps({**summary, "family_results": {"Activities": {"record_count": 1}}}).encode("utf-8"),
+            json.dumps({**summary, "family_results": {"activities": {"record_count": -1}}}).encode("utf-8"),
+            json.dumps({**summary, "family_results": {"activities": {"record_count": "1"}}}).encode("utf-8"),
+        )
+        for data in broken:
+            with self.subTest(data=data[:30]):
+                path.write_bytes(data)
+                self.assertIsNone(output_summary(self.output))
+        path.unlink()
+        self.assertIsNone(output_summary(self.output))
+        with patch.object(outputs, "MAX_SUMMARY_BYTES", 10):
+            path.write_text(json.dumps(summary), encoding="utf-8")
+            self.assertIsNone(output_summary(self.output))
+
+    def test_an_output_of_1_3_is_checked_and_told_by_its_version(self) -> None:
+        as_v1_3(self.output)
+        # As the output before a run, it names its version and the version of
+        # its checks, so that the page never compares a run with it.
+        summary = output_summary(self.output)
+        self.assertEqual((summary["version"], summary["run_all_version"]), ("1.3.3", 1))
+        answer = check_output(self.output)
+        self.assertEqual(answer["handoff"]["status"], "PASS")
+        self.assertEqual((answer["doctor"]["legacy"], answer["doctor"]["product_version"]), (True, "1.3.3"))
+        self.assert_code("SUPPORT_BUNDLE_AUTHORITY_INVALID", make_support_bundle, self.output)
+
+    def test_an_output_of_another_version_is_told_with_that_version(self) -> None:
+        written = json.loads((self.output / "run_summary.json").read_text(encoding="utf-8"))["generated_paths"]
+        as_release(self.output, "1.2.1", tuple(written))
+        for action in (check_output, make_support_bundle):
+            with self.subTest(action=action.__name__):
+                with self.assertRaises(OutputActionError) as caught:
+                    action(self.output)
+                self.assertEqual((caught.exception.code, caught.exception.version), ("OUTPUT_OTHER_VERSION", "1.2.1"))
         self.assertFalse(support_bundle_path(self.output).exists())
 
 

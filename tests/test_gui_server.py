@@ -43,6 +43,7 @@ from tests.test_gui_runs import (
     wait_until,
 )
 from tests.test_run_all_progress import tree_bytes
+from tests.v1_3_outputs import as_release, as_v1_3
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1116,6 +1117,91 @@ class GuiRunApiTest(GuiServerTestCase):
             with self.subTest(code=code, folder=folder):
                 self.assertEqual(self.call("/api/support-bundle", {"folder": folder}), (422, {"error": code}))
         self.assertFalse((self.root / "missing").exists())
+
+    def test_earlier_outputs_are_chosen_by_their_number_in_a_list(self) -> None:
+        # Stage B5b: the outputs that the settings remember, newest first and
+        # only those that are there, by their number in the last list given
+        # and its mark; and the one before, with the counts that the page
+        # compares a run with.
+        from garmin_running_data_normalizer.gui import settings as gui_settings
+        from garmin_running_data_normalizer.run_all import RUN_ALL_VERSION, run_all
+
+        older, newer = self.parent / "older", self.parent / "newer"
+        result = run_all(SYNTHETIC_EXPORT, older, timezone_name="Asia/Tokyo")
+        shutil.copytree(older, newer)
+        for output in (self.parent / "gone", older, newer):
+            self.assertIsNone(gui_settings.remember_run_at(places.settings_file(), output, None))
+        self.start_server(600.0)
+        status, answer = self.call("/api/outputs", {})
+        self.assertEqual(status, 200)
+        self.assertEqual(answer["list"], 1)
+        self.assertEqual(
+            answer["outputs"],
+            [{"index": 0, "name": "newer", "path": str(newer)}, {"index": 1, "name": "older", "path": str(older)}],
+        )
+        families = {family: details["record_count"] for family, details in result["family_results"].items()}
+        self.assertEqual(
+            answer["previous"],
+            {
+                "index": 0,
+                "name": "newer",
+                "families": families,
+                "snapshots": False,
+                "version": __version__,
+                "run_all_version": RUN_ALL_VERSION,
+                "timezone": "Asia/Tokyo",
+            },
+        )
+        self.assertEqual(answer["current"], {"version": __version__, "run_all_version": RUN_ALL_VERSION})
+        # The check and the Support Bundle of an earlier output.
+        earlier = {"output": "earlier", "index": 1, "list": 1}
+        self.assertEqual(self.call("/api/check-output", earlier), (200, outputs.check_output(older)))
+        self.assertEqual(
+            self.call("/api/support-bundle", earlier),
+            (200, {"path": str(self.parent / "older-support-bundle.zip"), "member_count": 6, "human_review_required": True}),
+        )
+        # A list given since makes the numbers of this one refused.
+        self.assertEqual(self.call("/api/outputs", {})[1]["list"], 2)
+        self.assertEqual(self.call("/api/check-output", earlier), (409, {"error": "OUTPUT_LIST_CHANGED"}))
+        for payload in (
+            {"output": "earlier", "index": 2, "list": 2},
+            {"output": "earlier", "index": "0", "list": 2},
+            {"output": "earlier", "index": True, "list": 2},
+            {"output": "earlier", "index": 0, "list": None},
+            {"output": "another"},
+            {"output": ["run"]},
+        ):
+            with self.subTest(payload=payload):
+                self.assertEqual(self.call("/api/check-output", payload), (422, {"error": "REQUEST_INVALID"}))
+        # A folder that the person chose, which the check takes or refuses.
+        self.assertEqual(self.call("/api/check-output", {"output": "chosen", "path": str(newer)}), (200, outputs.check_output(newer)))
+        self.assertEqual(self.call("/api/check-output", {"output": "chosen", "path": "relative"}), (422, {"error": "PATH_NOT_ABSOLUTE"}))
+        self.assertEqual(self.call("/api/check-output", {"output": "chosen", "path": str(self.root)}), (422, {"error": "HANDOFF_INVALID"}))
+        # An output of 1.3, and one that another version made, with that version.
+        legacy = self.parent / "legacy"
+        shutil.copytree(older, legacy)
+        as_v1_3(legacy)
+        status, answer = self.call("/api/check-output", {"output": "chosen", "path": str(legacy)})
+        self.assertEqual((status, answer["doctor"]["legacy"], answer["doctor"]["product_version"]), (200, True, "1.3.3"))
+        other = self.parent / "other"
+        shutil.copytree(older, other)
+        written = json.loads((other / "run_summary.json").read_text(encoding="utf-8"))["generated_paths"]
+        as_release(other, "2.0.0", tuple(written), RUN_ALL_VERSION)
+        chosen = {"output": "chosen", "path": str(other)}
+        self.assertEqual(self.call("/api/check-output", chosen), (422, {"error": "OUTPUT_OTHER_VERSION", "version": "2.0.0"}))
+        self.assertEqual(self.call("/api/support-bundle", chosen), (422, {"error": "OUTPUT_OTHER_VERSION", "version": "2.0.0"}))
+        self.assertFalse((self.parent / "other-support-bundle.zip").exists())
+        # Without a run of this launch, its own output is not there.
+        self.assertEqual(self.call("/api/check-output", {}), (409, {"error": "NO_FINISHED_OUTPUT"}))
+        self.assertEqual(self.call("/api/check-output", {"output": "run"}), (409, {"error": "NO_FINISHED_OUTPUT"}))
+
+    def test_the_output_of_this_launch_is_not_an_earlier_output(self) -> None:
+        self.start_server(600.0)
+        self.assertEqual(self.call("/api/run/start", self.run_request())[0], 200)
+        self.assertEqual(self.wait_for_state({"finished", "failed"})["state"], "finished")
+        # The run remembered its output (stage B4c), which is this launch's.
+        answer = self.call("/api/outputs", {})[1]
+        self.assertEqual((answer["outputs"], answer["previous"]), ([], None))
 
     def test_a_real_run_through_the_api_matches_the_cli(self) -> None:
         self.start_server(600.0)

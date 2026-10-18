@@ -324,6 +324,31 @@ class GuiPageStructureTest(unittest.TestCase):
                 self.assertEqual(reveal.get("aria-labelledby"), f"{identifier} {named}")
                 self.assertEqual(by_id(self.elements, result).get("role"), "status")
 
+    def test_the_output_of_the_fourth_box_and_the_change_say_what_they_are(self) -> None:
+        # Stage B5b: the choice of the output of the check and the Support
+        # Bundle is named by its heading, the list of earlier outputs by its
+        # choice, and what the check said is read out; the column of the
+        # change is hidden until there is one.
+        group = next(element for element in self.elements if element.tag == "fieldset" and element.get("aria-labelledby") == "target-heading")
+        self.assertIsNotNone(group)
+        self.assertEqual(by_id(self.elements, "target-heading").get("data-i18n"), "target.heading")
+        for identifier in ("target-run", "target-earlier"):
+            with self.subTest(choice=identifier):
+                choice = by_id(self.elements, identifier)
+                self.assertEqual((choice.tag, choice.get("type"), choice.get("name")), ("input", "radio", "target"))
+        self.assertEqual(by_id(self.elements, "target-list").get("aria-labelledby"), "target-earlier-label")
+        self.assertEqual(by_id(self.elements, "target-check").get("data-i18n"), "target.check")
+        self.assertEqual(by_id(self.elements, "target-check-result").get("role"), "status")
+        self.assertIn("hidden", by_id(self.elements, "target-chosen").attributes)
+        column = by_id(self.elements, "column-change")
+        self.assertEqual((column.tag, column.get("scope"), column.get("data-i18n")), ("th", "col", "result.column_change"))
+        self.assertIn("hidden", column.attributes)
+        self.assertIn("hidden", by_id(self.elements, "family-total-change").attributes)
+        # The choice of the output comes before the Support Bundle, which is
+        # made for it.
+        order = [element.get("id") for element in self.elements if element.get("id") in {"target-heading", "bundle-heading"}]
+        self.assertEqual(order, ["target-heading", "bundle-heading"])
+
     def test_folded_help_says_whether_it_is_open(self) -> None:
         toggle = by_id(self.elements, "tools-toggle")
         self.assertEqual(toggle.get("aria-expanded"), "false")
