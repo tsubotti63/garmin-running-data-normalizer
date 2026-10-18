@@ -117,10 +117,11 @@ LABEL_EXISTS_MESSAGE = STOPS["SNAPSHOT_LABEL_EXISTS"].what
 TIME_INVALID_MESSAGE = STOPS["SNAPSHOT_TIME_INVALID"].what
 INPUT_INSIDE_STORE_MESSAGE = STOPS["SNAPSHOT_INPUT_INSIDE_STORE"].what
 # The lock file of a registration holds the number of its process and a line
-# break, and nothing while it is being made; a file of another form or size
-# is not this app's lock, and is never removed (stage B4b-2).
+# break, which Windows writes as CR LF, and nothing while it is being made; a
+# file of another form or size is not this app's lock, and is never removed
+# (stage B4b-2).
 MAX_LOCK_BYTES = 64
-LOCK_CONTENT_RE = re.compile(rb"[0-9]{0,20}\n?")
+LOCK_CONTENT_RE = re.compile(rb"[0-9]{0,20}\r?\n?")
 UNLOCK_NOT_CONFIRMED_MESSAGE = STOPS["SNAPSHOT_UNLOCK_NOT_CONFIRMED"].what
 LOCK_NOT_FOUND_MESSAGE = STOPS["SNAPSHOT_LOCK_NOT_FOUND"].what
 LOCK_INVALID_MESSAGE = STOPS["SNAPSHOT_LOCK_INVALID"].what

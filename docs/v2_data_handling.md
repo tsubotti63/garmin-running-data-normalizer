@@ -1639,8 +1639,9 @@ without `--confirm-no-other-command` it stops with
 snapshot command does; a store without a lock file stops with
 `SNAPSHOT_LOCK_NOT_FOUND`; and a file that is not of this app's form (a
 regular file of at most 64 bytes that holds the number of a process and a line
-break, or nothing while it is being written), a link, a folder, or a file put
-in its place while it is checked stops with `SNAPSHOT_LOCK_INVALID` and stays.
+break, which Windows writes as CR LF, or nothing while it is being written), a
+link, a folder, or a file put in its place while it is checked stops with
+`SNAPSHOT_LOCK_INVALID` and stays.
 It does not look at whether the process of the number still runs: a store can
 be used from another computer, and the standard library of Windows offers no
 such look; the person's confirmation decides. The notices that a cancelled

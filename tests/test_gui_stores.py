@@ -465,7 +465,7 @@ class StoreApiTest(GuiServerTestCase):
         store = self.root / "store"
         initialize_store(store, ACCOUNT)
         lock = store / LOCK_NAME
-        lock.write_text("424242\n", encoding="ascii")
+        lock.write_bytes(b"424242\n")
         stamp = datetime(2030, 1, 1, 2, 3, 4, tzinfo=timezone.utc).timestamp()
         os.utime(lock, (stamp, stamp))
         status, answer = self.post("/api/store/open", {"path": str(store)})
@@ -478,7 +478,9 @@ class StoreApiTest(GuiServerTestCase):
             self.assertEqual(self.post("/api/store/unlock", {"path": str(store), "confirmed": True}), (409, {"error": "RUN_ACTIVE"}))
         self.assertTrue(lock.exists())
         status, answer = self.post("/api/store/unlock", {"path": str(store), "confirmed": True})
-        self.assertEqual((status, answer["state"], answer["unlocked"], answer["notices"]), (200, "store", True, []))
+        self.assertEqual(
+            (status, answer.get("state"), answer.get("unlocked"), answer.get("notices")), (200, "store", True, []), answer
+        )
         self.assertNotIn("lock_created_at", answer)
         self.assertFalse(lock.exists())
         status, answer = self.post("/api/store/unlock", {"path": str(store), "confirmed": True})

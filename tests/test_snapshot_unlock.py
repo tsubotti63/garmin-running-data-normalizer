@@ -9,6 +9,8 @@ one function for the CLI and the GUI (synthetic data only).
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -32,6 +34,7 @@ from tests.test_environment_stops import REAL_SYMLINKS
 from tests.test_stops import SYNTHETIC_EXPORT, StopLines, registered, cli, register_args
 
 ACCOUNT = "synthetic-account-boundary"
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def tree(root: Path) -> dict[str, bytes]:
@@ -58,9 +61,10 @@ class RemoveLockTest(unittest.TestCase):
 
     def test_a_lock_that_a_stopped_registration_left_is_removed(self) -> None:
         # The record of an interrupted registration and the Snapshots stay.
+        # The line break is CR LF where Windows wrote the lock.
         journal = self.store / "journal" / "registration.json"
         journal.write_text('{"format": "snapshot-registration-journal-v1"}', encoding="utf-8")
-        for content in (b"424242\n", b"424242", b""):
+        for content in (b"424242\n", b"424242\r\n", b"424242", b""):
             with self.subTest(content=content):
                 self.lock.write_bytes(content)
                 before = tree(self.store)
@@ -72,8 +76,31 @@ class RemoveLockTest(unittest.TestCase):
         self.assertEqual(verify_store(self.store)["status"], "PASS")
         self.assertEqual(len(load_manifests(self.store)), 1)
 
+    def test_the_lock_that_a_registration_wrote_before_it_stopped_is_removed(self) -> None:
+        # The lock as a registration writes it on this system, left by a
+        # process that stopped while it held it.
+        child = (
+            "import os, sys\n"
+            "from pathlib import Path\n"
+            "from garmin_running_data_normalizer.snapshot.store import _store_lock\n"
+            "held = _store_lock(Path(sys.argv[1]))\n"
+            "held.__enter__()\n"
+            "os._exit(0)\n"
+        )
+        environment = dict(os.environ)
+        environment["PYTHONPATH"] = os.pathsep.join(
+            path for path in (str(ROOT / "src"), environment.get("PYTHONPATH")) if path
+        )
+        completed = subprocess.run(
+            [sys.executable, "-c", child, str(self.store)], capture_output=True, text=True, env=environment, check=False
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertRegex(self.lock.read_bytes(), rb"\A[0-9]+\r?\n\Z")
+        self.assertEqual(remove_lock(self.store, confirmed=True), {"status": "PASS", "removed": LOCK_NAME})
+        self.assertFalse(os.path.lexists(self.lock))
+
     def test_only_with_the_check_and_only_in_a_store(self) -> None:
-        self.lock.write_text("424242\n", encoding="ascii")
+        self.lock.write_bytes(b"424242\n")
         for confirmed in (False, None, "yes"):
             with self.subTest(confirmed=confirmed):
                 self.assert_code("SNAPSHOT_UNLOCK_NOT_CONFIRMED", confirmed=confirmed)
@@ -87,13 +114,13 @@ class RemoveLockTest(unittest.TestCase):
                 with self.assertRaises(SnapshotStoreError) as caught:
                     remove_lock(folder, confirmed=True)
                 self.assertEqual(caught.exception.code, code)
-                (folder / LOCK_NAME).write_text("424242\n", encoding="ascii")
+                (folder / LOCK_NAME).write_bytes(b"424242\n")
         self.assertTrue((folder / LOCK_NAME).exists())
         self.lock.unlink()
         self.assert_code("SNAPSHOT_LOCK_NOT_FOUND")
 
     def test_a_file_that_is_not_this_apps_lock_stays(self) -> None:
-        for content in (b"not a lock\n", b"1" * 65, b"424242\n\n", b"-1\n", "４２\n".encode("utf-8")):
+        for content in (b"not a lock\n", b"1" * 65, b"424242\n\n", b"424242\n\r", b"-1\n", "４２\n".encode("utf-8")):
             with self.subTest(content=content):
                 self.lock.write_bytes(content)
                 self.assert_code("SNAPSHOT_LOCK_INVALID")
@@ -115,7 +142,7 @@ class RemoveLockTest(unittest.TestCase):
     def test_a_lock_put_in_its_place_while_it_is_checked_stays(self) -> None:
         # Another file put in the place of the lock between the first look and
         # the last one, such as the lock of a registration that started.
-        self.lock.write_text("424242\n", encoding="ascii")
+        self.lock.write_bytes(b"424242\n")
         real_lstat = os.lstat
         calls = []
 
@@ -125,16 +152,16 @@ class RemoveLockTest(unittest.TestCase):
                 calls.append(path)
                 if len(calls) == 2:
                     self.lock.unlink()
-                    self.lock.write_text("515151\n", encoding="ascii")
+                    self.lock.write_bytes(b"515151\n")
             return real_lstat(path, *args, **kwargs)
 
         with mock.patch.object(store_module.os, "lstat", side_effect=lstat):
             self.assert_code("SNAPSHOT_LOCK_INVALID")
-        self.assertEqual(self.lock.read_text(encoding="ascii"), "515151\n")
+        self.assertEqual(self.lock.read_bytes(), b"515151\n")
 
     def test_the_time_of_the_lock(self) -> None:
         self.assertIsNone(lock_created_at(self.store))
-        self.lock.write_text("424242\n", encoding="ascii")
+        self.lock.write_bytes(b"424242\n")
         stamp = datetime(2030, 1, 1, 2, 3, 4, tzinfo=timezone.utc).timestamp()
         os.utime(self.lock, (stamp, stamp))
         self.assertEqual(lock_created_at(self.store), "2030-01-01T02:03:04+00:00")
@@ -150,7 +177,7 @@ class CancelNoticesTest(unittest.TestCase):
             initialize_store(store, ACCOUNT)
             self.assertFalse(lock_exists(store))
             self.assertEqual(cancel_notices(store, lock_before=False), [])
-            (store / LOCK_NAME).write_text("424242\n", encoding="ascii")
+            (store / LOCK_NAME).write_bytes(b"424242\n")
             (store / "journal" / "registration.json").write_text("{}", encoding="utf-8")
             self.assertTrue(lock_exists(store))
             self.assertEqual(
@@ -171,7 +198,7 @@ class UnlockCommandTest(StopLines, unittest.TestCase):
             lock = store / LOCK_NAME
             unlock = ("snapshot", "unlock", "--store", store)
             confirmed = (*unlock, "--confirm-no-other-command")
-            lock.write_text("424242\n", encoding="ascii")
+            lock.write_bytes(b"424242\n")
             # The next step of a lock names the command.
             what = self.assert_stop("SNAPSHOT_STORE_LOCKED", (*register_args(store, SYNTHETIC_EXPORT, "S2"),), root)
             self.assertIn("pid 424242", what)
@@ -180,7 +207,7 @@ class UnlockCommandTest(StopLines, unittest.TestCase):
             self.assertEqual(cli(*confirmed), (0, ""))
             self.assertFalse(lock.exists())
             self.assert_stop("SNAPSHOT_LOCK_NOT_FOUND", confirmed, root)
-            lock.write_text("not a lock", encoding="ascii")
+            lock.write_bytes(b"not a lock")
             self.assert_stop("SNAPSHOT_LOCK_INVALID", confirmed, root)
             self.assertTrue(lock.exists())
             self.assert_stop("SNAPSHOT_STORE_NOT_FOUND", ("snapshot", "unlock", "--store", root / "missing", "--confirm-no-other-command"), root)
