@@ -405,14 +405,18 @@ class EarlierContractVersionTest(unittest.TestCase):
             ):
                 run_all(SYNTHETIC_EXPORT, output)
             self.assertEqual(_load(output / "run_summary.json")["run_all_version"], 1)
-            with self.assertRaisesRegex(StandaloneHandoffError, "contract version"):
+            # Told as an output of another version (stage B5b), as the
+            # release of 1.7.1 wrote it; until then, a contract version that
+            # did not match, DOCTOR_AUTHORITY_INVALID, and
+            # SUPPORT_BUNDLE_AUTHORITY_INVALID.
+            with self.assertRaisesRegex(StandaloneHandoffError, "made by version .* of this app"):
                 validate_standalone_handoff(output)
             with self.assertRaises(DoctorError) as caught:
                 doctor_run_output(output)
-            self.assertEqual(caught.exception.code, "DOCTOR_AUTHORITY_INVALID")
+            self.assertEqual(caught.exception.code, "OUTPUT_OTHER_VERSION")
             with self.assertRaises(SupportBundleError) as caught_bundle:
                 build_support_bundle(output, root / "support.zip")
-            self.assertEqual(caught_bundle.exception.code, "SUPPORT_BUNDLE_AUTHORITY_INVALID")
+            self.assertEqual(caught_bundle.exception.code, "OUTPUT_OTHER_VERSION")
 
 
 if __name__ == "__main__":

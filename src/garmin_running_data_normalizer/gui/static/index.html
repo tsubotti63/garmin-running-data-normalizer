@@ -304,6 +304,23 @@
           <div class="button-row">
             <button type="button" id="faq-help-button" data-i18n="tools.faq"></button>
           </div>
+          <h4 id="target-heading" tabindex="-1" data-i18n="target.heading"></h4>
+          <fieldset class="choices" aria-labelledby="target-heading">
+            <div class="choice">
+              <input type="radio" name="target" id="target-run" value="run" disabled>
+              <label for="target-run"><span data-i18n="target.run"></span> <span id="target-run-name" class="note"></span></label>
+            </div>
+            <div class="choice">
+              <input type="radio" name="target" id="target-earlier" value="earlier" disabled>
+              <label for="target-earlier" id="target-earlier-label" data-i18n="target.earlier"></label>
+            </div>
+          </fieldset>
+          <select id="target-list" aria-labelledby="target-earlier-label" disabled></select>
+          <p id="target-chosen" class="path" hidden></p>
+          <div class="button-row">
+            <button type="button" id="target-check" data-i18n="target.check" disabled></button>
+          </div>
+          <div id="target-check-result" class="messages" role="status" aria-live="polite"></div>
           <h4 id="bundle-heading" tabindex="-1" data-i18n="bundle.heading"></h4>
           <p class="help" data-i18n="bundle.help"></p>
           <p class="help" data-i18n="bundle.review_help"></p>
@@ -380,6 +397,7 @@
           <tr>
             <th scope="col" data-i18n="result.column_data"></th>
             <th scope="col" class="n" data-i18n="result.column_records"></th>
+            <th scope="col" id="column-change" class="n" data-i18n="result.column_change" hidden></th>
             <th scope="col" data-i18n="result.column_status"></th>
             <th scope="col" class="n" data-i18n="result.column_warnings"></th>
           </tr>
@@ -389,11 +407,13 @@
           <tr>
             <th scope="row" data-i18n="result.total_label"></th>
             <td></td>
+            <td id="family-total-change" hidden></td>
             <td id="family-total-text"></td>
             <td id="family-total-count" class="n"></td>
           </tr>
         </tfoot>
       </table>
+      <div id="results-change" class="messages"></div>
     </section>
   </div>
 </main>

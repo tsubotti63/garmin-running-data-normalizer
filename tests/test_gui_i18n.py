@@ -272,12 +272,14 @@ class GuiMessageCoverageTest(unittest.TestCase):
     def test_output_actions_pass_on_codes_from_doctor_and_the_bundle_only(self) -> None:
         # The test above collects the codes of these two errors; any other
         # error passed on as it is would need its codes collected as well.
+        # A Support Bundle of an output that another version made also passes
+        # on that version (stage B5b).
         source = (SOURCE / "gui/outputs.py").read_text(encoding="utf-8")
         self.assertEqual(
-            re.findall(r"except (\w+) as exc:\n\s+raise OutputActionError\(exc\.code\)", source),
+            re.findall(r"except (\w+) as exc:\n\s+raise OutputActionError\(exc\.code(?:, _made_by\(exc\))?\)", source),
             ["DoctorError", "SupportBundleError"],
         )
-        self.assertEqual(source.count("OutputActionError(exc.code)"), 2)
+        self.assertEqual(len(re.findall(r"OutputActionError\(exc\.code[,)]", source)), 2)
 
     def test_every_progress_stage_and_step_has_a_message(self) -> None:
         # The stages of a Snapshot run come before and after those of Run-All

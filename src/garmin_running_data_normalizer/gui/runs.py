@@ -349,6 +349,9 @@ class _Run:
         # Whether the run makes the External-safe Pack, which the page may
         # show in its folder (stage B5a).
         self.safe_pack = False
+        # The timezone of the run, which the page compares with the output
+        # before it (stage B5b).
+        self.timezone: str | None = None
         # Set when the child has ended and its outcome is being recorded: a
         # cancellation asked for from then on changes nothing.
         self.closing = False
@@ -579,6 +582,7 @@ class RunManager:
             run.how = how
             run.used_store = store
             run.safe_pack = external_safe_pack
+            run.timezone = timezone_name
             if how == "snapshots" and store is not None:
                 run.store = store
                 run.lock_before = lock_before
@@ -616,6 +620,7 @@ class RunManager:
                 # Settings that could not be remembered (stage B4c).
                 "settings_notice": run.settings_notice,
                 "safe_pack": run.safe_pack,
+                "timezone": run.timezone,
             }
 
     def cancel(self) -> dict[str, Any]:

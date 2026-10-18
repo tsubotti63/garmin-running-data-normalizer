@@ -83,7 +83,10 @@ export const STOP_KEYS = {
   RUN_START_FAILED: "stop.run_start_failed",
   RUN_ACTIVE: "stop.run_active",
   NO_FINISHED_OUTPUT: "stop.no_finished_output",
+  OUTPUT_LIST_CHANGED: "stop.output_list_changed",
   HANDOFF_INVALID: "stop.handoff_invalid",
+  // An output that another version made (stage B5b).
+  OUTPUT_OTHER_VERSION: "stop.output_other_version",
   OUTPUT_CHANGED: "stop.output_changed",
   DOCTOR_AUTHORITY_INVALID: "stop.doctor_authority_invalid",
   DOCTOR_UNREGISTERED_DIAGNOSTIC: "stop.doctor_unregistered_diagnostic",
@@ -185,7 +188,9 @@ export const STOP_NEXT_KEYS = {
   RUN_START_FAILED: "stop_next.run_again",
   RUN_ACTIVE: "stop_next.run_active",
   NO_FINISHED_OUTPUT: "stop_next.no_finished_output",
-  HANDOFF_INVALID: "stop_next.new_output",
+  OUTPUT_LIST_CHANGED: "stop_next.output_list_changed",
+  HANDOFF_INVALID: "stop_next.handoff_invalid",
+  OUTPUT_OTHER_VERSION: "stop_next.output_other_version",
   OUTPUT_CHANGED: "stop_next.output_changed",
   DOCTOR_AUTHORITY_INVALID: "stop_next.new_output",
   DOCTOR_UNREGISTERED_DIAGNOSTIC: "stop_next.doctor_version",
@@ -397,6 +402,11 @@ export function errorMessages(code, detail) {
     if (Number.isInteger(detail.more) && detail.more > 0) {
       messages.push({ key: "error.place_more", params: { more: detail.more }, keyParams: {} });
     }
+  }
+  // The version that made an output that this version cannot check, as the
+  // server read it from the output (stage B5b).
+  if (typeof detail?.version === "string" && detail.version !== "") {
+    messages.push({ key: "error.made_by_version", params: { version: detail.version }, keyParams: {} });
   }
   messages.push(nextStep(mix === null ? lookup(STOP_NEXT_KEYS, code, "next.reload_page") : MIX_NEXT_KEYS[mix]));
   if (typeof code === "string" && code !== "") {
@@ -1011,6 +1021,119 @@ export function bundlePlan(outputPath, folder) {
 export function packMade(outputPath) {
   const name = lastName(typeof outputPath === "string" ? outputPath : "");
   return name === "" ? [] : [message("pack.made", { path: `${name}/analysis/external_safe_handoff.zip` })];
+}
+
+// The earlier outputs to choose from (stage B5b), by their number in the
+// server's list: their names, and the folder that holds one whose name
+// another has too.
+export function earlierChoices(outputs) {
+  const list = Array.isArray(outputs) ? outputs : [];
+  const counts = new Map();
+  for (const output of list) {
+    counts.set(output?.name, (counts.get(output?.name) ?? 0) + 1);
+  }
+  return list
+    .filter((output) => Number.isInteger(output?.index) && typeof output?.name === "string")
+    .map((output) =>
+      counts.get(output.name) > 1
+        ? { index: output.index, ...message("target.earlier_with_folder", { name: output.name, folder: parentName(output.path) }) }
+        : { index: output.index, ...message("target.earlier_name", { name: output.name }) },
+    );
+}
+
+function parentName(path) {
+  const output = typeof path === "string" ? path.trim().replace(/[\\/]+$/, "") : "";
+  const name = lastName(output);
+  return lastName(output.slice(0, output.length - name.length));
+}
+
+// The output before the run, and whether the run is compared with it (stage
+// B5b): only when both were normalized the same way (Snapshots or this Export
+// alone), by the same version, and with the same timezone, as the person
+// decided; otherwise the line says which of them differ.
+export const CHANGE_REASON_KEYS = {
+  how: "change.reason_how",
+  version: "change.reason_version",
+  timezone: "change.reason_timezone",
+};
+
+export function changePlan(previous, current) {
+  if (previous === null || typeof previous !== "object" || typeof previous.families !== "object") {
+    return { comparable: false, reasons: [] };
+  }
+  const reasons = [];
+  if (previous.snapshots !== current?.snapshots) {
+    reasons.push("how");
+  }
+  if (previous.version !== current?.version || previous.run_all_version !== current?.run_all_version) {
+    reasons.push("version");
+  }
+  if (previous.timezone !== current?.timezone) {
+    reasons.push("timezone");
+  }
+  return { comparable: reasons.length === 0, reasons };
+}
+
+// The change of the records of each family since the output before the run;
+// none for a family that the output before had not, and for the row of no
+// family.
+export function changeRows(rows, previous) {
+  const families = previous?.families ?? {};
+  return rows.map((row) => ({
+    ...row,
+    change:
+      row.family !== null && Number.isInteger(row.records) && Number.isInteger(families[row.family])
+        ? row.records - families[row.family]
+        : null,
+  }));
+}
+
+// The lines of the change (stage B5b): under the table, what the column is,
+// or why there is none; in the fourth box, the change of the activities.
+export function changeMessages(plan, previous, rows) {
+  if (previous === null || typeof previous !== "object") {
+    return { table: [], run: [] };
+  }
+  if (!plan.comparable) {
+    return {
+      table: [message("change.not_compared", { name: previous.name }), ...plan.reasons.map((reason) => message(CHANGE_REASON_KEYS[reason]))],
+      run: [],
+    };
+  }
+  const activities = rows.find((row) => row.family === "activities")?.change;
+  const run = !Number.isInteger(activities)
+    ? []
+    : activities > 0
+      ? [message("change.activities_up", { count: activities })]
+      : activities < 0
+        ? [message("change.activities_down", { count: -activities })]
+        : [message("change.activities_same")];
+  return { table: [message("change.column", { name: previous.name }), message("change.note")], run };
+}
+
+// Before a run on a later launch (stage B5b), the table shows the counts of
+// the output before, as the mockup v10 does.
+export function previousRows(previous) {
+  const families = previous?.families ?? {};
+  return Object.keys(families)
+    .sort()
+    .map((family) => ({
+      family,
+      nameKey: lookup(FAMILY_KEYS, family, null),
+      statusKey: "family_status.previous",
+      kind: "prev",
+      records: families[family],
+      warnings: null,
+      change: null,
+    }));
+}
+
+// A change as the column shows it: +38, −2, or 0.
+export function signedChange(change, format = String) {
+  if (!Number.isInteger(change)) {
+    return "";
+  }
+  return change > 0 ? `+${format(change)}` : change < 0 ? `\u2212${format(-change)}` : format(0);
 }
 
 // Whether the folder for the output is the one that the settings remembered,
@@ -1797,6 +1920,16 @@ export function outputCheckMessages(check, result) {
     params: {},
     keyParams: {},
   });
+  // An output of 1.3 has none of the diagnostics of v1.4, and the result
+  // that it recorded is the one to use (stage B5b).
+  if (doctor?.legacy === true) {
+    messages.push(message("output_check.legacy"));
+    if (typeof doctor.product_version === "string") {
+      messages.push(message("error.made_by_version", { version: doctor.product_version }));
+    }
+    messages.push(nextStep("output_check.legacy_next"));
+    return messages;
+  }
   const next = lookup(NEXT_ACTION_KEYS, doctor?.next_action_id, null);
   if (next !== null) {
     messages.push(nextStep(next));

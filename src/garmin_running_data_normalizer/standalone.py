@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -12,26 +13,119 @@ from .run_all import OUTPUT_PATHS, RUN_ALL_VERSION, SNAPSHOT_LIFECYCLE_PATHS
 
 
 OPTIONAL_OUTPUT_PATH = "analysis/external_safe_handoff.zip"
+# The files that the 1.3 releases wrote, in their order, and those of their
+# Snapshot runs (stage B5b): an output of 1.3, which has no diagnostics, is
+# checked against these, as v1.4 through v1.7.1 did, and never against the
+# files of this version, which stage A2b-2 made longer. Outputs of 1.0 to
+# 1.2 were never taken.
+LEGACY_V1_3_OUTPUT_PATHS = (
+    "normalized/activities.json",
+    "normalized/gear.json",
+    "normalized/activity_gear.json",
+    "normalized/personal_records.json",
+    "normalized/fit_sessions.json",
+    "normalized/fit_laps.json",
+    "normalized/activity_fit_links.json",
+    "normalized/hill_score_daily.json",
+    "normalized/endurance_score_daily.json",
+    "normalized/race_prediction_daily.json",
+    "normalized/sleep_daily.json",
+    "normalized/uds_daily.json",
+    "normalized/acute_training_load_daily.json",
+    "normalized/training_readiness_daily.json",
+    "normalized/vo2max_daily.json",
+    "normalized/hrv_daily.json",
+    "normalized/training_history_daily.json",
+    "audit/fit_audit.json",
+    "audit/activity_fit_linkage.json",
+    "audit/hill_score_daily.json",
+    "audit/endurance_score_daily.json",
+    "audit/lactate_threshold_candidates.json",
+    "audit/race_prediction_daily.json",
+    "audit/sleep_daily.json",
+    "audit/uds_daily.json",
+    "audit/acute_training_load_daily.json",
+    "audit/training_readiness_daily.json",
+    "audit/vo2max_daily.json",
+    "audit/hrv_daily.json",
+    "audit/training_history_daily.json",
+    "analysis/activities.csv",
+    "analysis/performance_metrics_daily.csv",
+    "qa/dataset_summary.json",
+    "qa/relationship_summary.json",
+    "qa/performance_metrics_summary.json",
+    "qa/daily_metrics_summary.json",
+    "START_HERE.md",
+    "DATASET_INVENTORY.md",
+    "ANALYSIS_HANDOFF.md",
+    "ANALYSIS_CONTEXT.json",
+    "SCHEMA_CATALOG.json",
+    "artifact_inventory.json",
+    "run_manifest.json",
+    "run_summary.json",
+)
+LEGACY_V1_3_SNAPSHOT_PATHS = (
+    "snapshot/snapshot_lineage.json",
+    "snapshot/snapshot_coverage.json",
+    "snapshot/canonical_merge_summary.json",
+)
+# A version that an output names and that its stop may repeat.
+VERSION_FORM = re.compile(r"(?:0|[1-9][0-9]{0,3})(?:\.(?:0|[1-9][0-9]{0,3})){1,2}")
+
+
+def _path_shapes(base: tuple[str, ...], snapshot_paths: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
+    """A run's files, with the External-safe Pack, of a Snapshot run, and of
+    both, each before the manifest and the summary."""
+    optional = [*base[:-2], OPTIONAL_OUTPUT_PATH, *base[-2:]]
+    snapshot = [*base[:-2], *snapshot_paths, *base[-2:]]
+    optional_snapshot = [*optional[:-2], *snapshot_paths, *optional[-2:]]
+    return tuple(tuple(value) for value in (base, optional, snapshot, optional_snapshot))
 
 
 def _generated_path_sets(*, diagnostics_available: bool) -> tuple[tuple[str, ...], ...]:
-    base = [
-        path
-        for path in OUTPUT_PATHS
-        if diagnostics_available or not path.startswith("diagnostics/")
-    ]
-    optional = [*base[:-2], OPTIONAL_OUTPUT_PATH, *base[-2:]]
-    snapshot = [*base[:-2], *SNAPSHOT_LIFECYCLE_PATHS, *base[-2:]]
-    optional_snapshot = [
-        *optional[:-2],
-        *SNAPSHOT_LIFECYCLE_PATHS,
-        *optional[-2:],
-    ]
-    return tuple(tuple(value) for value in (base, optional, snapshot, optional_snapshot))
+    if diagnostics_available:
+        return _path_shapes(OUTPUT_PATHS, SNAPSHOT_LIFECYCLE_PATHS)
+    return _path_shapes(LEGACY_V1_3_OUTPUT_PATHS, LEGACY_V1_3_SNAPSHOT_PATHS)
 
 
 class StandaloneHandoffError(ValueError):
     """Raised when a Run-All directory is not a self-contained safe handoff."""
+
+
+class OtherVersionError(StandaloneHandoffError):
+    """An output that another version of this app made, which this version
+    cannot check (stage B5b): one of 1.0 to 1.2, or of 1.4 or later that is
+    not this version. ``version`` is the version that the output names, when
+    it is in the form of a version."""
+
+    def __init__(self, version: Any) -> None:
+        self.version = version if isinstance(version, str) and VERSION_FORM.fullmatch(version) else None
+        named = f"version {self.version}" if self.version else "another version"
+        super().__init__(f"the output was made by {named} of this app, which this version cannot check")
+
+
+def _diagnostics_available(summary: dict[str, Any]) -> bool:
+    """Whether the output has the diagnostics of v1.4 and later, from the
+    version that its summary names, before its files are compared (stage
+    B5b): an output of 1.3 has none and is checked as v1.4 through v1.7.1
+    did; one of 1.0 to 1.2, or of 1.4 or later that another version made,
+    is told as such, so that it is never taken for one whose files changed.
+    An output whose summary names another version is only told that it
+    cannot be checked, never taken."""
+    product_version = summary.get("product_version")
+    try:
+        version_parts = tuple(int(part) for part in str(product_version).split(".")[:2])
+    except ValueError as exc:
+        raise StandaloneHandoffError("handoff Product version is invalid") from exc
+    if len(version_parts) != 2 or version_parts[0] < 1:
+        raise StandaloneHandoffError("handoff Product version is not supported")
+    if version_parts < (1, 3):
+        raise OtherVersionError(product_version)
+    if version_parts < (1, 4):
+        return False
+    if product_version != __version__ or summary.get("run_all_version") != RUN_ALL_VERSION:
+        raise OtherVersionError(product_version)
+    return True
 
 
 def _json_object(root: Path, name: str) -> dict[str, Any]:
@@ -100,6 +194,9 @@ def validate_standalone_handoff(root: str | Path) -> dict[str, Any]:
     output_root = requested.resolve()
     if not output_root.is_dir():
         raise StandaloneHandoffError("handoff root does not exist")
+    # The version decides first (stage B5b).
+    summary = _json_object(output_root, "run_summary.json")
+    diagnostics_available = _diagnostics_available(summary)
 
     required_documents = (
         "START_HERE.md",
@@ -111,7 +208,6 @@ def validate_standalone_handoff(root: str | Path) -> dict[str, Any]:
             raise StandaloneHandoffError(f"required handoff file is missing: {name}")
 
     manifest = _json_object(output_root, "run_manifest.json")
-    summary = _json_object(output_root, "run_summary.json")
     context = _json_object(output_root, "ANALYSIS_CONTEXT.json")
     schema = _json_object(output_root, "SCHEMA_CATALOG.json")
     inventory = _json_object(output_root, "artifact_inventory.json")
@@ -126,21 +222,6 @@ def validate_standalone_handoff(root: str | Path) -> dict[str, Any]:
     ):
         raise StandaloneHandoffError("manifest and summary versions do not match")
     product_version = summary.get("product_version")
-    try:
-        version_parts = tuple(int(part) for part in str(product_version).split(".")[:2])
-    except ValueError as exc:
-        raise StandaloneHandoffError("handoff Product version is invalid") from exc
-    if len(version_parts) != 2 or version_parts[0] < 1:
-        raise StandaloneHandoffError("handoff Product version is not supported")
-    diagnostics_available = version_parts >= (1, 4)
-    if diagnostics_available and product_version != __version__:
-        raise StandaloneHandoffError(
-            "current diagnostic handoff version does not match the installed Product"
-        )
-    if diagnostics_available and summary.get("run_all_version") != RUN_ALL_VERSION:
-        raise StandaloneHandoffError(
-            "current diagnostic handoff contract version does not match the installed Product"
-        )
     if diagnostics_available:
         completeness = _json_object(
             output_root, "diagnostics/source_completeness.json"
@@ -264,6 +345,8 @@ def validate_standalone_handoff(root: str | Path) -> dict[str, Any]:
 
 
 __all__ = [
+    "LEGACY_V1_3_OUTPUT_PATHS",
+    "OtherVersionError",
     "StandaloneHandoffError",
     "validate_standalone_handoff",
 ]

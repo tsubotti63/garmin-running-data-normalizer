@@ -122,6 +122,13 @@ returns for the same result:
 
 A table lists each data family with its status, record count, and warnings,
 then the warnings that belong to no family, and the total of the warnings.
+From the second launch on, before you normalize, the table shows the counts
+of the output before; after the run, the column **Since the output before**
+shows the change of each family, and the fourth box says how many activities
+more or fewer there are. The change shows only when both outputs were
+normalized the same way (Snapshots, or this export alone), by the same
+version of this app, and with the same timezone; otherwise a line says what
+differs.
 
 **Output check** runs by itself after the run, with the same checks as the
 `validate-handoff` and `doctor --run-output` commands. It shows:
@@ -140,7 +147,16 @@ After a run, the page proposes a new name for the next one.
 
 ## 5. Make a Support Bundle when you need help
 
-Under **If something is wrong**, **Make the Support Bundle** writes
+Under **If something is wrong**, **Output to check** chooses the output of
+the check and of the Support Bundle: **The output of this run**, or
+**An earlier output** from the list of the outputs that you made before, or
+another folder with **Choose another output…**. **Check the output** checks
+it as **Output check** does. An output that a version before 1.4 made has
+none of the diagnostics of this version: use the result in its
+`START_HERE.md`. An output that another version made cannot be checked by
+this version; normalize again with this version.
+
+**Make the Support Bundle** writes
 `<output name>-support-bundle.zip`, as the `support-bundle` command does.
 **Where the Support Bundle is saved** is next to the output folder by
 default; **Choose…** picks another folder, which must exist and be outside
@@ -177,7 +193,8 @@ the code when you ask for help. Do not attach your Export or output.
 | `OUTPUT_PATH_TOO_LONG` | The output path is too long. | Choose a shorter folder or name, or on Windows turn on long paths. |
 | `INPUT_CHANGED` | The input changed while it was read. | Press Run normalization again when no other app changes the Export. |
 | `OUTPUT_PUBLISH_FAILED` | The output could not be written. | Check the free space and the permissions of the folder for the output, and press Run normalization again. |
-| `HANDOFF_INVALID` | The files of the output do not pass their checks. | Do not change the files of an output; normalize again into a new folder. |
+| `HANDOFF_INVALID` | The folder is not the output of a normalization, or the files of the output do not pass their checks. | Choose the folder of an output; if it is one, do not change its files, and normalize again into a new folder. |
+| `OUTPUT_OTHER_VERSION` | The output was made by another version of this app, which this version cannot check. | Normalize again with this version into a new folder. |
 | `SUPPORT_BUNDLE_EXISTS` | A file or a link is there already in the place of the Support Bundle. | Move or rename it, or choose another place, and press the button again. |
 
 For other codes, follow the next step on the page.

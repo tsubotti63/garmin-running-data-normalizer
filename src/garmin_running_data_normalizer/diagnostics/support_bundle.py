@@ -1033,6 +1033,10 @@ def build_support_bundle(run_output: str | Path, output_path: str | Path) -> dic
     try:
         doctor = doctor_run_output(requested_root)
     except DoctorError as exc:
+        # An output that another version made is told as the Doctor tells it
+        # (stage B5b).
+        if exc.code == "OUTPUT_OTHER_VERSION":
+            raise SupportBundleError(exc.code, exc.safe_message) from exc
         raise SupportBundleError("SUPPORT_BUNDLE_AUTHORITY_INVALID", "completed Run-All authority is invalid") from exc
     if doctor.get("diagnostic_contract_availability") != "CURRENT":
         raise SupportBundleError("SUPPORT_BUNDLE_AUTHORITY_INVALID", "v1.4 diagnostics are required")

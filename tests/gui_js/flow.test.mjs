@@ -1751,3 +1751,142 @@ test("the Support Bundle shows its file and its place before it is made", () => 
     assert.notEqual(messages[1].keyParams.step, "next.reload_page", code);
   }
 });
+
+test("the fourth box chooses an earlier output by its number, named by its folder when two have one name", () => {
+  const keys = (messages) => messages.map((item) => [item.index, item.key, item.params]);
+  assert.deepEqual(
+    keys(
+      flow.earlierChoices([
+        { index: 0, name: "garmin-run-all-20261018-1637", path: "/path/to/GarminRunningData/garmin-run-all-20261018-1637" },
+        { index: 1, name: "same", path: "/path/to/a/same" },
+        { index: 2, name: "same", path: "C:\\Garmin\\b\\same" },
+      ]),
+    ),
+    [
+      [0, "target.earlier_name", { name: "garmin-run-all-20261018-1637" }],
+      [1, "target.earlier_with_folder", { name: "same", folder: "a" }],
+      [2, "target.earlier_with_folder", { name: "same", folder: "b" }],
+    ],
+  );
+  assert.deepEqual(flow.earlierChoices(null), []);
+  assert.deepEqual(flow.earlierChoices([{ index: "0", name: "x" }, { index: 1 }]), []);
+});
+
+test("a run is compared with the output before only when both were made the same way", () => {
+  const previous = {
+    name: "garmin-run-all-20261017-0900",
+    families: { activities: 100, sleep: 30, gear: 2 },
+    snapshots: true,
+    version: "2.0.0",
+    run_all_version: 2,
+    timezone: "Asia/Tokyo",
+  };
+  const current = { snapshots: true, version: "2.0.0", run_all_version: 2, timezone: "Asia/Tokyo" };
+  assert.deepEqual(flow.changePlan(previous, current), { comparable: true, reasons: [] });
+  // How it was normalized, the version, the checks of the version, and the
+  // timezone each keep the change from showing, as the person decided.
+  assert.deepEqual(flow.changePlan(previous, { ...current, snapshots: false }).reasons, ["how"]);
+  assert.deepEqual(flow.changePlan(previous, { ...current, version: "2.0.1" }).reasons, ["version"]);
+  assert.deepEqual(flow.changePlan(previous, { ...current, run_all_version: 3 }).reasons, ["version"]);
+  assert.deepEqual(flow.changePlan(previous, { ...current, timezone: "UTC" }).reasons, ["timezone"]);
+  assert.deepEqual(flow.changePlan(previous, { snapshots: false, version: "2.0.1", run_all_version: 2, timezone: "UTC" }).reasons, [
+    "how",
+    "version",
+    "timezone",
+  ]);
+  assert.deepEqual(flow.changePlan({ ...previous, version: null }, current).reasons, ["version"]);
+  // An output before of 1.3, or of another version, is never compared.
+  assert.deepEqual(flow.changePlan({ ...previous, version: "1.3.3", run_all_version: 1 }, current).reasons, ["version"]);
+  assert.deepEqual(flow.changePlan({ ...previous, version: "1.7.1", run_all_version: 1 }, { ...current, version: "1.7.1" }).reasons, ["version"]);
+  assert.deepEqual(flow.changePlan(null, current), { comparable: false, reasons: [] });
+  // The change of each family; none for a family that the output before
+  // had not, and for the row of no family.
+  const rows = flow.changeRows(
+    [
+      { family: "activities", records: 138 },
+      { family: "sleep", records: 28 },
+      { family: "gear", records: 2 },
+      { family: "hrv", records: 5 },
+      { family: null, records: null },
+    ],
+    previous,
+  );
+  assert.deepEqual(
+    rows.map((row) => row.change),
+    [38, -2, 0, null, null],
+  );
+  assert.deepEqual(
+    [38, -2, 0, null].map((change) => flow.signedChange(change)),
+    ["+38", "\u22122", "0", ""],
+  );
+  // Under the table and in the fourth box.
+  const shapes = (lines) => lines.map((line) => [line.key, line.params]);
+  const shown = flow.changeMessages(flow.changePlan(previous, current), previous, rows);
+  assert.deepEqual(shapes(shown.table), [
+    ["change.column", { name: "garmin-run-all-20261017-0900" }],
+    ["change.note", {}],
+  ]);
+  assert.deepEqual(shapes(shown.run), [["change.activities_up", { count: 38 }]]);
+  const fewer = flow.changeRows([{ family: "activities", records: 90 }], previous);
+  assert.deepEqual(shapes(flow.changeMessages({ comparable: true, reasons: [] }, previous, fewer).run), [
+    ["change.activities_down", { count: 10 }],
+  ]);
+  const same = flow.changeRows([{ family: "activities", records: 100 }], previous);
+  assert.deepEqual(shapes(flow.changeMessages({ comparable: true, reasons: [] }, previous, same).run), [["change.activities_same", {}]]);
+  const hidden = flow.changeMessages(flow.changePlan(previous, { ...current, snapshots: false, timezone: "UTC" }), previous, rows);
+  assert.deepEqual(shapes(hidden.table), [
+    ["change.not_compared", { name: "garmin-run-all-20261017-0900" }],
+    ["change.reason_how", {}],
+    ["change.reason_timezone", {}],
+  ]);
+  assert.deepEqual(hidden.run, []);
+  assert.deepEqual(flow.changeMessages({ comparable: false, reasons: [] }, null, rows), { table: [], run: [] });
+  // Before a run, the counts of the output before.
+  assert.deepEqual(
+    flow.previousRows(previous).map((row) => [row.family, row.records, row.statusKey, row.kind, row.warnings]),
+    [
+      ["activities", 100, "family_status.previous", "prev", null],
+      ["gear", 2, "family_status.previous", "prev", null],
+      ["sleep", 30, "family_status.previous", "prev", null],
+    ],
+  );
+  assert.deepEqual(flow.previousRows(null), []);
+});
+
+test("an output of another version is told with its version, and one of 1.3 by its result", () => {
+  const shapes = (lines) => lines.map((line) => [line.key, line.params, line.keyParams]);
+  assert.deepEqual(shapes(flow.errorMessages("OUTPUT_OTHER_VERSION", { version: "1.2.1" })), [
+    ["stop.output_other_version", {}, {}],
+    ["error.made_by_version", { version: "1.2.1" }, {}],
+    ["next.label", {}, { step: "stop_next.output_other_version" }],
+    ["error.code", { code: "OUTPUT_OTHER_VERSION" }, {}],
+  ]);
+  assert.equal(flow.errorMessages("OUTPUT_OTHER_VERSION", null).length, 3);
+  assert.equal(flow.errorMessages("OUTPUT_OTHER_VERSION", { version: "" }).length, 3);
+  const check = {
+    handoff: { status: "PASS", dataset_count: 17, relationship_count: 6, warning_count: 1 },
+    doctor: {
+      usability_scope: "USABLE_WITH_DISCLOSED_WARNINGS",
+      next_action_id: "REVIEW_WARNING_CODES_AND_AFFECTED_SCOPES",
+      support_bundle_suggested: true,
+      legacy: true,
+      product_version: "1.3.3",
+    },
+  };
+  assert.deepEqual(
+    flow.outputCheckMessages(check, null).map((line) => [line.key, line.keyParams.step ?? null]),
+    [
+      ["output_check.handoff_pass", null],
+      ["doctor.usability_warnings", null],
+      ["output_check.legacy", null],
+      ["error.made_by_version", null],
+      ["next.label", "output_check.legacy_next"],
+    ],
+  );
+  assert.deepEqual(
+    flow.outputCheckMessages({ ...check, doctor: { ...check.doctor, product_version: null } }, null).map((line) => line.key),
+    ["output_check.handoff_pass", "doctor.usability_warnings", "output_check.legacy", "next.label"],
+  );
+  // The page's list of earlier outputs changed in another tab.
+  assert.notEqual(flow.errorMessages("OUTPUT_LIST_CHANGED")[0].key, "error.unknown");
+});

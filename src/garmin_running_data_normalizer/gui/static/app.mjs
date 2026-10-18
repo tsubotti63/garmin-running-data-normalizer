@@ -19,6 +19,9 @@ import {
   boxesSetBySettings,
   boxesToConfirm,
   bundlePlan,
+  changeMessages,
+  changePlan,
+  changeRows,
   changedBox,
   checkMessages,
   decideHidden,
@@ -28,6 +31,7 @@ import {
   defaultOutputName,
   defaultSnapshotLabel,
   downloadSourceMessage,
+  earlierChoices,
   errorBox,
   errorMessages,
   exportTime,
@@ -39,6 +43,7 @@ import {
   helpSteps,
   hintsShown,
   importProblem,
+  lastName,
   launchSettings,
   localTimeIso,
   lockAge,
@@ -54,6 +59,7 @@ import {
   outputSetBySettings,
   packMade,
   placeMessages,
+  previousRows,
   progressBar,
   progressMessage,
   resultDetails,
@@ -62,6 +68,7 @@ import {
   runSummary,
   settingsMessages,
   shouldFocusResult,
+  signedChange,
   snapshotRows,
   stalledSeconds,
   stepRows,
@@ -213,6 +220,19 @@ const ui = {
   bundlePlan: byId("bundle-plan"),
   bundleReveal: byId("bundle-reveal"),
   bundleRevealResult: byId("bundle-reveal-result"),
+  // The output of the check and the Support Bundle of the fourth box, and
+  // the change since the output before (stage B5b).
+  targetHeading: byId("target-heading"),
+  targetRun: byId("target-run"),
+  targetRunName: byId("target-run-name"),
+  targetEarlier: byId("target-earlier"),
+  targetList: byId("target-list"),
+  targetChosen: byId("target-chosen"),
+  targetCheck: byId("target-check"),
+  targetCheckResult: byId("target-check-result"),
+  columnChange: byId("column-change"),
+  familyTotalChange: byId("family-total-change"),
+  resultsChange: byId("results-change"),
   stepsCaption: byId("steps-caption"),
   stepsRows: byId("steps-rows"),
   stepsTotalLabel: byId("steps-total-label"),
@@ -341,6 +361,16 @@ const state = {
   nameProposed: true,
   bundleFolder: null,
   bundleChooserError: null,
+  // The output that the check and the Support Bundle of the fourth box are
+  // for (stage B5b): this run's ("run"), one of the list of earlier outputs
+  // ("earlier", by its number and its place in that list), or a folder that
+  // the person chose ("chosen"); the list, with the output before the last
+  // run and what a run is compared with; the error of the dialog; and the
+  // check, the bundle, and showing it, of that output.
+  earlier: null,
+  target: { kind: "run", index: null, path: null },
+  targetChooserError: null,
+  tools: emptyTools(),
   settingsNotice: null,
   snapshotAuto: false,
   outputAuto: false,
@@ -355,10 +385,13 @@ const state = {
 };
 
 class ApiError extends Error {
-  constructor(status, code) {
+  constructor(status, code, detail = null) {
     super(`API request failed with HTTP ${status}`);
     this.status = status;
     this.code = code;
+    // The version that made an output that this version cannot check
+    // (stage B5b).
+    this.detail = detail;
   }
 }
 
@@ -486,7 +519,11 @@ async function callApi(path, payload = {}) {
     body = null;
   }
   if (!response.ok) {
-    throw new ApiError(response.status, typeof body?.error === "string" ? body.error : null);
+    throw new ApiError(
+      response.status,
+      typeof body?.error === "string" ? body.error : null,
+      typeof body?.version === "string" ? { version: body.version } : null,
+    );
   }
   return body;
 }
@@ -987,7 +1024,7 @@ function renderErrors(current) {
   }
 }
 
-function familyRow(row) {
+function familyRow(row, showChange = false) {
   const tableRow = document.createElement("tr");
   tableRow.className = `r-${row.kind}`;
   const name = document.createElement("th");
@@ -1003,8 +1040,16 @@ function familyRow(row) {
   status.append(pill);
   const warnings = document.createElement("td");
   warnings.className = "n";
-  warnings.textContent = formatNumber(row.warnings);
-  tableRow.append(name, records, status, warnings);
+  warnings.textContent = row.warnings === null ? "—" : formatNumber(row.warnings);
+  // The change since the output before (stage B5b).
+  if (showChange) {
+    const change = document.createElement("td");
+    change.className = "n";
+    change.textContent = row.change === null || row.change === undefined ? "—" : signedChange(row.change, formatNumber);
+    tableRow.append(name, records, change, status, warnings);
+  } else {
+    tableRow.append(name, records, status, warnings);
+  }
   return tableRow;
 }
 
@@ -1060,8 +1105,13 @@ function renderSteps(current) {
 
 function renderResults() {
   const run = state.run;
-  const rows = resultRows(run);
-  ui.familyRows.replaceChildren(...rows.map(familyRow));
+  const change = changeView();
+  // Before a run, the counts of the output before (stage B5b).
+  const before = run.state === "idle" && !state.starting && state.earlier?.previous ? state.earlier.previous : null;
+  const rows = before !== null ? previousRows(before) : change.rows;
+  ui.columnChange.hidden = !change.shown;
+  ui.familyTotalChange.hidden = !change.shown;
+  ui.familyRows.replaceChildren(...rows.map((row) => familyRow(row, change.shown)));
   const total = resultTotal(run);
   ui.familyTotal.hidden = total === null;
   setText(ui.familyTotalText, total === null ? "" : describe(total));
@@ -1074,7 +1124,29 @@ function renderResults() {
   } else if (run.state === "failed" || run.state === "cancelled") {
     caption = "results.none";
   }
-  setText(ui.resultsCaption, t(caption));
+  setText(ui.resultsCaption, before !== null ? t("results.previous", { name: before.name }) : t(caption));
+  replaceLines(ui.resultsChange, change.table.map(describe));
+}
+
+// The change since the output before the run (stage B5b): the rows of the
+// run with their change, whether the column shows, and the lines under the
+// table and in the fourth box.
+function changeView() {
+  const run = state.run;
+  const rows = resultRows(run);
+  const previous = state.earlier?.previous ?? null;
+  if (!FINISHED_STATES.includes(run.state) || previous === null) {
+    return { rows, shown: false, table: [], run: [] };
+  }
+  const plan = changePlan(previous, {
+    snapshots: run.how === "snapshots" || run.how === "rerun",
+    version: state.earlier.current?.version,
+    run_all_version: state.earlier.current?.run_all_version,
+    timezone: run.timezone,
+  });
+  const changed = changeRows(rows, previous);
+  const lines = changeMessages(plan, previous, changed);
+  return { rows: changed, shown: plan.comparable, table: lines.table, run: lines.run };
 }
 
 function renderRun(states, current) {
@@ -1119,13 +1191,13 @@ function renderRun(states, current) {
     lines.push(t(state.quitKey));
   }
   replaceLines(ui.runStatus, lines);
-  replaceLines(ui.runResult, resultDetails(run).map(describe));
+  replaceLines(ui.runResult, [...resultDetails(run), ...changeView().run].map(describe));
   ui.nextActions.hidden = !FINISHED_STATES.includes(run.state);
 }
 
 function outputBusy() {
   const output = state.output;
-  return output !== null && (output.checking || output.opening || output.bundling);
+  return output !== null && (output.checking || output.opening);
 }
 
 function renderOutput() {
@@ -1157,24 +1229,27 @@ function renderOutput() {
     ui.bundlePlace,
     state.bundleFolder === null ? t("bundle.next_to_output") : t("bundle.chosen_folder", { folder: state.bundleFolder }),
   );
-  replaceLines(ui.bundlePlan, finished ? bundlePlan(state.run.output_path, state.bundleFolder).map(describe) : []);
+  // For the output of the fourth box (stage B5b).
+  const tools = state.tools;
+  replaceLines(ui.bundlePlan, targetReady() ? bundlePlan(targetPath(), state.bundleFolder).map(describe) : []);
   const bundleLines = [];
   if (state.choosing !== null && state.choosingFor === "bundle") {
     bundleLines.push(t("choose.open"));
   } else if (state.bundleChooserError !== null) {
     bundleLines.push(...errorLines(state.bundleChooserError));
   }
-  if (finished && output.bundling) {
+  if (tools.bundling) {
     bundleLines.push(t("bundle.creating"));
-  } else if (finished && output.bundleError !== null) {
-    bundleLines.push(...errorLines(output.bundleError));
-  } else if (finished && output.bundle !== null) {
-    bundleLines.push(t("bundle.saved", { count: formatNumber(output.bundle.member_count) }));
+  } else if (tools.bundleError !== null) {
+    bundleLines.push(...errorLines(tools.bundleError, tools.bundleDetail));
+  } else if (tools.bundle !== null) {
+    bundleLines.push(t("bundle.saved", { count: formatNumber(tools.bundle.member_count) }));
   }
   replaceLines(ui.bundleResult, bundleLines);
-  ui.bundleReveal.hidden = !(finished && output.bundle !== null);
+  ui.bundleReveal.hidden = tools.bundle === null;
   // What showing it said, under its button.
-  replaceLines(ui.bundleRevealResult, finished && output.bundle !== null ? revealLines(output.reveals.bundle) : []);
+  replaceLines(ui.bundleRevealResult, tools.bundle !== null ? revealLines(tools.reveal) : []);
+  renderTarget(finished);
   ui.toolsToggle.setAttribute("aria-expanded", String(state.toolsOpen));
   ui.toolsBody.hidden = !state.toolsOpen;
 }
@@ -1236,6 +1311,164 @@ function renderPackFile() {
   replaceLines(ui.packResult, made ? revealLines(state.output.reveals.safe_pack) : []);
 }
 
+// The output of the fourth box (stage B5b): this run's, one of the earlier
+// outputs, or one that the person chose, and the check of it.
+function renderTarget(finished) {
+  ui.targetRun.checked = state.target.kind === "run";
+  ui.targetEarlier.checked = state.target.kind !== "run";
+  setText(ui.targetRunName, finished ? t("target.run_name", { name: lastName(state.run.output_path) }) : t("target.run_none"));
+  const choices = earlierChoices(state.earlier?.outputs);
+  replaceOptions(ui.targetList, [
+    { value: "", text: t("target.pick") },
+    ...choices.map((choice) => ({ value: String(choice.index), text: describe(choice) })),
+    { value: "other", text: t(choices.length > 0 ? "target.other" : "target.none_found") },
+  ]);
+  ui.targetList.value =
+    state.target.kind === "earlier" && Number.isInteger(state.target.index)
+      ? String(state.target.index)
+      : state.target.kind === "chosen"
+        ? "other"
+        : "";
+  ui.targetChosen.hidden = state.target.kind !== "chosen";
+  setText(ui.targetChosen, state.target.kind === "chosen" ? t("target.chosen", { path: state.target.path }) : "");
+  const tools = state.tools;
+  const lines = [];
+  if (state.choosing !== null && state.choosingFor === "target") {
+    lines.push(t("choose.open"));
+  } else if (state.targetChooserError !== null) {
+    lines.push(...errorLines(state.targetChooserError));
+  }
+  if (tools.checking) {
+    lines.push(t("output_check.running"));
+  } else if (tools.checkError !== null) {
+    lines.push(...errorLines(tools.checkError, tools.checkDetail));
+  } else if (tools.check !== null) {
+    // The warnings of a run go with the output of that run only.
+    lines.push(...outputCheckMessages(tools.check, state.target.kind === "run" ? state.run.result : null).map(describe));
+  }
+  replaceLines(ui.targetCheckResult, lines);
+}
+
+// Options of a list, rebuilt only when they change.
+function replaceOptions(select, options) {
+  const current = Array.from(select.options, (option) => [option.value, option.textContent]);
+  if (current.length === options.length && current.every(([value, text], index) => value === options[index].value && text === options[index].text)) {
+    return;
+  }
+  select.replaceChildren(
+    ...options.map((item) => {
+      const option = document.createElement("option");
+      option.value = item.value;
+      option.textContent = item.text;
+      option.disabled = item.value === "";
+      return option;
+    }),
+  );
+}
+
+function targetReady() {
+  const target = state.target;
+  if (target.kind === "run") {
+    return state.output !== null && FINISHED_STATES.includes(state.run.state);
+  }
+  if (target.kind === "earlier") {
+    return state.earlier !== null && Number.isInteger(target.index);
+  }
+  return typeof target.path === "string" && target.path !== "";
+}
+
+// What the server takes for the output of an action: the page names a place
+// only for a folder that the person chose.
+function targetPayload() {
+  const target = state.target;
+  if (target.kind === "earlier") {
+    return { output: "earlier", index: target.index, list: state.earlier?.list };
+  }
+  if (target.kind === "chosen") {
+    return { output: "chosen", path: target.path };
+  }
+  return {};
+}
+
+function targetPath() {
+  const target = state.target;
+  return target.kind === "run" ? state.run.output_path : target.path;
+}
+
+function toolsBusy() {
+  const tools = state.tools;
+  return tools.checking || tools.bundling || tools.reveal?.busy === true;
+}
+
+// Another output for the fourth box: what it did for the one before goes.
+function setTarget(kind, index = null, path = null) {
+  state.target = { kind, index, path };
+  state.tools = emptyTools();
+  state.targetChooserError = null;
+}
+
+// The list of earlier outputs, from the server, with the output before the
+// last run (stage B5b). An earlier output that the box holds keeps its place
+// in the new list, by its folder.
+async function loadEarlier() {
+  try {
+    state.earlier = await callApi("/api/outputs");
+    if (state.target.kind === "earlier") {
+      const same = state.earlier.outputs.find((output) => output.path === state.target.path);
+      state.target = same ? { kind: "earlier", index: same.index, path: same.path } : { kind: "earlier", index: null, path: null };
+    }
+    // Before a run of this launch, the box is for an earlier output, as the
+    // mockup v10 does.
+    const finished = state.output !== null && FINISHED_STATES.includes(state.run.state);
+    if (!finished && state.target.kind === "run") {
+      const first = state.earlier.outputs[0];
+      setTarget("earlier", first ? first.index : null, first ? first.path : null);
+    }
+  } catch (error) {
+    connectionFailure(error);
+  }
+  render();
+}
+
+function chooseEarlier(value) {
+  if (value === "other") {
+    chooseWithDialog("folder", "target", ui.targetList);
+    return;
+  }
+  const output = state.earlier?.outputs.find((item) => String(item.index) === value);
+  if (output) {
+    setTarget("earlier", output.index, output.path);
+  }
+  render();
+}
+
+async function checkTarget() {
+  if (!targetReady()) {
+    return;
+  }
+  const tools = state.tools;
+  tools.checking = true;
+  tools.check = null;
+  tools.checkError = null;
+  tools.checkDetail = null;
+  render();
+  try {
+    tools.check = await callApi("/api/check-output", targetPayload());
+  } catch (error) {
+    if (!connectionFailure(error)) {
+      tools.checkError = error.code;
+      tools.checkDetail = error.detail;
+      if (error.code === "OUTPUT_LIST_CHANGED") {
+        loadEarlier();
+      }
+    }
+  } finally {
+    tools.checking = false;
+    render();
+    returnFocus(ui.targetCheck, ui.targetHeading);
+  }
+}
+
 // What showing a file where it is saved said (stage B5a).
 function revealLines(reveal) {
   if (reveal?.error) {
@@ -1269,8 +1502,16 @@ function renderControls(states, current) {
   // The place of the Support Bundle and showing the files where they are
   // saved (stage B5a).
   ui.bundleChoose.disabled = !enabled.browse;
-  ui.bundleReveal.disabled = !enabled.outputActions;
   ui.packReveal.disabled = !enabled.outputActions;
+  // The output of the fourth box and its actions (stage B5b), never while a
+  // run is active.
+  const toolsFree = state.connected && !(ACTIVE_STATES.includes(state.run.state) || state.starting) && !toolsBusy();
+  const runFinished = state.output !== null && FINISHED_STATES.includes(state.run.state);
+  ui.targetRun.disabled = !toolsFree || !runFinished;
+  ui.targetEarlier.disabled = !toolsFree;
+  ui.targetList.disabled = !toolsFree || state.target.kind === "run" || state.choosing !== null;
+  ui.targetCheck.disabled = !toolsFree || !targetReady();
+  ui.bundleReveal.disabled = !toolsFree;
   // The settings are not forgotten while a run, which remembers its places
   // when it ends, is active (stage B4c).
   const running = ACTIVE_STATES.includes(state.run.state) || state.starting;
@@ -1302,7 +1543,7 @@ function renderControls(states, current) {
   ui.openFolder.disabled = !enabled.outputActions;
   ui.openStartHere.disabled = !enabled.outputActions;
   // The bundle's name is fixed, so a second one would be refused.
-  ui.bundle.disabled = !enabled.outputActions || state.output?.bundle != null;
+  ui.bundle.disabled = !toolsFree || !targetReady() || state.tools.bundle !== null;
 }
 
 function render() {
@@ -1391,7 +1632,10 @@ async function pollRun() {
         ui.outputName.value = nextOutputName(ui.outputName.value.trim(), new Date());
         state.nameProposed = true;
         checkOutput();
+        // The output of this run is the one of the fourth box (stage B5b).
+        setTarget("run");
       }
+      loadEarlier();
       // A run may have made the default place (stage B4a).
       lookPlace();
       // A Snapshot run may have made the store and imported into it; the
@@ -1432,12 +1676,9 @@ async function checkOutput() {
     opening: false,
     opened: false,
     openError: null,
-    bundling: false,
-    bundle: null,
-    bundleError: null,
-    // Showing the Support Bundle or the External-safe Pack where it is saved
-    // (stage B5a).
-    reveals: { bundle: null, safe_pack: null },
+    // Showing the External-safe Pack where it is saved (stage B5a); the
+    // Support Bundle is that of the fourth box (stage B5b).
+    reveals: { safe_pack: null },
   };
   state.output = output;
   render();
@@ -1478,23 +1719,32 @@ async function openOutput(target) {
 }
 
 async function makeBundle() {
-  const output = state.output;
-  if (output === null) {
+  if (!targetReady()) {
     return;
   }
-  output.bundling = true;
-  output.bundleError = null;
-  output.reveals.bundle = null;
+  const tools = state.tools;
+  tools.bundling = true;
+  tools.bundleError = null;
+  tools.bundleDetail = null;
+  tools.reveal = null;
   render();
   try {
-    // Next to the output, or in the folder that the person chose (stage B5a).
-    output.bundle = await callApi("/api/support-bundle", state.bundleFolder === null ? {} : { folder: state.bundleFolder });
+    // Next to the output, or in the folder that the person chose (stage
+    // B5a), of the output of the fourth box (stage B5b).
+    tools.bundle = await callApi("/api/support-bundle", {
+      ...targetPayload(),
+      ...(state.bundleFolder === null ? {} : { folder: state.bundleFolder }),
+    });
   } catch (error) {
     if (!connectionFailure(error)) {
-      output.bundleError = error.code;
+      tools.bundleError = error.code;
+      tools.bundleDetail = error.detail;
+      if (error.code === "OUTPUT_LIST_CHANGED") {
+        loadEarlier();
+      }
     }
   } finally {
-    output.bundling = false;
+    tools.bundling = false;
     render();
     returnFocus(ui.bundle, ui.bundleHeading);
   }
@@ -1503,17 +1753,26 @@ async function makeBundle() {
 // Show the Support Bundle or the External-safe Pack where it is saved; the
 // server knows the file, and the page sends no place (stage B5a).
 async function revealFile(target, button, fallback) {
-  const output = state.output;
-  if (output === null) {
+  // The bundle is that of the fourth box (stage B5b), the pack that of the
+  // run.
+  const holder = target === "bundle" ? state.tools : state.output;
+  if (holder === null) {
     return;
   }
-  output.reveals[target] = { busy: true, opened: false, error: null };
+  const keep = (reveal) => {
+    if (target === "bundle") {
+      holder.reveal = reveal;
+    } else {
+      holder.reveals[target] = reveal;
+    }
+  };
+  keep({ busy: true, opened: false, error: null });
   render();
   try {
     await callApi("/api/open-output", { target });
-    output.reveals[target] = { busy: false, opened: true, error: null };
+    keep({ busy: false, opened: true, error: null });
   } catch (error) {
-    output.reveals[target] = { busy: false, opened: false, error: connectionFailure(error) ? null : error.code };
+    keep({ busy: false, opened: false, error: connectionFailure(error) ? null : error.code });
   }
   render();
   returnFocus(button, fallback);
@@ -1605,6 +1864,9 @@ function purposeHeading(purpose) {
   if (purpose === "bundle") {
     return ui.bundleHeading;
   }
+  if (purpose === "target") {
+    return ui.targetHeading;
+  }
   return purpose === "input" ? ui.inputHeading : purpose === "output" ? ui.outputHeading : ui.snapshotHeading;
 }
 
@@ -1616,6 +1878,8 @@ function setChooserError(purpose, code) {
     state.placeChooserError = code;
   } else if (purpose === "bundle") {
     state.bundleChooserError = code;
+  } else if (purpose === "target") {
+    state.targetChooserError = code;
   } else {
     state.store.chooserError = code;
   }
@@ -1636,13 +1900,18 @@ function usePlace(purpose, path, focusTarget) {
     // The folder for the Support Bundle (stage B5a); another one may be made
     // there.
     state.bundleFolder = path;
-    if (state.output !== null) {
-      state.output.bundle = null;
-      state.output.bundleError = null;
-      state.output.reveals.bundle = null;
-    }
+    const tools = state.tools;
+    tools.bundle = null;
+    tools.bundleError = null;
+    tools.bundleDetail = null;
+    tools.reveal = null;
     render();
     returnFocus(focusTarget, ui.bundleHeading);
+  } else if (purpose === "target") {
+    // An output that the person chose for the fourth box (stage B5b).
+    setTarget("chosen", null, path);
+    render();
+    returnFocus(focusTarget, ui.targetHeading);
   } else {
     ui.outputParent.value = path;
     ui.outputParent.dispatchEvent(new Event("input"));
@@ -1846,6 +2115,9 @@ async function startRun() {
   // The previous result would read as the answer to this attempt.
   state.run = { state: "idle" };
   state.output = null;
+  if (state.target.kind === "run") {
+    state.tools = emptyTools();
+  }
   state.announced = null;
   render();
   try {
@@ -1996,7 +2268,9 @@ function openBrowser(target, opener) {
         ? ui.outputParent.value
         : target === "bundle"
           ? state.bundleFolder ?? ui.outputParent.value
-          : state.store.answer?.path ?? state.defaultFolder ?? "";
+          : target === "target"
+            ? state.target.path ?? state.defaultFolder ?? ui.outputParent.value
+            : state.store.answer?.path ?? state.defaultFolder ?? "";
   state.browser = {
     target,
     opener,
@@ -2275,6 +2549,18 @@ function connect() {
   ui.openStartHere.addEventListener("click", () => openOutput("start_here"));
   ui.bundle.addEventListener("click", makeBundle);
   ui.bundleChoose.addEventListener("click", () => chooseWithDialog("folder", "bundle", ui.bundleChoose));
+  // The output of the fourth box (stage B5b).
+  ui.targetRun.addEventListener("change", () => {
+    setTarget("run");
+    render();
+  });
+  ui.targetEarlier.addEventListener("change", () => {
+    const first = state.earlier?.outputs[0];
+    setTarget("earlier", first ? first.index : null, first ? first.path : null);
+    render();
+  });
+  ui.targetList.addEventListener("change", () => chooseEarlier(ui.targetList.value));
+  ui.targetCheck.addEventListener("click", checkTarget);
   ui.bundleReveal.addEventListener("click", () => revealFile("bundle", ui.bundleReveal, ui.bundleHeading));
   ui.packReveal.addEventListener("click", () => revealFile("safe_pack", ui.packReveal, ui.outputHeading));
   ui.toolsToggle.addEventListener("click", () => {
@@ -2382,6 +2668,8 @@ async function start() {
     } else if (FINISHED_STATES.includes(state.run.state)) {
       checkOutput();
     }
+    // The outputs of earlier runs, and the one before (stage B5b).
+    loadEarlier();
     // The remembered store (stage B4c), or the store at the default place,
     // if there is one, and the folder for the output (stage B4a).
     if (state.remembered.store !== null) {
@@ -2397,3 +2685,19 @@ async function start() {
 }
 
 start();
+
+// What the fourth box did for its output: the check, the Support Bundle, and
+// showing it where it is saved (stage B5b).
+function emptyTools() {
+  return {
+    checking: false,
+    check: null,
+    checkError: null,
+    checkDetail: null,
+    bundling: false,
+    bundle: null,
+    bundleError: null,
+    bundleDetail: null,
+    reveal: null,
+  };
+}

@@ -278,6 +278,14 @@ def launch_settings() -> dict[str, Any]:
     return launch_answer(*read_settings(path))
 
 
+def recent_outputs() -> list[str]:
+    """The outputs that the settings remember, newest first (stage B5b); none
+    when there are no settings or they are not used."""
+    path, _makeable = _target()
+    values, _notice = read_settings(path)
+    return list(values.get("recent_outputs", []))
+
+
 def remember_run(output: Path, store: Path | None) -> str | None:
     path, makeable = _target()
     return remember_run_at(path, output, store, makeable)
@@ -306,6 +314,7 @@ __all__ = [
     "launch_answer",
     "launch_settings",
     "read_settings",
+    "recent_outputs",
     "remember_hints",
     "remember_hints_at",
     "remember_run",

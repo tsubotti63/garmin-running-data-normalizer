@@ -7,11 +7,16 @@ and the Support Bundle call the same functions as the CLI and report codes
 and counts only. Opening shows the folder or opens START_HERE.md with the
 operating system's default application, and shows the Support Bundle that
 this server made or the External-safe Pack of the output in their folder,
-from an argument list with an absolute path and without a shell.
+from an argument list with an absolute path and without a shell. From stage
+B5b, an output that an earlier run made, or one that the person chose, is
+checked and bundled the same way, and the summary of the output before a run
+gives the counts that the page compares the run with.
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -23,9 +28,13 @@ from typing import Any
 
 from ..diagnostics.doctor import DoctorError, doctor_run_output
 from ..diagnostics.support_bundle import SupportBundleError, build_support_bundle
-from ..standalone import StandaloneHandoffError, validate_standalone_handoff
+from ..standalone import VERSION_FORM, OtherVersionError, StandaloneHandoffError, validate_standalone_handoff
 
 OPEN_TARGETS = ("folder", "start_here", "bundle", "safe_pack")
+# What is read from the summary of an earlier output (stage B5b).
+MAX_SUMMARY_BYTES = 8 * 1024 * 1024
+FAMILY_NAME = re.compile(r"[a-z][a-z0-9_]{0,63}")
+TIMEZONE_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_+\-]{0,63}(?:/[A-Za-z0-9_+\-]{1,64}){0,3}")
 # The External-safe Pack, inside the output (stage B5a).
 SAFE_PACK = Path("analysis") / "external_safe_handoff.zip"
 MACOS_OPEN = "/usr/bin/open"
@@ -35,11 +44,23 @@ _REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
 
 
 class OutputActionError(ValueError):
-    """An output action that failed, reported to the page as a code."""
+    """An output action that failed, reported to the page as a code, and for
+    an output that another version made, that version (stage B5b)."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, version: str | None = None) -> None:
         super().__init__(code)
         self.code = code
+        self.version = version
+
+
+def _made_by(exc: BaseException | None) -> str | None:
+    """The version that made an output that this version cannot check, from
+    the error that told it, through the errors that it caused."""
+    while exc is not None:
+        if isinstance(exc, OtherVersionError):
+            return exc.version
+        exc = exc.__cause__
+    return None
 
 
 def check_output(output: Path) -> dict[str, Any]:
@@ -47,19 +68,24 @@ def check_output(output: Path) -> dict[str, Any]:
     try:
         handoff = validate_standalone_handoff(output)
         report = doctor_run_output(output)
+    except OtherVersionError as exc:
+        # Another version made the output (stage B5b).
+        raise OutputActionError("OUTPUT_OTHER_VERSION", exc.version) from exc
     except StandaloneHandoffError as exc:
         raise OutputActionError("HANDOFF_INVALID") from exc
     except DoctorError as exc:
         raise OutputActionError(exc.code) from exc
     except OSError as exc:
         raise OutputActionError("OUTPUT_NOT_AVAILABLE") from exc
-    if (
-        report["completion_state"] != "COMPLETED"
-        or report["diagnostic_contract_availability"] != "CURRENT"
+    # An output of 1.3 has no diagnostics, and is told so (stage B5b); a run
+    # of this version wrote a completed output with its diagnostics, so any
+    # other answer means that the folder changed after the run.
+    legacy = report["diagnostic_contract_availability"] == "LEGACY_NOT_AVAILABLE"
+    if report["completion_state"] != "COMPLETED" or (
+        report["diagnostic_contract_availability"] != "CURRENT" and not legacy
     ):
-        # The run wrote a completed output with current diagnostics, so the
-        # folder changed after the run.
         raise OutputActionError("OUTPUT_CHANGED")
+    version = report.get("product_version")
     return {
         "handoff": {
             "status": handoff["status"],
@@ -73,7 +99,61 @@ def check_output(output: Path) -> dict[str, Any]:
             "next_action_id": report["doctor_next_action_id"],
             "support_bundle_suggested": bool(report["support_bundle_suggested"]),
             "warning_codes": sorted({finding["code"] for finding in report["findings"]}),
+            "legacy": legacy,
+            "product_version": version if isinstance(version, str) and VERSION_FORM.fullmatch(version) else None,
         },
+    }
+
+
+def earlier_outputs(remembered: list[str], exclude: Path | None) -> list[Path]:
+    """The outputs that the settings remember, newest first, that are there as
+    plain folders, except ``exclude``, the output of this launch's last run
+    (stage B5b). One that is not found is left out, and stays remembered."""
+    found: list[Path] = []
+    for place in remembered:
+        path = Path(place)
+        if exclude is not None and path == exclude:
+            continue
+        try:
+            if _is_plain(path, stat.S_ISDIR):
+                found.append(path)
+        except OSError:
+            continue
+    return found
+
+
+def output_summary(output: Path) -> dict[str, Any] | None:
+    """What the page compares a run with (stage B5b): the count of the records
+    of each family, whether the output is of Snapshots, its version, and its
+    timezone, from its run_summary.json; None when it cannot be read. Nothing
+    else of the output is read."""
+    path = output / "run_summary.json"
+    try:
+        if not _is_plain(path, stat.S_ISREG) or path.stat().st_size > MAX_SUMMARY_BYTES:
+            return None
+        summary = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return None
+    if not isinstance(summary, dict) or not isinstance(summary.get("family_results"), dict):
+        return None
+    families: dict[str, int] = {}
+    for family, details in summary["family_results"].items():
+        count = details.get("record_count") if isinstance(details, dict) else None
+        if not isinstance(family, str) or not FAMILY_NAME.fullmatch(family):
+            return None
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            return None
+        families[family] = count
+    version = summary.get("product_version")
+    timezone = summary.get("local_timezone")
+    run_all_version = summary.get("run_all_version")
+    return {
+        "name": output.name,
+        "families": families,
+        "snapshots": summary.get("snapshot_lifecycle") is not None,
+        "version": version if isinstance(version, str) and VERSION_FORM.fullmatch(version) else None,
+        "run_all_version": run_all_version if isinstance(run_all_version, int) and not isinstance(run_all_version, bool) else None,
+        "timezone": timezone if isinstance(timezone, str) and TIMEZONE_NAME.fullmatch(timezone) else None,
     }
 
 
@@ -93,7 +173,7 @@ def make_support_bundle(output: Path, folder: Path | None = None) -> dict[str, A
     try:
         result = build_support_bundle(output, destination)
     except SupportBundleError as exc:
-        raise OutputActionError(exc.code) from exc
+        raise OutputActionError(exc.code, _made_by(exc)) from exc
     except OSError as exc:
         raise OutputActionError("SUPPORT_BUNDLE_NOT_WRITTEN") from exc
     return {
