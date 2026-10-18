@@ -268,6 +268,19 @@ STOPS: dict[str, Stop] = {
         "a file or a link is there already in the place of the Support Bundle",
         "move or rename it, or give another file for the Support Bundle",
     ),
+    # The place of a Support Bundle, as for the output (stage B5a).
+    "SUPPORT_BUNDLE_PARENT_NOT_FOUND": Stop(
+        "the folder for the Support Bundle does not exist or is not a folder",
+        "give a file in an existing folder for the Support Bundle, or create the folder first",
+    ),
+    "SUPPORT_BUNDLE_INSIDE_OUTPUT": Stop(
+        "the place of the Support Bundle is inside the run output",
+        "give a file outside the run output for the Support Bundle, such as next to it",
+    ),
+    "SUPPORT_BUNDLE_NOT_WRITTEN": Stop(
+        "the Support Bundle could not be written",
+        "check that the folder for it is still there and that this app can write in it",
+    ),
     "SUPPORT_BUNDLE_AUTHORITY_INVALID": Stop(
         "the diagnostics of the run output do not allow a Support Bundle",
         "run Run-All again into a new folder, and make the Support Bundle from it",
@@ -417,10 +430,6 @@ PAGE_STOPS: dict[str, Stop] = {
         "the output folder or a file in it is missing, or was replaced by a link",
         "check that the output folder is still where it was",
     ),
-    "SUPPORT_BUNDLE_NOT_WRITTEN": Stop(
-        "the Support Bundle could not be written",
-        "check that the folder for it is still there and that this app can write in it",
-    ),
     "OPEN_NOT_AVAILABLE": Stop(
         "no program to open it (xdg-open) was found",
         "open the output folder from your file manager, such as Finder or File Explorer",
@@ -490,11 +499,19 @@ PAGE_WORDING: dict[str, Stop] = {
         "the diagnostics of the output do not allow a Support Bundle",
         "normalize again into a new folder, and make the Support Bundle from that output",
     ),
-    # The page makes the Support Bundle next to the output; it does not take
-    # another place until stage B5.
+    # The page makes the Support Bundle next to the output or in a folder that
+    # the person chose (stage B5a).
     "SUPPORT_BUNDLE_EXISTS": Stop(
         "a file or a link is there already in the place of the Support Bundle",
-        "move or rename it, and press the button again",
+        "move or rename it, or choose another place, and press the button again",
+    ),
+    "SUPPORT_BUNDLE_PARENT_NOT_FOUND": Stop(
+        "the folder for the Support Bundle is not there",
+        "choose another place with Choose…, and press the button again",
+    ),
+    "SUPPORT_BUNDLE_INSIDE_OUTPUT": Stop(
+        "the place for the Support Bundle is inside the output folder",
+        "choose a place outside the output folder, such as next to it",
     ),
     "SUPPORT_BUNDLE_PATH_UNSAFE": Stop(
         "the output folder is a link or is no longer there",

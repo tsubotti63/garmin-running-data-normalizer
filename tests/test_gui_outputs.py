@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import json
 import os
 import shutil
@@ -9,7 +10,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
@@ -225,6 +226,121 @@ class SupportBundleTest(OutputTestCase):
             self.assert_code("SUPPORT_BUNDLE_EXISTS", make_support_bundle, self.output)
             self.assertFalse((self.root / "elsewhere.zip").exists())
 
+    def test_the_bundle_goes_in_a_chosen_folder(self) -> None:
+        # Stage B5a: next to the output by default, or in the folder that the
+        # person chose, with the same name and the same bytes.
+        chosen = self.root / "chosen"
+        chosen.mkdir()
+        answer = make_support_bundle(self.output, chosen)
+        destination = chosen / "output-support-bundle.zip"
+        self.assertEqual(answer, {"path": str(destination), "member_count": 6, "human_review_required": True})
+        self.assertEqual(support_bundle_path(self.output, chosen), destination)
+        make_support_bundle(self.output)
+        self.assertEqual(destination.read_bytes(), support_bundle_path(self.output).read_bytes())
+
+    def test_the_place_of_the_bundle_follows_the_rules_of_the_cli(self) -> None:
+        # A folder that is there, outside the output, as for the output
+        # (decision 20261016-13); no folder is made.
+        missing = self.root / "missing"
+        self.assert_code("SUPPORT_BUNDLE_PARENT_NOT_FOUND", make_support_bundle, self.output, missing)
+        self.assertFalse(missing.exists())
+        a_file = self.root / "a-file"
+        a_file.write_bytes(b"synthetic")
+        self.assert_code("SUPPORT_BUNDLE_PARENT_NOT_FOUND", make_support_bundle, self.output, a_file)
+        before = tree_bytes(self.output)
+        for folder in (self.output, self.output / "analysis"):
+            with self.subTest(folder=folder.name):
+                self.assert_code("SUPPORT_BUNDLE_INSIDE_OUTPUT", make_support_bundle, self.output, folder)
+        if can_symlink(self.root):
+            link = self.root / "link-to-output"
+            link.symlink_to(self.output, target_is_directory=True)
+            self.assert_code("SUPPORT_BUNDLE_INSIDE_OUTPUT", make_support_bundle, self.output, link)
+        # The case of the names too, on a disk that does not tell it apart.
+        if (self.root / "OUTPUT").exists():
+            self.assert_code("SUPPORT_BUNDLE_INSIDE_OUTPUT", make_support_bundle, self.output, self.root / "OUTPUT")
+        self.assertEqual(tree_bytes(self.output), before)
+        self.assertEqual(validate_standalone_handoff(self.output)["status"], "PASS")
+
+    def test_a_file_put_in_the_place_while_the_bundle_is_written_stays(self) -> None:
+        # The bundle is given its name in one step that never replaces a file
+        # (stage B5a): a file that another program put there meanwhile stays.
+        destination = support_bundle_path(self.output)
+        real_link = os.link
+
+        def link(source: object, target: object) -> None:
+            Path(str(target)).write_bytes(b"put there meanwhile")
+            real_link(source, target)
+
+        with patch("garmin_running_data_normalizer.diagnostics.support_bundle.os.link", side_effect=link):
+            self.assert_code("SUPPORT_BUNDLE_EXISTS", make_support_bundle, self.output)
+        self.assertEqual(destination.read_bytes(), b"put there meanwhile")
+        self.assertEqual(sorted(path.name for path in self.root.iterdir()), ["output", destination.name])
+
+    def test_a_disk_without_hard_links_gets_a_copy_that_never_replaces_a_file(self) -> None:
+        # Where the disk makes no hard links, the bundle is copied into a new
+        # file; a name that is taken is never written over.
+        destination = support_bundle_path(self.output)
+        for number in (errno.EPERM, errno.EXDEV, errno.ENOTSUP):
+            with self.subTest(errno=number):
+                with patch(
+                    "garmin_running_data_normalizer.diagnostics.support_bundle.os.link",
+                    side_effect=OSError(number, "no hard links here"),
+                ):
+                    answer = make_support_bundle(self.output)
+                self.assertEqual(answer["member_count"], 6)
+                with zipfile.ZipFile(destination) as archive:
+                    self.assertIsNone(archive.testzip())
+                    self.assertEqual(len(archive.namelist()), 6)
+                copied = destination.read_bytes()
+                destination.unlink()
+                make_support_bundle(self.output)
+                self.assertEqual(destination.read_bytes(), copied)
+                destination.unlink()
+        real_open = os.open
+
+        def taken(place: object, flags: int, *args: object) -> int:
+            # Something takes the name between the link and the copy.
+            if Path(str(place)) == destination:
+                destination.write_bytes(b"put there meanwhile")
+            return real_open(place, flags, *args)
+
+        with (
+            patch("garmin_running_data_normalizer.diagnostics.support_bundle.os.link", side_effect=OSError(errno.EXDEV, "no hard links here")),
+            patch("garmin_running_data_normalizer.diagnostics.support_bundle.os.open", side_effect=taken),
+        ):
+            self.assert_code("SUPPORT_BUNDLE_EXISTS", make_support_bundle, self.output)
+        self.assertEqual(destination.read_bytes(), b"put there meanwhile")
+        self.assertEqual(sorted(path.name for path in self.root.iterdir()), ["output", destination.name])
+
+    def test_a_bundle_that_cannot_be_written_leaves_nothing(self) -> None:
+        # A folder that cannot be written, or a copy that fails half-way,
+        # gives SUPPORT_BUNDLE_NOT_WRITTEN, as the CLI does (stage B5a), and
+        # leaves neither the temporary file nor a part of the bundle.
+        destination = support_bundle_path(self.output)
+        real_read, real_open = Path.read_bytes, os.open
+
+        def read_bytes(path: Path) -> bytes:
+            if path.name.startswith(f".{destination.name}."):
+                raise OSError(errno.EIO, "synthetic read error")
+            return real_read(path)
+
+        def refused(place: object, flags: int, *args: object) -> int:
+            if Path(str(place)) == destination:
+                raise PermissionError(errno.EACCES, "denied")
+            return real_open(place, flags, *args)
+
+        module = "garmin_running_data_normalizer.diagnostics.support_bundle"
+        cases = {
+            "the folder": patch(f"{module}.tempfile.mkstemp", side_effect=PermissionError("denied")),
+            "the new file": patch(f"{module}.os.open", side_effect=refused),
+            "the copy": patch.object(Path, "read_bytes", read_bytes),
+        }
+        for label, broken in cases.items():
+            with self.subTest(case=label):
+                with patch(f"{module}.os.link", side_effect=OSError(errno.EXDEV, "no hard links here")), broken:
+                    self.assert_code("SUPPORT_BUNDLE_NOT_WRITTEN", make_support_bundle, self.output)
+                self.assertEqual(sorted(path.name for path in self.root.iterdir()), ["output"])
+
     def test_bundle_failures_are_reported_by_code(self) -> None:
         self.assert_code("SUPPORT_BUNDLE_PATH_UNSAFE", make_support_bundle, self.root / "missing")
         empty = self.root / "empty"
@@ -256,28 +372,75 @@ class OpenOutputTest(OutputTestCase):
                 open_command(folder, folder=True, platform="linux"),
                 ["/usr/bin/xdg-open", str(folder)],
             )
+        # A file shown where it is saved (stage B5a): selected in Finder, in
+        # File Explorer, and elsewhere its folder.
+        bundle = self.root / "output-support-bundle.zip"
+        self.assertEqual(open_command(bundle, folder=False, platform="darwin", reveal=True), [MACOS_OPEN, "-R", str(bundle)])
+        # File Explorer takes /select only with the place alone in quotes,
+        # also for a place with a space, which a list would quote whole.
+        spaced = PureWindowsPath(r"D:\Running Data\GarminRunningData\out-support-bundle.zip")
+        explorer = str(self.root / "Windows" / "explorer.exe")
+        with patch.dict(os.environ, {"SystemRoot": str(self.root / "Windows")}):
+            command = open_command(spaced, folder=False, platform="win32", reveal=True)
+            self.assertEqual(command, f'"{explorer}" /select,"{spaced}"')
+            self.assertNotEqual(command, subprocess.list2cmdline([explorer, f"/select,{spaced}"]))
+            # A place with quotes, which Windows never names, is not put in it.
+            self.assert_code(
+                "OPEN_FAILED",
+                lambda: open_command(PureWindowsPath('C:\\a"b\\x.zip'), folder=False, platform="win32", reveal=True),
+            )
+        with patch.object(outputs.shutil, "which", return_value="/usr/bin/xdg-open"):
+            self.assertEqual(open_command(bundle, folder=False, platform="linux", reveal=True), ["/usr/bin/xdg-open", str(self.root)])
         with patch.object(outputs.shutil, "which", return_value=None):
             self.assert_code(
                 "OPEN_NOT_AVAILABLE",
                 lambda: open_command(folder, folder=False, platform="linux"),
             )
 
-    def test_only_the_folder_and_start_here_can_be_opened(self) -> None:
-        self.assertEqual(OPEN_TARGETS, ("folder", "start_here"))
+    def test_only_the_known_targets_can_be_opened(self) -> None:
+        # The output folder, its START_HERE.md, and from stage B5a the Support
+        # Bundle that the server made and the External-safe Pack of the output.
+        self.assertEqual(OPEN_TARGETS, ("folder", "start_here", "bundle", "safe_pack"))
+        bundle = Path(make_support_bundle(self.output)["path"])
+        pack = self.output / "analysis" / "external_safe_handoff.zip"
         with patch.object(outputs, "_launch") as launch:
             open_output(self.output, "folder")
             open_output(self.output, "start_here")
+            # No bundle made by the server, and no pack made by the run.
+            self.assert_code("OUTPUT_NOT_AVAILABLE", open_output, self.output, "bundle")
+            self.assert_code("OUTPUT_NOT_AVAILABLE", open_output, self.output, "safe_pack")
+            open_output(self.output, "bundle", bundle)
+            pack.write_bytes(b"synthetic pack")
+            open_output(self.output, "safe_pack")
             self.assertEqual(
                 launch.call_args_list,
                 [
-                    call(self.output, folder=True),
-                    call(self.output / "START_HERE.md", folder=False),
+                    call(self.output, folder=True, reveal=False),
+                    call(self.output / "START_HERE.md", folder=False, reveal=False),
+                    call(bundle, folder=False, reveal=True),
+                    call(pack, folder=False, reveal=True),
                 ],
             )
-            for target in (None, "", "Folder", "START_HERE.md", "../folder", ["folder"], {"target": "folder"}, 1):
+            for target in (None, "", "Folder", "START_HERE.md", "../folder", ["folder"], {"target": "folder"}, 1, str(bundle)):
                 with self.subTest(target=target):
-                    self.assert_code("REQUEST_INVALID", open_output, self.output, target)
-            self.assertEqual(launch.call_count, 2)
+                    self.assert_code("REQUEST_INVALID", open_output, self.output, target, bundle)
+            # A link or a folder in the place of a file to show is not shown.
+            pack.unlink()
+            pack.mkdir()
+            self.assert_code("OUTPUT_NOT_AVAILABLE", open_output, self.output, "safe_pack")
+            if can_symlink(self.root):
+                bundle.unlink()
+                bundle.symlink_to(self.output / "START_HERE.md")
+                self.assert_code("OUTPUT_NOT_AVAILABLE", open_output, self.output, "bundle", bundle)
+                # Nor a pack in a folder that a link put in the place of
+                # analysis.
+                elsewhere = self.root / "elsewhere"
+                elsewhere.mkdir()
+                (elsewhere / "external_safe_handoff.zip").write_bytes(b"synthetic pack")
+                shutil.rmtree(self.output / "analysis")
+                (self.output / "analysis").symlink_to(elsewhere, target_is_directory=True)
+                self.assert_code("OUTPUT_NOT_AVAILABLE", open_output, self.output, "safe_pack")
+            self.assertEqual(launch.call_count, 4)
 
     def test_missing_or_replaced_targets_are_not_opened(self) -> None:
         with patch.object(outputs, "_launch") as launch:

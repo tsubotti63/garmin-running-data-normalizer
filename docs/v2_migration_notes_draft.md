@@ -24,7 +24,7 @@ folder; earlier outputs are not converted.
 
 | Contract | v2.0.0 position |
 |---|---|
-| CLI commands and options | The same commands and options; `--input` also takes the downloaded Export ZIP file; for `run-all`, `snapshot run-all`, `snapshot build-input`, and `normalize-activities`, the folder for the output must exist and the name of a new output must be one that every system accepts; for `snapshot init`, the folder that holds the new store must exist, while `support-bundle` still makes the folders above its own; the new `snapshot unlock --store <store> --confirm-no-other-command` removes the lock file that a stopped registration left |
+| CLI commands and options | The same commands and options; `--input` also takes the downloaded Export ZIP file; for `run-all`, `snapshot run-all`, `snapshot build-input`, and `normalize-activities`, the folder for the output must exist and the name of a new output must be one that every system accepts; for `snapshot init`, the folder that holds the new store must exist, and for `support-bundle`, the folder of the bundle must exist and be outside the run output; the new `snapshot unlock --store <store> --confirm-no-other-command` removes the lock file that a stopped registration left |
 | Exit codes | The same `0 / 0 / 3 / 2` Product mapping; `PARTIAL_SUCCESS` (exit 3) covers every file or row left out, and many problems that stopped with exit 2 now finish with exit 3 or 0; `Ctrl+C` ends a command with exit 130 |
 | Stops | Every `ERROR` line says what happened and then the next step of its code; some codes change (below) |
 | Datasets, schemas, and stable keys | 17 datasets; 247 fields (224 in v1.7.1); ten fields become nullable; stable keys unchanged |
@@ -82,6 +82,9 @@ What can change:
   | `snapshot build-input`, `snapshot run-all`: no Activities record that can be kept | `SNAPSHOT_LIFECYCLE_FAILED` | `ACTIVITIES_EMPTY` |
   | `snapshot verify`: a folder without a store | A failed report, exit 2 | `SNAPSHOT_STORE_NOT_FOUND` |
   | `support-bundle`: a file or a link in the place of the bundle | `SUPPORT_BUNDLE_PATH_UNSAFE` | `SUPPORT_BUNDLE_EXISTS` |
+  | `support-bundle`: a folder of the bundle that is not there | The folders are made | `SUPPORT_BUNDLE_PARENT_NOT_FOUND` |
+  | `support-bundle`: a place inside the run output | The bundle is written there, and the output then fails `validate-handoff` | `SUPPORT_BUNDLE_INSIDE_OUTPUT` |
+  | `support-bundle`: a folder that cannot be written | `COMMAND_FAILED` | `SUPPORT_BUNDLE_NOT_WRITTEN` |
   | Every command: `Ctrl+C` | A Python traceback | `RUN_CANCELLED` or `RUN_CANCELLED_AFTER_OUTPUT`, exit 130 |
 
   The [table of the stops](v2_data_handling.md#stops-and-next-steps) gives

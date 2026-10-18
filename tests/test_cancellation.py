@@ -197,9 +197,9 @@ class CancelledCommandTest(UsualCtrlC):
                 # which stayed until stage A5c.
                 ("normalize-activities", interrupted_rename(empty, 2),
                  ("normalize-activities", "--input", SYNTHETIC_EXPORT, "--output", empty)),
-                # The Support Bundle while it is put in its place; its
-                # temporary file stayed until stage A5c.
-                ("support-bundle", mock.patch.object(Path, "replace", interrupt),
+                # The Support Bundle while it is given its name (stage
+                # B5a); its temporary file stayed until stage A5c.
+                ("support-bundle", mock.patch("garmin_running_data_normalizer.diagnostics.support_bundle._put_in_place", side_effect=interrupt),
                  ("support-bundle", "--run-output", done, "--output", root / "bundle.zip")),
                 # A new store while it is written.
                 ("snapshot init", mock.patch("garmin_running_data_normalizer.snapshot.store._write_registry", side_effect=interrupt),
@@ -248,17 +248,14 @@ class CancelledCommandTest(UsualCtrlC):
                 return mock.patch.object(module, function, wrapped)
 
             run_all_module = importlib.import_module("garmin_running_data_normalizer.run_all")
-            real_rename, real_replace = Path.rename, Path.replace
+            bundle_module = importlib.import_module("garmin_running_data_normalizer.diagnostics.support_bundle")
+            real_rename = Path.rename
 
             def rename_then_interrupt(self: Path, target: Any) -> Any:
                 result = real_rename(self, target)
                 if Path(target) == root / "o2":
                     raise KeyboardInterrupt
                 return result
-
-            def replace_then_interrupt(self: Path, target: Any) -> Any:
-                real_replace(self, target)
-                raise KeyboardInterrupt
 
             cases = [
                 ("run-all", after(run_all_module, "_publish_outputs"),
@@ -267,7 +264,8 @@ class CancelledCommandTest(UsualCtrlC):
                  ("snapshot", "build-input", "--store", store, "--output", root / "o2"), root / "o2"),
                 ("normalize-activities", after(runner, "_publish_golden_output"),
                  ("normalize-activities", "--input", SYNTHETIC_EXPORT, "--output", empty), empty),
-                ("support-bundle", mock.patch.object(Path, "replace", replace_then_interrupt),
+                # The Support Bundle once it has its name (stage B5a).
+                ("support-bundle", after(bundle_module, "_put_in_place"),
                  ("support-bundle", "--run-output", done, "--output", root / "bundle.zip"), root / "bundle.zip"),
             ]
             for name, patch, args, output in cases:

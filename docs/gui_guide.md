@@ -74,15 +74,18 @@ checked when the run starts.
   the run starts. A folder that a cloud may copy, such as iCloud Drive,
   OneDrive, or the Documents and the Desktop of a Mac, is marked in yellow.
 - **Name of the new folder**: proposed as
-  `garmin-run-all-YYYYMMDD-HHMM` in local time. Use a name that does not exist
+  `garmin-run-all-YYYYMMDD-HHMM` in local time, with `-2`, `-3`, and so on
+  when a folder of that name is there already. Use a name that does not exist
   yet, with up to 200 letters and digits or 66 Japanese characters. It must
-  not start with a dot or contain characters such as `/` or `:`.
+  not start with a dot or contain characters such as `/` or `:`. A name that
+  you type and that is there already is shown in red before the run starts.
 - **Timezone for local dates and times**: `Asia/Tokyo` by default. Use an
   IANA name such as `Europe/London`.
 - **Also create a summary that can be given to an AI (dates to the month, distance, time, and so on)**:
   off by default. It is the same Activities-only pack, the External-safe Pack,
   as the command line's `--external-safe-pack`. Review it
-  before you share it.
+  before you share it. After the run, the box names the file that the run
+  made, and **Show where it is saved** shows it in its folder.
 
 On Windows, keep the location and the name short. Unless long paths are
 enabled, Windows limits a whole path to 260 characters, and the files inside
@@ -138,15 +141,21 @@ After a run, the page proposes a new name for the next one.
 ## 5. Make a Support Bundle when you need help
 
 Under **If something is wrong**, **Make the Support Bundle** writes
-`<output name>-support-bundle.zip` next to the output folder, as the
-`support-bundle` command does.
+`<output name>-support-bundle.zip`, as the `support-bundle` command does.
+**Where the Support Bundle is saved** is next to the output folder by
+default; **Choose…** picks another folder, which must exist and be outside
+the output folder. The page shows the file and its place before you press
+the button.
 
 - It holds six summary files. It contains no rows of your records, paths, file
   names, identifiers, exact times, or coordinates. Nothing is uploaded.
 - Review all six files before you share it. The counts in it can still show
   how much you use your device.
-- An existing file with the same name is never replaced. Move or rename it
-  first.
+- An existing file with the same name is never replaced. Move or rename it,
+  or choose another place.
+- **Show where it is saved** shows the bundle in Finder on macOS and in File
+  Explorer on Windows, and opens its folder with the file manager that
+  `xdg-open` chooses on Linux.
 
 For what the bundle contains, see
 [v1.4 Export Evidence and Diagnostics](v1_4_diagnostics.md#support-bundle).
@@ -169,7 +178,7 @@ the code when you ask for help. Do not attach your Export or output.
 | `INPUT_CHANGED` | The input changed while it was read. | Press Run normalization again when no other app changes the Export. |
 | `OUTPUT_PUBLISH_FAILED` | The output could not be written. | Check the free space and the permissions of the folder for the output, and press Run normalization again. |
 | `HANDOFF_INVALID` | The files of the output do not pass their checks. | Do not change the files of an output; normalize again into a new folder. |
-| `SUPPORT_BUNDLE_EXISTS` | A file or a link is there already in the place of the Support Bundle. | Move or rename it, and press the button again. |
+| `SUPPORT_BUNDLE_EXISTS` | A file or a link is there already in the place of the Support Bundle. | Move or rename it, or choose another place, and press the button again. |
 
 For other codes, follow the next step on the page.
 

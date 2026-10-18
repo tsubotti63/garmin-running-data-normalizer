@@ -300,6 +300,30 @@ class GuiPageStructureTest(unittest.TestCase):
                 self.assertEqual((search.tag, search.get("data-i18n")), ("button", "remembered.search_again"))
                 self.assertIn("hidden", search.attributes)
 
+    def test_the_name_and_the_place_of_the_support_bundle_say_what_they_are(self) -> None:
+        # Stage B5a: the name of the output is described by its red lines,
+        # the button that chooses the folder of the Support Bundle by its
+        # label, and the buttons that show the files where they are saved
+        # are hidden until there is a file.
+        name = by_id(self.elements, "output-name")
+        self.assertEqual(name.get("aria-describedby"), "output-name-help output-name-note")
+        self.assertEqual(by_id(self.elements, "output-name-note").get("role"), "status")
+        choose = by_id(self.elements, "bundle-choose")
+        self.assertEqual((choose.tag, choose.get("aria-labelledby")), ("button", "bundle-choose bundle-place-label"))
+        self.assertEqual(by_id(self.elements, "bundle-place-label").get("data-i18n"), "bundle.place_label")
+        # Each one is named with what it shows: the Support Bundle, or the
+        # file that the run made, and says under it what showing it said.
+        for identifier, named, result in (
+            ("bundle-reveal", "bundle-heading", "bundle-reveal-result"),
+            ("pack-reveal", "pack-made", "pack-result"),
+        ):
+            with self.subTest(button=identifier):
+                reveal = by_id(self.elements, identifier)
+                self.assertEqual((reveal.tag, reveal.get("data-i18n")), ("button", "reveal.button"))
+                self.assertIn("hidden", reveal.attributes)
+                self.assertEqual(reveal.get("aria-labelledby"), f"{identifier} {named}")
+                self.assertEqual(by_id(self.elements, result).get("role"), "status")
+
     def test_folded_help_says_whether_it_is_open(self) -> None:
         toggle = by_id(self.elements, "tools-toggle")
         self.assertEqual(toggle.get("aria-expanded"), "false")

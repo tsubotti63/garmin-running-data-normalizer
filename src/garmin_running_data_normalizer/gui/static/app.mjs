@@ -18,6 +18,7 @@ import {
   boxSummary,
   boxesSetBySettings,
   boxesToConfirm,
+  bundlePlan,
   changedBox,
   checkMessages,
   decideHidden,
@@ -42,12 +43,16 @@ import {
   localTimeIso,
   lockAge,
   lockOffered,
+  movesProposedName,
+  nameMessages,
   nextLine,
   nextLineKind,
   nextOutputName,
   outputCheckMessages,
   outputMissingRemembered,
+  outputNameProblem,
   outputSetBySettings,
+  packMade,
   placeMessages,
   progressBar,
   progressMessage,
@@ -81,6 +86,9 @@ const SPOT_MS = 2000;
 // How long the page waits after the folder for the output is typed before it
 // asks the server about it (stage B4a).
 const PLACE_DELAY_MS = 300;
+// How many free names the page tries for its own proposed name of the output
+// (stage B5a).
+const MAX_NAME_TRIES = 20;
 // The information buttons, by the names of their ids (stage B1b), with the
 // Snapshot Store and the default place (stage B4a).
 const INFOS = ["how", "timezone", "pack", "exit", "tools", "store", "place"];
@@ -162,10 +170,15 @@ const ui = {
   outputSearch: byId("output-search"),
   outputParentNote: byId("output-parent-note"),
   outputName: byId("output-name"),
+  // What keeps the name from being a new folder (stage B5a).
+  outputNameNote: byId("output-name-note"),
   timezone: byId("timezone"),
   timezoneList: byId("timezone-list"),
   safePack: byId("safe-pack"),
   packFile: byId("pack-file"),
+  packMade: byId("pack-made"),
+  packReveal: byId("pack-reveal"),
+  packResult: byId("pack-result"),
   outputDecide: byId("output-decide"),
   runHeading: byId("run-heading"),
   resultHeading: byId("result-heading"),
@@ -193,6 +206,13 @@ const ui = {
   bundleHeading: byId("bundle-heading"),
   bundle: byId("bundle-button"),
   bundleResult: byId("bundle-result"),
+  // The place of the Support Bundle, the file that it makes, and showing it
+  // where it is saved (stage B5a).
+  bundlePlace: byId("bundle-place"),
+  bundleChoose: byId("bundle-choose"),
+  bundlePlan: byId("bundle-plan"),
+  bundleReveal: byId("bundle-reveal"),
+  bundleRevealResult: byId("bundle-reveal-result"),
   stepsCaption: byId("steps-caption"),
   stepsRows: byId("steps-rows"),
   stepsTotalLabel: byId("steps-total-label"),
@@ -315,6 +335,12 @@ const state = {
   // remembered places on a later launch, and the question that forgets them,
   // which says when they are forgotten.
   remembered: { store: null, outputParent: null },
+  // Whether the name of the output is the page's own proposal, which moves on
+  // to a free name; the folder that the person chose for the Support Bundle
+  // (null for next to the output), and the error of its dialog (stage B5a).
+  nameProposed: true,
+  bundleFolder: null,
+  bundleChooserError: null,
   settingsNotice: null,
   snapshotAuto: false,
   outputAuto: false,
@@ -578,7 +604,9 @@ function view() {
     // problem (stage B4c).
     snapshotAuto: storeSetBySettings(state.snapshotAuto, how, state.store),
     outputAuto: outputSetBySettings(state.outputAuto, state.place, ui.outputParent.value.trim()) && requestBox !== "output",
-    outputProblem: outputMissingRemembered(state.place, ui.outputParent.value.trim(), state.remembered.outputParent),
+    outputProblem:
+      outputMissingRemembered(state.place, ui.outputParent.value.trim(), state.remembered.outputParent) ||
+      outputNameProblem(state.place, ui.outputParent.value.trim(), ui.outputName.value.trim()) !== null,
     editedSinceRun: state.editedSinceRun,
     failedBox,
     requestBox,
@@ -814,6 +842,9 @@ function renderPlace() {
   lines.push(...kindLines(placeMessages(state.place, parent, state.remembered.outputParent)));
   replaceLines(ui.outputParentNote, lines);
   ui.outputSearch.hidden = !outputMissingRemembered(state.place, parent, state.remembered.outputParent);
+  // A name of something that is there already, in red before the run
+  // (stage B5a).
+  replaceLines(ui.outputNameNote, kindLines(nameMessages(outputNameProblem(state.place, parent, ui.outputName.value.trim()))));
 }
 
 // The bar at the bottom (stage B4c): what to tell of the settings, the
@@ -1120,23 +1151,30 @@ function renderOutput() {
     openLines.push(t("open.requested"));
   }
   replaceLines(ui.openResult, openLines);
+  // Where the Support Bundle goes, and the file that the button makes, before
+  // it is made (stage B5a).
+  setText(
+    ui.bundlePlace,
+    state.bundleFolder === null ? t("bundle.next_to_output") : t("bundle.chosen_folder", { folder: state.bundleFolder }),
+  );
+  replaceLines(ui.bundlePlan, finished ? bundlePlan(state.run.output_path, state.bundleFolder).map(describe) : []);
   const bundleLines = [];
+  if (state.choosing !== null && state.choosingFor === "bundle") {
+    bundleLines.push(t("choose.open"));
+  } else if (state.bundleChooserError !== null) {
+    bundleLines.push(...errorLines(state.bundleChooserError));
+  }
   if (finished && output.bundling) {
     bundleLines.push(t("bundle.creating"));
   } else if (finished && output.bundleError !== null) {
     bundleLines.push(...errorLines(output.bundleError));
   } else if (finished && output.bundle !== null) {
-    bundleLines.push(
-      t("bundle.created", {
-        count: formatNumber(output.bundle.member_count),
-        path: output.bundle.path,
-      }),
-    );
-    if (output.bundle.human_review_required === true) {
-      bundleLines.push(t("bundle.review"));
-    }
+    bundleLines.push(t("bundle.saved", { count: formatNumber(output.bundle.member_count) }));
   }
   replaceLines(ui.bundleResult, bundleLines);
+  ui.bundleReveal.hidden = !(finished && output.bundle !== null);
+  // What showing it said, under its button.
+  replaceLines(ui.bundleRevealResult, finished && output.bundle !== null ? revealLines(output.reveals.bundle) : []);
   ui.toolsToggle.setAttribute("aria-expanded", String(state.toolsOpen));
   ui.toolsBody.hidden = !state.toolsOpen;
 }
@@ -1188,6 +1226,22 @@ function renderInfos() {
 function renderPackFile() {
   ui.packFile.hidden = !ui.safePack.checked;
   setText(ui.packFile, ui.safePack.checked ? t("pack.file", { name: ui.outputName.value.trim() }) : "");
+  // The External-safe Pack that the run made, shown where it is saved
+  // (stage B5a).
+  const made = state.output !== null && FINISHED_STATES.includes(state.run.state) && state.run.safe_pack === true;
+  ui.packReveal.hidden = !made;
+  // The file that the run made, which the line of the next run's file does
+  // not name.
+  replaceLines(ui.packMade, made ? packMade(state.run.output_path).map(describe) : []);
+  replaceLines(ui.packResult, made ? revealLines(state.output.reveals.safe_pack) : []);
+}
+
+// What showing a file where it is saved said (stage B5a).
+function revealLines(reveal) {
+  if (reveal?.error) {
+    return errorLines(reveal.error);
+  }
+  return reveal?.opened ? [t("open.requested")] : [];
 }
 
 function renderControls(states, current) {
@@ -1212,6 +1266,11 @@ function renderControls(states, current) {
   }
   ui.outputBrowse.disabled = !enabled.browse;
   ui.outputSearch.disabled = !enabled.browse;
+  // The place of the Support Bundle and showing the files where they are
+  // saved (stage B5a).
+  ui.bundleChoose.disabled = !enabled.browse;
+  ui.bundleReveal.disabled = !enabled.outputActions;
+  ui.packReveal.disabled = !enabled.outputActions;
   // The settings are not forgotten while a run, which remembers its places
   // when it ends, is active (stage B4c).
   const running = ACTIVE_STATES.includes(state.run.state) || state.starting;
@@ -1330,6 +1389,7 @@ async function pollRun() {
       if (FINISHED_STATES.includes(state.run.state) && state.output === null) {
         // The name is taken now; propose another one for the next run.
         ui.outputName.value = nextOutputName(ui.outputName.value.trim(), new Date());
+        state.nameProposed = true;
         checkOutput();
       }
       // A run may have made the default place (stage B4a).
@@ -1375,6 +1435,9 @@ async function checkOutput() {
     bundling: false,
     bundle: null,
     bundleError: null,
+    // Showing the Support Bundle or the External-safe Pack where it is saved
+    // (stage B5a).
+    reveals: { bundle: null, safe_pack: null },
   };
   state.output = output;
   render();
@@ -1421,9 +1484,11 @@ async function makeBundle() {
   }
   output.bundling = true;
   output.bundleError = null;
+  output.reveals.bundle = null;
   render();
   try {
-    output.bundle = await callApi("/api/support-bundle");
+    // Next to the output, or in the folder that the person chose (stage B5a).
+    output.bundle = await callApi("/api/support-bundle", state.bundleFolder === null ? {} : { folder: state.bundleFolder });
   } catch (error) {
     if (!connectionFailure(error)) {
       output.bundleError = error.code;
@@ -1433,6 +1498,25 @@ async function makeBundle() {
     render();
     returnFocus(ui.bundle, ui.bundleHeading);
   }
+}
+
+// Show the Support Bundle or the External-safe Pack where it is saved; the
+// server knows the file, and the page sends no place (stage B5a).
+async function revealFile(target, button, fallback) {
+  const output = state.output;
+  if (output === null) {
+    return;
+  }
+  output.reveals[target] = { busy: true, opened: false, error: null };
+  render();
+  try {
+    await callApi("/api/open-output", { target });
+    output.reveals[target] = { busy: false, opened: true, error: null };
+  } catch (error) {
+    output.reveals[target] = { busy: false, opened: false, error: connectionFailure(error) ? null : error.code };
+  }
+  render();
+  returnFocus(button, fallback);
 }
 
 // Focus goes back to the button that started the check: the check button,
@@ -1518,6 +1602,9 @@ function useChosenExport(path, focusTarget) {
 // The heading that takes focus after a dialog for ``purpose``, when its
 // button cannot.
 function purposeHeading(purpose) {
+  if (purpose === "bundle") {
+    return ui.bundleHeading;
+  }
   return purpose === "input" ? ui.inputHeading : purpose === "output" ? ui.outputHeading : ui.snapshotHeading;
 }
 
@@ -1527,6 +1614,8 @@ function setChooserError(purpose, code) {
     state.chooserError = code;
   } else if (purpose === "output") {
     state.placeChooserError = code;
+  } else if (purpose === "bundle") {
+    state.bundleChooserError = code;
   } else {
     state.store.chooserError = code;
   }
@@ -1543,6 +1632,17 @@ function usePlace(purpose, path, focusTarget) {
     // box, which asks for its confirmation again (stage B4c).
     changeBox(purpose);
     storeAction(purpose === "store-open" ? "open" : "place", path, focusTarget);
+  } else if (purpose === "bundle") {
+    // The folder for the Support Bundle (stage B5a); another one may be made
+    // there.
+    state.bundleFolder = path;
+    if (state.output !== null) {
+      state.output.bundle = null;
+      state.output.bundleError = null;
+      state.output.reveals.bundle = null;
+    }
+    render();
+    returnFocus(focusTarget, ui.bundleHeading);
   } else {
     ui.outputParent.value = path;
     ui.outputParent.dispatchEvent(new Event("input"));
@@ -1667,8 +1767,20 @@ async function lookPlace() {
     return;
   }
   try {
-    const answer = await callApi("/api/place", { path });
-    state.place = { ...answer, path };
+    // With the name, as the start of a run checks it (stage B5a): the page's
+    // own proposal moves on to a free name, while the field still holds it.
+    let name = ui.outputName.value.trim();
+    let answer = await callApi("/api/place", { path, name });
+    for (
+      let tries = 0;
+      tries < MAX_NAME_TRIES && movesProposedName(answer.name_problem, state.nameProposed) && ui.outputName.value.trim() === name;
+      tries += 1
+    ) {
+      name = nextOutputName(name, new Date());
+      ui.outputName.value = name;
+      answer = await callApi("/api/place", { path, name });
+    }
+    state.place = { ...answer, path, name };
   } catch (error) {
     if (!connectionFailure(error)) {
       state.place = null;
@@ -1875,13 +1987,16 @@ async function loadFolder(path, startFromField = false) {
 
 function openBrowser(target, opener) {
   // The list starts at the place of its purpose: the Export, the store
-  // (stage B4a), or the folder for the output.
+  // (stage B4a), the folder for the output, or that of the Support Bundle
+  // (stage B5a).
   const start =
     target === "input"
       ? ui.inputPath.value
       : target === "output"
         ? ui.outputParent.value
-        : state.store.answer?.path ?? state.defaultFolder ?? "";
+        : target === "bundle"
+          ? state.bundleFolder ?? ui.outputParent.value
+          : state.store.answer?.path ?? state.defaultFolder ?? "";
   state.browser = {
     target,
     opener,
@@ -2087,6 +2202,12 @@ function fieldChanged(event) {
     state.placeChooserError = null;
     schedulePlace();
   }
+  // A name that the person gave is theirs, and is checked as they type it
+  // (stage B5a).
+  if (event?.target === ui.outputName) {
+    state.nameProposed = false;
+    schedulePlace();
+  }
   render();
 }
 
@@ -2153,6 +2274,9 @@ function connect() {
   ui.openFolder.addEventListener("click", () => openOutput("folder"));
   ui.openStartHere.addEventListener("click", () => openOutput("start_here"));
   ui.bundle.addEventListener("click", makeBundle);
+  ui.bundleChoose.addEventListener("click", () => chooseWithDialog("folder", "bundle", ui.bundleChoose));
+  ui.bundleReveal.addEventListener("click", () => revealFile("bundle", ui.bundleReveal, ui.bundleHeading));
+  ui.packReveal.addEventListener("click", () => revealFile("safe_pack", ui.packReveal, ui.outputHeading));
   ui.toolsToggle.addEventListener("click", () => {
     state.toolsOpen = !state.toolsOpen;
     render();
