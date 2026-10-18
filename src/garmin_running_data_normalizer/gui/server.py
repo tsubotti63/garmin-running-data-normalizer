@@ -37,7 +37,7 @@ from .runs import (
     RunRequestError,
     absolute_path,
 )
-from .stores import check_store, open_store, store_place
+from .stores import check_store, download_time, open_store, store_place
 
 
 HOST = "127.0.0.1"
@@ -446,7 +446,12 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         # The counts of the input, numbers only, as the CLI's Doctor gives
         # them (stage B3b).
         counts = report.get("input_counts")
+        # The download time that an import proposes, and where it came from
+        # (stage B4b-1).
+        downloaded_at, downloaded_from = download_time(input_path) if kind is not None else (None, None)
         return {
+            "downloaded_at": downloaded_at,
+            "downloaded_from": downloaded_from,
             "ready": all(finding["severity"] != "ERROR" for finding in findings),
             "input_kind": kind,
             "counts": dict(counts) if isinstance(counts, dict) else None,

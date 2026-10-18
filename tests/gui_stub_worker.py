@@ -82,6 +82,20 @@ def main() -> int:
         emit({"event": "failed", "code": "bad code /path/to/private"})
         sys.stderr.write("Traceback (most recent call last): /path/to/private\n")
         return 2
+    if args.mode == "snapshot-noise":
+        # The messages of a Snapshot run (stage B4b-1): only the valid ones,
+        # without their other fields, reach the status, and the messages
+        # that are not valid, which come after them, change nothing.
+        emit({"event": "progress", "stage": "importing", "done": 1, "total": 2, "label": "/path/to/private"})
+        emit({"event": "progress", "stage": "reading_export", "done": 3, "total": 2})
+        emit({"event": "progress", "stage": "importing", "done": "1", "total": 2})
+        emit({"event": "progress", "stage": "building_snapshots", "snapshots": -1})
+        emit({"event": "progress", "stage": "building_snapshots", "snapshots": "2"})
+        emit({"event": "imported", "order": 1, "same_content": False, "snapshot_count": 2, "label": "/path/to/private"})
+        emit({"event": "imported", "order": 3, "same_content": False, "snapshot_count": 2})
+        emit({"event": "imported", "order": 1, "same_content": "no", "snapshot_count": 2})
+        emit({"event": "failed", "code": "SNAPSHOT_STORE_NOT_READABLE", "place": "snapshots", "more": 0})
+        return 2
     return 1
 
 

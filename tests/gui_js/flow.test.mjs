@@ -1193,12 +1193,193 @@ test("the rows of the Snapshots, with the time of each export in local time", ()
       ],
     }),
     [
-      { order: 1, label: "S1", time: expected, files: 3561 },
-      { order: null, label: "", time: "—", files: null },
+      { order: 1, label: "S1", time: expected, files: 3561, state: "kept" },
+      { order: 2, label: "", time: "—", files: null, state: "kept" },
     ],
   );
   assert.deepEqual(flow.snapshotRows({ state: "new", path: "/x" }), []);
   assert.deepEqual(flow.snapshotRows(null), []);
+});
+
+test("the Export that a run imports takes its place in the order of the times of the Exports", () => {
+  // Stage B4b-1: an older Export imported later goes between, and the
+  // numbers follow; the label that the last run imported is marked.
+  const answer = {
+    state: "store",
+    snapshots: [
+      { order: 1, label: "2030-01-01", observed_at: "2030-01-01T02:00:00+00:00", files: 10 },
+      { order: 2, label: "2030-03-01", observed_at: "2030-03-01T02:00:00+00:00", files: 12 },
+    ],
+  };
+  const rows = flow.snapshotRows(answer, { label: "2030-02-01", time: "2030-02-01T02:00:00+00:00" });
+  assert.deepEqual(rows.map((row) => [row.order, row.label, row.state]), [
+    [1, "2030-01-01", "kept"],
+    [2, "2030-02-01", "pending"],
+    [3, "2030-03-01", "kept"],
+  ]);
+  assert.equal(rows[1].files, null);
+  // A new store holds the pending import alone.
+  assert.deepEqual(
+    flow.snapshotRows({ state: "new", path: "/x" }, { label: "S1", time: "2030-01-01T02:00:00+00:00" }).map((row) => [row.order, row.state]),
+    [[1, "pending"]],
+  );
+  assert.deepEqual(flow.snapshotRows(answer, null, "2030-03-01").map((row) => row.state), ["kept", "added"]);
+});
+
+test("the fields of an import: the proposed label, the local time, and what keeps a run from starting", () => {
+  assert.equal(flow.defaultSnapshotLabel("2030-01-01 02:00", []), "2030-01-01");
+  assert.equal(flow.defaultSnapshotLabel("2030-01-01 02:00", ["2030-01-01", "2030-01-01-2"]), "2030-01-01-3");
+  assert.equal(flow.defaultSnapshotLabel("", []), "");
+  for (const label of ["2030-01-01", "S1", "a.b_c-1", "A".repeat(64)]) {
+    assert.equal(flow.isValidSnapshotLabel(label), true, label);
+  }
+  for (const label of ["", "-x", ".x", "日本語", "a b", "A".repeat(65), null]) {
+    assert.equal(flow.isValidSnapshotLabel(label), false, String(label));
+  }
+  const iso = flow.localTimeIso("2030-01-01 02:00");
+  assert.match(iso, /^2030-01-01T02:00:00[+-]\d{2}:\d{2}$/);
+  // The same instant, read back in local time.
+  assert.equal(flow.exportTime(iso), "2030-01-01 02:00");
+  for (const text of ["2030-02-30 02:00", "2030-01-01", "02:00", "2030/01/01 02:00", null]) {
+    assert.equal(flow.localTimeIso(text), null, String(text));
+  }
+  assert.equal(flow.importProblem({ label: "S1", time: "2030-01-01 02:00" }, []), null);
+  assert.equal(flow.importProblem({ label: "S 1", time: "2030-01-01 02:00" }, []), "SNAPSHOT_LABEL_INVALID");
+  assert.equal(flow.importProblem({ label: "S1", time: "2030-01-01 02:00" }, ["S1"]), "SNAPSHOT_LABEL_EXISTS");
+  assert.equal(flow.importProblem({ label: "S1", time: "soon" }, []), "SNAPSHOT_TIME_INVALID");
+  assert.equal(flow.downloadSourceMessage("zip").key, "import.time_from_zip");
+  assert.equal(flow.downloadSourceMessage("newest_file").key, "import.time_from_folder");
+  assert.equal(flow.downloadSourceMessage("other"), null);
+});
+
+test("the steps of a Snapshot run, as the mockup v10 gives them, and the bar of an import", () => {
+  const steps = (how, newStore, numbers) =>
+    flow.runSteps(how, newStore, numbers).map((step) => (step.params ? [step.key, step.params] : step.key));
+  const tail = ["steps.convert", "steps.write", "steps.check_output"];
+  assert.deepEqual(steps("single"), ["steps.check_export", ...tail]);
+  // The first import makes the store, and Run-All reads its one Snapshot.
+  assert.deepEqual(steps("snapshots", true), [
+    "steps.check_export", "steps.import_new", "steps.check_store", "steps.read_snapshot", ...tail,
+  ]);
+  // A later import names its place in the order and the Snapshots built.
+  assert.deepEqual(steps("snapshots", false, { order: 2, count: 3 }), [
+    "steps.check_export",
+    ["steps.import_nth", { order: 2 }],
+    "steps.check_store",
+    ["steps.build_count", { count: 3 }],
+    ...tail,
+  ]);
+  assert.deepEqual(steps("snapshots", false, { order: 1, count: 1 }).slice(1, 4), [
+    ["steps.import_nth", { order: 1 }], "steps.check_store", "steps.read_snapshot",
+  ]);
+  for (const numbers of [{}, { order: 0, count: "2" }, null]) {
+    assert.deepEqual(steps("snapshots", false, numbers).slice(1, 4), ["steps.import", "steps.check_store", "steps.build_snapshots"]);
+  }
+  assert.deepEqual(steps("rerun", false, { order: 2, count: 3 }), ["steps.check_store", "steps.build_existing", ...tail]);
+  // The status of a run names its way; the step of an import and its bar.
+  const status = { state: "running", how: "snapshots", progress: { stage: "importing", done: 3, total: 9 } };
+  assert.deepEqual(flow.currentStep(status, "single", false, { order: 2, count: 2 }), {
+    key: "steps.import_nth", params: { order: 2 }, number: 2, total: 7,
+  });
+  assert.deepEqual(flow.currentStep({ ...status, progress: { stage: "reading_export", done: 0, total: 9 } }), {
+    key: "steps.check_export", number: 1, total: 7,
+  });
+  // A store that is made is a part of the import.
+  assert.equal(flow.currentStep({ ...status, progress: { stage: "creating_store" } }, "snapshots", true).key, "steps.import_new");
+  assert.deepEqual(flow.progressBar(status.progress), { max: 9, value: 3 });
+  assert.deepEqual(flow.progressBar({ stage: "reading_export", done: 4, total: 5 }), { max: 5, value: 4 });
+  assert.deepEqual(flow.progressMessage(status.progress), { key: "progress.importing", params: { done: 3, total: 9 }, keyParams: {} });
+  assert.equal(flow.progressMessage({ stage: "reading_export", done: 1, total: 2 }).key, "progress.reading_export");
+  assert.deepEqual(flow.progressMessage({ stage: "building_snapshots", snapshots: 3 }).params, { snapshots: 3 });
+  assert.equal(flow.progressBar({ stage: "checking_store" }), null);
+  const running = flow.runSummary(status, null, { how: "snapshots", newStore: false, stepNumbers: { order: 2, count: 2 } });
+  assert.deepEqual(running.sub, {
+    key: "run.sub_running",
+    params: { number: 2, total: 7 },
+    keyParams: { step: { key: "steps.import_nth", params: { order: 2 }, keyParams: {} } },
+  });
+  const rows = flow.stepRows({ state: "running", how: "rerun", progress: { stage: "discovering" }, stage_seconds: { checking_store: 2, building_snapshots: 3, discovering: 1 } }, null);
+  assert.deepEqual(rows.map((row) => [row.key, row.state, row.seconds]).slice(0, 3), [
+    ["steps.check_store", "done", 2],
+    ["steps.build_existing", "run", 4],
+    ["steps.convert", "todo", null],
+  ]);
+  const imported = flow.stepRows(
+    { state: "running", how: "snapshots", progress: { stage: "checking_store" }, stage_seconds: { reading_export: 1, importing: 2 } },
+    null, null, "snapshots", false, { order: 3, count: 3 },
+  );
+  assert.deepEqual(imported.slice(0, 4).map((row) => [row.key, row.params ?? null, row.state, row.seconds]), [
+    ["steps.check_export", null, "done", 1],
+    ["steps.import_nth", { order: 3 }, "done", 2],
+    ["steps.check_store", null, "run", null],
+    ["steps.build_count", { count: 3 }, "todo", null],
+  ]);
+});
+
+test("the second box is red for a store with a problem, and the result says what the import did", () => {
+  const states = boxStates({ ...READY, storeProblem: true });
+  assert.equal(states.snapshot, "error");
+  assert.equal(states.run, "todo");
+  assert.equal(flow.nextLine({ ...READY, storeProblem: true }, states).key, "next_line.fix_box");
+  assert.equal(controls({ ...READY, importProblem: "SNAPSHOT_LABEL_EXISTS" }, boxStates(READY)).start, false);
+  const done = flow.resultDetails({ state: "finished", output_path: "/x", imported: { order: 2, same_content: false, snapshot_count: 3 } });
+  assert.deepEqual(done.slice(2).map((line) => [line.key, line.params]), [["result.import_done", { order: 2, count: 3 }]]);
+  const failed = flow.resultDetails({ state: "failed", imported: { order: 1, same_content: true, snapshot_count: 1 } });
+  assert.deepEqual(failed.map((line) => line.key), ["result.import_same", "result.import_kept"]);
+  assert.equal(flow.boxSummary("snapshot", { how: "snapshots", newStore: true }).key, "summary.snapshot_new");
+  assert.deepEqual(flow.boxSummary("snapshot", { how: "rerun", snapshotCount: 2 }).params, { count: 2 });
+  assert.equal(flow.boxSummary("export", { how: "rerun" }).key, "summary.export_rerun");
+});
+
+test("a lock file stops an import only, and normalizing again needs Snapshots", () => {
+  const store = (answer, extra = {}) => ({ answer, checked: null, busy: false, ...extra });
+  const locked = store({ state: "store", path: "/path/to/store", snapshots: [{ label: "S1" }], notices: ["SNAPSHOT_STORE_LOCKED"] });
+  // An import takes the lock, so its file stops the import; the Snapshots
+  // can still be normalized again, and this Export alone uses no store.
+  assert.deepEqual(["snapshots", "rerun", "single"].map((how) => flow.storeProblem(how, locked)), [true, false, false]);
+  assert.deepEqual(["snapshots", "rerun", "single"].map((how) => flow.storeReady(how, locked)), [false, true, true]);
+  const kinds = (how) => flow.storeMessages(locked, how).filter((line) => line.start).map((line) => line.kind);
+  assert.equal(kinds("snapshots")[0], "error");
+  assert.equal(kinds("single")[0], "warn");
+  const empty = store({ state: "store", path: "/path/to/store", snapshots: [], notices: [] });
+  assert.deepEqual(["snapshots", "rerun"].map((how) => flow.storeProblem(how, empty)), [false, true]);
+  const fresh = store({ state: "new", path: "/path/to/store" });
+  assert.deepEqual(["snapshots", "rerun"].map((how) => flow.storeReady(how, fresh)), [true, false]);
+  assert.equal(flow.storeReady("snapshots", { ...fresh, busy: true }), false);
+  // A store that its check found damaged stops both ways that use it.
+  const damaged = store({ state: "store", path: "/path/to/store", snapshots: [{ label: "S1" }], notices: [] }, {
+    checked: { state: "error", error_code: "SNAPSHOT_STORE_INVALID" },
+  });
+  assert.deepEqual(["snapshots", "rerun", "single"].map((how) => flow.storeProblem(how, damaged)), [true, true, false]);
+});
+
+test("the summaries of the first two boxes say what the last run did, as the mockup v10 says it", () => {
+  const summary = (box, view) => {
+    const words = flow.boxSummary(box, view);
+    return [words.key, words.params];
+  };
+  const name = { name: "garmin-export.zip" };
+  const before = { runState: "idle", inputPath: "/path/to/garmin-export.zip", how: "snapshots", snapshotCount: 2 };
+  assert.deepEqual(summary("export", before), ["summary.export_import", name]);
+  assert.deepEqual(summary("export", { ...before, how: "single" }), ["summary.export", name]);
+  assert.deepEqual(summary("snapshot", before), ["summary.snapshot_import", { count: 2 }]);
+  const ran = {
+    ...before,
+    runState: "finished",
+    editedSinceRun: false,
+    runHow: "snapshots",
+    snapshotCount: 3,
+    result: { snapshot_count: 3 },
+    imported: { order: 2, same_content: false, snapshot_count: 3 },
+  };
+  assert.deepEqual(summary("export", ran), ["summary.export_imported", name]);
+  assert.deepEqual(summary("export", { ...ran, imported: { ...ran.imported, same_content: true } }), ["summary.export_same", name]);
+  assert.deepEqual(summary("snapshot", ran), ["summary.snapshot_done", { count: 3 }]);
+  assert.deepEqual(summary("snapshot", { ...ran, madeStore: true }), ["summary.snapshot_new_done", {}]);
+  assert.deepEqual(summary("snapshot", { ...ran, how: "rerun", runHow: "rerun", imported: null }), ["summary.snapshot_rerun_done", { count: 3 }]);
+  // Once a box changed, the summaries are those of the next run.
+  assert.deepEqual(summary("export", { ...ran, editedSinceRun: true }), ["summary.export_import", name]);
+  assert.deepEqual(summary("snapshot", { ...ran, editedSinceRun: true }), ["summary.snapshot_import", { count: 3 }]);
 });
 
 test("the folder for the output: the default place that a run makes, and a cloud", () => {

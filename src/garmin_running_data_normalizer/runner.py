@@ -544,6 +544,43 @@ class _Interrupts:
         self.saved.clear()
 
 
+def stop_of(exc: BaseException) -> tuple[str, str] | None:
+    """The code and the message of a known stop: what the CLI prints for it,
+    and what the GUI's child reports for the same functions (stage B4b-1).
+    None for an error that no code describes, for which each caller has its
+    own code."""
+    if isinstance(exc, GoldenPathError):
+        return exc.code, str(exc)
+    # A folder or file of the input that this app may not open, met while a
+    # Snapshot is registered (stage A3d-3a).
+    if isinstance(exc, InputNotReadableError):
+        return "INPUT_NOT_READABLE", input_not_readable_message(exc.places)
+    if isinstance(exc, (TimezoneDataUnavailableError, TimezoneNameInvalidError)):
+        return exc.code, exc.safe_message
+    if isinstance(exc, RunAllError):
+        return exc.code, shown_message(exc)
+    # Each stop of the Snapshot Store has its code (stage A3d-3b); the stops
+    # of the store's contract keep SNAPSHOT_LIFECYCLE_FAILED.
+    if isinstance(exc, SnapshotLifecycleError):
+        return exc.code, shown_store_message(exc)
+    if isinstance(exc, StandaloneHandoffError):
+        return "HANDOFF_INVALID", str(exc)
+    if isinstance(exc, (DoctorError, SupportBundleError)):
+        return exc.code, exc.safe_message
+    # The same codes as Run-All, for the commands that read an Export without
+    # Run-All (normalize-activities and snapshot register) and for a Snapshot
+    # Store that holds the Exports of more than one account.
+    if isinstance(exc, MixedExportsError):
+        return exc.code, exc.safe_message
+    if isinstance(exc, CorruptArchiveError):
+        return "INPUT_ZIP_CORRUPT", STOPS["INPUT_ZIP_CORRUPT"].what
+    if isinstance(exc, ExportTooLargeError):
+        return "INPUT_TOO_LARGE", STOPS["INPUT_TOO_LARGE"].what
+    if isinstance(exc, TempSpaceError):
+        return "TEMP_SPACE_INSUFFICIENT", TEMP_SPACE_MESSAGE
+    return None
+
+
 def _cancelled(watch: _Watch) -> int:
     """Report a command that Ctrl+C cancelled, and what it left (stage A5c)."""
     complete = watch.output_complete()
@@ -807,38 +844,10 @@ def _main(args: argparse.Namespace, watch: _Watch, interrupts: _Interrupts) -> i
         return _cancelled(watch)
     # Every stop prints what happened and the next step of its code (stage
     # A5b), and exits with 2.
-    except GoldenPathError as exc:
-        return _stop(exc.code, str(exc))
-    # A folder or file of the input that this app may not open, met while a
-    # Snapshot is registered (stage A3d-3a).
-    except InputNotReadableError as exc:
-        return _stop("INPUT_NOT_READABLE", input_not_readable_message(exc.places))
-    except (TimezoneDataUnavailableError, TimezoneNameInvalidError) as exc:
-        return _stop(exc.code, exc.safe_message)
-    except RunAllError as exc:
-        return _stop(exc.code, shown_message(exc))
-    # Each stop of the Snapshot Store has its code (stage A3d-3b); the stops
-    # of the store's contract keep SNAPSHOT_LIFECYCLE_FAILED.
-    except SnapshotLifecycleError as exc:
-        return _stop(exc.code, shown_store_message(exc))
-    except StandaloneHandoffError as exc:
-        return _stop("HANDOFF_INVALID", str(exc))
-    except DoctorError as exc:
-        return _stop(exc.code, exc.safe_message)
-    except SupportBundleError as exc:
-        return _stop(exc.code, exc.safe_message)
-    # The same codes as Run-All, for the commands that read an Export without
-    # Run-All (normalize-activities and snapshot register) and for a Snapshot
-    # Store that holds the Exports of more than one account.
-    except MixedExportsError as exc:
-        return _stop(exc.code, exc.safe_message)
-    except CorruptArchiveError:
-        return _stop("INPUT_ZIP_CORRUPT", STOPS["INPUT_ZIP_CORRUPT"].what)
-    except ExportTooLargeError:
-        return _stop("INPUT_TOO_LARGE", STOPS["INPUT_TOO_LARGE"].what)
-    except TempSpaceError:
-        return _stop("TEMP_SPACE_INSUFFICIENT", TEMP_SPACE_MESSAGE)
-    except Exception:
+    except Exception as exc:
+        known = stop_of(exc)
+        if known is not None:
+            return _stop(*known)
         # Until stage A3d-3a, the other commands also said "Golden Path
         # failed", and until stage A3d-3b, the other snapshot commands "Run-All
         # failed"; until stage A5b, the next step of all three was to verify
@@ -926,4 +935,4 @@ def _main(args: argparse.Namespace, watch: _Watch, interrupts: _Interrupts) -> i
     return 0
 
 
-__all__ = ["GoldenPathError", "OUTPUT_FILES", "build_parser", "main", "run_activities"]
+__all__ = ["GoldenPathError", "OUTPUT_FILES", "build_parser", "main", "run_activities", "stop_of"]

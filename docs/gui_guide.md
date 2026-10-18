@@ -221,8 +221,16 @@ The GUI runs the same Run-All as this command:
 garmin-running-data-normalizer run-all --input /path/to/export --output /path/to/new-output --timezone Asia/Tokyo
 ```
 
-Use the command line for automation, for Snapshot runs, and to check an output
-that was made earlier:
+When it imports the Export into the Snapshots, it runs the same as these
+commands, with the time of the download as each time of the Export:
+
+```bash
+garmin-running-data-normalizer snapshot register --store /path/to/store --input /path/to/export --label 2030-01-01 --requested-at 2030-01-01T02:00:00+00:00 --downloaded-at 2030-01-01T02:00:00+00:00 --observed-at 2030-01-01T02:00:00+00:00 --confirm-complete
+garmin-running-data-normalizer snapshot run-all --store /path/to/store --output /path/to/new-output --timezone Asia/Tokyo
+```
+
+Use the command line for automation and to check an output that was made
+earlier:
 
 ```bash
 garmin-running-data-normalizer validate-handoff --input /path/to/output

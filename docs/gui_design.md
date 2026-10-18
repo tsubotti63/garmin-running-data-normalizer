@@ -125,17 +125,54 @@ store…" open a store that the user chooses, or the one in the folder
 new store…" choose the folder in which a new store will be made, as its
 folder `snapshots`, or the chosen folder itself when it is named `snapshots`;
 a store there is opened instead. The place is checked as `snapshot init`
-checks it, but nothing is made: the page makes a store when it imports an
-Export into it (stage B4b), so until then it says that importing is not
-possible on the page yet. "Check the Snapshots" checks the store as
-`snapshot verify` does. The page reads a store with the functions of the
-CLI's snapshot commands and never writes in it. Each button opens the
-system's dialog for a folder, or the page's own folder list without one.
-Until stage B4b the page normalizes this Export only, so a problem of the
-store is shown in the store's lines, in red, or in yellow for a lock file or
-an interrupted import, which do not stop anything, and it neither turns the
-second box red nor stops a run; from stage B4b, it turns the second box red
-when the user chooses to import.
+checks it, but nothing is made until a run imports an Export into it.
+"Check the Snapshots" checks the store as `snapshot verify` does. The page
+reads a store with the functions of the CLI's snapshot commands; only a run
+writes in it. Each button opens the system's dialog for a folder, or the
+page's own folder list without one.
+
+Importing (stage B4b-1): the second box offers three ways to normalize.
+
+- Import this Export into the Snapshots and normalize them together, the
+  default and recommended way. A new store is made at the chosen place when
+  the run starts. The first box then asks for the name of the Snapshot and
+  the time of the download. The name is the date of the download by
+  default, with `-2`, `-3`, and so on when the store has it, and takes 1 to
+  64 letters, digits, dots, underscores, or hyphens, starting with a letter
+  or a digit; the page checks it before the button can be pressed. The time
+  is that of the ZIP file, which the browser set when it downloaded it, or
+  that of the newest file of an extracted folder, which is near the time
+  when the Export was made; a line says which, and the user can change it.
+  The registration records the same time as the request and the
+  observation of the Export.
+- Normalize this Export only, without the Snapshots. The parts of the store
+  turn gray, and a note says that this way does not use the store.
+- Normalize the existing Snapshots again, without an Export, for example
+  with a new version or other settings of the output. A link under the first
+  box chooses it when the store has Snapshots; the first box then takes no
+  Export, and "Choose an export instead" goes back.
+
+The list of the Snapshots says which will be used: all of them, with a state
+column (imported before, to import now, imported now), in the order of the
+times of their Exports, never in the order of their import; for those imported
+on this page, the time is the time of the download. As in the mockup, a narrow
+box leaves out the column of the times, and a narrower one that of the numbers
+of files. The steps of a run follow the way, as the mockup gives them: the
+import reads and checks the Export, then makes the store and imports it as the
+first Snapshot, or imports it as the Nth; the Snapshots are checked, and the
+one Snapshot is read, or the N are built into one input; Run-All follows.
+Normalizing again starts at the check of the Snapshots and builds the existing
+ones. The result says where the Export came in the order, or that the store
+held the same Export already, so that no Snapshot was added; a run that stops
+after its import says that the import is done, so that the same Export adds no
+Snapshot when the run is started again. While the way uses the store, a
+problem of the store, or of the name or the time, turns its box red and stops
+the run before it starts; for this Export only, the store's lines show it as
+in stage B4a, in red, or in yellow for a lock file or an interrupted import,
+and nothing stops. A cancelled import takes its lock back as the CLI does, and
+the next registration completes an interrupted one; a lock file that a forced
+stop left stops the next import with `SNAPSHOT_STORE_LOCKED`, and the store's
+lines say how to remove it, as `snapshot status` does.
 
 Colors have five meanings across the page: blue is the current step or a
 running task, green is done or confirmed, yellow is a warning, red is a problem
@@ -200,16 +237,52 @@ Local Snapshot Store and new output folders
   standard error. Short operations (Doctor, handoff validation, and Support
   Bundle, and from stage B4a opening, listing, and checking a Snapshot Store
   and checking the place of a new one) run in the server process.
+- From stage B4b-1 the child has three ways: this Export only (`run_all`),
+  importing it (`initialize_store` for a new store, `register_snapshot`, then
+  `run_snapshot_all`), and normalizing the Snapshots again
+  (`run_snapshot_all`). After an import it reports where the Snapshot came in
+  the order, whether the store held the same Export, and the number of
+  Snapshots, before the run goes on. It stops with the codes with which the
+  CLI stops (`runner.stop_of`), and for an error that no code describes, with
+  `COMMAND_FAILED` during the import and `RUN_ALL_FAILED` after it, as the
+  CLI's commands do. The server checks the request before the child starts
+  with the functions that the registration and the store use, so that each
+  rule is written once: the name of the Snapshot, the time, the Export and
+  the store apart, the name free in the store, a store with Snapshots to
+  normalize again, and the place of a new store; an existing store is read
+  only when no run is active. A new store at the default place makes
+  `GarminRunningData` as for the output. The page and the server refuse a
+  name that the store has before the Export is read, while the CLI reads the
+  Export first and takes the same Export again under any name, one that the
+  store has included: with another name, the outcome is the same.
+- The account boundary of a store that the page makes is the server's own:
+  `gui-` and 24 hexadecimal digits from `secrets`, never a value that the
+  page sends, and the page never shows it. It is in `store.json`, the
+  manifests, and the records of the build (the lineage and the build's
+  hash), and so in the output. The CLI uses such a store without
+  `snapshot init`: `snapshot register`, `status`, `verify`, and `run-all`
+  take it as it is, and `snapshot init` with another `--account` stops,
+  since the store belongs to another account boundary. To compare the output
+  of the page with that of the CLI, `snapshot init` is given the same
+  boundary.
 - Progress: `run_all` has an optional keyword-only `progress` callback that the
   CLI never passes. Events carry only a stage (`discovering`, `normalizing`
   with a step such as `activities` or `fit`, `reading_fit`, `verifying_input`,
   `building_output`, and `writing_output`) and counts. `reading_fit` counts the
   FIT files with distinct content read out of the total, because a file
   repeated under another name is read once. Output is identical with and
-  without the callback, and the callback must not raise. Snapshot runs add
-  their stages in stage B. The server keeps the seconds of each stage, with the
-  stage's name and the number only, for the steps table of the page (stage
-  B1a).
+  without the callback, and the callback must not raise. From stage B4b-1,
+  `register_snapshot` and `run_snapshot_all` take the same optional callback,
+  and a Snapshot run reports its stages before those of Run-All:
+  `creating_store`, which the child reports before it makes a new store,
+  `reading_export` and `importing`, with the files of the Export read, then
+  copied, out of all (an Export that the store holds already is not copied),
+  `checking_store`, and `building_snapshots` with the number of Snapshots.
+  The store and the output are identical with and without the
+  callback, and a stop or a cancellation in the callback takes back the lock
+  and the record of the registration as any stop does. The server keeps the
+  seconds of each stage, with the stage's name and the number only, for the
+  steps table of the page (stage B1a).
 - Cancellation stops the child process and its process group: `SIGINT` on
   POSIX, and `CTRL_BREAK_EVENT` with `CREATE_NEW_PROCESS_GROUP` on Windows,
   followed by termination after 10 seconds and a kill 5 seconds later.

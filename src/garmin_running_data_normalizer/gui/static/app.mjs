@@ -21,19 +21,25 @@ import {
   connectionMessages,
   controls,
   defaultOutputName,
+  defaultSnapshotLabel,
+  downloadSourceMessage,
   errorBox,
   errorMessages,
+  exportTime,
   familyRows,
   findingMessages,
   formatElapsed,
   foundChoices,
   helpReturnTarget,
   helpSteps,
+  importProblem,
+  localTimeIso,
   nextLine,
   nextLineKind,
   nextOutputName,
   outputCheckMessages,
   placeMessages,
+  progressBar,
   progressMessage,
   resultDetails,
   resultRows,
@@ -44,6 +50,8 @@ import {
   stalledSeconds,
   stepRows,
   storeMessages,
+  storeProblem,
+  storeReady,
   warningMessages,
 } from "./flow.mjs";
 
@@ -94,6 +102,19 @@ const ui = {
   checkChoices: byId("check-choices"),
   extractArea: byId("extract-area"),
   extractConfirm: byId("extract-confirm"),
+  // The fields of an import and normalizing the Snapshots again (stage B4b-1).
+  importArea: byId("import-area"),
+  snapshotLabel: byId("snapshot-label"),
+  downloadedAt: byId("downloaded-at"),
+  downloadedAtHelp: byId("downloaded-at-help"),
+  importResult: byId("import-result"),
+  rerunArea: byId("rerun-area"),
+  rerunText: byId("rerun-text"),
+  rerunToggle: byId("rerun-toggle"),
+  howSnapshots: byId("how-snapshots"),
+  howSingle: byId("how-single"),
+  howNote: byId("how-note"),
+  storeArea: byId("store-area"),
   snapshotDecide: byId("snapshot-decide"),
   snapshotHeading: byId("snapshot-heading"),
   storePath: byId("store-path"),
@@ -219,6 +240,16 @@ const state = {
   // dialog for it, whether the page is asking the server, the answer of the
   // store or of the place for a new one, and the answer of its check.
   store: { chooserError: null, busy: false, answer: null, checked: null },
+  // The way to normalize: "snapshots" (the default, decision 20261011-10),
+  // "single", or "rerun"; where the download time of the Export came from;
+  // whether the user changed the proposed label or time; and the label of
+  // the Snapshot that the last run imported (stage B4b-1).
+  how: "snapshots",
+  importSource: null,
+  labelEdited: false,
+  timeEdited: false,
+  lastImported: null,
+  runLabel: null,
   // The server's answer for the folder for the output, the error of the last
   // dialog for it, and the timer of the next question (stage B4a).
   place: null,
@@ -281,8 +312,9 @@ function describe(message) {
   for (const [name, value] of Object.entries(message.params ?? {})) {
     params[name] = formatNumber(value);
   }
+  // A part that has numbers of its own is a message itself (stage B4b-1).
   for (const [name, key] of Object.entries(message.keyParams ?? {})) {
-    params[name] = t(key);
+    params[name] = typeof key === "string" ? t(key) : describe(key);
   }
   return t(message.key, params);
 }
@@ -440,10 +472,29 @@ function outputCheckState() {
   return output.check === null ? null : warned ? "warn" : "done";
 }
 
+// The labels of the Snapshots of the open store, which a new one may not take.
+function storeLabels() {
+  const answer = state.store.answer;
+  return answer?.state === "store" && Array.isArray(answer.snapshots)
+    ? answer.snapshots.map((item) => item?.label).filter((label) => typeof label === "string")
+    : [];
+}
+
+// The fields of an import as the page holds them (stage B4b-1).
+function importFields() {
+  return { label: ui.snapshotLabel.value.trim(), time: ui.downloadedAt.value.trim() };
+}
+
 // One view of the page's state, for the rules in flow.mjs.
 function view() {
   const run = state.run;
-  const checked = isCheckCurrent();
+  // Normalizing the Snapshots again takes no Export (stage B4b-1).
+  const how = state.how;
+  const rerun = how === "rerun";
+  const answer = state.store.answer;
+  const snapshotCount =
+    answer?.state === "store" && Array.isArray(answer.snapshots) ? answer.snapshots.length : 0;
+  const checked = !rerun && isCheckCurrent();
   const failedBox = run.state === "failed" ? errorBox(run.error_code, ui.inputPath.value) : null;
   const requestBox = state.runError !== null ? errorBox(state.runError, ui.inputPath.value) : null;
   // The timezone data that the check found missing belongs to the third box,
@@ -454,8 +505,17 @@ function view() {
   // An extracted folder needs the confirmation that its extraction was
   // complete; a ZIP file does not. Only the page asks for it (stage B3a).
   const extractNeeded = ready && state.check.kind === "folder";
-  const checkedReady = ready && (!extractNeeded || ui.extractConfirm.checked);
-  return {
+  const checkedReady = rerun || (ready && (!extractNeeded || ui.extractConfirm.checked));
+  // The fields of an import keep the run from starting once the Export is
+  // ready (stage B4b-1).
+  const importIssue = how === "snapshots" && checkedReady ? importProblem(importFields(), storeLabels()) : null;
+  const current = {
+    how,
+    newStore: how === "snapshots" && answer?.state === "new",
+    snapshotCount,
+    storeProblem: storeProblem(how, state.store),
+    storeReady: storeReady(how, state.store),
+    importProblem: importIssue,
     connected: state.connected,
     runState: run.state,
     starting: state.starting,
@@ -466,8 +526,12 @@ function view() {
     checkedReady,
     extractNeeded,
     extractConfirmed: ui.extractConfirm.checked,
-    exportReady: checkedReady && requestBox !== "export",
-    exportProblem: (checked && (state.check.error !== undefined || parts.stops)) || requestBox === "export",
+    exportReady: rerun || (checkedReady && requestBox !== "export" && importIssue === null),
+    // A name or a time of an import that cannot be used is a problem of the
+    // first box, as the codes of a registration are (stage B4b-1).
+    exportProblem:
+      !rerun &&
+      ((checked && (state.check.error !== undefined || parts.stops)) || requestBox === "export" || importIssue !== null),
     timezoneProblem,
     snapshotDecided: state.snapshotDecided,
     outputDecided: state.outputDecided && requestBox !== "output",
@@ -475,6 +539,11 @@ function view() {
     failedBox,
     requestBox,
     result: run.result,
+    // The way of the last run, its import, and whether it made the store
+    // (stage B4b-1).
+    runHow: run.how,
+    imported: run.imported ?? null,
+    madeStore: typeof run.stage_seconds?.creating_store === "number",
     outputPath: run.output_path,
     inputFilled: ui.inputPath.value.trim() !== "",
     inputPath: ui.inputPath.value,
@@ -482,9 +551,43 @@ function view() {
     outputName: ui.outputName.value,
     timezone: ui.timezone.value,
   };
+  current.stepNumbers = stepNumbers(current);
+  return current;
+}
+
+// The Export that the run will import, with its name and time, while the
+// first box is ready for it and no finished run shows its own (stage B4b-1).
+function pendingImport(current) {
+  const importing =
+    current.how === "snapshots" &&
+    current.checkedReady &&
+    current.importProblem === null &&
+    !current.storeProblem &&
+    (!FINISHED_STATES.includes(state.run.state) || state.editedSinceRun);
+  return importing ? { label: ui.snapshotLabel.value.trim(), time: localTimeIso(ui.downloadedAt.value) } : null;
+}
+
+// The place of the import in the order of the Snapshots and their number
+// after it, for the names of the steps: from the run once it has imported,
+// otherwise from the list with the Export that the run will import.
+function stepNumbers(current) {
+  const imported = state.run.imported;
+  if (imported) {
+    return { order: imported.order, count: imported.snapshot_count };
+  }
+  const rows = snapshotRows(state.store.answer, pendingImport(current));
+  const pending = rows.find((row) => row.state === "pending");
+  return pending === undefined ? {} : { order: pending.order, count: rows.length };
 }
 
 function renderCheck(current) {
+  // Normalizing the Snapshots again takes no Export (stage B4b-1).
+  if (current.how === "rerun") {
+    replaceLines(ui.checkResult, []);
+    ui.extractArea.hidden = true;
+    renderChoices([]);
+    return;
+  }
   const lines = [];
   // The dialog for the store or the output speaks in its own box (stage B4a).
   const choosingExport = state.choosing !== null && state.choosingFor === "input";
@@ -549,10 +652,21 @@ function kindLines(lines) {
 
 // The Snapshot Store of the second box (stage B4a): its place, the buttons
 // for a store that is open or not, its lines, and its Snapshots.
-function renderStore() {
+const ROW_STATE_KEYS = {
+  kept: "store.row_kept",
+  pending: "store.row_pending",
+  added: "store.row_added",
+};
+
+function renderStore(current) {
   const store = state.store;
   const answer = store.answer;
   const opened = answer?.state === "store";
+  // This Export alone does not use the store (stage B4b-1).
+  const single = current.how === "single";
+  ui.storeArea.classList.toggle("unused", single);
+  ui.howNote.hidden = !single;
+  setText(ui.howNote, single ? t("how.single_note") : "");
   setText(ui.storePath, typeof answer?.path === "string" ? answer.path : "");
   ui.storeCreate.hidden = opened;
   ui.storeOpen.hidden = opened;
@@ -560,8 +674,9 @@ function renderStore() {
   ui.storeCreateNew.hidden = !opened;
   ui.storeCheck.hidden = !opened;
   const choosing = state.choosing !== null && String(state.choosingFor).startsWith("store");
-  replaceLines(ui.storeResult, kindLines(storeMessages({ ...store, choosing })));
-  const rows = snapshotRows(answer);
+  replaceLines(ui.storeResult, kindLines(storeMessages({ ...store, choosing }, current.how)));
+  // The Export that the run will import, in its place (stage B4b-1).
+  const rows = snapshotRows(answer, pendingImport(current), state.lastImported);
   ui.storeList.hidden = rows.length === 0;
   const key = JSON.stringify([state.language, rows]);
   if (ui.storeRows.dataset.key === key) {
@@ -578,15 +693,52 @@ function renderStore() {
       const label = document.createElement("td");
       label.textContent = row.label;
       const time = document.createElement("td");
-      time.className = "nowrap";
+      time.className = "nowrap time-col";
       time.textContent = row.time;
       const files = document.createElement("td");
       files.className = "n";
       files.textContent = row.files === null ? "—" : formatNumber(row.files);
-      tableRow.append(order, label, time, files);
+      // The Export that the run imports, and the one that it imported, are
+      // marked as the steps are; the others are plain (stage B4b-1).
+      const rowState = document.createElement("td");
+      const words = t(ROW_STATE_KEYS[row.state] ?? ROW_STATE_KEYS.kept);
+      if (row.state === "pending" || row.state === "added") {
+        const pill = document.createElement("span");
+        pill.className = `pill k-${row.state === "pending" ? "run" : "done"}`;
+        pill.textContent = words;
+        rowState.append(pill);
+      } else {
+        rowState.className = "kept";
+        rowState.textContent = words;
+      }
+      tableRow.className = row.state === "pending" ? "r-run" : row.state === "added" ? "r-done" : "";
+      tableRow.append(order, label, time, files, rowState);
       return tableRow;
     }),
   );
+}
+
+// The fields of an import in the first box: the label and the download time,
+// where the time came from, and what keeps the run from starting
+// (stage B4b-1).
+function renderImport(current) {
+  const shown = current.how === "snapshots" && current.checkedReady;
+  ui.importArea.hidden = !shown;
+  // Where the proposed time came from, until the user changes it.
+  const source = state.timeEdited ? null : downloadSourceMessage(state.importSource);
+  setText(ui.downloadedAtHelp, source === null ? t("import.time_help") : describe(source));
+  const code = shown ? current.importProblem : null;
+  const lines = typeof code === "string" ? errorMessages(code) : [];
+  replaceLines(ui.importResult, kindLines(lines.map((line, index) => ({ kind: "error", start: index === 0, message: line }))));
+}
+
+// Normalizing the Snapshots again, at the foot of the first box, when the
+// open store holds some (stage B4b-1).
+function renderRerun(current) {
+  const rerun = current.how === "rerun";
+  ui.rerunArea.hidden = !(rerun || (state.store.answer?.state === "store" && current.snapshotCount > 0));
+  setText(ui.rerunText, rerun ? t("rerun.chosen", { count: formatNumber(current.snapshotCount) }) : t("rerun.help"));
+  setText(ui.rerunToggle, t(rerun ? "rerun.back" : "rerun.button"));
 }
 
 // The lines under the folder for the output: its dialog, the default place
@@ -775,7 +927,7 @@ function stepRow(row) {
   tableRow.className = `r-${kind}`;
   const name = document.createElement("th");
   name.scope = "row";
-  name.textContent = t(row.key);
+  name.textContent = describe({ key: row.key, params: row.params });
   const status = document.createElement("td");
   const pill = document.createElement("span");
   pill.className = `pill k-${kind}`;
@@ -788,9 +940,11 @@ function stepRow(row) {
   return tableRow;
 }
 
-function renderSteps() {
+function renderSteps(current) {
   const run = state.run;
-  const rows = stepRows(run, outputCheckState(), state.output?.seconds ?? null);
+  // The steps of the chosen way; a run that made its store names it.
+  const newStore = current.madeStore || current.newStore;
+  const rows = stepRows(run, outputCheckState(), state.output?.seconds ?? null, state.how, newStore, current.stepNumbers);
   ui.stepsRows.replaceChildren(...rows.map(stepRow));
   const started = ACTIVE_STATES.includes(run.state) || TERMINAL_STATES.includes(run.state);
   setText(ui.stepsCaption, started ? "" : t("steps.caption"));
@@ -828,11 +982,12 @@ function renderRun(states, current) {
   // hidden announcer speaks only when the stage changes.
   const running = run.state === "running";
   setText(ui.fitProgressLabel, running ? describe(progressMessage(run.progress)) : "");
-  const reading = running && run.progress?.stage === "reading_fit" && Number(run.progress.total) > 0;
-  ui.fitProgress.hidden = !reading;
-  if (reading) {
-    ui.fitProgress.max = Number(run.progress.total);
-    ui.fitProgress.value = Number(run.progress.done) || 0;
+  // The bar of the files of an import, or of the FIT files (stage B4b-1).
+  const bar = running ? progressBar(run.progress) : null;
+  ui.fitProgress.hidden = bar === null;
+  if (bar !== null) {
+    ui.fitProgress.max = bar.max;
+    ui.fitProgress.value = bar.value;
   }
   const stalled = stalledSeconds(run);
   setText(ui.runStalled, stalled === null ? "" : t("run.stalled", { seconds: formatNumber(stalled) }));
@@ -965,16 +1120,26 @@ function renderControls(states, current) {
   for (const field of [ui.inputPath, ui.extractConfirm, ui.outputParent, ui.outputName, ui.timezone, ui.safePack]) {
     field.disabled = !enabled.form;
   }
-  ui.chooseZip.disabled = !enabled.choose;
-  ui.chooseFolder.disabled = !enabled.choose;
+  // Normalizing the Snapshots again takes no Export (stage B4b-1).
+  const rerun = state.how === "rerun";
+  ui.chooseZip.disabled = !enabled.choose || rerun;
+  ui.chooseFolder.disabled = !enabled.choose || rerun;
+  ui.inputPath.disabled = !enabled.form || rerun;
+  ui.howSnapshots.checked = state.how !== "single";
+  ui.howSingle.checked = state.how === "single";
+  ui.howSnapshots.disabled = !enabled.form || rerun;
+  ui.howSingle.disabled = !enabled.form || rerun;
+  ui.snapshotLabel.disabled = !enabled.form;
+  ui.downloadedAt.disabled = !enabled.form;
+  ui.rerunToggle.disabled = !enabled.choose;
   for (const button of ui.checkChoices.children) {
     button.disabled = !enabled.choose;
   }
   ui.outputBrowse.disabled = !enabled.browse;
   for (const button of [ui.storeCreate, ui.storeOpen, ui.storeOpenOther, ui.storeCreateNew, ui.storeCheck]) {
-    button.disabled = !enabled.choose || state.store.busy;
+    button.disabled = !enabled.choose || state.store.busy || state.how === "single";
   }
-  ui.check.disabled = !enabled.check;
+  ui.check.disabled = !enabled.check || rerun;
   ui.snapshotDecide.disabled = !enabled.decideSnapshot;
   ui.outputDecide.disabled = !enabled.decideOutput;
   ui.snapshotDecide.hidden = states.snapshot === "done";
@@ -1011,12 +1176,14 @@ function render() {
   renderBoxes(states, current);
   renderNextLine(states, current);
   renderCheck(current);
-  renderStore();
+  renderImport(current);
+  renderRerun(current);
+  renderStore(current);
   renderPlace();
   renderBrowser();
   renderErrors(current);
   renderRun(states, current);
-  renderSteps();
+  renderSteps(current);
   renderResults();
   renderOutput();
   renderPackFile();
@@ -1075,6 +1242,16 @@ async function pollRun() {
       }
       // A run may have made the default place (stage B4a).
       lookPlace();
+      // A Snapshot run may have made the store and imported into it; the
+      // list shows what it imported (stage B4b-1).
+      if (state.run.how === "snapshots" || state.run.how === "rerun") {
+        const imported = state.run.imported;
+        state.lastImported = imported && imported.same_content === false ? state.runLabel : null;
+        const path = state.store.answer?.path;
+        if (typeof path === "string") {
+          storeAction("open", path, null);
+        }
+      }
     }
   } catch (error) {
     connectionFailure(error);
@@ -1197,6 +1374,7 @@ async function runCheck(focusTarget = ui.check) {
       notReadable: answer.not_readable !== null && typeof answer.not_readable === "object" ? answer.not_readable : null,
       findings: Array.isArray(answer.findings) ? answer.findings : [],
     };
+    proposeImport(path, answer);
   } catch (error) {
     if (!connectionFailure(error)) {
       state.check = { path, error: error.code };
@@ -1209,6 +1387,33 @@ async function runCheck(focusTarget = ui.check) {
 }
 
 const pause = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+
+// The proposed fields of an import, from the check of an Export (stage
+// B4b-1): the download time from the time of the ZIP file or of the newest
+// file of a folder (decision 20261017-16), and the label from its date. A
+// field that the user changed stays, until another Export is checked.
+let proposedFor = null;
+function proposeImport(path, answer) {
+  if (proposedFor !== path) {
+    proposedFor = path;
+    state.labelEdited = false;
+    state.timeEdited = false;
+  }
+  state.importSource = typeof answer.downloaded_from === "string" ? answer.downloaded_from : null;
+  if (!state.timeEdited) {
+    const time = typeof answer.downloaded_at === "string" ? exportTime(answer.downloaded_at) : "—";
+    ui.downloadedAt.value = time === "—" ? "" : time;
+  }
+  proposeLabel();
+}
+
+// The proposed label follows the download time and the labels of the store,
+// until the user changes it.
+function proposeLabel() {
+  if (!state.labelEdited) {
+    ui.snapshotLabel.value = defaultSnapshotLabel(ui.downloadedAt.value.trim(), storeLabels());
+  }
+}
 
 // Put a chosen place in the field as it is and check it at once.
 function useChosenExport(path, focusTarget) {
@@ -1327,6 +1532,7 @@ async function storeAction(action, path, focusTarget) {
     }
   } finally {
     store.busy = false;
+    proposeLabel();
     render();
     // The buttons of a store that is open differ from those without one, so
     // the button that was pressed may be gone.
@@ -1363,6 +1569,20 @@ function schedulePlace() {
   state.placeTimer = window.setTimeout(lookPlace, PLACE_DELAY_MS);
 }
 
+// Choose the way to normalize; the second box asks for its confirmation
+// again, and a stop or a cancellation that the page showed gives way
+// (stage B4b-1).
+function setHow(how) {
+  state.how = how;
+  state.snapshotDecided = false;
+  state.runError = null;
+  state.editedSinceRun = true;
+  if (state.run.state === "failed" || state.run.state === "cancelled") {
+    state.run = { state: "idle" };
+  }
+  render();
+}
+
 // Confirm a box and move to the next one, as the page asks on a first launch.
 function decide(box) {
   if (box === "snapshot") {
@@ -1386,13 +1606,30 @@ async function startRun() {
   state.announced = null;
   render();
   try {
-    state.run = await callApi("/api/run/start", {
+    const request = {
       input: inputValue(),
       output_parent: ui.outputParent.value.trim(),
       output_name: ui.outputName.value.trim(),
       timezone: ui.timezone.value.trim(),
       external_safe_pack: ui.safePack.checked,
-    });
+    };
+    // A Snapshot run names its way, its store, and for an import its fields
+    // (stage B4b-1); normalizing the Snapshots again takes no Export.
+    state.runLabel = null;
+    if (state.how !== "single") {
+      request.how = state.how;
+      request.store = state.store.answer?.path;
+      request.new_store = state.how === "snapshots" && state.store.answer?.state === "new";
+      if (state.how === "snapshots") {
+        request.label = ui.snapshotLabel.value.trim();
+        request.downloaded_at = localTimeIso(ui.downloadedAt.value);
+        state.runLabel = request.label;
+      } else {
+        delete request.input;
+      }
+    }
+    state.lastImported = null;
+    state.run = await callApi("/api/run/start", request);
     startPolling();
   } catch (error) {
     if (!connectionFailure(error)) {
@@ -1668,7 +1905,8 @@ function fieldChanged(event) {
   }
   if (event?.target === ui.inputPath) {
     state.chooserError = null;
-  } else if (event?.target !== ui.extractConfirm) {
+  } else if (![ui.extractConfirm, ui.snapshotLabel, ui.downloadedAt].includes(event?.target)) {
+    // The fields of the first box leave the third box as it was decided.
     state.outputDecided = false;
   }
   if (event?.target === ui.outputParent) {
@@ -1705,6 +1943,20 @@ function connect() {
   ui.storeCreateNew.addEventListener("click", () => chooseWithDialog("folder", "store-place", ui.storeCreateNew));
   ui.storeCheck.addEventListener("click", () => storeAction("check", state.store.answer?.path, ui.storeCheck));
   ui.check.addEventListener("click", () => runCheck());
+  // The way to normalize, and normalizing the Snapshots again (stage B4b-1).
+  for (const radio of [ui.howSnapshots, ui.howSingle]) {
+    radio.addEventListener("change", () => setHow(radio.value));
+  }
+  ui.rerunToggle.addEventListener("click", () => setHow(state.how === "rerun" ? "snapshots" : "rerun"));
+  ui.snapshotLabel.addEventListener("input", (event) => {
+    state.labelEdited = true;
+    fieldChanged(event);
+  });
+  ui.downloadedAt.addEventListener("input", (event) => {
+    state.timeEdited = true;
+    proposeLabel();
+    fieldChanged(event);
+  });
   ui.snapshotDecide.addEventListener("click", () => decide("snapshot"));
   ui.outputDecide.addEventListener("click", () => decide("output"));
   ui.start.addEventListener("click", startRun);

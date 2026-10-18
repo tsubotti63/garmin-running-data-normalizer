@@ -1615,6 +1615,21 @@ anything is written:
   free space there is compared with the size of the FIT files that it copies,
   the least that it needs.
 
+From stage B4b-1, the four stops of a registration that gave
+`SNAPSHOT_LIFECYCLE_FAILED` have their own codes, with which the CLI and the
+GUI stop alike: a label that this app does not take
+(`SNAPSHOT_LABEL_INVALID`), a label that another Snapshot of the store has
+(`SNAPSHOT_LABEL_EXISTS`), a time of the Export that cannot be read or times
+out of order (`SNAPSHOT_TIME_INVALID`, whose message still says which time
+and what is wrong), and an Export and a store that are the same folder or one
+inside the other (`SNAPSHOT_INPUT_INSIDE_STORE`). The GUI checks the same
+before a run starts, with the functions that the registration uses
+(`new_snapshot_label`, `registration_times`, `check_input_apart`, and
+`check_label_free`). The same Export registered again is still not a new
+Snapshot, under any label, one that the store has included.
+`SNAPSHOT_LIFECYCLE_FAILED` remains for a registration without
+`--confirm-complete` and the other stops of the store's contract.
+
 The problems:
 
 - Safety: members of the Export ZIP file that fail a safety check (paths
@@ -1687,6 +1702,10 @@ gives, for its entries and controls, are not in this table.
 | `SNAPSHOT_STORE_PARENT_NOT_FOUND` | the folder that should hold the new Snapshot Store does not exist | check the place given with --store, or make the folder that holds it first; no folder is made above a new store |
 | `SNAPSHOT_STORE_NOT_EMPTY` | the place given for a new Snapshot Store is a file, or a folder that holds other files | give the place of a new folder, or of an empty one, with --store; to use a store, give the folder of the store itself |
 | `SNAPSHOT_STORE_INSIDE_STORE` | the place given for a new Snapshot Store is inside another Snapshot Store | give a place outside the other store with --store |
+| `SNAPSHOT_LABEL_INVALID` | the label of the Snapshot is not one that this app takes | give a label of 1 to 64 letters, digits, dots, underscores, or hyphens that starts with a letter or a digit, with --label |
+| `SNAPSHOT_LABEL_EXISTS` | another Snapshot in the store has this label | give another label with --label |
+| `SNAPSHOT_TIME_INVALID` | a time of the Export cannot be read, or the times are not in order | give each time with its offset from UTC, such as 2030-01-01T02:00:00+00:00, with the request no later than the download, and the download no later than the observation |
+| `SNAPSHOT_INPUT_INSIDE_STORE` | the Export and the Snapshot Store are the same folder, or one is inside the other | keep the Export and the store in separate folders |
 | `SNAPSHOT_LIFECYCLE_FAILED` | a snapshot command cannot do what it was asked | correct the command or its input as the message says, and run it again |
 | `HANDOFF_INVALID` | the folder is not the output of a run, or the files of the output do not pass their checks | check that the folder is the output of Run-All; if it is, do not change its files, and run Run-All again into a new folder |
 | `DOCTOR_AUTHORITY_INVALID` | the diagnostics of the output are missing, invalid, or disagree | do not change the files of an output; run Run-All again into a new folder |

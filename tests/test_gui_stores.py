@@ -22,7 +22,7 @@ from unittest.mock import patch
 from garmin_running_data_normalizer.gui import places, runs, stores
 from garmin_running_data_normalizer.gui.places import cloud_kind, make_default_folder
 from garmin_running_data_normalizer.gui.runs import RunActiveError, RunRequestError
-from garmin_running_data_normalizer.gui.stores import ANSWER_CODES, check_store, open_store, store_place
+from garmin_running_data_normalizer.gui.stores import ANSWER_CODES, check_store, download_time, open_store, store_place
 from garmin_running_data_normalizer.snapshot import initialize_store, register_snapshot
 from garmin_running_data_normalizer.snapshot.store import LOCK_NAME
 from tests.test_environment_stops import REAL_PERMISSIONS, REAL_SYMLINKS, permissions
@@ -366,6 +366,60 @@ class RunStartTest(HomeTestCase):
                 manager.start(request(SYNTHETIC_EXPORT, folder))
         self.assertEqual(raised.exception.code, "OUTPUT_PARENT_NOT_WRITABLE")
         self.assertFalse(folder.exists())
+
+
+class DownloadTimeTest(HomeTestCase):
+    """The download time that an import proposes (stage B4b-1)."""
+
+    START = 1893456000  # 2030-01-01T00:00:00+00:00
+
+    def touch(self, path: Path, seconds: int) -> None:
+        os.utime(path, (self.START + seconds, self.START + seconds))
+
+    def test_the_time_of_a_zip_file(self) -> None:
+        archive = self.root / "export.zip"
+        archive.write_bytes(b"synthetic")
+        self.touch(archive, 3600)
+        self.assertEqual(download_time(archive), ("2030-01-01T01:00:00+00:00", "zip"))
+
+    def test_the_time_of_the_newest_file_of_a_folder(self) -> None:
+        folder = self.root / "export"
+        shutil.copytree(SYNTHETIC_EXPORT, folder)
+        files = sorted(path for path in folder.rglob("*") if path.is_file())
+        for number, path in enumerate(files):
+            self.touch(path, number * 60)
+        newest = f"2030-01-01T00:{(len(files) - 1):02d}:00+00:00"
+        # Hidden files and folders, and the folders' own times, do not count:
+        # the folder has the time of the extraction.
+        (folder / ".hidden").write_text("synthetic", encoding="utf-8")
+        self.touch(folder / ".hidden", 86400)
+        (folder / ".cache").mkdir()
+        (folder / ".cache" / "file.json").write_text("{}", encoding="utf-8")
+        self.touch(folder / ".cache" / "file.json", 86400)
+        self.touch(folder, 86400)
+        self.assertEqual(download_time(folder), (newest, "newest_file"))
+
+    @REAL_SYMLINKS
+    def test_a_link_is_passed_over(self) -> None:
+        folder = self.root / "export"
+        shutil.copytree(SYNTHETIC_EXPORT, folder)
+        files = sorted(path for path in folder.rglob("*") if path.is_file())
+        for path in files:
+            self.touch(path, 0)
+        outside = self.root / "outside.json"
+        outside.write_text("{}", encoding="utf-8")
+        self.touch(outside, 86400)
+        (folder / "link.json").symlink_to(outside)
+        # The link's own time, which POSIX systems can set, does not count.
+        later = self.START + 86400
+        os.utime(folder / "link.json", (later, later), follow_symlinks=False)
+        self.assertEqual(download_time(folder), ("2030-01-01T00:00:00+00:00", "newest_file"))
+
+    def test_no_time_without_a_file(self) -> None:
+        empty = self.root / "empty"
+        (empty / ".hidden").mkdir(parents=True)
+        self.assertEqual(download_time(empty), (None, None))
+        self.assertEqual(download_time(self.root / "missing"), (None, None))
 
 
 class StoreApiTest(GuiServerTestCase):

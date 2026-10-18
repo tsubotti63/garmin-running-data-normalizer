@@ -110,6 +110,12 @@ NEW_STORE_INSIDE_STORE_MESSAGE = STOPS["SNAPSHOT_STORE_INSIDE_STORE"].what
 # The store.json of a store above a new one is read up to this size; a
 # larger file is not one that this app wrote.
 MAX_STORE_METADATA_BYTES = 64 * 1024
+# A registration (stage B4b-1): until then, these stopped with
+# SNAPSHOT_LIFECYCLE_FAILED.
+LABEL_INVALID_MESSAGE = STOPS["SNAPSHOT_LABEL_INVALID"].what
+LABEL_EXISTS_MESSAGE = STOPS["SNAPSHOT_LABEL_EXISTS"].what
+TIME_INVALID_MESSAGE = STOPS["SNAPSHOT_TIME_INVALID"].what
+INPUT_INSIDE_STORE_MESSAGE = STOPS["SNAPSHOT_INPUT_INSIDE_STORE"].what
 # The input of a registration that cannot be read safely, as a run says it
 # (stage A5b-2).
 INPUT_DISCOVERY_MESSAGE = STOPS["INPUT_DISCOVERY_FAILED"].what
@@ -336,6 +342,50 @@ def _validate_label(value: str) -> str:
             "snapshot label must use 1-64 letters, digits, dot, underscore, or hyphen"
         )
     return value
+
+
+# The checks of a registration, which the GUI makes with the same functions
+# before it starts one (stage B4b-1). The checks of a store's records keep
+# their own words above, as a damaged store names them.
+def new_snapshot_label(value: Any) -> str:
+    """The label of a new Snapshot, or SNAPSHOT_LABEL_INVALID."""
+    if not isinstance(value, str) or not LABEL_RE.fullmatch(value):
+        raise SnapshotStoreError(LABEL_INVALID_MESSAGE, "SNAPSHOT_LABEL_INVALID")
+    return value
+
+
+def registration_times(requested: Any, downloaded: Any, observed: Any) -> tuple[str, str, str]:
+    """The times of an Export in UTC, each with its offset, requested no
+    later than downloaded and downloaded no later than observed; or
+    SNAPSHOT_TIME_INVALID, with what is wrong."""
+    try:
+        times = (
+            _require_aware_iso(requested, "export_requested_at"),
+            _require_aware_iso(downloaded, "export_downloaded_at"),
+            _require_aware_iso(observed, "export_observed_at"),
+        )
+    except SnapshotStoreError as exc:
+        raise SnapshotStoreError(f"{TIME_INVALID_MESSAGE}: {exc}", "SNAPSHOT_TIME_INVALID") from exc
+    if not (_logical_time(times[0]) <= _logical_time(times[1]) <= _logical_time(times[2])):
+        raise SnapshotStoreError(
+            f"{TIME_INVALID_MESSAGE}: snapshot timestamps must be requested <= downloaded <= observed",
+            "SNAPSHOT_TIME_INVALID",
+        )
+    return times
+
+
+def check_input_apart(source: Path, root: Path) -> None:
+    """An Export and a store, both resolved, are separate folders; or
+    SNAPSHOT_INPUT_INSIDE_STORE."""
+    if source == root or root in source.parents or source in root.parents:
+        raise SnapshotStoreError(INPUT_INSIDE_STORE_MESSAGE, "SNAPSHOT_INPUT_INSIDE_STORE")
+
+
+def check_label_free(manifests: list[dict[str, Any]], label: str, snapshot_id: str | None = None) -> None:
+    """No other Snapshot of the store has ``label``; or
+    SNAPSHOT_LABEL_EXISTS. The Snapshot ``snapshot_id`` itself may have it."""
+    if any(item["snapshot_label"] == label and item["snapshot_id"] != snapshot_id for item in manifests):
+        raise SnapshotStoreError(LABEL_EXISTS_MESSAGE, "SNAPSHOT_LABEL_EXISTS")
 
 
 def _load_json(path: Path, root: Path) -> dict[str, Any]:
@@ -1080,10 +1130,12 @@ def _archive_state(source: Path) -> tuple[int, int]:
 def _scan_source(
     source: Path,
     export: ExportView,
+    report: Callable[[int, int], None] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Path | _StreamedFile], set[str]]:
     """List the Export's files and archive members, and the accounts its records name.
 
     The accounts are compared during registration only and never stored.
+    ``report``, when given, receives the number of files read and of all.
     """
     inventory: list[dict[str, Any]] = []
     payloads: dict[str, Path | _StreamedFile] = {}
@@ -1092,7 +1144,9 @@ def _scan_source(
     if not files:
         raise SnapshotStoreError("snapshot input contains no files")
     archive_before = _archive_state(source) if is_zip_input(source) else None
-    for item in files:
+    for done, item in enumerate(files):
+        if report is not None:
+            report(done, len(files))
         relative = item.relative_path
         if (
             item.suffix == ".json"
@@ -1161,6 +1215,8 @@ def _scan_source(
             # The ZIP file is stored whole, without its members, and the
             # build leaves it out for this reason (stage A3c-2).
             row["parser_state"] = reason
+    if report is not None:
+        report(len(files), len(files))
     if archive_before is not None and archive_before != _archive_state(source):
         raise _input_changed()
     if not inventory:
@@ -1300,9 +1356,23 @@ def register_snapshot(
     export_downloaded_at: str,
     export_observed_at: str,
     confirm_complete: bool,
+    progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
+    """Register a complete Export as a Snapshot. ``progress``, when given,
+    receives the files done and all (``done`` and ``total``) of two stages
+    (stage B4b-1): ``reading_export``, while the Export is read, and
+    ``importing``, while its files that the store does not hold yet are
+    copied, which an Export that the store holds already never reaches. The
+    events never carry a place, a name, or a value, and the store is the same
+    with or without them. The CLI passes none."""
     if confirm_complete is not True:
         raise SnapshotStoreError("snapshot registration requires --confirm-complete")
+
+    def report(stage: str) -> Callable[[int, int], None] | None:
+        if progress is None:
+            return None
+        return lambda done, total: progress({"stage": stage, "done": done, "total": total})
+
     root, store_metadata = load_store(store_root)
     # The input stops with the codes of a run (stage A5b-2).
     requested_source = Path(input_root)
@@ -1319,14 +1389,11 @@ def register_snapshot(
         ) from exc
     if not is_input:
         raise SnapshotStoreError("input must be an existing folder or ZIP file", "INPUT_NOT_DIRECTORY")
-    if source == root or root in source.parents or source in root.parents:
-        raise SnapshotStoreError("snapshot input and snapshot store must be separate")
-    label = _validate_label(snapshot_label)
-    requested_at = _require_aware_iso(export_requested_at, "export_requested_at")
-    downloaded_at = _require_aware_iso(export_downloaded_at, "export_downloaded_at")
-    observed_at = _require_aware_iso(export_observed_at, "export_observed_at")
-    if not (_logical_time(requested_at) <= _logical_time(downloaded_at) <= _logical_time(observed_at)):
-        raise SnapshotStoreError("snapshot timestamps must be requested <= downloaded <= observed")
+    check_input_apart(source, root)
+    label = new_snapshot_label(snapshot_label)
+    requested_at, downloaded_at, observed_at = registration_times(
+        export_requested_at, export_downloaded_at, export_observed_at
+    )
 
     # The input stays open until its files are copied to the store.
     with _store_lock(root), ExitStack() as stack:
@@ -1336,7 +1403,7 @@ def register_snapshot(
             store_notes["temporary_files_removed"] = removed
         recovery_status = _recover_journal(root)
         opened = stack.enter_context(_open_snapshot_input(source))
-        inventory, payloads, accounts = _scan_source(source, opened.source)
+        inventory, payloads, accounts = _scan_source(source, opened.source, report("reading_export"))
         if len(accounts) > 1:
             raise MixedExportsError()
         input_notes: dict[str, int] = {}
@@ -1382,11 +1449,7 @@ def register_snapshot(
         )
         snapshot_id = f"snapshot-{snapshot_digest}"
         manifest_path = root / "snapshots" / snapshot_id / "manifest.json"
-        if any(
-            item["snapshot_label"] == label and item["snapshot_id"] != snapshot_id
-            for item in manifests
-        ):
-            raise SnapshotStoreError("snapshot label is already registered")
+        check_label_free(manifests, label, snapshot_id)
         existing = next(
             (item for item in manifests if item["snapshot_id"] == snapshot_id),
             None,
@@ -1433,11 +1496,16 @@ def register_snapshot(
             )
         added = 0
         reused = 0
-        for digest in sorted(payloads):
+        copying = report("importing")
+        for done, digest in enumerate(sorted(payloads)):
+            if copying is not None:
+                copying(done, len(payloads))
             if _preserve_blob(root, digest, payloads[digest], sizes[digest]):
                 added += 1
             else:
                 reused += 1
+        if copying is not None:
+            copying(len(payloads), len(payloads))
         family_counts = Counter(row["source_family"] for row in inventory)
         manifest = {
             "format": "garmin-running-data-normalizer-snapshot-manifest-v1",
@@ -1739,14 +1807,18 @@ def verification_error(
 __all__ = [
     "NOTICE_MESSAGES",
     "SnapshotStoreError",
+    "check_input_apart",
+    "check_label_free",
     "check_new_store_place",
     "content_multiset",
     "initialize_store",
     "invalid_store_error",
     "load_manifests",
     "load_store",
+    "new_snapshot_label",
     "not_readable_error",
     "register_snapshot",
+    "registration_times",
     "sha256_file",
     "shown_store_message",
     "snapshot_status",

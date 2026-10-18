@@ -21,6 +21,7 @@ from garmin_running_data_normalizer.gui.runs import RUN_STATUSES
 from garmin_running_data_normalizer.gui.server import LANGUAGES, STATIC_FILES
 from garmin_running_data_normalizer.gui.stores import ANSWER_CODES
 from garmin_running_data_normalizer.run_all import PROGRESS_STAGES, PROGRESS_STEPS, run_all
+from garmin_running_data_normalizer.snapshot.lifecycle import SNAPSHOT_PROGRESS_STAGES
 from garmin_running_data_normalizer.stops import NEXT_ACTIONS, PAGE_STOPS, PAGE_WORDING, STOPS
 
 
@@ -237,6 +238,13 @@ class GuiMessageCoverageTest(unittest.TestCase):
             | codes_in("gui/chooser.py", r'_failed\("([A-Z_]+)"\)')
             | codes_in("gui/server.py", r'ApiError\(HTTPStatus\.[A-Z_]+, "([A-Z_]+)"\)')
             | codes_in("gui/run_worker.py", r'"code": "([A-Z_]+)"')
+            # A Snapshot run of the page (stage B4b-1) stops with the codes of
+            # the CLI's snapshot commands: those of the Snapshot Store, and for
+            # an error that no code describes, that of Run-All or of the
+            # registration.
+            | codes_in("snapshot/store.py", r'"(SNAPSHOT_[A-Z_]+)"')
+            | codes_in("snapshot/merge.py", r'"(SNAPSHOT_[A-Z_]+)"')
+            | codes_in("gui/run_worker.py", r'"([A-Z_]+_FAILED)"')
             | codes_in("gui/outputs.py", r'OutputActionError\("([A-Z_]+)"\)')
             | codes_in("diagnostics/doctor.py", r'DoctorError\(\s*"([A-Z_]+)"')
             | codes_in("diagnostics/support_bundle.py", r'SupportBundleError\(\s*"([A-Z_]+)"')
@@ -264,7 +272,9 @@ class GuiMessageCoverageTest(unittest.TestCase):
         self.assertEqual(source.count("OutputActionError(exc.code)"), 2)
 
     def test_every_progress_stage_and_step_has_a_message(self) -> None:
-        self.assertEqual(set(flow_table("STAGE_KEYS")), set(PROGRESS_STAGES))
+        # The stages of a Snapshot run come before and after those of Run-All
+        # (stage B4b-1).
+        self.assertEqual(set(flow_table("STAGE_KEYS")), set(PROGRESS_STAGES) | set(SNAPSHOT_PROGRESS_STAGES))
         self.assertEqual(set(flow_table("STEP_KEYS")), set(PROGRESS_STEPS))
 
     def test_every_pre_run_finding_has_a_message(self) -> None:

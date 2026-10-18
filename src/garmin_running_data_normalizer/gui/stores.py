@@ -9,6 +9,9 @@ places, numbers, labels, times, and codes only.
 """
 from __future__ import annotations
 
+import os
+import stat
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -142,4 +145,41 @@ def check_store(path: Path) -> dict[str, Any]:
     }
 
 
-__all__ = ["ANSWER_CODES", "check_store", "not_readable_detail", "open_store", "store_place"]
+def download_time(input_path: Path) -> tuple[str | None, str | None]:
+    """The time to propose as the download of an Export, and where it came
+    from (stage B4b-1, decision 20261017-16): the time of a ZIP file, which
+    the browser set when it downloaded it, or the time of the newest file of
+    an extracted folder, which is near the time when the Export was made,
+    since the folder itself has the time of the extraction. Hidden files,
+    links, and what cannot be opened are passed over. None for an input
+    without a file to read it from."""
+    try:
+        if input_path.is_file():
+            return _proposed(input_path.stat().st_mtime, "zip")
+    except OSError:
+        return None, None
+    newest: float | None = None
+    for folder, names, files in os.walk(input_path, followlinks=False):
+        names[:] = [name for name in names if not name.startswith(".")]
+        for name in files:
+            if name.startswith("."):
+                continue
+            try:
+                status = os.lstat(os.path.join(folder, name))
+            except OSError:
+                continue
+            if stat.S_ISREG(status.st_mode) and (newest is None or status.st_mtime > newest):
+                newest = status.st_mtime
+    return _proposed(newest, "newest_file")
+
+
+def _proposed(timestamp: float | None, source: str) -> tuple[str | None, str | None]:
+    if timestamp is None:
+        return None, None
+    try:
+        return datetime.fromtimestamp(timestamp, timezone.utc).isoformat(timespec="seconds"), source
+    except (OverflowError, OSError, ValueError):
+        return None, None
+
+
+__all__ = ["ANSWER_CODES", "check_store", "download_time", "not_readable_detail", "open_store", "store_place"]

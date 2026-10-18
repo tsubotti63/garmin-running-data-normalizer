@@ -197,6 +197,25 @@ STOPS: dict[str, Stop] = {
         "the place given for a new Snapshot Store is inside another Snapshot Store",
         "give a place outside the other store with --store",
     ),
+    # A registration (stage B4b-1).
+    "SNAPSHOT_LABEL_INVALID": Stop(
+        "the label of the Snapshot is not one that this app takes",
+        "give a label of 1 to 64 letters, digits, dots, underscores, or hyphens that starts "
+        "with a letter or a digit, with --label",
+    ),
+    "SNAPSHOT_LABEL_EXISTS": Stop(
+        "another Snapshot in the store has this label",
+        "give another label with --label",
+    ),
+    "SNAPSHOT_TIME_INVALID": Stop(
+        "a time of the Export cannot be read, or the times are not in order",
+        "give each time with its offset from UTC, such as 2030-01-01T02:00:00+00:00, with the "
+        "request no later than the download, and the download no later than the observation",
+    ),
+    "SNAPSHOT_INPUT_INSIDE_STORE": Stop(
+        "the Export and the Snapshot Store are the same folder, or one is inside the other",
+        "keep the Export and the store in separate folders",
+    ),
     # The stops of the store's contract that no code above describes, such
     # as an argument that is not valid; a damaged store is always
     # SNAPSHOT_STORE_INVALID (stage A5b-2).
@@ -501,6 +520,43 @@ PAGE_WORDING: dict[str, Stop] = {
     "SNAPSHOT_REGISTRATION_INCOMPLETE": Stop(
         "an import into the Snapshot Store was interrupted",
         "the next import completes the store",
+    ),
+    # An import from the page (stage B4b-1), which names its fields.
+    "SNAPSHOT_LABEL_INVALID": Stop(
+        "the name of the Snapshot is not one that this app takes",
+        "use 1 to 64 letters, digits, dots, underscores, or hyphens that start with a letter "
+        "or a digit",
+    ),
+    "SNAPSHOT_LABEL_EXISTS": Stop(
+        "another Snapshot in the store has this name",
+        "change the name of the Snapshot",
+    ),
+    "SNAPSHOT_TIME_INVALID": Stop(
+        "the download time cannot be read",
+        "enter the date and the time, such as 2030-01-01 02:00",
+    ),
+    "SNAPSHOT_INPUT_INSIDE_STORE": Stop(
+        "the Export and the Snapshot Store are the same folder, or one is inside the other",
+        "choose an Export outside the store, or another store",
+    ),
+    "SNAPSHOT_STORE_NOT_WRITABLE": Stop(
+        "this app cannot write in the Snapshot Store, or create it there",
+        "allow this app to write in its folder, or for a new store choose another folder; then "
+        "press Run normalization again",
+    ),
+    "SNAPSHOT_STORE_SPACE_INSUFFICIENT": Stop(
+        "the drive of the Snapshot Store does not have enough free space",
+        "free some space, or for a new store choose another folder; then press Run "
+        "normalization again",
+    ),
+    "SNAPSHOT_STORE_EMPTY": Stop(
+        "the Snapshot Store holds no Snapshot yet",
+        "import an Export into it first",
+    ),
+    "SNAPSHOT_LIFECYCLE_FAILED": Stop(
+        "this app could not do this with the Snapshot Store",
+        "check what you chose and entered, and press the button again; if it stops again, "
+        "please report the code",
     ),
 }
 

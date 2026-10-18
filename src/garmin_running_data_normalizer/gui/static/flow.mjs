@@ -9,6 +9,12 @@ export const FINISHED_STATES = ["finished", "finished_after_cancel"];
 export const STALL_SECONDS = 30;
 
 const STAGE_KEYS = {
+  // The stages of a Snapshot run before those of Run-All (stage B4b-1).
+  creating_store: "progress.creating_store",
+  reading_export: "progress.reading_export",
+  importing: "progress.importing",
+  checking_store: "progress.checking_store",
+  building_snapshots: "progress.building_snapshots",
   discovering: "progress.discovering",
   normalizing: "progress.normalizing",
   reading_fit: "progress.reading_fit",
@@ -16,6 +22,8 @@ const STAGE_KEYS = {
   building_output: "progress.building_output",
   writing_output: "progress.writing_output",
 };
+
+const COUNTED_STAGES = ["reading_export", "importing", "reading_fit"];
 
 const STEP_KEYS = {
   activities: "step.activities",
@@ -116,6 +124,15 @@ export const STOP_KEYS = {
   SNAPSHOT_STORE_INSIDE_STORE: "stop.snapshot_store_inside_store",
   SNAPSHOT_STORE_LOCKED: "stop.snapshot_store_locked",
   SNAPSHOT_REGISTRATION_INCOMPLETE: "stop.snapshot_registration_incomplete",
+  // A Snapshot run of the page (stage B4b-1).
+  SNAPSHOT_LABEL_INVALID: "stop.snapshot_label_invalid",
+  SNAPSHOT_LABEL_EXISTS: "stop.snapshot_label_exists",
+  SNAPSHOT_TIME_INVALID: "stop.snapshot_time_invalid",
+  SNAPSHOT_INPUT_INSIDE_STORE: "stop.snapshot_input_inside_store",
+  SNAPSHOT_STORE_NOT_WRITABLE: "stop.snapshot_store_not_writable",
+  SNAPSHOT_STORE_SPACE_INSUFFICIENT: "stop.snapshot_store_space_insufficient",
+  SNAPSHOT_STORE_EMPTY: "stop.snapshot_store_empty",
+  SNAPSHOT_LIFECYCLE_FAILED: "stop.snapshot_lifecycle_failed",
 };
 
 // Several codes share a next step, as they share it in stops.py.
@@ -201,6 +218,14 @@ export const STOP_NEXT_KEYS = {
   SNAPSHOT_STORE_INSIDE_STORE: "stop_next.snapshot_store_inside_store",
   SNAPSHOT_STORE_LOCKED: "stop_next.snapshot_store_locked",
   SNAPSHOT_REGISTRATION_INCOMPLETE: "stop_next.snapshot_registration_incomplete",
+  SNAPSHOT_LABEL_INVALID: "stop_next.snapshot_label_invalid",
+  SNAPSHOT_LABEL_EXISTS: "stop_next.snapshot_label_exists",
+  SNAPSHOT_TIME_INVALID: "stop_next.snapshot_time_invalid",
+  SNAPSHOT_INPUT_INSIDE_STORE: "stop_next.snapshot_input_inside_store",
+  SNAPSHOT_STORE_NOT_WRITABLE: "stop_next.snapshot_store_not_writable",
+  SNAPSHOT_STORE_SPACE_INSUFFICIENT: "stop_next.snapshot_store_space_insufficient",
+  SNAPSHOT_STORE_EMPTY: "stop_next.snapshot_store_empty",
+  SNAPSHOT_LIFECYCLE_FAILED: "stop_next.snapshot_lifecycle_failed",
 };
 
 // A pre-run finding says what a run would stop with in the words of the stop
@@ -375,14 +400,29 @@ export function progressMessage(progress) {
     }
     return { key: STAGE_KEYS.normalizing, params: {}, keyParams: { step } };
   }
-  if (stage === "reading_fit") {
+  // The stages that count files: the FIT files that Run-All reads, and from
+  // stage B4b-1 the files of an import, read and copied.
+  if (COUNTED_STAGES.includes(stage)) {
     return {
-      key: STAGE_KEYS.reading_fit,
+      key: STAGE_KEYS[stage],
       params: { done: progress.done, total: progress.total },
       keyParams: {},
     };
   }
+  if (stage === "building_snapshots") {
+    return { key: STAGE_KEYS.building_snapshots, params: { snapshots: progress.snapshots }, keyParams: {} };
+  }
   return { key: STAGE_KEYS[stage], params: {}, keyParams: {} };
+}
+
+// The bar under the headline: the files of an import, or the FIT files that
+// Run-All reads (stage B4b-1); null for a stage without numbers.
+export function progressBar(progress) {
+  const stage = progress?.stage;
+  if (COUNTED_STAGES.includes(stage) && Number.isInteger(progress.total) && progress.total > 0) {
+    return { max: progress.total, value: Number.isInteger(progress.done) ? progress.done : 0 };
+  }
+  return null;
 }
 
 // A pre-run finding, and what to do next when it has a step. A finding that
@@ -583,7 +623,7 @@ const storeProblemKind = (code) => (STORE_NOTICE_CODES.includes(code) ? "warn" :
 // check found. ``store`` holds the dialog that is open for it, its error,
 // whether the page is asking the server, the answer of the store or of the
 // place for a new one, and the answer of the check.
-export function storeMessages(store) {
+export function storeMessages(store, how = "single") {
   const lines = [];
   const add = (kind, messages) =>
     messages.forEach((line, index) => lines.push({ kind, start: index === 0, message: line }));
@@ -626,7 +666,9 @@ export function storeMessages(store) {
       notices.add(checked.error_code);
     }
     for (const code of STORE_NOTICE_CODES.filter((item) => notices.has(item))) {
-      add("warn", errorMessages(code));
+      // A lock file keeps an import from starting, so it is red then
+      // (stage B4b-1).
+      add(code === "SNAPSHOT_STORE_LOCKED" && how === "snapshots" ? "error" : "warn", errorMessages(code));
     }
   }
   add("warn", cloudMessages(answer.cloud));
@@ -644,6 +686,36 @@ export function storeMessages(store) {
   return lines;
 }
 
+// Whether the store keeps the chosen way from starting (stage B4b-1): a
+// problem of the store or of its check, a lock file for an import, or no
+// Snapshot to normalize again. This Export alone never uses the store.
+export function storeProblem(how, store) {
+  const answer = store?.answer;
+  if (how === "single" || answer === null || typeof answer !== "object") {
+    return false;
+  }
+  const checked = store.checked;
+  if (answer.state === "error" || (checked?.state === "error" && !STORE_NOTICE_CODES.includes(checked.error_code))) {
+    return true;
+  }
+  const snapshots = Array.isArray(answer.snapshots) ? answer.snapshots.length : 0;
+  if (how === "rerun") {
+    return answer.state !== "store" || snapshots === 0;
+  }
+  return answer.state === "store" && Array.isArray(answer.notices) && answer.notices.includes("SNAPSHOT_STORE_LOCKED");
+}
+
+// Whether the store is ready for the chosen way: a store, or for an import
+// also the place of a new one, without a problem.
+export function storeReady(how, store) {
+  if (how === "single") {
+    return true;
+  }
+  const state = store?.answer?.state;
+  const known = state === "store" || (how === "snapshots" && state === "new");
+  return known && store?.busy !== true && !storeProblem(how, store);
+}
+
 // The time of an Export, which orders the Snapshots, in the local time of
 // this computer, to the minute; a dash for one that cannot be read.
 export function exportTime(value) {
@@ -656,17 +728,111 @@ export function exportTime(value) {
 }
 
 // The rows of the Snapshots of an opened store, in their order: the number,
-// the label, the time of the Export, and the number of files (stage B4a).
-export function snapshotRows(answer) {
-  if (answer?.state !== "store" || !Array.isArray(answer.snapshots)) {
+// the label, the time of the Export, the number of files, and the state
+// (stage B4a). ``pending`` is the Export that the run will import, with its
+// label and time: it takes its place in the order of the times of the
+// Exports, and the numbers follow (stage B4b-1). ``added`` names the label
+// that the last run imported.
+export function snapshotRows(answer, pending = null, added = null) {
+  const kept =
+    answer?.state === "store" && Array.isArray(answer.snapshots)
+      ? answer.snapshots.map((item) => ({
+          label: typeof item?.label === "string" ? item.label : "",
+          observed: typeof item?.observed_at === "string" ? item.observed_at : null,
+          files: Number.isInteger(item?.files) ? item.files : null,
+          state: typeof added === "string" && item?.label === added ? "added" : "kept",
+        }))
+      : [];
+  if (answer?.state !== "store" && answer?.state !== "new") {
     return [];
   }
-  return answer.snapshots.map((item) => ({
-    order: Number.isInteger(item?.order) ? item.order : null,
-    label: typeof item?.label === "string" ? item.label : "",
-    time: exportTime(item?.observed_at),
-    files: Number.isInteger(item?.files) ? item.files : null,
+  if (pending !== null && typeof pending?.time === "string") {
+    const time = new Date(pending.time).getTime();
+    const index = kept.findIndex((row) => row.observed !== null && new Date(row.observed).getTime() > time);
+    const row = { label: pending.label ?? "", observed: pending.time, files: null, state: "pending" };
+    kept.splice(index < 0 ? kept.length : index, 0, row);
+  }
+  return kept.map((row, index) => ({
+    order: index + 1,
+    label: row.label,
+    time: exportTime(row.observed),
+    files: row.files,
+    state: row.state,
   }));
+}
+
+// The label rule of a new Snapshot, as the store checks it (stage B4b-1);
+// the server checks it again with the store's own function.
+export const SNAPSHOT_LABEL = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+export function isValidSnapshotLabel(label) {
+  return typeof label === "string" && SNAPSHOT_LABEL.test(label);
+}
+
+// The proposed label of an import: the date of its download, with -2, -3,
+// and so on when the store has that label already, as the names of outputs
+// are proposed (stage B4b-1).
+export function defaultSnapshotLabel(timeText, labels = []) {
+  const date = /^\d{4}-\d{2}-\d{2}/.exec(typeof timeText === "string" ? timeText : "")?.[0];
+  if (date === undefined) {
+    return "";
+  }
+  const taken = new Set(labels);
+  let label = date;
+  for (let number = 2; taken.has(label); number += 1) {
+    label = `${date}-${number}`;
+  }
+  return label;
+}
+
+// The instant of a local date and time that the page writes, as "2030-01-01
+// 02:00", with the offset of this computer at that time; null for one that
+// cannot be read (stage B4b-1).
+export function localTimeIso(text) {
+  const match = /^\s*(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})\s*$/.exec(typeof text === "string" ? text : "");
+  if (match === null) {
+    return null;
+  }
+  const [year, month, day, hour, minute] = match.slice(1).map(Number);
+  const date = new Date(year, month - 1, day, hour, minute);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day ||
+    date.getHours() !== hour ||
+    date.getMinutes() !== minute
+  ) {
+    return null;
+  }
+  const offset = -date.getTimezoneOffset();
+  const pad = (number) => String(number).padStart(2, "0");
+  const sign = offset < 0 ? "-" : "+";
+  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00${sign}${pad(Math.floor(Math.abs(offset) / 60))}:${pad(Math.abs(offset) % 60)}`;
+}
+
+// What keeps an import from starting, as the code of its stop: a label that
+// the store does not take or has already, or a time that cannot be read
+// (stage B4b-1). The server checks them again.
+export function importProblem(fields, labels = []) {
+  if (!isValidSnapshotLabel(fields?.label)) {
+    return "SNAPSHOT_LABEL_INVALID";
+  }
+  if (labels.includes(fields.label)) {
+    return "SNAPSHOT_LABEL_EXISTS";
+  }
+  return localTimeIso(fields?.time) === null ? "SNAPSHOT_TIME_INVALID" : null;
+}
+
+// Where the download time came from: the time of the ZIP file, or of the
+// newest file of an extracted folder (decision 20261017-16).
+const DOWNLOAD_SOURCE_KEYS = {
+  zip: "import.time_from_zip",
+  newest_file: "import.time_from_folder",
+};
+
+export function downloadSourceMessage(source) {
+  const key = lookup(DOWNLOAD_SOURCE_KEYS, source, null);
+  return key === null ? null : message(key);
 }
 
 // The lines under the folder for the output (stage B4a): the default place,
@@ -835,6 +1001,26 @@ const ERROR_BOXES = {
   OUTPUT_PUBLISH_FAILED: "output",
   TIMEZONE_INVALID: "output",
   TIMEZONE_DATA_UNAVAILABLE: "output",
+  // An import names its fields in the first box, and the store is the
+  // second box's (stage B4b-1).
+  SNAPSHOT_LABEL_INVALID: "export",
+  SNAPSHOT_LABEL_EXISTS: "export",
+  SNAPSHOT_TIME_INVALID: "export",
+  SNAPSHOT_INPUT_INSIDE_STORE: "snapshot",
+  SNAPSHOT_STORE_NOT_FOUND: "snapshot",
+  SNAPSHOT_STORE_INVALID: "snapshot",
+  SNAPSHOT_STORE_VERSION_UNSUPPORTED: "snapshot",
+  SNAPSHOT_STORE_NOT_READABLE: "snapshot",
+  SNAPSHOT_STORE_SYMLINK: "snapshot",
+  SNAPSHOT_STORE_PARENT_NOT_FOUND: "snapshot",
+  SNAPSHOT_STORE_NOT_EMPTY: "snapshot",
+  SNAPSHOT_STORE_INSIDE_STORE: "snapshot",
+  SNAPSHOT_STORE_LOCKED: "snapshot",
+  SNAPSHOT_REGISTRATION_INCOMPLETE: "snapshot",
+  SNAPSHOT_STORE_NOT_WRITABLE: "snapshot",
+  SNAPSHOT_STORE_SPACE_INSUFFICIENT: "snapshot",
+  SNAPSHOT_STORE_EMPTY: "snapshot",
+  SNAPSHOT_LIFECYCLE_FAILED: "snapshot",
 };
 
 // A path that the server reads as absolute: a POSIX path, a home path that it
@@ -901,6 +1087,15 @@ export function boxStates(view) {
     }
   });
   states.run = current === null ? "current" : "todo";
+  // A Snapshot run needs a store without a problem: the second box is red
+  // until the store is fixed or another way is chosen (stage B4b-1).
+  if (view.storeProblem === true) {
+    states.snapshot = "error";
+    if (states.output === "current") {
+      states.output = "todo";
+    }
+    states.run = "todo";
+  }
   // A run request that the server refused marks the box that it concerns.
   if (typeof view.requestBox === "string" && Object.hasOwn(states, view.requestBox)) {
     states[view.requestBox] = "error";
@@ -998,12 +1193,56 @@ export const RUN_STEPS = [
   { key: "steps.write", stages: ["writing_output"] },
   { key: "steps.check_output", stages: [] },
 ];
-const OUTPUT_CHECK_STEP = RUN_STEPS.length - 1;
+// The steps of a Snapshot run (stage B4b-1), as the mockup v10 gives them:
+// an import reads the Export, then copies it into the store, which a first
+// import makes; the Snapshots are checked, then read or built into one input,
+// which Run-All then reads. Normalizing the Snapshots again starts with the
+// check.
+const CHECK_STORE_STEP = { key: "steps.check_store", stages: ["checking_store"] };
+const READ_SNAPSHOTS = ["building_snapshots", "discovering"];
 
-// The step that a stage of Run-All belongs to, or 0 before the first stage.
-function stepOf(stage) {
-  const index = RUN_STEPS.findIndex((step) => step.stages.includes(stage));
+function positive(value) {
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+// The steps of a way to normalize: "single", "snapshots", or "rerun".
+// ``numbers`` are the place of the imported Snapshot in the order and the
+// number of Snapshots after the import, when they are known; a new store's
+// import is its first Snapshot.
+export function runSteps(how, newStore = false, numbers = {}) {
+  const after = RUN_STEPS.slice(1);
+  if (how === "rerun") {
+    return [CHECK_STORE_STEP, { key: "steps.build_existing", stages: READ_SNAPSHOTS }, ...after];
+  }
+  if (how !== "snapshots") {
+    return RUN_STEPS;
+  }
+  const order = positive(numbers?.order);
+  const count = positive(numbers?.count);
+  let importStep = { key: "steps.import", stages: ["importing"] };
+  if (newStore) {
+    importStep = { key: "steps.import_new", stages: ["creating_store", "importing"] };
+  } else if (order !== null) {
+    importStep = { ...importStep, key: "steps.import_nth", params: { order } };
+  }
+  let readStep = { key: "steps.build_snapshots", stages: READ_SNAPSHOTS };
+  if (newStore || count === 1) {
+    readStep = { ...readStep, key: "steps.read_snapshot" };
+  } else if (count !== null) {
+    readStep = { ...readStep, key: "steps.build_count", params: { count } };
+  }
+  return [{ key: "steps.check_export", stages: ["reading_export"] }, importStep, CHECK_STORE_STEP, readStep, ...after];
+}
+
+// The step that a stage belongs to, or 0 before the first stage.
+function stepOf(steps, stage) {
+  const index = steps.findIndex((step) => step.stages.includes(stage));
   return index < 0 ? 0 : index;
+}
+
+// The steps of a run as its status gives its way, or as the page is set.
+function stepsOf(status, how, newStore, numbers) {
+  return runSteps(typeof status?.how === "string" ? status.how : how, newStore, numbers);
 }
 
 function stepSeconds(step, stageSeconds) {
@@ -1018,17 +1257,24 @@ function stepSeconds(step, stageSeconds) {
 // ``outputCheck`` is the page's check of the finished output: null before it
 // starts, "running", "done", "warn", or "error". The check is no stage of
 // Run-All, so the page measures its seconds (``outputCheckSeconds``).
-export function stepRows(status, outputCheck, outputCheckSeconds = null) {
+export function stepRows(status, outputCheck, outputCheckSeconds = null, how = "single", newStore = false, numbers = {}) {
   const runState = status?.state;
+  const steps = stepsOf(status, how, newStore, numbers);
+  const checkStep = steps.length - 1;
   const seconds = (index) =>
-    index === OUTPUT_CHECK_STEP
+    index === checkStep
       ? FINISHED_STATES.includes(runState) && typeof outputCheckSeconds === "number"
         ? outputCheckSeconds
         : null
-      : stepSeconds(RUN_STEPS[index], status?.stage_seconds);
-  const rows = RUN_STEPS.map((step, index) => ({ key: step.key, state: "todo", seconds: seconds(index) }));
+      : stepSeconds(steps[index], status?.stage_seconds);
+  const rows = steps.map((step, index) => ({
+    key: step.key,
+    ...(step.params ? { params: step.params } : {}),
+    state: "todo",
+    seconds: seconds(index),
+  }));
   if (ACTIVE_STATES.includes(runState)) {
-    const current = stepOf(status.progress?.stage);
+    const current = stepOf(steps, status.progress?.stage);
     rows.forEach((row, index) => {
       row.state = index < current ? "done" : index === current ? "run" : "todo";
     });
@@ -1037,11 +1283,11 @@ export function stepRows(status, outputCheck, outputCheckSeconds = null) {
       row.state = "done";
     });
     if ((status.result?.warning_count ?? 0) > 0) {
-      rows[stepOf("normalizing")].state = "warn";
+      rows[stepOf(steps, "normalizing")].state = "warn";
     }
-    rows[OUTPUT_CHECK_STEP].state = outputCheck === "running" ? "run" : outputCheck ?? "todo";
+    rows[checkStep].state = outputCheck === "running" ? "run" : outputCheck ?? "todo";
   } else if (runState === "failed" || runState === "cancelled") {
-    const last = stepOf(status.progress?.stage);
+    const last = stepOf(steps, status.progress?.stage);
     rows.forEach((row, index) => {
       row.state = index < last ? "done" : index === last ? (runState === "failed" ? "error" : "cancelled") : "skipped";
     });
@@ -1050,9 +1296,11 @@ export function stepRows(status, outputCheck, outputCheckSeconds = null) {
 }
 
 // Where a run is, for the line under the headline: the step and how many.
-export function currentStep(status) {
-  const index = stepOf(status?.progress?.stage);
-  return { key: RUN_STEPS[index].key, number: index + 1, total: RUN_STEPS.length };
+export function currentStep(status, how = "single", newStore = false, numbers = {}) {
+  const steps = stepsOf(status, how, newStore, numbers);
+  const index = stepOf(steps, status?.progress?.stage);
+  const step = steps[index];
+  return { key: step.key, ...(step.params ? { params: step.params } : {}), number: index + 1, total: steps.length };
 }
 
 // The headline of the fourth box, the exit code under it, and the line under
@@ -1062,11 +1310,13 @@ export function runSummary(status, states, view = {}) {
   const runState = status?.state;
   const result = status?.result;
   if (view.starting || runState === "running") {
-    const step = currentStep(status);
+    const step = currentStep(status, view.how, view.newStore, view.stepNumbers);
+    // A step with numbers names them (stage B4b-1).
+    const name = step.params ? message(step.key, step.params) : step.key;
     return {
       headline: message("run.headline_running"),
       exitCode: null,
-      sub: message("run.sub_running", { number: step.number, total: step.total }, { step: step.key }),
+      sub: message("run.sub_running", { number: step.number, total: step.total }, { step: name }),
     };
   }
   if (runState === "cancelling") {
@@ -1118,6 +1368,20 @@ export function resultDetails(status) {
     messages.push(message("result.output_label"));
     messages.push(message("result.path", { path: status.output_path }));
   }
+  // What the import of a Snapshot run did, which stays also when the run
+  // then stopped (stage B4b-1). The order is that of the times of the
+  // Exports, not of the imports.
+  const imported = status?.imported;
+  if (imported !== null && typeof imported === "object" && Number.isInteger(imported.order)) {
+    messages.push(
+      imported.same_content === true
+        ? message("result.import_same", { order: imported.order })
+        : message("result.import_done", { order: imported.order, count: imported.snapshot_count }),
+    );
+    if (status.state === "failed" || status.state === "cancelled") {
+      messages.push(message("result.import_kept"));
+    }
+  }
   if (Array.isArray(status?.staging_folders) && status.staging_folders.length > 0) {
     messages.push(message("result.staging_left", { names: status.staging_folders.join(", ") }));
     messages.push(nextStep("next.delete_staging"));
@@ -1127,13 +1391,40 @@ export function resultDetails(status) {
 
 // The words that sum up a confirmed box (a green line under its heading).
 export function boxSummary(box, view) {
+  // What the last run did, while no box changed since (stage B4b-1), as the
+  // mockup v10 says it.
+  const ran = FINISHED_STATES.includes(view.runState) && !view.editedSinceRun;
   if (box === "export") {
+    // Normalizing the Snapshots again takes no Export (stage B4b-1).
+    if (view.how === "rerun") {
+      return message("summary.export_rerun");
+    }
     // After the page is loaded again, the field is empty until the settings
-    // of an earlier launch come (stage B4a); the fourth box names the output.
+    // of an earlier launch come (stage B4c); the fourth box names the output.
     const name = lastName(view.inputPath);
-    return name === "" ? null : message("summary.export", { name });
+    if (name === "") {
+      return null;
+    }
+    if (ran && view.imported) {
+      return message(view.imported.same_content === true ? "summary.export_same" : "summary.export_imported", { name });
+    }
+    return message(view.how === "snapshots" ? "summary.export_import" : "summary.export", { name });
   }
   if (box === "snapshot") {
+    const count = Number.isInteger(view.snapshotCount) ? view.snapshotCount : 0;
+    if (ran && (view.runHow === "snapshots" || view.runHow === "rerun")) {
+      const used = Number.isInteger(view.result?.snapshot_count) ? view.result.snapshot_count : count;
+      if (view.runHow === "rerun") {
+        return message("summary.snapshot_rerun_done", { count: used });
+      }
+      return view.madeStore ? message("summary.snapshot_new_done") : message("summary.snapshot_done", { count: used });
+    }
+    if (view.how === "rerun") {
+      return message("summary.snapshot_rerun", { count });
+    }
+    if (view.how === "snapshots") {
+      return view.newStore ? message("summary.snapshot_new") : message("summary.snapshot_import", { count });
+    }
     return message("summary.snapshot_single");
   }
   if (box === "output") {
@@ -1306,6 +1597,8 @@ export function controls(view, states) {
       !busy &&
       view.checkedReady &&
       outputReady &&
+      typeof view.importProblem !== "string" &&
+      view.storeReady !== false &&
       (states.run === "current" ||
         ((FINISHED_STATES.includes(view.runState) || view.runState === "failed") &&
           view.snapshotDecided &&

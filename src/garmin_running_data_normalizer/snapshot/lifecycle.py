@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,17 @@ from .store import (
 
 
 SnapshotLifecycleError = SnapshotStoreError
+# The stages of a Snapshot run before those of Run-All (stage B4b-1): making a
+# store, which the GUI reports itself, reading an Export and copying it into
+# the store (``register_snapshot``), checking the store, and building the
+# Snapshots into one input. Events carry stage names and numbers only.
+SNAPSHOT_PROGRESS_STAGES = (
+    "creating_store",
+    "reading_export",
+    "importing",
+    "checking_store",
+    "building_snapshots",
+)
 # The build of a Snapshot run is written in the temporary folder
 # (stage A3d-3b).
 SNAPSHOT_BUILD_TEMP_MESSAGE = (
@@ -44,8 +56,14 @@ def run_snapshot_all(
     external_safe_pack: bool = False,
     processing_sequence: list[str] | None = None,
     timezone_name: str = DEFAULT_TIMEZONE,
+    progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
-    """Build an approved cumulative input and run the existing Run-All pipeline."""
+    """Build an approved cumulative input and run the existing Run-All pipeline.
+
+    ``progress``, when given, receives ``checking_store``, then
+    ``building_snapshots`` with the number of Snapshots, then the events of
+    Run-All (stage B4b-1). The output is the same with or without it; the
+    CLI passes none."""
     from ..run_all import (
         ACTIVITIES_NOT_READABLE_MESSAGE,
         RunAllError,
@@ -59,9 +77,13 @@ def run_snapshot_all(
         raise RunAllError(exc.code, exc.safe_message) from exc
     # The output is checked before the build, which can take long (stage A3d-3a).
     check_run_output(output_root)
+    if progress is not None:
+        progress({"stage": "checking_store"})
     verification = verify_store(store_root)
     if verification["status"] != "PASS":
         raise verification_error(verification, SnapshotMergeError)
+    if progress is not None:
+        progress({"stage": "building_snapshots", "snapshots": int(verification["snapshot_count"])})
     output = Path(output_root)
     try:
         temporary_folder = tempfile.TemporaryDirectory(prefix="garmin-snapshot-run-all-")
@@ -90,6 +112,7 @@ def run_snapshot_all(
             output,
             external_safe_pack=external_safe_pack,
             timezone_name=timezone_name,
+            progress=progress,
             snapshot_context={
                 "lineage": build["lineage"],
                 "coverage": build["coverage"],
@@ -122,6 +145,7 @@ def run_snapshot_all(
 __all__ = [
     "NOTICE_MESSAGES",
     "SNAPSHOT_BUILD_TEMP_MESSAGE",
+    "SNAPSHOT_PROGRESS_STAGES",
     "SnapshotLifecycleError",
     "build_approved_input",
     "initialize_store",

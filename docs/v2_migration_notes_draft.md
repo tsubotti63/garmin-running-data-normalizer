@@ -77,6 +77,7 @@ What can change:
   | `snapshot init`: a folder that holds what a store writes, but not `store.json` | `SNAPSHOT_LIFECYCLE_FAILED` | `SNAPSHOT_STORE_INVALID` |
   | `snapshot register`: an input that is a link or not a folder or ZIP file | `SNAPSHOT_LIFECYCLE_FAILED` | `INPUT_SYMLINK`, `INPUT_NOT_DIRECTORY` |
   | `snapshot register`: a link inside the input | `SNAPSHOT_LIFECYCLE_FAILED` | `INPUT_DISCOVERY_FAILED` |
+  | `snapshot register`: a label that this app does not take, a label that the store has, a time that cannot be read or times out of order, an input and a store that are the same folder or one inside the other | `SNAPSHOT_LIFECYCLE_FAILED` | `SNAPSHOT_LABEL_INVALID`, `SNAPSHOT_LABEL_EXISTS`, `SNAPSHOT_TIME_INVALID`, `SNAPSHOT_INPUT_INSIDE_STORE` |
   | `snapshot build-input`: an output that is there already or a link | `SNAPSHOT_LIFECYCLE_FAILED` | `OUTPUT_EXISTS`, `OUTPUT_SYMLINK` |
   | `snapshot build-input`, `snapshot run-all`: no Activities record that can be kept | `SNAPSHOT_LIFECYCLE_FAILED` | `ACTIVITIES_EMPTY` |
   | `snapshot verify`: a folder without a store | A failed report, exit 2 | `SNAPSHOT_STORE_NOT_FOUND` |
