@@ -235,6 +235,7 @@ class GuiPageStructureTest(unittest.TestCase):
             "help-faq-heading",
             "help-words-heading",
             "help-ai-heading",
+            "help-report-heading",
         ):
             with self.subTest(heading=identifier):
                 self.assertEqual(by_id(self.elements, identifier).get("tabindex"), "-1")
@@ -355,7 +356,7 @@ class GuiPageStructureTest(unittest.TestCase):
         self.assertEqual(toggle.get("aria-controls"), "tools-body")
         self.assertIn("hidden", by_id(self.elements, "tools-body").attributes)
 
-    def test_the_help_panel_is_a_closed_side_panel_with_four_parts(self) -> None:
+    def test_the_help_panel_is_a_closed_side_panel_with_five_parts(self) -> None:
         # Stage B1b: the panel pushes the page aside instead of covering it,
         # so it is a complementary landmark, not a dialog.
         button = by_id(self.elements, "help-button")
@@ -369,7 +370,7 @@ class GuiPageStructureTest(unittest.TestCase):
         nav = [element for element in self.elements if element.tag == "nav"]
         self.assertEqual(len(nav), 1)
         self.assertEqual(by_id(self.elements, nav[0].get("aria-labelledby")).get("data-i18n"), "help.nav")
-        for name in ("steps", "faq", "words", "ai"):
+        for name in ("steps", "faq", "words", "ai", "report"):
             with self.subTest(part=name):
                 self.assertEqual(by_id(self.elements, f"help-nav-{name}").get("data-section"), name)
                 section = by_id(self.elements, f"help-{name}")
@@ -380,6 +381,55 @@ class GuiPageStructureTest(unittest.TestCase):
                 with self.subTest(copy=element.get("id")):
                     described = by_id(self.elements, str(element.get("aria-describedby")))
                     self.assertEqual(described.get("id"), element.get("data-copy"))
+
+    def test_the_report_and_the_links_open_in_a_new_tab_only_when_pressed(self) -> None:
+        # Stage B5c: every link of the page opens in a new tab, gives the
+        # opened page neither this page nor where it came from, and has no
+        # address in the page itself: the script gives it one, of the
+        # repository's documents, the private channel, the page of Garmin, or
+        # the report's form.
+        source = (STATIC_ROOT / "flow.mjs").read_text(encoding="utf-8")
+        block = re.search(r"export const OUTSIDE_DOCUMENTS = \[(.*?)\];", source, re.DOTALL)
+        assert block is not None
+        documents = set(re.findall(r'"([^"]+)"', block.group(1)))
+        for document in documents:
+            with self.subTest(document=document):
+                self.assertTrue((ROOT / document).is_file())
+        links = [element for element in self.elements if element.tag == "a"]
+        self.assertEqual(len(links), 9)
+        for link in links:
+            with self.subTest(link=link.get("data-link") or link.get("id")):
+                self.assertEqual(link.get("target"), "_blank")
+                self.assertEqual(link.get("rel"), "noopener noreferrer")
+                self.assertNotIn("href", link.attributes)
+                self.assertIsNotNone(link.get("data-i18n"))
+                if link.get("id") == "report-open":
+                    self.assertIsNone(link.get("data-link"))
+                else:
+                    self.assertIn(link.get("data-link"), documents | {"garmin", "security"})
+                if link.get("data-link-ja") is not None:
+                    self.assertIn(link.get("data-link-ja"), documents)
+        report = by_id(self.elements, "report-open")
+        self.assertEqual(by_id(self.elements, str(report.get("aria-describedby"))).get("data-i18n"), "report.new_tab")
+        values = by_id(self.elements, "report-values")
+        table = values.parent
+        assert table is not None
+        self.assertEqual(table.tag, "table")
+        self.assertEqual(
+            [element.get("data-i18n") for element in self.elements if element.tag == "caption" and element.parent is table],
+            ["report.table_caption"],
+        )
+        button = by_id(self.elements, "tools-report")
+        self.assertEqual(button.tag, "button")
+        self.assertEqual(by_id(self.elements, str(button.get("aria-describedby"))).get("data-i18n"), "tools.report_note")
+        self.assertIn(by_id(self.elements, "tools-body"), button.ancestors())
+        # The page of Garmin shows its address as its words, in each language.
+        page = re.search(r'export const GARMIN_DATA_PAGE = "([^"]+)";', source)
+        assert page is not None
+        for language in LANGUAGES:
+            with self.subTest(language=language):
+                catalog = json.loads((STATIC_ROOT / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
+                self.assertEqual(catalog["help.garmin_page"], page.group(1))
 
     def test_information_buttons_open_a_part_under_them(self) -> None:
         # Stage B1b: an information button is a disclosure, named by its own

@@ -240,15 +240,50 @@ shows the name and location of the file that will be created.
 The Help button at the top right opens a help panel at the right of the window
 (stage B1b). The panel pushes the page aside instead of covering it, and the
 boxes fold to two columns while it is open on a window narrower than 1680
-pixels. It has four parts: how to use, in which each step lights up its box;
-questions; words; and using the normalized data with an AI, with example
-questions that can be copied. Close or Escape closes it, and focus returns to
+pixels. It has five parts: how to use, in which each step lights up its box;
+questions; words; using the normalized data with an AI, with example
+questions that can be copied; and "If something is wrong", which reports a
+problem on GitHub (stage B5c). Close or Escape closes it, and focus returns to
 the button that opened it, or to the Help button when that button is no longer
 shown. "Show tips" shows one line under each box heading. It is on at a
 first launch and off at later ones, and the settings remember the person's
 choice (stage B4c). The help panel, the tips, and the information
-buttons say only what the page can do at its stage; links to pages outside
-the app and the GitHub report come in stage B5.
+buttons say only what the page can do at its stage.
+
+The GitHub report (stage B5c), as the Human maintainer decided on
+2026-10-18: the line "If this does not solve it, report it on GitHub (you
+can check the values before it opens)." ends the explanation of a stop in
+the red boxes, in the check of the Export and the Snapshot Store, and in the
+output check and under the buttons of the fourth box; a note under a field
+(the name and the folder of the output, or the name and time of an import)
+has none, as the mockup v10 has it. "Report on GitHub…" ends "If something
+is wrong" of the fourth box. Either opens "If something is wrong" in the help panel, which
+shows first the values that go in the Bug report form of the repository
+(`.github/ISSUE_TEMPLATE/bug_report.yml`), and "Open on GitHub" opens the
+form with them in a new tab. The values are English, as the form is, in the
+order of its fields: the title `[Bug]: <code> in the GUI`, the part of the
+page or its button, the operating system and its version, `None (run from
+the GUI)` as the shell, the version of Python, the line that `--version`
+prints, whether this launch is the first, the kind of the Export and the
+way to normalize, the exit code (2 for a stop, or 0 or 3 for a finished
+run), and the code. A report from a stop is about that stop; one from the
+fourth box or the help panel is about the first stop that the page shows,
+or else the last run. The person writes the problem, chooses whether the
+synthetic data shows it, and ticks the four checks of privacy on GitHub. No
+place, name, count, date, time, timezone, account, or key goes in; the
+server gives the three values of the computer in a plain form only (see
+[Privacy](#privacy)). The table and the address come from the same rows, so
+that the address carries what the table shows. The panel says that the
+values reach GitHub when the form opens and are public only when the report
+is submitted, that GitHub may ask the person to sign in first, and that a
+vulnerability goes to the private channel of the repository instead.
+
+The help panel also links to the GUI guide of its language and to other
+documents of the repository at the tag of this version (`v<version>`), so
+that they describe the version that is installed, to the private channel,
+and to the data management page of Garmin. In development the version keeps
+the name of the last release, whose tag has no GUI guide; those links open
+once the tag of v2.0.0 is made.
 
 Stage A settled the codes `INPUT_ZIP_CORRUPT` (stage A1a),
 `INPUT_MULTIPLE_EXPORTS` (stage A3a), and `SNAPSHOT_STORE_LOCKED` (stage
@@ -693,6 +728,13 @@ Processing:
 - The page can open only an output folder and its `START_HERE.md`, and show
   the Support Bundle that this launch made or the External-safe Pack of the
   output in its folder (stage B5a); any other place is refused.
+- The links of the page (stage B5c) have no address in the page itself: the
+  script gives each one from fixed strings, under
+  `https://github.com/tsubotti63/garmin-running-data-normalizer/` or the data
+  management page of Garmin, and each opens in a new tab with
+  `rel="noopener noreferrer"`, only when it is pressed. The
+  Content-Security-Policy is unchanged; following a link is not a request of
+  the page.
 - The settings of an earlier launch (stage B4c) are read without following a
   link, up to 64 KiB, and only in their form; the places in them are absolute
   places without control characters, and the server checks them again as it
@@ -704,7 +746,16 @@ Processing:
 
 - No outbound network access and no external resources. No analytics or
   telemetry. Copying an example question of the help panel uses the clipboard
-  of this computer only.
+  of this computer only. A link opens a page outside only when the person
+  presses it (stage B5c), and the address of the GitHub report carries only
+  the values that the help panel shows first, which reach GitHub when the
+  form opens.
+- The values of this computer in the report are read from fixed sources
+  only: the version of macOS, the version of Windows, the name and version
+  in os-release on Linux (up to 64 KiB), and the version of Python, each
+  only in a plain form (letters and digits of ASCII, spaces, `.`, `_`, and
+  `-`, up to 40 characters), and otherwise the name of the system alone;
+  never the name of the machine or of the person, or a place.
 - Local paths are shown only to the local user. The server does not log
   requests, paths, or secrets, and errors are returned as codes.
 - The page explains that Run-All output and the Snapshot Store contain personal

@@ -199,6 +199,28 @@ the code when you ask for help. Do not attach your Export or output.
 
 For other codes, follow the next step on the page.
 
+### Report a problem on GitHub
+
+If the next step does not solve it, press **report it on GitHub** at the end
+of the explanation of the stop, or **Report on GitHub…** at the end of
+**If something is wrong**. **If something is wrong** opens in the help panel
+with the values that go in the Bug report form of the repository first: the
+title with the code, the part of the page, the operating system and its
+version, the version of Python, the line that `--version` prints, how this
+launch normalizes, the exit code, and the code. No paths, names, counts,
+dates, times, or timezone go in. **Open on GitHub** opens the form in a new
+tab of the browser; the values reach GitHub then, and they are public only
+when you submit the report. Write what happened yourself, choose whether the
+synthetic data shows the problem, and tick the four checks that no personal
+data is in it. Do not attach any file. Tell a vulnerability through the
+private channel instead, as [Security](../SECURITY.md) says.
+
+The help panel also links to the guides and other documents of the
+repository at the tag of this version, and to the data management page of
+Garmin. A link opens in a new tab only when you press it. In development,
+the version keeps the name of the last release, whose tag has no GUI guide,
+so the links to this guide open once v2.0.0 is released.
+
 If the page says that this app is not responding, the GUI may have stopped, for
 example because the terminal was closed. Start it again with the same command
 and open the new address; each launch has a new address and key.
@@ -216,8 +238,10 @@ and open the new address; each launch has a new address and key.
 
 - Run-All output contains your personal data. It stays on this computer
   unless you share it.
-- The GUI sends nothing over the network. It has no analytics, and the page
-  loads nothing from outside the GUI.
+- The GUI sends nothing over the network by itself. It has no analytics,
+  and the page loads nothing from outside the GUI. A link of the help panel
+  opens a page in a new tab only when you press it, and **Open on GitHub**
+  gives GitHub only the values that the page shows you first.
 - The External-safe Pack and the Support Bundle are made for sharing, but
   review them before you do.
 

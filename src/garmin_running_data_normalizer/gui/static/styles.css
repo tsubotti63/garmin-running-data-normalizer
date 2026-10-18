@@ -1297,6 +1297,92 @@ body.help-open {
   }
 }
 
+/* The GitHub report and the pages outside this app (stage B5c). */
+.messages p.report {
+  color: var(--sub);
+}
+
+.links {
+  margin: 6px 0 0;
+  padding-left: 1.4em;
+}
+
+.links li + li {
+  margin-top: 4px;
+}
+
+a.outside,
+.links a {
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+
+.pubwarn {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 4px solid var(--warn-line);
+  border-radius: 6px;
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.prefill {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.prefill caption {
+  padding-bottom: 4px;
+  color: var(--sub);
+  text-align: left;
+}
+
+.prefill th,
+.prefill td {
+  padding: 4px 6px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.prefill th {
+  width: 36%;
+  font-weight: 600;
+}
+
+.prefill td {
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.prefill td.empty {
+  color: var(--muted);
+}
+
+a.button-link {
+  display: inline-block;
+  padding: 5px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+a.button-link:not([href]) {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--dis);
+}
+
+.report-row {
+  margin-top: 14px;
+  align-items: center;
+}
+
 :focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
