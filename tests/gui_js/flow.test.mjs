@@ -1082,3 +1082,144 @@ test("closing the help panel returns focus to its opener while it can take focus
   assert.equal(flow.helpReturnTarget(null), "help");
   assert.equal(flow.helpReturnTarget(undefined), "help");
 });
+
+// Stage B4a: the Snapshot Store of the second box and the folder for the
+// output.
+const lineShapes = (lines) => lines.map((line) => [line.kind, line.start, line.message.key]);
+
+test("the store's lines: what the page does, the problem, the notices, the cloud, the count", () => {
+  assert.deepEqual(flow.storeMessages({ choosing: true, answer: null }).map((line) => line.message.key), [
+    "choose.open",
+  ]);
+  assert.deepEqual(lineShapes(flow.storeMessages({ busy: true, answer: { state: "store", snapshots: [] } })), [
+    ["info", true, "store.checking"],
+  ]);
+  // Nothing is known yet.
+  assert.deepEqual(flow.storeMessages({ answer: null }), []);
+  // A place for a new store, which a cloud may copy.
+  assert.deepEqual(lineShapes(flow.storeMessages({ answer: { state: "new", path: "/x", cloud: "desktop_documents" } })), [
+    ["warn", true, "place.cloud_desktop"],
+    ["info", true, "store.new"],
+  ]);
+  // A store with two Snapshots and both notices, in yellow.
+  const opened = {
+    state: "store",
+    path: "/x",
+    snapshots: [{ order: 1 }, { order: 2 }],
+    notices: ["SNAPSHOT_REGISTRATION_INCOMPLETE", "SNAPSHOT_STORE_LOCKED"],
+    cloud: null,
+  };
+  const lines = flow.storeMessages({ answer: opened, checked: null });
+  assert.deepEqual(
+    lines.filter((line) => line.start).map((line) => [line.kind, line.message.key]),
+    [
+      ["warn", "stop.snapshot_store_locked"],
+      ["warn", "stop.snapshot_registration_incomplete"],
+      ["ok", "store.count"],
+    ],
+  );
+  assert.deepEqual(lines.at(-1).message.params, { count: 2 });
+  // The check: no problem, or a problem in red, which hides the count; an
+  // interrupted import is yellow, and is not named twice.
+  const checked = flow.storeMessages({ answer: { ...opened, notices: [] }, checked: { state: "checked", snapshot_count: 2, notices: [] } });
+  assert.deepEqual(lineShapes(checked), [["ok", true, "store.checked"]]);
+  const damaged = flow.storeMessages({ answer: opened, checked: { state: "error", error_code: "SNAPSHOT_STORE_INVALID" } });
+  assert.equal(damaged[0].kind, "error");
+  assert.equal(damaged[0].message.key, "stop.snapshot_store_invalid");
+  assert.equal(damaged.some((line) => line.kind === "ok"), false);
+  const interrupted = flow.storeMessages({
+    answer: opened,
+    checked: { state: "error", error_code: "SNAPSHOT_REGISTRATION_INCOMPLETE" },
+  });
+  // The notices keep their order, also when the check found one, and no
+  // line is green after a check that failed.
+  assert.deepEqual(
+    interrupted.filter((line) => line.start).map((line) => [line.kind, line.message.key]),
+    [
+      ["warn", "stop.snapshot_store_locked"],
+      ["warn", "stop.snapshot_registration_incomplete"],
+    ],
+  );
+  // An interrupted import that only the check found is said too.
+  assert.deepEqual(
+    lineShapes(
+      flow.storeMessages({
+        answer: { ...opened, notices: [] },
+        checked: { state: "error", error_code: "SNAPSHOT_REGISTRATION_INCOMPLETE", notices: [] },
+      }),
+    ).filter((line) => line[1]),
+    [["warn", true, "stop.snapshot_registration_incomplete"]],
+  );
+  // Without the system's dialog, the folder list opens instead.
+  assert.deepEqual(lineShapes(flow.storeMessages({ chooserError: "CHOOSER_NOT_AVAILABLE", answer: null })), [
+    ["info", true, "choose.list_instead"],
+  ]);
+  assert.equal(flow.storeMessages({ chooserError: "CHOOSER_TIMEOUT", answer: null })[0].message.key, "stop.chooser_timeout");
+  // An empty store says so.
+  assert.deepEqual(lineShapes(flow.storeMessages({ answer: { ...opened, snapshots: [], notices: [] } })), [
+    ["ok", true, "snapshot.empty"],
+  ]);
+});
+
+test("a problem of a store names the place that cannot be opened in the store", () => {
+  const lines = flow.storeMessages({
+    answer: {
+      state: "error",
+      path: "/x",
+      error_code: "SNAPSHOT_STORE_NOT_READABLE",
+      detail: { place: "", more: 1, store: true },
+    },
+  });
+  assert.deepEqual(
+    lines.map((line) => line.message.key),
+    ["stop.snapshot_store_not_readable", "error.place_store_itself", "error.place_more", "next.label", "error.code"],
+  );
+  assert.equal(lines.every((line) => line.kind === "error"), true);
+  // The input itself keeps its words.
+  assert.equal(errorMessages("INPUT_NOT_READABLE", { place: "", more: 0 })[1].key, "error.place_input_itself");
+});
+
+test("the rows of the Snapshots, with the time of each export in local time", () => {
+  const observed = "2030-01-15T02:00:00+00:00";
+  const local = new Date(observed);
+  const pad = (number) => String(number).padStart(2, "0");
+  const expected = `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())} ${pad(local.getHours())}:${pad(local.getMinutes())}`;
+  assert.deepEqual(
+    flow.snapshotRows({
+      state: "store",
+      snapshots: [
+        { order: 1, label: "S1", observed_at: observed, files: 3561 },
+        { order: "2", label: null, observed_at: "not a time", files: -1.5 },
+      ],
+    }),
+    [
+      { order: 1, label: "S1", time: expected, files: 3561 },
+      { order: null, label: "", time: "—", files: null },
+    ],
+  );
+  assert.deepEqual(flow.snapshotRows({ state: "new", path: "/x" }), []);
+  assert.deepEqual(flow.snapshotRows(null), []);
+});
+
+test("the folder for the output: the default place that a run makes, and a cloud", () => {
+  const place = { path: "/path/to/GarminRunningData", default: true, exists: false, cloud: null };
+  assert.deepEqual(lineShapes(flow.placeMessages(place, "/path/to/GarminRunningData")), [
+    ["info", true, "output.parent_new"],
+  ]);
+  assert.deepEqual(flow.placeMessages({ ...place, exists: true }, "/path/to/GarminRunningData"), []);
+  // Another folder that is not there is refused when the run starts.
+  assert.deepEqual(flow.placeMessages({ ...place, default: false }, "/path/to/GarminRunningData"), []);
+  assert.deepEqual(lineShapes(flow.placeMessages({ ...place, exists: true, cloud: "cloud" }, "/path/to/GarminRunningData")), [
+    ["warn", true, "place.cloud"],
+  ]);
+  // An answer for another place says nothing.
+  assert.deepEqual(flow.placeMessages(place, "/elsewhere"), []);
+  assert.deepEqual(flow.placeMessages(null, "/path/to/GarminRunningData"), []);
+  assert.deepEqual(flow.cloudMessages("unknown"), []);
+});
+
+test("a dialog for a folder of the store or the output says so in the line above the boxes", () => {
+  const states = boxStates({ ...READY, choosing: true });
+  assert.equal(flow.nextLine({ ...READY, choosing: true, choosingFolder: true }, states).key, "next_line.choosing_folder");
+  assert.equal(flow.nextLine({ ...READY, choosing: true }, states).key, "next_line.choosing");
+});

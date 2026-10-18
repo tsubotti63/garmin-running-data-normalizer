@@ -24,7 +24,7 @@ folder; earlier outputs are not converted.
 
 | Contract | v2.0.0 position |
 |---|---|
-| CLI commands and options | The same commands and options; `--input` also takes the downloaded Export ZIP file; for `run-all`, `snapshot run-all`, `snapshot build-input`, and `normalize-activities`, the folder for the output must exist and the name of a new output must be one that every system accepts, while `snapshot init` and `support-bundle` still make the folders above theirs |
+| CLI commands and options | The same commands and options; `--input` also takes the downloaded Export ZIP file; for `run-all`, `snapshot run-all`, `snapshot build-input`, and `normalize-activities`, the folder for the output must exist and the name of a new output must be one that every system accepts; for `snapshot init`, the folder that holds the new store must exist, while `support-bundle` still makes the folders above its own |
 | Exit codes | The same `0 / 0 / 3 / 2` Product mapping; `PARTIAL_SUCCESS` (exit 3) covers every file or row left out, and many problems that stopped with exit 2 now finish with exit 3 or 0; `Ctrl+C` ends a command with exit 130 |
 | Stops | Every `ERROR` line says what happened and then the next step of its code; some codes change (below) |
 | Datasets, schemas, and stable keys | 17 datasets; 247 fields (224 in v1.7.1); ten fields become nullable; stable keys unchanged |
@@ -55,7 +55,10 @@ What can change:
   not allowed to open (`INPUT_NOT_READABLE`; v1.7.1 passed it over), a
   folder for the output that does not exist (`OUTPUT_PARENT_NOT_FOUND`;
   v1.7.1 made it), and an output name that starts with a dot or ends with a
-  dot or a space, among others (`OUTPUT_NAME_INVALID`).
+  dot or a space, among others (`OUTPUT_NAME_INVALID`). `snapshot init`
+  stops for a folder above the new store that does not exist
+  (`SNAPSHOT_STORE_PARENT_NOT_FOUND`) and for a place inside another store
+  (`SNAPSHOT_STORE_INSIDE_STORE`); v1.7.1 made the store there.
 - Runs that ended with exit 0 can end with exit 3: a daily row without its
   date that holds a value, which v1.7.1 left out with a count only, is now
   announced with `DATA_ROW_LEFT_OUT`.
@@ -69,6 +72,9 @@ What can change:
   | `normalize-activities`: a stop | `ERROR:` without a code | `ERROR [CODE]:`, such as `ACTIVITIES_NOT_FOUND` or `OUTPUT_EXISTS` |
   | Snapshot commands: a folder without a store, a store without a Snapshot | `SNAPSHOT_LIFECYCLE_FAILED` | `SNAPSHOT_STORE_NOT_FOUND`, `SNAPSHOT_STORE_EMPTY` |
   | Snapshot commands: a damaged store, a store that holds a link | `SNAPSHOT_LIFECYCLE_FAILED` | `SNAPSHOT_STORE_INVALID` |
+  | Snapshot commands (`init`, `register`, `status`, `verify`, `build-input`, and `run-all`): a store that is a symbolic link | `SNAPSHOT_LIFECYCLE_FAILED` | `SNAPSHOT_STORE_SYMLINK` |
+  | `snapshot init`: a place that is a file, or a folder that holds other files | `SNAPSHOT_LIFECYCLE_FAILED` | `SNAPSHOT_STORE_NOT_EMPTY` |
+  | `snapshot init`: a folder that holds what a store writes, but not `store.json` | `SNAPSHOT_LIFECYCLE_FAILED` | `SNAPSHOT_STORE_INVALID` |
   | `snapshot register`: an input that is a link or not a folder or ZIP file | `SNAPSHOT_LIFECYCLE_FAILED` | `INPUT_SYMLINK`, `INPUT_NOT_DIRECTORY` |
   | `snapshot register`: a link inside the input | `SNAPSHOT_LIFECYCLE_FAILED` | `INPUT_DISCOVERY_FAILED` |
   | `snapshot build-input`: an output that is there already or a link | `SNAPSHOT_LIFECYCLE_FAILED` | `OUTPUT_EXISTS`, `OUTPUT_SYMLINK` |

@@ -83,14 +83,44 @@
         </div>
       </fieldset>
       <p id="snapshot-not-yet" class="note" data-i18n="snapshot.not_yet"></p>
-      <div class="unused">
-        <p class="label-line" data-i18n="snapshot.list_label"></p>
-        <p class="empty" data-i18n="snapshot.empty"></p>
-        <label for="store-path" data-i18n="store.label"></label>
-        <input id="store-path" type="text" disabled aria-describedby="snapshot-not-yet">
+      <div class="store-area">
+        <div class="label-row">
+          <p id="store-label" class="label-line" data-i18n="store.label"></p>
+          <button type="button" id="store-info-button" class="info-button" aria-expanded="false" aria-controls="store-info" aria-labelledby="store-info-button store-label" data-i18n="info.explain"></button>
+        </div>
+        <div id="store-info" class="info-text" hidden>
+          <p data-i18n="info.store_text"></p>
+          <dl>
+            <dt data-i18n="info.care"></dt>
+            <dd data-i18n="info.store_care1"></dd>
+            <dd data-i18n="info.store_care2"></dd>
+            <dd data-i18n="info.store_care3"></dd>
+          </dl>
+          <p class="info-foot" data-i18n="info.store_foot"></p>
+        </div>
+        <p id="store-path" class="path"></p>
         <div class="button-row">
-          <button type="button" id="store-create" data-i18n="store.create" disabled aria-describedby="snapshot-not-yet"></button>
-          <button type="button" id="store-open" data-i18n="store.open" disabled aria-describedby="snapshot-not-yet"></button>
+          <button type="button" id="store-create" data-i18n="store.create" disabled></button>
+          <button type="button" id="store-open" data-i18n="store.open" disabled></button>
+          <button type="button" id="store-open-other" data-i18n="store.open_other" disabled hidden></button>
+          <button type="button" id="store-create-new" data-i18n="store.create_new" disabled hidden></button>
+          <button type="button" id="store-check" data-i18n="store.check" disabled hidden></button>
+        </div>
+        <div id="store-result" class="messages" role="status" aria-live="polite"></div>
+        <div id="store-list" hidden>
+          <p id="store-list-label" class="label-line" data-i18n="snapshot.list_label"></p>
+          <table class="t snap" aria-labelledby="store-list-label">
+            <thead>
+              <tr>
+                <th scope="col" data-i18n="store.col_order"></th>
+                <th scope="col" data-i18n="store.col_label"></th>
+                <th scope="col" data-i18n="store.col_time"></th>
+                <th scope="col" class="n" data-i18n="store.col_files"></th>
+              </tr>
+            </thead>
+            <tbody id="store-rows"></tbody>
+          </table>
+          <p class="help" data-i18n="store.list_note"></p>
         </div>
       </div>
       <div class="decide">
@@ -102,11 +132,26 @@
       <h2 id="output-heading" tabindex="-1"><span class="num" aria-hidden="true"></span><span data-i18n="output.heading"></span><span class="badge"></span></h2>
       <p class="hint" data-i18n="hint.output"></p>
       <p class="summary" hidden></p>
-      <label for="output-parent" data-i18n="output.parent"></label>
+      <div class="label-row">
+        <label id="output-parent-label" for="output-parent" data-i18n="output.parent"></label>
+        <button type="button" id="place-info-button" class="info-button" aria-expanded="false" aria-controls="place-info" aria-labelledby="place-info-button output-parent-label" data-i18n="info.explain"></button>
+      </div>
+      <div id="place-info" class="info-text" hidden>
+        <p data-i18n="info.place_text"></p>
+        <dl>
+          <dt data-i18n="info.place_why_label"></dt>
+          <dd data-i18n="info.place_why"></dd>
+          <dt data-i18n="info.place_backup_label"></dt>
+          <dd data-i18n="info.place_backup"></dd>
+          <dt data-i18n="info.place_other_label"></dt>
+          <dd data-i18n="info.place_other"></dd>
+        </dl>
+      </div>
       <div class="path-row">
-        <input id="output-parent" type="text" autocomplete="off" spellcheck="false">
+        <input id="output-parent" type="text" autocomplete="off" spellcheck="false" aria-describedby="output-parent-note">
         <button type="button" id="output-browse" data-i18n="browse.button" disabled></button>
       </div>
+      <div id="output-parent-note" class="messages" role="status" aria-live="polite"></div>
       <label for="output-name" data-i18n="output.name"></label>
       <input id="output-name" type="text" autocomplete="off" spellcheck="false" aria-describedby="output-name-help">
       <p id="output-name-help" class="help" data-i18n="output.name_help"></p>
@@ -370,6 +415,7 @@
     <section id="help-faq" class="help-section" aria-labelledby="help-faq-heading" hidden>
       <h3 id="help-faq-heading" tabindex="-1" data-i18n="help.faq"></h3>
       <details class="qa"><summary data-i18n="faq.zip_q"></summary><p data-i18n="faq.zip_a"></p></details>
+      <details class="qa"><summary data-i18n="faq.place_q"></summary><p data-i18n="faq.place_a"></p></details>
       <details class="qa"><summary data-i18n="faq.exit_q"></summary><p data-i18n="faq.exit_a"></p></details>
       <details class="qa"><summary data-i18n="faq.send_q"></summary><p data-i18n="faq.send_a"></p></details>
       <details class="qa"><summary data-i18n="faq.values_q"></summary><p data-i18n="faq.values_a"></p></details>
@@ -383,6 +429,8 @@
         <dd data-i18n="words.normalize_text"></dd>
         <dt data-i18n="words.snapshot"></dt>
         <dd data-i18n="words.snapshot_text"></dd>
+        <dt data-i18n="words.store"></dt>
+        <dd data-i18n="words.store_text"></dd>
         <dt data-i18n="words.how"></dt>
         <dd data-i18n="words.how_text"></dd>
         <dt data-i18n="words.exit"></dt>

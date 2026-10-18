@@ -141,6 +141,8 @@ def runs(root: Path, *sources: Path) -> tuple[Path, Path]:
     """A one-shot run of the last Export, and a Snapshot run of a store that
     holds every Export, one day apart."""
     store = root / "store"
+    # A new store needs the folder that holds it (stage B4a).
+    root.mkdir(parents=True, exist_ok=True)
     initialize_store(store, ACCOUNT)
     for day, source in enumerate(sources, start=1):
         stamp = f"2030-01-{day:02d}T02:00:00+00:00"

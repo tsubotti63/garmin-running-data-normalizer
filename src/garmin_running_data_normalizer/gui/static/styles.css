@@ -307,15 +307,23 @@ fieldset {
   font-size: 0.93rem;
 }
 
-.unused {
-  margin-top: 4px;
-  padding-left: 10px;
-  border-left: 3px solid var(--line);
+/* The Snapshots of the store (stage B4a): a long name wraps, and a long
+   list scrolls inside the box. */
+#store-list {
+  max-height: 18rem;
+  overflow-y: auto;
 }
 
-.empty {
-  color: var(--muted);
+.snap {
   font-size: 0.86rem;
+}
+
+.snap td {
+  overflow-wrap: anywhere;
+}
+
+.snap .nowrap {
+  white-space: nowrap;
 }
 
 .help,

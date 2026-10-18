@@ -66,11 +66,13 @@ checked when the run starts.
 
 ## 2. Choose the output
 
-- **Where to create the output**: after a successful check,
-  this is filled in with the folder that contains the Export, if it is empty.
-  You can also pick a folder with **Choose…**; the list shows folder names
-  only. The folder must exist, and you must be able to write to it; the GUI
-  checks this before the run starts.
+- **Where to create the output**: `GarminRunningData` in your home folder
+  by default; if it is not there, it is made when you normalize. You can
+  also pick a folder with **Choose…**, which opens the system's dialog for a
+  folder, or a list of folder names when there is none. Any other folder
+  must exist, and you must be able to write to it; the GUI checks this before
+  the run starts. A folder that a cloud may copy, such as iCloud Drive,
+  OneDrive, or the Documents and the Desktop of a Mac, is marked in yellow.
 - **Name of the new folder**: proposed as
   `garmin-run-all-YYYYMMDD-HHMM` in local time. Use a name that does not exist
   yet, with up to 200 letters and digits or 66 Japanese characters. It must

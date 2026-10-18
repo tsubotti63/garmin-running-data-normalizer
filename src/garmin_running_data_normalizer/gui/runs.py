@@ -32,7 +32,9 @@ from ..output_location import (
 )
 from ..output_location import long_paths_enabled as _long_paths_enabled
 from ..output_location import windows_paths_too_long as _windows_paths_too_long
+from ..output_location import write_error_code
 from ..run_all import OTHER_WARNING_FIELDS, OUTPUT_PATHS, PROGRESS_STAGES, PROGRESS_STEPS
+from .places import make_default_folder
 from .run_worker import FAMILY_COUNT_FIELDS
 
 WORKER_MODULE = "garmin_running_data_normalizer.gui.run_worker"
@@ -318,8 +320,16 @@ class RunManager:
         external_safe_pack = request.get("external_safe_pack", False)
         if not isinstance(external_safe_pack, bool):
             raise RunRequestError("REQUEST_INVALID")
-        # A missing parent is refused below, by the check that Run-All makes
-        # too; neither creates folders for a mistyped parent (stage A5a).
+        # The default place is made here, once the request is valid and no
+        # run is active (stage B4a); any other missing parent is refused
+        # below, by the check that Run-All makes too, and neither creates
+        # folders for a mistyped parent (stage A5a).
+        if self.active():
+            raise RunActiveError()
+        try:
+            make_default_folder(parent)
+        except OSError as exc:
+            raise RunRequestError(write_error_code(exc) or "OUTPUT_PARENT_NOT_WRITABLE") from exc
         output = parent / name
         # Run-All checks this too. Checking it here also means that an output
         # found after a cancelled run was created by that run.

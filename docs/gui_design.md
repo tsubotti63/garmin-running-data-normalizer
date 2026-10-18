@@ -111,7 +111,31 @@ Progress through the areas:
   button that accepts their settings.
 - On later launches, areas 2 and 3 are confirmed automatically while they keep
   their defaults. An area whose settings change becomes the current step again
-  and must be confirmed before the run can start.
+  and must be confirmed before the run can start. The page remembers the
+  settings of an earlier launch from stage B4c, after the import of stage B4b;
+  until then every launch is a first launch.
+
+The Snapshot Store (stage B4a): the second box shows the place of the store
+and its Snapshots, in the order of the times of their Exports, with the
+number of files of each. At launch the page looks at the default place,
+`GarminRunningData/snapshots` in the home folder: it opens the store there,
+or says that there is none yet. "Open a store in use…" and "Open another
+store…" open a store that the user chooses, or the one in the folder
+`snapshots` of the chosen folder. "Choose where to create it…" and "Create a
+new store…" choose the folder in which a new store will be made, as its
+folder `snapshots`, or the chosen folder itself when it is named `snapshots`;
+a store there is opened instead. The place is checked as `snapshot init`
+checks it, but nothing is made: the page makes a store when it imports an
+Export into it (stage B4b), so until then it says that importing is not
+possible on the page yet. "Check the Snapshots" checks the store as
+`snapshot verify` does. The page reads a store with the functions of the
+CLI's snapshot commands and never writes in it. Each button opens the
+system's dialog for a folder, or the page's own folder list without one.
+Until stage B4b the page normalizes this Export only, so a problem of the
+store is shown in the store's lines, in red, or in yellow for a lock file or
+an interrupted import, which do not stop anything, and it neither turns the
+second box red nor stops a run; from stage B4b, it turns the second box red
+when the user chooses to import.
 
 Colors have five meanings across the page: blue is the current step or a
 running task, green is done or confirmed, yellow is a warning, red is a problem
@@ -123,8 +147,8 @@ Explanations open from an information button (ⓘ) under the control that they
 explain, and stay open until the button is pressed again or Escape is pressed;
 nothing opens on hover. Stage B1b places them at how to normalize, the
 timezone, the External-safe Pack contents, the exit code, and the output check
-and Support Bundle; the Snapshot Store and the default place follow in stage
-B4a. Before the External-safe Pack or the Support Bundle is created, the page
+and Support Bundle; stage B4a adds the Snapshot Store and the default place.
+Before the External-safe Pack or the Support Bundle is created, the page
 shows the name and location of the file that will be created.
 
 The Help button at the top right opens a help panel at the right of the window
@@ -135,7 +159,7 @@ questions; words; and using the normalized data with an AI, with example
 questions that can be copied. Close or Escape closes it, and focus returns to
 the button that opened it, or to the Help button when that button is no longer
 shown. "Show tips" shows one line under each box heading. It is on at every
-launch until the settings of an earlier launch come in stage B4a, and the
+launch until the settings of an earlier launch come in stage B4c, and the
 browser tab keeps the choice. The help panel, the tips, and the information
 buttons say only what the page can do at its stage; links to pages outside
 the app and the GitHub report come in stage B5.
@@ -174,7 +198,8 @@ Local Snapshot Store and new output folders
   progress events and the outcome as JSON lines; the server accepts only stage
   names, counts, statuses, and error codes from them, and discards the child's
   standard error. Short operations (Doctor, handoff validation, and Support
-  Bundle) run in the server process.
+  Bundle, and from stage B4a opening, listing, and checking a Snapshot Store
+  and checking the place of a new one) run in the server process.
 - Progress: `run_all` has an optional keyword-only `progress` callback that the
   CLI never passes. Events carry only a stage (`discovering`, `normalizing`
   with a step such as `activities` or `fit`, `reading_fit`, `verifying_input`,
@@ -260,7 +285,7 @@ around a pasted path, and uses a chosen path as it is.
 - A stop of a run in the first box hides the lines of the check before it,
   which would read as the answer to it. After the page is loaded again, the
   first box shows no summary until its field holds a place; the settings of an
-  earlier launch come in stage B4a.
+  earlier launch come in stage B4c.
 
 A ZIP file is read directly:
 
@@ -298,10 +323,28 @@ can report a read-only or protected location as writable. On Windows without
 long paths, a run whose deepest paths inside the staging folder would reach the
 limit of 260 characters for a file or 248 for a folder is refused before it
 starts (`OUTPUT_PATH_TOO_LONG`). These checks move to shared code in stage A, so
-that the CLI applies them too. After the Export is checked, the parent defaults
-to the folder that contains the Export, and the proposed name is
+that the CLI applies them too. The proposed name is
 `garmin-run-all-YYYYMMDD-HHMM` in local time; a second run in the same minute
 adds `-2`, `-3`, and so on.
+
+The parent defaults to the folder `GarminRunningData` in the home folder
+(stage B4a; until then, the folder that contains the Export), which also
+holds the default Snapshot Store, so that personal data stays out of
+Documents and the Desktop, which iCloud Drive or OneDrive may copy to the
+cloud, and out of Downloads, where Exports and outputs would mix. Only the
+GUI has a default place; the CLI takes every place as an argument. When the
+folder is not there, the third box says that it is made when the user
+normalizes: when a run starts, once its request is valid and no run is
+active, the server makes that folder alone, owner-only, with one `mkdir`,
+when the requested parent is the default place as the server names it, not
+as the page says, and nothing is there. A folder, a link, or a file there,
+or a missing home folder, is left to the checks above, and any other parent
+that is not there is refused (`OUTPUT_PARENT_NOT_FOUND`), as before. A
+parent that cannot be made has the codes of a parent that cannot be written.
+The folder stays when the run then stops before its output, empty, and the
+next run uses it.
+"Choose…" opens the system's dialog for a folder, as the first box does, or
+the page's own folder list without one (stage B4a).
 
 ## After a run
 
@@ -403,7 +446,15 @@ GUI's run status, and makes the pre-run check read the Activities files as a
 run does (see [v2.0.0 Data Handling](v2_data_handling.md#reports-of-a-run-in-the-cli-and-the-gui)).
 Stage B sets the rules for the place of a new Snapshot Store and of a Support
 Bundle with the controls that choose them, and the page shows the warning
-totals.
+totals. Stage B4a sets those of a new store: `snapshot init` and the page
+make a new store only where the folder that holds it exists
+(`SNAPSHOT_STORE_PARENT_NOT_FOUND`; until then, `snapshot init` made the
+missing folders above it), in a new or empty folder (`SNAPSHOT_STORE_NOT_EMPTY`
+for a file or a folder that holds other files; `SNAPSHOT_STORE_INVALID` for
+one that holds what a store writes but not `store.json`), and not inside
+another store (`SNAPSHOT_STORE_INSIDE_STORE`), and every snapshot command
+refuses a store that is a symbolic link with `SNAPSHOT_STORE_SYMLINK`
+(until then, `SNAPSHOT_LIFECYCLE_FAILED`).
 
 Stage A5b gives every stop of the CLI what happened and its next step from
 one table (`stops.STOPS`, see [Stops and next steps](v2_data_handling.md#stops-and-next-steps)),
@@ -477,6 +528,15 @@ Processing:
   before it is shared, and what the Support Bundle contains.
 - Snapshot labels given by users stay out of the Support Bundle and the
   External-safe Pack.
+- A Snapshot Store or a folder for the output in a folder that a cloud may
+  copy is marked in yellow, without a stop (stage B4a): a folder that a cloud
+  app keeps (on a Mac, iCloud Drive in `Library/Mobile Documents` and the
+  apps in `Library/CloudStorage`; on Windows, the OneDrive folders that the
+  system names and `iCloudDrive`; and a folder named Dropbox, OneDrive,
+  Google Drive, or iCloud Drive anywhere), and the Documents and Desktop of a
+  Mac, with the condition that iCloud copies them when its setting for them
+  is on. Only these fixed names are compared, as the place is given and as
+  its links lead; no program is asked, so the page says "may be".
 
 ## Internationalization
 
