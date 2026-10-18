@@ -38,6 +38,7 @@ from .outputs import (
     output_summary,
 )
 from .places import cloud_kind, default_folder, default_store
+from .report import report_values
 from .runs import (
     MAX_TIMEZONE_LENGTH,
     RunActiveError,
@@ -408,12 +409,15 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         # The settings of an earlier launch (stage B4c), read when the page
         # starts: the places of the last run that made its output, whether
         # the tips show, and what to tell of the file.
+        # This computer's values of the GitHub report, which the help panel
+        # shows before the person opens it (stage B5c).
         return {
             "default_output_parent": str(default_folder()),
             "default_store": str(default_store()),
             "default_timezone": DEFAULT_TIMEZONE,
             "languages": list(LANGUAGES),
             "product_version": __version__,
+            "report": report_values(),
             "settings": launch_settings(),
         }
 

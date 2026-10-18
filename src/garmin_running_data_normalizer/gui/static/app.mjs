@@ -57,11 +57,15 @@ import {
   outputMissingRemembered,
   outputNameProblem,
   outputSetBySettings,
+  outsideUrl,
   packMade,
   placeMessages,
   previousRows,
   progressBar,
   progressMessage,
+  reportFacts,
+  reportRows,
+  reportUrl,
   resultDetails,
   resultRows,
   resultTotal,
@@ -273,6 +277,16 @@ const ui = {
   copyButtons: document.querySelectorAll(".copy-button"),
   aiHelp: byId("ai-help-button"),
   faqHelp: byId("faq-help-button"),
+  // The GitHub report (stage B5c): its table, its link, the button of the
+  // fourth box, and the links to pages outside this app.
+  reportValues: byId("report-values"),
+  reportOpen: byId("report-open"),
+  toolsReport: byId("tools-report"),
+  outsideLinks: document.querySelectorAll("a[data-link]"),
+  aroundLinks: [
+    ["help.get_step1", byId("get-step1-before"), byId("get-step1-after")],
+    ["report.security", byId("report-security-before"), byId("report-security-after")],
+  ],
   infos: Object.fromEntries(
     INFOS.map((name) => [name, { button: byId(`${name}-info-button`), region: byId(`${name}-info`) }]),
   ),
@@ -345,6 +359,15 @@ const state = {
   // button that opened it, to return focus to (stage B1b).
   help: null,
   helpOpener: null,
+  // The GitHub report (stage B5c): what the open report is about, this
+  // computer's values from the server, whether this launch is a later one,
+  // the button of the run that stopped, and the stops that the page shows,
+  // in the order that the last render drew them.
+  report: null,
+  reportComputer: null,
+  launch: "first",
+  runErrorPart: "run.start",
+  shownStops: [],
   // Whether the tips under the box headings show: on at a first launch,
   // off at a later one, and as the person last switched them, which the
   // settings remember (stage B4c).
@@ -421,24 +444,76 @@ function errorLines(code, detail) {
   return errorMessages(code, detail).map(describe);
 }
 
+// The line at the end of the explanation of a stop in a red part of a box,
+// whose button opens the GitHub report in the help panel with the values of
+// that stop (stage B5c): the red boxes, the stops that the check of the
+// Export and the Snapshot Store show, and those of the output check and of
+// the buttons of the fourth box. A note under a field has none, as the
+// mockup v10 has it. The page notes each stop that it shows, for a report
+// opened from elsewhere.
+function reportLine(code, partKey) {
+  state.shownStops.push({ code, partKey });
+  const [before, after] = aroundPart("report.line");
+  return { text: `${before}${t("report.line_button")}${after}`, className: "report", report: { code, partKey } };
+}
+
+// The words before and after the part of a message that is a button or a
+// link, which each language puts in its own place as {part} (stage B5c).
+function aroundPart(key) {
+  const [before, after = ""] = t(key, { part: "\u0000" }).split("\u0000");
+  return [before, after];
+}
+
+// The lines of a stop, with that line at their end.
+function stopLines(code, detail, partKey) {
+  const lines = errorLines(code, detail);
+  return typeof code === "string" && code !== "" ? [...lines, reportLine(code, partKey)] : lines;
+}
+
+// Lines with kinds, with that line after the code of each stop among them.
+function reportedKindLines(lines, partKey) {
+  return lines.flatMap((line) => {
+    const [item] = kindLines([line]);
+    const code = line.kind === "error" && line.message?.key === "error.code" ? line.message.params?.code : null;
+    return typeof code === "string" && code !== "" ? [item, reportLine(code, partKey)] : [item];
+  });
+}
+
 // The page renders every second during a run. Rebuilding a live region
 // makes screen readers repeat it, so text changes only when it differs. A
 // line is its text, or its text with a kind that gives it a mark and a color
 // (stage B3b).
 function replaceLines(container, lines) {
   const items = lines.map((line) => (typeof line === "string" ? { text: line, className: "" } : line));
-  const current = Array.from(container.children, (line) => [line.textContent, line.className]);
+  // The line of a report differs by its stop too (stage B5c).
+  const reportOf = (item) => (item.report ? `${item.report.code} ${item.report.partKey}` : "");
+  const current = Array.from(container.children, (line) => [line.textContent, line.className, line.dataset.report ?? ""]);
   if (
     current.length === items.length &&
-    current.every(([text, className], index) => text === items[index].text && className === items[index].className)
+    current.every(
+      ([text, className, report], index) =>
+        text === items[index].text && className === items[index].className && report === reportOf(items[index]),
+    )
   ) {
     return;
   }
   container.replaceChildren(
     ...items.map((item) => {
       const line = document.createElement("p");
-      line.textContent = item.text;
       line.className = item.className;
+      if (item.report) {
+        line.dataset.report = reportOf(item);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "link-button report-link";
+        button.dataset.code = item.report.code;
+        button.dataset.part = item.report.partKey;
+        button.textContent = t("report.line_button");
+        const [before, after] = aroundPart("report.line");
+        line.append(before, button, after);
+      } else {
+        line.textContent = item.text;
+      }
       return line;
     }),
   );
@@ -703,7 +778,7 @@ function renderCheck(current) {
   if (choosingExport) {
     lines.push(t("choose.open"));
   } else if (state.chooserError !== null) {
-    lines.push(...errorLines(state.chooserError));
+    lines.push(...stopLines(state.chooserError, undefined, "export.heading"));
   }
   // A stop in the first box shows in its own area; the lines of the check
   // before it would read as the answer to it.
@@ -714,13 +789,11 @@ function renderCheck(current) {
   } else if (state.checking) {
     lines.push(t("check.running"));
   } else if (state.check?.error !== undefined) {
-    lines.push(...errorLines(state.check.error));
+    lines.push(...stopLines(state.check.error, undefined, "export.heading"));
   } else if (state.check) {
     // Red, then yellow, then what the check found, each with its mark
-    // (stage B3b).
-    for (const line of checkMessages(state.check)) {
-      lines.push({ text: describe(line.message), className: `m-${line.kind}${line.start ? " start" : ""}` });
-    }
+    // (stage B3b), and the report after each stop (stage B5c).
+    lines.push(...reportedKindLines(checkMessages(state.check), "export.heading"));
   }
   replaceLines(ui.checkResult, lines);
   ui.extractArea.hidden = !current.extractNeeded;
@@ -788,7 +861,7 @@ function renderStore(current) {
   ui.storeCreateNew.hidden = !opened && !missing;
   ui.storeCheck.hidden = !opened;
   const choosing = state.choosing !== null && String(state.choosingFor).startsWith("store");
-  replaceLines(ui.storeResult, kindLines(storeMessages({ ...remembered, choosing }, current.how)));
+  replaceLines(ui.storeResult, reportedKindLines(storeMessages({ ...remembered, choosing }, current.how), "snapshot.heading"));
   // The Export that the run will import, in its place (stage B4b-1).
   const rows = snapshotRows(answer, pendingImport(current), state.lastImported);
   ui.storeList.hidden = rows.length === 0;
@@ -1007,13 +1080,14 @@ function renderErrors(current) {
   let heading = "error.heading";
   if (run.state === "failed") {
     box = current.failedBox;
-    lines = errorLines(run.error_code, run.error_detail);
+    lines = stopLines(run.error_code, run.error_detail, "run.start");
   } else if (state.runError !== null) {
     box = current.requestBox;
-    lines = errorLines(state.runError);
+    lines = stopLines(state.runError, undefined, state.runErrorPart);
   } else if (current.timezoneProblem && !current.exportProblem) {
     box = "output";
-    lines = findingMessages(checkParts(state.check).timezone).map(describe);
+    const finding = checkParts(state.check).timezone;
+    lines = [...findingMessages(finding).map(describe), reportLine(finding.code, "output.heading")];
     heading = "error.heading_check";
   }
   for (const [name, error] of Object.entries(ui.errors)) {
@@ -1211,14 +1285,14 @@ function renderOutput() {
   if (finished && output.checking) {
     checkLines.push(t("output_check.running"), ...warnings);
   } else if (finished && output.checkError !== null) {
-    checkLines.push(...errorLines(output.checkError), ...warnings);
+    checkLines.push(...stopLines(output.checkError, undefined, "output_check.heading"), ...warnings);
   } else if (finished && output.check !== null) {
     checkLines.push(...outputCheckMessages(output.check, state.run.result).map(describe));
   }
   replaceLines(ui.outputCheck, checkLines);
   const openLines = [];
   if (finished && output.openError !== null) {
-    openLines.push(...errorLines(output.openError));
+    openLines.push(...stopLines(output.openError, undefined, "open.folder"));
   } else if (finished && output.opened) {
     openLines.push(t("open.requested"));
   }
@@ -1236,12 +1310,12 @@ function renderOutput() {
   if (state.choosing !== null && state.choosingFor === "bundle") {
     bundleLines.push(t("choose.open"));
   } else if (state.bundleChooserError !== null) {
-    bundleLines.push(...errorLines(state.bundleChooserError));
+    bundleLines.push(...stopLines(state.bundleChooserError, undefined, "bundle.button"));
   }
   if (tools.bundling) {
     bundleLines.push(t("bundle.creating"));
   } else if (tools.bundleError !== null) {
-    bundleLines.push(...errorLines(tools.bundleError, tools.bundleDetail));
+    bundleLines.push(...stopLines(tools.bundleError, tools.bundleDetail, "bundle.button"));
   } else if (tools.bundle !== null) {
     bundleLines.push(t("bundle.saved", { count: formatNumber(tools.bundle.member_count) }));
   }
@@ -1278,6 +1352,67 @@ function renderHelp(states, current) {
   for (const button of ui.copyButtons) {
     const copied = state.copy !== null && state.copy.id === button.id;
     setText(byId(`${button.id}-result`), copied ? t(state.copy.key) : "");
+  }
+}
+
+// The GitHub report in the help panel (stage B5c): the values that go in,
+// in the order of the form, and the link that opens the form with them. Both
+// come from the same rows, so that the link carries what the table shows.
+function renderReport(current) {
+  if (state.help !== "report") {
+    return;
+  }
+  const english = (key) => translate(state.catalogs, "en", key);
+  const facts = {
+    ...(state.report ?? {}),
+    launch: state.launch,
+    how: current.how,
+    exportKind: current.how === "rerun" ? null : state.check?.kind,
+  };
+  const rows = reportRows(facts, state.reportComputer, english);
+  const key = JSON.stringify([state.language, rows]);
+  if (ui.reportValues.dataset.key !== key) {
+    ui.reportValues.dataset.key = key;
+    ui.reportValues.replaceChildren(
+      ...rows.map((row) => {
+        const line = document.createElement("tr");
+        const name = document.createElement("th");
+        name.scope = "row";
+        name.textContent = t(row.key);
+        const value = document.createElement("td");
+        if (row.value === "") {
+          value.className = "empty";
+          value.textContent = t(row.person ?? "report.not_given");
+        } else {
+          value.textContent = row.value;
+        }
+        line.append(name, value);
+        return line;
+      }),
+    );
+  }
+  const href = reportUrl(rows);
+  if (ui.reportOpen.getAttribute("href") !== href) {
+    ui.reportOpen.setAttribute("href", href);
+  }
+}
+
+// The links to pages outside this app, to the documents at the tag of this
+// version (stage B5c). They open in a new tab only when they are pressed.
+function renderOutsideLinks() {
+  for (const [key, before, after] of ui.aroundLinks) {
+    const [first, last] = aroundPart(key);
+    setText(before, first);
+    setText(after, last);
+  }
+  for (const link of ui.outsideLinks) {
+    const target = state.language === "ja" && link.dataset.linkJa ? link.dataset.linkJa : link.dataset.link;
+    const href = outsideUrl(target, state.productVersion);
+    if (href === null) {
+      link.removeAttribute("href");
+    } else if (link.getAttribute("href") !== href) {
+      link.setAttribute("href", href);
+    }
   }
 }
 
@@ -1336,12 +1471,12 @@ function renderTarget(finished) {
   if (state.choosing !== null && state.choosingFor === "target") {
     lines.push(t("choose.open"));
   } else if (state.targetChooserError !== null) {
-    lines.push(...errorLines(state.targetChooserError));
+    lines.push(...stopLines(state.targetChooserError, undefined, "target.check"));
   }
   if (tools.checking) {
     lines.push(t("output_check.running"));
   } else if (tools.checkError !== null) {
-    lines.push(...errorLines(tools.checkError, tools.checkDetail));
+    lines.push(...stopLines(tools.checkError, tools.checkDetail, "target.check"));
   } else if (tools.check !== null) {
     // The warnings of a run go with the output of that run only.
     lines.push(...outputCheckMessages(tools.check, state.target.kind === "run" ? state.run.result : null).map(describe));
@@ -1472,7 +1607,7 @@ async function checkTarget() {
 // What showing a file where it is saved said (stage B5a).
 function revealLines(reveal) {
   if (reveal?.error) {
-    return errorLines(reveal.error);
+    return stopLines(reveal.error, undefined, "reveal.button");
   }
   return reveal?.opened ? [t("open.requested")] : [];
 }
@@ -1544,9 +1679,12 @@ function renderControls(states, current) {
   ui.openStartHere.disabled = !enabled.outputActions;
   // The bundle's name is fixed, so a second one would be refused.
   ui.bundle.disabled = !toolsFree || !targetReady() || state.tools.bundle !== null;
+  // The report waits for a run to end, as the mockup v10 has it (stage B5c).
+  ui.toolsReport.disabled = ACTIVE_STATES.includes(state.run.state);
 }
 
 function render() {
+  state.shownStops = [];
   document.documentElement.lang = state.language;
   for (const element of document.querySelectorAll("[data-i18n]")) {
     element.textContent = t(element.dataset.i18n);
@@ -1581,6 +1719,8 @@ function render() {
   renderPackFile();
   renderControls(states, current);
   renderHelp(states, current);
+  renderReport(current);
+  renderOutsideLinks();
   renderHints();
   renderInfos();
 }
@@ -2149,6 +2289,7 @@ async function startRun() {
   } catch (error) {
     if (!connectionFailure(error)) {
       state.runError = error.code;
+      state.runErrorPart = "run.start";
     }
   } finally {
     state.starting = false;
@@ -2182,6 +2323,7 @@ async function cancelRun() {
   } catch (error) {
     if (!connectionFailure(error)) {
       state.runError = error.code;
+      state.runErrorPart = "run.cancel";
     }
   }
   render();
@@ -2202,6 +2344,7 @@ async function quit() {
       state.quitKey = error.code === "RUN_ACTIVE" ? "quit.blocked" : null;
       if (state.quitKey === null) {
         state.runError = error.code;
+        state.runErrorPart = "quit.button";
       }
     }
   }
@@ -2328,6 +2471,7 @@ function closeHelp() {
   state.help = null;
   state.helpOpener = null;
   state.copy = null;
+  state.report = null;
   render();
   const target = helpReturnTarget(opener === null ? null : { usable: canTakeFocus(opener) });
   (target === "opener" ? opener : ui.helpButton).focus();
@@ -2346,8 +2490,19 @@ function toggleHelp() {
 function showHelpSection(section) {
   state.help = section;
   state.copy = null;
+  // The report of its own part is about what the page shows (stage B5c).
+  if (section === "report" && state.report === null) {
+    state.report = reportFacts(state.shownStops, state.run);
+  }
   render();
   ui.helpSections[section].heading.focus();
+}
+
+// The GitHub report in the help panel, about a stop or about what the page
+// shows (stage B5c). GitHub opens only from its link there.
+function openReport(facts, opener) {
+  state.report = facts;
+  openHelp("report", opener);
 }
 
 // Light up the box of a step for a moment; focus stays in the help panel.
@@ -2605,6 +2760,15 @@ function connect() {
   }
   ui.aiHelp.addEventListener("click", () => openHelp("ai", ui.aiHelp));
   ui.faqHelp.addEventListener("click", () => openHelp("faq", ui.faqHelp));
+  // The GitHub report: from the fourth box, about what the page shows, and
+  // from the line under a stop, about that stop (stage B5c).
+  ui.toolsReport.addEventListener("click", () => openReport(reportFacts(state.shownStops, state.run), ui.toolsReport));
+  document.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest("button.report-link") : null;
+    if (button !== null) {
+      openReport({ code: button.dataset.code, partKey: button.dataset.part, exitCode: 2 }, button);
+    }
+  });
   for (const [name, info] of Object.entries(ui.infos)) {
     info.button.addEventListener("click", () => toggleInfo(name));
     for (const element of [info.button, info.region]) {
@@ -2634,6 +2798,8 @@ async function start() {
     const status = await callApi("/api/status");
     state.productVersion =
       typeof status.product_version === "string" ? status.product_version : null;
+    // This computer's values of the GitHub report (stage B5c).
+    state.reportComputer = status.report !== null && typeof status.report === "object" ? status.report : null;
     // The product's default, as the CLI takes it (stage A5a).
     if (typeof status.default_timezone === "string" && ui.timezone.value === "") {
       ui.timezone.value = status.default_timezone;
@@ -2642,6 +2808,7 @@ async function start() {
     // remembered, which set the second and third boxes by themselves, and
     // the tips.
     const settings = launchSettings(status);
+    state.launch = settings.launch;
     state.remembered = { store: settings.store, outputParent: settings.outputParent };
     state.settingsNotice = settings.notice === null ? null : { code: settings.notice, writing: false };
     state.hintsOn = hintsShown(settings);

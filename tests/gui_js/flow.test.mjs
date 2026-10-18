@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
@@ -1034,8 +1035,8 @@ test("the end of a run moves focus only from where the run left it", () => {
   assert.equal(shouldFocusResult(language, body, runSection), false);
 });
 
-test("the help panel has four parts, and its steps follow the boxes", () => {
-  assert.deepEqual(flow.HELP_SECTIONS, ["steps", "faq", "words", "ai"]);
+test("the help panel has five parts, and its steps follow the boxes", () => {
+  assert.deepEqual(flow.HELP_SECTIONS, ["steps", "faq", "words", "ai", "report"]);
   assert.deepEqual(flow.HELP_STEPS, ["export", "snapshot", "output", "run", "results"]);
   const first = { ...READY, exportReady: false, checkedReady: false, snapshotDecided: false, outputDecided: false };
   assert.deepEqual(flow.helpSteps(boxStates(first), "idle"), {
@@ -1889,4 +1890,183 @@ test("an output of another version is told with its version, and one of 1.3 by i
   );
   // The page's list of earlier outputs changed in another tab.
   assert.notEqual(flow.errorMessages("OUTPUT_LIST_CHANGED")[0].key, "error.unknown");
+});
+
+// The GitHub report and the pages outside this app (stage B5c).
+const ROOT = new URL("../../", import.meta.url);
+const ENGLISH = JSON.parse(
+  readFileSync(new URL("src/garmin_running_data_normalizer/gui/static/i18n/en.json", ROOT), "utf-8"),
+);
+const english = (key) => ENGLISH[key] ?? key;
+const COMPUTER = {
+  operating_system: "macOS 26.5",
+  python_version: "Python 3.12.6",
+  package_version: "python -m garmin_running_data_normalizer 2.0.0",
+};
+const STOP_FACTS = {
+  code: "INPUT_ZIP_CORRUPT",
+  partKey: "run.start",
+  exitCode: 2,
+  launch: "later",
+  exportKind: "zip",
+  how: "snapshots",
+};
+
+test("the report has the fields of the Bug report form, in its order", () => {
+  const form = readFileSync(new URL(`.github/ISSUE_TEMPLATE/${flow.REPORT_FORM}`, ROOT), "utf-8");
+  const ids = [...form.matchAll(/^ {4}id: (\S+)$/gm)].map((match) => match[1]);
+  assert.deepEqual(
+    flow.REPORT_FIELDS.map((field) => field.id),
+    ["title", ...ids.filter((id) => id !== "privacy")],
+  );
+  assert.equal(ids.at(-1), "privacy");
+  for (const field of flow.REPORT_FIELDS) {
+    assert.equal(typeof ENGLISH[field.key], "string", field.key);
+  }
+});
+
+test("the report gives the values of a stop in English, and the table and the address agree", () => {
+  const rows = flow.reportRows(STOP_FACTS, COMPUTER, english);
+  assert.deepEqual(
+    rows.map((row) => [row.id, row.value]),
+    [
+      ["title", "[Bug]: INPUT_ZIP_CORRUPT in the GUI"],
+      ["problem", ""],
+      ["guide", "GUI — Run normalization"],
+      ["operating_system", "macOS 26.5"],
+      ["shell", "None (run from the GUI)"],
+      ["python_version", "Python 3.12.6"],
+      ["package_version", "python -m garmin_running_data_normalizer 2.0.0"],
+      [
+        "reproduction",
+        "Launch: later.\nExport: ZIP file.\nHow: import into the Snapshots and normalize them together.",
+      ],
+      ["exit_code", "2"],
+      ["synthetic_reproduction", ""],
+      ["logs", "INPUT_ZIP_CORRUPT"],
+    ],
+  );
+  // The person writes the problem and chooses the answer of the synthetic
+  // data on GitHub.
+  assert.deepEqual(
+    rows.filter((row) => row.person).map((row) => [row.id, row.person]),
+    [
+      ["problem", "report.person_writes"],
+      ["synthetic_reproduction", "report.person_chooses"],
+    ],
+  );
+  // The address carries the rows of the table that have a value, in their
+  // order, and nothing else.
+  const url = new URL(flow.reportUrl(rows));
+  assert.equal(`${url.origin}${url.pathname}`, `${flow.REPOSITORY}/issues/new`);
+  assert.deepEqual(
+    [...url.searchParams],
+    [["template", flow.REPORT_FORM], ...rows.filter((row) => row.value !== "").map((row) => [row.id, row.value])],
+  );
+  // Without a stop, from a first launch that has chosen nothing yet.
+  assert.deepEqual(
+    flow.reportRows({}, null, english).map((row) => [row.id, row.value]).filter(([, value]) => value !== ""),
+    [
+      ["title", "[Bug]: "],
+      ["guide", "GUI"],
+      ["shell", "None (run from the GUI)"],
+      ["reproduction", "Launch: first."],
+    ],
+  );
+  // The other ways and an extracted folder.
+  assert.equal(
+    flow.reportRows({ how: "single", exportKind: "folder" }, null, english)[7].value,
+    "Launch: first.\nExport: extracted folder.\nHow: normalize this export only.",
+  );
+  assert.equal(flow.reportRows({ how: "rerun" }, null, english)[7].value, "Launch: first.\nHow: normalize the Snapshots again.");
+});
+
+test("the report carries no place, name, count, time, timezone, or account", () => {
+  const facts = {
+    ...STOP_FACTS,
+    path: "/Volumes/Running Data/synthetic-person-q7/GarminRunningData",
+    label: "synthetic-label-k4",
+    name: "garmin-run-all-20300102-0304",
+    timezone: "Asia/Tokyo",
+    count: 98765,
+    account: "synthetic-account-boundary",
+    exportKind: "toString",
+    how: "constructor",
+  };
+  const computer = {
+    operating_system: "macOS 26.5\n/Volumes/synthetic-person-q7",
+    python_version: "Python 3.12.6 <script>",
+    package_version: "x".repeat(81),
+    node: "synthetic-machine-z9",
+  };
+  const rows = flow.reportRows(facts, computer, english);
+  const url = flow.reportUrl(rows);
+  for (const text of ["synthetic", "Volumes", "Running Data", "Garmin", "20300102", "Asia", "Tokyo", "98765", "script", "xxxx"]) {
+    assert.equal(url.includes(text), false, text);
+    assert.equal(rows.some((row) => row.value.includes(text)), false, text);
+  }
+  assert.deepEqual(
+    rows.map((row) => row.value).filter((value) => value !== ""),
+    ["[Bug]: INPUT_ZIP_CORRUPT in the GUI", "GUI — Run normalization", "None (run from the GUI)", "Launch: later.", "2", "INPUT_ZIP_CORRUPT"],
+  );
+  // A code takes only the form of a code.
+  for (const code of ["../x", "input_zip", "A".repeat(65), "A B", 7]) {
+    assert.equal(flow.reportRows({ code }, null, english)[0].value, "[Bug]: ", String(code));
+  }
+  // The exit code is one that the runs give.
+  assert.equal(flow.reportRows({ exitCode: 1 }, null, english)[8].value, "");
+  assert.equal(flow.reportRows({ exitCode: 3 }, null, english)[8].value, "3");
+});
+
+test("the address of the report stays short", () => {
+  const longest = { ...STOP_FACTS, code: `A${"_B".repeat(31)}`, partKey: "bundle.button", how: "snapshots", exportKind: "folder" };
+  const computer = Object.fromEntries(Object.keys(COMPUTER).map((key) => [key, "a.".repeat(40)]));
+  const url = flow.reportUrl(flow.reportRows(longest, computer, english));
+  assert.equal(longest.code.length, 63);
+  assert.ok(url.length <= 2000, String(url.length));
+});
+
+test("a report from the help panel or the fourth box is about the first stop shown, or the last run", () => {
+  assert.deepEqual(flow.reportFacts([], { state: "idle" }), {});
+  assert.deepEqual(
+    flow.reportFacts(
+      [
+        { code: "SNAPSHOT_STORE_LOCKED", partKey: "snapshot.heading" },
+        { code: "OUTPUT_PUBLISH_FAILED", partKey: "run.start" },
+      ],
+      { state: "failed" },
+    ),
+    { code: "SNAPSHOT_STORE_LOCKED", partKey: "snapshot.heading", exitCode: 2 },
+  );
+  assert.deepEqual(flow.reportFacts([], { state: "finished", result: { status: "PARTIAL_SUCCESS", exit_code: 3 } }), {
+    code: "PARTIAL_SUCCESS",
+    partKey: "run.start",
+    exitCode: 3,
+  });
+  assert.deepEqual(flow.reportFacts(null, { state: "cancelled", result: null }), {});
+});
+
+test("the links go only to the documents of the repository and the page of Garmin", () => {
+  for (const prefix of flow.OUTSIDE_PREFIXES) {
+    assert.ok(prefix.startsWith("https://"), prefix);
+  }
+  const allowed = (url) => flow.OUTSIDE_PREFIXES.some((prefix) => url.startsWith(prefix));
+  for (const document of flow.OUTSIDE_DOCUMENTS) {
+    const url = flow.outsideUrl(document, "2.0.0");
+    assert.equal(url, `${flow.REPOSITORY}/blob/v2.0.0/${document}`);
+    assert.ok(allowed(url), url);
+    // The document is in the repository, so that the tag of a release has it.
+    assert.ok(existsSync(new URL(document, ROOT)), document);
+  }
+  assert.equal(flow.outsideUrl("garmin", null), flow.GARMIN_DATA_PAGE);
+  assert.equal(flow.outsideUrl("security", null), `${flow.REPOSITORY}/security/advisories/new`);
+  assert.ok(allowed(flow.reportUrl(flow.reportRows(STOP_FACTS, COMPUTER, english))));
+  // A version as the releases name theirs, and nothing else.
+  assert.equal(flow.outsideUrl("docs/faq.md", "2.0.0rc1"), `${flow.REPOSITORY}/blob/v2.0.0rc1/docs/faq.md`);
+  for (const version of [null, "", "2.0.0.dev1", "v2.0.0", "2.0.0/../main", "02.0.0"]) {
+    assert.equal(flow.outsideUrl("docs/faq.md", version), null, String(version));
+  }
+  for (const link of ["docs/other.md", "../README.md", "https://example.invalid/", "toString"]) {
+    assert.equal(flow.outsideUrl(link, "2.0.0"), null, link);
+  }
 });

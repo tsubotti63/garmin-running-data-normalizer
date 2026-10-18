@@ -2074,8 +2074,9 @@ export function boxesToConfirm(states) {
   return ["export", "snapshot", "output"].filter((box) => states[box] !== "done").map(boxNumber);
 }
 
-// The parts of the help panel, in the order of its buttons (stage B1b).
-export const HELP_SECTIONS = ["steps", "faq", "words", "ai"];
+// The parts of the help panel, in the order of its buttons (stage B1b), and
+// the GitHub report (stage B5c).
+export const HELP_SECTIONS = ["steps", "faq", "words", "ai", "report"];
 
 // The steps of "How to use": the four boxes, then reading the result, which
 // lights up the results table.
@@ -2100,4 +2101,134 @@ export function helpSteps(states, runState) {
 // then, as the fourth box's button is after a new run starts.
 export function helpReturnTarget(opener) {
   return opener?.usable === true ? "opener" : "help";
+}
+
+// The GitHub report and the pages outside this app (stage B5c). The page
+// reads nothing outside and sends nothing itself: a link opens in a new tab
+// only when it is pressed, and the address of the report carries only the
+// values that the help panel shows before it.
+export const REPOSITORY = "https://github.com/tsubotti63/garmin-running-data-normalizer";
+export const GARMIN_DATA_PAGE = "https://www.garmin.com/account/datamanagement/";
+// Every page that this app links to starts with one of these.
+export const OUTSIDE_PREFIXES = [`${REPOSITORY}/`, GARMIN_DATA_PAGE];
+// The documents of the repository that the help panel links to.
+export const OUTSIDE_DOCUMENTS = [
+  "docs/gui_guide.md",
+  "docs/gui_guide.ja.md",
+  "docs/getting_started_from_garmin_export.md",
+  "docs/faq.md",
+  "docs/known_limitations.md",
+  "docs/ai_analysis_quick_start.md",
+  "SUPPORT.md",
+];
+// A version as the releases name theirs; their tags add a "v" before it.
+const RELEASE_VERSION = /^(?:0|[1-9][0-9]{0,3})(?:\.(?:0|[1-9][0-9]{0,3})){1,2}(?:(?:a|b|rc)(?:0|[1-9][0-9]{0,3}))?$/;
+
+// The address of a link of the help panel: the page of Garmin, the private
+// channel for a vulnerability, or a document at the tag of this version, so
+// that it describes the version that is installed. A version in development
+// keeps the name of the release before it, whose tag has no GUI guide yet:
+// those links open once the tag of 2.0.0 is made. Null for anything else, and
+// until the version is known.
+export function outsideUrl(link, version) {
+  if (link === "garmin") {
+    return GARMIN_DATA_PAGE;
+  }
+  if (link === "security") {
+    return `${REPOSITORY}/security/advisories/new`;
+  }
+  if (OUTSIDE_DOCUMENTS.includes(link) && typeof version === "string" && RELEASE_VERSION.test(version)) {
+    return `${REPOSITORY}/blob/v${version}/${link}`;
+  }
+  return null;
+}
+
+// The fields of the form "Bug report" of the repository
+// (.github/ISSUE_TEMPLATE), in its order, with the words of the table that
+// shows them first. The title is not a field of the form, but its address
+// takes one too. The person writes the problem and chooses whether the
+// synthetic data shows it on GitHub, and ticks the four checks of privacy
+// there.
+export const REPORT_FORM = `bug_report.yml`;
+export const REPORT_FIELDS = [
+  { id: "title", key: "report.field_title" },
+  { id: "problem", key: "report.field_problem", person: "report.person_writes" },
+  { id: "guide", key: "report.field_guide" },
+  { id: "operating_system", key: "report.field_os" },
+  { id: "shell", key: "report.field_shell" },
+  { id: "python_version", key: "report.field_python" },
+  { id: "package_version", key: "report.field_version" },
+  { id: "reproduction", key: "report.field_reproduction" },
+  { id: "exit_code", key: "report.field_exit" },
+  { id: "synthetic_reproduction", key: "report.field_synthetic", person: "report.person_chooses" },
+  { id: "logs", key: "report.field_logs" },
+];
+
+// The words of the report are English, as the form and the reports of the
+// repository are; the table shows them as they go in.
+const REPORT_HOW = {
+  snapshots: "import into the Snapshots and normalize them together",
+  single: "normalize this export only",
+  rerun: "normalize the Snapshots again",
+};
+const REPORT_EXPORT = { zip: "ZIP file", folder: "extracted folder" };
+const REPORT_CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
+// What this computer's values may hold, as the server makes them.
+const REPORT_COMPUTER = /^[A-Za-z0-9 ._()+-]{1,80}$/;
+
+const computerValue = (value) => (typeof value === "string" && REPORT_COMPUTER.test(value) ? value : "");
+
+// The values of the report, one row for each field of the form, in its
+// order: the code and the part of the page of the stop that it is about,
+// how this launch normalizes, and this computer's values as the server
+// gives them (``english`` gives the English words of a message key). No
+// place, name, count, time, timezone, or account goes in.
+export function reportRows(facts, computer, english) {
+  const code = typeof facts?.code === "string" && REPORT_CODE.test(facts.code) ? facts.code : "";
+  const part = typeof facts?.partKey === "string" ? english(facts.partKey) : "";
+  const lines = [`Launch: ${facts?.launch === "later" ? "later" : "first"}.`];
+  if (Object.hasOwn(REPORT_EXPORT, facts?.exportKind ?? "")) {
+    lines.push(`Export: ${REPORT_EXPORT[facts.exportKind]}.`);
+  }
+  if (Object.hasOwn(REPORT_HOW, facts?.how ?? "")) {
+    lines.push(`How: ${REPORT_HOW[facts.how]}.`);
+  }
+  const exit = String(facts?.exitCode ?? "");
+  const values = {
+    title: code === "" ? "[Bug]: " : `[Bug]: ${code} in the GUI`,
+    guide: part === "" ? "GUI" : `GUI — ${part}`,
+    operating_system: computerValue(computer?.operating_system),
+    shell: "None (run from the GUI)",
+    python_version: computerValue(computer?.python_version),
+    package_version: computerValue(computer?.package_version),
+    reproduction: lines.join("\n"),
+    exit_code: ["0", "2", "3"].includes(exit) ? exit : "",
+    logs: code,
+  };
+  return REPORT_FIELDS.map((field) => ({ ...field, value: values[field.id] ?? "" }));
+}
+
+// The address of the form with the values of the rows, in their order; a
+// field without a value is left to the form.
+export function reportUrl(rows) {
+  const query = [`template=${REPORT_FORM}`];
+  for (const row of rows) {
+    if (row.value !== "") {
+      query.push(`${row.id}=${encodeURIComponent(row.value)}`);
+    }
+  }
+  return `${REPOSITORY}/issues/new?${query.join("&")}`;
+}
+
+// What a report opened from the help panel or the fourth box is about: the
+// first stop that the page shows, from the top, or else the result of the
+// last run, or nothing. A stop's report comes from the line under it.
+export function reportFacts(shownStops, run) {
+  if (Array.isArray(shownStops) && shownStops.length > 0) {
+    return { code: shownStops[0].code, partKey: shownStops[0].partKey, exitCode: 2 };
+  }
+  if (FINISHED_STATES.includes(run?.state) && run?.result) {
+    return { code: run.result.status, partKey: "run.start", exitCode: run.result.exit_code };
+  }
+  return {};
 }

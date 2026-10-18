@@ -336,6 +336,10 @@
           <div id="bundle-result" class="messages" role="status" aria-live="polite"></div>
           <button type="button" id="bundle-reveal" class="search-again" data-i18n="reveal.button" aria-labelledby="bundle-reveal bundle-heading" hidden disabled></button>
           <div id="bundle-reveal-result" class="messages" role="status" aria-live="polite"></div>
+          <div class="button-row report-row">
+            <button type="button" id="tools-report" data-i18n="tools.report" aria-describedby="tools-report-note"></button>
+            <span id="tools-report-note" class="note" data-i18n="tools.report_note"></span>
+          </div>
         </div>
       </div>
     </section>
@@ -429,13 +433,14 @@
     <button type="button" id="help-nav-faq" data-section="faq" data-i18n="help.faq"></button>
     <button type="button" id="help-nav-words" data-section="words" data-i18n="help.words"></button>
     <button type="button" id="help-nav-ai" data-section="ai" data-i18n="help.ai"></button>
+    <button type="button" id="help-nav-report" data-section="report" data-i18n="help.report"></button>
   </nav>
   <div class="help-body">
     <section id="help-steps" class="help-section" aria-labelledby="help-steps-heading">
       <h3 id="help-steps-heading" tabindex="-1" data-i18n="help.steps"></h3>
       <h4 data-i18n="help.get_heading"></h4>
       <ol class="get-steps">
-        <li data-i18n="help.get_step1"></li>
+        <li><span id="get-step1-before"></span><a class="outside" data-link="garmin" target="_blank" rel="noopener noreferrer" data-i18n="help.garmin_page"></a><span id="get-step1-after"></span></li>
         <li data-i18n="help.get_step2"></li>
         <li data-i18n="help.get_step3"></li>
       </ol>
@@ -469,6 +474,11 @@
           <p id="walk-results-text" data-i18n="help.step_results_text"></p>
         </li>
       </ol>
+      <h4 data-i18n="help.guides_heading"></h4>
+      <ul class="links">
+        <li><a class="outside" data-link="docs/gui_guide.md" data-link-ja="docs/gui_guide.ja.md" target="_blank" rel="noopener noreferrer" data-i18n="links.gui_guide"></a></li>
+        <li><a class="outside" data-link="docs/getting_started_from_garmin_export.md" target="_blank" rel="noopener noreferrer" data-i18n="links.getting_started"></a></li>
+      </ul>
     </section>
     <section id="help-faq" class="help-section" aria-labelledby="help-faq-heading" hidden>
       <h3 id="help-faq-heading" tabindex="-1" data-i18n="help.faq"></h3>
@@ -478,9 +488,15 @@
       <details class="qa"><summary data-i18n="faq.remember_q"></summary><p data-i18n="faq.remember_a"></p></details>
       <details class="qa"><summary data-i18n="faq.exit_q"></summary><p data-i18n="faq.exit_a"></p></details>
       <details class="qa"><summary data-i18n="faq.send_q"></summary><p data-i18n="faq.send_a"></p></details>
+      <details class="qa"><summary data-i18n="faq.attach_q"></summary><p data-i18n="faq.attach_a"></p></details>
       <details class="qa"><summary data-i18n="faq.values_q"></summary><p data-i18n="faq.values_a"></p></details>
       <details class="qa"><summary data-i18n="faq.date_q"></summary><p data-i18n="faq.date_a"></p></details>
       <details class="qa"><summary data-i18n="faq.window_q"></summary><p data-i18n="faq.window_a"></p></details>
+      <h4 data-i18n="help.more_heading"></h4>
+      <ul class="links">
+        <li><a class="outside" data-link="docs/faq.md" target="_blank" rel="noopener noreferrer" data-i18n="links.faq"></a></li>
+        <li><a class="outside" data-link="docs/known_limitations.md" target="_blank" rel="noopener noreferrer" data-i18n="links.limitations"></a></li>
+      </ul>
     </section>
     <section id="help-words" class="help-section" aria-labelledby="help-words-heading" hidden>
       <h3 id="help-words-heading" tabindex="-1" data-i18n="help.words"></h3>
@@ -532,6 +548,33 @@
         <p id="ai-example-4" data-i18n="ai.example4"></p>
         <div class="prompt-row"><span class="tag" data-i18n="ai.tag_external"></span><span class="copy-row"><span id="copy-4-result" class="copy-result" aria-live="polite"></span><button type="button" id="copy-4" class="copy-button" data-copy="ai-example-4" aria-describedby="ai-example-4" data-i18n="ai.copy"></button></span></div>
       </div>
+      <h4 data-i18n="help.more_heading"></h4>
+      <ul class="links">
+        <li><a class="outside" data-link="docs/ai_analysis_quick_start.md" target="_blank" rel="noopener noreferrer" data-i18n="links.ai_quick_start"></a></li>
+      </ul>
+    </section>
+    <section id="help-report" class="help-section" aria-labelledby="help-report-heading" hidden>
+      <h3 id="help-report-heading" tabindex="-1" data-i18n="help.report_heading"></h3>
+      <p class="lede" data-i18n="report.lede"></p>
+      <p class="pubwarn" data-i18n="report.public"></p>
+      <p data-i18n="report.prefill"></p>
+      <table class="prefill">
+        <caption data-i18n="report.table_caption"></caption>
+        <tbody id="report-values"></tbody>
+      </table>
+      <p class="note" data-i18n="report.checks"></p>
+      <p class="note" data-i18n="report.reach"></p>
+      <p class="note" data-i18n="report.sign_in"></p>
+      <div class="button-row">
+        <a id="report-open" class="button-link" target="_blank" rel="noopener noreferrer" aria-describedby="report-new-tab" data-i18n="report.open"></a>
+        <span id="report-new-tab" class="note" data-i18n="report.new_tab"></span>
+      </div>
+      <h4 data-i18n="report.security_heading"></h4>
+      <p><span id="report-security-before"></span><a class="outside" data-link="security" target="_blank" rel="noopener noreferrer" data-i18n="report.security_link"></a><span id="report-security-after"></span></p>
+      <h4 data-i18n="help.more_heading"></h4>
+      <ul class="links">
+        <li><a class="outside" data-link="SUPPORT.md" target="_blank" rel="noopener noreferrer" data-i18n="links.support"></a></li>
+      </ul>
     </section>
   </div>
 </aside>

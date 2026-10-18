@@ -23,6 +23,7 @@ from garmin_running_data_normalizer import __version__
 from garmin_running_data_normalizer.common.time import DEFAULT_TIMEZONE
 from garmin_running_data_normalizer.gui import chooser, outputs, places
 from garmin_running_data_normalizer.gui.chooser import Chooser
+from garmin_running_data_normalizer.gui.report import report_values
 from garmin_running_data_normalizer.gui.runs import RunManager
 from garmin_running_data_normalizer.gui.server import (
     API_ROUTES,
@@ -267,8 +268,9 @@ class GuiApiRequestTest(GuiServerTestCase):
             status, _, body = self.post_api("/api/status")
         self.assertEqual(status, 200)
         # The page takes the product's default timezone from here (stage A5a),
-        # the default places, which only the GUI has (stage B4a), and the
-        # settings of an earlier launch, none in a test's own place (stage B4c).
+        # the default places, which only the GUI has (stage B4a), the
+        # settings of an earlier launch, none in a test's own place (stage
+        # B4c), and this computer's values of the GitHub report (stage B5c).
         self.assertEqual(
             json.loads(body),
             {
@@ -277,6 +279,7 @@ class GuiApiRequestTest(GuiServerTestCase):
                 "default_timezone": DEFAULT_TIMEZONE,
                 "languages": ["en", "ja"],
                 "product_version": __version__,
+                "report": report_values(),
                 "settings": {"launch": "first", "store": None, "output_parent": None, "hints": None, "notice": None},
             },
         )

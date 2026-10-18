@@ -39,6 +39,10 @@ QUOTED_LABELS = (
     "target.check",
     "result.column_change",
     "quit.button",
+    "report.line_button",
+    "tools.report",
+    "help.report",
+    "report.open",
 )
 
 
