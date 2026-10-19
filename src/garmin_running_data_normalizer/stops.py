@@ -198,6 +198,11 @@ STOPS: dict[str, Stop] = {
         "the place given for a new Snapshot Store is inside another Snapshot Store",
         "give a place outside the other store with --store",
     ),
+    # The paths inside a store on Windows without long paths (stage B6c).
+    "SNAPSHOT_STORE_PATH_TOO_LONG": Stop(
+        "the paths inside the Snapshot Store would be too long for this computer",
+        "give a store in a shorter folder with --store, or on Windows turn on long paths",
+    ),
     # A registration (stage B4b-1).
     # Removing the lock file that a stopped registration left (stage B4b-2).
     "SNAPSHOT_UNLOCK_NOT_CONFIRMED": Stop(
@@ -562,6 +567,10 @@ PAGE_WORDING: dict[str, Stop] = {
     "SNAPSHOT_STORE_INSIDE_STORE": Stop(
         "the place for the new Snapshot Store is inside another Snapshot Store",
         "choose a folder outside the other store",
+    ),
+    "SNAPSHOT_STORE_PATH_TOO_LONG": Stop(
+        "the paths inside the Snapshot Store would be too long for this computer",
+        "choose a store in a shorter folder, or on Windows turn on long paths",
     ),
     "SNAPSHOT_STORE_LOCKED": Stop(
         "the Snapshot Store has a lock file (.single-writer.lock): an import is running, "

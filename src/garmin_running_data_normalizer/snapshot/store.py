@@ -3,6 +3,7 @@ from __future__ import annotations
 import errno
 import hashlib
 import json
+import ntpath
 import os
 import re
 import shutil
@@ -49,6 +50,12 @@ from ..intake.source import (
     is_zip_input,
     place_can_be_shown,
     walk_paths,
+)
+from ..output_location import (
+    WINDOWS_MAX_FILE_PATH,
+    WINDOWS_MAX_FOLDER_PATH,
+    long_paths_enabled,
+    utf16_length,
 )
 from ..stops import STOPS, stop_text
 from .policies import CONTRACT_VERSION, REGISTRY_VERSION
@@ -107,6 +114,20 @@ STORE_SYMLINK_MESSAGE = STOPS["SNAPSHOT_STORE_SYMLINK"].what
 NEW_STORE_PARENT_MESSAGE = STOPS["SNAPSHOT_STORE_PARENT_NOT_FOUND"].what
 NEW_STORE_NOT_EMPTY_MESSAGE = STOPS["SNAPSHOT_STORE_NOT_EMPTY"].what
 NEW_STORE_INSIDE_STORE_MESSAGE = STOPS["SNAPSHOT_STORE_INSIDE_STORE"].what
+# The deepest paths that a registration writes inside a store (stage B6c):
+# the temporary file of the inventory of a Snapshot, whose name holds the id
+# of the Snapshot ("snapshot-" and 64 characters) and the number of the
+# process (up to 10 digits), in the folder of the Snapshot, and that folder.
+# Windows without long paths refuses them for a store of more than about 70
+# characters; until stage B6c, the registration stopped with COMMAND_FAILED
+# after it had copied part of the Export.
+SNAPSHOT_ID_LENGTH = len("snapshot-") + 64
+DEEPEST_STORE_FILE = (
+    len("snapshots/") + SNAPSHOT_ID_LENGTH + len("/.") + SNAPSHOT_ID_LENGTH
+    + len(".inventory.json.") + 10 + len(".tmp")
+)
+DEEPEST_STORE_FOLDER = len("snapshots/") + SNAPSHOT_ID_LENGTH
+PATH_TOO_LONG_MESSAGE = STOPS["SNAPSHOT_STORE_PATH_TOO_LONG"].what
 # The store.json of a store above a new one is read up to this size; a
 # larger file is not one that this app wrote.
 MAX_STORE_METADATA_BYTES = 64 * 1024
@@ -135,7 +156,38 @@ REGISTRATION_INPUT_CHANGED_MESSAGE = "the Export changed while it was registered
 NOTICE_MESSAGES = {
     "SNAPSHOT_STORE_LOCKED": stop_text("SNAPSHOT_STORE_LOCKED"),
     "SNAPSHOT_REGISTRATION_INCOMPLETE": stop_text("SNAPSHOT_REGISTRATION_INCOMPLETE"),
+    "SNAPSHOT_STORE_PATH_TOO_LONG": stop_text("SNAPSHOT_STORE_PATH_TOO_LONG"),
 }
+
+
+def windows_store_paths_too_long(store_root: str) -> bool:
+    """Return whether the deepest paths that a registration writes inside
+    the store at ``store_root`` reach the limits of Windows without long
+    paths (stage B6c). ``store_root`` is measured in its absolute Windows
+    form, in UTF-16 units, as the place of an output is."""
+    base = ntpath.abspath(store_root)
+    if base.startswith("\\\\?\\"):
+        return False  # Such paths have no MAX_PATH limit.
+    length = utf16_length(base) + 1
+    return (
+        length + DEEPEST_STORE_FILE >= WINDOWS_MAX_FILE_PATH
+        or length + DEEPEST_STORE_FOLDER >= WINDOWS_MAX_FOLDER_PATH
+    )
+
+
+def store_paths_too_long(store_root: str | Path) -> bool:
+    """Return whether a registration could not write the files of a store
+    at ``store_root`` on this system: on Windows without long paths only."""
+    if os.name != "nt" or long_paths_enabled():
+        return False
+    return windows_store_paths_too_long(str(store_root))
+
+
+def check_store_paths(store_root: str | Path) -> None:
+    """Stop with SNAPSHOT_STORE_PATH_TOO_LONG before anything is written,
+    for a new store and for a registration alike (stage B6c)."""
+    if store_paths_too_long(store_root):
+        raise SnapshotStoreError(PATH_TOO_LONG_MESSAGE, "SNAPSHOT_STORE_PATH_TOO_LONG")
 
 
 def store_not_readable_message(places: list[str] | None = None) -> str:
@@ -561,6 +613,7 @@ def check_new_store_place(store_root: str | Path) -> Path:
         raise not_readable_error(root, root) from exc
     if not parent_is_folder:
         raise SnapshotStoreError(NEW_STORE_PARENT_MESSAGE, "SNAPSHOT_STORE_PARENT_NOT_FOUND")
+    check_store_paths(root)
     try:
         mode = os.stat(root).st_mode
     except (FileNotFoundError, NotADirectoryError):
@@ -1486,6 +1539,9 @@ def register_snapshot(
         return lambda done, total: progress({"stage": stage, "done": done, "total": total})
 
     root, store_metadata = load_store(store_root)
+    # A store whose files would be too long stops before the Export is read
+    # (stage B6c).
+    check_store_paths(root)
     # The input stops with the codes of a run (stage A5b-2).
     requested_source = Path(input_root)
     try:
@@ -1705,6 +1761,10 @@ def snapshot_status(store_root: str | Path) -> dict[str, Any]:
         ],
     }
     notices = _notices(root, journal=True)
+    # A store whose files a registration could not write here (stage B6c):
+    # a NOTE, which an import makes a stop.
+    if store_paths_too_long(root):
+        notices.append("SNAPSHOT_STORE_PATH_TOO_LONG")
     if notices:
         result["notices"] = notices
     return result
@@ -1923,6 +1983,7 @@ __all__ = [
     "check_input_apart",
     "check_label_free",
     "check_new_store_place",
+    "check_store_paths",
     "content_multiset",
     "initialize_store",
     "invalid_store_error",
@@ -1939,6 +2000,8 @@ __all__ = [
     "shown_store_message",
     "snapshot_status",
     "store_not_readable_message",
+    "store_paths_too_long",
     "verification_error",
     "verify_store",
+    "windows_store_paths_too_long",
 ]

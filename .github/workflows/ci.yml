@@ -178,7 +178,7 @@ jobs:
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_environment_stops.py -q
       - name: Verify Windows Snapshot Store stops
         shell: powershell
-        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_snapshot_store_environment.py .\tests\test_snapshot_store_places.py .\tests\test_snapshot_unlock.py -q
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_snapshot_store_environment.py .\tests\test_snapshot_store_places.py .\tests\test_snapshot_unlock.py .\tests\test_snapshot_store_path_length.py -q
       - name: Verify Windows Snapshot parity
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_snapshot_parity.py -q

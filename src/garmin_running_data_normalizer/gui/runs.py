@@ -42,6 +42,7 @@ from ..snapshot.store import (
     check_input_apart,
     check_label_free,
     check_new_store_place,
+    check_store_paths,
     load_manifests,
     load_store,
     lock_exists,
@@ -429,6 +430,9 @@ def _check_store(store: Path, label: str | None) -> None:
         # the outcome is the same.
         if label is not None:
             check_label_free(manifests, label)
+            # The files that the import writes must fit this system's paths
+            # (stage B6c), as the registration checks them.
+            check_store_paths(root)
         elif not manifests:
             raise RunRequestError("SNAPSHOT_STORE_EMPTY")
     except SnapshotStoreError as exc:
