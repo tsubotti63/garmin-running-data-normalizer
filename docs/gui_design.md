@@ -162,7 +162,11 @@ checks it, but nothing is made until a run imports an Export into it.
 "Check the Snapshots" checks the store as `snapshot verify` does. The page
 reads a store with the functions of the CLI's snapshot commands; only a run
 writes in it. Each button opens the system's dialog for a folder, or the
-page's own folder list without one.
+page's own folder list without one. Neither the page nor the CLI checks the
+length of the paths inside a store: on Windows without long paths, the
+files of a store add about 185 characters to its path, and an import whose
+paths reach the limit stops with `COMMAND_FAILED`, as `snapshot register`
+does; the GUI guide says to keep the place of the store short (stage B6b).
 
 Importing (stage B4b-1): the second box offers three ways to normalize.
 
@@ -679,6 +683,26 @@ one that holds what a store writes but not `store.json`), and not inside
 another store (`SNAPSHOT_STORE_INSIDE_STORE`), and every snapshot command
 refuses a store that is a symbolic link with `SNAPSHOT_STORE_SYMLINK`
 (until then, `SNAPSHOT_LIFECYCLE_FAILED`).
+
+Stage B also changed the CLI where the page needed it, with the same
+functions in both (see [v2.0.0 Data Handling](v2_data_handling.md) and the
+[migration notes draft](v2_migration_notes_draft.md)). The `ERROR` lines of
+`INPUT_NOT_READABLE` and `SNAPSHOT_STORE_NOT_READABLE` say that this app is
+not allowed to open a folder or file, and the report of `doctor` for a
+person gives the next step of a finding whose code is a stop (stage B2b).
+`doctor --input` gives the counts of the input (stage B3b), and its report
+for a person names the Exports of a mixed input and the first place that
+cannot be opened (stage B3c). The four stops of `snapshot register` that the
+page checks before a run have codes of their own, `SNAPSHOT_LABEL_INVALID`,
+`SNAPSHOT_LABEL_EXISTS`, `SNAPSHOT_TIME_INVALID`, and
+`SNAPSHOT_INPUT_INSIDE_STORE` (stage B4b-1). `snapshot unlock
+--confirm-no-other-command` removes the lock file that a stopped
+registration left, and the three cases of `INPUT_MULTIPLE_EXPORTS` have next
+steps of their own (stage B4b-2). `support-bundle` stops for a folder that
+cannot be written with `SUPPORT_BUNDLE_NOT_WRITTEN` (stage B5a), and
+`validate-handoff`, `doctor --run-output`, and `support-bundle` tell an
+output of another version with `OUTPUT_OTHER_VERSION` and the version that
+made it (stage B5b).
 
 Stage A5b gives every stop of the CLI what happened and its next step from
 one table (`stops.STOPS`, see [Stops and next steps](v2_data_handling.md#stops-and-next-steps)),

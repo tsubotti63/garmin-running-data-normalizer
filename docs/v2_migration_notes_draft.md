@@ -4,9 +4,11 @@
   checkpoint from the
   [Migration notes outline](v2_data_handling.md#migration-notes-outline-v171-to-v200)
   and a comparison of v1.7.1 with the CLI of stage A on synthetic Exports. It
-  covers the CLI and its outputs; stage B adds the GUI. When v2.0.0 is
-  released, its section moves into [Migration Notes](migration_notes.md),
-  which describes the published version until then.
+  covers the CLI and its outputs, with the changes that stage B made to the
+  CLI for the GUI; the `gui` command is added to it when stage D exposes the
+  command. When v2.0.0 is released, its section moves into
+  [Migration Notes](migration_notes.md), which describes the published
+  version until then.
 - Authority: [v2.0.0 Data Handling](v2_data_handling.md) gives every rule and
   each change by stage. This draft keeps what a user needs to change scripts
   and the readers of the outputs.
