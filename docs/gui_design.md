@@ -177,7 +177,13 @@ Importing (stage B4b-1): the second box offers three ways to normalize.
   that of the newest file of an extracted folder, which is near the time
   when the Export was made; a line says which, and the user can change it.
   The registration records the same time as the request and the
-  observation of the Export.
+  observation of the Export. The two fields are for the next import: once a
+  run has finished, they are hidden until something changes, and the second
+  box shows what the run imported (stage B6a, so that a proposed name that
+  no Snapshot took is not read as one). They show again, with the reason,
+  while the name or the time keeps a run from starting, and after an import
+  the page proposes the next name again, also when the person typed the one
+  that the import took.
 - Normalize this Export only, without the Snapshots. The parts of the store
   turn gray, and a note says that this way does not use the store.
 - Normalize the existing Snapshots again, without an Export, for example
@@ -188,24 +194,28 @@ Importing (stage B4b-1): the second box offers three ways to normalize.
 The list of the Snapshots says which will be used: all of them, with a state
 column (imported before, to import now, imported now), in the order of the
 times of their Exports, never in the order of their import; for those imported
-on this page, the time is the time of the download. As in the mockup, a narrow
-box leaves out the column of the times, and a narrower one that of the numbers
-of files. The steps of a run follow the way, as the mockup gives them: the
-import reads and checks the Export, then makes the store and imports it as the
-first Snapshot, or imports it as the Nth; the Snapshots are checked, and the
-one Snapshot is read, or the N are built into one input; Run-All follows.
-Normalizing again starts at the check of the Snapshots and builds the existing
-ones. The result says where the Export came in the order, or that the store
-held the same Export already, so that no Snapshot was added; a run that stops
-after its import says that the import is done, so that the same Export adds no
-Snapshot when the run is started again. While the way uses the store, a
-problem of the store, or of the name or the time, turns its box red and stops
-the run before it starts; for this Export only, the store's lines show it as
-in stage B4a, in red, or in yellow for a lock file or an interrupted import,
-and nothing stops. A cancelled import takes its lock back as the CLI does, and
-the next registration completes an interrupted one; a lock file that a forced
-stop left stops the next import with `SNAPSHOT_STORE_LOCKED`, and the store's
-lines say how to remove it, as `snapshot status` does.
+on this page, the time is the time of the download. While it holds the Export
+to import and a Snapshot to compare it with, a line under it says that an
+Export of the same content adds no new Snapshot, which the import finds out
+(stage B6a: the checkpoint of stage B saw "the second Snapshot, to import now"
+before a run of the same Export). As in the mockup, a narrow box leaves out
+the column of the times, and a narrower one that of the numbers of files. The
+steps of a run follow the way, as the mockup gives them: the import reads and
+checks the Export, then makes the store and imports it as the first Snapshot,
+or imports it as the Nth; the Snapshots are checked, and the one Snapshot is
+read, or the N are built into one input; Run-All follows. Normalizing again
+starts at the check of the Snapshots and builds the existing ones. The result
+says where the Export came in the order, or that the store held the same
+Export already, so that no Snapshot was added; a run that stops after its
+import says that the import is done, so that the same Export adds no Snapshot
+when the run is started again. While the way uses the store, a problem of the
+store, or of the name or the time, turns its box red and stops the run before
+it starts; for this Export only, the store's lines show it as in stage B4a, in
+red, or in yellow for a lock file or an interrupted import, and nothing stops.
+A cancelled import takes its lock back as the CLI does, and the next
+registration completes an interrupted one; a lock file that a forced stop left
+stops the next import with `SNAPSHOT_STORE_LOCKED`, and the store's lines say
+how to remove it, as `snapshot status` does.
 
 When things go wrong with the store (stage B4b-2): under the stop of a lock
 file, for an import, the page says when the lock file was written, so that a
@@ -250,33 +260,36 @@ first launch and off at later ones, and the settings remember the person's
 choice (stage B4c). The help panel, the tips, and the information
 buttons say only what the page can do at its stage.
 
-The GitHub report (stage B5c), as the Human maintainer decided on
-2026-10-18: the line "If this does not solve it, report it on GitHub (you
-can check the values before it opens)." ends the explanation of a stop in
-the red boxes, in the check of the Export and the Snapshot Store, and in the
-output check and under the buttons of the fourth box; a note under a field
-(the name and the folder of the output, or the name and time of an import)
-has none, as the mockup v10 has it. "Report on GitHub…" ends "If something
-is wrong" of the fourth box. Either opens "If something is wrong" in the help panel, which
-shows first the values that go in the Bug report form of the repository
-(`.github/ISSUE_TEMPLATE/bug_report.yml`), and "Open on GitHub" opens the
-form with them in a new tab. The values are English, as the form is, in the
-order of its fields: the title `[Bug]: <code> in the GUI`, the part of the
-page or its button, the operating system and its version, `None (run from
-the GUI)` as the shell, the version of Python, the line that `--version`
-prints, whether this launch is the first, the kind of the Export and the
-way to normalize, the exit code (2 for a stop, or 0 or 3 for a finished
-run), and the code. A report from a stop is about that stop; one from the
-fourth box or the help panel is about the first stop that the page shows,
-or else the last run. The person writes the problem, chooses whether the
-synthetic data shows it, and ticks the four checks of privacy on GitHub. No
-place, name, count, date, time, timezone, account, or key goes in; the
-server gives the three values of the computer in a plain form only (see
-[Privacy](#privacy)). The table and the address come from the same rows, so
-that the address carries what the table shows. The panel says that the
-values reach GitHub when the form opens and are public only when the report
-is submitted, that GitHub may ask the person to sign in first, and that a
-vulnerability goes to the private channel of the repository instead.
+The GitHub report (stage B5c), as the Human maintainer decided on 2026-10-18:
+the line "If this does not solve it, report it on GitHub (you can check the
+values before it opens)." ends the explanation of a stop in the red boxes, in
+the check of the Export and the Snapshot Store, and in the output check and
+under the buttons of the fourth box; a note under a field (the name and the
+folder of the output, or the name and time of an import) has none, as the
+mockup v10 has it. In the first and second box, the line comes after the
+buttons that fix the stop: the choice of one Export of a mixed input, and the
+check and the button that remove the lock file (stage B6a). "Report on
+GitHub…" ends "If something is wrong" of the fourth box. Either opens "If
+something is wrong" in the help panel, which shows first the values that go in
+the Bug report form of the repository
+(`.github/ISSUE_TEMPLATE/bug_report.yml`), and "Open on GitHub" opens the form
+with them in a new tab. The values are English, as the form is, in the order
+of its fields: the title `[Bug]: <code> in the GUI`, the part of the page or
+its button, the operating system and its version, `None (run from the GUI)` as
+the shell, the version of Python, the line that `--version` prints, whether
+this launch is the first, the kind of the Export and the way to normalize, the
+exit code (2 for a stop, or 0 or 3 for a finished run), and the code. A report
+from a stop is about that stop; one from the fourth box or the help panel is
+about the first stop that the page shows, or else the last run. The person
+writes the problem, chooses whether the synthetic data shows it, and ticks the
+four checks of privacy on GitHub. No place, name, count, date, time, timezone,
+account, or key goes in; the server gives the three values of the computer in
+a plain form only (see [Privacy](#privacy)). The table and the address come
+from the same rows, so that the address carries what the table shows. The
+panel says that the values reach GitHub when the form opens and are public
+only when the report is submitted, that GitHub may ask the person to sign in
+first, and that a vulnerability goes to the private channel of the repository
+instead.
 
 The help panel also links to the GUI guide of its language and to other
 documents of the repository at the tag of this version (`v<version>`), so

@@ -44,6 +44,7 @@
       </div>
       <div id="check-result" class="messages" role="status" aria-live="polite"></div>
       <div id="check-choices" class="button-row" hidden></div>
+      <div id="check-report" class="messages"></div>
       <div id="extract-area" hidden>
         <div class="checkbox-row">
           <input id="extract-confirm" type="checkbox" aria-describedby="extract-help">
@@ -129,6 +130,7 @@
           </div>
           <button type="button" id="lock-remove" data-i18n="lock.remove"></button>
         </div>
+        <div id="store-report" class="messages"></div>
         <div id="store-list" hidden>
           <p id="store-list-label" class="label-line" data-i18n="snapshot.list_label"></p>
           <div class="snap-wrap">
@@ -146,6 +148,7 @@
             </table>
           </div>
           <p class="help" data-i18n="store.list_note"></p>
+          <p id="store-same-note" class="help" data-i18n="store.same_note" hidden></p>
         </div>
       </div>
       <div class="decide">

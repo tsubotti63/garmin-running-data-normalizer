@@ -2074,6 +2074,38 @@ export function boxesToConfirm(states) {
   return ["export", "snapshot", "output"].filter((box) => states[box] !== "done").map(boxNumber);
 }
 
+// The fields of an import (the name and the time of the download) are for
+// the next import: they show until a run has finished and nothing has
+// changed since, when the second box shows what the run imported, or that
+// the Export was there already (stage B6a). They show again while the name
+// or the time keeps a run from starting, so that the reason is in sight.
+export function importFieldsShown(view) {
+  return (
+    view?.how === "snapshots" &&
+    view?.checkedReady === true &&
+    (typeof view?.importProblem === "string" ||
+      !(FINISHED_STATES.includes(view?.runState) && view?.editedSinceRun !== true))
+  );
+}
+
+// Whether the list of the second box says that an Export of the same content
+// adds no new Snapshot: while it holds the Export that the run will import
+// and a Snapshot to compare it with, which the import does (stage B6a).
+export function sameContentNoted(rows) {
+  return (
+    Array.isArray(rows) &&
+    rows.some((row) => row?.state === "pending") &&
+    rows.some((row) => row?.state !== "pending")
+  );
+}
+
+// The lines of a stop apart from the line of its report, which the first
+// and second box show after the buttons that fix the stop (stage B6a).
+export function apartReport(lines) {
+  const items = Array.isArray(lines) ? lines : [];
+  return { lines: items.filter((line) => !line?.report), report: items.filter((line) => Boolean(line?.report)) };
+}
+
 // The parts of the help panel, in the order of its buttons (stage B1b), and
 // the GitHub report (stage B5c).
 export const HELP_SECTIONS = ["steps", "faq", "words", "ai", "report"];

@@ -654,6 +654,7 @@
   "store.row_kept": "Imported",
   "store.row_order": "{order}",
   "store.row_pending": "To import now",
+  "store.same_note": "If the export has the same content as one in the store, the import finds that out and adds no new Snapshot.",
   "summary.as_last_time": "{summary} (as last time)",
   "summary.export": "Uses {name}",
   "summary.export_import": "Imports {name}",

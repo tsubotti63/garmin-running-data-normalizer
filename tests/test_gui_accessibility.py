@@ -431,6 +431,41 @@ class GuiPageStructureTest(unittest.TestCase):
                 catalog = json.loads((STATIC_ROOT / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
                 self.assertEqual(catalog["help.garmin_page"], page.group(1))
 
+    def test_the_report_of_a_stop_comes_after_the_buttons_that_fix_it(self) -> None:
+        # Stage B6a: in the first box after the buttons that choose one of the
+        # Exports of a mixed input, and in the second after the check and the
+        # button that remove the lock file, so that the report does not come
+        # between what happened and how to fix it.
+        order = [element.get("id") for element in self.elements if element.get("id")]
+        for before, report in (("check-choices", "check-report"), ("lock-area", "store-report")):
+            with self.subTest(report=report):
+                self.assertEqual(order.index(report), order.index(before) + 1 + sum(
+                    1 for element in self.elements
+                    if element.get("id") and by_id(self.elements, before) in element.ancestors()
+                ))
+                self.assertEqual(by_id(self.elements, report).get("class"), "messages")
+        self.assertLess(order.index("check-result"), order.index("check-choices"))
+        self.assertLess(order.index("store-result"), order.index("lock-area"))
+        # The page puts the line there through the rule of flow.mjs, which
+        # the tests of the page's rules check.
+        script = (STATIC_ROOT / "app.mjs").read_text(encoding="utf-8")
+        for result, report in (("checkResult", "checkReport"), ("storeResult", "storeReport")):
+            with self.subTest(result=result):
+                found = re.search(
+                    rf"const (\w+) = apartReport\(.*\);\n\s+replaceLines\(ui\.{result}, \1\.lines\);\n\s+replaceLines\(ui\.{report}, \1\.report\);",
+                    script,
+                )
+                self.assertIsNotNone(found)
+                assert found is not None
+                # Elsewhere the areas are only emptied.
+                given = {area: set(re.findall(rf"replaceLines\(ui\.{area}, ([^)]*)\)", script)) for area in (result, report)}
+                self.assertEqual(given[result] - {"[]"}, {f"{found.group(1)}.lines"})
+                self.assertEqual(given[report] - {"[]"}, {f"{found.group(1)}.report"})
+        note = by_id(self.elements, "store-same-note")
+        self.assertEqual(note.get("data-i18n"), "store.same_note")
+        self.assertIn("hidden", note.attributes)
+        self.assertIn(by_id(self.elements, "store-list"), note.ancestors())
+
     def test_information_buttons_open_a_part_under_them(self) -> None:
         # Stage B1b: an information button is a disclosure, named by its own
         # word first and then by what it explains (WCAG 2.5.3).
