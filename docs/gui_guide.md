@@ -49,7 +49,8 @@ The command prints the GUI's address and opens it in your default browser.
 The page has four boxes, numbered in the order in which you set them:
 1 **This export**, 2 **Snapshots**, 3 **Output**, and 4 **Normalize**. The
 line **Next:** at the top says what to do now, and the box to work on is
-marked **Now**. **Use these settings** sets the second and the third box. A
+marked **Now**. **Use these settings** sets the second and the third box; in
+the box to work on, it is filled blue, as the button to press next. A
 box that is set is marked **Set** and says in one line what the run will do
 with it. Under the boxes come **Colors**, the meaning of the colors of the
 page, and two tables: **Steps**, the steps of a run with the time of each, and
@@ -329,7 +330,8 @@ third box **Choose…** and **Look again**. Neither place is made again, except
 the default folder `GarminRunningData` for the output.
 
 **Forget the remembered settings…** in the bar at the bottom asks first, and
-then removes the file of the settings only, never while a run is active. The
+then removes the file of the settings only, never while a run is active. It
+can be pressed only while there are remembered settings. The
 store and the outputs stay, and the next launch goes as a first launch; a
 store that is not in the default place must then be opened again. When the
 file cannot be read, the bar says so, and the launch goes as a first one.
@@ -424,7 +426,8 @@ An information button next to what it explains, **About**,
 how to normalize, the Snapshot Store, the place of the output, the timezone,
 the summary for an AI, the exit code, and **If something is wrong**. The
 explanation stays open until you press the button again or press Escape;
-nothing opens when you only point at it.
+nothing opens when you only point at it. With a screen reader, the
+explanation is read once when it opens, and focus stays on the button.
 
 **Colors** under the boxes gives the five colors of the page: blue is what to
 do now, or a task that is running; green is done or set; yellow is a warning,

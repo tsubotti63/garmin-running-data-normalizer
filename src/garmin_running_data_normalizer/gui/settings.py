@@ -201,6 +201,19 @@ def write_settings(path: Path, values: dict[str, Any], makeable: tuple[Path, ...
     return None
 
 
+def settings_present(path: Path) -> bool:
+    """Whether anything is at the place of the settings (stage C1): a file,
+    a link, or something that forgetting them would report. True when the
+    place cannot be looked at, so that the page lets the person try."""
+    try:
+        os.lstat(path)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+    return True
+
+
 def remove_settings(path: Path) -> str | None:
     """Forget the settings: remove the file at ``path`` (a link there is
     removed, not what it points to) and this app's folder when nothing else
@@ -252,10 +265,11 @@ def remember_hints_at(path: Path, on: bool, makeable: tuple[Path, ...] = ()) -> 
     return write_settings(path, {**current, "hints": on}, makeable)
 
 
-def launch_answer(values: dict[str, Any], notice: str | None) -> dict[str, Any]:
+def launch_answer(values: dict[str, Any], notice: str | None, *, present: bool) -> dict[str, Any]:
     """What the page takes from the settings when it starts: a later launch
     when a place is remembered (the tips alone do not make one), the places,
-    the tips, and what to tell of the file."""
+    the tips, what to tell of the file, and whether there is a file to forget
+    (stage C1)."""
     store = values.get("store")
     parent = values.get("output_parent")
     return {
@@ -264,6 +278,7 @@ def launch_answer(values: dict[str, Any], notice: str | None) -> dict[str, Any]:
         "output_parent": parent,
         "hints": values.get("hints"),
         "notice": notice,
+        "present": present,
     }
 
 
@@ -275,7 +290,7 @@ def _target() -> tuple[Path, tuple[Path, ...]]:
 
 def launch_settings() -> dict[str, Any]:
     path, _makeable = _target()
-    return launch_answer(*read_settings(path))
+    return launch_answer(*read_settings(path), present=settings_present(path))
 
 
 def recent_outputs() -> list[str]:
@@ -296,9 +311,12 @@ def remember_hints(on: bool) -> str | None:
     return remember_hints_at(path, on, makeable)
 
 
-def forget_settings() -> str | None:
+def forget_settings() -> tuple[str | None, bool]:
+    """Forget the settings: what to tell (None when no file is left), and
+    whether there was anything to forget (stage C1)."""
     path, _makeable = _target()
-    return remove_settings(path)
+    present = settings_present(path)
+    return remove_settings(path), present
 
 
 __all__ = [
@@ -320,5 +338,6 @@ __all__ = [
     "remember_run",
     "remember_run_at",
     "remove_settings",
+    "settings_present",
     "write_settings",
 ]

@@ -7,6 +7,9 @@ export const TERMINAL_STATES = ["finished", "finished_after_cancel", "cancelled"
 // States in which the run published a complete output folder.
 export const FINISHED_STATES = ["finished", "finished_after_cancel"];
 export const STALL_SECONDS = 30;
+// The seconds of a run before the hidden live region speaks its stage, so
+// that a run that ends at once speaks only its end (stage C1).
+export const QUIET_START_SECONDS = 2;
 
 const STAGE_KEYS = {
   // The stages of a Snapshot run before those of Run-All (stage B4b-1).
@@ -1261,7 +1264,26 @@ export function launchSettings(status) {
     outputParent,
     hints: typeof settings?.hints === "boolean" ? settings.hints : null,
     notice: lookup(SETTINGS_KEYS, settings?.notice, null) === null ? null : settings.notice,
+    // Whether there is a file of the settings to forget (stage C1).
+    present: settings?.present === true,
   };
+}
+
+// Whether there is a file of the settings to forget after a run ended (stage
+// C1): a run that made its output remembers its places before the page
+// learns that it ended, and then tells no notice.
+export function settingsPresentAfterRun(present, run) {
+  return present === true || (FINISHED_STATES.includes(run?.state) && run?.settings_notice === null);
+}
+
+// What the page tells after forgetting the settings (stage C1): the server
+// says "forgotten" when no file is left, and whether there was one; when a
+// file is left, it could not be removed.
+export function forgetOutcome(answer) {
+  if (answer?.forgotten === true) {
+    return { key: answer.had_settings === false ? "forget.nothing" : "forget.done", notice: null, present: false };
+  }
+  return { key: null, notice: "SETTINGS_NOT_REMOVED", present: true };
 }
 
 // Whether the tips show (the mockup v10): as the person last switched them,
@@ -2028,6 +2050,12 @@ export function announcement(status) {
     if (stalled !== null) {
       return { id: "stalled", message: { key: "run.stalled", params: { seconds: stalled }, keyParams: {} } };
     }
+    // A run that ends within its first seconds speaks only its end: a
+    // message given to the live region is spoken even after a later one, so
+    // the first stage waits until the run has gone on (stage C1).
+    if (typeof status.elapsed_seconds === "number" && status.elapsed_seconds < QUIET_START_SECONDS) {
+      return null;
+    }
     const progress = progressMessage(status.progress);
     return { id: `progress:${progress.key}:${progress.keyParams.step ?? ""}`, message: progress };
   }
@@ -2079,7 +2107,31 @@ export function controls(view, states) {
     cancel: view.connected && view.runState === "running",
     quit: view.connected && !running && !view.outputBusy,
     outputActions: view.connected && !busy && FINISHED_STATES.includes(view.runState),
+    // The settings are not forgotten while a run, which remembers its places
+    // when it ends, is active (stage B4c), nor when there is no file of them
+    // (stage C1).
+    forget: view.connected && !running && view.forgetBusy !== true && view.settingsPresent === true,
   };
+}
+
+// The one button that the page fills with its accent color, so that the next
+// step is clear (stage C1): after a run that made its output, until a box
+// changes, the button that shows the output (as from stage B5a); otherwise
+// the confirmation of the second or third box while it is the current one and
+// shows, and then Normalize while it can start. Never more than one, and
+// never a button that cannot be pressed; null when none of them is the next
+// step.
+export function primaryControl(view, states, enabled) {
+  if (FINISHED_STATES.includes(view.runState) && !view.editedSinceRun) {
+    return enabled.outputActions ? "openFolder" : null;
+  }
+  if (enabled.decideSnapshot && states.snapshot === "current" && !decideHidden(states.snapshot, view.snapshotAuto)) {
+    return "snapshotDecide";
+  }
+  if (enabled.decideOutput && states.output === "current" && !decideHidden(states.output, view.outputAuto)) {
+    return "outputDecide";
+  }
+  return enabled.start ? "start" : null;
 }
 
 // Which boxes must still be confirmed before a run can start, by number.

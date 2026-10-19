@@ -207,6 +207,29 @@ class GuiPageStructureTest(unittest.TestCase):
         self.assertEqual(announcer.get("aria-live"), "polite")
         self.assertIn("visually-hidden", str(announcer.get("class")).split())
 
+    def test_an_explanation_that_opens_is_spoken_by_a_hidden_live_region(self) -> None:
+        # Stage C1: focus stays on the information button, so a hidden polite
+        # region, which the page fills only when an explanation opens, says
+        # its text once.
+        announcer = by_id(self.elements, "info-announcer")
+        self.assertEqual((announcer.get("role"), announcer.get("aria-live")), ("status", "polite"))
+        self.assertIn("visually-hidden", str(announcer.get("class")).split())
+
+    def test_the_result_heading_is_named_with_its_visible_words(self) -> None:
+        # Stage C1: a screen reader that lists headings alone reads hidden
+        # words before the visible headline, such as "Normalization result:
+        # Waiting"; the visible words stay in the name (WCAG 2.5.3).
+        heading = by_id(self.elements, "result-heading")
+        children = [element for element in self.elements if element.parent is heading]
+        self.assertEqual([child.tag for child in children], ["span", "span"])
+        prefix, headline = children
+        self.assertIn("visually-hidden", str(prefix.get("class")).split())
+        self.assertEqual(prefix.get("data-i18n"), "run.result_prefix")
+        self.assertEqual(headline.get("id"), "result-headline")
+        for language in ("en", "ja"):
+            with self.subTest(language=language):
+                self.assertTrue(self.catalogs[language].get("run.result_prefix", "").strip())
+
     def test_live_regions_are_polite_apart_from_the_connection_alert(self) -> None:
         for element in self.elements:
             if element.get("aria-live") is not None:
