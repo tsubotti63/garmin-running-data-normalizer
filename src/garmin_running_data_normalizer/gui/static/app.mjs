@@ -13,6 +13,7 @@ import {
   HELP_STEPS,
   TERMINAL_STATES,
   afterChange,
+  apartReport,
   announcement,
   boxStates,
   boxSummary,
@@ -42,6 +43,7 @@ import {
   helpReturnTarget,
   helpSteps,
   hintsShown,
+  importFieldsShown,
   importProblem,
   lastName,
   launchSettings,
@@ -70,6 +72,7 @@ import {
   resultRows,
   resultTotal,
   runSummary,
+  sameContentNoted,
   settingsMessages,
   shouldFocusResult,
   signedChange,
@@ -130,6 +133,9 @@ const ui = {
   inputPath: byId("input-path"),
   check: byId("check-button"),
   checkResult: byId("check-result"),
+  // The line of the report of a stop of the first and second box, after
+  // the buttons that fix it (stage B6a).
+  checkReport: byId("check-report"),
   checkChoices: byId("check-choices"),
   extractArea: byId("extract-area"),
   extractConfirm: byId("extract-confirm"),
@@ -164,6 +170,8 @@ const ui = {
   storeCreateNew: byId("store-create-new"),
   storeCheck: byId("store-check"),
   storeResult: byId("store-result"),
+  storeReport: byId("store-report"),
+  storeSameNote: byId("store-same-note"),
   storeList: byId("store-list"),
   storeRows: byId("store-rows"),
   outputHeading: byId("output-heading"),
@@ -795,7 +803,11 @@ function renderCheck(current) {
     // (stage B3b), and the report after each stop (stage B5c).
     lines.push(...reportedKindLines(checkMessages(state.check), "export.heading"));
   }
-  replaceLines(ui.checkResult, lines);
+  // The line of the report comes after the buttons that choose one of the
+  // Exports of a mixed input (stage B6a).
+  const parts = apartReport(lines);
+  replaceLines(ui.checkResult, parts.lines);
+  replaceLines(ui.checkReport, parts.report);
   ui.extractArea.hidden = !current.extractNeeded;
   // The Exports of a mixed input that can be chosen, each with its button
   // (stage B3c).
@@ -861,10 +873,16 @@ function renderStore(current) {
   ui.storeCreateNew.hidden = !opened && !missing;
   ui.storeCheck.hidden = !opened;
   const choosing = state.choosing !== null && String(state.choosingFor).startsWith("store");
-  replaceLines(ui.storeResult, reportedKindLines(storeMessages({ ...remembered, choosing }, current.how), "snapshot.heading"));
-  // The Export that the run will import, in its place (stage B4b-1).
+  // The line of the report comes after the check and the button that remove
+  // the lock file (stage B6a).
+  const storeParts = apartReport(reportedKindLines(storeMessages({ ...remembered, choosing }, current.how), "snapshot.heading"));
+  replaceLines(ui.storeResult, storeParts.lines);
+  replaceLines(ui.storeReport, storeParts.report);
+  // The Export that the run will import, in its place (stage B4b-1), and
+  // that one of the same content adds no new Snapshot (stage B6a).
   const rows = snapshotRows(answer, pendingImport(current), state.lastImported);
   ui.storeList.hidden = rows.length === 0;
+  ui.storeSameNote.hidden = !sameContentNoted(rows);
   const key = JSON.stringify([state.language, rows]);
   if (ui.storeRows.dataset.key === key) {
     return;
@@ -919,7 +937,7 @@ function renderLock(current) {
 // where the time came from, and what keeps the run from starting
 // (stage B4b-1).
 function renderImport(current) {
-  const shown = current.how === "snapshots" && current.checkedReady;
+  const shown = importFieldsShown(current);
   ui.importArea.hidden = !shown;
   // Where the proposed time came from, until the user changes it.
   const source = state.timeEdited ? null : downloadSourceMessage(state.importSource);
@@ -1783,6 +1801,11 @@ async function pollRun() {
       if (state.run.how === "snapshots" || state.run.how === "rerun") {
         const imported = state.run.imported;
         state.lastImported = imported && imported.same_content === false ? state.runLabel : null;
+        // A name that a Snapshot took is not the next one: the page proposes
+        // the next name again, as for the output (stage B6a).
+        if (imported && imported.same_content === false) {
+          state.labelEdited = false;
+        }
         const path = state.store.answer?.path;
         if (typeof path === "string") {
           storeAction("open", path, null);

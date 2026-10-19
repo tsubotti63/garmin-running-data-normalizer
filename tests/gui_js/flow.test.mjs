@@ -2070,3 +2070,49 @@ test("the links go only to the documents of the repository and the page of Garmi
     assert.equal(flow.outsideUrl(link, "2.0.0"), null, link);
   }
 });
+
+// The checkpoint of stage B (stage B6a).
+test("the fields of an import show for the next import, not after a run until something changes", () => {
+  const view = { how: "snapshots", checkedReady: true, runState: "idle", editedSinceRun: false };
+  assert.equal(flow.importFieldsShown(view), true);
+  assert.equal(flow.importFieldsShown({ ...view, runState: "running" }), true);
+  for (const runState of FINISHED_STATES) {
+    assert.equal(flow.importFieldsShown({ ...view, runState }), false, runState);
+    assert.equal(flow.importFieldsShown({ ...view, runState, editedSinceRun: true }), true, runState);
+  }
+  // A run that stopped or was cancelled imported nothing to show.
+  assert.equal(flow.importFieldsShown({ ...view, runState: "failed" }), true);
+  assert.equal(flow.importFieldsShown({ ...view, runState: "cancelled" }), true);
+  assert.equal(flow.importFieldsShown({ ...view, how: "single" }), false);
+  assert.equal(flow.importFieldsShown({ ...view, checkedReady: false }), false);
+  // A name or a time that keeps a run from starting shows with its reason,
+  // also after a run (a name that the person typed and the run took).
+  for (const runState of FINISHED_STATES) {
+    assert.equal(flow.importFieldsShown({ ...view, runState, importProblem: "SNAPSHOT_LABEL_EXISTS" }), true, runState);
+  }
+  assert.equal(flow.importFieldsShown({ ...view, runState: "finished", importProblem: null }), false);
+});
+
+test("the list says that an Export of the same content adds no Snapshot while it holds the one to import", () => {
+  const answer = {
+    state: "store",
+    snapshots: [{ label: "2030-01-01", observed_at: "2030-01-01T02:00:00+00:00", files: 3 }],
+  };
+  const pending = { label: "2030-01-02", time: "2030-01-02T02:00:00+00:00" };
+  assert.equal(flow.sameContentNoted(flow.snapshotRows(answer, pending)), true);
+  assert.equal(flow.sameContentNoted(flow.snapshotRows(answer, null)), false);
+  assert.equal(flow.sameContentNoted(flow.snapshotRows(answer, null, "2030-01-01")), false);
+  assert.equal(flow.sameContentNoted([]), false);
+  assert.equal(flow.sameContentNoted(null), false);
+  // A new store holds nothing to compare the Export with.
+  assert.deepEqual(flow.snapshotRows({ state: "new" }, pending).map((row) => row.state), ["pending"]);
+  assert.equal(flow.sameContentNoted(flow.snapshotRows({ state: "new" }, pending)), false);
+});
+
+test("the line of a stop's report is kept apart from the stop's lines", () => {
+  const report = { text: "If this does not solve it, report it on GitHub.", className: "report", report: { code: "A", partKey: "x" } };
+  const lines = ["What happened.", { text: "Code: A", className: "m-error" }, report];
+  assert.deepEqual(flow.apartReport(lines), { lines: ["What happened.", { text: "Code: A", className: "m-error" }], report: [report] });
+  assert.deepEqual(flow.apartReport([]), { lines: [], report: [] });
+  assert.deepEqual(flow.apartReport(null), { lines: [], report: [] });
+});

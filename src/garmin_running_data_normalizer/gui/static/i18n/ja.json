@@ -654,6 +654,7 @@
   "store.row_kept": "取り込み済み",
   "store.row_order": "{order} つ目",
   "store.row_pending": "今回取り込む",
+  "store.same_note": "同じ中身のエクスポートなら、取り込むときに分かり、新しい回は増やしません。",
   "summary.as_last_time": "{summary}（前回のまま）",
   "summary.export": "{name} を使います",
   "summary.export_import": "{name} を取り込みます",
