@@ -35,6 +35,7 @@ from garmin_running_data_normalizer.gui.settings import (
     remember_hints_at,
     remember_run_at,
     remove_settings,
+    settings_present,
     write_settings,
 )
 from tests.test_environment_stops import REAL_SYMLINKS
@@ -255,14 +256,25 @@ class SettingsFileTest(unittest.TestCase):
         self.assertEqual(write_settings(self.path, {"store": "relative"}), SETTINGS_NOT_WRITTEN)
 
     def test_forgetting_removes_the_file_and_the_empty_folder(self) -> None:
+        self.assertFalse(settings_present(self.path))
         self.assertIsNone(remove_settings(self.path))
         self.assertIsNone(write_settings(self.path, {"hints": True}))
+        self.assertTrue(settings_present(self.path))
         self.assertIsNone(remove_settings(self.path))
+        self.assertFalse(settings_present(self.path))
         self.assertFalse(self.path.parent.exists())
         self.assertTrue(self.base.is_dir())
+        # A folder in its place is there to report (stage C1).
         self.path.mkdir(parents=True)
+        self.assertTrue(settings_present(self.path))
         self.assertEqual(remove_settings(self.path), SETTINGS_NOT_REMOVED)
         self.assertTrue(self.path.is_dir())
+
+    def test_a_place_that_cannot_be_looked_at_counts_as_present(self) -> None:
+        # Stage C1: the page lets the person try, and forgetting tells what
+        # it could not do.
+        with patch("os.lstat", side_effect=PermissionError("denied")):
+            self.assertTrue(settings_present(self.path))
 
     @REAL_SYMLINKS
     def test_forgetting_a_link_removes_the_link_only(self) -> None:
@@ -270,19 +282,22 @@ class SettingsFileTest(unittest.TestCase):
         target.write_bytes(b"{}")
         self.path.parent.mkdir()
         self.path.symlink_to(target)
+        self.assertTrue(settings_present(self.path))
         self.assertIsNone(remove_settings(self.path))
         self.assertFalse(os.path.lexists(self.path))
         self.assertEqual(target.read_bytes(), b"{}")
 
     def test_a_later_launch_needs_a_remembered_place(self) -> None:
         self.assertEqual(
-            launch_answer({}, None),
-            {"launch": "first", "store": None, "output_parent": None, "hints": None, "notice": None},
+            launch_answer({}, None, present=False),
+            {"launch": "first", "store": None, "output_parent": None, "hints": None, "notice": None, "present": False},
         )
-        self.assertEqual(launch_answer({"hints": False}, None)["launch"], "first")
-        self.assertEqual(launch_answer({"store": self.store}, None)["launch"], "later")
-        self.assertEqual(launch_answer({"output_parent": self.parent}, None)["launch"], "later")
-        self.assertEqual(launch_answer({}, SETTINGS_INVALID)["notice"], SETTINGS_INVALID)
+        self.assertEqual(launch_answer({"hints": False}, None, present=True)["launch"], "first")
+        self.assertEqual(launch_answer({"store": self.store}, None, present=True)["launch"], "later")
+        self.assertEqual(launch_answer({"output_parent": self.parent}, None, present=True)["launch"], "later")
+        self.assertEqual(launch_answer({}, SETTINGS_INVALID, present=True)["notice"], SETTINGS_INVALID)
+        # Whether there is a file to forget goes to the page as it is (stage C1).
+        self.assertIs(launch_answer({"hints": False}, None, present=True)["present"], True)
 
 
 class SettingsApiTest(GuiServerTestCase):
@@ -306,11 +321,13 @@ class SettingsApiTest(GuiServerTestCase):
                     "output_parent": str(path.parent.parent / "outputs"),
                     "hints": None,
                     "notice": None,
+                    "present": True,
                 },
             ),
         )
         path.write_bytes(b"{not json")
         self.assertEqual(self.post("/api/status")[1]["settings"]["notice"], SETTINGS_INVALID)
+        self.assertIs(self.post("/api/status")[1]["settings"]["present"], True)
 
     def test_the_tips_are_remembered_as_they_are_switched(self) -> None:
         for on in (False, True):
@@ -328,15 +345,30 @@ class SettingsApiTest(GuiServerTestCase):
 
     def test_the_settings_are_forgotten_on_request_and_never_while_a_run_is_active(self) -> None:
         path = places.settings_file()
+        # Nothing to forget: no file is left, and the answer says that there
+        # was none (stage C1).
+        self.assertIs(self.post("/api/status")[1]["settings"]["present"], False)
+        self.assertEqual(
+            self.post("/api/settings/forget"),
+            (200, {"forgotten": True, "had_settings": False, "notice": None}),
+        )
         self.assertIsNone(remember_hints_at(path, False))
+        self.assertIs(self.post("/api/status")[1]["settings"]["present"], True)
         with patch.object(self.server.runs, "active", return_value=True):
             self.assertEqual(self.post("/api/settings/forget"), (409, {"error": "RUN_ACTIVE"}))
         self.assertTrue(path.exists())
-        self.assertEqual(self.post("/api/settings/forget"), (200, {"forgotten": True, "notice": None}))
+        self.assertEqual(
+            self.post("/api/settings/forget"),
+            (200, {"forgotten": True, "had_settings": True, "notice": None}),
+        )
         self.assertFalse(path.exists())
         self.assertEqual(self.post("/api/status")[1]["settings"]["launch"], "first")
+        self.assertIs(self.post("/api/status")[1]["settings"]["present"], False)
         path.mkdir(parents=True)
-        self.assertEqual(self.post("/api/settings/forget"), (200, {"forgotten": False, "notice": SETTINGS_NOT_REMOVED}))
+        self.assertEqual(
+            self.post("/api/settings/forget"),
+            (200, {"forgotten": False, "had_settings": True, "notice": SETTINGS_NOT_REMOVED}),
+        )
 
 
 class RunRemembersTest(unittest.TestCase):

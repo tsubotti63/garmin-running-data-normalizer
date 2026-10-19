@@ -670,8 +670,10 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         # stores and the outputs stay.
         if self.server.runs.active():
             raise ApiError(HTTPStatus.CONFLICT, "RUN_ACTIVE")
-        notice = forget_settings()
-        return {"forgotten": notice is None, "notice": notice}
+        # Whether there was anything to forget tells the page what to say
+        # (stage C1); "forgotten" says that no file is left.
+        notice, present = forget_settings()
+        return {"forgotten": notice is None, "had_settings": present, "notice": notice}
 
     def _method_not_allowed(self, allow: str) -> None:
         self._send_json(

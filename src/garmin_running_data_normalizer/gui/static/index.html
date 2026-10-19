@@ -236,7 +236,7 @@
     <section id="box-run" class="box" aria-labelledby="run-heading">
       <h2 id="run-heading" tabindex="-1"><span class="num" aria-hidden="true"></span><span data-i18n="run.heading"></span><span class="badge"></span></h2>
       <p class="hint" data-i18n="hint.run"></p>
-      <h3 id="result-heading" class="headline" tabindex="-1"></h3>
+      <h3 id="result-heading" class="headline" tabindex="-1"><span class="visually-hidden" data-i18n="run.result_prefix"></span> <span id="result-headline"></span></h3>
       <div id="run-exit-row" class="exit-row" hidden>
         <p id="run-exit" class="exit-code"></p>
         <button type="button" id="exit-info-button" class="info-button" aria-expanded="false" aria-controls="exit-info" aria-labelledby="exit-info-button run-exit" data-i18n="info.meaning"></button>
@@ -262,7 +262,7 @@
       <p id="run-elapsed" class="help"></p>
       <p id="run-announcer" class="visually-hidden" role="status" aria-live="polite"></p>
       <div class="button-row">
-        <button type="button" id="start-button" class="primary big" data-i18n="run.start" disabled></button>
+        <button type="button" id="start-button" class="big" data-i18n="run.start" disabled></button>
         <button type="button" id="cancel-button" class="big" data-i18n="run.cancel" disabled></button>
       </div>
       <p id="start-reason" class="help"></p>
@@ -282,7 +282,7 @@
       <div id="next-actions" class="next-actions" hidden>
         <h3 data-i18n="next_actions.heading"></h3>
         <div class="button-row">
-          <button type="button" id="open-folder-button" class="primary" data-i18n="open.folder" disabled></button>
+          <button type="button" id="open-folder-button" data-i18n="open.folder" disabled></button>
           <button type="button" id="open-start-here-button" data-i18n="open.start_here" disabled></button>
           <button type="button" id="ai-help-button" data-i18n="next_actions.ai"></button>
         </div>
@@ -598,6 +598,7 @@
   <select id="language-select"></select>
   <button type="button" id="quit-button" data-i18n="quit.button" disabled></button>
   <p id="connection-status" class="status" role="status" aria-live="polite"></p>
+  <p id="info-announcer" class="visually-hidden" role="status" aria-live="polite"></p>
 </footer>
 </body>
 </html>

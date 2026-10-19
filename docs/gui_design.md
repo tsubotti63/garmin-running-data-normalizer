@@ -892,7 +892,18 @@ alone, and reduced motion.
 - Progress counts change every second, so they stay out of live regions. A
   hidden live region speaks when the stage changes, when a run stalls or is
   being cancelled, and when it ends. Live regions change only when their text
-  changes, so that screen readers do not repeat them.
+  changes, so that screen readers do not repeat them. The stage is spoken
+  only after a run has gone on for two seconds, so that a run that ends at
+  once speaks only its end; a message given to a live region is spoken even
+  after a later one (stage C1).
+- The result heading is named with hidden words before its visible ones,
+  such as "Normalization result: Waiting", because a screen reader may list
+  headings alone (stage C1).
+- One button at most is filled with the accent color, the next step: after a
+  run that made its output, until a box changes, the button that shows the
+  output; otherwise Use these settings in the second or third box while it
+  is the current one, and then Normalize. A button that cannot be pressed is
+  not filled (stage C1).
 - When a run ends, focus moves to the result heading; when it stops, to the
   heading of the stop in the box that it concerns (stage B1a). When a box is
   confirmed, focus moves to the next box. When a button that had focus stays
@@ -903,7 +914,8 @@ alone, and reduced motion.
   heading of that part; Escape inside it closes it (stage B1b).
 - An information button is a disclosure. Its name starts with its visible
   word and adds what it explains, such as "About Timezone for local dates and
-  times".
+  times". When it opens, a hidden live region says the text of its
+  explanation once, and focus stays on the button (stage C1).
 - Tests check labels, button names, heading order, live regions, focus
   targets, and the contrast of the stylesheet's colors. Keyboard-only use and
   a screen reader (VoiceOver on macOS) are checked by hand in stage C; a

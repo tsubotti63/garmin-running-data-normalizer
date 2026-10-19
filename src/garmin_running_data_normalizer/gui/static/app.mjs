@@ -38,6 +38,7 @@ import {
   exportTime,
   familyRows,
   findingMessages,
+  forgetOutcome,
   formatElapsed,
   foundChoices,
   helpReturnTarget,
@@ -63,6 +64,7 @@ import {
   packMade,
   placeMessages,
   previousRows,
+  primaryControl,
   progressBar,
   progressMessage,
   reportFacts,
@@ -74,6 +76,7 @@ import {
   runSummary,
   sameContentNoted,
   settingsMessages,
+  settingsPresentAfterRun,
   shouldFocusResult,
   signedChange,
   snapshotRows,
@@ -93,6 +96,9 @@ const LAUNCH_KEY_STORAGE = "launchKey";
 const LANGUAGE_STORAGE = "language";
 const HEARTBEAT_INTERVAL_MS = 30000;
 const POLL_INTERVAL_MS = 1000;
+// The time before an explanation that opened is given to its live region,
+// after the region was emptied (stage C1).
+const INFO_SPEAK_DELAY_MS = 100;
 // How often the page asks for the answer of the system's dialog (stage B3a).
 const CHOOSE_POLL_MS = 500;
 // How long a step of "How to use" lights up its box.
@@ -201,6 +207,7 @@ const ui = {
   outputDecide: byId("output-decide"),
   runHeading: byId("run-heading"),
   resultHeading: byId("result-heading"),
+  resultHeadline: byId("result-headline"),
   runExit: byId("run-exit"),
   runSub: byId("run-sub"),
   fitProgress: byId("fit-progress"),
@@ -262,6 +269,7 @@ const ui = {
   hintsToggle: byId("hints-toggle"),
   // The settings of an earlier launch, and forgetting them (stage B4c).
   settingsStatus: byId("settings-status"),
+  infoAnnouncer: byId("info-announcer"),
   forgetButton: byId("forget-button"),
   forgetConfirm: byId("forget-confirm"),
   forgetYes: byId("forget-yes"),
@@ -405,9 +413,14 @@ const state = {
   settingsNotice: null,
   snapshotAuto: false,
   outputAuto: false,
-  forget: { asked: false, busy: false, done: false },
-  // The information buttons that are open.
+  // Whether there is a file of the settings to forget (stage C1), and the
+  // key of what the bar tells after forgetting them.
+  settingsPresent: false,
+  forget: { asked: false, busy: false, key: null },
+  // The information buttons that are open, and the timer that gives the
+  // one that opened last to its live region (stage C1).
   infos: new Set(),
+  infoTimer: null,
   // The message beside the example question that was copied last.
   copy: null,
   // The step of "How to use" whose box lights up, and its timer.
@@ -708,6 +721,8 @@ function view() {
     choosing: state.choosing !== null,
     choosingFolder: state.choosing !== null && state.choosingFor !== "input",
     outputBusy: outputBusy(),
+    forgetBusy: state.forget.busy,
+    settingsPresent: state.settingsPresent,
     checkedReady,
     extractNeeded,
     extractConfirmed: ui.extractConfirm.checked,
@@ -979,8 +994,8 @@ function renderPlace() {
 // question that forgets them, and its answer.
 function renderSettings() {
   const lines = [];
-  if (state.forget.done) {
-    lines.push(t("forget.done"));
+  if (state.forget.key !== null) {
+    lines.push(t(state.forget.key));
   } else if (state.settingsNotice !== null) {
     lines.push(...settingsMessages(state.settingsNotice.code, state.settingsNotice.writing).map(describe));
   }
@@ -1244,7 +1259,9 @@ function changeView() {
 function renderRun(states, current) {
   const run = state.run;
   const summary = runSummary(run, states, current);
-  setText(ui.resultHeading, describe(summary.headline));
+  // The hidden words before it name the heading for a screen reader, which
+  // may list headings alone (stage C1).
+  setText(ui.resultHeadline, describe(summary.headline));
   ui.runExitRow.hidden = summary.exitCode === null;
   setText(ui.runExit, summary.exitCode === null ? "" : t("result.exit_code", { code: summary.exitCode }));
   setText(ui.runSub, summary.sub === null ? "" : describe(summary.sub));
@@ -1665,11 +1682,11 @@ function renderControls(states, current) {
   ui.targetList.disabled = !toolsFree || state.target.kind === "run" || state.choosing !== null;
   ui.targetCheck.disabled = !toolsFree || !targetReady();
   ui.bundleReveal.disabled = !toolsFree;
-  // The settings are not forgotten while a run, which remembers its places
-  // when it ends, is active (stage B4c).
-  const running = ACTIVE_STATES.includes(state.run.state) || state.starting;
-  ui.forgetButton.disabled = !state.connected || running || state.forget.busy;
-  ui.forgetYes.disabled = !state.connected || running || state.forget.busy;
+  // The settings are forgotten only when there is a file of them, never
+  // while a run, which remembers its places when it ends, is active (stages
+  // B4c and C1).
+  ui.forgetButton.disabled = !enabled.forget;
+  ui.forgetYes.disabled = !enabled.forget;
   for (const button of [ui.storeCreate, ui.storeOpen, ui.storeOpenOther, ui.storeSearch, ui.storeCreateNew, ui.storeCheck]) {
     button.disabled = !enabled.choose || state.store.busy || state.how === "single";
   }
@@ -1684,9 +1701,13 @@ function renderControls(states, current) {
   ui.snapshotDecide.hidden = decideHidden(states.snapshot, state.snapshotAuto);
   ui.outputDecide.hidden = decideHidden(states.output, state.outputAuto);
   ui.start.disabled = !enabled.start;
-  // After a run, the main action is to open the output, so only that button
-  // is the primary one.
-  ui.start.classList.toggle("primary", !FINISHED_STATES.includes(state.run.state));
+  // One button only is filled with the accent color: the next step (stage
+  // C1). After a run, the main action is to open the output.
+  const primary = primaryControl(current, states, enabled);
+  ui.snapshotDecide.classList.toggle("primary", primary === "snapshotDecide");
+  ui.outputDecide.classList.toggle("primary", primary === "outputDecide");
+  ui.start.classList.toggle("primary", primary === "start");
+  ui.openFolder.classList.toggle("primary", primary === "openFolder");
   ui.cancel.disabled = !enabled.cancel;
   // Cancelling an import also says that the store is completed by the next
   // one (stage B4b-2).
@@ -1783,6 +1804,7 @@ async function pollRun() {
     if (TERMINAL_STATES.includes(state.run.state)) {
       stopPolling();
       ended = true;
+      state.settingsPresent = settingsPresentAfterRun(state.settingsPresent, state.run);
       state.cancelAsked = false;
       state.editedSinceRun = false;
       if (FINISHED_STATES.includes(state.run.state) && state.output === null) {
@@ -2560,30 +2582,52 @@ async function copyExample(button) {
 }
 
 function toggleInfo(name) {
-  if (state.infos.has(name)) {
-    state.infos.delete(name);
-  } else {
+  const opening = !state.infos.has(name);
+  if (opening) {
     state.infos.add(name);
+  } else {
+    state.infos.delete(name);
   }
   render();
+  speakInfo(opening ? name : null);
 }
 
 function closeInfo(name) {
   if (state.infos.delete(name)) {
     render();
+    speakInfo(null);
     ui.infos[name].button.focus();
   }
+}
+
+// An explanation that opens is spoken once by a hidden live region, while
+// focus stays on its button (stage C1). Only opening and closing change the
+// region, never a render, so that it is not repeated; it is emptied first, so
+// that the same explanation is spoken again when it opens again.
+function speakInfo(name) {
+  window.clearTimeout(state.infoTimer);
+  ui.infoAnnouncer.textContent = "";
+  if (name === null) {
+    return;
+  }
+  state.infoTimer = window.setTimeout(() => {
+    ui.infoAnnouncer.textContent = ui.infos[name].region.innerText.replace(/\s+/g, " ").trim();
+  }, INFO_SPEAK_DELAY_MS);
 }
 
 // The person switched the tips: the next launch shows them so too
 // (stage B4c).
 async function changeHints() {
   state.hintsOn = ui.hintsToggle.checked;
-  state.forget.done = false;
+  state.forget.key = null;
   render();
   try {
     const answer = await callApi("/api/settings/hints", { on: state.hintsOn });
     state.settingsNotice = answer?.remembered === true ? null : { code: answer?.notice, writing: true };
+    // The file of the settings is there to forget now (stage C1).
+    if (answer?.remembered === true) {
+      state.settingsPresent = true;
+    }
   } catch (error) {
     connectionFailure(error);
   }
@@ -2593,7 +2637,7 @@ async function changeHints() {
 // Forgetting the remembered settings asks first, above the bar (stage B4c).
 function askForget() {
   state.forget.asked = true;
-  state.forget.done = false;
+  state.forget.key = null;
   render();
   ui.forgetNo.focus();
 }
@@ -2609,8 +2653,10 @@ async function forgetSettings() {
   render();
   try {
     const answer = await callApi("/api/settings/forget");
-    state.forget.done = answer?.forgotten === true;
-    state.settingsNotice = state.forget.done ? null : { code: "SETTINGS_NOT_REMOVED", writing: false };
+    const outcome = forgetOutcome(answer);
+    state.forget.key = outcome.key;
+    state.settingsPresent = outcome.present;
+    state.settingsNotice = outcome.notice === null ? null : { code: outcome.notice, writing: false };
   } catch (error) {
     if (!connectionFailure(error) && error.code !== "RUN_ACTIVE") {
       state.settingsNotice = { code: "SETTINGS_NOT_REMOVED", writing: false };
@@ -2833,6 +2879,7 @@ async function start() {
     const settings = launchSettings(status);
     state.launch = settings.launch;
     state.remembered = { store: settings.store, outputParent: settings.outputParent };
+    state.settingsPresent = settings.present;
     state.settingsNotice = settings.notice === null ? null : { code: settings.notice, writing: false };
     state.hintsOn = hintsShown(settings);
     Object.assign(state, boxesSetBySettings(settings));

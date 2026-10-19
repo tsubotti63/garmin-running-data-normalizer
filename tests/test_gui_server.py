@@ -280,7 +280,14 @@ class GuiApiRequestTest(GuiServerTestCase):
                 "languages": ["en", "ja"],
                 "product_version": __version__,
                 "report": report_values(),
-                "settings": {"launch": "first", "store": None, "output_parent": None, "hints": None, "notice": None},
+                "settings": {
+                    "launch": "first",
+                    "store": None,
+                    "output_parent": None,
+                    "hints": None,
+                    "notice": None,
+                    "present": False,
+                },
             },
         )
         status, _, body = self.post_api("/api/heartbeat")

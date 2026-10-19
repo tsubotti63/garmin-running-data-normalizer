@@ -67,6 +67,7 @@ test("a checked export with confirmed boxes can start a run", () => {
     cancel: false,
     quit: true,
     outputActions: false,
+    forget: false,
   });
 });
 
@@ -87,6 +88,7 @@ test("a running job can only be cancelled", () => {
     cancel: true,
     quit: false,
     outputActions: false,
+    forget: false,
   });
   const cancelling = enabled({ ...READY, runState: "cancelling" });
   assert.equal(cancelling.cancel, false);
@@ -134,6 +136,147 @@ test("a box is confirmed with its button while it is the current one", () => {
   // The third box needs a usable name before it can be confirmed.
   assert.equal(enabled({ ...third, outputName: "a/b" }).decideOutput, false);
   assert.equal(enabled({ ...third, checking: true }).decideOutput, false);
+});
+
+test("the remembered settings are forgotten only when there is a file of them", () => {
+  // Stage C1: never without a file, without a connection, while a run is
+  // active, or while the page is forgetting them.
+  const present = { ...READY, settingsPresent: true };
+  assert.equal(enabled(present).forget, true);
+  assert.equal(enabled(READY).forget, false);
+  assert.equal(enabled({ ...present, connected: false }).forget, false);
+  assert.equal(enabled({ ...present, runState: "running" }).forget, false);
+  assert.equal(enabled({ ...present, runState: "cancelling" }).forget, false);
+  assert.equal(enabled({ ...present, starting: true }).forget, false);
+  assert.equal(enabled({ ...present, forgetBusy: true }).forget, false);
+  for (const state of TERMINAL_STATES) {
+    assert.equal(enabled({ ...present, runState: state }).forget, true, state);
+  }
+});
+
+test("a run that made its output leaves a file of the settings to forget", () => {
+  // Stage C1: the page learns it when the run ends, without opening again.
+  const after = flow.settingsPresentAfterRun;
+  assert.equal(after(false, { state: "finished", settings_notice: null }), true);
+  assert.equal(after(false, { state: "finished_after_cancel", settings_notice: null }), true);
+  assert.equal(after(false, { state: "finished", settings_notice: "SETTINGS_NOT_WRITTEN" }), false);
+  assert.equal(after(false, { state: "failed", settings_notice: null }), false);
+  assert.equal(after(false, { state: "cancelled", settings_notice: null }), false);
+  assert.equal(after(false, undefined), false);
+  // A file that was there stays there.
+  assert.equal(after(true, { state: "failed" }), true);
+  assert.equal(after(true, { state: "finished", settings_notice: "SETTINGS_NEWER" }), true);
+});
+
+test("the page tells what forgetting the settings did, and whether a file is left", () => {
+  // Stage C1: the server says "forgotten" when no file is left, and whether
+  // there was one.
+  assert.deepEqual(flow.forgetOutcome({ forgotten: true, had_settings: true, notice: null }), {
+    key: "forget.done",
+    notice: null,
+    present: false,
+  });
+  assert.deepEqual(flow.forgetOutcome({ forgotten: true, had_settings: false, notice: null }), {
+    key: "forget.nothing",
+    notice: null,
+    present: false,
+  });
+  for (const answer of [{ forgotten: false, had_settings: true, notice: "SETTINGS_NOT_REMOVED" }, null, {}]) {
+    assert.deepEqual(flow.forgetOutcome(answer), { key: null, notice: "SETTINGS_NOT_REMOVED", present: true });
+  }
+  // When the page starts, from the settings that the server read.
+  assert.equal(flow.launchSettings({ settings: { launch: "first", present: true } }).present, true);
+  assert.equal(flow.launchSettings({ settings: { launch: "later", store: "/s", present: false } }).present, false);
+  assert.equal(flow.launchSettings({ settings: { launch: "first" } }).present, false);
+  assert.equal(flow.launchSettings({}).present, false);
+});
+
+test("one button at most is filled with the accent color, and it is the next step", () => {
+  // Stage C1: after a run that made its output, until a box changes, the
+  // button that shows it; otherwise the confirmation of the current box that
+  // shows, and then Normalize.
+  const primary = (view) => flow.primaryControl(view, boxStates(view), enabled(view));
+  const second = { ...READY, snapshotDecided: false, outputDecided: false };
+  const third = { ...READY, outputDecided: false };
+  assert.equal(primary(second), "snapshotDecide");
+  assert.equal(primary(third), "outputDecide");
+  assert.equal(primary(READY), "start");
+  assert.equal(primary({ ...READY, runState: "running" }), null);
+  assert.equal(primary({ ...READY, connected: false }), null);
+  for (const state of FINISHED_STATES) {
+    assert.equal(primary({ ...READY, runState: state }), "openFolder", state);
+    // Normalize can start again, but the output is the next step.
+    assert.equal(enabled({ ...READY, runState: state }).start, true, state);
+    // A change after the run brings back the next step of the boxes.
+    assert.equal(primary({ ...third, runState: state, editedSinceRun: true }), "outputDecide", state);
+    assert.equal(primary({ ...READY, runState: state, editedSinceRun: true }), "start", state);
+    // A button that cannot be pressed is not filled.
+    assert.equal(primary({ ...READY, runState: state, outputBusy: true }), null, state);
+    assert.equal(primary({ ...READY, runState: state, connected: false }), null, state);
+  }
+  assert.equal(primary({ ...READY, runState: "failed" }), "start");
+  // A button that its box hides is never the one filled, whatever the page
+  // enables; the next shown step is.
+  const allOn = { decideSnapshot: true, decideOutput: true, start: true };
+  assert.equal(flow.primaryControl({ snapshotAuto: true }, { snapshot: "current", output: "current" }, allOn), "outputDecide");
+  assert.equal(flow.primaryControl({ outputAuto: true }, { snapshot: "done", output: "current" }, allOn), "start");
+  assert.equal(flow.primaryControl({}, { snapshot: "done", output: "done" }, allOn), "start");
+  // Every view of a grid: the button is one that the page enables and shows.
+  const flags = [
+    "connected",
+    "starting",
+    "checking",
+    "checkedReady",
+    "exportReady",
+    "snapshotDecided",
+    "outputDecided",
+    "snapshotAuto",
+    "outputAuto",
+    "outputBusy",
+    "choosing",
+    "editedSinceRun",
+  ];
+  const runStates = ["idle", ...ACTIVE_STATES, ...TERMINAL_STATES];
+  let views = 0;
+  for (const runState of runStates) {
+    for (let bits = 0; bits < 2 ** flags.length; bits++) {
+      const view = { ...READY, runState };
+      flags.forEach((flag, index) => {
+        view[flag] = Boolean(bits & (1 << index));
+      });
+      const states = boxStates(view);
+      const on = controls(view, states);
+      const shows = (box, auto) => !flow.decideHidden(states[box], auto);
+      const chosen = flow.primaryControl(view, states, on);
+      const where = JSON.stringify(view);
+      const outputNext = FINISHED_STATES.includes(runState) && !view.editedSinceRun;
+      if (outputNext) {
+        assert.equal(chosen, on.outputActions ? "openFolder" : null, where);
+      } else if (on.decideSnapshot && shows("snapshot", view.snapshotAuto)) {
+        assert.equal(chosen, "snapshotDecide", where);
+      } else if (on.decideOutput && shows("output", view.outputAuto)) {
+        assert.equal(chosen, "outputDecide", where);
+      } else {
+        assert.equal(chosen, on.start ? "start" : null, where);
+      }
+      // The button that shows the output is filled only while it shows and
+      // can be pressed; so is every other one.
+      if (chosen === "openFolder") {
+        assert.ok(FINISHED_STATES.includes(runState) && on.outputActions, where);
+      }
+      if (chosen === "start") {
+        assert.ok(on.start, where);
+      }
+      if (chosen === "snapshotDecide") {
+        assert.equal(states.snapshot, "current", where);
+      }
+      if (chosen === "outputDecide") {
+        assert.equal(states.output, "current", where);
+      }
+      views += 1;
+    }
+  }
+  assert.equal(views, runStates.length * 2 ** flags.length);
 });
 
 test("only a finished output can be checked, opened, or bundled", () => {
@@ -1022,6 +1165,27 @@ test("the announcer speaks at a new stage, a stall, a cancellation, and the end"
   assert.equal(announcement(undefined), null);
 });
 
+test("a run that ends within its first seconds speaks only its end", () => {
+  // Stage C1: a message given to the live region is spoken even after a
+  // later one, so the stage waits until the run has gone on for two seconds.
+  const running = (elapsed) => ({
+    state: "running",
+    elapsed_seconds: elapsed,
+    seconds_since_progress: 0,
+    progress: { stage: "reading_fit", done: 1, total: 9 },
+  });
+  assert.equal(flow.QUIET_START_SECONDS, 2);
+  for (const elapsed of [0, 0.3, 1.9]) {
+    assert.equal(announcement(running(elapsed)), null, String(elapsed));
+  }
+  assert.equal(announcement(running(2)).id, announcement(running(10)).id);
+  assert.deepEqual(shape(announcement(running(2)).message), shape(progressMessage(running(2).progress)));
+  // The end, a cancellation, and a stall are spoken at any time.
+  assert.equal(announcement({ ...FINISHED, elapsed_seconds: 0.3 }).id, "end:finished");
+  assert.equal(announcement({ state: "cancelling", elapsed_seconds: 0.5 }).id, "cancelling");
+  assert.equal(announcement({ ...running(1), seconds_since_progress: 31 }).id, "stalled");
+});
+
 test("the end of a run moves focus only from where the run left it", () => {
   const body = { name: "body" };
   const start = { name: "start" };
@@ -1494,12 +1658,19 @@ test("a dialog for a folder of the store or the output says so in the line above
 
 // The settings of an earlier launch (stage B4c).
 test("the settings of an earlier launch: a later launch needs a place, and the tips follow them", () => {
-  assert.deepEqual(flow.launchSettings({}), { launch: "first", store: null, outputParent: null, hints: null, notice: null });
+  assert.deepEqual(flow.launchSettings({}), {
+    launch: "first",
+    store: null,
+    outputParent: null,
+    hints: null,
+    notice: null,
+    present: false,
+  });
   assert.deepEqual(
     flow.launchSettings({
       settings: { launch: "later", store: "/path/to/store", output_parent: "/path/to", hints: false, notice: "SETTINGS_INVALID" },
     }),
-    { launch: "later", store: "/path/to/store", outputParent: "/path/to", hints: false, notice: "SETTINGS_INVALID" },
+    { launch: "later", store: "/path/to/store", outputParent: "/path/to", hints: false, notice: "SETTINGS_INVALID", present: false },
   );
   // A later launch without a place, and values of another form, are not taken.
   assert.equal(flow.launchSettings({ settings: { launch: "later", store: null, output_parent: "" } }).launch, "first");
@@ -1507,7 +1678,7 @@ test("the settings of an earlier launch: a later launch needs a place, and the t
     flow.launchSettings({
       settings: { launch: "later", store: 3, output_parent: "/path/to", hints: "no", notice: "/path/to/private" },
     }),
-    { launch: "later", store: null, outputParent: "/path/to", hints: null, notice: null },
+    { launch: "later", store: null, outputParent: "/path/to", hints: null, notice: null, present: false },
   );
   // The tips: as the person last switched them, otherwise on at a first
   // launch and off at a later one (the mockup v10).
