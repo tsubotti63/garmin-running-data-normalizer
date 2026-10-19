@@ -176,11 +176,12 @@ stay; press **Run normalization** to import again.
 
 On Windows, keep the place of the store short. Unless long paths are enabled,
 Windows limits a whole path to 260 characters, and the files inside the store
-add about 185 characters to the path of the store, so that the path of the
-store can have about 70 characters at most. The page does not check this
-before the import, and an import whose paths would be too long stops with
-`COMMAND_FAILED`, as the command line's `snapshot register` does. The default
-place is usually short enough.
+add about 190 characters to the path of the store, so that the path of the
+store can have about 70 characters at most. The page checks this when you
+choose where to create a store and before an import, and stops with
+`SNAPSHOT_STORE_PATH_TOO_LONG`, as the command line's `snapshot init` and
+`snapshot register` do; for a store that is open already, the box says so in
+red when it would import. The default place is usually short enough.
 
 ## Box 3: Output
 
@@ -451,6 +452,7 @@ from the first to the fourth, and then **If something is wrong**.
 | `SNAPSHOT_LABEL_EXISTS` | Another Snapshot in the store has this name. | Change the name of the Snapshot. |
 | `SNAPSHOT_STORE_NOT_FOUND` | There is no Snapshot Store in the chosen folder. | Choose the folder of the store, or choose where to create a new one. |
 | `SNAPSHOT_STORE_LOCKED` | The Snapshot Store has a lock file (.single-writer.lock): an import is running, or one stopped before it ended. | If no other normalization or snapshot command is running, check the box below and press Remove the lock file; only that file is removed, and the Snapshots stay. |
+| `SNAPSHOT_STORE_PATH_TOO_LONG` | The paths inside the Snapshot Store would be too long for this computer. | Choose a store in a shorter folder, or on Windows turn on long paths. |
 | `OUTPUT_EXISTS` | The output folder is there already. | Choose another name for the output. |
 | `OUTPUT_NAME_INVALID` | The output folder name is too long or cannot be used on every system. | Choose a name of at most 200 bytes that does not start with a dot, end with a dot or a space, hold any of <>:"/\\\|?*, or name a device of Windows. |
 | `OUTPUT_PARENT_NOT_WRITABLE` | This app cannot write in the folder for the output. | Choose another folder, or allow this app to write in it. |

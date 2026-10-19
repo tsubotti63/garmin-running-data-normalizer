@@ -162,11 +162,14 @@ checks it, but nothing is made until a run imports an Export into it.
 "Check the Snapshots" checks the store as `snapshot verify` does. The page
 reads a store with the functions of the CLI's snapshot commands; only a run
 writes in it. Each button opens the system's dialog for a folder, or the
-page's own folder list without one. Neither the page nor the CLI checks the
-length of the paths inside a store: on Windows without long paths, the
-files of a store add about 185 characters to its path, and an import whose
-paths reach the limit stops with `COMMAND_FAILED`, as `snapshot register`
-does; the GUI guide says to keep the place of the store short (stage B6b).
+page's own folder list without one. On Windows without long paths, the
+files of a store add up to 189 characters to its path (stage B6b), so the
+place of a new store and an import are checked against the limits before
+anything is written, as an output is, and stop with
+`SNAPSHOT_STORE_PATH_TOO_LONG` in `snapshot init`, `snapshot register`, and
+the page alike; `snapshot status` tells it of an open store, which the page
+then shows in red for an import, and in yellow for the other ways (stage
+B6c; until then, the import stopped with `COMMAND_FAILED`).
 
 Importing (stage B4b-1): the second box offers three ways to normalize.
 

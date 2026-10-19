@@ -19,6 +19,7 @@ from ..intake.source import place_can_be_shown
 from ..snapshot.store import (
     SnapshotStoreError,
     check_new_store_place,
+    check_store_paths,
     lock_created_at,
     remove_lock,
     snapshot_status,
@@ -41,6 +42,9 @@ ANSWER_CODES = (
     "SNAPSHOT_STORE_INSIDE_STORE",
     "SNAPSHOT_STORE_LOCKED",
     "SNAPSHOT_REGISTRATION_INCOMPLETE",
+    # Paths too long for the files of an import (stage B6c): a stop of the
+    # place of a new store, and a notice of an open store.
+    "SNAPSHOT_STORE_PATH_TOO_LONG",
     # Removing a lock file (stage B4b-2).
     "SNAPSHOT_UNLOCK_NOT_CONFIRMED",
     "SNAPSHOT_LOCK_NOT_FOUND",
@@ -147,11 +151,15 @@ def store_place(folder: Path) -> dict[str, Any]:
     if found is not None:
         return found
     place = folder if folder.name == STORE_FOLDER_NAME else folder / STORE_FOLDER_NAME
-    if place != default_store() or default_folder().exists() or default_folder().is_symlink():
-        try:
+    try:
+        if place != default_store() or default_folder().exists() or default_folder().is_symlink():
             check_new_store_place(place)
-        except SnapshotStoreError as exc:
-            return _problem(place, exc)
+        else:
+            # The default place waits for its folder, but whether its files
+            # would be too long is known at once (stage B6c).
+            check_store_paths(place)
+    except SnapshotStoreError as exc:
+        return _problem(place, exc)
     return {"state": "new", "path": str(place), "cloud": cloud_kind(place)}
 
 

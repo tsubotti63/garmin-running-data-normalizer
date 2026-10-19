@@ -1354,6 +1354,30 @@ test("a lock file stops an import only, and normalizing again needs Snapshots", 
   assert.deepEqual(["snapshots", "rerun", "single"].map((how) => flow.storeProblem(how, damaged)), [true, true, false]);
 });
 
+test("paths too long for the files of an import stop an import only, as a lock file does", () => {
+  // On Windows without long paths (stage B6c): the notice of an open store
+  // stops an import, and is yellow for the other ways; the place of a new
+  // store whose files would be too long is a problem in red.
+  const store = (answer) => ({ answer, checked: null, busy: false });
+  const long = store({ state: "store", path: "/path/to/store", snapshots: [{ label: "S1" }], notices: ["SNAPSHOT_STORE_PATH_TOO_LONG"] });
+  assert.deepEqual(["snapshots", "rerun", "single"].map((how) => flow.storeProblem(how, long)), [true, false, false]);
+  const first = (how) => {
+    const line = flow.storeMessages(long, how).find((item) => item.start);
+    return [line.kind, line.message.key];
+  };
+  assert.deepEqual(first("snapshots"), ["error", "stop.snapshot_store_path_too_long"]);
+  assert.deepEqual(first("rerun"), ["warn", "stop.snapshot_store_path_too_long"]);
+  assert.deepEqual(first("single"), ["warn", "stop.snapshot_store_path_too_long"]);
+  // Only a lock file is offered to be removed.
+  assert.equal(flow.lockOffered("snapshots", long), false);
+  const place = store({ state: "error", path: "/path/to/store", error_code: "SNAPSHOT_STORE_PATH_TOO_LONG" });
+  assert.deepEqual(flow.storeMessages(place, "snapshots").filter((line) => line.start).map((line) => line.kind), ["error"]);
+  assert.equal(flow.storeProblem("snapshots", place), true);
+  assert.equal(flow.errorBox("SNAPSHOT_STORE_PATH_TOO_LONG", "/path/to/export"), "snapshot");
+  // A cancelled import tells only of what an import leaves in the store.
+  assert.deepEqual(flow.resultDetails({ state: "cancelled", store_notices: ["SNAPSHOT_STORE_PATH_TOO_LONG"] }), []);
+});
+
 test("the summaries of the first two boxes say what the last run did, as the mockup v10 says it", () => {
   const summary = (box, view) => {
     const words = flow.boxSummary(box, view);

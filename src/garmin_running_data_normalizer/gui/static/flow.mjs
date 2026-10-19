@@ -128,6 +128,7 @@ export const STOP_KEYS = {
   SNAPSHOT_STORE_PARENT_NOT_FOUND: "stop.snapshot_store_parent_not_found",
   SNAPSHOT_STORE_NOT_EMPTY: "stop.snapshot_store_not_empty",
   SNAPSHOT_STORE_INSIDE_STORE: "stop.snapshot_store_inside_store",
+  SNAPSHOT_STORE_PATH_TOO_LONG: "stop.snapshot_store_path_too_long",
   SNAPSHOT_STORE_LOCKED: "stop.snapshot_store_locked",
   SNAPSHOT_REGISTRATION_INCOMPLETE: "stop.snapshot_registration_incomplete",
   // A Snapshot run of the page (stage B4b-1).
@@ -230,6 +231,7 @@ export const STOP_NEXT_KEYS = {
   SNAPSHOT_STORE_PARENT_NOT_FOUND: "stop_next.snapshot_store_parent_not_found",
   SNAPSHOT_STORE_NOT_EMPTY: "stop_next.snapshot_store_not_empty",
   SNAPSHOT_STORE_INSIDE_STORE: "stop_next.snapshot_store_inside_store",
+  SNAPSHOT_STORE_PATH_TOO_LONG: "stop_next.snapshot_store_path_too_long",
   SNAPSHOT_STORE_LOCKED: "stop_next.snapshot_store_locked",
   SNAPSHOT_REGISTRATION_INCOMPLETE: "stop_next.snapshot_registration_incomplete",
   SNAPSHOT_LABEL_INVALID: "stop_next.snapshot_label_invalid",
@@ -653,8 +655,13 @@ export function cloudMessages(kind) {
 
 // An interrupted import does not stop anything: the next import completes
 // the store, so it is yellow, as the notices of a store are (stage B4a).
-const STORE_NOTICE_CODES = ["SNAPSHOT_STORE_LOCKED", "SNAPSHOT_REGISTRATION_INCOMPLETE"];
-const storeProblemKind = (code) => (STORE_NOTICE_CODES.includes(code) ? "warn" : "error");
+const STORE_WARN_CODES = ["SNAPSHOT_STORE_LOCKED", "SNAPSHOT_REGISTRATION_INCOMPLETE"];
+const storeProblemKind = (code) => (STORE_WARN_CODES.includes(code) ? "warn" : "error");
+// The notices of an open store, in their order. A lock file, and paths too
+// long for the files of an import on this system (stage B6c), keep an
+// import from starting; for another way they are yellow.
+const STORE_NOTICE_CODES = [...STORE_WARN_CODES, "SNAPSHOT_STORE_PATH_TOO_LONG"];
+const IMPORT_STOP_NOTICES = ["SNAPSHOT_STORE_LOCKED", "SNAPSHOT_STORE_PATH_TOO_LONG"];
 
 // The lines of the Snapshot Store in the second box, each with its kind, in
 // the order of the first box (stage B4a): what the page is doing, a problem
@@ -696,7 +703,7 @@ export function storeMessages(store, how = "single") {
   // A check that found a notice gives it with the notices, in their order;
   // any other problem of the store or of its check is red.
   const checkedNotice =
-    answer.state === "store" && checked?.state === "error" && STORE_NOTICE_CODES.includes(checked.error_code);
+    answer.state === "store" && checked?.state === "error" && STORE_WARN_CODES.includes(checked.error_code);
   const problem =
     answer.state === "error"
       ? answer
@@ -718,8 +725,8 @@ export function storeMessages(store, how = "single") {
     }
     for (const code of STORE_NOTICE_CODES.filter((item) => notices.has(item))) {
       // A lock file keeps an import from starting, so it is red then
-      // (stage B4b-1).
-      add(code === "SNAPSHOT_STORE_LOCKED" && how === "snapshots" ? "error" : "warn", errorMessages(code));
+      // (stage B4b-1), and so do paths too long (stage B6c).
+      add(IMPORT_STOP_NOTICES.includes(code) && how === "snapshots" ? "error" : "warn", errorMessages(code));
     }
   }
   add("warn", cloudMessages(answer.cloud));
@@ -796,22 +803,27 @@ export function lockOffered(how, store, active = false) {
 }
 
 // Whether the store keeps the chosen way from starting (stage B4b-1): a
-// problem of the store or of its check, a lock file for an import, or no
-// Snapshot to normalize again. This Export alone never uses the store.
+// problem of the store or of its check, a lock file or paths too long for an
+// import (stage B6c), or no Snapshot to normalize again. This Export alone
+// never uses the store.
 export function storeProblem(how, store) {
   const answer = store?.answer;
   if (how === "single" || answer === null || typeof answer !== "object") {
     return false;
   }
   const checked = store.checked;
-  if (answer.state === "error" || (checked?.state === "error" && !STORE_NOTICE_CODES.includes(checked.error_code))) {
+  if (answer.state === "error" || (checked?.state === "error" && !STORE_WARN_CODES.includes(checked.error_code))) {
     return true;
   }
   const snapshots = Array.isArray(answer.snapshots) ? answer.snapshots.length : 0;
   if (how === "rerun") {
     return answer.state !== "store" || snapshots === 0;
   }
-  return answer.state === "store" && Array.isArray(answer.notices) && answer.notices.includes("SNAPSHOT_STORE_LOCKED");
+  return (
+    answer.state === "store" &&
+    Array.isArray(answer.notices) &&
+    IMPORT_STOP_NOTICES.some((code) => answer.notices.includes(code))
+  );
 }
 
 // Whether the store is ready for the chosen way: a store, or for an import
@@ -1425,6 +1437,7 @@ const ERROR_BOXES = {
   SNAPSHOT_STORE_PARENT_NOT_FOUND: "snapshot",
   SNAPSHOT_STORE_NOT_EMPTY: "snapshot",
   SNAPSHOT_STORE_INSIDE_STORE: "snapshot",
+  SNAPSHOT_STORE_PATH_TOO_LONG: "snapshot",
   SNAPSHOT_STORE_LOCKED: "snapshot",
   SNAPSHOT_REGISTRATION_INCOMPLETE: "snapshot",
   SNAPSHOT_STORE_NOT_WRITABLE: "snapshot",
@@ -1823,7 +1836,7 @@ export function resultDetails(status) {
   // What a cancelled import left in the store, as the CLI says it after a
   // cancelled registration (stage B4b-2).
   if (status?.state === "cancelled" && Array.isArray(status.store_notices)) {
-    for (const code of STORE_NOTICE_CODES.filter((item) => status.store_notices.includes(item))) {
+    for (const code of STORE_WARN_CODES.filter((item) => status.store_notices.includes(item))) {
       messages.push(message(STOP_KEYS[code]));
       messages.push(nextStep(STOP_NEXT_KEYS[code]));
     }

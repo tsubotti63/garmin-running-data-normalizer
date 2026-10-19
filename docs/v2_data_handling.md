@@ -1582,6 +1582,19 @@ anything is written:
   but not `store.json` is damaged (`SNAPSHOT_STORE_INVALID`).
 - A folder of the place that cannot be opened stops with
   `SNAPSHOT_STORE_NOT_READABLE` where the place is read.
+- From stage B6c, on Windows without long paths, a place whose deepest
+  paths would reach the limits stops with `SNAPSHOT_STORE_PATH_TOO_LONG`, as
+  an output does with `OUTPUT_PATH_TOO_LONG`. The deepest file of a store is
+  the temporary file of the inventory of a Snapshot,
+  `snapshots/<snapshot id>/.<snapshot id>.inventory.json.<process>.tmp`,
+  which adds 189 characters to the path of the store with a process number
+  of 10 digits, so that the path of the store can have 70 characters at
+  most; the paths are measured in their absolute Windows form, in UTF-16
+  units, and a path that starts with `\\?\` has no such limit. `snapshot
+  register` stops the same way before it reads the Export, and `snapshot
+  status` gives it as a `NOTE`, which the GUI makes a stop for an import.
+  Until then, a registration stopped with `COMMAND_FAILED` after it had
+  copied part of the Export, and in v1.7.1 with `RUN_ALL_FAILED`.
 
 - A registration finds that the store cannot be written when it creates its
   lock, before it reads the Export. Before it writes, it compares the free
@@ -1735,6 +1748,7 @@ gives, for its entries and controls, are not in this table.
 | `SNAPSHOT_STORE_PARENT_NOT_FOUND` | the folder that should hold the new Snapshot Store does not exist | check the place given with --store, or make the folder that holds it first; no folder is made above a new store |
 | `SNAPSHOT_STORE_NOT_EMPTY` | the place given for a new Snapshot Store is a file, or a folder that holds other files | give the place of a new folder, or of an empty one, with --store; to use a store, give the folder of the store itself |
 | `SNAPSHOT_STORE_INSIDE_STORE` | the place given for a new Snapshot Store is inside another Snapshot Store | give a place outside the other store with --store |
+| `SNAPSHOT_STORE_PATH_TOO_LONG` | the paths inside the Snapshot Store would be too long for this computer | give a store in a shorter folder with --store, or on Windows turn on long paths |
 | `SNAPSHOT_UNLOCK_NOT_CONFIRMED` | the lock file is removed only when no snapshot command uses the Snapshot Store | check that no normalization or snapshot command uses the store, then run snapshot unlock again with --confirm-no-other-command |
 | `SNAPSHOT_LOCK_NOT_FOUND` | the Snapshot Store has no lock file | nothing needs to be removed; run the command that stopped again |
 | `SNAPSHOT_LOCK_INVALID` | the lock file of the Snapshot Store is not one that this app writes, or it changed while it was checked | check that no snapshot command is running, and look at the file .single-writer.lock in the store; this app removes only its own lock file |

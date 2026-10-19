@@ -504,6 +504,24 @@ class SnapshotRunRequestTest(unittest.TestCase):
         self.assertEqual(list(self.parent.iterdir()), [])
         self.assertFalse((self.root / "missing").exists())
 
+    def test_a_store_whose_files_would_be_too_long_stops_an_import(self) -> None:
+        # On Windows without long paths (stage B6c), for an import into the
+        # store and into a new one, with the functions of the registration;
+        # normalizing the Snapshots again only reads the store.
+        manager = stub_manager("wait")
+        self.addCleanup(manager.stop)
+        rerun = {**request(SYNTHETIC_EXPORT, self.parent, "rerun"), "how": "rerun", "store": str(self.store)}
+        rerun.pop("input")
+        with patch.object(store_module, "store_paths_too_long", return_value=True):
+            for case in (self.snapshot_request(), self.snapshot_request(store=str(self.root / "new"), new_store=True)):
+                with self.subTest(new_store=case.get("new_store", False)), self.assertRaises(RunRequestError) as caught:
+                    manager.start(case)
+                self.assertEqual(caught.exception.code, "SNAPSHOT_STORE_PATH_TOO_LONG")
+            self.assertEqual(manager.status(), {"state": "idle"})
+            self.assertIn("--how=rerun", self.started_args(stub_manager("wait"), rerun))
+        self.assertFalse((self.root / "new").exists())
+        self.assertEqual(list(self.parent.iterdir()), [])
+
     def test_an_active_run_comes_before_the_store(self) -> None:
         # The store is read once no run is active, since that run may be
         # writing in it: a second request is told that a run is active.

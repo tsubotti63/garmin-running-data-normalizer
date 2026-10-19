@@ -60,7 +60,10 @@ What can change:
   dot or a space, among others (`OUTPUT_NAME_INVALID`). `snapshot init`
   stops for a folder above the new store that does not exist
   (`SNAPSHOT_STORE_PARENT_NOT_FOUND`) and for a place inside another store
-  (`SNAPSHOT_STORE_INSIDE_STORE`); v1.7.1 made the store there.
+  (`SNAPSHOT_STORE_INSIDE_STORE`); v1.7.1 made the store there. On Windows
+  without long paths, `snapshot init` also stops for a place whose files
+  would be too long (`SNAPSHOT_STORE_PATH_TOO_LONG`), where v1.7.1 made a
+  store that no registration could then write in.
 - Runs that ended with exit 0 can end with exit 3: a daily row without its
   date that holds a value, which v1.7.1 left out with a count only, is now
   announced with `DATA_ROW_LEFT_OUT`.
@@ -80,6 +83,7 @@ What can change:
   | `snapshot register`: an input that is a link or not a folder or ZIP file | `SNAPSHOT_LIFECYCLE_FAILED` | `INPUT_SYMLINK`, `INPUT_NOT_DIRECTORY` |
   | `snapshot register`: a link inside the input | `SNAPSHOT_LIFECYCLE_FAILED` | `INPUT_DISCOVERY_FAILED` |
   | `snapshot register`: a label that this app does not take, a label that the store has, a time that cannot be read or times out of order, an input and a store that are the same folder or one inside the other | `SNAPSHOT_LIFECYCLE_FAILED` | `SNAPSHOT_LABEL_INVALID`, `SNAPSHOT_LABEL_EXISTS`, `SNAPSHOT_TIME_INVALID`, `SNAPSHOT_INPUT_INSIDE_STORE` |
+  | `snapshot register`, on Windows without long paths: a store whose files would be too long | `RUN_ALL_FAILED` | `SNAPSHOT_STORE_PATH_TOO_LONG`, before the Export is read |
   | `snapshot build-input`: an output that is there already or a link | `SNAPSHOT_LIFECYCLE_FAILED` | `OUTPUT_EXISTS`, `OUTPUT_SYMLINK` |
   | `snapshot build-input`, `snapshot run-all`: no Activities record that can be kept | `SNAPSHOT_LIFECYCLE_FAILED` | `ACTIVITIES_EMPTY` |
   | `snapshot verify`: a folder without a store | A failed report, exit 2 | `SNAPSHOT_STORE_NOT_FOUND` |
