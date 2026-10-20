@@ -167,6 +167,39 @@ class GuiCatalogTest(unittest.TestCase):
         self.assertIn("範囲の外の行", catalogs["ja"]["info.exit_foot"])
         self.assertIn("out of range", catalogs["en"]["info.exit_foot"])
 
+    def test_texts_keep_the_corrections_of_the_first_time_check(self) -> None:
+        # Stage D6, after two new AI sessions used the page of v2.0.0rc1 with
+        # no instructions: the page no longer says that it is in development
+        # or that the command line is the reference, as both make the same
+        # output.
+        catalogs = {language: load_catalog(language) for language in LANGUAGES}
+        self.assertNotIn("development", (STATIC_ROOT / "index.html").read_text(encoding="utf-8"))
+        self.assertNotIn(".development", (STATIC_ROOT / "styles.css").read_text(encoding="utf-8"))
+        for language, catalog in catalogs.items():
+            with self.subTest(language=language):
+                self.assertFalse([key for key, text in catalog.items() if "開発中" in text or "in development" in text])
+        # The boxes stand in a row only on a wide window, so the help says
+        # their numbers, not "from left to right".
+        self.assertIn("番号の順", catalogs["ja"]["help.steps_lede"])
+        self.assertIn("order of their numbers", catalogs["en"]["help.steps_lede"])
+        # A warning of absent data says what to do, so that the next line,
+        # which asks to read the warnings, reads well with it.
+        self.assertNotIn("問題ではありません", catalogs["ja"]["warning.optional_family_not_present"])
+        self.assertIn("使わないなら", catalogs["ja"]["warning.optional_family_not_present"])
+        self.assertIn("If you do not use this data", catalogs["en"]["warning.optional_family_not_present"])
+        # Of the absent families, those that add a warning are named under
+        # the table: the daily families add none (docs/supported_datasets.md).
+        for language, catalog in catalogs.items():
+            for family in ("gear", "personal_records", "fit"):
+                with self.subTest(language=language, family=family):
+                    self.assertIn(catalog[f"family.{family}"], catalog["result.absent_note"])
+        # A place to paste starts at the root, as the next step of the stop
+        # says, in words that a person knows.
+        for key in ("input.help", "stop.path_not_absolute"):
+            with self.subTest(key=key):
+                self.assertNotIn("いちばん上から", catalogs["ja"][key])
+        self.assertNotIn("OS", catalogs["ja"]["open.requested"])
+
     def test_language_names_are_written_in_their_own_language(self) -> None:
         self.assertEqual(load_catalog("en")["language.name"], "English")
         self.assertEqual(load_catalog("ja")["language.name"], "日本語")
