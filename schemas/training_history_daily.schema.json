@@ -5,12 +5,13 @@
   "type": "array",
   "items": {
     "type": "object",
-    "required": ["calendar_date", "observation_timestamp", "training_status", "sport"],
+    "required": ["calendar_date", "observation_timestamp", "training_status", "sport", "disagreeing_fields"],
     "properties": {
       "calendar_date": {"type": "string", "format": "date"},
       "observation_timestamp": {"type": "string", "description": "Source observation timestamp. Naive source timestamps are preserved without inventing a timezone."},
-      "training_status": {"type": "string"},
-      "sport": {"type": ["string", "null"], "description": "Optional source context; not part of the stable key."}
+      "training_status": {"type": ["string", "null"]},
+      "sport": {"type": ["string", "null"], "description": "Optional source context; not part of the stable key."},
+      "disagreeing_fields": {"type": "array", "items": {"type": "string"}, "description": "Starting with v2.0.0: the fields of this row whose values differ between the observations of its stable key, in field order. Those fields are null, and the dataset's audit keeps every observed value. Empty when the observations agree."}
     },
     "additionalProperties": false
   }

@@ -12,10 +12,14 @@ UDS, and HRV retain calendar-day contracts; Sleep uses `sleep_day`.
 - Missing is not zero and missing from a later Snapshot is not deletion.
 - Nulls are not filled, carried forward, averaged, or interpolated.
 - Source values are not recalculated and unconfirmed units are not inferred.
-- Exact duplicates are deterministic. Snapshot-based Endurance and UDS values
-  that differ for one stable key are preserved in audit evidence while
-  canonicalization remains unresolved; same-export malformed/divergent values
-  fail closed.
+- Exact duplicates are deterministic. Starting with v2.0.0, values that differ
+  for one stable key, within one Export or across Snapshots, are null and
+  listed in `disagreeing_fields`, and the audit record keeps every observed
+  value (`VALUES_DISAGREE`); a value of another form is null with
+  `DATA_VALUE_INVALID`; and a row without its date or a value that its
+  dataset needs is left out with `DATA_ROW_LEFT_OUT` (see
+  [Values that disagree](v2_data_handling.md#values-that-disagree) and
+  [Rows and values with problems](v2_data_handling.md#rows-and-values-with-problems)).
 - Source observations are never collapsed by latest-wins, keep-last, source
   order, or a canonical daily-row selection. A day-level summary is derived
   from preserved observations and is not a normalized Source of Truth.
@@ -42,7 +46,7 @@ by `vo2max_source_series`; neither series overwrites the other.
 | Dataset | Stable key | Public fields | Interpretation boundary |
 |---|---|---|---|
 | `race_prediction_daily` | `calendar_date`, `observation_timestamp` | date, source observation timestamp, and 5K/10K/Half/Marathon predictions | Garmin algorithm predictions, not measured race results or calculations made by this package |
-| `sleep_daily` | `sleep_day` | `sleep_day`, local start/end, sleep-window and duration minutes, stage minutes, score, awake minutes, availability flags, normalization/reason fields | Exact canonical duplicates collapse deterministically with audit counts; divergent or provenance-conflicted duplicates and missing/invalid windows remain reviewable; `sleep_duration_minutes_ex_awake` sums observed finite deep/light/REM stages when present, otherwise uses an agreeing approved direct source alias or remains null; awake time is never derived |
+| `sleep_daily` | `sleep_day` | `sleep_day`, local start/end, sleep-window and duration minutes, stage minutes, score, awake minutes, availability flags, normalization/reason fields | Exact canonical duplicates collapse deterministically with audit counts; duplicates whose values differ keep one row with the differing fields null and listed in `disagreeing_fields`, and only a start, end, or window that differs makes the row `needs_review`; missing/invalid windows remain reviewable; `sleep_duration_minutes_ex_awake` sums observed finite deep/light/REM stages when present, otherwise uses an agreeing approved direct source alias or remains null; awake time is never derived |
 | `uds_daily` | `calendar_date` | date; steps, distance, calories and heart-rate fields; Body Battery charged/drained; total stress values; three `raw_has_*` flags | Sparse generation-specific source context; excluded respiration, detailed stress, hydration, and private provenance are not reconstructed |
 | `acute_training_load_daily` | `calendar_date`, `observation_timestamp` | date, source timestamp, ACWR fields, and acute/chronic load values | Garmin source values only; the ratio is not recalculated when absent |
 | `training_readiness_daily` | `calendar_date`, `observation_timestamp` | date and source timestamp; readiness score/level/recovery; ACWR, stress-history, HRV and sleep factors; acute load; HRV weekly average; valid-sleep and sleep-score fields | HRV-labelled fields are Garmin source-provided readiness components, not HRV values calculated by this package |
@@ -50,19 +54,30 @@ by `vo2max_source_series`; neither series overwrites the other.
 | `hrv_daily` | `calendar_date` | `calendar_date`, `hrv_value`, `semantics_status`, `analysis_role`, record/file counts, `dedupe_status` | `analysis_reference_only`; not a daily Source of Truth and not automatically selected when same-day values differ |
 | `training_history_daily` | `calendar_date`, `observation_timestamp` | `calendar_date`, `observation_timestamp`, `training_status`, optional `sport` | Deliberately limited observation contract; other sparse or unapproved fields are not emitted |
 
+Starting with v2.0.0, every row also has `disagreeing_fields`, and Sleep rows
+have `sleep_day_source` and `sleep_duration_source`, which name the source
+field of the day and how the duration was made (see
+[Values taken from several source fields](v2_data_handling.md#values-taken-from-several-source-fields)).
+
 ## HRV source definition
 
 The bounded HRV reference is read from non-running FIT message `370`, field
 `1`, scaled as raw value divided by `128`, with the FIT end date interpreted in
 the configured local timezone. Same-date same-value observations are deduped.
-Same-date differing values produce a null selected value and
-`review_required_same_day_differing_values`; the package never chooses a latest
-or average value. Health Status data is not treated as equivalent HRV evidence.
+Same-date differing values produce a null value listed in
+`disagreeing_fields`, with the `dedupe_status` `same_day_values_disagree`;
+`audit/hrv_daily.json` keeps every observed value in `disagreements`, and the
+run warns with `VALUES_DISAGREE`. The package never chooses a latest or
+average value. A reading without a value (65535) is counted in
+`absent_value_counts`, without a warning. Health Status data is not treated as
+equivalent HRV evidence.
 
 ## Snapshot and output behavior
 
 The five source-observation datasets use `immutable_observation_union` with
-missing-is-not-delete and same-stable-key conflict fail-closed behavior. The
+missing-is-not-delete behavior; starting with v2.0.0, observations with the
+same full stable key whose values differ keep one row with the differing
+fields null and listed in `disagreeing_fields` (`VALUES_DISAGREE`). The
 remaining daily JSON datasets keep their declared daily-state contracts. HRV is
 regenerated from the cumulative unique FIT blob set. Run-All emits one normalized
 JSON and aggregate audit per dataset, plus `qa/daily_metrics_summary.json`. For
@@ -84,26 +99,31 @@ or `sleep_window_minutes_including_awake - sleep_awake_minutes` are never used.
 Only when all three stages are absent may the approved direct aliases
 `sleepTimeSeconds`, `totalSleepSeconds`, `durationInSeconds`, and
 `sleepDuration` supply a value. Equal finite aliases collapse deterministically;
-conflicting finite aliases fail closed rather than using first-wins or
-latest-wins. If no authoritative direct value exists, the result is `null`.
+starting with v2.0.0, conflicting finite aliases leave the duration null and
+listed in `disagreeing_fields`, with the `sleep_duration_source`
+`direct_aliases_disagree` and the audit count `direct_aliases_disagree_count`,
+rather than using first-wins or latest-wins. If no authoritative direct value
+exists, the result is `null`.
 Explicit zero remains an observed value. The field remains nullable and keeps
 the same `sleep_day` grain and stable key.
 
 Sleep rows with `sleep_normalization_status=available` and
 `sleep_source_available_for_analysis_flag=true` may be used as same-day context.
 `needs_review` and `excluded` rows remain evidence but are not eligible for an
-Activity context join. `review_required_count` is separate from
-`excluded_record_count`; an excluded-only family is a clean `PASS` with its
-exclusion evidence retained.
+Activity context join. `review_key_count` counts the keys that need review,
+apart from `excluded_record_count`. Starting with v2.0.0, a row left out that
+holds a value gives `DATA_ROW_LEFT_OUT` and ends the run as `PARTIAL_SUCCESS`
+(exit 3), and a row without any value is counted in `empty_record_count`
+without a warning.
 
 ## Relationship and projection contract
 
 | Dataset or family | Relationship role | Activity guidance | Canonical / derived | Multiple observations and limits |
 |---|---|---|---|---|
-| Hill Score / Endurance Score | daily performance context | `calendar_date` is a candidate context field; direct link `not_yet_defined` | daily normalized JSON canonical; namespaced CSV derived | one canonical state per day when resolved; accepted Snapshot variants remain audit-only until canonical authority is known; no Activity identity or causal interpretation |
+| Hill Score / Endurance Score | daily performance context | `calendar_date` is a candidate context field; direct link `not_yet_defined` | daily normalized JSON canonical; namespaced CSV derived | one row per day; values that differ, within one Export or across Snapshots, are null and listed in `disagreeing_fields`, with every value in the audit record; no Activity identity or causal interpretation |
 | Lactate Threshold | performance threshold observation | no join; direct link `not_yet_defined` | candidate/audit-only, not a stable normalized dataset | retain history, latest-snapshot, profile-state, and derived-evidence families; no latest-wins, unit conversion, or cross-family collapse |
 | Race Prediction | daily performance prediction | direct link `not_yet_defined` | source observations canonical; QA day view derived | preserve every stable observation; no measured-result claim or selected daily row |
-| Sleep / UDS / HRV | condition context | same-day `context_only`; direct link `not_yet_defined` | normalized JSON canonical; UDS Snapshot variants are audit-preserved when canonicalization is unresolved | context must stay separate from Activity facts; UDS canonicalization and HRV conflict rows remain unresolved when authority is unknown |
+| Sleep / UDS / HRV | condition context | same-day `context_only`; direct link `not_yet_defined` | normalized JSON canonical; values that differ are null, listed in `disagreeing_fields`, and kept in the audit record | context must stay separate from Activity facts; no value is chosen when observations disagree |
 | Acute Training Load / Training Readiness / VO2Max / Training History | performance context | same-day `context_only`; direct link `not_yet_defined` | source observations canonical; QA day view derived | keep all source observations; `selection_rule` remains null and source generations/series remain distinct |
 
 `context_only` allows comparison of separately aggregated daily series. It does

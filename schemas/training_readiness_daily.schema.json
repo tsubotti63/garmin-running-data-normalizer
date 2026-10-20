@@ -5,7 +5,7 @@
   "type": "array",
   "items": {
     "type": "object",
-    "required": ["calendar_date", "observation_timestamp", "training_readiness_score", "training_readiness_level", "training_readiness_recovery_time", "acwr_factor_percent", "stress_history_factor_percent", "hrv_factor_percent", "sleep_history_factor_percent", "training_readiness_acute_load", "training_readiness_hrv_weekly_average", "training_readiness_valid_sleep", "training_readiness_sleep_score"],
+    "required": ["calendar_date", "observation_timestamp", "training_readiness_score", "training_readiness_level", "training_readiness_recovery_time", "acwr_factor_percent", "stress_history_factor_percent", "hrv_factor_percent", "sleep_history_factor_percent", "training_readiness_acute_load", "training_readiness_hrv_weekly_average", "training_readiness_valid_sleep", "training_readiness_sleep_score", "disagreeing_fields"],
     "properties": {
       "calendar_date": {"type": "string", "format": "date"},
       "observation_timestamp": {"type": "string", "description": "Source observation timestamp. Naive source timestamps are preserved without inventing a timezone."},
@@ -19,7 +19,8 @@
       "training_readiness_acute_load": {"type": ["number", "null"]},
       "training_readiness_hrv_weekly_average": {"type": ["number", "null"]},
       "training_readiness_valid_sleep": {"type": ["boolean", "null"]},
-      "training_readiness_sleep_score": {"type": ["number", "null"]}
+      "training_readiness_sleep_score": {"type": ["number", "null"]},
+      "disagreeing_fields": {"type": "array", "items": {"type": "string"}, "description": "Starting with v2.0.0: the fields of this row whose values differ between the observations of its stable key, in field order. Those fields are null, and the dataset's audit keeps every observed value. Empty when the observations agree."}
     },
     "additionalProperties": false
   }

@@ -7,15 +7,21 @@
 - Compatibility family: stable 1.x
 
 This document describes the current stable contract and identifies when each
-additive layer entered the `1.x` family. Executable authority remains in
+additive layer entered the `1.x` family. Text that begins "Starting with
+v2.0.0" describes v2.0.0, the release in preparation, whose release candidate
+is published on TestPyPI; [v2.0.0 Data Handling](v2_data_handling.md) gives
+its rules. Executable authority remains in
 `run_all.py`, the versioned dataset registry, and each run's `run_manifest.json`
 and `run_summary.json`.
 
 For Snapshot-backed inputs, acquisition chronology is derived only from the
-timezone-aware `manifest.export_observed_at` value (with the registered
-Snapshot ID as the deterministic tie-breaker). Runtime processing sequence is
-diagnostic execution order only; it never selects a current endpoint, merge
-winner, observed variant, candidate, or normalized value. Existing
+timezone-aware `manifest.export_observed_at` value; in v1.7.1, the registered
+Snapshot ID broke ties. Starting with v2.0.0, Snapshots are numbered from 1 in
+that order in every run, and Snapshots observed at the same time are one time
+point, whose values are compared as within one Export (see
+[Changes across Snapshots](v2_data_handling.md#changes-across-snapshots)).
+Runtime processing sequence is diagnostic execution order only; it never
+selects a current endpoint, merge winner, candidate, or normalized value. Existing
 `logical_order` fields remain the backward-compatible acquisition-order alias.
 
 Both machine authorities record the exact installed `product_version`;
@@ -84,7 +90,10 @@ For the released v1.7.1 Sleep contract, `sleep_duration_minutes_ex_awake` is
 an observed-stage sum when any finite deep/light/REM stage exists, with an
 approved direct-source fallback only when all stages are absent. Missing stages
 are not zero-filled; awake and window-minus-awake are not used; conflicting
-direct aliases fail closed. Available-only Sleep rows may be used as
+direct aliases stop the run in v1.7.1, and starting with v2.0.0 they leave the
+duration null and listed in `disagreeing_fields`, with the
+`sleep_duration_source` `direct_aliases_disagree`. Available-only Sleep rows
+may be used as
 `context_only` analysis context, while `needs_review` and excluded rows remain
 ineligible.
 
@@ -156,7 +165,9 @@ Starting with v1.4.1, FIT session `sport` and `sub_sport` use FIT profile type
 names; for example, a trail run is `running` with `trail`, and a mountain-bike
 ride is `cycling` with `mountain`. A bounded table names common FIT sport and
 sub-sport codes; any other sport code is kept as its numeric text and any other
-sub-sport code as null. The same container checks also gate the FIT-derived
+sub-sport code as null. Starting with v2.0.0, `sub_sport_code` keeps the
+recorded number of each session's sub-sport, also an unknown one; it is null
+when the session has none or the number is of another form. The same container checks also gate the FIT-derived
 HRV values used by `hrv_daily`, so a FIT file that fails them contributes no
 HRV value.
 
@@ -179,8 +190,14 @@ point, dataset states, explicit relationships, warnings, prohibited
 operations, and privacy mode. `SCHEMA_CATALOG.json` comes from the runtime
 schema definitions, not the first data row. Source identifiers that Garmin may
 emit as either a JSON integer or string—`activity_id`, `gear_key`, and
-`personal_record_id`—use the explicit `integer|string` logical type; the
-normalizer does not silently coerce identity.
+`personal_record_id`—use the explicit `integer|string` logical type.
+Identifiers are compared after trimming spaces and leading zeros, and
+digit-only `gear_key` and `activity_id` text is written as an integer in
+`activity_gear`, as in v1.7.1. Starting with v2.0.0, only the ASCII digits 0-9
+are digits, a whole number written with a decimal point, such as `123.0`, is
+the identifier `123`, and a row whose identifier cannot be used is left out
+with `DATA_ROW_LEFT_OUT` (see
+[Rows and values with problems](v2_data_handling.md#rows-and-values-with-problems)).
 
 For every normalized dataset, both machine artifacts also declare the runtime
 grain and stable key plus identical `relationship_role`, `semantic_role`,
@@ -222,7 +239,7 @@ volume and count context. It is never uploaded automatically.
 |---|---:|---|
 | `PASS` | 0 | Every detected family completed without warnings |
 | `PASS_WITH_WARNINGS` | 0 | Valid output exists with disclosed non-fatal warnings |
-| `PARTIAL_SUCCESS` | 3 | Activities are valid and detected FIT input is auditably incomplete |
+| `PARTIAL_SUCCESS` | 3 | Activities are valid and a file or row was left out; the warnings name it (in v1.7.1, only when detected FIT input was auditably incomplete) |
 | Fatal error | 2 | No valid completed output is published |
 
 Validation and evidence tooling must record the Product result separately from
@@ -276,14 +293,22 @@ The lineage binds the ordered immutable Snapshot set, policy registry, current
 parser/schema versions, and deterministic Canonical build identity. Coverage
 reports dataset presence patterns, previous-only retention, new and reappeared
 records, changed records/fields, review holds, unsupported objects, pairwise and
-leave-one-out evidence. Missing from a later Export never means delete.
-Explicit null or empty values preserve an earlier explicit value and remain
-reviewable, except in daily datasets, where a differing record stops the build
-or, for `endurance_score_daily` and `uds_daily`, is kept as observed variants.
+leave-one-out evidence. Missing from a later Export never means delete,
+except, starting with v2.0.0, an `activity_gear` link that the latest Snapshot
+shows was changed, such as when the shoes of an Activity were changed (see
+[Known Limitations](known_limitations.md#snapshot-lifecycle)). In v1.7.1,
+explicit null or empty values preserve an earlier explicit value and remain
+reviewable, and in daily datasets a differing record stops the build or
+removes the day. Starting with v2.0.0, an explicit empty value in a later
+Snapshot of Activities, Gear, `activity_gear`, or Personal Records removes the
+value; daily datasets compare the observations of a key in all Snapshots
+together, so values that differ are null and listed in `disagreeing_fields`;
+and Sleep rows without `calendarDate` take their day from the end time (see
+[Known Limitations](known_limitations.md#snapshot-lifecycle) and
+[Changes across Snapshots](v2_data_handling.md#changes-across-snapshots)).
 Automatic deletion and timestamp-only relationship inference are
 both `false`. Starting with v1.5.0, the approved input keeps every Sleep source
-field that Run-All reads; Sleep rows without `calendarDate` remain review holds
-(see [Known Limitations](known_limitations.md#snapshot-lifecycle)).
+field that Run-All reads.
 
 The local Canonical build also records `canonical_merge_manifest.json`,
 `snapshot_delta_report.json`, `presence_pattern_report.json`,
@@ -326,11 +351,18 @@ The listed normalized datasets are optional stable datasets. When their
 source files are absent, Run-All emits empty normalized arrays and
 `SKIPPED_NOT_PRESENT` family evidence without adding a warning. Detected rows
 with missing or invalid required values remain visible through aggregate audit
-and warning counts. Race Prediction, Acute Training Load, Training Readiness,
+and warning counts. Starting with v2.0.0, a row left out that holds a value
+gives `DATA_ROW_LEFT_OUT` and ends the run as `PARTIAL_SUCCESS`, a row without
+any value is counted in `empty_record_count` without a warning, and a value of
+another form is null with `DATA_VALUE_INVALID`. Race Prediction, Acute Training Load, Training Readiness,
 VO2Max, and Training History retain one row per source observation and expose
 `observation_timestamp`; no latest-wins or canonical daily-row selection is
-performed. Divergent public values for one stable key fail
-closed; HRV instead emits an unresolved review row with no selected value. The
+performed. Starting with v2.0.0, divergent public values for one stable key
+keep one row with the differing fields null and listed in
+`disagreeing_fields`, with every value in the audit record and the warning
+`VALUES_DISAGREE`; HRV marks such a day with the `dedupe_status`
+`same_day_values_disagree` (see
+[Values that disagree](v2_data_handling.md#values-that-disagree)). The
 public rows intentionally exclude device, account, unapproved raw timestamp,
 and source-path fields. The five observation contracts expose only their
 normalized `observation_timestamp`. Health Status remains deferred.
@@ -352,7 +384,10 @@ When Snapshot Merge observes multiple accepted Lactate candidates without
 resolved authority, it preserves the distinct candidates, records exact replay
 counts and an unresolved candidate status, and continues with a warning. This
 candidate-only warning does not make Stable promotion available and does not
-select a winner. Malformed source structure remains fail-closed.
+select a winner. Starting with v2.0.0, a malformed candidate no longer stops
+the run: an item that is not a record is left out with `DATA_ROW_LEFT_OUT`,
+and a value of another form stays in the audit record with
+`DATA_VALUE_INVALID`.
 
 Race Prediction, Sleep, UDS, Acute Training Load, Training Readiness, VO2Max,
 HRV, and Training History remain separate context. Their detailed fields,
