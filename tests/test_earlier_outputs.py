@@ -134,8 +134,9 @@ class EarlierOutputTest(StopLines, unittest.TestCase):
             ("1.7.0", 1, "1.7.0"),
             ("1.7.1", 1, "1.7.1"),
             ("2.0.0", RUN_ALL_VERSION, "2.0.0"),
-            # Another pre-release, named as a release is (stage D2).
-            ("2.0.0rc2", RUN_ALL_VERSION, "2.0.0rc2"),
+            # Another pre-release, named as a release is (stage D2): the
+            # release candidate before this one (stage D7).
+            ("2.0.0rc1", RUN_ALL_VERSION, "2.0.0rc1"),
             # This version's name with the checks of another, as a build of
             # this version in development may have written: named, also when
             # it is a pre-release such as 2.0.0rc1.

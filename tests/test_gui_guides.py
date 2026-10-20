@@ -127,6 +127,12 @@ class GuiGuideTest(unittest.TestCase):
         japanese = GUIDES["ja"].read_text(encoding="utf-8")
         self.assertTrue(english.startswith("# GUI Guide\n\n> **Release candidate of v2.0.0.**"))
         self.assertTrue(japanese.startswith("# GUI の手引き\n\n> **v2.0.0 の試しのバージョンです。**"))
+        # The note at the top names this release candidate, and no other
+        # (stage D7).
+        for language, text in (("en", english), ("ja", japanese)):
+            with self.subTest(language=language):
+                note = text.split("\n\n", 2)[1]
+                self.assertEqual(set(re.findall(r"v\d+\.\d+\.\d+(?:a|b|rc)\d+", note)), {f"v{__version__}"})
         self.assertIn("[日本語](gui_guide.ja.md)", english)
         self.assertIn("[English](gui_guide.md)", japanese)
         index = (ROOT / "docs/README.md").read_text(encoding="utf-8")

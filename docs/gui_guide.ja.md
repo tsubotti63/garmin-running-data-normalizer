@@ -1,8 +1,8 @@
 # GUI の手引き
 
-> **v2.0.0 の試しのバージョンです。** GUI は、TestPyPI に出した v2.0.0 の試しの
-> バージョン（release candidate）v2.0.0rc1 に入っています。今の安定したバージョン
-> v1.7.1 には入っていません。v2.0.0rc1 の入れ方は、
+> **v2.0.0 の試しのバージョンです。** GUI は、TestPyPI に出す v2.0.0 の試しの
+> バージョン（release candidate）v2.0.0rc2 に入っています。今の安定したバージョン
+> v1.7.1 には入っていません。v2.0.0rc2 を公開したあとの入れ方は、
 > [用意するもの](#用意するもの)にあります。v1.7.1 では、
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md)
 > のとおりに、コマンドラインを使ってください。
@@ -18,13 +18,13 @@ GUI は、Garmin のエクスポート（Account Data Export）を、ブラウ�
 
 ## 用意するもの
 
-- Python 3.11 以降で入れた、試しのバージョン v2.0.0rc1。GUI のために足す依存は
-  ありません。v2.0.0rc1 は TestPyPI に公開しています。v1.7.1 を入れた環境はそのままに
+- Python 3.11 以降で入れた、試しのバージョン v2.0.0rc2。GUI のために足す依存は
+  ありません。v2.0.0rc2 を TestPyPI に公開したら、v1.7.1 を入れた環境はそのままに
   して、別の仮想環境に入れてください。TestPyPI に無いことがある依存（Windows の
   `tzdata` など）は、Production PyPI から入れます：
 
   ```bash
-  python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc1
+  python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc2
   ```
 
 - 同じコンピューターで動くブラウザ。デスクトップかノートのコンピューターの
