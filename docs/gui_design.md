@@ -969,15 +969,23 @@ alone, and reduced motion.
 - Each stage B pull request checks the screen texts and the points where a user
   may hesitate, not only the layout.
 - Manual checks in stage C cover macOS (Chrome and Safari), with the keyboard
-  and VoiceOver. The release candidate of stage D is checked by a person who
-  has not seen the GUI before, who must be able to select an Export and finish
-  a normalization without instructions, and on a physical Windows machine
-  (x64, Edge and Chrome, with the keyboard) with synthetic data. Both come
-  before the stable release, as the Human maintainer decided on 2026-10-19
-  and 2026-10-20. A Windows 11 on Arm64 virtual machine was planned as well;
-  the Human maintainer decided on 2026-10-20 to leave it out once the
-  physical machine covered its checks, which it did on 2026-10-20. Windows on
-  Arm64 is not checked by hand. Linux is covered by CI only.
+  and VoiceOver. No person who had not seen the GUI before checked a release
+  candidate before the stable release, because none could be found. Instead,
+  as the Human maintainer decided on 2026-10-20, new AI sessions that had
+  never seen the GUI finished a normalization of the synthetic Export with no
+  instructions: two with v2.0.0rc1, whose findings stage D6 made clearer in
+  the texts of v2.0.0rc2, and one with v2.0.0rc2, which read the clearer
+  texts without hesitating there; the five things that it found new are left
+  for after the stable release. An AI session does not hesitate as a person
+  does, so this check finds unclear words and next steps, and is weaker than
+  a check by a person. A person checks the GUI after the stable release if
+  one can be found. v2.0.0rc1 was checked on a physical Windows machine (x64,
+  Edge and Chrome, with the keyboard) with synthetic data; from v2.0.0rc1,
+  v2.0.0rc2 changed only the page texts and the version, so Windows was not
+  checked by hand again. A Windows 11 on Arm64 virtual machine was planned as
+  well; the Human maintainer decided on 2026-10-20 to leave it out once the
+  physical machine covered its checks. Windows on Arm64 is not checked by
+  hand. Linux is covered by CI only.
 - The maintainer compares GUI and CLI output on a real Export by counts and
   identity only, as for earlier releases.
 
@@ -991,7 +999,7 @@ alone, and reduced motion.
 | A checkpoint | CLI-only verification with synthetic golden outputs and a draft of the migration notes |
 | B | The single-page GUI, in several pull requests, each checked for screen texts and points of hesitation |
 | C | Verification on macOS and browsers, with the keyboard and VoiceOver, and the maintainer real-data check |
-| D | Release candidate on TestPyPI with the `gui` command exposed, checked by a first-time user who finishes a normalization without instructions and on a physical Windows machine (x64) with synthetic data, before the stable release |
+| D | Release candidates on TestPyPI with the `gui` command exposed, before the stable release: v2.0.0rc1, checked on a physical Windows machine (x64) with synthetic data and by two new AI sessions in place of a first-time user; and v2.0.0rc2, with the texts that they found unclear made clearer, checked on macOS with synthetic and real data and by a new AI session |
 | E | Stable 2.0.0 release |
 
 Installing the release candidate from TestPyPI uses Production PyPI as an

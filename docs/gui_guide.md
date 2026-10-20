@@ -133,7 +133,9 @@ exports held; none can be left out.
   copies this export into the store, then normalizes it together with the
   existing Snapshots.
 - **Normalize this export only (no import)**: normalizes this export alone,
-  without the store. The parts of the store turn gray.
+  without the store. The parts of the store turn gray. When there is no store
+  yet, they still say "It is created here when you normalize.", but this
+  way creates no store.
 
 The third way, normalizing the existing Snapshots again, is chosen in the
 first box.
