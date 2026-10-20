@@ -220,7 +220,7 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Default branch: `main`
 - License: `Apache-2.0`
 - GitHub Actions: Operational
-- Current source and package version: `2.0.0rc1`
+- Current source and package version: `2.0.0rc2`
 - Current Production PyPI version: `1.7.1`
 - Latest GitHub Release: `v1.7.1`
 - GitHub Release: Public, non-prerelease, and marked latest

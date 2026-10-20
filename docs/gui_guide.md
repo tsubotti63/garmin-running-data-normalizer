@@ -1,8 +1,9 @@
 # GUI Guide
 
-> **Release candidate of v2.0.0.** The GUI is in v2.0.0rc1, the release
-> candidate of v2.0.0 on TestPyPI; the current stable release, v1.7.1, does
-> not have it. [What you need](#what-you-need) says how to install v2.0.0rc1.
+> **Release candidate of v2.0.0.** The GUI is in v2.0.0rc2, the release
+> candidate of v2.0.0 for TestPyPI; the current stable release, v1.7.1, does
+> not have it. [What you need](#what-you-need) says how to install v2.0.0rc2
+> once it is published.
 > With v1.7.1, use the command line as described in
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
 
@@ -17,14 +18,14 @@ Everything stays on your computer.
 
 ## What you need
 
-- The release candidate v2.0.0rc1, installed with Python 3.11 or later. The
-  GUI adds no dependency. v2.0.0rc1 is published on TestPyPI. Install it in a
-  virtual environment of its own, so that an installed v1.7.1 stays as
+- The release candidate v2.0.0rc2, installed with Python 3.11 or later. The
+  GUI adds no dependency. Once v2.0.0rc2 is published on TestPyPI, install it
+  in a virtual environment of its own, so that an installed v1.7.1 stays as
   it is. Production PyPI is the extra index for the dependencies that
   TestPyPI may not provide, such as `tzdata` on Windows:
 
   ```bash
-  python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc1
+  python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc2
   ```
 
 - A web browser on the same computer, in a window of a desktop or laptop
