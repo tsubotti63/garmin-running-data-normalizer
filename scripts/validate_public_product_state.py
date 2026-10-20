@@ -41,6 +41,9 @@ CURRENT_DOCUMENTS = (
 )
 CURRENT_RELEASE_NOTES_TEMPLATE = "docs/release_notes/v{version}.md"
 CURRENT_STABLE_VERSION = "1.7.1"
+# Where an implementation candidate is published, as the output contract
+# says it.
+CANDIDATE_PUBLICATION_PLACES = ("not published", "TestPyPI only")
 
 STATUS_EXIT_CONTRACT_MARKERS = (
     "| `PASS` | 0 |",
@@ -397,14 +400,23 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
                 f"## v<previous version> to v{CURRENT_STABLE_VERSION}"
             )
         if version != CURRENT_STABLE_VERSION:
+            # A candidate is not published, or is published on TestPyPI only,
+            # as a release candidate is for its checks (stage D3).
             candidate_markers = {
-                "README.md": f"Implementation candidate: **v{version}**",
-                "docs/output_contract.md": f"- Implementation candidate: v{version} (not published)",
+                "README.md": (f"Implementation candidate: **v{version}**",),
+                "docs/output_contract.md": tuple(
+                    f"- Implementation candidate: v{version} ({place})"
+                    for place in CANDIDATE_PUBLICATION_PLACES
+                ),
             }
-            for relative, marker in candidate_markers.items():
-                if not _contains_whitespace_normalized(contents.get(relative, ""), marker):
+            for relative, markers in candidate_markers.items():
+                if not any(
+                    _contains_whitespace_normalized(contents.get(relative, ""), marker)
+                    for marker in markers
+                ):
                     findings.append(
-                        f"{relative}: implementation candidate marker is missing: {marker}"
+                        f"{relative}: implementation candidate marker is missing: "
+                        + " or ".join(markers)
                     )
     for relative, markers in required_markers.items():
         text = contents.get(relative, "")
