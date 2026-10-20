@@ -278,7 +278,10 @@ a new Snapshot.
 
 **Results by data family** lists each kind of data with its record count, its
 status, and its warnings, then the warnings that belong to no kind, and the
-total of the warnings. Yellow rows are warnings.
+total of the warnings. Yellow rows are warnings. Of the families shown as
+**Not in the export**, Gear, Personal records, and FIT files add a warning; the
+daily records, such as Sleep, HRV, and VO2 max, are often not in an export, so
+they add none.
 
 **Output check** runs by itself after the run, under **Steps**, with the same
 checks as the `validate-handoff` and `doctor --run-output` commands. It
