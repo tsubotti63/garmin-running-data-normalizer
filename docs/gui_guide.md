@@ -1,9 +1,8 @@
 # GUI Guide
 
 > **Release candidate of v2.0.0.** The GUI is in v2.0.0rc2, the release
-> candidate of v2.0.0 for TestPyPI; the current stable release, v1.7.1, does
-> not have it. [What you need](#what-you-need) says how to install v2.0.0rc2
-> once it is published.
+> candidate of v2.0.0 on TestPyPI; the current stable release, v1.7.1, does
+> not have it. [What you need](#what-you-need) says how to install v2.0.0rc2.
 > With v1.7.1, use the command line as described in
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
 
@@ -19,8 +18,8 @@ Everything stays on your computer.
 ## What you need
 
 - The release candidate v2.0.0rc2, installed with Python 3.11 or later. The
-  GUI adds no dependency. Once v2.0.0rc2 is published on TestPyPI, install it
-  in a virtual environment of its own, so that an installed v1.7.1 stays as
+  GUI adds no dependency. v2.0.0rc2 is published on TestPyPI. Install it in a
+  virtual environment of its own, so that an installed v1.7.1 stays as
   it is. Production PyPI is the extra index for the dependencies that
   TestPyPI may not provide, such as `tzdata` on Windows:
 
