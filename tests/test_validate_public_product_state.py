@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
@@ -504,6 +505,44 @@ def test_candidate_marker_follows_package_version(tmp_path: Path) -> None:
         for item in findings
     )
 
+
+
+@pytest.mark.parametrize(
+    ("place", "taken"),
+    (
+        ("(not published)", True),
+        ("(TestPyPI only)", True),
+        ("(published)", False),
+        ("", False),
+    ),
+)
+def test_candidate_contract_marker_says_where_the_candidate_is_published(
+    tmp_path: Path, place: str, taken: bool
+) -> None:
+    # Stage D3: a candidate is not published, or is published on TestPyPI
+    # only, as a release candidate is for its checks; nothing else is taken.
+    _copy_validator_inputs(tmp_path)
+    contract = tmp_path / "docs/output_contract.md"
+    text = contract.read_text(encoding="utf-8")
+    line = re.search(
+        rf"^- Implementation candidate: v{re.escape(__version__)}\b.*$", text, re.M
+    )
+    assert line is not None
+    contract.write_text(
+        text.replace(
+            line.group(0), f"- Implementation candidate: v{__version__} {place}".rstrip()
+        ),
+        encoding="utf-8",
+    )
+
+    _, findings = validate(tmp_path)
+
+    missing = [
+        item
+        for item in findings
+        if item.startswith("docs/output_contract.md: implementation candidate marker is missing")
+    ]
+    assert (missing == []) is taken
 
 MAINTAINER_STATE_DOCUMENTS = (
     "SECURITY.md",

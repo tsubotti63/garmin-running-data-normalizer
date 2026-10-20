@@ -1,5 +1,50 @@
 # Release Readiness
 
+## v2.0.0rc1 release candidate
+
+Version `2.0.0rc1`, the release candidate of v2.0.0, is published on TestPyPI
+only, for the checks of stage D before the stable release. It adds the local
+GUI and the data handling of v2.0.0, as the
+[draft of the v2.0.0 migration notes](v2_migration_notes_draft.md) lists.
+Production PyPI and the latest GitHub Release stay v1.7.1, and no GitHub
+Release was made for the release candidate.
+
+The release source is `f9d12fc8b49915add1a43efa34417e36569dcd9e` (#133). The
+annotated `v2.0.0rc1` tag (tag object
+`1ddf9c6f5e5f7677ed5cc7d8ee2437b321638e06`) points to it, so that the links of
+the GUI's help panel open the documents of that tag. TestPyPI publication
+through Trusted Publishing/OIDC on 2026-10-20 JST and the publish workflow's
+exact-version TestPyPI install verification are complete.
+
+The release source passed main CI run `39366348529` (Ubuntu `test` and
+`windows-runtime`) and CodeQL. A build-only publish workflow run
+(`39366955879`) on the release source passed with every upload job skipped.
+Publish workflow run `39368797742` then built and validated the exact source
+and published to TestPyPI; the PyPI jobs were skipped. In its first attempt,
+creating the PEP 740 attestations failed before any upload, because the
+Sigstore transparency log (Rekor) answered HTTP 502. On the Human's
+instruction, the failed job was re-run in the same run (attempt 2): the build
+and the approval gate did not run again, as their jobs kept the start times of
+the first attempt, and the re-run published the artifact of the first
+attempt's build and verified the exact-version TestPyPI install. The
+publication and the tag ran under one Human approval given after their values
+were shown, and the re-run under another. The `testpypi` Environment
+deployment was Human-authorized for each attempt, and the approvals were
+submitted through the GitHub API on the Human's instruction.
+`TESTPYPI_PUBLISH_APPROVED` was returned to `false` during the first attempt,
+once its approval gate had passed, and was not set again for the re-run.
+
+The SHA-256 checksums recorded by that run match TestPyPI: wheel
+`f64485cf4a861a7dc9da64cff74633f21cdbb063caaf51f76a7765e49722aa4b` and source
+distribution `b36a93179d46df93159abd51321646cbafc44c21ff232ad2ea841fbcdc6f4df8`.
+Each file carries a PEP 740 publish attestation from `publish-pypi.yml` of
+`tsubotti63/garmin-running-data-normalizer` in the `testpypi` Environment,
+through GitHub Trusted Publishing. The build-only run produced different
+checksums because the distributions are not byte-reproducible across runs;
+only the publish run's artifacts were published. The documents at the
+`v2.0.0rc1` tag describe the installation from TestPyPI in the words used
+before the publication.
+
 ## v1.7.1 stable release
 
 Version `1.7.1` is published as the Snapshot metrics fix release. It makes
@@ -162,12 +207,18 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
   skipped
 - Production PyPI `1.7.1`: Published and exact-version install verified by the
   publish workflow
+- TestPyPI `2.0.0rc1`: Published and exact-version install verified by the
+  publish workflow
+- Release candidate tag: `v2.0.0rc1`, without a GitHub Release
 - Trusted Publishing: Configured for protected `testpypi` and `pypi`
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
 and GitHub Releases remain immutable. v1.7.1 is the current stable release;
-v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 are historical releases.
+v2.0.0rc1 is a release candidate on TestPyPI only; v1.7.0, v1.6.0, v1.5.0,
+v1.4.1, v1.4.0, and v1.3.3 are historical releases. The v2.0.0rc1 tag and
+TestPyPI publication evidence was recorded only after the corresponding
+external state was observed.
 The v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag, GitHub
 Release, and Production PyPI publication evidence was recorded only after the
 corresponding external state was observed.
