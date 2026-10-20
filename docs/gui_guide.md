@@ -36,6 +36,7 @@ garmin-running-data-normalizer gui
 ```
 
 The command prints the GUI's address and opens it in your default browser.
+With `--no-browser`, it only prints the address, for you to open.
 
 - The address contains a key for this launch only. Do not share it. A page
   without the key cannot use the GUI; if the page says so, open the address
@@ -494,6 +495,11 @@ and open the new address; each launch has a new address and key.
   terminal.
 - While a run is active, **Quit** is refused; cancel the run first. `Ctrl+C`
   cancels the run and then stops the GUI.
+- The `gui` command ends with exit code 0 after **Quit**, or after `Ctrl+C`
+  when no run is active. When `Ctrl+C` cancels a run, the terminal shows what
+  the command line shows for a cancelled command, and the code is 130. A
+  second `Ctrl+C` while the GUI stops a run does nothing; the GUI stops once
+  the run has ended.
 - When no page has used the GUI for 10 minutes and no run is active, the GUI
   stops by itself. Closing the browser tab does not stop it at once.
 

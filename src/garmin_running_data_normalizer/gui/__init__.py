@@ -1,6 +1,6 @@
-"""Local browser interface, in development for v2.0.0.
+"""Local browser interface of v2.0.0, opened with the `gui` command.
 
-This package is internal. The command-line interface does not expose the GUI
-until the v2.0.0 release candidate, and nothing here is a public contract yet.
-See ``docs/gui_design.md`` for the design.
+The modules of this package are internal: the `gui` command (stage D1) and
+the page are the interface, and nothing here is a public contract yet. See
+``docs/gui_design.md`` for the design.
 """

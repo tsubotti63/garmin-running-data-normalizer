@@ -655,7 +655,11 @@ Many cases that stop with exit 2 in v1.x finish with exit 0 or 3 in v2.0.0.
 
 ## CLI changes
 
-- `gui` starts the GUI; it is exposed in stage D.
+- `gui` starts the GUI (stage D1): it prints the address with the launch key,
+  opens it in the default browser unless `--no-browser` is given, and ends
+  with exit 0 after the Quit button or after `Ctrl+C` without a run, or, when
+  `Ctrl+C` stopped a run, with the CLI's lines and exit code for a cancelled
+  command, 130.
 - `run-all`, `doctor --input`, and `snapshot register` accept a ZIP file.
 - Warnings about values that disagree name the Snapshots by number.
 - The pre-run checks that only the GUI performs in v1.7.1 (output name, an

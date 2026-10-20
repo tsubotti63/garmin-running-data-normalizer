@@ -5,8 +5,8 @@
   [Migration notes outline](v2_data_handling.md#migration-notes-outline-v171-to-v200)
   and a comparison of v1.7.1 with the CLI of stage A on synthetic Exports. It
   covers the CLI and its outputs, with the changes that stage B made to the
-  CLI for the GUI; the `gui` command is added to it when stage D exposes the
-  command. When v2.0.0 is released, its section moves into
+  CLI for the GUI, and the `gui` command that stage D1 adds. When v2.0.0 is
+  released, its section moves into
   [Migration Notes](migration_notes.md), which describes the published
   version until then.
 - Authority: [v2.0.0 Data Handling](v2_data_handling.md) gives every rule and
@@ -26,7 +26,7 @@ folder; earlier outputs are not converted.
 
 | Contract | v2.0.0 position |
 |---|---|
-| CLI commands and options | The same commands and options; `--input` also takes the downloaded Export ZIP file; for `run-all`, `snapshot run-all`, `snapshot build-input`, and `normalize-activities`, the folder for the output must exist and the name of a new output must be one that every system accepts; for `snapshot init`, the folder that holds the new store must exist, and for `support-bundle`, the folder of the bundle must exist and be outside the run output; the new `snapshot unlock --store <store> --confirm-no-other-command` removes the lock file that a stopped registration left |
+| CLI commands and options | One new command, `gui`, which opens the local GUI and ends with exit 0 after its Quit button or `Ctrl+C` without a run, or 130 when `Ctrl+C` stopped a run; otherwise the same commands and options; `--input` also takes the downloaded Export ZIP file; for `run-all`, `snapshot run-all`, `snapshot build-input`, and `normalize-activities`, the folder for the output must exist and the name of a new output must be one that every system accepts; for `snapshot init`, the folder that holds the new store must exist, and for `support-bundle`, the folder of the bundle must exist and be outside the run output; the new `snapshot unlock --store <store> --confirm-no-other-command` removes the lock file that a stopped registration left |
 | Exit codes | The same `0 / 0 / 3 / 2` Product mapping; `PARTIAL_SUCCESS` (exit 3) covers every file or row left out, and many problems that stopped with exit 2 now finish with exit 3 or 0; `Ctrl+C` ends a command with exit 130 |
 | Stops | Every `ERROR` line says what happened and then the next step of its code; some codes change (below) |
 | Datasets, schemas, and stable keys | 17 datasets; 247 fields (224 in v1.7.1); ten fields become nullable; stable keys unchanged |

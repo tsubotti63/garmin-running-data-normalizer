@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Open the GUI that is in development, from a source checkout.
+"""Open the GUI from a source checkout, as the `gui` command does.
 
-The command-line interface does not expose the GUI until the v2.0.0 release
-candidate. This helper is for development only and is not part of the wheel.
+The `gui` command opens the GUI of an installed package. This helper runs the
+same launch from a source checkout, for development only, and is not part of
+the wheel.
 """
 from __future__ import annotations
 
 import argparse
 import os
 import sys
-import webbrowser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Open the GUI that is in development, from a source checkout."
+        description="Open the GUI from a source checkout, as the gui command does."
     )
     parser.add_argument(
         "--no-browser",
@@ -33,24 +33,10 @@ def main() -> int:
     os.environ["PYTHONPATH"] = os.pathsep.join(
         path for path in (source, os.environ.get("PYTHONPATH")) if path
     )
-    from garmin_running_data_normalizer.gui.server import (
-        GuiServer,
-        cancel_report,
-        serve_until_stopped,
-    )
+    # The same launch as the `gui` command (stage D1).
+    from garmin_running_data_normalizer.gui.command import run_gui
 
-    server = GuiServer()
-    print("GUI address (it contains the launch key; do not share it):")
-    print(server.url)
-    print("Stop with Ctrl+C or the Quit button on the page.", flush=True)
-    if not args.no_browser:
-        webbrowser.open(server.url)
-    stopped = serve_until_stopped(server)
-    # The run that Ctrl+C cancelled, as the CLI reports a cancelled command.
-    for line in cancel_report(stopped) if stopped is not None else []:
-        print(line, file=sys.stderr)
-    print("GUI stopped.")
-    return 0
+    return run_gui(open_browser=not args.no_browser)
 
 
 if __name__ == "__main__":
