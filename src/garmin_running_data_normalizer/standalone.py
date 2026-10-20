@@ -70,7 +70,9 @@ LEGACY_V1_3_SNAPSHOT_PATHS = (
     "snapshot/canonical_merge_summary.json",
 )
 # A version that an output names and that its stop may repeat.
-VERSION_FORM = re.compile(r"(?:0|[1-9][0-9]{0,3})(?:\.(?:0|[1-9][0-9]{0,3})){1,2}")
+# A release, or a pre-release such as 2.0.0rc1, as the page takes it too
+# (RELEASE_VERSION in gui/static/flow.mjs; stage D2).
+VERSION_FORM = re.compile(r"(?:0|[1-9][0-9]{0,3})(?:\.(?:0|[1-9][0-9]{0,3})){1,2}(?:(?:a|b|rc)(?:0|[1-9][0-9]{0,3}))?")
 
 
 def _path_shapes(base: tuple[str, ...], snapshot_paths: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:

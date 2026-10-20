@@ -19,6 +19,10 @@ PUBLIC_DOCUMENTS = (
     "docs/known_limitations.md",
     "SUPPORT.md",
     "CONTRIBUTING.md",
+    # The guides of the GUI, which the help panel of its page links to
+    # (stage D2).
+    "docs/gui_guide.md",
+    "docs/gui_guide.ja.md",
 )
 REQUIRED_PLATFORM_SECTIONS = (
     "README.md",
@@ -44,6 +48,11 @@ CURRENT_STABLE_VERSION = "1.7.1"
 WINDOWS_SOURCE_CONTROL_COMMANDS = re.compile(
     r"(?im)^\s*git\s+(?:clone|fetch|checkout|pull)\b"
 )
+# An install of the release candidate from TestPyPI takes the dependencies
+# that TestPyPI may not provide, such as tzdata on Windows, from Production
+# PyPI (stage D2).
+TESTPYPI_INDEX = "--index-url https://test.pypi.org/simple/"
+PRODUCTION_EXTRA_INDEX = "--extra-index-url https://pypi.org/simple/"
 
 
 def _project_version(root: Path, pyproject_data: dict[str, object]) -> str:
@@ -173,6 +182,23 @@ def validate(root: Path = ROOT) -> list[str]:
         findings.append(
             "docs/project/run_all_public_usage_example_v0_1.md: Bash heredoc remains"
         )
+
+    for relative, text in contents.items():
+        for _language, block in _fenced_blocks(text):
+            for line in block.splitlines():
+                if "test.pypi.org" not in line:
+                    continue
+                if TESTPYPI_INDEX not in line or PRODUCTION_EXTRA_INDEX not in line:
+                    findings.append(
+                        f"{relative}: TestPyPI install does not take its dependencies from Production PyPI"
+                    )
+                if (
+                    current_version is not None
+                    and f"garmin-running-data-normalizer=={current_version}" not in line.split()
+                ):
+                    findings.append(
+                        f"{relative}: TestPyPI install does not name the package version {current_version}"
+                    )
 
     for relative, text in contents.items():
         for language, block in _fenced_blocks(text):
