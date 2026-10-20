@@ -1,24 +1,52 @@
 # Known Limitations
 
-These limitations apply to the current stable v1.7.1 release published as the
-latest GitHub Release and Production PyPI distribution. These remain explicit
-Product boundaries.
+These limitations describe v2.0.0, the release in preparation, whose release
+candidate v2.0.0rc2 is published on TestPyPI. The current stable release,
+v1.7.1, is described by the documents at its tag `v1.7.1`. These remain
+explicit Product boundaries. The rules for problems in the data, which
+v2.0.0 changes, are in [v2.0.0 Data Handling](v2_data_handling.md).
 
 ## Input and orchestration
 
 - Run-All requires a supported `summarizedActivities.json` asset.
-- Gear, Personal Records, and FIT are optional and use exact filename or bounded
-  FIT discovery rules.
+- Gear, Personal Records, and FIT are optional. Their files are found by name
+  without regard to letter case, and FIT files by bounded discovery rules.
+  Files of a form that no dataset reads, and ZIP files inside ZIP files, are
+  not read; `run_manifest.json` lists them (see
+  [Files and fields that are not read](v2_data_handling.md#files-and-fields-that-are-not-read)).
 - Existing output is never overwritten. A new output directory is required for
-  each run.
-- A detected but incompletely parsed FIT asset produces auditable
-  `PARTIAL_SUCCESS` rather than silent omission.
+  each run, and the folder that holds it must exist: the command stops with
+  `OUTPUT_PARENT_NOT_FOUND` before it reads the input (see
+  [Stops that remain](v2_data_handling.md#stops-that-remain)).
+- A file or a row that cannot be used is left out with a warning, and the run
+  finishes as `PARTIAL_SUCCESS` (exit 3) rather than omitting it silently: a
+  FIT asset that is detected but not parsed completely, a file that cannot be
+  read, or a row with a value but without a usable key or date or, in some
+  datasets, a usable value (see
+  [Files that cannot be read](v2_data_handling.md#files-that-cannot-be-read)
+  and [Rows and values with problems](v2_data_handling.md#rows-and-values-with-problems)).
 - The compatible one-shot Run-All processes one supplied Export. It does not
   accumulate historical records across multiple Export downloads.
 - A newer Export can omit files, periods, records, or fields observed in an
-  older Export. Missing from the newer Export is not evidence of deletion.
-  Retain every downloaded Export until the additive Snapshot lifecycle has
-  registered and verified it.
+  older Export. A record or a field missing from the newer Export is not
+  evidence of deletion, and the Snapshot lifecycle keeps the earlier value;
+  an explicit empty value in a later Snapshot of Activities, Gear,
+  `activity_gear`, or Personal Records removes the value, and an
+  `activity_gear` link that the newer Export does not hold can be removed
+  (see [Snapshot lifecycle](#snapshot-lifecycle)).
+  Retain every downloaded Export until the Snapshot lifecycle has registered
+  and verified it.
+
+## Identifiers
+
+- Identifiers are compared after trimming spaces and leading zeros. Only the
+  ASCII digits 0-9 count as digits, so full-width digits are text, and a
+  number written as `123.0` is the identifier `123`.
+  `normalized/activity_gear.json` writes digit-only `gear_key` and
+  `activity_id` text as integers. A row whose identifier cannot be used, such
+  as `1.5`, and a row of Activities, Gear, or the links whose identifier is
+  `0`, is left out with the warning `DATA_ROW_LEFT_OUT` (see
+  [Rows and values with problems](v2_data_handling.md#rows-and-values-with-problems)).
 
 ## Local dates and times
 
@@ -28,11 +56,12 @@ Product boundaries.
 - Starting with v1.6.0, `run-all`, `snapshot run-all`, and
   `normalize-activities` accept `--timezone` with an IANA timezone name, such
   as `America/New_York`, and `doctor --input --timezone` checks that
-  timezone's data. The name must match exactly; use the Area/Location form,
-  because legacy aliases such as `Japan` are not available on every system.
-  The timezone is recorded as `local_timezone` in `run_manifest.json`,
-  `run_summary.json`, and `ANALYSIS_CONTEXT.json`. It is not added to the
-  External-safe Pack or the Support Bundle.
+  timezone's data; the GUI sets it in the box of the output. The name must
+  match exactly; use the Area/Location form, because legacy aliases such as
+  `Japan` are not available on every system. The timezone is recorded as
+  `local_timezone` in `run_manifest.json`, `run_summary.json`, and
+  `ANALYSIS_CONTEXT.json`, and as `date_timezone` in the HRV audit. It is not
+  added to the External-safe Pack or the Support Bundle.
 - This applies to Activity `activity_datetime_local` and `activity_date_local`
   (and therefore the External-safe Pack month), FIT session
   `start_datetime_local` and lap `start_time`, Sleep `sleep_start_local` and
@@ -49,33 +78,56 @@ Product boundaries.
   shifted.
 - A Sleep row without `calendarDate` takes its day from its end time in the
   run's timezone, so changing the timezone can place it on the same day as
-  another Sleep row. Differing rows for one day stop Run-All with
-  `DAILY_METRICS_CONFLICT`, as for any other daily conflict, so the same Export
-  can complete in one timezone and stop in another. FIT-derived HRV values that
-  share a local date with different values become review rows instead of
-  stopping the run; the timezone can change which values share a date.
+  another Sleep row. When such rows differ, the fields that differ are left
+  empty and listed in `disagreeing_fields`, the values stay in the audit
+  record, and the warning `VALUES_DISAGREE` counts the day (see
+  [Values that disagree](v2_data_handling.md#values-that-disagree)), so the
+  same Export can leave different fields empty in different timezones. The
+  same holds for FIT-derived HRV values that share a local date.
 
 ## Diagnostics and handoff validation
 
 - For a completed output that contains `diagnostics/` (produced by v1.4.0 or
-  later), `validate-handoff`, `doctor --run-output`, and `support-bundle`
-  accept the output only when the installed package version equals the version
-  that produced it. After upgrading the package, rerun Run-All before using
-  these commands on that output, or keep the producing version available.
+  later), `validate-handoff`, `doctor --run-output`, `support-bundle`, and the
+  GUI's check of an earlier output accept the output only when the installed
+  package version equals the version that produced it, a release candidate
+  such as `2.0.0rc2` included. Otherwise they stop with
+  `OUTPUT_OTHER_VERSION` and name the version that produced it, and the GUI
+  shows no change since such an output (see
+  [Checks of earlier outputs](v2_data_handling.md#checks-of-earlier-outputs)).
+  After upgrading the package, rerun Run-All before using these commands on
+  that output, or keep the producing version available.
 
 ## Snapshot lifecycle
 
 - The v1.2.0 workflow stores complete, explicitly confirmed Export
   observations in one private local store per opaque account boundary.
-- Canonical merge uses `missing_is_not_delete`; explicit null and empty values
-  preserve the prior explicit value and become review holds. Daily datasets are
-  the exception: when Exports differ for one daily key, including a null,
-  empty, or missing field, `endurance_score_daily` and `uds_daily` keep
-  observed variants, and the other daily datasets, including `sleep_daily`,
-  stop.
+- Snapshots are ordered by the observation times of their Exports, and
+  Snapshots observed at the same time are one time point. In Activities, Gear,
+  `activity_gear`, and Personal Records, each field takes its value from the
+  latest Snapshot that contains it, an explicit empty value removes the value,
+  and every earlier value stays in the dataset's audit record with the warning
+  `VALUES_UPDATED`; values that differ within one time point leave the field
+  empty and listed in `disagreeing_fields`. A record that the latest Snapshot
+  does not contain stays, with the warning `RECORDS_NOT_IN_LATEST_SNAPSHOT`,
+  except an `activity_gear` link: it is removed when the latest Snapshot has
+  Gear links (`gearActivityDTOs`, even empty) and contains both the link's
+  Activity and its Gear, as when the Activity's shoes were changed, and the
+  audit record keeps it in `removed_links` (see
+  [Changes across Snapshots](v2_data_handling.md#changes-across-snapshots)).
+  In the daily datasets, the observations of a key in all Snapshots are
+  compared together: a value that a later Snapshot leaves null or out stays,
+  and values that differ leave the field empty and listed in
+  `disagreeing_fields`, with the values and the Snapshots that gave them in
+  the audit record and the warning `VALUES_DISAGREE` (see
+  [Values that disagree](v2_data_handling.md#values-that-disagree)). A daily
+  value or record that the user deleted in Garmin Connect therefore stays from
+  the earlier Snapshot.
 - Automatic deletion, snapshot/blob deletion, and garbage collection are not
-  implemented. Unknown and unsupported inputs are preserved as raw evidence,
-  not promoted to normalized public datasets.
+  implemented: no command removes a Snapshot, and every normalization of the
+  Snapshots uses all of them. Excluding a Snapshot or choosing a value is not
+  supported. Unknown and unsupported inputs are preserved as raw evidence, not
+  promoted to normalized public datasets.
 - A Snapshot Store is not a public artifact or a backup service. Back up only
   after integrity verification and verify again after restore.
 - Starting with v1.5.0, new Snapshot Store directories and files are
@@ -85,23 +137,18 @@ Product boundaries.
   `normalize-activities` creates a new output directory as `0700` with `0600`
   files. Existing stores and directories keep their permissions; tighten an
   older store with `chmod -R go-rwx <store>`. Windows ignores these modes.
-- If `snapshot register` is interrupted, the store can keep
-  `.single-writer.lock` and an incomplete registration journal. `register`
-  then reports the lock and its recorded process ID, and `verify` reports
-  `incomplete_registration_journal_present`. Confirm that no other snapshot
-  command is running, delete `.single-writer.lock`, and rerun
-  `snapshot register` with the same Export, or with another complete Export if
-  the original is no longer available; it reconciles the journal before
-  registering. The lock file is the only store file that may be deleted.
-- When Snapshots disagree for the same stable key in a daily dataset other
-  than `endurance_score_daily` and `uds_daily`, `snapshot build-input` and
-  `snapshot run-all` stop and report counts by dataset and conflict type,
-  without dates, keys, or values. Activities, Gear, `activity_gear` links, and
-  Personal Records do not stop: each field takes the latest explicit value in
-  Snapshot acquisition order (by `export_observed_at`), so one record can
-  combine fields from different Snapshots, and an explicit null or empty value
-  does not replace an earlier explicit value. Excluding a Snapshot or choosing
-  a value is not supported.
+- If `snapshot register` is interrupted, the store can keep its lock file
+  `.single-writer.lock` and an incomplete registration journal. While the lock
+  file is there, `snapshot register` stops with `SNAPSHOT_STORE_LOCKED`; while
+  the journal is incomplete, `snapshot verify`, `snapshot build-input`, and
+  `snapshot run-all` stop with `SNAPSHOT_REGISTRATION_INCOMPLETE` (see
+  [Snapshot Stores](v2_data_handling.md#snapshot-stores)). Confirm that no
+  other normalization or snapshot command uses the store, remove the lock
+  file with `snapshot unlock --store <store> --confirm-no-other-command`,
+  which the GUI offers too, and rerun `snapshot register` with the same
+  Export, or with another complete Export if the original is no longer
+  available; it completes the store before registering. The lock file is the
+  only store file that may be removed.
 - From v1.3.0 through v1.7.0, `snapshot run-all` produced no
   `hill_score_daily`, `endurance_score_daily`, or `vo2max_daily` rows, with no
   warning, because Run-All did not recognize the merged files that
@@ -111,8 +158,9 @@ Product boundaries.
 - Starting with v1.5.0, `Thumbs.db` inside a ZIP file is not registered, so a
   ZIP that contains it receives a different Snapshot content identity than in
   v1.4.1 or earlier. Re-registering such an Export with its original label
-  fails, and a new label registers it as an additional Snapshot; do not
-  re-register Exports already registered with an earlier version.
+  stops with `SNAPSHOT_LABEL_EXISTS`, and a new label registers it as an
+  additional Snapshot; do not re-register Exports already registered with an
+  earlier version.
 - Starting with v1.5.0, Snapshot Sleep keeps every Sleep field that Run-All
   reads from a single Export. Earlier versions dropped the direct duration
   aliases `durationInSeconds` and `sleepDuration`, the snake_case stage fields
@@ -121,13 +169,14 @@ Product boundaries.
   so `snapshot run-all` could return `null` where Run-All on the same Export
   returned a value. Sleep rows without these fields build the same Snapshot
   records as in v1.4.1.
-- Snapshot Sleep stops when Exports differ for one `calendarDate` in a kept
-  field, including a field that is present in one Export and absent in
-  another. Because v1.5.0 keeps more fields, a store that v1.4.1 could build
-  can stop with v1.5.0 when its Exports differ only in the added fields.
-- Snapshot Sleep rows without `calendarDate` remain review holds and are not
-  passed to Run-All, while Run-All on a single Export takes the sleep day from
-  the sleep end time.
+- From v1.5.0 through v1.7.1, Snapshot Sleep stopped when Exports differed for
+  one `calendarDate` in a kept field, including a field present in one Export
+  and absent in another. v2.0.0 leaves the fields that differ empty instead,
+  as for every daily dataset, and a field absent in one Export is not a
+  difference.
+- Snapshot Sleep rows without `calendarDate` take their sleep day from the
+  sleep end time, as Run-All on a single Export does; a row without either is
+  left out (see [Snapshot Stores](v2_data_handling.md#snapshot-stores)).
 
 ## FIT
 
@@ -148,7 +197,8 @@ Product boundaries.
   normalized sessions/laps, remain explicit in FIT audit, and do not enter the
   eligible Activity/FIT Relationship Coverage population.
 - Activity/FIT linkage is limited to the documented evidence-qualified eligible
-  population; excluded and ambiguous candidates are not guessed.
+  population; excluded and ambiguous candidates are not guessed, and the
+  warning `ACTIVITY_FIT_LINK_AMBIGUOUS` counts the ambiguous ones.
 - Record coordinates, raw telemetry, and arbitrary FIT message preservation are
   intentionally excluded from public output.
 
@@ -163,16 +213,22 @@ Product boundaries.
   missing stage with zero or subtracts awake time from the sleep window. When
   all stages are absent, only the approved direct aliases
   (`sleepTimeSeconds`, `totalSleepSeconds`, `durationInSeconds`,
-  `sleepDuration`) may provide a value; conflicting aliases fail closed and no
-  authoritative value remains `null`.
-- Sleep `review_required_count` and `excluded_record_count` are separate audit
-  concepts. Excluded-only evidence does not create a review-required warning;
+  `sleepDuration`) may provide a value; when they disagree, the duration stays
+  empty, the audit record counts it in `direct_aliases_disagree_count`, and no
+  value is chosen.
+- Sleep keys that need review (`review_key_count`) and rows left out
+  (`excluded_record_count`) are counted apart in the audit. A row that holds
+  a value but cannot be used is left out with the
+  warning `DATA_ROW_LEFT_OUT`, and the run finishes as `PARTIAL_SUCCESS`
+  (exit 3); a row without any value is only counted as an empty record.
   `needs_review` and excluded rows remain ineligible for Activity context use.
-- The v1.3 HRV reference does not average conflicting same-date
-  values. Garmin/FIT raw sentinel
-  `65535` is excluded, and Health Status HRV is not asserted to be equivalent to
-  nightly FIT HRV. It is `analysis_reference_only`, not a Source of Truth and
-  not intended for daily coaching, medical, or readiness decisions.
+- The v1.3 HRV reference does not average values that differ for one date:
+  the value is empty and listed in `disagreeing_fields`, and the audit record
+  keeps the values. A reading without a value, such as the Garmin/FIT raw
+  sentinel `65535`, is counted in `absent_value_counts` without a warning.
+  Health Status HRV is not asserted to be equivalent to nightly FIT HRV. It is
+  `analysis_reference_only`, not a Source of Truth and not intended for daily
+  coaching, medical, or readiness decisions.
 - Health Status unknown metrics remain in long-form evidence; duplicate metric
   types are not silently overwritten.
 - Race Prediction is a Garmin algorithm prediction, not a measured result.
@@ -182,13 +238,20 @@ Product boundaries.
 - Race Prediction, Acute Training Load, Training Readiness, VO2Max, and Training
   History preserve each source observation. Their day-level QA view is a
   non-canonical aggregate; the package does not choose a latest or preferred row.
-- Snapshot-based Endurance and UDS values that differ for one calendar key are
-  preserved as public-safe observed variants in the corresponding audit output.
-  Their canonical daily interpretation remains unresolved, so no winner is
-  emitted. Same-export malformed/divergent values remain fail-closed.
+- Daily values that differ for one key, across Snapshots or within one Export,
+  Endurance Score and UDS included, leave the field empty and listed in
+  `disagreeing_fields`; the audit record keeps the values, with the Snapshots
+  that gave them in Snapshot runs, and no winner is emitted. A value of
+  another form is left out with its row or kept with the warning
+  `DATA_VALUE_INVALID` (see
+  [Rows and values with problems](v2_data_handling.md#rows-and-values-with-problems)).
 - Snapshot-aware relationship resolution can use earlier authoritative
-  observations when a later Export omits an endpoint. Valid unresolved links
-  remain auditable; malformed links remain fail-closed.
+  observations when a later Export omits an endpoint. A link whose record is
+  not in the output, or that is missing, malformed, or disagrees, stays with
+  its relationship `unresolved` and a reason, with the warning
+  `RELATIONSHIP_UNRESOLVED_VALID_LINK` or
+  `RELATIONSHIP_UNRESOLVED_INVALID_LINK`; a row without a usable identifier is
+  left out (see [Relationships](v2_data_handling.md#relationships)).
 - Runtime processing sequence is diagnostic only. It cannot alter acquisition
   chronology, normalized truth, relationship classification, or candidate
   selection.
@@ -229,45 +292,11 @@ stable third-party API contract.
 - Hill Score Daily and Endurance Score Daily are stable v1.3 datasets.
 - No Activity relationship is defined for either daily dataset. Date equality
   is not sufficient evidence for a join.
-- Lactate Threshold is provided as candidate/audit infrastructure only. Stable
-  public promotion is intentionally deferred until machine identity, units,
-  timezone semantics, heart-rate authority, FTP/power authority, and public
-  field/type rules are finalized. Fail-closed behavior is retained.
+- Lactate Threshold is provided as candidate/audit infrastructure only: its
+  candidates stay in the audit output and are not promoted to a public
+  dataset until machine identity, units, timezone semantics, heart-rate
+  authority, FTP/power authority, and public field/type rules are finalized.
 - Lactate source sequence may order records within its source family, but it is
   not identity and never authorizes latest-wins behavior.
 - Power conflicts remain review evidence and are not averaged, converted, or
   silently resolved.
-
-## Current behavior described differently elsewhere
-
-These points describe v1.7.1 behavior. Some other documents still describe
-them differently; they are planned to be corrected in v2.0.0.
-
-- HRV: when FIT files give different HRV values for one date, `hrv_daily`
-  keeps the date with `hrv_value` set to `null`, and the differing values are
-  not kept in the output; the HRV audit keeps only counts.
-  `diagnostics/run_quality.json` counts these dates under the reason
-  `CONFLICT_PRESERVED_NO_WINNER`, although the values are not preserved.
-- Relationships: a Personal Record, an `activity_gear` link, or a FIT lap whose
-  valid link points to a record that is not in the output is removed from the
-  normalized output. Only counts and the `RELATIONSHIP_UNRESOLVED_VALID_LINK`
-  warning remain, and the removed rows are not identified. This includes an
-  `activity_gear` link to missing Gear, which
-  [Dataset Relationships](dataset_relationships.md) lists as failing closed.
-- Sleep: two Sleep rows for one sleep day with different values stop Run-All
-  with `DAILY_METRICS_CONFLICT`; [Wellness Metrics](wellness_metrics.md)
-  describes them as reviewable.
-- Identifiers: relationship checks compare identifiers after trimming spaces
-  and leading zeros, and `normalized/activity_gear.json` writes digit-only
-  `gear_key` and `activity_id` text as integers;
-  [Output Contract](output_contract.md) says identity is not coerced.
-- Excluded daily rows: rows excluded from a daily dataset are counted in its
-  audit and in the `excluded` section of `diagnostics/run_quality.json`, but
-  they raise no warning; [Output Contract](output_contract.md) mentions
-  warning counts.
-- Endurance Score in Snapshots: Endurance Score values that differ across
-  Snapshots are kept as observed variants instead of stopping, as described
-  under [Snapshot lifecycle](#snapshot-lifecycle);
-  [Performance Metrics](performance_metrics.md) describes only the stop.
-- The HRV audit `date_basis` value names JST even when `--timezone` selects
-  another timezone; the HRV date itself uses the selected timezone.
