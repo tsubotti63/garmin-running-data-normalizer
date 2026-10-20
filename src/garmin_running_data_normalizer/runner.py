@@ -784,11 +784,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     support_bundle.add_argument("--run-output", required=True, help="Completed v1.4 Run-All output")
     support_bundle.add_argument("--output", required=True, help="New Support Bundle ZIP path")
+    gui = commands.add_parser(
+        "gui",
+        help="Open the local GUI in the default browser; the terminal shows its address.",
+    )
+    gui.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Print the address of the GUI without opening the default browser",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "gui":
+        # The GUI has its own Ctrl+C: it cancels a run before the server
+        # stops and reports it as the CLI reports a cancelled command
+        # (stage D1).
+        from .gui.command import run_gui
+
+        return run_gui(open_browser=not args.no_browser)
     watch = _Watch.of(args)
     interrupts = _Interrupts()
     try:

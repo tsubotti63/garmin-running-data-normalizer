@@ -726,8 +726,10 @@ def serve_until_stopped(
                 server.shutdown()
                 return
 
-    threading.Thread(target=stop_when_idle, daemon=True).start()
     try:
+        # Ctrl+C before the server serves stops it as after the Quit button
+        # (stage D1).
+        threading.Thread(target=stop_when_idle, daemon=True).start()
         server.serve_forever(poll_interval=poll_interval)
     except KeyboardInterrupt:
         pass

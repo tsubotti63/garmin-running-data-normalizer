@@ -1800,7 +1800,13 @@ gives, for its entries and controls, are not in this table.
 
 From stage A5c, `Ctrl+C` ends every command of the CLI with one line and exit
 130, as a shell gives it for `SIGINT`, instead of a Python traceback. The exit
-code of a stop stays 2.
+code of a stop stays 2. The `gui` command (stage D1) is the exception, because
+`Ctrl+C` is one of its two ways to stop, with the Quit button of the page:
+without a run, it ends with exit 0 and no `ERROR` line, as after the Quit
+button; when `Ctrl+C` stops a run, the command prints the lines below for the
+run and ends with 130. A second `Ctrl+C` while the GUI stops a run and reports
+it does nothing, so that the run's child always ends first; stopping a run
+takes at most about 25 seconds.
 
 - `ERROR [RUN_CANCELLED]: <command> was cancelled with Ctrl+C; <next step>`:
   the command did not finish; run it again when you need its result.
