@@ -963,13 +963,14 @@ alone, and reduced motion.
   work of stage B.
 - Each stage B pull request checks the screen texts and the points where a user
   may hesitate, not only the layout.
-- Manual checks in stage C cover macOS (Chrome and Safari), Windows (Edge and
-  Chrome) in a Windows 11 on Arm64 virtual machine with synthetic data, and a
-  person who has not seen the GUI before, who must be able to select an Export
-  and finish a normalization without instructions. The release candidate of
-  stage D is checked on a physical Windows machine, chosen in the plan of
-  stage D, before the stable release, as the Human maintainer decided on
-  2026-10-19. Linux is covered by CI only.
+- Manual checks in stage C cover macOS (Chrome and Safari), with the keyboard
+  and VoiceOver. The release candidate of stage D is checked by a person who
+  has not seen the GUI before, who must be able to select an Export and finish
+  a normalization without instructions; on Windows (Edge and Chrome) in a
+  Windows 11 on Arm64 virtual machine with synthetic data; and on a physical
+  Windows machine, chosen in the plan of stage D. All three come before the
+  stable release, as the Human maintainer decided on 2026-10-19 and
+  2026-10-20. Linux is covered by CI only.
 - The maintainer compares GUI and CLI output on a real Export by counts and
   identity only, as for earlier releases.
 
@@ -982,8 +983,8 @@ alone, and reduced motion.
 | A | The data-handling and CLI changes, in several pull requests, each planned and reviewed |
 | A checkpoint | CLI-only verification with synthetic golden outputs and a draft of the migration notes |
 | B | The single-page GUI, in several pull requests, each checked for screen texts and points of hesitation |
-| C | Verification on Windows (in a Windows 11 on Arm64 virtual machine, with synthetic data), macOS, and browsers; the maintainer real-data check; and a first-time user who finishes a normalization without instructions |
-| D | Release candidate on TestPyPI with the `gui` command exposed, checked on a physical Windows machine |
+| C | Verification on macOS and browsers, with the keyboard and VoiceOver, and the maintainer real-data check |
+| D | Release candidate on TestPyPI with the `gui` command exposed, checked by a first-time user who finishes a normalization without instructions, on Windows in a Windows 11 on Arm64 virtual machine with synthetic data, and on a physical Windows machine, before the stable release |
 | E | Stable 2.0.0 release |
 
 Installing the release candidate from TestPyPI uses Production PyPI as an
