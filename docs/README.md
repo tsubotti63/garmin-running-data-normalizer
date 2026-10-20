@@ -40,13 +40,14 @@ and platform material linked below after reviewing the product documentation.
 ## Maintainers and AI collaboration
 
 - [Architecture Overview](architecture_overview.md)
-- [v2.0.0 GUI Design](gui_design.md) — planned local GUI with Snapshots and
-  ZIP input, and the v2.0.0 data-handling changes; in development and not
-  available yet
-- [v2.0.0 Data Handling](v2_data_handling.md) — the planned v2.0.0 rules for
-  problems in the data, statuses, and exit codes; not available yet
+- [v2.0.0 GUI Design](gui_design.md) — the local GUI with Snapshots and ZIP
+  input, and the v2.0.0 data-handling changes; in the release candidate
+  v2.0.0rc1, not in the stable release
+- [v2.0.0 Data Handling](v2_data_handling.md) — the v2.0.0 rules for problems
+  in the data, statuses, and exit codes; in the release candidate v2.0.0rc1,
+  not in the stable release
 - [v2.0.0 GUI Guide](gui_guide.md) ([日本語](gui_guide.ja.md)) — how to use the
-  planned local GUI; in development and not available yet
+  local GUI; in the release candidate v2.0.0rc1, not in the stable release
 - [`AGENTS.md`](../AGENTS.md) — AI development adapter, not a product guide
 - [AI Collaboration Platform](https://github.com/tsubotti63/ai-collaboration-platform)
 - Embedded `project_os/`, `runtime/`, and `templates/` assets are maintainer-facing

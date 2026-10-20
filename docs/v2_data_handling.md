@@ -1,8 +1,9 @@
 # v2.0.0 Data Handling
 
 - Status: design record for stage A of the [v2.0.0 GUI Design](gui_design.md),
-  agreed by the Human maintainer on 2026-10-11. Stage A pull requests implement
-  it; v1.7.1 behavior applies until they do.
+  agreed by the Human maintainer on 2026-10-11. Stage A pull requests
+  implemented it, and the release candidate v2.0.0rc1 follows it; the current
+  stable release, v1.7.1, keeps its own behavior.
 - Applies to: the CLI and the GUI alike, and one-shot `run-all` and Snapshot
   runs alike.
 - Authority: every stage A pull request follows these rules. A pull request

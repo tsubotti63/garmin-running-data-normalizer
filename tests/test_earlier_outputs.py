@@ -18,6 +18,7 @@ The 1.0 releases named no version, and their outputs stop as before.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import tempfile
 import unittest
@@ -31,6 +32,7 @@ from garmin_running_data_normalizer.diagnostics.doctor import DoctorError, docto
 from garmin_running_data_normalizer.diagnostics.support_bundle import SupportBundleError, build_support_bundle
 from garmin_running_data_normalizer.run_all import RUN_ALL_VERSION
 from garmin_running_data_normalizer.standalone import (
+    VERSION_FORM,
     OtherVersionError,
     StandaloneHandoffError,
     validate_standalone_handoff,
@@ -41,6 +43,7 @@ from tests.v1_3_outputs import V1_3_FILES, V1_3_PACK, V1_3_SHAPES, V1_3_SNAPSHOT
 # The four shapes of a run of this version: a run, with the External-safe
 # Pack, of Snapshots, and both.
 SHAPES = ("plain", "pack", "snapshot", "both")
+FLOW = Path(__file__).resolve().parents[1] / "src/garmin_running_data_normalizer/gui/static/flow.mjs"
 
 
 class EarlierOutputTest(StopLines, unittest.TestCase):
@@ -125,15 +128,20 @@ class EarlierOutputTest(StopLines, unittest.TestCase):
             ("1.0.0", RUN_ALL_VERSION, "1.0.0"),
             ("1.1.1", 1, "1.1.1"),
             ("1.2.1", 1, "1.2.1"),
-            # Versions of 1.4 and later that are not this one.
+            # Versions of 1.4 and later that are not this one, with the stable
+            # release 1.7.1, whose outputs the release candidate names too.
             ("1.4.2", 1, "1.4.2"),
             ("1.7.0", 1, "1.7.0"),
+            ("1.7.1", 1, "1.7.1"),
             ("2.0.0", RUN_ALL_VERSION, "2.0.0"),
-            # This version's name with the checks of another, as the release
-            # of 1.7.1 and this version in development until 2.0.0.
+            # Another pre-release, named as a release is (stage D2).
+            ("2.0.0rc2", RUN_ALL_VERSION, "2.0.0rc2"),
+            # This version's name with the checks of another, as a build of
+            # this version in development may have written: named, also when
+            # it is a pre-release such as 2.0.0rc1.
             (__version__, RUN_ALL_VERSION - 1, __version__),
             # A version of another form is not repeated.
-            ("2.0.0rc1", RUN_ALL_VERSION, None),
+            ("2.0.0.dev1", RUN_ALL_VERSION, None),
         )
         for version, run_all_version, named in cases:
             with self.subTest(version=version, run_all_version=run_all_version):
@@ -184,6 +192,18 @@ class EarlierOutputTest(StopLines, unittest.TestCase):
             validate_standalone_handoff(output)
         self.assertNotIsInstance(caught.exception, OtherVersionError)
         self.assert_stop("HANDOFF_INVALID", ("validate-handoff", "--input", output), self.root)
+
+
+class VersionFormTest(unittest.TestCase):
+    def test_the_cli_and_the_page_take_one_form_of_a_version(self) -> None:
+        # The stops and the page's summaries of earlier outputs name a
+        # version of this form, which this version's own name has, also as a
+        # pre-release such as 2.0.0rc1; the page takes the same form for the
+        # addresses of its help (stage D2).
+        self.assertIsNotNone(VERSION_FORM.fullmatch(__version__))
+        found = re.search(r"const RELEASE_VERSION = /\^(.+)\$/;", FLOW.read_text(encoding="utf-8"))
+        assert found is not None
+        self.assertEqual(found.group(1), VERSION_FORM.pattern)
 
 
 if __name__ == "__main__":

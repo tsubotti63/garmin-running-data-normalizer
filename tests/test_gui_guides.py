@@ -5,6 +5,7 @@ import re
 import unittest
 from pathlib import Path
 
+from garmin_running_data_normalizer import __version__
 from tests import test_gui_i18n
 
 
@@ -119,19 +120,23 @@ class GuiGuideTest(unittest.TestCase):
                 with self.subTest(language=language, key=key):
                     self.assertIn(quote[language].format(messages[key]), text)
 
-    def test_guides_say_that_the_gui_is_in_development(self) -> None:
-        # Until the release candidate exposes the gui command (stage 5).
+    def test_guides_say_that_the_gui_is_in_the_release_candidate(self) -> None:
+        # The release candidate, such as v2.0.0rc1, has the gui command, and
+        # the stable release does not (stage D2).
         english = GUIDES["en"].read_text(encoding="utf-8")
         japanese = GUIDES["ja"].read_text(encoding="utf-8")
-        self.assertTrue(english.startswith("# GUI Guide\n\n> **In development for v2.0.0.**"))
-        self.assertTrue(japanese.startswith("# GUI の手引き\n\n> **v2.0.0 に向けて開発中です。**"))
+        self.assertTrue(english.startswith("# GUI Guide\n\n> **Release candidate of v2.0.0.**"))
+        self.assertTrue(japanese.startswith("# GUI の手引き\n\n> **v2.0.0 の試しのバージョンです。**"))
         self.assertIn("[日本語](gui_guide.ja.md)", english)
         self.assertIn("[English](gui_guide.md)", japanese)
         index = (ROOT / "docs/README.md").read_text(encoding="utf-8")
         entry = re.search(r"^- \[v2\.0\.0 GUI Guide\]\(gui_guide\.md\).*?(?=^- |\Z)", index, re.M | re.S)
         self.assertIsNotNone(entry)
         assert entry is not None
-        self.assertIn("in development and not available yet", " ".join(entry.group(0).split()))
+        self.assertIn(
+            f"in the release candidate v{__version__}, not in the stable release",
+            " ".join(entry.group(0).split()),
+        )
 
     def test_the_exit_3_result_reads_the_same_on_the_page_and_in_the_guides(self) -> None:
         # PARTIAL_SUCCESS is a finished run that left out part of the input,

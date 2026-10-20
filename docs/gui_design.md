@@ -1,7 +1,8 @@
 # v2.0.0 GUI Design
 
-- Status: design revised on 2026-10-11; implementation in progress; the
-  command-line interface does not expose the GUI yet
+- Status: design revised on 2026-10-11; implemented in the release candidate
+  v2.0.0rc1, whose `gui` command opens the GUI; stage D checks the release
+  candidate before the stable release
 - Applies to: the v2.0.0 release in preparation; v1.7.1 remains the current
   stable release
 - Authority: maintainer design record agreed by the Human maintainer on

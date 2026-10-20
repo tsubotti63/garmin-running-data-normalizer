@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from garmin_running_data_normalizer import __version__
 from scripts.validate_public_product_state import (
     DOCUMENTATION_PROBLEM_FORM,
     SYNTHETIC_VALIDATION_FORM,
@@ -28,7 +29,7 @@ def _copy_validator_inputs(destination: Path) -> None:
 def test_repository_public_product_state_passes() -> None:
     version, findings = validate(ROOT)
 
-    assert version == "1.7.1"
+    assert version == __version__
     assert findings == []
 
 
@@ -304,7 +305,7 @@ def test_package_version_drift_fails(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
     version_source = tmp_path / VERSION_SOURCE
     version_source.write_text(
-        version_source.read_text(encoding="utf-8").replace('"1.7.1"', '"1.7.2"'),
+        version_source.read_text(encoding="utf-8").replace(f'"{__version__}"', '"1.7.2"'),
         encoding="utf-8",
     )
 
@@ -490,7 +491,7 @@ def test_candidate_marker_follows_package_version(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
     version_source = tmp_path / VERSION_SOURCE
     version_source.write_text(
-        version_source.read_text(encoding="utf-8").replace('"1.7.1"', '"1.7.2"'),
+        version_source.read_text(encoding="utf-8").replace(f'"{__version__}"', '"1.7.2"'),
         encoding="utf-8",
     )
 
@@ -515,7 +516,7 @@ MAINTAINER_STATE_DOCUMENTS = (
 def _start_implementation_candidate(root: Path, version: str) -> None:
     version_source = root / VERSION_SOURCE
     version_source.write_text(
-        version_source.read_text(encoding="utf-8").replace('"1.7.1"', f'"{version}"'),
+        version_source.read_text(encoding="utf-8").replace(f'"{__version__}"', f'"{version}"'),
         encoding="utf-8",
     )
     readme = root / "README.md"
@@ -547,7 +548,7 @@ def _start_implementation_candidate(root: Path, version: str) -> None:
         ),
         (
             "docs/release_readiness.md",
-            "Current source and package version: `1.7.1`",
+            f"Current source and package version: `{__version__}`",
             "Current source and package version: `1.3.3`",
         ),
         (
@@ -620,7 +621,7 @@ def test_maintainer_state_follows_candidate_package_version(tmp_path: Path) -> N
     readiness = tmp_path / "docs/release_readiness.md"
     readiness.write_text(
         readiness.read_text(encoding="utf-8").replace(
-            "Current source and package version: `1.7.1`",
+            f"Current source and package version: `{__version__}`",
             "Current source and package version: `1.7.2`",
         ),
         encoding="utf-8",
@@ -665,7 +666,7 @@ def test_obsolete_agents_phase_fails(tmp_path: Path) -> None:
 def test_current_cs010_public_case_study_passes() -> None:
     version, findings = validate(ROOT)
 
-    assert version == "1.7.1"
+    assert version == __version__
     assert not any(CS010_DOCUMENT in item for item in findings)
 
 
