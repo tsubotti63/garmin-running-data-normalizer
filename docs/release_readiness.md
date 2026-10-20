@@ -1,5 +1,58 @@
 # Release Readiness
 
+## v2.0.0rc2 release candidate
+
+Version `2.0.0rc2`, the second release candidate of v2.0.0, is published on
+TestPyPI only, for the checks of stage D before the stable release. It is
+v2.0.0rc1 with the clearer screen texts of stage D6 (#136): two new AI
+sessions that had never seen the GUI used v2.0.0rc1 with no instructions, in
+place of a first-time user, and the texts that made them hesitate changed.
+Production PyPI and the latest GitHub Release stay v1.7.1, and no GitHub
+Release was made for the release candidate.
+
+From v2.0.0rc1, the only line of the package's Python that changes is the
+version in `__init__.py`:
+
+```text
+$ git diff --stat v2.0.0rc1 v2.0.0rc2 -- 'src/**/*.py'
+ src/garmin_running_data_normalizer/__init__.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+```
+
+So the physical Windows check of v2.0.0rc1 below was not repeated for
+v2.0.0rc2, as the Human maintainer decided on 2026-10-20; the Windows CI ran
+every Windows step with v2.0.0rc2.
+
+The release source is `b210e5285e003aa0912980a478ceca4cf192b074` (#137). The
+annotated `v2.0.0rc2` tag (tag object
+`75a0d23193e4b989200fad1e7be2beeb1736645c`) points to it, so that the links of
+the GUI's help panel open the documents of that tag. TestPyPI publication
+through Trusted Publishing/OIDC on 2026-10-20 JST and the publish workflow's
+exact-version TestPyPI install verification are complete.
+
+The release source passed main CI run `39408498560` (Ubuntu `test` and
+`windows-runtime`) and CodeQL (`39408498438`). A build-only publish workflow
+run (`39410892656`) on the release source passed with every upload job
+skipped. Publish workflow run `39411324672` then built and validated the
+exact source and published to TestPyPI; the PyPI jobs were skipped. The
+Sigstore transparency log (Rekor) was read before the run and answered. The
+publication and the tag ran under one Human approval given after their values
+were shown. The `testpypi` Environment deployment was Human-authorized, and
+the approval was submitted through the GitHub API on the Human's
+instruction. `TESTPYPI_PUBLISH_APPROVED` was set to `true` for the publish
+run and returned to `false` as soon as the run finished.
+
+The SHA-256 checksums recorded by that run match TestPyPI: wheel
+`4cc90dc5bffbb6e18f07acc31121324916d80667e67cee466b160fa33f2edc70` and source
+distribution `b4584c434707b40d0124d2fc3e7642b28536e6b5d8aeb702fdf248fb86273b28`.
+Each file carries a PEP 740 publish attestation from `publish-pypi.yml` of
+`tsubotti63/garmin-running-data-normalizer` in the `testpypi` Environment,
+through GitHub Trusted Publishing. The build-only run produced different
+checksums because the distributions are not byte-reproducible across runs;
+only the publish run's artifacts were published. The documents at the
+`v2.0.0rc2` tag describe the installation from TestPyPI in the words used
+before the publication.
+
 ## v2.0.0rc1 release candidate
 
 Version `2.0.0rc1`, the release candidate of v2.0.0, is published on TestPyPI
@@ -229,18 +282,21 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
   skipped
 - Production PyPI `1.7.1`: Published and exact-version install verified by the
   publish workflow
+- TestPyPI `2.0.0rc2`: Published and exact-version install verified by the
+  publish workflow
 - TestPyPI `2.0.0rc1`: Published and exact-version install verified by the
   publish workflow
-- Release candidate tag: `v2.0.0rc1`, without a GitHub Release
+- Release candidate tags: `v2.0.0rc2` and `v2.0.0rc1`, without a GitHub
+  Release
 - Trusted Publishing: Configured for protected `testpypi` and `pypi`
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
 and GitHub Releases remain immutable. v1.7.1 is the current stable release;
-v2.0.0rc1 is a release candidate on TestPyPI only; v1.7.0, v1.6.0, v1.5.0,
-v1.4.1, v1.4.0, and v1.3.3 are historical releases. The v2.0.0rc1 tag and
-TestPyPI publication evidence was recorded only after the corresponding
-external state was observed.
+v2.0.0rc2 and v2.0.0rc1 are release candidates on TestPyPI only; v1.7.0,
+v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 are historical releases. The
+v2.0.0rc2 and v2.0.0rc1 tag and TestPyPI publication evidence was recorded
+only after the corresponding external state was observed.
 The v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag, GitHub
 Release, and Production PyPI publication evidence was recorded only after the
 corresponding external state was observed.
