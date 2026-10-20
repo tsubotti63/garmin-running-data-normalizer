@@ -53,6 +53,28 @@ only the publish run's artifacts were published. The documents at the
 `v2.0.0rc2` tag describe the installation from TestPyPI in the words used
 before the publication.
 
+On 2026-10-20, v2.0.0rc2 installed from TestPyPI was checked on macOS: the
+downloaded wheel was the file on TestPyPI, and the installed files of the
+package were those of the `v2.0.0rc2` tag, byte for byte. With the tracked
+synthetic fixture and with one real Export of the maintainer, compared by
+counts and identity only, the page's three ways of normalizing gave the same
+files as the CLI, file by file, and the same counts. An output of v2.0.0rc1
+was refused with `OUTPUT_OTHER_VERSION`, naming 2.0.0rc1, and the page
+showed no change since such an output. No personal Garmin data, and no count
+from it, is recorded here.
+
+In place of a first-time user, new AI sessions that had never seen the GUI
+normalized the synthetic Export in a work home of their own, with one
+sentence of request and no instructions, and then showed the output folder
+and quit the app: two with v2.0.0rc1, whose findings stage D6 made clearer in
+the texts of v2.0.0rc2, and one with v2.0.0rc2 installed from TestPyPI, which
+read the clearer texts without hesitating there. They chose files from the
+page's own list, as on a computer without the system's dialog. An AI session
+does not hesitate as a person does, so this check is weaker than a check by a
+person; a person checks the GUI after the stable release if one can be found.
+The five things that the third session found new are left for after the
+stable release.
+
 ## v2.0.0rc1 release candidate
 
 Version `2.0.0rc1`, the release candidate of v2.0.0, is published on TestPyPI
