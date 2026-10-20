@@ -45,6 +45,28 @@ only the publish run's artifacts were published. The documents at the
 `v2.0.0rc1` tag describe the installation from TestPyPI in the words used
 before the publication.
 
+On 2026-10-20, the release candidate was checked by hand on one physical
+Windows 11 x64 machine (build 26200) with Python 3.14.5 (64-bit); CI runs
+Python 3.11. A clean installation
+from TestPyPI, with Production PyPI as the extra index, installed
+`tzdata 2026.5` from Production PyPI; `Asia/Tokyo` resolved and `--version`
+reported `2.0.0rc1`. With the tracked synthetic fixture of the `v2.0.0rc1`
+tag, the `gui` command printed its three lines and opened Edge; the dialogs
+of Windows chose the ZIP file and the extracted folder; the page normalized
+in its three ways and showed the change since the output before the run;
+the keyboard alone reached the start of a run; File Explorer opened the
+outputs and the saved files, also in a folder whose name has spaces and
+Japanese; Windows without long paths stopped with
+`SNAPSHOT_STORE_PATH_TOO_LONG` and `OUTPUT_PATH_TOO_LONG`; the Quit button
+ended the command with `GUI stopped.` and left no process of the app; Chrome
+showed the page and normalized; the Support Bundle, the remembered settings,
+and forgetting them worked. Two of the later runs finished, but their
+headings were not noted. No Git command, no local installation, and no
+personal Garmin data were used. This evidence is bounded: it does not
+establish compatibility with every Windows version or environment, and
+Windows on Arm64 was not checked by hand. The planned Windows 11 on Arm64
+virtual machine was left out, as the Human maintainer decided.
+
 ## v1.7.1 stable release
 
 Version `1.7.1` is published as the Snapshot metrics fix release. It makes

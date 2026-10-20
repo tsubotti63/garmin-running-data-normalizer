@@ -971,11 +971,13 @@ alone, and reduced motion.
 - Manual checks in stage C cover macOS (Chrome and Safari), with the keyboard
   and VoiceOver. The release candidate of stage D is checked by a person who
   has not seen the GUI before, who must be able to select an Export and finish
-  a normalization without instructions; on Windows (Edge and Chrome) in a
-  Windows 11 on Arm64 virtual machine with synthetic data; and on a physical
-  Windows machine, chosen in the plan of stage D. All three come before the
-  stable release, as the Human maintainer decided on 2026-10-19 and
-  2026-10-20. Linux is covered by CI only.
+  a normalization without instructions, and on a physical Windows machine
+  (x64, Edge and Chrome, with the keyboard) with synthetic data. Both come
+  before the stable release, as the Human maintainer decided on 2026-10-19
+  and 2026-10-20. A Windows 11 on Arm64 virtual machine was planned as well;
+  the Human maintainer decided on 2026-10-20 to leave it out once the
+  physical machine covered its checks, which it did on 2026-10-20. Windows on
+  Arm64 is not checked by hand. Linux is covered by CI only.
 - The maintainer compares GUI and CLI output on a real Export by counts and
   identity only, as for earlier releases.
 
@@ -989,7 +991,7 @@ alone, and reduced motion.
 | A checkpoint | CLI-only verification with synthetic golden outputs and a draft of the migration notes |
 | B | The single-page GUI, in several pull requests, each checked for screen texts and points of hesitation |
 | C | Verification on macOS and browsers, with the keyboard and VoiceOver, and the maintainer real-data check |
-| D | Release candidate on TestPyPI with the `gui` command exposed, checked by a first-time user who finishes a normalization without instructions, on Windows in a Windows 11 on Arm64 virtual machine with synthetic data, and on a physical Windows machine, before the stable release |
+| D | Release candidate on TestPyPI with the `gui` command exposed, checked by a first-time user who finishes a normalization without instructions and on a physical Windows machine (x64) with synthetic data, before the stable release |
 | E | Stable 2.0.0 release |
 
 Installing the release candidate from TestPyPI uses Production PyPI as an
