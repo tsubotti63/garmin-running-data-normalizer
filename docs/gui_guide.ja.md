@@ -1,8 +1,8 @@
 # GUI の手引き
 
-> **v2.0.0 の試しのバージョンです。** GUI は、TestPyPI に出した v2.0.0 の試しの
-> バージョン（release candidate）v2.0.0rc2 に入っています。今の安定したバージョン
-> v1.7.1 には入っていません。v2.0.0rc2 の入れ方は、
+> **v2.0.0 の試しのバージョンです。** GUI は、TestPyPI に出す v2.0.0 の試しの
+> バージョン（release candidate）v2.0.0rc3 に入っています。今の安定したバージョン
+> v1.7.1 には入っていません。v2.0.0rc3 を公開したあとの入れ方は、
 > [用意するもの](#用意するもの)にあります。v1.7.1 では、
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md)
 > のとおりに、コマンドラインを使ってください。
@@ -18,14 +18,37 @@ GUI は、Garmin のエクスポート（Account Data Export）を、ブラウ�
 
 ## 用意するもの
 
-- Python 3.11 以降で入れた、試しのバージョン v2.0.0rc2。GUI のために足す依存は
-  ありません。v2.0.0rc2 は TestPyPI に公開しています。v1.7.1 を入れた環境はそのままに
+- Python 3.11 以降で入れた、試しのバージョン v2.0.0rc3。GUI のために足す依存は
+  ありません。v2.0.0rc3 を TestPyPI に公開したら、v1.7.1 を入れた環境はそのままに
   して、別の仮想環境に入れてください。TestPyPI に無いことがある依存（Windows の
-  `tzdata` など）は、Production PyPI から入れます：
+  `tzdata` など）は、Production PyPI から入れます。
+
+  先に [python.org](https://www.python.org/downloads/) から Python を入れてください。
+  Microsoft Store の Python では、このアプリを確かめていません。そのあと、次の
+  1 行で、ホームのフォルダーに仮想環境 `garmin-normalizer` を作り、そこに
+  v2.0.0rc3 を入れ、GUI を起動するアイコンを作って
+  （[アイコンから起動する](#アイコンから起動する)）、GUI を開きます。
+  それぞれの部分は、前の部分がうまくいったときだけ動きます。アイコンを作るとき、
+  ターミナルがデスクトップを使ってよいかを macOS が聞くことがあります。
+  「許可」を押してください。GUI を使っている間は、ターミナルの窓を閉じないで
+  ください。
+
+  macOS：
 
   ```bash
-  python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc2
+  python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc3 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
   ```
+
+  Windows PowerShell（バージョン 5.1 には `&&` が無いので、`if ($?)` で
+  つなぎます）：
+
+  ```powershell
+  py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc3 }; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut }
+  ```
+
+  Linux にはアイコンが無いので、`--create-shortcut` を外してください。この
+  バージョンを使わなくなったら、ホームのフォルダーの `garmin-normalizer` と
+  アイコンを、ごみ箱へ入れてください。
 
 - 同じコンピューターで動くブラウザ。デスクトップかノートのコンピューターの
   窓で使います。スマートフォンやタブレットには向けていません。
@@ -45,6 +68,13 @@ garmin-running-data-normalizer gui
 
 コマンドは、GUI のアドレスをターミナルに表示し、既定のブラウザで開きます。
 `--no-browser` を付けると、アドレスを表示するだけで、ブラウザは開きません。
+
+[用意するもの](#用意するもの)の 1 行で入れたときは、このアプリはその仮想環境の
+中にあります。アイコンから起動するか、アイコンと同じく仮想環境の Python で、
+macOS では `~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui`、
+Windows PowerShell では
+`& "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui`
+を動かしてください。
 
 - アドレスには、この起動だけの鍵が入っています。人に渡さないでください。
   鍵の無いページからは、GUI を使えません。画面にそう出たときは、
