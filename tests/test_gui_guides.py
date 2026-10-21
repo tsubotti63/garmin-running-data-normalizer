@@ -190,6 +190,49 @@ class GuiGuideTest(unittest.TestCase):
         commands = re.compile(r"^garmin-running-data-normalizer .*$", re.M)
         self.assertEqual(commands.findall(english), commands.findall(japanese))
 
+    def test_guides_give_one_line_that_installs_this_version_and_makes_the_icon(self) -> None:
+        # One line for each system makes a virtual environment whose name has
+        # no version, so that a later version goes into the same one and the
+        # icon stays; installs this version in it; and makes the icon with its
+        # Python. Each part runs only after the one before it succeeded: "&&"
+        # on macOS, "; if ($?) { … }" in Windows PowerShell 5.1, which has no
+        # "&&" (stage E1e). The places are quoted for a home folder with spaces.
+        block = re.compile(r"^  ```(bash|powershell)\n  (.*)\n  ```$", re.M)
+        found = {
+            language: block.findall(section(GUIDES[language].read_text(encoding="utf-8"), heading))
+            for language, heading in (("en", "What you need"), ("ja", "用意するもの"))
+        }
+        self.assertEqual(found["en"], found["ja"])
+        (mac_language, mac), (windows_language, windows) = found["en"]
+        self.assertEqual((mac_language, windows_language), ("bash", "powershell"))
+        install = (
+            "-m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "
+            f"garmin-running-data-normalizer=={__version__}"
+        )
+        icon = "-m garmin_running_data_normalizer gui --create-shortcut"
+        venv = "~/garmin-normalizer"
+        self.assertEqual(
+            mac.split(" && "),
+            [f"python3 -m venv {venv}", f"{venv}/bin/python {install}", f"{venv}/bin/python {icon}"],
+        )
+        venv = "$HOME\\garmin-normalizer"
+        python = f'& "{venv}\\Scripts\\python.exe"'
+        self.assertEqual(
+            windows.split("; if ($?) "),
+            [f'py -m venv "{venv}"', f"{{ {python} {install} }}", f"{{ {python} {icon} }}"],
+        )
+        self.assertNotIn("&&", windows)
+        # After the line, the GUI starts with the Python of the virtual
+        # environment, as the icon starts it, and not with the program that
+        # pip makes, which Windows may refuse, since it has no signature
+        # (stage E1d).
+        for language, heading in (("en", "Start the GUI"), ("ja", "GUI を起動する")):
+            text = " ".join(section(GUIDES[language].read_text(encoding="utf-8"), heading).split())
+            with self.subTest(language=language):
+                self.assertIn("`~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui`", text)
+                self.assertIn(f"`{python} -m garmin_running_data_normalizer gui`", text)
+                self.assertNotIn("garmin-running-data-normalizer.exe", text)
+
 
 if __name__ == "__main__":
     unittest.main()
