@@ -7,14 +7,19 @@ Garmin Running Data Normalizer release published on GitHub and Production PyPI.
 Use this guide for a full Garmin Account Data Export. An individual Activity
 GPX or TCX export is not the input described here.
 
+This guide uses commands. Starting with v2.0.0, you can instead normalize on a
+page in your browser: see the [GUI guide](gui_guide.md)
+([日本語](gui_guide.ja.md)). The GUI runs the same processing as these
+commands.
+
 ## Before you begin
 
 You need:
 
 - Python 3.11 or later;
-- enough private local storage for the original archive, extracted Export, and
-  generated output;
-- a new output path outside the Export directory; and
+- enough private local storage for the original archive, an extracted copy if
+  you extract it, and generated output;
+- a new output path outside the Export, in a folder that exists; and
 - permission to process the Garmin data.
 
 Run the repository's synthetic
@@ -31,20 +36,22 @@ notification until the archive has been downloaded.
 
 The product does not sign in to Garmin or request the Export for you.
 
-## 2. Preserve and extract the delivery
+## 2. Preserve the delivery
 
-1. Keep the downloaded outer ZIP as immutable private evidence.
-2. Copy or extract it into a dedicated local directory.
-3. Extract the outer Garmin Account Data Export ZIP only.
-4. Use the extracted directory as the Run-All input root.
+1. Keep the downloaded ZIP file unchanged as private evidence.
+2. Use it as the input as it is, or extract it into a dedicated local
+   directory and use that directory.
 
-Do not pass the outer ZIP itself to `--input`; direct ZIP input is unsupported.
-ZIP assets discovered inside the input directory are handled by the product's
-bounded archive intake. Do not keep both an inner ZIP and a separately
-extracted duplicate of that same inner content in the input root.
+Starting with v2.0.0, `--input` takes the downloaded Export ZIP file directly.
+The product checks that it is complete and undamaged, and reads the ZIP files
+inside it one level deep (see
+[An Export given as a ZIP file](v2_data_handling.md#an-export-given-as-a-zip-file)).
+If you extract it instead, check that the extraction finished before you run.
+An input that holds the same Export twice, such as a ZIP file and its
+extracted copy, is read once with the warning `INPUT_DUPLICATE_SOURCES`.
 
-Keep generated output outside the input root. Run-All reads the Export and does
-not modify it.
+Keep generated output outside the input. Run-All reads the Export and does not
+modify it.
 
 ## 3. Install the published baseline
 
@@ -97,20 +104,23 @@ Use the compatible one-shot path for your first real Export:
 ### macOS / Linux
 
 ```bash
+mkdir -p /path/to/outputs
 .venv/bin/python -m garmin_running_data_normalizer run-all \
-  --input /path/to/extracted-garmin-export \
-  --output /path/to/new-run-all-output
+  --input /path/to/garmin-export.zip \
+  --output /path/to/outputs/run-all-01
 ```
 
 ### Windows PowerShell
 
 ```powershell
-.\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input "C:\Garmin\Export" --output "C:\Garmin\Output\run-all-01"
+New-Item -ItemType Directory -Force "C:\Garmin\Output" | Out-Null
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input "C:\Garmin\garmin-export.zip" --output "C:\Garmin\Output\run-all-01"
 ```
 
-Replace both example paths. The input must be a directory containing a
-supported filename ending in `summarizedActivities.json`. Activities are
-required. Gear, Personal Records, and FIT are optional.
+Replace the example paths. The input is the downloaded Export ZIP file or an
+extracted Export folder, with a supported filename ending in
+`summarizedActivities.json`. Activities are required. Gear, Personal Records,
+and FIT are optional.
 
 Local dates and times use the IANA timezone `Asia/Tokyo` by default. If your
 records were made in another timezone, add `--timezone` with an exact
@@ -121,10 +131,13 @@ the run records state the timezone used. See
 The output path:
 
 - must not already exist;
-- must not be a symbolic link; and
-- must be outside the input directory.
+- must not be a symbolic link;
+- must be outside the input; and
+- must be in a folder that exists: starting with v2.0.0, the command does not
+  create it and stops with `OUTPUT_PARENT_NOT_FOUND` before it reads the
+  input.
 
-Run-All fails closed instead of overwriting an existing result.
+Run-All stops with `OUTPUT_EXISTS` instead of overwriting an existing result.
 
 ## 5. Confirm completion
 
@@ -147,10 +160,11 @@ The exit contract is:
 |---:|---|
 | `0` | `PASS` or `PASS_WITH_WARNINGS` |
 | `2` | Fatal contract, input, QA, or publication error; no completed output |
-| `3` | `PARTIAL_SUCCESS`; Activities are valid and detected FIT is auditably incomplete |
+| `3` | `PARTIAL_SUCCESS`; Activities are valid, and a file or row was left out; the warnings name it |
 
-`PASS_WITH_WARNINGS` requires review of the warnings. `PARTIAL_SUCCESS` is not
-a complete FIT pass: limit FIT-derived analysis to the parsed subset and
+`PASS_WITH_WARNINGS` requires review of the warnings. `PARTIAL_SUCCESS` means
+that a file, a row, or FIT data was left out: read the warnings and
+`START_HERE.md`, limit analysis of the affected datasets to what was kept, and
 disclose the warning.
 
 You can validate a completed handoff later:
@@ -199,18 +213,21 @@ absence from a later Export != evidence of deletion
 
 Keep each original Export. In `v1.2.0`, the optional Snapshot lifecycle can
 register repeated complete Exports from one account boundary and build a
-canonical cumulative input:
+canonical cumulative input. Starting with v2.0.0, `snapshot register` also
+takes the Export ZIP file, and the folder that holds a new store must exist
+(`SNAPSHOT_STORE_PARENT_NOT_FOUND`):
 
 ### macOS / Linux
 
 ```bash
+mkdir -p /path/to/private /path/to/outputs
 .venv/bin/python -m garmin_running_data_normalizer snapshot init \
-  --store /path/to/private-snapshot-store \
+  --store /path/to/private/snapshot-store \
   --account opaque-local-account
 
 .venv/bin/python -m garmin_running_data_normalizer snapshot register \
-  --store /path/to/private-snapshot-store \
-  --input /path/to/complete-garmin-export \
+  --store /path/to/private/snapshot-store \
+  --input /path/to/complete-garmin-export.zip \
   --label S1 \
   --requested-at 2030-01-01T00:00:00+00:00 \
   --downloaded-at 2030-01-01T01:00:00+00:00 \
@@ -218,18 +235,19 @@ canonical cumulative input:
   --confirm-complete
 
 .venv/bin/python -m garmin_running_data_normalizer snapshot verify \
-  --store /path/to/private-snapshot-store
+  --store /path/to/private/snapshot-store
 
 .venv/bin/python -m garmin_running_data_normalizer snapshot run-all \
-  --store /path/to/private-snapshot-store \
-  --output /path/to/new-snapshot-run-all-output
+  --store /path/to/private/snapshot-store \
+  --output /path/to/outputs/snapshot-run-all-01
 ```
 
 ### Windows PowerShell
 
 ```powershell
+New-Item -ItemType Directory -Force "C:\Garmin\Output" | Out-Null
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot init --store "C:\Garmin\SnapshotStore" --account opaque-local-account
-.\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot register --store "C:\Garmin\SnapshotStore" --input "C:\Garmin\Export" --label S1 --requested-at 2030-01-01T00:00:00+00:00 --downloaded-at 2030-01-01T01:00:00+00:00 --observed-at 2030-01-01T02:00:00+00:00 --confirm-complete
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot register --store "C:\Garmin\SnapshotStore" --input "C:\Garmin\garmin-export.zip" --label S1 --requested-at 2030-01-01T00:00:00+00:00 --downloaded-at 2030-01-01T01:00:00+00:00 --observed-at 2030-01-01T02:00:00+00:00 --confirm-complete
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot verify --store "C:\Garmin\SnapshotStore"
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot run-all --store "C:\Garmin\SnapshotStore" --output "C:\Garmin\Output\snapshot-run-all-01"
 ```
@@ -238,10 +256,12 @@ Use one opaque account token per person/account boundary. Repeat only the
 registration step for later complete Exports. Registration requires
 timezone-aware lifecycle timestamps. The Store contains immutable private
 evidence; restrict access, never commit it, and do not manually delete Store
-internals. The one exception is `.single-writer.lock` after an interrupted
-registration; see
-[Known Limitations](known_limitations.md#snapshot-lifecycle). Automatic
-Snapshot/blob deletion and garbage collection are not provided.
+internals. When an interrupted registration left the lock file
+`.single-writer.lock`, check that no other normalization or snapshot command
+uses the store, and remove it with
+`snapshot unlock --store <store> --confirm-no-other-command`, which the GUI
+offers too; see [Known Limitations](known_limitations.md#snapshot-lifecycle).
+Automatic Snapshot/blob deletion and garbage collection are not provided.
 
 Read the
 [v1.2 Snapshot Migration Guide](project/v1_2_snapshot_migration_guide_v1_0.md)

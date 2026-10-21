@@ -426,6 +426,7 @@ git clone https://github.com/tsubotti63/garmin-running-data-normalizer.git
 cd garmin-running-data-normalizer
 python3 -m venv .venv
 .venv/bin/python -m pip install -e .
+mkdir -p workspace
 .venv/bin/python -m garmin_running_data_normalizer run-all \
   --input examples/synthetic/garmin_export \
   --output workspace/run-all
@@ -441,6 +442,7 @@ from the Windows package/runtime gate.
 Set-Location C:\Garmin\garmin-running-data-normalizer
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
+New-Item -ItemType Directory -Force .\workspace | Out-Null
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\run-all
 ```
 
@@ -452,10 +454,13 @@ The installed console script is equivalent when its environment is active.
 The activation-independent `python -m` form above also avoids PowerShell
 execution-policy differences.
 
-Use a new output path that does not already exist for every run. Run-All never
-uploads the export. Start with `START_HERE.md` in the generated output. The
-tracked fixture contains Activities only, so this tested example returns
-`PASS_WITH_WARNINGS` with exit code 0 and records the absent optional families.
+Use a new output path that does not already exist for every run, in a folder
+that exists: starting with v2.0.0, Run-All does not create that folder and
+stops with `OUTPUT_PARENT_NOT_FOUND`, so the examples create `workspace`
+first. Run-All never uploads the export. Start with `START_HERE.md` in the
+generated output. The tracked fixture contains Activities only, so this tested
+example returns `PASS_WITH_WARNINGS` with exit code 0 and records the absent
+optional families.
 
 For the bounded activities-only Golden Path and its byte-for-byte Golden Result,
 follow the complete
@@ -492,13 +497,14 @@ observations, builds a cumulative approved input, and then reuses the existing
 Run-All parser and output contract:
 
 ```bash
+mkdir -p workspace
 garmin-running-data-normalizer snapshot init \
   --store workspace/snapshot-store \
   --account local-account-01
 
 garmin-running-data-normalizer snapshot register \
   --store workspace/snapshot-store \
-  --input /path/to/complete-garmin-export \
+  --input /path/to/complete-garmin-export.zip \
   --label S1 \
   --requested-at 2030-01-01T00:00:00+00:00 \
   --downloaded-at 2030-01-01T01:00:00+00:00 \
@@ -513,6 +519,11 @@ garmin-running-data-normalizer snapshot run-all \
   --output workspace/snapshot-run-all
 ```
 
+Starting with v2.0.0, `--input` can be the downloaded Export ZIP file or its
+extracted folder, and the folder that holds a new store must exist
+(`SNAPSHOT_STORE_PARENT_NOT_FOUND`). The GUI that v2.0.0 adds uses Snapshots
+by default.
+
 Use one opaque account token per person/account boundary. Snapshot Stores and
 their Run-All outputs are private local data: place them outside synchronized
 or shared folders where practical and never commit them. Starting with v1.5.0,
@@ -520,8 +531,12 @@ new Snapshot Stores are created owner-only on Unix-like systems; tighten a store
 created by an earlier version with `chmod -R go-rwx workspace/snapshot-store`.
 Windows ignores these permissions, so rely on the folder's access control
 there. Back up a store only after `snapshot verify` reports `PASS`;
-verify it again after restoration. Snapshot and blob deletion, automatic
-garbage collection, and automatic deletion inference are not provided.
+verify it again after restoration. When an interrupted registration left the
+lock file `.single-writer.lock`, check that no other normalization or snapshot
+command uses the store, and remove it with
+`snapshot unlock --store workspace/snapshot-store --confirm-no-other-command`.
+Snapshot and blob deletion, automatic garbage collection, and automatic
+deletion inference are not provided.
 
 Public-safe aggregate validation used four repeated Garmin Account Data Export
 snapshots from the same account. It confirmed deterministic cumulative rebuilds,
@@ -591,12 +606,12 @@ locally and never uploads it.
 | Personal records | `personalRecord.json` normalizer | Run-All |
 | FIT sessions and laps | CRC-validated multi-session parser with `fit_session_key` and `fit_lap_key`; record coordinates and raw telemetry are not emitted | Run-All |
 | Activity/FIT links | Auditable evidence-qualified links with exclusions and relationship QA | Run-All |
-| Hill Score Daily | Public-safe calendar-day Hill Score state with fail-closed same-day conflict handling | Run-All in v1.3.0 |
-| Endurance Score Daily | Public-safe calendar-day Endurance Score state; Snapshot variants remain audit-preserved when canonicalization is unresolved | Run-All in v1.3.0 |
+| Hill Score Daily | Public-safe calendar-day Hill Score state; starting with v2.0.0, a value that differs, within one Export or across Snapshots, is null and listed in `disagreeing_fields`, with every value in the audit record | Run-All in v1.3.0 |
+| Endurance Score Daily | Public-safe calendar-day Endurance Score state; starting with v2.0.0, a value that differs, within one Export or across Snapshots, is null and listed in `disagreeing_fields`, with every value in the audit record | Run-All in v1.3.0 |
 | Lactate Threshold | Four-family candidate/audit collection; unit, timezone, stable-key, and promotion gates remain open | Candidate audit only; not a stable dataset |
 | Race Prediction observations | Garmin-provided 5K/10K/Half/Marathon predictions keyed by date and source timestamp; no private device fields | Run-All in v1.3.0 |
 | Sleep Daily | `sleepData.json` bounded daily normalization with explicit review states; no filling or inferred awake time | Run-All in v1.3.0 |
-| UDS Daily | Selected steps, calories, heart rate, Body Battery, total stress, and source-presence flags; Snapshot variants remain audit-preserved when canonicalization is unresolved | Run-All in v1.3.0 |
+| UDS Daily | Selected steps, calories, heart rate, Body Battery, total stress, and source-presence flags; starting with v2.0.0, a value that differs, within one Export or across Snapshots, is null and listed in `disagreeing_fields`, with every value in the audit record | Run-All in v1.3.0 |
 | Acute Training Load observations | Garmin-provided timestamped acute/chronic values and ratio without recomputation or daily row selection | Run-All in v1.3.0 |
 | Training Readiness observations | Garmin-provided timestamped readiness score, level, recovery, and component context | Run-All in v1.3.0 |
 | VO2Max observations | Two source series in one generation-aware observation schema without cross-series overwrite | Run-All in v1.3.0 |
@@ -724,17 +739,18 @@ local directories.
 
 - The documented Golden Path produces byte-identical JSON for identical input.
 - Input is read-only; output must be absent or empty and is never silently
-  overwritten.
-- `--input` must be a directory; passing a ZIP file directly is unsupported.
-  ZIP assets discovered inside that directory are validated for traversal,
-  links, encryption, entry count, size, total size, and compression-ratio
-  limits.
+  overwritten. Starting with v2.0.0, a new output folder must be in a folder
+  that exists (`OUTPUT_PARENT_NOT_FOUND`).
+- `--input` is an Export folder or, starting with v2.0.0, the downloaded Export
+  ZIP file. The Export ZIP file and the ZIP files inside the Export are
+  validated for traversal, links, encryption, entry count, size, total size,
+  and compression-ratio limits.
 - Stable keys, activity record grain, source-relative provenance, hashes, and
   deterministic QA are included in the reviewed output contract.
 - Local dates use `Asia/Tokyo` unless `--timezone` names another IANA timezone
   (starting with v1.6.0); `run_manifest.json` records it as `local_timezone`.
-- Unsupported or unsafe Golden Path input fails closed with a non-zero exit
-  status.
+- Unsupported or unsafe Golden Path input stops with a non-zero exit status
+  and an `ERROR [CODE]` line that gives the next step.
 
 ## Known limitations
 

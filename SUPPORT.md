@@ -13,7 +13,8 @@ Before reporting a problem:
 
 ## Diagnose a run locally
 
-`doctor --input` checks bounded pre-run readiness of an extracted Export, and
+`doctor --input` checks bounded pre-run readiness of an Export folder or,
+starting with v2.0.0, the downloaded Export ZIP file, and
 `doctor --run-output` explains a completed Run-All output without changing it.
 `support-bundle` creates a deterministic, six-member public-safe ZIP for Human
 review. These commands run locally and never upload. Review every Support

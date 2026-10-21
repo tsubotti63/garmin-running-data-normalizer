@@ -22,6 +22,21 @@ Yes. Use the tracked synthetic fixture in the
 [Product Quick Start](product_quick_start.md). Public reproduction uses
 synthetic data.
 
+### Is there a graphical interface?
+
+Starting with v2.0.0, `garmin-running-data-normalizer gui` opens a local GUI
+in a browser on the same computer: a page served on `127.0.0.1` with a key for
+each launch. It normalizes an Export ZIP file or folder, with Snapshots by
+default. See the [GUI guide](gui_guide.md) ([日本語](gui_guide.ja.md)).
+
+### Do the GUI and the CLI give the same output?
+
+Yes. The GUI runs the same processing as the CLI: for the same input and
+settings, it writes the same output with the same warnings. The
+[GUI guide](gui_guide.md#the-gui-and-the-command-line) names the commands that
+match each way of normalizing, and the few ways in which the page differs from
+them, such as the times that it records for an imported Export.
+
 ### Which version is stable?
 
 `v1.7.1` is the current stable release. It includes the approved Sleep
@@ -41,15 +56,22 @@ TCX export. Follow
 
 ### Can I pass the downloaded ZIP directly to `--input`?
 
-No. Direct ZIP input is unsupported. Preserve the downloaded outer archive,
-extract that outer ZIP into a dedicated directory, and pass the extracted
-directory to `--input`. Validated inner ZIP assets may be discovered inside
-that directory.
+Yes, starting with v2.0.0. `run-all`, `snapshot register`, and `doctor --input`
+take the downloaded Export ZIP file as it is, and an extracted folder as
+before. The product checks that the ZIP file is complete and undamaged and
+reads the ZIP files inside it one level deep; an unsafe or damaged Export ZIP
+file stops the run, and a ZIP file inside it that cannot be read or holds an
+unsafe member is left out with a warning (see
+[An Export given as a ZIP file](v2_data_handling.md#an-export-given-as-a-zip-file)).
+Keep the downloaded ZIP file unchanged as your original. In v1.7.1, the ZIP
+file had to be extracted first.
 
 ### Can the output path already exist or be inside the input?
 
-No. Use a new output path outside the input directory. Run-All fails closed
-instead of silently overwriting an existing result.
+No. Use a new output path outside the input. Run-All stops with
+`OUTPUT_EXISTS` instead of silently overwriting an existing result. Starting
+with v2.0.0, the folder that holds the new output must exist: create it first,
+or the run stops with `OUTPUT_PARENT_NOT_FOUND` before it reads the input.
 
 ### What input is required?
 
@@ -75,7 +97,7 @@ completed handoff.
 |---:|---|
 | `0` | `PASS` or `PASS_WITH_WARNINGS` |
 | `2` | Fatal contract, input, QA, or publication error |
-| `3` | `PARTIAL_SUCCESS` because detected FIT is auditably incomplete |
+| `3` | `PARTIAL_SUCCESS` because a file or row was left out; the warnings name it |
 
 Review warnings and affected families before analysis. See the
 [Output Contract](output_contract.md).
@@ -83,12 +105,13 @@ Review warnings and affected families before analysis. See the
 ### How can I check a run or prepare a public-safe support report?
 
 Run `doctor --run-output` on a completed output to explain the result without
-changing it, or `doctor --input` on an extracted Export to check bounded
-pre-run readiness. `support-bundle` creates a deterministic, six-member
+changing it, or `doctor --input` on an Export folder or ZIP file to check
+bounded pre-run readiness. `support-bundle` creates a deterministic, six-member
 public-safe ZIP for Human review and never uploads automatically. Review every
 member before sharing anything, and follow the Issue form rules, which ask you
 not to upload files. For an output that contains `diagnostics/`, use the same
-package version that produced it; see
+package version that produced it; starting with v2.0.0, another version stops
+with `OUTPUT_OTHER_VERSION` and names the version that made the output; see
 [Known Limitations](known_limitations.md#diagnostics-and-handoff-validation)
 and [v1.4 Export Evidence and Diagnostics](v1_4_diagnostics.md).
 
@@ -108,7 +131,8 @@ of deletion.
 
 Yes. It is an optional additive capability in `v1.2.0`. It preserves immutable
 observations from repeated complete Exports within one account boundary and
-builds a cumulative approved input before reusing Run-All.
+builds a cumulative approved input before reusing Run-All. Starting with
+v2.0.0, the GUI uses Snapshots by default; the CLI keeps them optional.
 
 Read the
 [v1.2 Snapshot Migration Guide](project/v1_2_snapshot_migration_guide_v1_0.md).
@@ -141,9 +165,11 @@ zero-defect, or external-adoption claim.
 ### Can I delete old Snapshot blobs?
 
 No supported Snapshot/blob deletion or automatic garbage collection workflow
-is provided. Do not manually edit or delete Store internals; the only
-exception is `.single-writer.lock` after an interrupted `snapshot register`, as
-described in
+is provided. Do not manually edit or delete Store internals. When an
+interrupted `snapshot register` left the lock file `.single-writer.lock`,
+check that no other normalization or snapshot command uses the store, and
+remove it with `snapshot unlock --store <store> --confirm-no-other-command`,
+which the GUI offers too; see
 [Known Limitations](known_limitations.md#snapshot-lifecycle). Verify the Store
 before backup and again after restore.
 

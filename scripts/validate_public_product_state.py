@@ -344,12 +344,12 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
             "### Was the v1.2.0 Windows timezone-data issue resolved?",
             "| `0` | `PASS` or `PASS_WITH_WARNINGS` |",
             "| `2` | Fatal contract, input, QA, or publication error |",
-            "| `3` | `PARTIAL_SUCCESS` because detected FIT is auditably incomplete |",
+            "| `3` | `PARTIAL_SUCCESS` because a file or row was left out; the warnings name it |",
         ),
         "docs/getting_started_from_garmin_export.md": (
             "| `0` | `PASS` or `PASS_WITH_WARNINGS` |",
             "| `2` | Fatal contract, input, QA, or publication error; no completed output |",
-            "| `3` | `PARTIAL_SUCCESS`; Activities are valid and detected FIT is auditably incomplete |",
+            "| `3` | `PARTIAL_SUCCESS`; Activities are valid, and a file or row was left out; the warnings name it |",
         ),
         "docs/product_quick_start.md": (
             "The root `QUICK_START.md` is a short router to the product guides.",
