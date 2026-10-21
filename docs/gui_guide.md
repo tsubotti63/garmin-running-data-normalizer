@@ -65,6 +65,42 @@ with it. Under the boxes come **Colors**, the meaning of the colors of the
 page, and two tables: **Steps**, the steps of a run with the time of each, and
 **Results by data family**.
 
+## Start the GUI from an icon
+
+On macOS and Windows, `--create-shortcut` makes an icon that starts the GUI,
+and then opens the GUI as the command does without it:
+
+```bash
+garmin-running-data-normalizer gui --create-shortcut
+```
+
+- macOS: the file **Garmin Running Data Normalizer.command** on the desktop.
+  Double-click it: the Terminal opens a window, which shows the address, and
+  the GUI opens in your default browser. When the command writes the file,
+  macOS may ask whether the Terminal may use the desktop: choose **Allow**, or
+  the icon is not made. Later, macOS asks the same for the folders that you
+  choose from, such as Downloads, as it does when you start the GUI from the
+  Terminal.
+- Windows: the shortcut **Garmin Running Data Normalizer** on the desktop and
+  in the Start menu. Its window opens minimized, in the taskbar.
+- Keep the window that the icon opens open while you use the GUI: closing it
+  stops the GUI, as closing the terminal does.
+- The icon starts the Python that ran the command. After you update this app
+  with pip, the icon starts the new version. After you replace Python (for
+  example 3.13 with 3.14) or the virtual environment, run the command again to
+  make the icon again. The icon holds no key: each launch makes its own.
+- The command replaces only an icon that it made. Another file of the same
+  name stops it with `SHORTCUT_PLACE_TAKEN`; an icon that cannot be made stops
+  it with `SHORTCUT_NOT_CREATED`, and other systems with
+  `SHORTCUT_NOT_SUPPORTED`. The GUI does not open then; without
+  `--create-shortcut`, the command opens it.
+- When your desktop is synchronized with iCloud, the file also appears on
+  your other Macs, where it may not start, because Python is in another place
+  there.
+- To remove the icon, move it to the Trash (the Recycle Bin on Windows).
+  `pip uninstall` does not remove it.
+- Linux has no icon: start the GUI with the command.
+
 ## Box 1: This export
 
 1. Choose **Choose ZIP file…** for the ZIP file downloaded from Garmin, or
@@ -505,7 +541,7 @@ and open the new address; each launch has a new address and key.
 ## Stop the GUI
 
 - Choose **Quit** at the bottom of the page, or press `Ctrl+C` in the
-  terminal.
+  terminal. When the icon started the GUI, its window is the terminal.
 - While a run is active, **Quit** is refused; cancel the run first. `Ctrl+C`
   cancels the run and then stops the GUI.
 - The `gui` command ends with exit code 0 after **Quit**, or after `Ctrl+C`

@@ -1777,6 +1777,9 @@ gives, for its entries and controls, are not in this table.
 | `SUPPORT_BUNDLE_SIZE_LIMIT_EXCEEDED` | the Support Bundle would be larger than its limit | the Support Bundle was not made; please report the code |
 | `SUPPORT_BUNDLE_UNCLASSIFIED_FIELD` | the Support Bundle would hold a field that is not classified as safe | the Support Bundle was not made; please report the code |
 | `SUPPORT_BUNDLE_UNREGISTERED_DIAGNOSTIC` | the Support Bundle would hold a diagnostic code that is not registered | the Support Bundle was not made; please report the code |
+| `SHORTCUT_NOT_SUPPORTED` | an icon that starts the GUI can be made only on macOS and Windows | start the GUI with garmin-running-data-normalizer gui, without --create-shortcut |
+| `SHORTCUT_PLACE_TAKEN` | a file that this app did not make has the name of the icon that starts the GUI | rename or move that file and run the command again, or start the GUI with garmin-running-data-normalizer gui, without --create-shortcut |
+| `SHORTCUT_NOT_CREATED` | the icon that starts the GUI could not be made | check that this app may write on the desktop (on a Mac, allow the Terminal in System Settings > Privacy & Security > Files and Folders) and run the command again, or start the GUI with garmin-running-data-normalizer gui, without --create-shortcut |
 | `ACTIVITIES_NORMALIZATION_FAILED` | the Activities could not be normalized | no output was written; this is a defect of this app, so please report the code |
 | `GEAR_NORMALIZATION_FAILED` | the Gear could not be normalized | no output was written; this is a defect of this app, so please report the code |
 | `PERSONAL_RECORDS_NORMALIZATION_FAILED` | the Personal Records could not be normalized | no output was written; this is a defect of this app, so please report the code |

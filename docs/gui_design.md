@@ -325,7 +325,9 @@ Local Snapshot Store and new output folders
 
 - Server: `http.server.ThreadingHTTPServer` bound to `127.0.0.1` with a port
   chosen by the operating system. The URL is printed in the terminal and
-  opened with the default browser.
+  opened with the default browser. From the icon of `gui --create-shortcut`
+  (stage E1d), the terminal is the window that the icon opens: the Terminal on
+  macOS, and a console minimized in the taskbar on Windows.
 - Static files live under `src/garmin_running_data_normalizer/gui/static/` and
   are shipped as package data. No third-party libraries, CDN, web fonts, or
   build step are used. The server answers only the paths in a fixed table,
@@ -661,6 +663,16 @@ Many cases that stop with exit 2 in v1.x finish with exit 0 or 3 in v2.0.0.
   with exit 0 after the Quit button or after `Ctrl+C` without a run, or, when
   `Ctrl+C` stopped a run, with the CLI's lines and exit code for a cancelled
   command, 130.
+- `gui --create-shortcut` (stage E1d, decision 20261021-1) first makes an icon
+  that starts the GUI with the Python that runs the command: a file on the
+  desktop that the Terminal runs on macOS, and a shortcut on the desktop and
+  in the Start menu whose console opens minimized on Windows. The icon keeps
+  the terminal's window, so that a run, its cancellation, and the stop work as
+  from the command; an icon without a window, which needs another way to
+  cancel the child of a run on Windows, waits until after 2.0.0. The command
+  replaces only an icon that it made, and when it cannot make one it stops
+  with exit 2 (`SHORTCUT_NOT_SUPPORTED`, `SHORTCUT_PLACE_TAKEN`, or
+  `SHORTCUT_NOT_CREATED`) before the GUI opens. Linux has no icon.
 - `run-all`, `doctor --input`, and `snapshot register` accept a ZIP file.
 - Warnings about values that disagree name the Snapshots by number.
 - The pre-run checks that only the GUI performs in v1.7.1 (output name, an

@@ -403,6 +403,12 @@ python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-ur
 garmin-running-data-normalizer gui
 ```
 
+On macOS and Windows, `garmin-running-data-normalizer gui --create-shortcut`
+also makes an icon that starts the GUI, so that later launches need no
+command; see
+[Start the GUI from an icon](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#start-the-gui-from-an-icon)
+in the GUI Guide.
+
 Maintainers can reproduce the packaging gate without uploading anything:
 
 ```bash
