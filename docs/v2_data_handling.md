@@ -1611,8 +1611,10 @@ anything is written:
   this app gives them, in the folders where it writes them (a blob's only in
   the folder named after the first two characters of its SHA-256), without
   following a link. Its result gives their number
-  (`temporary_files_removed`) when there are some. This app never removes the
-  lock or the journal.
+  (`temporary_files_removed`) when there are some. A registration never
+  removes the lock or the journal; only `snapshot unlock`, and the GUI's
+  button that uses the same function, removes the lock file, after the user
+  confirms that no other command uses the store (see below).
 - `snapshot status` and `snapshot verify` tell of the lock, and `status` of an
   interrupted registration, in `notices` and with a `NOTE` line, only when
   there is one, and do not fail for them. When `snapshot verify` fails, it

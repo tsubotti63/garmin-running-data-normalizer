@@ -16,7 +16,18 @@ personal data.
 - Redact paths, emails, account/activity identifiers, and coordinates from
   portable evidence unless the user explicitly opts in.
 - Synthetic test fixtures only.
-- Fail closed on unknown archive members, unsafe paths, or unexpected schemas.
+- Stop on unsafe members of the Export ZIP file (paths outside the folder,
+  links, encryption, or a compression ratio over the limit), on symbolic links
+  in the input, on a damaged Export ZIP file, and over the limits on the
+  totals of the Export ZIP file. Starting with v2.0.0, a ZIP file inside the
+  Export with an unsafe member is left out with `DATA_FILE_LEFT_OUT` (see
+  [Files that cannot be read](v2_data_handling.md#files-that-cannot-be-read)),
+  files of a form that no dataset reads are not read and are listed in
+  `run_manifest.json` (`files_not_read`; see
+  [Files and fields that are not read](v2_data_handling.md#files-and-fields-that-are-not-read)),
+  and a value of another form is left empty with `DATA_VALUE_INVALID` while
+  its row stays (see
+  [Rows and values with problems](v2_data_handling.md#rows-and-values-with-problems)).
 - Open-Meteo is opt-in until coordinate disclosure and API-use policy are
   documented; raw responses are local/generated data and not committed.
 - Temporary copies stay private and short-lived. Every ZIP file inside an

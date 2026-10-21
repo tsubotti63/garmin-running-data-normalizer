@@ -24,10 +24,17 @@ GitHub Release and Production PyPI distribution.
 - `feedback_phrase`
 
 For both datasets, `calendar_date` is the stable key. Exact duplicates and
-same-public-value duplicates collapse deterministically. A same-day public
-value conflict fails closed. Snapshot accumulation retains earlier daily state
-when a later complete Export omits it; it never uses keep-last to resolve a
-conflict.
+same-public-value duplicates collapse deterministically. Starting with v2.0.0,
+a same-day public value conflict, within one Export or across Snapshots, keeps
+the day: each field whose values differ is null and listed in
+`disagreeing_fields`, the dataset's audit record keeps every observed value
+and the Snapshots that gave it, and the run warns with `VALUES_DISAGREE` (see
+[Values that disagree](v2_data_handling.md#values-that-disagree)). A row
+without a usable overall score is left out with `DATA_ROW_LEFT_OUT`, and a
+value of another form in another field is null with `DATA_VALUE_INVALID` (see
+[Rows and values with problems](v2_data_handling.md#rows-and-values-with-problems)).
+Snapshot accumulation retains earlier daily state when a later complete Export
+omits it; it never uses keep-last to resolve a conflict.
 
 Garmin may encode source `calendarDate` as an ISO-like string or epoch
 milliseconds. Epoch milliseconds represent the labeled UTC calendar day and
@@ -52,7 +59,10 @@ timestamp is an identity anchor, not an approved machine stable key. Numeric
 units and timezone semantics remain `UNCONFIRMED`. Sequence can support
 deterministic within-source ordering only. Cross-source candidates are not
 collapsed, converted, averaged, or resolved by latest-wins logic. Derived
-evidence is audit-only.
+evidence is audit-only. Starting with v2.0.0, an item that is not a record is
+left out with `DATA_ROW_LEFT_OUT`, and a value of another form stays in the
+audit record with `DATA_VALUE_INVALID`, both for the family
+`lactate_threshold`; a malformed candidate no longer stops the run.
 
 Stable promotion requires Product approval of the identity, unit, timezone,
 and conflict contracts.

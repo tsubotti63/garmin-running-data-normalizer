@@ -5,18 +5,19 @@
   "type": "array",
   "items": {
     "type": "object",
-    "required": ["calendar_date", "observation_timestamp", "vo2max", "vo2max_source_series", "sport", "source_activity_id", "source_confidence", "max_met", "max_met_category", "calibrated_data"],
+    "required": ["calendar_date", "observation_timestamp", "vo2max", "vo2max_source_series", "sport", "source_activity_id", "source_confidence", "max_met", "max_met_category", "calibrated_data", "disagreeing_fields"],
     "properties": {
       "calendar_date": {"type": "string", "format": "date"},
       "observation_timestamp": {"type": "string", "description": "Activity timestampGmt is interpreted as UTC by source-field semantics; other naive source timestamps remain timezone-unconfirmed."},
-      "vo2max": {"type": "number"},
-      "vo2max_source_series": {"enum": ["activity_vo2max_daily", "performance_metrics_daily"]},
+      "vo2max": {"type": ["number", "null"]},
+      "vo2max_source_series": {"type": "string", "description": "The source series, usually activity_vo2max_daily or performance_metrics_daily; a series that the source record names is kept as given."},
       "sport": {"type": "string"},
       "source_activity_id": {"type": ["integer", "null"], "description": "Supplemental source provenance only; never part of the stable key."},
       "source_confidence": {"type": ["string", "null"]},
       "max_met": {"type": ["number", "null"]},
       "max_met_category": {"type": ["string", "null"]},
-      "calibrated_data": {"type": ["number", "null"]}
+      "calibrated_data": {"type": ["number", "null"]},
+      "disagreeing_fields": {"type": "array", "items": {"type": "string"}, "description": "Starting with v2.0.0: the fields of this row whose values differ between the observations of its stable key, in field order. Those fields are null, and the dataset's audit keeps every observed value. Empty when the observations agree."}
     },
     "additionalProperties": false
   }

@@ -4,12 +4,13 @@
   "type": "array",
   "items": {
     "type": "object",
-    "required": ["calendar_date", "overall_score", "classification", "feedback_phrase"],
+    "required": ["calendar_date", "overall_score", "classification", "feedback_phrase", "disagreeing_fields"],
     "properties": {
       "calendar_date": {"type": "string", "format": "date"},
-      "overall_score": {"type": "number"},
+      "overall_score": {"type": ["number", "null"]},
       "classification": {"type": ["number", "null"]},
-      "feedback_phrase": {"type": ["number", "null"]}
+      "feedback_phrase": {"type": ["number", "null"]},
+      "disagreeing_fields": {"type": "array", "items": {"type": "string"}, "description": "Starting with v2.0.0: the fields of this row whose values differ between the observations of its stable key, in field order. Those fields are null, and the dataset's audit keeps every observed value. Empty when the observations agree."}
     },
     "additionalProperties": false
   }

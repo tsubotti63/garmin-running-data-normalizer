@@ -15,19 +15,19 @@ machine authorities.
 | `activities` | `summarizedActivities.json`; `normalize-activities`, Run-All | Authoritative normalized activity records | activity | `garmin_activity_key` | yes | `source_path`, `source_sha256`, confidence | Detailed local activity analysis; use the reduced CSV when its columns are sufficient |
 | `gear` | `gear.json`; Run-All | Authoritative normalized gear records | gear | `gear_key` | no | `source_path`, `source_sha256` | Local gear attribute analysis; cross-dataset use requires the relationship catalog |
 | `activity_gear` | `gear.json`; Run-All | Authoritative normalized link records, not an activity Source of Truth | activity-gear link | `gear_key`, `activity_id` | no | `source_path`, `source_sha256` | Explicit joins to Activities through `garmin_activity_key` and to Gear through `gear_key` |
-| `personal_records` | `personalRecord.json`; Run-All | Authoritative normalized personal-record entries | personal record | `personal_record_id` | no | `source_path`, `source_sha256`, confidence | Nonzero activity IDs resolve explicitly; `activity_id = 0` remains independent |
+| `personal_records` | `personalRecord.json`; Run-All | Authoritative normalized personal-record entries | personal record | `personal_record_id` | no | `source_path`, `source_sha256`, confidence | Nonzero activity IDs resolve explicitly or stay `unresolved` with a reason; `activity_id = 0` remains independent |
 | `fit_sessions` | CRC-valid bounded Activity `.fit`; Run-All | Authoritative bounded FIT session summaries | FIT session | `fit_session_key` | no | `source_path`, `source_sha256`; compatible `fit_file_id` retained | Local bounded session analysis after audit review |
 | `fit_laps` | CRC-valid bounded Activity `.fit`; Run-All | Authoritative bounded FIT lap summaries | FIT session lap | `fit_lap_key` | no | `source_path`, `source_sha256`; compatible `fit_file_id`, `lap_index` retained | Explicit child of a FIT session through `fit_session_key` |
 | `activity_fit_links` | Activities and CRC-valid FIT Sessions; Run-All | Auditable evidence-qualified relationship records | Activity/FIT session link | `garmin_activity_key`, `fit_session_key` | no | both Activity and FIT provenance | Explicit one-to-one join within the evidence-qualified eligible population |
 | `hill_score_daily` | exact-suffix `HillScore*.json`; Run-All | Authoritative public-safe daily Hill Score state | calendar day | `calendar_date` | no | aggregate source-lineage audit; private source fields are not emitted | Standalone daily performance context; no Activity relationship is defined |
 | `endurance_score_daily` | exact-suffix `EnduranceScore*.json`; Run-All | Authoritative public-safe daily Endurance Score state | calendar day | `calendar_date` | no | aggregate source-lineage audit; private source fields are not emitted | Standalone daily performance context; no Activity relationship is defined |
 | `race_prediction_daily` | `RunRacePredictions*.json`; Run-All | Garmin source-provided race predictions | source observation | `calendar_date`, `observation_timestamp` | no | aggregate source-lineage audit | Standalone prediction context; not a measured race result |
-| `sleep_daily` | `*sleepData.json`; Run-All | Bounded normalized sleep state and explicit review rows; observed-stage duration restoration is nullable | sleep day | `sleep_day` | no | aggregate source-lineage audit | Standalone available-only condition context; missing values are not inferred |
+| `sleep_daily` | `*sleepData.json`; Run-All | Bounded normalized sleep state, with `needs_review` rows when the sleep window cannot be used or its observations disagree; observed-stage duration restoration is nullable | sleep day | `sleep_day` | no | aggregate source-lineage audit | Standalone available-only condition context; missing values are not inferred |
 | `uds_daily` | `UDSFile*.json`; Run-All | Selected source-provided activity, heart-rate, Body Battery, and stress context | calendar day | `calendar_date` | no | aggregate source-lineage audit | Generation-aware condition context with explicit source-presence flags |
 | `acute_training_load_daily` | `MetricsAcuteTrainingLoad*.json`; Run-All | Source-provided acute/chronic load observations | source observation | `calendar_date`, `observation_timestamp` | no | aggregate source-lineage audit | No ratio or status recomputation; no daily row selection |
 | `training_readiness_daily` | `TrainingReadinessDTO*.json`; Run-All | Source-provided readiness and component observations | source observation | `calendar_date`, `observation_timestamp` | no | aggregate source-lineage audit | HRV-labelled components remain source-provided readiness fields |
 | `vo2max_daily` | `ActivityVo2Max*.json`, `MetricsMaxMetData*.json`; Run-All | Unified observation schema retaining two source series | source observation | `calendar_date`, `vo2max_source_series`, `sport`, `observation_timestamp` | no | aggregate source-lineage audit; supplemental source Activity ID | Source-series boundary is explicit; no cross-series overwrite or Activity join |
-| `hrv_daily` | non-running FIT message 370 field 1; Run-All | Bounded FIT-derived analysis reference | calendar day | `calendar_date` | no | aggregate FIT audit | `analysis_reference_only`; conflicting same-day values remain unresolved |
+| `hrv_daily` | non-running FIT message 370 field 1; Run-All | Bounded FIT-derived analysis reference | calendar day | `calendar_date` | no | aggregate FIT audit | `analysis_reference_only`; conflicting same-day values leave the value null and listed in `disagreeing_fields` |
 | `training_history_daily` | `TrainingHistory*.json`; Run-All | Limited training-status observations | source observation | `calendar_date`, `observation_timestamp` | no | aggregate source-lineage audit | Status plus optional sport context; no promotion of other sparse fields |
 
 Run-All requires Activities. Gear, Personal Records, and FIT are optional and
@@ -37,12 +37,14 @@ versioned Run-All manifest fields form the stable `1.x` interface.
 
 All v1.3 daily families are optional. Their absence is an expected
 source condition and does not add a warning. Exact duplicates are deduplicated.
-Snapshot-based Endurance and UDS values that differ for one stable key are
-preserved in their audit evidence while canonicalization remains unresolved;
-same-export malformed/divergent values fail closed. The HRV reference preserves
-an explicit unresolved review row. Sleep exact duplicates collapse with
-`review_required_count=0`; exclusions remain separate from review-required
-observations. Missing from a later Snapshot never means
+Starting with v2.0.0, values that differ for one stable key, within one Export
+or across Snapshots, are null and listed in `disagreeing_fields`, with every
+observed value in the audit record and the warning `VALUES_DISAGREE`; a value
+of another form is null with `DATA_VALUE_INVALID`; and a row without its date
+or a value that its dataset needs is left out with `DATA_ROW_LEFT_OUT` (see
+[v2.0.0 Data Handling](v2_data_handling.md#rules-by-situation)). Sleep exact
+duplicates collapse with `review_key_count=0`; exclusions remain separate from
+the keys that need review. Missing from a later Snapshot never means
 delete. The shared generation/source boundary and exact field contracts are
 defined in [Wellness and Daily Metrics](wellness_metrics.md).
 
