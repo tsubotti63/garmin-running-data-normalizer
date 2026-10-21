@@ -473,12 +473,12 @@ def test_partial_success_exit_zero_in_faq_table_fails(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
     faq = tmp_path / "docs/faq.md"
     correct_row = (
-        "| `3` | `PARTIAL_SUCCESS` because detected FIT is auditably incomplete |"
+        "| `3` | `PARTIAL_SUCCESS` because a file or row was left out; the warnings name it |"
     )
     faq.write_text(
         faq.read_text(encoding="utf-8").replace(
             correct_row,
-            "| `0` | `PARTIAL_SUCCESS` because detected FIT is auditably incomplete |",
+            "| `0` | `PARTIAL_SUCCESS` because a file or row was left out; the warnings name it |",
         ),
         encoding="utf-8",
     )

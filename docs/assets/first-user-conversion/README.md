@@ -29,9 +29,10 @@ evidence of training outcomes.
 
 ## Reproduce
 
-Use a new output directory for Run-All:
+Use a new output directory for Run-All, in a folder that exists:
 
 ```text
+mkdir -p workspace
 python -m garmin_running_data_normalizer run-all --input examples/synthetic/garmin_export --output workspace/first-user-conversion-run-all
 python scripts/generate_first_user_conversion_assets.py --run-all-output workspace/first-user-conversion-run-all
 ```

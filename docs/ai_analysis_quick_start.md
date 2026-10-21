@@ -106,16 +106,18 @@ run them from the directory that contains `.venv`.
 ### macOS / Linux
 
 ```bash
+mkdir -p /path/to/outputs
 .venv/bin/python -m garmin_running_data_normalizer run-all \
-  --input /path/to/extracted-garmin-export \
-  --output /path/to/new-run-all-output \
+  --input /path/to/garmin-export.zip \
+  --output /path/to/outputs/external-safe-01 \
   --external-safe-pack
 ```
 
 ### Windows PowerShell
 
 ```powershell
-.\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input "C:\Garmin\Export" --output "C:\Garmin\Output\external-safe-01" --external-safe-pack
+New-Item -ItemType Directory -Force "C:\Garmin\Output" | Out-Null
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input "C:\Garmin\garmin-export.zip" --output "C:\Garmin\Output\external-safe-01" --external-safe-pack
 ```
 
 The stable Snapshot path supports the same option:
@@ -124,8 +126,8 @@ The stable Snapshot path supports the same option:
 
 ```bash
 .venv/bin/python -m garmin_running_data_normalizer snapshot run-all \
-  --store /path/to/private-snapshot-store \
-  --output /path/to/new-snapshot-run-all-output \
+  --store /path/to/private/snapshot-store \
+  --output /path/to/outputs/snapshot-safe-01 \
   --external-safe-pack
 ```
 

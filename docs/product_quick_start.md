@@ -83,6 +83,7 @@ record per activity and its stable key remains `garmin_activity_key`.
 ### macOS / Linux
 
 ```bash
+mkdir -p workspace
 .venv/bin/python -m garmin_running_data_normalizer normalize-activities \
   --input examples/synthetic/garmin_export \
   --output workspace/golden-path
@@ -91,10 +92,14 @@ record per activity and its stable key remains `garmin_activity_key`.
 ### Windows PowerShell
 
 ```powershell
+New-Item -ItemType Directory -Force .\workspace | Out-Null
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer normalize-activities --input .\examples\synthetic\garmin_export --output .\workspace\golden-path
 ```
 
-Success prints `PASS`, a record count, and a deterministic digest. This is the
+Starting with v2.0.0, the folder that holds an output (`workspace` here) must
+exist: the commands do not create it and stop with `OUTPUT_PARENT_NOT_FOUND`,
+so the first line creates it. Success prints `PASS`, a record count, and a
+deterministic digest. This is the
 synthetic Golden Path status, not the status of the separate real-user
 validation. The command does not modify the input. It refuses a non-empty output
 directory rather than overwriting existing files.
@@ -160,13 +165,14 @@ The stable v1.2.0 release includes the additive Snapshot commands:
 ### macOS / Linux
 
 ```bash
+mkdir -p workspace
 .venv/bin/python -m garmin_running_data_normalizer snapshot init \
   --store workspace/snapshot-store \
   --account local-account-01
 
 .venv/bin/python -m garmin_running_data_normalizer snapshot register \
   --store workspace/snapshot-store \
-  --input /path/to/complete-export \
+  --input /path/to/complete-export.zip \
   --label S1 \
   --requested-at 2030-01-01T00:00:00+00:00 \
   --downloaded-at 2030-01-01T01:00:00+00:00 \
@@ -188,8 +194,9 @@ The stable v1.2.0 release includes the additive Snapshot commands:
 ### Windows PowerShell
 
 ```powershell
+New-Item -ItemType Directory -Force .\workspace | Out-Null
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot init --store .\workspace\snapshot-store --account local-account-01
-.\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot register --store .\workspace\snapshot-store --input "C:\Garmin\CompleteExport" --label S1 --requested-at 2030-01-01T00:00:00+00:00 --downloaded-at 2030-01-01T01:00:00+00:00 --observed-at 2030-01-01T02:00:00+00:00 --confirm-complete
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot register --store .\workspace\snapshot-store --input "C:\Garmin\complete-export.zip" --label S1 --requested-at 2030-01-01T00:00:00+00:00 --downloaded-at 2030-01-01T01:00:00+00:00 --observed-at 2030-01-01T02:00:00+00:00 --confirm-complete
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot status --store .\workspace\snapshot-store
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot verify --store .\workspace\snapshot-store
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer snapshot build-input --store .\workspace\snapshot-store --output .\workspace\approved-input
@@ -197,15 +204,21 @@ The stable v1.2.0 release includes the additive Snapshot commands:
 ```
 
 Repeat only `snapshot register` for each complete Export, with its own label and
-timezone-aware request/download/observation timestamps. Registration is
-content-idempotent and chronological order is derived from the observation
-timestamp, so a historical middle Snapshot can be added later. Never reuse one
-store for different accounts. Review `snapshot/snapshot_coverage.json` and
-`snapshot/canonical_merge_summary.json` before making completeness claims.
+timezone-aware request/download/observation timestamps. Starting with v2.0.0,
+the Export can be the downloaded ZIP file or its extracted folder, and the
+folder that holds a new store must exist (`SNAPSHOT_STORE_PARENT_NOT_FOUND`).
+Registration is content-idempotent and chronological order is derived from the
+observation timestamp, so a historical middle Snapshot can be added later.
+Never reuse one store for different accounts. Review
+`snapshot/snapshot_coverage.json` and `snapshot/canonical_merge_summary.json`
+before making completeness claims.
 
 The Store contains raw personal evidence. Keep it local, restrict filesystem
-access, never commit it, and do not delete blobs or Snapshot directories. Run
-`snapshot verify` before backup and after restore.
+access, never commit it, and do not delete blobs or Snapshot directories. When
+an interrupted registration left the lock file `.single-writer.lock`, check
+that no other normalization or snapshot command uses the store, and remove it
+with `snapshot unlock --store workspace/snapshot-store --confirm-no-other-command`.
+Run `snapshot verify` before backup and after restore.
 
 For migration and rollback guidance, see
 [`docs/project/v1_2_snapshot_migration_guide_v1_0.md`](project/v1_2_snapshot_migration_guide_v1_0.md).
@@ -213,12 +226,13 @@ For migration and rollback guidance, see
 ## Run the minimum Run-All workflow
 
 Run-All requires Activities. Gear, Personal Records, bounded FIT, and the ten
-v1.3 Wellness / Metrics families are optional. The destination must be new and
-outside the input directory.
+v1.3 Wellness / Metrics families are optional. The destination must be new,
+outside the input, and in a folder that exists.
 
 ### macOS / Linux
 
 ```bash
+mkdir -p workspace
 .venv/bin/python -m garmin_running_data_normalizer run-all \
   --input examples/synthetic/garmin_export \
   --output workspace/run-all
@@ -227,6 +241,7 @@ outside the input directory.
 ### Windows PowerShell
 
 ```powershell
+New-Item -ItemType Directory -Force .\workspace | Out-Null
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\run-all
 ```
 
@@ -363,16 +378,19 @@ Continue with:
 The `normalize-activities` Golden Path is activities-only. The separate
 multi-family `run-all` command requires Activities and supports optional Gear,
 Personal Records, bounded FIT sessions/laps, and the ten stable v1.3 Wellness /
-Metrics families listed above. `--input` must itself point to a local export
-directory containing a JSON file whose name ends in
-`summarizedActivities.json`. Passing a ZIP file directly as `--input` is
-unsupported. ZIP assets discovered inside the input directory remain subject to
-the existing traversal, symbolic-link, encryption, entry count, size,
-expanded-size, and compression-ratio limits.
+Metrics families listed above. `--input` points to a local Export folder or,
+starting with v2.0.0, the downloaded Export ZIP file, containing a JSON file
+whose name ends in `summarizedActivities.json`. The Export ZIP file and the
+ZIP files inside it, which are read one level deep, remain subject to the
+traversal, symbolic-link, encryption, entry count, size, expanded-size, and
+compression-ratio limits; a ZIP file inside the Export that fails them is left
+out with a warning (see
+[An Export given as a ZIP file](v2_data_handling.md#an-export-given-as-a-zip-file)).
 
 Real Garmin exports and generated personal outputs are sensitive. Keep them in
 ignored local locations such as `data/` and `workspace/`; never commit them.
-Run-All uses the existing exact filename rules. It validates complete FIT file
+Run-All uses the existing filename rules; starting with v2.0.0, it matches
+the names without regard to letter case. It validates complete FIT file
 CRC and optional header CRC, supports multiple sessions per FIT file, preserves
 file/session/lap identity, and converts selected invalid metric sentinels to
 null before scaling. It emits Activity/FIT links only from evidence-qualified

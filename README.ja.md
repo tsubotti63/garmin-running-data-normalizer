@@ -44,7 +44,9 @@ Synthetic Quick Startを完了できた場合は、個人Garminデータを含�
 実際のExportを使う場合は、先にSynthetic workflowで導入を確認し、その後
 [Getting Started from Garmin Export](docs/getting_started_from_garmin_export.md)
 へ進んでください。入力と出力はローカルに置き、出力先には新しいディレクトリを
-指定します。
+指定します。v2.0.0 からは、ダウンロードした ZIP のままでも入力にでき、出力を
+作るフォルダーは先に作っておく必要があります。画面で使うときは
+[GUI の手引き](docs/gui_guide.ja.md)を見てください。
 
 ## Privacy
 

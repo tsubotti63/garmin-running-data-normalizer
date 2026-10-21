@@ -27,7 +27,7 @@ folder; earlier outputs are not converted.
 
 | Contract | v2.0.0 position |
 |---|---|
-| CLI commands and options | One new command, `gui`, which opens the local GUI and ends with exit 0 after its Quit button or `Ctrl+C` without a run, or 130 when `Ctrl+C` stopped a run; otherwise the same commands and options; `--input` also takes the downloaded Export ZIP file; for `run-all`, `snapshot run-all`, `snapshot build-input`, and `normalize-activities`, the folder for the output must exist and the name of a new output must be one that every system accepts; for `snapshot init`, the folder that holds the new store must exist, and for `support-bundle`, the folder of the bundle must exist and be outside the run output; the new `snapshot unlock --store <store> --confirm-no-other-command` removes the lock file that a stopped registration left |
+| CLI commands and options | Two new commands: `gui`, which opens the local GUI and ends with exit 0 after its Quit button or `Ctrl+C` without a run, or 130 when `Ctrl+C` stopped a run, and `snapshot unlock --store <store> --confirm-no-other-command`, which removes the lock file that a stopped registration left; otherwise the same commands and options; `--input` also takes the downloaded Export ZIP file; for `run-all`, `snapshot run-all`, `snapshot build-input`, and `normalize-activities`, the folder for the output must exist and the name of a new output must be one that every system accepts; for `snapshot init`, the folder that holds the new store must exist, and for `support-bundle`, the folder of the bundle must exist and be outside the run output |
 | Exit codes | The same `0 / 0 / 3 / 2` Product mapping; `PARTIAL_SUCCESS` (exit 3) covers every file or row left out, and many problems that stopped with exit 2 now finish with exit 3 or 0; `Ctrl+C` ends a command with exit 130 |
 | Stops | Every `ERROR` line says what happened and then the next step of its code; some codes change (below) |
 | Datasets, schemas, and stable keys | 17 datasets; 247 fields (224 in v1.7.1); ten fields become nullable; stable keys unchanged |
@@ -123,6 +123,21 @@ What can change:
   them. HRV `dedupe_status` `review_required_same_day_differing_values` becomes
   `same_day_values_disagree`, and Run-All no longer gives
   `DAILY_METRICS_REVIEW_REQUIRED`.
+- Identifiers: spaces and leading zeros are trimmed, as in v1.7.1; a whole
+  number written with a decimal point, such as `123.0`, is the identifier
+  `123` and is written as `123`, in its key too; and only the ASCII digits 0
+  to 9 are digits, so an identifier written with other digits, such as the
+  full-width `"１２３"`, which v1.7.1 read as `123`, is now text. A link that
+  names an Activity in this way is a valid link whose endpoint is absent, and
+  records that name their account in this way and as `123` name two
+  accounts, which stops the run with `INPUT_MULTIPLE_EXPORTS`. A row whose
+  identifier cannot be used, such as `1.5`, or 0 in Activities, Gear, and
+  links, is left out with `DATA_ROW_LEFT_OUT`.
+- The HRV audit record names its date basis
+  `fit_end_local_date_from_message_370_field_253_timestamp`, with the
+  timezone in `date_timezone`, where v1.7.1 wrote
+  `fit_end_jst_date_from_message_370_field_253_timestamp` whatever the
+  timezone.
 - Nullable fields: the Hill and Endurance `overall_score`, the four Race
   Prediction times, `vo2max`, `training_status`,
   `personal_records.activity_id`, and `activity_gear.garmin_activity_key`. A
