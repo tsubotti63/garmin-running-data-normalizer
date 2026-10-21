@@ -243,6 +243,11 @@ class WindowsRequestTest(TemporaryFolder):
             self.assertLess(script.index("$link.Save()"), script.index(line))
             self.assertLess(script.index(line), script.index("$saved.Save()"))
         self.assertLess(script.index("$saved.Save()"), script.index("Move-Item -LiteralPath $temporary"))
+        # Windows PowerShell 5.1 takes no -Leaf with -LiteralPath in Split-Path;
+        # .NET names the folder and the file of a place in every version.
+        self.assertNotIn("Split-Path", script)
+        self.assertIn("[System.IO.Path]::GetDirectoryName($temporary)", script)
+        self.assertIn("[System.IO.Path]::GetFileName($temporary)", script)
         first, second = Path("C:\\a"), Path("C:\\b")
         _, seen = self.run_with(0, folders=[first, second])
         self.assertEqual(seen["env"]["GRDN_SHORTCUT_FOLDERS"], f"{first}\n{second}")
@@ -282,8 +287,8 @@ def on_shortcut(place: Path, script: str) -> str:
     opening = (
         "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; "
         "$application = New-Object -ComObject Shell.Application; "
-        "$link = $application.Namespace((Split-Path -LiteralPath $env:GRDN_TEST_PLACE))"
-        ".ParseName((Split-Path -LiteralPath $env:GRDN_TEST_PLACE -Leaf)).GetLink; "
+        "$link = $application.Namespace([System.IO.Path]::GetDirectoryName($env:GRDN_TEST_PLACE))"
+        ".ParseName([System.IO.Path]::GetFileName($env:GRDN_TEST_PLACE)).GetLink; "
     )
     result = subprocess.run(
         ["powershell.exe", "-NoProfile", "-NonInteractive", "-STA", "-Command", opening + script],

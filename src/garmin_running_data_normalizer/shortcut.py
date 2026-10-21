@@ -147,7 +147,7 @@ WINDOWS_SCRIPT = (
     "$link.WindowStyle = 7; "
     "$link.Description = $env:GRDN_SHORTCUT_DESCRIPTION; "
     "$link.Save(); "
-    "$saved = $application.Namespace((Split-Path -LiteralPath $temporary)).ParseName((Split-Path -LiteralPath $temporary -Leaf)).GetLink; "
+    "$saved = $application.Namespace([System.IO.Path]::GetDirectoryName($temporary)).ParseName([System.IO.Path]::GetFileName($temporary)).GetLink; "
     "$saved.Path = $env:GRDN_SHORTCUT_TARGET; "
     "$saved.WorkingDirectory = $env:GRDN_SHORTCUT_HOME; "
     "$saved.Description = $env:GRDN_SHORTCUT_DESCRIPTION; "
