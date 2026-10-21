@@ -36,12 +36,15 @@ POWERSHELL_TIMEOUT_SECONDS = 60.0
 
 
 class ShortcutError(Exception):
-    """A stop of ``gui --create-shortcut``: its code and what happened."""
+    """A stop of ``gui --create-shortcut``: its code and what happened. The
+    detail, such as what Windows PowerShell said, is for the tests and is
+    never printed, since it can name places."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, detail: str | None = None) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
+        self.detail = detail
 
 
 def mac_script(executable: str) -> str:
@@ -101,12 +104,28 @@ def _create_on_mac(executable: str, desktop: Path) -> list[Path]:
 # The script that makes the shortcuts on Windows. The places come from the
 # environment, so that no name is quoted into the script. It checks every
 # place before it writes one: a place that holds anything else than a shortcut
-# of this command ends it with 3, and any other failure with 4.
+# of this command ends it with 3, and any other failure with 4, after it says
+# why on the standard error. WScript.Shell reads and saves a shortcut only in
+# the temporary folder, under a name of plain letters, and the shortcut is
+# then copied from or moved to its place: a place such as a desktop that
+# OneDrive keeps as "デスクトップ" holds letters that it may not take. When the
+# temporary folder itself has such letters, as under a home folder of another
+# script, its short name of plain letters is used, and without one, the
+# temporary folder of Windows. WScript.Shell may also lose such letters inside
+# the shortcut, so it is given only plain letters (a Python or a home folder
+# with other letters stands in as cmd.exe or the temporary folder), and the
+# Python, the home folder, and the description are then written with the
+# ShellLinkObject of Shell.Application, which keeps them. Until then the
+# shortcut is only in the temporary folder, so no stand-in reaches a place.
 WINDOWS_SCRIPT = (
     "$ErrorActionPreference = 'Stop'; "
     "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; "
     "try { "
     "$shell = New-Object -ComObject WScript.Shell; "
+    "$application = New-Object -ComObject Shell.Application; "
+    "$temp = [System.IO.Path]::GetTempPath(); "
+    "if ($temp -match '[^\\x00-\\x7F]') { $temp = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($temp).ShortPath }; "
+    "if ($temp -match '[^\\x00-\\x7F]') { $temp = Join-Path $env:SystemRoot 'Temp' }; "
     "$folders = if ($env:GRDN_SHORTCUT_FOLDERS) { $env:GRDN_SHORTCUT_FOLDERS -split \"`n\" } "
     "else { @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs')) }; "
     "$places = @($folders | ForEach-Object { Join-Path $_ $env:GRDN_SHORTCUT_NAME }); "
@@ -114,18 +133,31 @@ WINDOWS_SCRIPT = (
     "if (Test-Path -LiteralPath $place) { "
     "$item = Get-Item -LiteralPath $place -Force; "
     "if ($item.PSIsContainer) { exit 3 }; "
-    "try { $arguments = $shell.CreateShortcut($place).Arguments } catch { exit 3 }; "
+    "$copy = Join-Path $temp ('grdn-' + [guid]::NewGuid().ToString('N') + '.lnk'); "
+    "Copy-Item -LiteralPath $place -Destination $copy; "
+    "try { $arguments = $shell.CreateShortcut($copy).Arguments } catch { $arguments = $null } "
+    "finally { Remove-Item -LiteralPath $copy -Force }; "
     "if ($arguments -ne $env:GRDN_SHORTCUT_ARGUMENTS) { exit 3 } } }; "
     "foreach ($place in $places) { "
-    "$link = $shell.CreateShortcut($place); "
-    "$link.TargetPath = $env:GRDN_SHORTCUT_TARGET; "
+    "$temporary = Join-Path $temp ('grdn-' + [guid]::NewGuid().ToString('N') + '.lnk'); "
+    "$link = $shell.CreateShortcut($temporary); "
+    "$link.TargetPath = if ($env:GRDN_SHORTCUT_TARGET -match '[^\\x00-\\x7F]') { Join-Path $env:SystemRoot 'System32\\cmd.exe' } else { $env:GRDN_SHORTCUT_TARGET }; "
     "$link.Arguments = $env:GRDN_SHORTCUT_ARGUMENTS; "
-    "$link.WorkingDirectory = $env:GRDN_SHORTCUT_HOME; "
+    "$link.WorkingDirectory = if ($env:GRDN_SHORTCUT_HOME -match '[^\\x00-\\x7F]') { $temp } else { $env:GRDN_SHORTCUT_HOME }; "
     "$link.WindowStyle = 7; "
     "$link.Description = $env:GRDN_SHORTCUT_DESCRIPTION; "
     "$link.Save(); "
+    "$saved = $application.Namespace((Split-Path -LiteralPath $temporary)).ParseName((Split-Path -LiteralPath $temporary -Leaf)).GetLink; "
+    "$saved.Path = $env:GRDN_SHORTCUT_TARGET; "
+    "$saved.WorkingDirectory = $env:GRDN_SHORTCUT_HOME; "
+    "$saved.Description = $env:GRDN_SHORTCUT_DESCRIPTION; "
+    "$saved.Save(); "
+    "Move-Item -LiteralPath $temporary -Destination $place -Force; "
+    "$temporary = $null; "
     "[Console]::Out.WriteLine($place) } "
-    "} catch { exit 4 }"
+    "} catch { [Console]::Error.WriteLine($_.Exception.Message); "
+    "if ($temporary -and (Test-Path -LiteralPath $temporary)) { Remove-Item -LiteralPath $temporary -Force }; "
+    "exit 4 }"
 )
 
 
@@ -160,7 +192,7 @@ def _create_on_windows(
     }
     try:
         result = run(
-            [powershell, "-NoProfile", "-NonInteractive", "-Command", WINDOWS_SCRIPT],
+            [powershell, "-NoProfile", "-NonInteractive", "-STA", "-Command", WINDOWS_SCRIPT],
             env=environment,
             stdin=subprocess.DEVNULL,
             capture_output=True,
@@ -174,7 +206,10 @@ def _create_on_windows(
             f"the desktop or the Start menu has a file named {NAME}.lnk that this app did not make",
         )
     if result.returncode != 0:
-        raise ShortcutError("SHORTCUT_NOT_CREATED", "Windows PowerShell could not make the shortcut")
+        said = result.stderr.decode("utf-8", "replace") if isinstance(result.stderr, bytes) else result.stderr
+        raise ShortcutError(
+            "SHORTCUT_NOT_CREATED", "Windows PowerShell could not make the shortcut", (said or "").strip() or None
+        )
     output = result.stdout.decode("utf-8", "replace") if isinstance(result.stdout, bytes) else result.stdout
     return [Path(line) for line in output.splitlines() if line.strip()]
 

@@ -189,7 +189,7 @@ class WindowsRequestTest(TemporaryFolder):
             seen.update(arguments=arguments, **keywords)
             if isinstance(options.get("error"), BaseException):
                 raise options["error"]  # type: ignore[misc]
-            return subprocess.CompletedProcess(arguments, returncode, stdout, b"")
+            return subprocess.CompletedProcess(arguments, returncode, stdout, options.get("stderr", b""))
 
         with mock.patch.object(shortcut.shutil, "which", return_value="C:\\Windows\\powershell.exe"):
             places = create_shortcut(
@@ -204,8 +204,8 @@ class WindowsRequestTest(TemporaryFolder):
     def test_the_shortcuts_start_the_gui_minimized_with_the_python_that_ran_the_command(self) -> None:
         places, seen = self.run_with(0, "C:\\D\\Garmin Running Data Normalizer.lnk\r\nC:\\S\\Garmin Running Data Normalizer.lnk\r\n".encode())
         self.assertEqual(places, [Path("C:\\D\\Garmin Running Data Normalizer.lnk"), Path("C:\\S\\Garmin Running Data Normalizer.lnk")])
-        self.assertEqual(seen["arguments"][:4], ["C:\\Windows\\powershell.exe", "-NoProfile", "-NonInteractive", "-Command"])
-        self.assertEqual(seen["arguments"][4], shortcut.WINDOWS_SCRIPT)
+        self.assertEqual(seen["arguments"][:5], ["C:\\Windows\\powershell.exe", "-NoProfile", "-NonInteractive", "-STA", "-Command"])
+        self.assertEqual(seen["arguments"][5], shortcut.WINDOWS_SCRIPT)
         environment = seen["env"]
         self.assertEqual(environment["GRDN_SHORTCUT_NAME"], "Garmin Running Data Normalizer.lnk")
         self.assertEqual(environment["GRDN_SHORTCUT_TARGET"], "C:\\Python311\\python.exe")
@@ -220,7 +220,29 @@ class WindowsRequestTest(TemporaryFolder):
         # Every place is checked before the first one is written, and a place
         # that holds anything else ends the script with 3.
         self.assertLess(script.index("Test-Path -LiteralPath $place"), script.index("$link.Save()"))
-        self.assertEqual(script.count("{ exit 3 }"), 3)
+        self.assertEqual(script.count("{ exit 3 }"), 2)
+        # WScript.Shell reads and saves only in the temporary folder, under a
+        # name of plain letters; the shortcut is moved to its place.
+        self.assertNotIn("CreateShortcut($place)", script)
+        self.assertIn("$shell.CreateShortcut($copy).Arguments", script)
+        self.assertIn("Move-Item -LiteralPath $temporary -Destination $place -Force", script)
+        # A temporary folder with other letters gives way to its short name,
+        # and then to the temporary folder of Windows.
+        self.assertEqual(script.count("if ($temp -match '[^\\x00-\\x7F]')"), 2)
+        # WScript.Shell is given only plain letters: a Python or a home folder
+        # with other letters stands in as cmd.exe or the temporary folder.
+        self.assertIn("if ($env:GRDN_SHORTCUT_TARGET -match '[^\\x00-\\x7F]') { Join-Path $env:SystemRoot 'System32\\cmd.exe' }", script)
+        self.assertIn("if ($env:GRDN_SHORTCUT_HOME -match '[^\\x00-\\x7F]') { $temp }", script)
+        self.assertLess(script.index(".ShortPath"), script.index("Join-Path $env:SystemRoot 'Temp'"))
+        self.assertLess(script.index("Join-Path $env:SystemRoot 'Temp'"), script.index("$copy = Join-Path $temp"))
+        # The Python, the home folder, and the description are written again
+        # with Shell.Application, which keeps letters that WScript.Shell may
+        # lose, before the shortcut is moved to its place.
+        for line in ("$saved.Path = $env:GRDN_SHORTCUT_TARGET", "$saved.WorkingDirectory = $env:GRDN_SHORTCUT_HOME",
+                     "$saved.Description = $env:GRDN_SHORTCUT_DESCRIPTION"):
+            self.assertLess(script.index("$link.Save()"), script.index(line))
+            self.assertLess(script.index(line), script.index("$saved.Save()"))
+        self.assertLess(script.index("$saved.Save()"), script.index("Move-Item -LiteralPath $temporary"))
         first, second = Path("C:\\a"), Path("C:\\b")
         _, seen = self.run_with(0, folders=[first, second])
         self.assertEqual(seen["env"]["GRDN_SHORTCUT_FOLDERS"], f"{first}\n{second}")
@@ -241,26 +263,43 @@ class WindowsRequestTest(TemporaryFolder):
                 self.run_with(0, error=error)
             self.assertEqual(caught.exception.code, "SHORTCUT_NOT_CREATED")
 
+    def test_what_windows_powershell_said_is_kept_but_not_printed(self) -> None:
+        with self.assertRaises(ShortcutError) as caught:
+            self.run_with(4, stderr="Unable to save shortcut\r\n".encode())
+        self.assertEqual(caught.exception.message, "Windows PowerShell could not make the shortcut")
+        self.assertEqual(caught.exception.detail, "Unable to save shortcut")
+        self.assertNotIn("Unable", stops.stop_line(caught.exception.code, caught.exception.message))
+
     def test_a_system_without_windows_powershell_stops_the_command(self) -> None:
         with mock.patch.object(shortcut.shutil, "which", return_value=None), self.assertRaises(ShortcutError) as caught:
             create_shortcut(platform="win32", executable="C:\\Python311\\python.exe", home=self.root)
         self.assertEqual(caught.exception.code, "SHORTCUT_NOT_CREATED")
 
 
-def read_shortcut(place: Path) -> dict[str, object]:
-    script = (
-        "$link = (New-Object -ComObject WScript.Shell).CreateShortcut($env:GRDN_TEST_PLACE); "
+def on_shortcut(place: Path, script: str) -> str:
+    """Run a script on the ShellLinkObject of a shortcut, with Shell.Application,
+    which keeps every letter of its place and of its fields, and give its output."""
+    opening = (
         "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; "
-        "[Console]::Out.WriteLine($link.TargetPath); [Console]::Out.WriteLine($link.Arguments); "
-        "[Console]::Out.WriteLine($link.WorkingDirectory); [Console]::Out.WriteLine($link.WindowStyle)"
+        "$application = New-Object -ComObject Shell.Application; "
+        "$link = $application.Namespace((Split-Path -LiteralPath $env:GRDN_TEST_PLACE))"
+        ".ParseName((Split-Path -LiteralPath $env:GRDN_TEST_PLACE -Leaf)).GetLink; "
     )
     result = subprocess.run(
-        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-STA", "-Command", opening + script],
         env={**os.environ, "GRDN_TEST_PLACE": str(place)},
         capture_output=True,
         check=True,
     )
-    target, arguments, folder, style = result.stdout.decode("utf-8").splitlines()[:4]
+    return result.stdout.decode("utf-8")
+
+
+def read_shortcut(place: Path) -> dict[str, object]:
+    script = (
+        "[Console]::Out.WriteLine($link.Path); [Console]::Out.WriteLine($link.Arguments); "
+        "[Console]::Out.WriteLine($link.WorkingDirectory); [Console]::Out.WriteLine($link.ShowCommand)"
+    )
+    target, arguments, folder, style = on_shortcut(place, script).splitlines()[:4]
     return {"target": target, "arguments": arguments, "folder": folder, "style": int(style)}
 
 
@@ -275,8 +314,50 @@ class WindowsShortcutTest(TemporaryFolder):
             folder.mkdir()
         self.places = [folder / f"{NAME}.lnk" for folder in self.folders]
 
+    def make(self, folders: list[Path] | None = None, **options: object) -> list[Path]:
+        options.setdefault("home", self.root)
+        try:
+            return create_shortcut(
+                platform="win32", windows_folders=self.folders if folders is None else folders, **options
+            )
+        except ShortcutError as exc:
+            self.fail(f"{exc.code}: {exc.message}; Windows PowerShell said: {exc.detail}")
+
+    def test_the_shortcuts_in_folders_of_plain_letters(self) -> None:
+        folders = [self.root / "Desktop", self.root / "Programs"]
+        for folder in folders:
+            folder.mkdir()
+        self.assertEqual([Path(place) for place in self.make(folders)], [folder / f"{NAME}.lnk" for folder in folders])
+        self.assertEqual(read_shortcut(folders[0] / f"{NAME}.lnk")["arguments"], ARGUMENTS)
+
+    def test_a_temporary_folder_with_other_letters_is_not_given_to_wscript_shell(self) -> None:
+        temporary = self.root / "一時"
+        temporary.mkdir()
+        with mock.patch.dict(os.environ, {"TEMP": str(temporary), "TMP": str(temporary)}):
+            made = self.make()
+        self.assertEqual([Path(place) for place in made], self.places)
+        self.assertEqual(read_shortcut(self.places[0])["arguments"], ARGUMENTS)
+        self.assertEqual(list(temporary.iterdir()), [])
+
+    def test_letters_of_other_scripts_inside_the_shortcut_are_kept(self) -> None:
+        # A home folder and a Python whose places have letters that the
+        # Windows of the runner cannot write in its code page.
+        python = self.root / "テスト" / "python.exe"
+        python.parent.mkdir()
+        python.write_bytes(b"")
+        home = self.root / "ホーム"
+        home.mkdir()
+        self.make(executable=str(python), home=home)
+        for place in self.places:
+            with self.subTest(place=place.parent.name):
+                read = read_shortcut(place)
+                self.assertEqual(read["target"], str(python))
+                self.assertEqual(read["folder"], str(home))
+                self.assertEqual(read["arguments"], ARGUMENTS)
+                self.assertNotIn("?", f"{read['target']}{read['folder']}")
+
     def test_the_shortcuts_start_the_gui_minimized_in_the_home(self) -> None:
-        made = create_shortcut(platform="win32", home=self.root, windows_folders=self.folders)
+        made = self.make()
         self.assertEqual([Path(place) for place in made], self.places)
         for place in self.places:
             with self.subTest(place=place.parent.name):
@@ -287,8 +368,14 @@ class WindowsShortcutTest(TemporaryFolder):
                 self.assertEqual(read["style"], 7)
 
     def test_the_shortcuts_of_this_command_are_made_again(self) -> None:
-        create_shortcut(platform="win32", executable="C:\\Old\\python.exe", home=self.root, windows_folders=self.folders)
-        create_shortcut(platform="win32", home=self.root, windows_folders=self.folders)
+        # The Python that the icon started before, as after Python is
+        # replaced; a shortcut points to a Python that is there.
+        old_python = self.root / "Old" / "python.exe"
+        old_python.parent.mkdir()
+        old_python.write_bytes(b"")
+        self.make(executable=str(old_python))
+        self.assertEqual(read_shortcut(self.places[0])["target"], str(old_python))
+        self.make()
         for place in self.places:
             self.assertEqual(Path(str(read_shortcut(place)["target"])).resolve(), Path(sys.executable).resolve())
 
@@ -306,16 +393,8 @@ class WindowsShortcutTest(TemporaryFolder):
         self.assertEqual(caught.exception.code, "SHORTCUT_PLACE_TAKEN")
 
     def test_a_shortcut_with_other_arguments_stops_the_command(self) -> None:
-        create_shortcut(platform="win32", home=self.root, windows_folders=self.folders[:1])
-        script = (
-            "$link = (New-Object -ComObject WScript.Shell).CreateShortcut($env:GRDN_TEST_PLACE); "
-            "$link.Arguments = '-m something_else'; $link.Save()"
-        )
-        subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
-            env={**os.environ, "GRDN_TEST_PLACE": str(self.places[0])},
-            check=True,
-        )
+        self.make(self.folders[:1])
+        on_shortcut(self.places[0], "$link.Arguments = '-m something_else'; $link.Save()")
         with self.assertRaises(ShortcutError) as caught:
             create_shortcut(platform="win32", home=self.root, windows_folders=self.folders)
         self.assertEqual(caught.exception.code, "SHORTCUT_PLACE_TAKEN")
