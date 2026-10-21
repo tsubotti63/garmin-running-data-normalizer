@@ -356,8 +356,11 @@ class WindowsShortcutTest(TemporaryFolder):
         for place in self.places:
             with self.subTest(place=place.parent.name):
                 read = read_shortcut(place)
-                self.assertEqual(read["target"], str(python))
-                self.assertEqual(read["folder"], str(home))
+                # Windows gives the Python of a shortcut by the long names of
+                # its folders, also when it was given a short name, as the
+                # temporary folder of the runner is; the places are resolved.
+                self.assertEqual(Path(str(read["target"])).resolve(), python.resolve())
+                self.assertEqual(Path(str(read["folder"])).resolve(), home.resolve())
                 self.assertEqual(read["arguments"], ARGUMENTS)
                 self.assertNotIn("?", f"{read['target']}{read['folder']}")
 
@@ -379,7 +382,7 @@ class WindowsShortcutTest(TemporaryFolder):
         old_python.parent.mkdir()
         old_python.write_bytes(b"")
         self.make(executable=str(old_python))
-        self.assertEqual(read_shortcut(self.places[0])["target"], str(old_python))
+        self.assertEqual(Path(str(read_shortcut(self.places[0])["target"])).resolve(), old_python.resolve())
         self.make()
         for place in self.places:
             self.assertEqual(Path(str(read_shortcut(place)["target"])).resolve(), Path(sys.executable).resolve())
