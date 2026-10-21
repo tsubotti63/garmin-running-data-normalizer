@@ -22,9 +22,10 @@ import threading
 import unittest
 import urllib.request
 from pathlib import Path
+from unittest import mock
 from unittest.mock import patch
 
-from garmin_running_data_normalizer import runner
+from garmin_running_data_normalizer import runner, shortcut
 from garmin_running_data_normalizer.gui import command
 from garmin_running_data_normalizer.gui.server import LAUNCH_KEY_HEADER
 from garmin_running_data_normalizer.runner import build_parser
@@ -33,6 +34,31 @@ from tests.test_gui_runs import child_environment
 ADDRESS_LINE = "GUI address (it contains the launch key; do not share it):"
 STOP_LINE = "Stop with Ctrl+C or the Quit button on the page."
 TIMEOUT_SECONDS = 30.0
+
+
+# No test of this module may write in a person's home folder, even when the
+# code under test is broken: the whole module runs with a temporary home
+# folder (stage E1d; a broken copy once wrote an icon on the real desktop).
+_HOME_GUARD: list = []
+
+
+def setUpModule() -> None:
+    folder = tempfile.TemporaryDirectory()
+    home = Path(folder.name)
+    patches = [
+        mock.patch.dict(os.environ, {"HOME": str(home), "USERPROFILE": str(home)}),
+        mock.patch.object(Path, "home", return_value=home),
+    ]
+    for patch in patches:
+        patch.start()
+    _HOME_GUARD[:] = [folder, *patches]
+
+
+def tearDownModule() -> None:
+    folder, *patches = _HOME_GUARD
+    for patch in reversed(patches):
+        patch.stop()
+    folder.cleanup()
 
 
 def _default_ctrl_c() -> None:
@@ -52,7 +78,13 @@ class GuiCommandParserTest(unittest.TestCase):
 
 class GuiCommandRunnerTest(unittest.TestCase):
     def test_the_cli_opens_the_browser_unless_no_browser_is_given(self) -> None:
-        with patch.object(command, "run_gui", return_value=0) as run_gui:
+        # Without --create-shortcut no icon is made; were one made, the test
+        # fails here instead of writing it (stage E1d).
+        no_icon = AssertionError("an icon was made without --create-shortcut")
+        with (
+            patch.object(command, "run_gui", return_value=0) as run_gui,
+            patch.object(shortcut, "create_shortcut", side_effect=no_icon),
+        ):
             self.assertEqual(runner.main(["gui", "--no-browser"]), 0)
             self.assertEqual(runner.main(["gui"]), 0)
         self.assertEqual([call.kwargs for call in run_gui.call_args_list], [{"open_browser": False}, {"open_browser": True}])

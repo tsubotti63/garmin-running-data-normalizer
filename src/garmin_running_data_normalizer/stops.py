@@ -318,6 +318,24 @@ STOPS: dict[str, Stop] = {
         "the Support Bundle would hold a diagnostic code that is not registered",
         _BUNDLE_REFUSED,
     ),
+    # The icon that gui --create-shortcut makes before the GUI opens (stage
+    # E1d); the GUI does not open when it cannot be made.
+    "SHORTCUT_NOT_SUPPORTED": Stop(
+        "an icon that starts the GUI can be made only on macOS and Windows",
+        "start the GUI with garmin-running-data-normalizer gui, without --create-shortcut",
+    ),
+    "SHORTCUT_PLACE_TAKEN": Stop(
+        "a file that this app did not make has the name of the icon that starts the GUI",
+        "rename or move that file and run the command again, or start the GUI with "
+        "garmin-running-data-normalizer gui, without --create-shortcut",
+    ),
+    "SHORTCUT_NOT_CREATED": Stop(
+        "the icon that starts the GUI could not be made",
+        "check that this app may write on the desktop (on a Mac, allow the Terminal in "
+        "System Settings > Privacy & Security > Files and Folders) and run the command "
+        "again, or start the GUI with garmin-running-data-normalizer gui, without "
+        "--create-shortcut",
+    ),
     # Internal checks that data cannot trigger: a stop before any output is
     # written (stage A5b checks it).
     "ACTIVITIES_NORMALIZATION_FAILED": Stop("the Activities could not be normalized", _DEFECT),

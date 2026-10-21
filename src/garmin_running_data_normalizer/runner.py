@@ -793,12 +793,31 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the address of the GUI without opening the default browser",
     )
+    gui.add_argument(
+        "--create-shortcut",
+        action="store_true",
+        help=(
+            "First make an icon that starts the GUI: on the desktop of macOS, and on "
+            "the desktop and in the Start menu of Windows"
+        ),
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "gui":
+        # The icon comes first, and the GUI does not open when it cannot be
+        # made, as no command goes on after a stop (stage E1d).
+        if args.create_shortcut:
+            from .shortcut import ShortcutError, create_shortcut
+
+            try:
+                places = create_shortcut()
+            except ShortcutError as exc:
+                return _stop(exc.code, exc.message)
+            for place in places:
+                print(f"Icon that starts the GUI: {place}", flush=True)
         # The GUI has its own Ctrl+C: it cancels a run before the server
         # stops and reports it as the CLI reports a cancelled command
         # (stage D1).
