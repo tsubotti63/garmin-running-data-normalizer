@@ -631,12 +631,17 @@ class WindowsPowerShellLineTest(unittest.TestCase):
                 ran = list(names[: names.index(failing) + 1]) if failing else list(names)
                 self.assertEqual(self.said(stand_in), ran)
 
-    def test_an_if_that_reads_the_answer_leaves_it_true(self) -> None:
-        # The reason why the guides put one "if" inside the other (stage
-        # E1i): with two in a row, the third part ran after the first failed.
+    def test_two_ifs_in_a_row_also_stop_after_a_failure(self) -> None:
+        # A reader of the guides of v2.0.0rc3 thought that the "if" that
+        # reads $? leaves it true, so that the third part of the line of
+        # v2.0.0rc3, with two "if" in a row, would run after the first
+        # failed. Windows PowerShell 5.1 keeps $? false after an "if" whose
+        # part did not run, so that line stopped too; the guides put one
+        # "if" inside the other all the same, which says it plainly (stage
+        # E1i).
         self.assertEqual(
             self.said('cmd /c "echo A& exit 1"; if ($?) { cmd /c "echo B& exit 0" }; if ($?) { cmd /c "echo C& exit 0" }'),
-            ["A", "C"],
+            ["A"],
         )
 
 

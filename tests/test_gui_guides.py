@@ -213,10 +213,9 @@ class GuiGuideTest(unittest.TestCase):
         # icon stays; installs this version in it; and makes the icon with its
         # Python. Each part runs only after the one before it succeeded: "&&"
         # on macOS (stage E1e), and in Windows PowerShell 5.1, which has no
-        # "&&", "if ($?) { … }" one inside the other, since an "if" that reads
-        # $? leaves it true (stage E1i; WindowsPowerShellLineTest in
-        # tests/test_shortcut.py runs the line). The places are quoted for a
-        # home folder with spaces.
+        # "&&", "if ($?) { … }" one inside the other (stage E1i;
+        # WindowsPowerShellLineTest in tests/test_shortcut.py runs the line).
+        # The places are quoted for a home folder with spaces.
         found = {language: one_lines(language) for language in GUIDES}
         self.assertEqual(found["en"], found["ja"])
         (mac_language, mac), (windows_language, windows) = found["en"]
