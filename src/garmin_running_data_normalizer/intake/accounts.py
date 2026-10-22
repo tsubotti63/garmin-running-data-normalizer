@@ -14,6 +14,7 @@ import json
 from typing import Any, Iterable
 
 from ..common.identity import identity_token
+from ..common.json_depth import check_json_depth
 from ..normalizers.source_records import is_mark
 
 ACCOUNT_FIELDS = frozenset({"userProfileId", "userProfilePk", "userProfilePK"})
@@ -88,6 +89,7 @@ def account_values(files: Iterable[tuple[str, bytes]]) -> set[str]:
             continue
         try:
             payload = json.loads(data.decode("utf-8-sig"))
+            check_json_depth(payload)
         except (UnicodeError, ValueError, RecursionError):
             # The same errors as the run leaves a file out for: not UTF-8,
             # not JSON, nested too deeply, or a number with too many digits.

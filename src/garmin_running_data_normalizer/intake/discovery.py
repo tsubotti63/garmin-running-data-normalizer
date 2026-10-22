@@ -29,6 +29,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterable, Iterator
 from zipfile import ZipInfo
 
+from ..common.json_depth import check_json_depth
 from ..common.text import repair_json_text
 from .archive import (
     ArchiveLimitError,
@@ -348,8 +349,12 @@ def _read_json(asset: DiscoveredAsset) -> tuple[bool, Any]:
     try:
         text = asset.data.decode("utf-8-sig")
         # json.loads raises ValueError only for text that is not JSON
-        # (JSONDecodeError) or a number too long to convert.
-        value, repaired = repair_json_text(text, json.loads(text))
+        # (JSONDecodeError) or a number too long to convert. The nesting is
+        # checked before the repair, which follows the value by recursion
+        # (stage E2d).
+        value = json.loads(text)
+        check_json_depth(value)
+        value, repaired = repair_json_text(text, value)
     except (ValueError, RecursionError):
         return False, None
     asset._repaired_text_count = repaired
@@ -360,12 +365,13 @@ def parse_json_asset(asset: DiscoveredAsset) -> tuple[bool, Any]:
     """Parse a JSON file; return whether it could be read, and its value.
 
     A file that is not UTF-8 (a byte order mark is accepted), is not JSON,
-    nests too deeply, or holds a number too long to convert is left out
-    with the reason ``json_not_readable`` (stage A3c). Only these errors are
-    caught; any other error, such as a file that changed during the run,
-    still stops the run. Text with a lone UTF-16 surrogate, such as a
-    truncated emoji, is written with U+FFFD in its place, and the asset
-    counts the texts and names repaired (stage A3d-2c-1).
+    nests more than 256 deep (stage E2d), or holds a number too long to
+    convert is left out with the reason ``json_not_readable`` (stage A3c).
+    Only these errors are caught; any other error, such as a file that
+    changed during the run, still stops the run. Text with a lone UTF-16
+    surrogate, such as a truncated emoji, is written with U+FFFD in its
+    place, and the asset counts the texts and names repaired (stage
+    A3d-2c-1).
     """
     readable, value = _read_json(asset)
     if not readable:

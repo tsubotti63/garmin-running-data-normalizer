@@ -379,8 +379,11 @@ class GuiApiRequestTest(GuiServerTestCase):
                 headers = replaced(self.api_headers(), "Content-Type", content_type)
                 self.assertEqual(self.post_api("/api/status", headers)[0], 200)
 
-        for body in (b"", b"not json", b"[]", b'"text"', b"\xff\xfe"):
-            with self.subTest(body=body):
+        # An object with a value more than 256 deep, and JSON that Python 3.11
+        # cannot read by recursion, as every version reads them (stage E2d).
+        deep = (b'{"padding": ' + b"[" * 300 + b"]" * 300 + b"}", b"[" * 30_000 + b"]" * 30_000)
+        for body in (b"", b"not json", b"[]", b'"text"', b"\xff\xfe", *deep):
+            with self.subTest(body=body[:30]):
                 status, _, answer = self.post_api("/api/status", self.api_headers(body), body)
                 self.assertEqual(status, 400)
                 self.assertEqual(json.loads(answer), {"error": "BAD_REQUEST"})

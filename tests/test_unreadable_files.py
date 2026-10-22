@@ -147,11 +147,15 @@ class LeftOutFilesTest(unittest.TestCase):
         )
 
     def test_json_files_that_cannot_be_read_are_left_out(self) -> None:
-        # The four errors that leave a JSON file out.
+        # The four errors that leave a JSON file out. More than 256 levels are
+        # too deep, which every version of Python reads, so that the limit
+        # decides, and not the version (stage E2d).
         contents = {
             "not UTF-8": '[{"summarizedActivitiesExport": [{"activityId": "A9", "name": "Caf\xe9"}]}]'.encode("latin-1"),
             "not JSON": b'[{"summarizedActivitiesExport": [{"activityId": "A9"',
             "nested too deeply": b"[" * 100_000 + b"]" * 100_000,
+            "nested more than 256 deep": b"[" * 300 + b"]" * 300,
+            "nested more than 256 deep, with a lone surrogate": b"[" * 300 + b'"\\ud800"' + b"]" * 300,
             "a number with too many digits": b"[" + b"1" * 5_000 + b"]",
         }
         with tempfile.TemporaryDirectory() as directory:

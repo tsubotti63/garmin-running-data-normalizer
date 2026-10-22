@@ -16,6 +16,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO, Callable, ContextManager, Iterator
 from zipfile import ZipFile, ZipInfo
 
+from ..common.json_depth import check_json_depth
 from ..common.private_files import (
     PRIVATE_DIRECTORY_MODE,
     ensure_private_directory,
@@ -458,6 +459,7 @@ def _load_json(path: Path, root: Path) -> dict[str, Any]:
         raise invalid_store_error(f"invalid snapshot store metadata: {path.name}") from exc
     try:
         value = json.loads(data.decode("utf-8"))
+        check_json_depth(value)
     except (ValueError, RecursionError) as exc:
         raise invalid_store_error(f"invalid snapshot store metadata: {path.name}") from exc
     if not isinstance(value, dict):
@@ -587,6 +589,7 @@ def _store_above(root: Path) -> bool:
             continue
         try:
             value = json.loads(data.decode("utf-8"))
+            check_json_depth(value)
         except (UnicodeDecodeError, ValueError, RecursionError):
             continue
         if isinstance(value, dict) and str(value.get("format", "")).startswith(STORE_FORMAT_FAMILY):

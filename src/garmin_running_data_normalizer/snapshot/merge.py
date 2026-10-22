@@ -13,6 +13,7 @@ from zipfile import ZipFile
 
 from .. import __version__
 from ..common.identity import identifier_value, identity_token, is_ascii_digits
+from ..common.json_depth import check_json_depth
 from ..common.text import repair_json_text
 from ..common.time import daily_calendar_date, normalize_observation_timestamp
 from ..common.values import comparable as _comparable
@@ -2325,6 +2326,9 @@ def build_approved_input(
                 try:
                     text = data.decode("utf-8-sig")
                     value = json.loads(text)
+                    # Before the repair, which follows the value by
+                    # recursion (stage E2d).
+                    check_json_depth(value)
                     repaired = 0
                     if read_by_run_all:
                         # Text with a lone surrogate is repaired as a run

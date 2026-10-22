@@ -25,6 +25,7 @@ import stat
 from pathlib import Path
 from typing import Any
 
+from ..common.json_depth import check_json_depth
 from ..common.private_files import PRIVATE_DIRECTORY_MODE, PRIVATE_FILE_MODE
 from . import places
 
@@ -136,6 +137,7 @@ def read_settings(path: Path) -> tuple[dict[str, Any], str | None]:
         return {}, SETTINGS_INVALID
     try:
         data = json.loads(content.decode("utf-8"))
+        check_json_depth(data)
     except (UnicodeDecodeError, ValueError, RecursionError):
         return {}, SETTINGS_INVALID
     version = _version(data.get("format")) if isinstance(data, dict) else None
