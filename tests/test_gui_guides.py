@@ -105,6 +105,23 @@ def section(text: str, heading: str) -> str:
     return text[start : end if end != -1 else len(text)]
 
 
+# The one line of each system that installs this version and makes the icon
+# (stage E1e): the code blocks inside the list of what you need.
+ONE_LINE = re.compile(r"^  ```(bash|powershell)\n  (.*)\n  ```$", re.M)
+WHAT_YOU_NEED = {"en": "What you need", "ja": "用意するもの"}
+
+
+def one_lines(language: str) -> list[tuple[str, str]]:
+    return ONE_LINE.findall(section(GUIDES[language].read_text(encoding="utf-8"), WHAT_YOU_NEED[language]))
+
+
+def flowing(language: str, heading: str) -> str:
+    """A section as it reads: an English line break is a space, and a
+    Japanese one is nothing."""
+    text = section(GUIDES[language].read_text(encoding="utf-8"), heading)
+    return " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+
+
 def catalog(language: str) -> dict[str, str]:
     return json.loads((STATIC_ROOT / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
 
@@ -195,13 +212,12 @@ class GuiGuideTest(unittest.TestCase):
         # no version, so that a later version goes into the same one and the
         # icon stays; installs this version in it; and makes the icon with its
         # Python. Each part runs only after the one before it succeeded: "&&"
-        # on macOS, "; if ($?) { … }" in Windows PowerShell 5.1, which has no
-        # "&&" (stage E1e). The places are quoted for a home folder with spaces.
-        block = re.compile(r"^  ```(bash|powershell)\n  (.*)\n  ```$", re.M)
-        found = {
-            language: block.findall(section(GUIDES[language].read_text(encoding="utf-8"), heading))
-            for language, heading in (("en", "What you need"), ("ja", "用意するもの"))
-        }
+        # on macOS (stage E1e), and in Windows PowerShell 5.1, which has no
+        # "&&", "if ($?) { … }" one inside the other, since an "if" that reads
+        # $? leaves it true (stage E1i; WindowsPowerShellLineTest in
+        # tests/test_shortcut.py runs the line). The places are quoted for a
+        # home folder with spaces.
+        found = {language: one_lines(language) for language in GUIDES}
         self.assertEqual(found["en"], found["ja"])
         (mac_language, mac), (windows_language, windows) = found["en"]
         self.assertEqual((mac_language, windows_language), ("bash", "powershell"))
@@ -217,21 +233,79 @@ class GuiGuideTest(unittest.TestCase):
         )
         venv = "$HOME\\garmin-normalizer"
         python = f'& "{venv}\\Scripts\\python.exe"'
-        self.assertEqual(
-            windows.split("; if ($?) "),
-            [f'py -m venv "{venv}"', f"{{ {python} {install} }}", f"{{ {python} {icon} }}"],
-        )
+        self.assertEqual(windows, f'py -m venv "{venv}"; if ($?) {{ {python} {install}; if ($?) {{ {python} {icon} }} }}')
         self.assertNotIn("&&", windows)
         # After the line, the GUI starts with the Python of the virtual
         # environment, as the icon starts it, and not with the program that
         # pip makes, which Windows may refuse, since it has no signature
-        # (stage E1d).
-        for language, heading in (("en", "Start the GUI"), ("ja", "GUI を起動する")):
-            text = " ".join(section(GUIDES[language].read_text(encoding="utf-8"), heading).split())
+        # (stage E1d). The sections that start the GUI and make the icon give
+        # these commands first, as a person who installed with the line has
+        # no other (stage E1i).
+        for language, headings in (
+            ("en", ("Start the GUI", "Start the GUI from an icon")),
+            ("ja", ("GUI を起動する", "アイコンから起動する")),
+        ):
+            for heading, option in zip(headings, ("", " --create-shortcut")):
+                text = section(GUIDES[language].read_text(encoding="utf-8"), heading)
+                with self.subTest(language=language, heading=heading):
+                    self.assertEqual(
+                        re.findall(r"^```(bash|powershell)\n(.*)\n```$", text, re.M),
+                        [
+                            ("bash", f"~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui{option}"),
+                            ("powershell", f"{python} -m garmin_running_data_normalizer gui{option}"),
+                            ("bash", f"garmin-running-data-normalizer gui{option}"),
+                        ],
+                    )
+                    self.assertNotIn("garmin-running-data-normalizer.exe", text)
+
+    def test_guides_answer_what_a_first_reader_asked(self) -> None:
+        # Stage E1i, from a new AI session that read the guides of v2.0.0rc3
+        # as a first-time user, and from the checks of v2.0.0rc3 on a Mac: how
+        # to see the version of Python, what the end of the line looks like,
+        # what to do when it stops, how to update, how to undo Don't Allow,
+        # why the terminal seems to stand still, and how to remove this app.
+        phrases = {
+            "en": {
+                "What you need": (
+                    "`python3 --version`", "`py --version`", "open the Terminal again",
+                    "a new release of pip is available", "run the same line again",
+                    "move the folder `garmin-normalizer`", "the line of the guide of that version",
+                    "stop the GUI first", "request it early", "you add nothing yourself",
+                ),
+                "Start the GUI from an icon": ("**Desktop Folder**", "**Files & Folders**", "OneDrive"),
+                "When something goes wrong": ("double-click the icon again", "10 minutes"),
+                "Stop the GUI": ("seems to stand still", '"GUI stopped."'),
+                "Remove this app": (
+                    "`shell:programs`", "`GarminRunningData`", "personal data",
+                    "`pip uninstall garmin-running-data-normalizer`",
+                ),
+            },
+            "ja": {
+                "用意するもの": (
+                    "`python3 --version`", "`py --version`", "ターミナルを開き直して",
+                    "A new release of pip is available", "同じ 1 行をもう一度動かして",
+                    "`garmin-normalizer` をごみ箱へ", "そのバージョンの手引きにある 1 行",
+                    "先に GUI を終えて", "先にリクエストして", "自分で足すものはありません",
+                ),
+                "アイコンから起動する": ("「デスクトップフォルダ」", "「ファイルとフォルダ」", "OneDrive"),
+                "うまくいかないとき": ("アイコンをもう一度ダブルクリック", "10 分間"),
+                "GUI を終える": ("止まって見えます", "「GUI stopped.」"),
+                "このアプリを片付ける": (
+                    "`shell:programs`", "`GarminRunningData`", "個人のデータ",
+                    "`pip uninstall garmin-running-data-normalizer`",
+                ),
+            },
+        }
+        for language, sections in phrases.items():
+            for heading, wanted in sections.items():
+                text = flowing(language, heading)
+                for phrase in wanted:
+                    with self.subTest(language=language, heading=heading, phrase=phrase):
+                        self.assertIn(phrase, text)
+        # The page says the same when the GUI no longer answers.
+        for language, phrase in (("en", "double-click the icon again"), ("ja", "アイコンをもう一度ダブルクリック")):
             with self.subTest(language=language):
-                self.assertIn("`~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui`", text)
-                self.assertIn(f"`{python} -m garmin_running_data_normalizer gui`", text)
-                self.assertNotIn("garmin-running-data-normalizer.exe", text)
+                self.assertIn(phrase, catalog(language)["next.restart_gui"])
 
 
 if __name__ == "__main__":

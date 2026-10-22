@@ -170,3 +170,15 @@ def test_a_testpypi_install_names_the_package_version(tmp_path: Path) -> None:
     assert validate(tmp_path) == [
         f"README.md: TestPyPI install does not name the package version {__version__}"
     ] * 2
+
+
+def test_a_testpypi_install_may_end_a_statement_of_windows_powershell(tmp_path: Path) -> None:
+    # Stage E1i: in the line of Windows PowerShell, the next part follows the
+    # install after ";", inside an "if" of its own; the version must still be
+    # the exact one.
+    _copy_validator_inputs(tmp_path)
+    install = "python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/"
+    _add_install_line(tmp_path, "README.md", f"{install} garmin-running-data-normalizer=={__version__}; if ($?) {{ gui }}")
+    assert validate(tmp_path) == []
+    _add_install_line(tmp_path, "README.md", f"{install} garmin-running-data-normalizer=={__version__}0; if ($?) {{ gui }}")
+    assert validate(tmp_path) == [f"README.md: TestPyPI install does not name the package version {__version__}"]

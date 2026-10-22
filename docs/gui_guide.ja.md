@@ -20,13 +20,20 @@ GUI は、Garmin のエクスポート（Account Data Export）を、ブラウ�
 
 - Python 3.11 以降で入れた、試しのバージョン v2.0.0rc3。GUI のために足す依存は
   ありません。v2.0.0rc3 は TestPyPI に公開しています。v1.7.1 を入れた環境はそのままに
-  して、別の仮想環境に入れてください。TestPyPI に無いことがある依存（Windows の
-  `tzdata` など）は、Production PyPI から入れます。
+  して、別の仮想環境に入れてください。下の 1 行は、TestPyPI に無いことがある依存
+  （Windows の `tzdata` など）を Production PyPI から入れるので、自分で足すものは
+  ありません。
 
   先に [python.org](https://www.python.org/downloads/) から Python を入れてください。
-  Microsoft Store の Python では、このアプリを確かめていません。そのあと、次の
-  1 行で、ホームのフォルダーに仮想環境 `garmin-normalizer` を作り、そこに
-  v2.0.0rc3 を入れ、GUI を起動するアイコンを作って
+  Microsoft Store の Python では、このアプリを確かめていません。Python 3.11 以降が
+  入っているかは、macOS ではターミナルで `python3 --version`、Windows では
+  PowerShell で `py --version` を動かすと分かります。3.10 以前と出るときや、
+  コマンドが見つからないと出るときは、python.org のページの「Download Python」の
+  ボタンから入れてください。macOS では、Python を入れたあと、ターミナルを
+  開き直してください。
+
+  そのあと、次の 1 行で、ホームのフォルダーに仮想環境 `garmin-normalizer` を作り、
+  そこに v2.0.0rc3 を入れ、GUI を起動するアイコンを作って
   （[アイコンから起動する](#アイコンから起動する)）、GUI を開きます。
   それぞれの部分は、前の部分がうまくいったときだけ動きます。アイコンを作るとき、
   ターミナルがデスクトップを使ってよいかを macOS が聞くことがあります。
@@ -39,28 +46,62 @@ GUI は、Garmin のエクスポート（Account Data Export）を、ブラウ�
   python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc3 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
   ```
 
-  Windows PowerShell（バージョン 5.1 には `&&` が無いので、`if ($?)` で
-  つなぎます）：
+  Windows PowerShell（バージョン 5.1 には `&&` が無いので、`if ($?)` を
+  入れ子にしてつなぎます）：
 
   ```powershell
-  py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc3 }; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut }
+  py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc3; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
   ```
 
-  Linux にはアイコンが無いので、`--create-shortcut` を外してください。この
-  バージョンを使わなくなったら、ホームのフォルダーの `garmin-normalizer` と
-  アイコンを、ごみ箱へ入れてください。
+  - うまくいくと、最後にブラウザで GUI の画面が開きます。途中で、pip の新しい
+    バージョンがあるという英語の知らせ（A new release of pip is available）が
+    出ることがありますが、気にしなくてかまいません。
+  - 途中で止まったとき（エラーの行が出て、画面が開かないとき）は、出た行を
+    読んで直してから、同じ 1 行をもう一度動かしてかまいません。Python を入れる
+    前に 1 行を動かしたときや、もう一度動かしても同じところで止まるときは、
+    ホームのフォルダーにできた `garmin-normalizer` をごみ箱へ入れてから、
+    もう一度動かしてください。
+  - 新しいバージョンに更新するときは、そのバージョンの手引きにある 1 行を、
+    同じように動かします。同じ仮想環境 `garmin-normalizer` に入り、アイコンも
+    作り直します。Windows では、先に GUI を終えてください
+    （[GUI を終える](#gui-を終える)）。GUI が動いている間は仮想環境の Python が
+    使われているので、途中で止まることがあります。
+
+  Linux にはアイコンが無いので、`--create-shortcut` を外してください。使わなく
+  なったときの片付けは、[このアプリを片付ける](#このアプリを片付ける)にあります。
 
 - 同じコンピューターで動くブラウザ。デスクトップかノートのコンピューターの
   窓で使います。スマートフォンやタブレットには向けていません。
 - Garmin のエクスポート：Garmin からダウンロードした ZIP か、それを展開した
   フォルダー。手に入れ方は、ヘルプの欄の「使い方」にあります。
   [Getting Started from Garmin Export](getting_started_from_garmin_export.md) の
-  1 と 2 も見てください。
+  1 と 2 も見てください。Garmin にリクエストしてから、ダウンロードできるように
+  なるまでに時間がかかることがあるので、先にリクエストしておいてください。
 - スナップショットの保管場所と、新しい出力のフォルダーを作るための空き容量。
   保管場所には、エクスポートごとにファイルの写しを置きます（前のエクスポートにも
   あったファイルは、1 つだけ置きます）。
 
 ## GUI を起動する
+
+[用意するもの](#用意するもの)の 1 行で入れたときは、このアプリはその仮想環境の
+中にあります。アイコン（[アイコンから起動する](#アイコンから起動する)）を
+ダブルクリックするか、アイコンと同じく仮想環境の Python で、次のコマンドを
+動かしてください。
+
+macOS：
+
+```bash
+~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui
+```
+
+Windows PowerShell：
+
+```powershell
+& "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui
+```
+
+ほかのしかたで入れて、`garmin-running-data-normalizer` のコマンドが使えるときは
+（仮想環境を有効にしたときなど）、次のコマンドでも起動できます。
 
 ```bash
 garmin-running-data-normalizer gui
@@ -68,13 +109,6 @@ garmin-running-data-normalizer gui
 
 コマンドは、GUI のアドレスをターミナルに表示し、既定のブラウザで開きます。
 `--no-browser` を付けると、アドレスを表示するだけで、ブラウザは開きません。
-
-[用意するもの](#用意するもの)の 1 行で入れたときは、このアプリはその仮想環境の
-中にあります。アイコンから起動するか、アイコンと同じく仮想環境の Python で、
-macOS では `~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui`、
-Windows PowerShell では
-`& "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui`
-を動かしてください。
 
 - アドレスには、この起動だけの鍵が入っています。人に渡さないでください。
   鍵の無いページからは、GUI を使えません。画面にそう出たときは、
@@ -96,7 +130,25 @@ Windows PowerShell では
 ## アイコンから起動する
 
 macOS と Windows では、`--create-shortcut` を付けると、GUI を起動するアイコンを
-作ってから、付けないときと同じように GUI を開きます：
+作ってから、付けないときと同じように GUI を開きます。[用意するもの](#用意するもの)の
+1 行も、こうしてアイコンを作ります。アイコンを作り直すとき（Python や仮想環境を
+入れ替えたとき、アイコンをごみ箱へ入れてしまったときなど）は、1 行で入れたなら、
+仮想環境の Python で次のコマンドを動かしてください。
+
+macOS：
+
+```bash
+~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
+```
+
+Windows PowerShell：
+
+```powershell
+& "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut
+```
+
+`garmin-running-data-normalizer` のコマンドが使えるときは、次のコマンドでも
+作れます。
 
 ```bash
 garmin-running-data-normalizer gui --create-shortcut
@@ -108,9 +160,12 @@ garmin-running-data-normalizer gui --create-shortcut
   ダブルクリックすると、ターミナルの窓が開いてアドレスを表示し、既定の
   ブラウザで GUI を開きます。コマンドがファイルを書くとき、ターミナルが
   デスクトップを使ってよいかを macOS が聞くことがあります。「許可」を
-  押してください。許可しないと、アイコンは作られません。そのあと、選ぶ
-  フォルダー（ダウンロードなど）についても、ターミナルから起動したときと
-  同じように macOS が聞きます。
+  押してください。許可しないと、アイコンは作られません。「許可しない」を
+  押したあとは、macOS はもう聞きません。システム設定の
+  「プライバシーとセキュリティ」→「ファイルとフォルダ」で、「ターミナル」の
+  「デスクトップフォルダ」をオンにしてから、アイコンを作るコマンドをもう一度
+  動かしてください。そのあと、選ぶフォルダー（ダウンロードなど）についても、
+  ターミナルから起動したときと同じように macOS が聞きます。
 - Windows：デスクトップとスタートメニューに、ショートカット
   「Garmin Running Data Normalizer」ができ、同じ絵が付きます。窓は最小化されて、
   タスクバーに入ります。
@@ -128,11 +183,12 @@ garmin-running-data-normalizer gui --create-shortcut
   ファイルがあると `SHORTCUT_PLACE_TAKEN`、アイコンを作れないときは
   `SHORTCUT_NOT_CREATED`、ほかのシステムでは `SHORTCUT_NOT_SUPPORTED` で止まり、
   GUI は開きません。`--create-shortcut` を付けなければ、コマンドは GUI を開きます。
-- デスクトップを iCloud で同期していると、ほかの Mac にもファイルが写ります。
-  そこでは Python の場所が違うので、起動できないことがあります。絵が写らない
-  こともあります。
-- アイコンが要らなくなったら、ごみ箱へ入れてください。`pip uninstall` では
-  消えません。
+- デスクトップを iCloud や OneDrive で同期していると、ほかのコンピューターにも
+  アイコンが写ります。そこでは Python の場所が違うので、起動できないことが
+  あります。絵が写らないこともあります。
+- アイコンが要らなくなったら、ごみ箱へ入れてください（Windows では、
+  スタートメニューの分も。[このアプリを片付ける](#このアプリを片付ける)）。
+  `pip uninstall` では消えません。
 - Linux にはアイコンがありません。コマンドで起動してください。
 
 ## 1 の箱：今回のエクスポート
@@ -536,14 +592,20 @@ GUI は、1 つのタブで使ってください。選ぶ窓は、どのタブ�
 そのボタンをもう一度押してください。ほかのタブで始めた正規化は、どのタブにも
 出て、終わるまでほかの正規化は始められません（`RUN_ACTIVE`）。
 
-画面に「このアプリが応答しません」と出たときは、ターミナルを閉じたなどの理由で、
-GUI が止まっている可能性があります。同じコマンドで起動し直し、新しい
-アドレスを開いてください。アドレスと鍵は、起動のたびに変わります。
+画面に「このアプリが応答しません」と出たときは、ターミナルの窓を閉じた、
+10 分間使わなかった、などの理由で、GUI が止まっている可能性があります。
+アイコンから起動したときはアイコンをもう一度ダブルクリックし、ターミナルから
+起動したときは同じコマンドで起動し直して、新しいアドレスを開いてください。
+アドレスと鍵は、起動のたびに変わります。
 
 ## GUI を終える
 
+GUI を使っている間、ターミナルの窓（アイコンから起動したときは、アイコンが
+開いた窓）は、アドレスなどを表示したまま止まって見えます。それで正常です。
+
 - 画面の下の「終了」を押すか、ターミナルで `Ctrl+C` を押します。アイコンから
-  起動したときは、アイコンが開いた窓がターミナルです。
+  起動したときは、アイコンが開いた窓がターミナルです。GUI が止まると、
+  ターミナルに「GUI stopped.」と出ます。そのあとは、窓を閉じてかまいません。
 - 実行中は「終了」を押せません。先に実行を取り消してください。`Ctrl+C` は、
   実行を取り消してから GUI を止めます。
 - `gui` のコマンドの終了コードは、「終了」のあとと、実行していないときの
@@ -553,6 +615,27 @@ GUI が止まっている可能性があります。同じコマンドで起動�
   終わってから、GUI が止まります。
 - どのページも 10 分間 GUI を使わず、実行もしていないときは、GUI は
   自分で止まります。ブラウザのタブを閉じても、すぐには止まりません。
+
+## このアプリを片付ける
+
+このバージョンを使わなくなったら、GUI を終えてから、次のものをごみ箱へ入れて
+ください。
+
+- ホームのフォルダーの `garmin-normalizer`：[用意するもの](#用意するもの)の 1 行で
+  作った仮想環境です。このアプリは、この中に入っています。
+- アイコン：macOS ではデスクトップの「Garmin Running Data Normalizer」です。
+  Windows では、デスクトップのショートカットと、スタートメニューのショートカット
+  「Garmin Running Data Normalizer」です。スタートメニューの分は、エクスプローラーの
+  アドレス欄に `shell:programs` と入れて開くフォルダーの中にあります。
+- スナップショットの保管場所と出力（既定では、ホームのフォルダーの中の
+  `GarminRunningData`）：あなたの個人のデータと、エクスポートの写しが入って
+  います。まだ使うときは残してください。
+- GUI の覚えた設定は、終える前に、画面の下の帯の「覚えた設定を消す…」で
+  消せます。設定のファイルの場所は、[2 回目からの起動](#2-回目からの起動)に
+  あります。
+
+ほかのしかたで入れたときは、`pip uninstall garmin-running-data-normalizer` で
+このアプリを外せます。アイコンは、それでは消えません。
 
 ## プライバシー
 

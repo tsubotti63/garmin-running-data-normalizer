@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import re
 import stat
 import struct
 import subprocess
@@ -35,6 +36,7 @@ from garmin_running_data_normalizer.shortcut import (
     create_shortcut,
     mac_script,
 )
+from tests.test_gui_guides import one_lines
 from tests.test_gui_i18n import flow_table
 
 SHORTCUT_CODES = ("SHORTCUT_NOT_SUPPORTED", "SHORTCUT_PLACE_TAKEN", "SHORTCUT_NOT_CREATED")
@@ -606,19 +608,36 @@ class WindowsShortcutTest(TemporaryFolder):
 
 @WINDOWS_ONLY
 class WindowsPowerShellLineTest(unittest.TestCase):
-    def test_the_line_of_the_guide_runs_its_second_command_only_after_the_first_succeeded(self) -> None:
-        # Windows PowerShell 5.1 has no "&&"; the guides join the two
-        # commands with "if ($?) { … }" (stage E1d).
-        for first, expected in (("cmd /c exit 1", "stopped"), ("cmd /c exit 0", "ran")):
-            with self.subTest(first=first):
-                result = subprocess.run(
-                    ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-                     f"{first}; if ($?) {{ 'ran' }} else {{ 'stopped' }}"],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                self.assertEqual(result.stdout.strip(), expected)
+    """The line of the guides in Windows PowerShell 5.1, which has no "&&",
+    with a stand-in for each of its parts."""
+
+    @staticmethod
+    def said(line: str) -> list[str]:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", line], capture_output=True, text=True
+        )
+        return result.stdout.split()
+
+    def test_the_line_of_the_guide_runs_each_part_only_after_the_one_before_it_succeeded(self) -> None:
+        [_, (_, line)] = one_lines("en")
+        parts = re.fullmatch(r"(.+?); if \(\$\?\) \{ (.+?); if \(\$\?\) \{ (.+) \} \}", line)
+        assert parts is not None
+        names = ("venv", "install", "icon")
+        for failing in (*names, None):
+            stand_in = line
+            for name, part in zip(names, parts.groups()):
+                stand_in = stand_in.replace(part, f'cmd /c "echo {name}& exit {int(name == failing)}"')
+            with self.subTest(failing=failing):
+                ran = list(names[: names.index(failing) + 1]) if failing else list(names)
+                self.assertEqual(self.said(stand_in), ran)
+
+    def test_an_if_that_reads_the_answer_leaves_it_true(self) -> None:
+        # The reason why the guides put one "if" inside the other (stage
+        # E1i): with two in a row, the third part ran after the first failed.
+        self.assertEqual(
+            self.said('cmd /c "echo A& exit 1"; if ($?) { cmd /c "echo B& exit 0" }; if ($?) { cmd /c "echo C& exit 0" }'),
+            ["A", "C"],
+        )
 
 
 class CommandTest(unittest.TestCase):
