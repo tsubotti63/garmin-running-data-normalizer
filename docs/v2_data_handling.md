@@ -2,7 +2,7 @@
 
 - Status: design record for stage A of the [v2.0.0 GUI Design](gui_design.md),
   agreed by the Human maintainer on 2026-10-11. Stage A pull requests
-  implemented it, and the release candidate v2.0.0rc3 follows it; the current
+  implemented it, and the release candidate v2.0.0rc4 follows it; the current
   stable release, v1.7.1, keeps its own behavior.
 - Applies to: the CLI and the GUI alike, and one-shot `run-all` and Snapshot
   runs alike.
