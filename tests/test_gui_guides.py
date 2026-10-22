@@ -306,6 +306,112 @@ class GuiGuideTest(unittest.TestCase):
             with self.subTest(language=language):
                 self.assertIn(phrase, catalog(language)["next.restart_gui"])
 
+    def test_guides_answer_what_a_second_reader_asked(self) -> None:
+        # Stage E2a, from a new AI session that read the guides of v2.0.0rc4
+        # as a first-time user, from the checks of v2.0.0rc4 on Windows and on
+        # a Mac, and from a second new AI session that read the guides that
+        # these answers changed: how to read the version of Python, the lines
+        # of a line that stopped (an old pip, such as the one of Python 3.9,
+        # shows no line of Requires-Python) and where to ask, how to open the
+        # home folder, how to update, how to go back to the GUI that is open,
+        # and the name with ".command" that the Finder shows when it shows
+        # every extension. An update stops the GUI first on every system: a
+        # GUI that is still open keeps the page of its version (gui/server.py
+        # reads the page at its start), while each run is a new Python process
+        # that takes the code on the disk (gui/runs.py). An open page keeps
+        # the GUI awake with its heartbeat (gui/server.py).
+        phrases = {
+            "en": {
+                "What you need": (
+                    'the number after "3." is 11 or more', "can be too old for this app", "`%USERPROFILE%`",
+                    "**Go** > **Home**",
+                    # The rows of the table, which the words of a row also name.
+                    "| `command not found` (macOS), or `is not recognized` (Windows) |", "| `xcode-select` (macOS) |",
+                    "| `Requires-Python` |", "| `Retrying` and `connection` |",
+                    "| `No matching distribution found`, without the two lines above |",
+                    "| A line that starts with `ERROR [SHORTCUT_` |",
+                    "On macOS as on Windows, stop the GUI first", '"Unable to copy"', "the versions are mixed",
+                    "stay as they are", "open a new PowerShell window", "the terminal is the window of PowerShell",
+                    "a line that ends with %", "there is nothing to move",
+                    "an old pip does not show the line of `Requires-Python`",
+                    "[Report a problem on GitHub](#report-a-problem-on-github)",
+                ),
+                "Start the GUI from an icon": ("**Show all filename extensions**", "the icon starts the new version"),
+                "Go back to the GUI that is open": (
+                    "A bookmark does not open the GUI", "one more GUI opens", "10 minutes",
+                    "the easiest is to double-click the icon again", "the command key and C",
+                    "right-click to copy it", "stops the GUI of that page only", "puts the tab to sleep",
+                ),
+                "Stop the GUI": ("the control key and C, on macOS too",),
+            },
+            "ja": {
+                "用意するもの": (
+                    "「3.」のあとの数が 11 以上", "このアプリには古いことがあります", "`%USERPROFILE%`",
+                    "「移動」→「ホーム」",
+                    "| `command not found`（macOS）、`認識されません` か `is not recognized`（Windows） |",
+                    "| `xcode-select`（macOS） |", "| `Requires-Python` |", "| `Retrying` と `connection` |",
+                    "| `No matching distribution found`（上の 2 つが無いとき） |", "| `ERROR [SHORTCUT_` で始まる行 |",
+                    "macOS でも Windows でも、先に GUI を終えて", "「Unable to copy」",
+                    "バージョンが混ざります", "そのまま残ります", "PowerShell の窓を開き直して",
+                    "Windows では PowerShell の窓のことです", "% で終わる行", "そのフォルダーが無ければ",
+                    "古い pip は `Requires-Python` の行を出しません", "[GitHub で報告する](#github-で報告する)",
+                ),
+                "アイコンから起動する": ("「すべてのファイル名拡張子を表示」", "アイコンから新しいバージョンが起動します"),
+                "開いている GUI に戻る": (
+                    "ブックマークからは開けません", "GUI がもう 1 つ開きます", "10 分たつと",
+                    "アイコンをもう一度ダブルクリックするのがかんたんです", "command キーと C", "右クリックで写します",
+                    "そのページの GUI だけが終わります", "タブを眠らせた",
+                ),
+                "GUI を終える": ("macOS でも control キーと C",),
+            },
+        }
+        for language, sections in phrases.items():
+            for heading, wanted in sections.items():
+                text = flowing(language, heading)
+                for phrase in wanted:
+                    with self.subTest(language=language, heading=heading, phrase=phrase):
+                        self.assertIn(phrase, text)
+        # The guides quote the lines that the gui command prints at the end of
+        # a line that succeeded.
+        command = (ROOT / "src/garmin_running_data_normalizer/gui/command.py").read_text(encoding="utf-8")
+        for line in (
+            "GUI address (it contains the launch key; do not share it):",
+            "Stop with Ctrl+C or the Quit button on the page.",
+        ):
+            self.assertIn(f'print("{line}"', command)
+            for language in GUIDES:
+                with self.subTest(language=language, line=line):
+                    self.assertIn(line, flowing(language, WHAT_YOU_NEED[language]))
+        # The Export comes first among what you need, since Garmin takes time
+        # to make it; and the remembered settings are forgotten before the
+        # GUI stops, since only the page forgets them.
+        for language, export, forget, stop in (
+            ("en", "- A Garmin Account Data Export", "**Forget the remembered settings…**", "2. Stop the GUI"),
+            ("ja", "- Garmin のエクスポート", "「覚えた設定を消す…」", "2. GUI を終えます"),
+        ):
+            with self.subTest(language=language):
+                text = GUIDES[language].read_text(encoding="utf-8")
+                need = section(text, WHAT_YOU_NEED[language])
+                self.assertTrue(need.split("\n\n", 2)[1].startswith(export))
+                remove = flowing(language, {"en": "Remove this app", "ja": "このアプリを片付ける"}[language])
+                self.assertLess(remove.index(forget), remove.index(stop))
+
+    def test_links_inside_the_guides_lead_to_their_headings(self) -> None:
+        # GitHub makes the anchor of a heading from its text in lower case,
+        # without the characters that are not letters, digits, "_", "-", or
+        # spaces, and with each space made a "-".
+        def anchor(heading: str) -> str:
+            return re.sub(r"[^\w\- ]", "", heading.strip().lower()).replace(" ", "-")
+
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            anchors = {anchor(heading) for heading in re.findall(r"^#{1,6} (.+)$", text, re.M)}
+            links = re.findall(r"\]\(#([^)]+)\)", text)
+            self.assertTrue(links, language)
+            for link in links:
+                with self.subTest(language=language, link=link):
+                    self.assertIn(link, anchors)
+
 
 if __name__ == "__main__":
     unittest.main()
