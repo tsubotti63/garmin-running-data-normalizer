@@ -192,9 +192,12 @@ def validate(root: Path = ROOT) -> list[str]:
                     findings.append(
                         f"{relative}: TestPyPI install does not take its dependencies from Production PyPI"
                     )
+                # A statement of Windows PowerShell may end right after the
+                # version, before the next one (stage E1i).
                 if (
                     current_version is not None
-                    and f"garmin-running-data-normalizer=={current_version}" not in line.split()
+                    and f"garmin-running-data-normalizer=={current_version}"
+                    not in [word.removesuffix(";") for word in line.split()]
                 ):
                     findings.append(
                         f"{relative}: TestPyPI install does not name the package version {current_version}"

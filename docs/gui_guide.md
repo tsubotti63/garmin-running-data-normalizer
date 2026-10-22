@@ -20,13 +20,20 @@ Everything stays on your computer.
 - The release candidate v2.0.0rc3, installed with Python 3.11 or later. The
   GUI adds no dependency. v2.0.0rc3 is published on TestPyPI. Install it in a
   virtual environment of its own, so that an installed v1.7.1 stays as
-  it is. Production PyPI is the extra index for the dependencies that
-  TestPyPI may not provide, such as `tzdata` on Windows.
+  it is. The line below takes the dependencies that TestPyPI may not
+  provide, such as `tzdata` on Windows, from Production PyPI, so that you
+  add nothing yourself.
 
   First install Python from [python.org](https://www.python.org/downloads/);
-  this app is not checked with the Python of the Microsoft Store. Then one
-  line makes the virtual environment `garmin-normalizer` in your home folder,
-  installs v2.0.0rc3 in it, makes the icon that starts the GUI
+  this app is not checked with the Python of the Microsoft Store. To see
+  whether Python 3.11 or later is installed, run `python3 --version` in the
+  Terminal on macOS, or `py --version` in PowerShell on Windows. When it says
+  3.10 or earlier, or that the command is not found, install Python with the
+  **Download Python** button of the page of python.org. On macOS, open the
+  Terminal again after you install Python.
+
+  Then one line makes the virtual environment `garmin-normalizer` in your
+  home folder, installs v2.0.0rc3 in it, makes the icon that starts the GUI
   ([Start the GUI from an icon](#start-the-gui-from-an-icon)), and opens the
   GUI. Each part runs only after the one before it has succeeded. When the
   line makes the icon, macOS may ask whether the Terminal may use the
@@ -40,15 +47,29 @@ Everything stays on your computer.
   ```
 
   Windows PowerShell, whose version 5.1 has no `&&`, so that the parts are
-  joined with `if ($?)`:
+  joined with `if ($?)`, one inside the other:
 
   ```powershell
-  py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc3 }; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut }
+  py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc3; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
   ```
 
+  - When the line succeeds, the GUI opens in your browser at its end. On the
+    way, pip may say that a new release of pip is available; you need not
+    mind it.
+  - When the line stops on the way, with a line of an error and no page,
+    read that line and set it right, and then run the same line again. When
+    you ran the line before you installed Python, or when it stops at the
+    same place again, first move the folder `garmin-normalizer` that it made
+    in your home folder to the Trash (the Recycle Bin on Windows), and then
+    run it again.
+  - To update to a new version, run the line of the guide of that version in
+    the same way: it installs into the same virtual environment
+    `garmin-normalizer` and makes the icon again. On Windows, stop the GUI
+    first ([Stop the GUI](#stop-the-gui)): while it runs, the Python of the
+    virtual environment is in use, and the line may stop on the way.
+
   On Linux, which has no icon, leave out `--create-shortcut`. When you no
-  longer use this version, move the folder `garmin-normalizer` in your home
-  folder and the icon to the Trash (the Recycle Bin on Windows).
+  longer use this app, see [Remove this app](#remove-this-app).
 
 - A web browser on the same computer, in a window of a desktop or laptop
   computer. The page is not made for phones or tablets.
@@ -56,11 +77,34 @@ Everything stays on your computer.
   folder extracted from it. **How to use** in the help panel says how to get
   one; see also steps 1 and 2 of
   [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
+  Garmin may take some time after your request before you can download the
+  Export, so request it early.
 - Free space for the Snapshot Store, which keeps a copy of the files of each
   Export (a file that an earlier Export had is kept once), and for a new
   output folder.
 
 ## Start the GUI
+
+When the line in [What you need](#what-you-need) installed this app, it is in
+that virtual environment: double-click the icon
+([Start the GUI from an icon](#start-the-gui-from-an-icon)), or run this
+command with the Python of the virtual environment, as the icon does.
+
+macOS:
+
+```bash
+~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui
+```
+
+Windows PowerShell:
+
+```powershell
+& "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui
+```
+
+When you installed this app in another way and the command
+`garmin-running-data-normalizer` works, for example in a virtual environment
+that you activated, this command also starts the GUI:
 
 ```bash
 garmin-running-data-normalizer gui
@@ -68,14 +112,6 @@ garmin-running-data-normalizer gui
 
 The command prints the GUI's address and opens it in your default browser.
 With `--no-browser`, it only prints the address, for you to open.
-
-When the line in [What you need](#what-you-need) installed this app, it is in
-that virtual environment: start the GUI from the icon, or with the Python of
-the virtual environment, as the icon does:
-`~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui` on
-macOS, and
-`& "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui`
-in Windows PowerShell.
 
 - The address contains a key for this launch only. Do not share it. A page
   without the key cannot use the GUI; if the page says so, open the address
@@ -99,7 +135,26 @@ page, and two tables: **Steps**, the steps of a run with the time of each, and
 ## Start the GUI from an icon
 
 On macOS and Windows, `--create-shortcut` makes an icon that starts the GUI,
-and then opens the GUI as the command does without it:
+and then opens the GUI as the command does without it. The line in
+[What you need](#what-you-need) makes the icon in this way too. To make the
+icon again, for example after you replaced Python or the virtual
+environment, or moved the icon to the Trash, run this command with the Python
+of the virtual environment when the line installed this app.
+
+macOS:
+
+```bash
+~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
+```
+
+Windows PowerShell:
+
+```powershell
+& "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut
+```
+
+When the command `garmin-running-data-normalizer` works, this command also
+makes it:
 
 ```bash
 garmin-running-data-normalizer gui --create-shortcut
@@ -111,8 +166,11 @@ garmin-running-data-normalizer gui --create-shortcut
   Double-click it: the Terminal opens a window, which shows the address, and
   the GUI opens in your default browser. When the command writes the file,
   macOS may ask whether the Terminal may use the desktop: choose **Allow**, or
-  the icon is not made. Later, macOS asks the same for the folders that you
-  choose from, such as Downloads, as it does when you start the GUI from the
+  the icon is not made. After **Don't Allow**, macOS does not ask again: turn
+  on **Desktop Folder** under **Terminal** in **Privacy & Security** >
+  **Files & Folders** of System Settings, and then run the command that makes
+  the icon again. Later, macOS asks the same for the folders that you choose
+  from, such as Downloads, as it does when you start the GUI from the
   Terminal.
 - Windows: the shortcut **Garmin Running Data Normalizer** on the desktop and
   in the Start menu, which shows the same picture. Its window opens
@@ -132,10 +190,11 @@ garmin-running-data-normalizer gui --create-shortcut
   it with `SHORTCUT_NOT_CREATED`, and other systems with
   `SHORTCUT_NOT_SUPPORTED`. The GUI does not open then; without
   `--create-shortcut`, the command opens it.
-- When your desktop is synchronized with iCloud, the file also appears on
-  your other Macs, where it may not start, because Python is in another place
-  there, and may come without its picture.
-- To remove the icon, move it to the Trash (the Recycle Bin on Windows).
+- When your desktop is synchronized with iCloud or OneDrive, the icon also
+  appears on your other computers, where it may not start, because Python is
+  in another place there, and may come without its picture.
+- To remove the icon, move it to the Trash (the Recycle Bin on Windows, also
+  the one in the Start menu: [Remove this app](#remove-this-app)).
   `pip uninstall` does not remove it.
 - Linux has no icon: start the GUI with the command.
 
@@ -573,13 +632,21 @@ started shows in every tab, and another run cannot start until it ends
 (`RUN_ACTIVE`).
 
 If the page says that this app is not responding, the GUI may have stopped, for
-example because the terminal was closed. Start it again with the same command
-and open the new address; each launch has a new address and key.
+example because the terminal window was closed, or because nothing used it for
+10 minutes. When the icon started it, double-click the icon again; when you
+started it in the terminal, start it again with the same command; then open
+the new address. Each launch has a new address and key.
 
 ## Stop the GUI
 
+While you use the GUI, the terminal window (the window that the icon opened,
+when the icon started the GUI) shows the address and seems to stand still.
+That is as it should be.
+
 - Choose **Quit** at the bottom of the page, or press `Ctrl+C` in the
-  terminal. When the icon started the GUI, its window is the terminal.
+  terminal. When the icon started the GUI, its window is the terminal. When
+  the GUI stops, the terminal shows "GUI stopped."; you may then close the
+  window.
 - While a run is active, **Quit** is refused; cancel the run first. `Ctrl+C`
   cancels the run and then stops the GUI.
 - The `gui` command ends with exit code 0 after **Quit**, or after `Ctrl+C`
@@ -589,6 +656,28 @@ and open the new address; each launch has a new address and key.
   the run has ended.
 - When no page has used the GUI for 10 minutes and no run is active, the GUI
   stops by itself. Closing the browser tab does not stop it at once.
+
+## Remove this app
+
+When you no longer use this version, stop the GUI, and then move these to the
+Trash (the Recycle Bin on Windows):
+
+- The folder `garmin-normalizer` in your home folder: the virtual environment
+  that the line in [What you need](#what-you-need) made. This app is in it.
+- The icon: on macOS, **Garmin Running Data Normalizer** on the desktop; on
+  Windows, the shortcuts **Garmin Running Data Normalizer** on the desktop
+  and in the Start menu. The one in the Start menu is in the folder that
+  opens when you type `shell:programs` in the address bar of File Explorer.
+- The Snapshot Store and the outputs, by default in `GarminRunningData` in
+  your home folder: they hold your personal data and the copies of your
+  Exports. Keep them while you still use them.
+- Before you stop the GUI, **Forget the remembered settings…** in the bar at
+  the bottom of the page removes what the GUI remembers. The place of its
+  file is in [Later launches](#later-launches).
+
+When you installed this app in another way,
+`pip uninstall garmin-running-data-normalizer` removes it. That does not
+remove the icon.
 
 ## Privacy
 

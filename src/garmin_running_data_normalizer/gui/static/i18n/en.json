@@ -279,7 +279,7 @@
   "next.label": "Next: {step}",
   "next.open_terminal_address": "Open the address shown in the terminal.",
   "next.reload_page": "Reload the page and try again. If it happens again, report the code below.",
-  "next.restart_gui": "Start this app again with the same command in the terminal, and open the new address that it shows.",
+  "next.restart_gui": "If you started this app from its icon, double-click the icon again. If you started it in the terminal, start it again with the same command, and open the new address that it shows.",
   "next_actions.ai": "Use the normalized data with AI",
   "next_actions.heading": "Next",
   "next_line.cancelled": "You can check the settings and press “Run normalization” again.",
