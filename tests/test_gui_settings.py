@@ -171,6 +171,8 @@ class SettingsFileTest(unittest.TestCase):
             # 64 KiB at most, as the file promises.
             "too large": json.dumps({**good, "padding": "x" * 64 * 1024}).encode(),
             "deeply nested": b"[" * 30000 + b"]" * 30000,
+            # Of this form but for a value more than 256 deep (stage E2d).
+            "nested more than 256 deep": (json.dumps(good)[:-1] + ', "padding": ' + "[" * 300 + "]" * 300 + "}").encode(),
         }
         self.path.parent.mkdir()
         for name, content in cases.items():

@@ -26,6 +26,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from ..common.json_depth import check_json_depth
 from ..diagnostics.doctor import DoctorError, doctor_run_output
 from ..diagnostics.support_bundle import SupportBundleError, build_support_bundle
 from ..standalone import VERSION_FORM, OtherVersionError, StandaloneHandoffError, validate_standalone_handoff
@@ -132,7 +133,8 @@ def output_summary(output: Path) -> dict[str, Any] | None:
         if not _is_plain(path, stat.S_ISREG) or path.stat().st_size > MAX_SUMMARY_BYTES:
             return None
         summary = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, ValueError):
+        check_json_depth(summary)
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError):
         return None
     if not isinstance(summary, dict) or not isinstance(summary.get("family_results"), dict):
         return None
