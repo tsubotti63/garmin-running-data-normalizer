@@ -19,7 +19,7 @@ class PackagingReadinessTest(unittest.TestCase):
         self.assertEqual(project["name"], "garmin-running-data-normalizer")
         self.assertNotIn("version", project)
         self.assertEqual(project["dynamic"], ["version"])
-        self.assertEqual(__version__, "2.0.0rc3")
+        self.assertEqual(__version__, "2.0.0rc4")
         self.assertEqual(
             metadata["tool"]["setuptools"]["dynamic"]["version"],
             {"attr": "garmin_running_data_normalizer.__version__"},

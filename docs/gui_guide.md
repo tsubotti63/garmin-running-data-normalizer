@@ -1,8 +1,9 @@
 # GUI Guide
 
-> **Release candidate of v2.0.0.** The GUI is in v2.0.0rc3, the release
-> candidate of v2.0.0 on TestPyPI; the current stable release, v1.7.1, does
-> not have it. [What you need](#what-you-need) says how to install v2.0.0rc3.
+> **Release candidate of v2.0.0.** The GUI is in v2.0.0rc4, the release
+> candidate of v2.0.0 for TestPyPI; the current stable release, v1.7.1, does
+> not have it. [What you need](#what-you-need) says how to install v2.0.0rc4
+> once it is published.
 > With v1.7.1, use the command line as described in
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
 
@@ -17,9 +18,9 @@ Everything stays on your computer.
 
 ## What you need
 
-- The release candidate v2.0.0rc3, installed with Python 3.11 or later. The
-  GUI adds no dependency. v2.0.0rc3 is published on TestPyPI. Install it in a
-  virtual environment of its own, so that an installed v1.7.1 stays as
+- The release candidate v2.0.0rc4, installed with Python 3.11 or later. The
+  GUI adds no dependency. Once v2.0.0rc4 is published on TestPyPI, install it
+  in a virtual environment of its own, so that an installed v1.7.1 stays as
   it is. The line below takes the dependencies that TestPyPI may not
   provide, such as `tzdata` on Windows, from Production PyPI, so that you
   add nothing yourself.
@@ -33,7 +34,7 @@ Everything stays on your computer.
   Terminal again after you install Python.
 
   Then one line makes the virtual environment `garmin-normalizer` in your
-  home folder, installs v2.0.0rc3 in it, makes the icon that starts the GUI
+  home folder, installs v2.0.0rc4 in it, makes the icon that starts the GUI
   ([Start the GUI from an icon](#start-the-gui-from-an-icon)), and opens the
   GUI. Each part runs only after the one before it has succeeded. When the
   line makes the icon, macOS may ask whether the Terminal may use the
@@ -43,14 +44,14 @@ Everything stays on your computer.
   macOS:
 
   ```bash
-  python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc3 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
+  python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc4 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
   ```
 
   Windows PowerShell, whose version 5.1 has no `&&`, so that the parts are
   joined with `if ($?)`, one inside the other:
 
   ```powershell
-  py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc3; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
+  py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc4; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
   ```
 
   - When the line succeeds, the GUI opens in your browser at its end. On the
