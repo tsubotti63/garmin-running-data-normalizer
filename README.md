@@ -71,11 +71,11 @@ See the
 Current stable release: **v1.7.1** · Python **3.11+** · Apache License 2.0
 
 Implementation candidate: **v2.0.0rc5** (the fifth release candidate of
-v2.0.0, for TestPyPI; Production PyPI and the latest GitHub Release stay v1.7.1). It adds
+v2.0.0, published on TestPyPI; Production PyPI and the latest GitHub Release stay v1.7.1). It adds
 a local GUI, opened with `garmin-running-data-normalizer gui`, which v1.7.1
 does not have, and runs that stopped on problems in the data now finish and
 report warnings with codes and counts. **Install** below says how to install
-it once it is published. See the
+it. See the
 [draft of the v2.0.0 migration notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/v2_migration_notes_draft.md)
 and the
 [GUI Guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md).
@@ -393,8 +393,8 @@ package installs `tzdata` automatically on Windows so Python can resolve IANA
 timezone data (`Asia/Tokyo` by default, or the timezone given with
 `--timezone`). macOS and Linux continue to use their system timezone data.
 
-The release candidate v2.0.0rc5 can be installed once it is published on
-TestPyPI. Install it in a virtual environment of its own, so that an
+The release candidate v2.0.0rc5 is published on TestPyPI. Install it in a
+virtual environment of its own, so that an
 installed v1.7.1 stays as it is. Production PyPI is the extra index for the
 dependencies that TestPyPI may not provide, such as `tzdata` on Windows:
 
