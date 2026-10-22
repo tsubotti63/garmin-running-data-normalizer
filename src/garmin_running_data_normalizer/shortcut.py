@@ -12,6 +12,11 @@ An icon is replaced only when this command made it: on macOS, a file whose
 second line is the mark below, and on Windows, a shortcut with the arguments
 below, whatever Python it starts, so that the command makes it again after
 Python is replaced. Any other file of the same name stops the command.
+
+The icon shows the picture of this app (stage E1i): on macOS the file gets it,
+and its name shows without ".command", and on Windows the shortcuts point to
+it. When the picture cannot be given, the icon still starts the GUI, with the
+look of a plain file, and the command says so in one line.
 """
 from __future__ import annotations
 
@@ -21,6 +26,7 @@ import subprocess
 import sys
 import tempfile
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +39,22 @@ MAC_MARK = "# Garmin Running Data Normalizer: starts the GUI."
 # command made; the mark is in its second line.
 _HEAD_BYTES = 4096
 POWERSHELL_TIMEOUT_SECONDS = 60.0
+OSASCRIPT_TIMEOUT_SECONDS = 30.0
+# The pictures of the icon, which scripts/generate_app_icons.py makes from the
+# SVG files next to them.
+ASSETS = Path(__file__).resolve().parent / "assets"
+MAC_PICTURE = ASSETS / "icon.icns"
+WINDOWS_PICTURE = ASSETS / "icon.ico"
+# What the command says when the icon has no picture; it does not stop.
+NO_PICTURE_NOTE = "The picture of the icon could not be set; the icon still starts the GUI."
+
+
+@dataclass(frozen=True)
+class Shortcuts:
+    """The icons that the command made, and whether they show the picture."""
+
+    places: list[Path]
+    picture: bool
 
 
 class ShortcutError(Exception):
@@ -73,7 +95,40 @@ def _made_here(place: Path) -> bool:
     return len(lines) > 1 and lines[0] == "#!/bin/sh" and lines[1] == MAC_MARK
 
 
-def _create_on_mac(executable: str, desktop: Path) -> list[Path]:
+# The script of osascript that gives the file its picture and hides its
+# extension, with the frameworks of macOS; it answers "set" when both are done.
+MAC_PICTURE_SCRIPT = (
+    'ObjC.import("AppKit"); '
+    "function run(argv) { "
+    "const image = $.NSImage.alloc.initWithContentsOfFile(argv[1]); "
+    'if (image.isNil()) { return "no picture"; } '
+    "const pictured = $.NSWorkspace.sharedWorkspace.setIconForFileOptions(image, argv[0], 0); "
+    "const hidden = $.NSFileManager.defaultManager.setAttributesOfItemAtPathError("
+    "$({NSFileExtensionHidden: true}), argv[0], null); "
+    'return pictured && hidden ? "set" : "not set"; }'
+)
+
+
+def _dress_on_mac(place: Path, picture: Path, run: Callable[..., Any]) -> bool:
+    """Give the file on the desktop the picture of the icon and hide its
+    extension. They live beside the content of the file, so the mark and the
+    mode stay as they are, and a new file needs them again."""
+    if not picture.is_file():
+        return False
+    try:
+        result = run(
+            ["/usr/bin/osascript", "-l", "JavaScript", "-e", MAC_PICTURE_SCRIPT, str(place), str(picture)],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=OSASCRIPT_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    said = result.stdout.decode("utf-8", "replace") if isinstance(result.stdout, bytes) else (result.stdout or "")
+    return result.returncode == 0 and said.strip() == "set"
+
+
+def _create_on_mac(executable: str, desktop: Path, picture: Path, run: Callable[..., Any]) -> Shortcuts:
     place = desktop / f"{NAME}.command"
     # A desktop that the Terminal may not use, because its person answered
     # Don't Allow to the question of macOS, refuses even the look at the file.
@@ -98,7 +153,7 @@ def _create_on_mac(executable: str, desktop: Path) -> list[Path]:
         raise ShortcutError("SHORTCUT_NOT_CREATED", "this app is not allowed to write on the desktop") from exc
     except OSError as exc:
         raise ShortcutError("SHORTCUT_NOT_CREATED", "the icon could not be written on the desktop") from exc
-    return [place]
+    return Shortcuts([place], _dress_on_mac(place, picture, run))
 
 
 # The script that makes the shortcuts on Windows. The places come from the
@@ -117,9 +172,14 @@ def _create_on_mac(executable: str, desktop: Path) -> list[Path]:
 # Python, the home folder, and the description are then written with the
 # ShellLinkObject of Shell.Application, which keeps them. Until then the
 # shortcut is only in the temporary folder, so no stand-in reaches a place.
+# The ShellLinkObject also points the shortcut to the picture of the icon; a
+# shortcut without it still starts the GUI, so the script then only says so
+# in a line of its own after the places.
+NO_PICTURE_LINE = "NO-PICTURE"
 WINDOWS_SCRIPT = (
     "$ErrorActionPreference = 'Stop'; "
     "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; "
+    "$pictured = $true; "
     "try { "
     "$shell = New-Object -ComObject WScript.Shell; "
     "$application = New-Object -ComObject Shell.Application; "
@@ -151,10 +211,13 @@ WINDOWS_SCRIPT = (
     "$saved.Path = $env:GRDN_SHORTCUT_TARGET; "
     "$saved.WorkingDirectory = $env:GRDN_SHORTCUT_HOME; "
     "$saved.Description = $env:GRDN_SHORTCUT_DESCRIPTION; "
+    "if ($env:GRDN_SHORTCUT_PICTURE) { try { $saved.SetIconLocation($env:GRDN_SHORTCUT_PICTURE, 0) } "
+    "catch { $pictured = $false } } else { $pictured = $false }; "
     "$saved.Save(); "
     "Move-Item -LiteralPath $temporary -Destination $place -Force; "
     "$temporary = $null; "
-    "[Console]::Out.WriteLine($place) } "
+    "[Console]::Out.WriteLine($place) }; "
+    f"if (-not $pictured) {{ [Console]::Out.WriteLine('{NO_PICTURE_LINE}') }} "
     "} catch { [Console]::Error.WriteLine($_.Exception.Message); "
     "if ($temporary -and (Test-Path -LiteralPath $temporary)) { Remove-Item -LiteralPath $temporary -Force }; "
     "exit 4 }"
@@ -176,8 +239,9 @@ def _create_on_windows(
     executable: str,
     folders: Sequence[Path] | None,
     home: Path,
+    picture: Path,
     run: Callable[..., Any],
-) -> list[Path]:
+) -> Shortcuts:
     powershell = shutil.which("powershell.exe") or shutil.which("powershell")
     if powershell is None:
         raise ShortcutError("SHORTCUT_NOT_CREATED", "Windows PowerShell, which makes the shortcut, was not found")
@@ -189,6 +253,7 @@ def _create_on_windows(
         "GRDN_SHORTCUT_HOME": str(home),
         "GRDN_SHORTCUT_DESCRIPTION": f"Starts the GUI of {NAME}",
         "GRDN_SHORTCUT_FOLDERS": "\n".join(str(folder) for folder in folders) if folders else "",
+        "GRDN_SHORTCUT_PICTURE": str(picture) if picture.is_file() else "",
     }
     try:
         result = run(
@@ -211,7 +276,8 @@ def _create_on_windows(
             "SHORTCUT_NOT_CREATED", "Windows PowerShell could not make the shortcut", (said or "").strip() or None
         )
     output = result.stdout.decode("utf-8", "replace") if isinstance(result.stdout, bytes) else result.stdout
-    return [Path(line) for line in output.splitlines() if line.strip()]
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    return Shortcuts([Path(line) for line in lines if line != NO_PICTURE_LINE], NO_PICTURE_LINE not in lines)
 
 
 def create_shortcut(
@@ -221,25 +287,33 @@ def create_shortcut(
     home: Path | None = None,
     desktop: Path | None = None,
     windows_folders: Sequence[Path] | None = None,
+    picture: Path | None = None,
     run: Callable[..., Any] = subprocess.run,
-) -> list[Path]:
-    """Make the icon that starts the GUI, and return where it is. The tests
-    give the places; the command uses those of the system."""
+) -> Shortcuts:
+    """Make the icon that starts the GUI, and return where it is and whether
+    it shows the picture. The tests give the places and the picture; the
+    command uses those of the system and of this package."""
     platform = sys.platform if platform is None else platform
     executable = sys.executable if executable is None else executable
     home = Path.home() if home is None else home
     if platform == "darwin":
-        return _create_on_mac(executable, home / "Desktop" if desktop is None else desktop)
+        return _create_on_mac(
+            executable, home / "Desktop" if desktop is None else desktop, MAC_PICTURE if picture is None else picture, run
+        )
     if platform == "win32":
-        return _create_on_windows(executable, windows_folders, home, run)
+        return _create_on_windows(executable, windows_folders, home, WINDOWS_PICTURE if picture is None else picture, run)
     raise ShortcutError("SHORTCUT_NOT_SUPPORTED", "an icon that starts the GUI can be made only on macOS and Windows")
 
 
 __all__ = [
     "ARGUMENTS",
     "MAC_MARK",
+    "MAC_PICTURE",
     "NAME",
+    "NO_PICTURE_NOTE",
     "ShortcutError",
+    "Shortcuts",
+    "WINDOWS_PICTURE",
     "WINDOWS_SCRIPT",
     "create_shortcut",
     "mac_script",

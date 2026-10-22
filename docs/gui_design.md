@@ -673,6 +673,16 @@ Many cases that stop with exit 2 in v1.x finish with exit 0 or 3 in v2.0.0.
   replaces only an icon that it made, and when it cannot make one it stops
   with exit 2 (`SHORTCUT_NOT_SUPPORTED`, `SHORTCUT_PLACE_TAKEN`, or
   `SHORTCUT_NOT_CREATED`) before the GUI opens. Linux has no icon.
+  The icon shows the picture of this app (stage E1i, the Human maintainer's
+  choice of 2026-10-22): on macOS, `osascript` gives the file the picture of
+  `assets/icon.icns` and hides its extension; on Windows, the shortcut points
+  to `assets/icon.ico`. When the picture cannot be given, the command says so
+  in one line, not as a stop, and the icon still starts the GUI. The page
+  shows the same picture in the tab of the browser (`favicon.svg`, and
+  `favicon.png` for a browser without SVG there).
+  `scripts/generate_app_icons.py` makes the pictures on macOS from the SVG
+  files of `assets/`, which draw the letters with lines and arcs instead of a
+  typeface.
 - `run-all`, `doctor --input`, and `snapshot register` accept a ZIP file.
 - Warnings about values that disagree name the Snapshots by number.
 - The pre-run checks that only the GUI performs in v1.7.1 (output name, an
@@ -944,9 +954,9 @@ alone, and reduced motion.
   HTML, JavaScript, CSS, and message catalogs. GUI files must not contain the
   terms that the scan bans in production code, host-path-shaped examples (use
   `/path/to/...` instead), literal secret assignments, or email addresses.
-- `pyproject.toml` ships the static files as package data, and the CI wheel and
-  source-distribution installation checks verify that the GUI files are
-  installed.
+- `pyproject.toml` ships the static files and the pictures of the icon as
+  package data, and the CI wheel and source-distribution installation checks
+  verify that the GUI files are installed.
 
 ## Compatibility and versioning
 

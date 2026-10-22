@@ -12,6 +12,7 @@ import contextlib
 import io
 import os
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
@@ -25,8 +26,12 @@ from garmin_running_data_normalizer.runner import build_parser
 from garmin_running_data_normalizer.shortcut import (
     ARGUMENTS,
     MAC_MARK,
+    MAC_PICTURE,
     NAME,
+    NO_PICTURE_NOTE,
     ShortcutError,
+    Shortcuts,
+    WINDOWS_PICTURE,
     create_shortcut,
     mac_script,
 )
@@ -69,7 +74,18 @@ class TemporaryFolder(unittest.TestCase):
         self.root = Path(handle.name)
 
 
+def set_picture(arguments, **keywords):  # type: ignore[no-untyped-def]
+    """A stand-in for osascript that gives the file its picture."""
+    return subprocess.CompletedProcess(arguments, 0, b"set\n", b"")
+
+
 class MacFileTest(TemporaryFolder):
+    def make(self, **options: object) -> Shortcuts:
+        options.setdefault("platform", "darwin")
+        options.setdefault("executable", "/usr/bin/python3")
+        options.setdefault("run", set_picture)
+        return create_shortcut(**options)  # type: ignore[arg-type]
+
     def test_the_file_starts_the_gui_with_the_python_that_ran_the_command(self) -> None:
         self.assertEqual(
             mac_script("/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"),
@@ -84,9 +100,9 @@ class MacFileTest(TemporaryFolder):
     def test_the_file_is_on_the_desktop_and_only_its_owner_runs_it(self) -> None:
         desktop = self.root / "Desktop"
         desktop.mkdir()
-        places = create_shortcut(platform="darwin", executable="/usr/bin/python3", home=self.root)
+        made = self.make(home=self.root)
         place = desktop / f"{NAME}.command"
-        self.assertEqual(places, [place])
+        self.assertEqual(made, Shortcuts([place], picture=True))
         self.assertEqual(place.read_text(encoding="utf-8"), mac_script("/usr/bin/python3"))
         if os.name != "nt":
             self.assertEqual(stat.S_IMODE(place.stat().st_mode), 0o700)
@@ -103,13 +119,13 @@ class MacFileTest(TemporaryFolder):
         python.chmod(0o700)
         desktop = self.root / "Desktop"
         desktop.mkdir()
-        [place] = create_shortcut(platform="darwin", executable=str(python), desktop=desktop)
+        [place] = self.make(executable=str(python), desktop=desktop).places
         result = subprocess.run(["/bin/sh", str(place)], capture_output=True, text=True, check=True)
         self.assertEqual(result.stdout, f"{python}|-P|-m|garmin_running_data_normalizer|gui|")
 
     def test_the_file_that_this_command_made_is_replaced(self) -> None:
-        create_shortcut(platform="darwin", executable="/old/python3", desktop=self.root)
-        [place] = create_shortcut(platform="darwin", executable="/new/python3", desktop=self.root)
+        self.make(executable="/old/python3", desktop=self.root)
+        [place] = self.make(executable="/new/python3", desktop=self.root).places
         self.assertEqual(place.read_text(encoding="utf-8"), mac_script("/new/python3"))
         self.assertEqual([path.name for path in self.root.iterdir()], [place.name])
 
@@ -119,13 +135,13 @@ class MacFileTest(TemporaryFolder):
             with self.subTest(text=text):
                 place.write_text(text, encoding="utf-8")
                 with self.assertRaises(ShortcutError) as caught:
-                    create_shortcut(platform="darwin", executable="/usr/bin/python3", desktop=self.root)
+                    self.make(desktop=self.root)
                 self.assertEqual(caught.exception.code, "SHORTCUT_PLACE_TAKEN")
                 self.assertEqual(place.read_text(encoding="utf-8"), text)
         place.unlink()
         place.mkdir()
         with self.assertRaises(ShortcutError) as caught:
-            create_shortcut(platform="darwin", executable="/usr/bin/python3", desktop=self.root)
+            self.make(desktop=self.root)
         self.assertEqual(caught.exception.code, "SHORTCUT_PLACE_TAKEN")
 
     @POSIX_ONLY
@@ -134,7 +150,7 @@ class MacFileTest(TemporaryFolder):
         target.write_text(mac_script("/usr/bin/python3"), encoding="utf-8")
         (self.root / f"{NAME}.command").symlink_to(target)
         with self.assertRaises(ShortcutError) as caught:
-            create_shortcut(platform="darwin", executable="/usr/bin/python3", desktop=self.root)
+            self.make(desktop=self.root)
         self.assertEqual(caught.exception.code, "SHORTCUT_PLACE_TAKEN")
         self.assertEqual(target.read_text(encoding="utf-8"), mac_script("/usr/bin/python3"))
 
@@ -155,7 +171,7 @@ class MacFileTest(TemporaryFolder):
                 else:
                     patch = mock.patch.object(shortcut.os, "replace", side_effect=error)
                 with patch, self.assertRaises(ShortcutError) as caught:
-                    create_shortcut(platform="darwin", executable="/usr/bin/python3", desktop=self.root)
+                    self.make(desktop=self.root)
                 self.assertEqual(caught.exception.code, "SHORTCUT_NOT_CREATED")
                 expected = (
                     "this app is not allowed to write on the desktop"
@@ -167,8 +183,95 @@ class MacFileTest(TemporaryFolder):
 
     def test_a_desktop_that_does_not_exist_stops_the_command(self) -> None:
         with self.assertRaises(ShortcutError) as caught:
-            create_shortcut(platform="darwin", executable="/usr/bin/python3", desktop=self.root / "none")
+            self.make(desktop=self.root / "none")
         self.assertEqual(caught.exception.code, "SHORTCUT_NOT_CREATED")
+
+    def test_the_file_gets_its_picture_once_it_is_in_its_place(self) -> None:
+        # The picture and the hidden extension live beside the content of the
+        # file, so a new file needs them again (stage E1i).
+        seen = []
+
+        def run(arguments, **keywords):  # type: ignore[no-untyped-def]
+            place = Path(arguments[5])
+            seen.append((arguments, keywords, place.read_text(encoding="utf-8"), stat.S_IMODE(place.stat().st_mode)))
+            return set_picture(arguments)
+
+        executables = ("/old/python3", "/new/python3")
+        for executable in executables:
+            self.make(executable=executable, desktop=self.root, run=run)
+        place = self.root / f"{NAME}.command"
+        self.assertEqual(len(seen), 2)
+        for (arguments, keywords, text, mode), executable in zip(seen, executables):
+            self.assertEqual(
+                arguments,
+                ["/usr/bin/osascript", "-l", "JavaScript", "-e", shortcut.MAC_PICTURE_SCRIPT, str(place), str(MAC_PICTURE)],
+            )
+            self.assertEqual(keywords["timeout"], shortcut.OSASCRIPT_TIMEOUT_SECONDS)
+            self.assertEqual(text, mac_script(executable))
+            if os.name != "nt":
+                self.assertEqual(mode, 0o700)
+        self.assertIn("setIconForFileOptions(image, argv[0], 0)", shortcut.MAC_PICTURE_SCRIPT)
+        self.assertIn("NSFileExtensionHidden: true", shortcut.MAC_PICTURE_SCRIPT)
+        self.assertTrue(MAC_PICTURE.is_file())
+
+    def test_an_icon_without_its_picture_still_starts_the_gui(self) -> None:
+        def answer(returncode: int, stdout: bytes):  # type: ignore[no-untyped-def]
+            return lambda arguments, **keywords: subprocess.CompletedProcess(arguments, returncode, stdout, b"")
+
+        def fail(error: BaseException):  # type: ignore[no-untyped-def]
+            def run(arguments, **keywords):  # type: ignore[no-untyped-def]
+                raise error
+
+            return run
+
+        place = self.root / f"{NAME}.command"
+        for label, run in (
+            ("not set", answer(0, b"not set\n")),
+            ("no picture", answer(0, b"no picture\n")),
+            ("an error of osascript", answer(1, b"")),
+            ("no osascript", fail(FileNotFoundError(2, "No such file or directory"))),
+            ("too slow", fail(subprocess.TimeoutExpired("osascript", 30))),
+        ):
+            with self.subTest(label):
+                self.assertEqual(self.make(desktop=self.root, run=run), Shortcuts([place], picture=False))
+                self.assertEqual(place.read_text(encoding="utf-8"), mac_script("/usr/bin/python3"))
+        # Without the picture, osascript is not asked.
+        made = self.make(desktop=self.root, picture=self.root / "none.icns", run=fail(AssertionError("asked")))
+        self.assertEqual(made, Shortcuts([place], picture=False))
+
+    @unittest.skipUnless(hasattr(os, "setxattr"), "extended attributes as Linux has them")
+    def test_attributes_beside_the_content_do_not_change_what_is_made_here(self) -> None:
+        self.make(desktop=self.root)
+        place = self.root / f"{NAME}.command"
+        try:
+            os.setxattr(place, "user.picture", b"picture")
+        except OSError:
+            self.skipTest("this file system takes no extended attributes")
+        self.assertEqual(self.make(executable="/new/python3", desktop=self.root).places, [place])
+        self.assertEqual(place.read_text(encoding="utf-8"), mac_script("/new/python3"))
+
+
+@unittest.skipUnless(
+    sys.platform == "darwin" and Path("/usr/bin/osascript").is_file(), "macOS gives the picture of a file"
+)
+class MacPictureTest(TemporaryFolder):
+    """The picture that macOS gives, in a temporary folder only (stage E1i)."""
+
+    def test_macos_gives_the_picture_and_the_file_stays_one_that_this_command_made(self) -> None:
+        for executable in ("/old/python3", "/new/python3"):
+            made = create_shortcut(platform="darwin", executable=executable, desktop=self.root)
+            self.assertTrue(made.picture)
+            [place] = made.places
+            names = subprocess.run(["xattr", str(place)], capture_output=True, text=True, check=True).stdout.split()
+            self.assertIn("com.apple.ResourceFork", names)
+            finder = subprocess.run(
+                ["xattr", "-px", "com.apple.FinderInfo", str(place)], capture_output=True, text=True, check=True
+            ).stdout.split()
+            flags = int(finder[8] + finder[9], 16)
+            self.assertTrue(flags & 0x0400, "the picture of the file")
+            self.assertTrue(flags & 0x0010, "the hidden extension")
+            self.assertEqual(place.read_text(encoding="utf-8"), mac_script(executable))
+            self.assertEqual(stat.S_IMODE(place.stat().st_mode), 0o700)
 
 
 class OtherSystemTest(unittest.TestCase):
@@ -182,7 +285,7 @@ class OtherSystemTest(unittest.TestCase):
 class WindowsRequestTest(TemporaryFolder):
     """What this command asks of Windows PowerShell, on any system."""
 
-    def run_with(self, returncode: int, stdout: bytes = b"", **options: object) -> tuple[list[Path], dict]:
+    def run_with(self, returncode: int, stdout: bytes = b"", **options: object) -> tuple[Shortcuts, dict]:
         seen: dict = {}
 
         def run(arguments, **keywords):  # type: ignore[no-untyped-def]
@@ -192,18 +295,22 @@ class WindowsRequestTest(TemporaryFolder):
             return subprocess.CompletedProcess(arguments, returncode, stdout, options.get("stderr", b""))
 
         with mock.patch.object(shortcut.shutil, "which", return_value="C:\\Windows\\powershell.exe"):
-            places = create_shortcut(
+            made = create_shortcut(
                 platform="win32",
                 executable=str(options.get("executable", "C:\\Python311\\python.exe")),
                 home=Path("C:\\Profiles\\runner"),
                 windows_folders=options.get("folders"),  # type: ignore[arg-type]
+                picture=options.get("picture"),  # type: ignore[arg-type]
                 run=run,
             )
-        return places, seen
+        return made, seen
 
     def test_the_shortcuts_start_the_gui_minimized_with_the_python_that_ran_the_command(self) -> None:
-        places, seen = self.run_with(0, "C:\\D\\Garmin Running Data Normalizer.lnk\r\nC:\\S\\Garmin Running Data Normalizer.lnk\r\n".encode())
-        self.assertEqual(places, [Path("C:\\D\\Garmin Running Data Normalizer.lnk"), Path("C:\\S\\Garmin Running Data Normalizer.lnk")])
+        made, seen = self.run_with(0, "C:\\D\\Garmin Running Data Normalizer.lnk\r\nC:\\S\\Garmin Running Data Normalizer.lnk\r\n".encode())
+        self.assertEqual(
+            made,
+            Shortcuts([Path("C:\\D\\Garmin Running Data Normalizer.lnk"), Path("C:\\S\\Garmin Running Data Normalizer.lnk")], picture=True),
+        )
         self.assertEqual(seen["arguments"][:5], ["C:\\Windows\\powershell.exe", "-NoProfile", "-NonInteractive", "-STA", "-Command"])
         self.assertEqual(seen["arguments"][5], shortcut.WINDOWS_SCRIPT)
         environment = seen["env"]
@@ -248,9 +355,46 @@ class WindowsRequestTest(TemporaryFolder):
         self.assertNotIn("Split-Path", script)
         self.assertIn("[System.IO.Path]::GetDirectoryName($temporary)", script)
         self.assertIn("[System.IO.Path]::GetFileName($temporary)", script)
+        # The ShellLinkObject also points the shortcut to the picture of the
+        # icon in the package, never WScript.Shell (stage E1i).
+        self.assertEqual(environment["GRDN_SHORTCUT_PICTURE"], str(WINDOWS_PICTURE))
+        self.assertTrue(WINDOWS_PICTURE.is_file())
+        picture = "$saved.SetIconLocation($env:GRDN_SHORTCUT_PICTURE, 0)"
+        self.assertLess(script.index("$saved.Description = $env:GRDN_SHORTCUT_DESCRIPTION"), script.index(picture))
+        self.assertLess(script.index(picture), script.index("$saved.Save()"))
+        self.assertNotIn("IconLocation =", script)
         first, second = Path("C:\\a"), Path("C:\\b")
         _, seen = self.run_with(0, folders=[first, second])
         self.assertEqual(seen["env"]["GRDN_SHORTCUT_FOLDERS"], f"{first}\n{second}")
+
+    def test_the_reader_of_a_shortcut_finds_its_picture(self) -> None:
+        # The bytes of a shortcut as [MS-SHLLINK] lays them out, so that the
+        # reader of the Windows tests is checked on every system.
+        def strings(*texts: str) -> bytes:
+            return b"".join(struct.pack("<H", len(text)) + text.encode("utf-16-le") for text in texts)
+
+        header = bytearray(0x4C)
+        struct.pack_into("<I", header, 0, 0x4C)
+        struct.pack_into("<I", header, 0x14, 0x80 | 0x10 | 0x20 | 0x40)
+        struct.pack_into("<i", header, 0x38, 0)
+        body = bytes(header) + strings("C:\\ホーム", ARGUMENTS, "C:\\テスト\\icon.ico")
+        place = self.root / "plain.lnk"
+        place.write_bytes(body + struct.pack("<I", 0))
+        self.assertEqual(shortcut_picture(place), ("C:\\テスト\\icon.ico", 0))
+        target = "C:\\Profiles\\ホーム\\icon.ico"
+        block = struct.pack("<II", 0x314, 0xA0000007) + bytes(260) + target.encode("utf-16-le").ljust(520, b"\0")
+        place.write_bytes(body + block + struct.pack("<I", 0))
+        self.assertEqual(shortcut_picture(place), (target, 0))
+
+    def test_a_shortcut_without_its_picture_still_starts_the_gui(self) -> None:
+        made, _ = self.run_with(0, "C:\\D\\x.lnk\r\nC:\\S\\x.lnk\r\nNO-PICTURE\r\n".encode())
+        self.assertEqual(made, Shortcuts([Path("C:\\D\\x.lnk"), Path("C:\\S\\x.lnk")], picture=False))
+        script = shortcut.WINDOWS_SCRIPT
+        self.assertIn("catch { $pictured = $false } } else { $pictured = $false }", script)
+        self.assertIn("if (-not $pictured) { [Console]::Out.WriteLine('NO-PICTURE') }", script)
+        # Without the picture, the script is not asked to point to one.
+        _, seen = self.run_with(0, picture=self.root / "none.ico")
+        self.assertEqual(seen["env"]["GRDN_SHORTCUT_PICTURE"], "")
 
     def test_the_windowless_python_is_replaced_by_the_console_python_next_to_it(self) -> None:
         for name in ("pythonw.exe", "python.exe"):
@@ -308,6 +452,43 @@ def read_shortcut(place: Path) -> dict[str, object]:
     return {"target": target, "arguments": arguments, "folder": folder, "style": int(style)}
 
 
+def shortcut_picture(place: Path) -> tuple[str, int]:
+    """The picture that a shortcut points to and its index, read from its
+    bytes as [MS-SHLLINK] lays them out: the string ICON_LOCATION, or the
+    IconEnvironmentDataBlock when Windows keeps it with an environment
+    variable. Reading the bytes keeps every letter of the place."""
+    data = place.read_bytes()
+    (flags,) = struct.unpack_from("<I", data, 0x14)
+    (index,) = struct.unpack_from("<i", data, 0x38)
+    position = 0x4C
+    if flags & 0x01:  # HasLinkTargetIDList
+        (size,) = struct.unpack_from("<H", data, position)
+        position += 2 + size
+    if flags & 0x02:  # HasLinkInfo
+        (size,) = struct.unpack_from("<I", data, position)
+        position += size
+    width, encoding = (2, "utf-16-le") if flags & 0x80 else (1, "latin-1")  # IsUnicode
+    location = ""
+    # The strings of a shortcut, in their order: the name, the relative path,
+    # the working directory, the arguments, and the place of its picture.
+    for flag in (0x04, 0x08, 0x10, 0x20, 0x40):
+        if flags & flag:
+            (count,) = struct.unpack_from("<H", data, position)
+            text = data[position + 2 : position + 2 + count * width].decode(encoding)
+            position += 2 + count * width
+            if flag == 0x40:
+                location = text
+    while position + 8 <= len(data):
+        size, signature = struct.unpack_from("<II", data, position)
+        if size < 8:
+            break
+        if signature == 0xA0000007:  # IconEnvironmentDataBlock, after 260 bytes of ANSI
+            target = data[position + 8 + 260 : position + 8 + 260 + 520].decode("utf-16-le").split("\0", 1)[0]
+            location = target or location
+        position += size
+    return os.path.expandvars(location), index
+
+
 @WINDOWS_ONLY
 class WindowsShortcutTest(TemporaryFolder):
     """Real shortcuts in temporary folders, read back with Windows PowerShell."""
@@ -319,7 +500,7 @@ class WindowsShortcutTest(TemporaryFolder):
             folder.mkdir()
         self.places = [folder / f"{NAME}.lnk" for folder in self.folders]
 
-    def make(self, folders: list[Path] | None = None, **options: object) -> list[Path]:
+    def make(self, folders: list[Path] | None = None, **options: object) -> Shortcuts:
         options.setdefault("home", self.root)
         try:
             return create_shortcut(
@@ -332,7 +513,7 @@ class WindowsShortcutTest(TemporaryFolder):
         folders = [self.root / "Desktop", self.root / "Programs"]
         for folder in folders:
             folder.mkdir()
-        self.assertEqual([Path(place) for place in self.make(folders)], [folder / f"{NAME}.lnk" for folder in folders])
+        self.assertEqual(self.make(folders).places, [folder / f"{NAME}.lnk" for folder in folders])
         self.assertEqual(read_shortcut(folders[0] / f"{NAME}.lnk")["arguments"], ARGUMENTS)
 
     def test_a_temporary_folder_with_other_letters_is_not_given_to_wscript_shell(self) -> None:
@@ -340,7 +521,7 @@ class WindowsShortcutTest(TemporaryFolder):
         temporary.mkdir()
         with mock.patch.dict(os.environ, {"TEMP": str(temporary), "TMP": str(temporary)}):
             made = self.make()
-        self.assertEqual([Path(place) for place in made], self.places)
+        self.assertEqual(made.places, self.places)
         self.assertEqual(read_shortcut(self.places[0])["arguments"], ARGUMENTS)
         self.assertEqual(list(temporary.iterdir()), [])
 
@@ -352,7 +533,9 @@ class WindowsShortcutTest(TemporaryFolder):
         python.write_bytes(b"")
         home = self.root / "ホーム"
         home.mkdir()
-        self.make(executable=str(python), home=home)
+        picture = python.parent / "icon.ico"
+        picture.write_bytes(WINDOWS_PICTURE.read_bytes())
+        self.assertTrue(self.make(executable=str(python), home=home, picture=picture).picture)
         for place in self.places:
             with self.subTest(place=place.parent.name):
                 read = read_shortcut(place)
@@ -363,10 +546,13 @@ class WindowsShortcutTest(TemporaryFolder):
                 self.assertEqual(Path(str(read["folder"])).resolve(), home.resolve())
                 self.assertEqual(read["arguments"], ARGUMENTS)
                 self.assertNotIn("?", f"{read['target']}{read['folder']}")
+                location, index = shortcut_picture(place)
+                self.assertEqual((Path(location).resolve(), index), (picture.resolve(), 0))
+                self.assertNotIn("?", location)
 
     def test_the_shortcuts_start_the_gui_minimized_in_the_home(self) -> None:
         made = self.make()
-        self.assertEqual([Path(place) for place in made], self.places)
+        self.assertEqual(made, Shortcuts(self.places, picture=True))
         for place in self.places:
             with self.subTest(place=place.parent.name):
                 read = read_shortcut(place)
@@ -374,6 +560,9 @@ class WindowsShortcutTest(TemporaryFolder):
                 self.assertEqual(read["arguments"], ARGUMENTS)
                 self.assertEqual(Path(str(read["folder"])), self.root)
                 self.assertEqual(read["style"], 7)
+                # The picture of the icon in the package (stage E1i).
+                location, index = shortcut_picture(place)
+                self.assertEqual((Path(location).resolve(), index), (WINDOWS_PICTURE.resolve(), 0))
 
     def test_the_shortcuts_of_this_command_are_made_again(self) -> None:
         # The Python that the icon started before, as after Python is
@@ -442,19 +631,23 @@ class CommandTest(unittest.TestCase):
         self.assertIn("--create-shortcut", output.getvalue())
 
     def test_the_icon_comes_first_and_then_the_gui_opens(self) -> None:
-        output = io.StringIO()
-        with (
-            mock.patch.object(shortcut, "create_shortcut", return_value=[Path("place-a"), Path("place-b")]) as made,
-            mock.patch.object(command, "run_gui", return_value=0) as run_gui,
-            contextlib.redirect_stdout(output),
-        ):
-            self.assertEqual(runner.main(["gui", "--create-shortcut", "--no-browser"]), 0)
-        made.assert_called_once_with()
-        self.assertEqual(run_gui.call_args.kwargs, {"open_browser": False})
-        self.assertEqual(
-            output.getvalue().splitlines(),
-            [f"Icon that starts the GUI: {Path('place-a')}", f"Icon that starts the GUI: {Path('place-b')}"],
-        )
+        places = [Path("place-a"), Path("place-b")]
+        lines = [f"Icon that starts the GUI: {place}" for place in places]
+        # An icon without its picture still starts the GUI: one line says so,
+        # not an ERROR line, and the GUI opens (stage E1i).
+        for picture, said in ((True, lines), (False, [*lines, NO_PICTURE_NOTE])):
+            output = io.StringIO()
+            with (
+                self.subTest(picture=picture),
+                mock.patch.object(shortcut, "create_shortcut", return_value=Shortcuts(places, picture)) as made,
+                mock.patch.object(command, "run_gui", return_value=0) as run_gui,
+                contextlib.redirect_stdout(output),
+            ):
+                self.assertEqual(runner.main(["gui", "--create-shortcut", "--no-browser"]), 0)
+                made.assert_called_once_with()
+                self.assertEqual(run_gui.call_args.kwargs, {"open_browser": False})
+            self.assertEqual(output.getvalue().splitlines(), said)
+        self.assertNotIn("ERROR", NO_PICTURE_NOTE)
 
     def test_an_icon_that_cannot_be_made_stops_the_command_before_the_gui(self) -> None:
         for code in SHORTCUT_CODES:
