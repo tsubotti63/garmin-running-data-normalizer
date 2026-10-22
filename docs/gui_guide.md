@@ -105,7 +105,9 @@ and then opens the GUI as the command does without it:
 garmin-running-data-normalizer gui --create-shortcut
 ```
 
-- macOS: the file **Garmin Running Data Normalizer.command** on the desktop.
+- macOS: the file **Garmin Running Data Normalizer.command** on the desktop,
+  which shows the picture of this app, a blue tile with GR over DN, and its
+  name without ".command".
   Double-click it: the Terminal opens a window, which shows the address, and
   the GUI opens in your default browser. When the command writes the file,
   macOS may ask whether the Terminal may use the desktop: choose **Allow**, or
@@ -113,7 +115,12 @@ garmin-running-data-normalizer gui --create-shortcut
   choose from, such as Downloads, as it does when you start the GUI from the
   Terminal.
 - Windows: the shortcut **Garmin Running Data Normalizer** on the desktop and
-  in the Start menu. Its window opens minimized, in the taskbar.
+  in the Start menu, which shows the same picture. Its window opens
+  minimized, in the taskbar.
+- The tab of the browser shows the same picture.
+- When the picture cannot be given to the icon, the command says "The picture
+  of the icon could not be set; the icon still starts the GUI." and goes on:
+  the icon starts the GUI with the look of a plain file.
 - Keep the window that the icon opens open while you use the GUI: closing it
   stops the GUI, as closing the terminal does.
 - The icon starts the Python that ran the command. After you update this app
@@ -127,7 +134,7 @@ garmin-running-data-normalizer gui --create-shortcut
   `--create-shortcut`, the command opens it.
 - When your desktop is synchronized with iCloud, the file also appears on
   your other Macs, where it may not start, because Python is in another place
-  there.
+  there, and may come without its picture.
 - To remove the icon, move it to the Trash (the Recycle Bin on Windows).
   `pip uninstall` does not remove it.
 - Linux has no icon: start the GUI with the command.

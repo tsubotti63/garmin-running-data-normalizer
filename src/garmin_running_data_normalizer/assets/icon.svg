@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- The icon that starts the GUI (stage E1i): GR over DN, drawn with lines
+       and arcs, on a blue tile with the margin and the shadow of a macOS icon.
+       scripts/generate_app_icons.py makes icon.icns from it. -->
+  <defs>
+    <linearGradient id="ground" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#2E86F5"/>
+      <stop offset="1" stop-color="#0B2F7A"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#ground)" filter="url(#shadow)"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#sheen)"/>
+  <rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.14" stroke-width="3"/>
+  <g fill="none" stroke-width="62" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke="#FFFFFF" d="M418.1,312.4 A89.0,89.0 0 1 0 441.0,372.0 H360.0"/>
+    <path stroke="#FFFFFF" d="M583.0,461.0 V283.0 H706.9 A54.1,54.1 0 0 1 706.9,391.2 H583.0 M696.9,391.2 L761.0,461.0"/>
+    <path stroke="#8ED8FF" d="M263.0,583.0 H352.0 A89.0,89.0 0 0 1 352.0,761.0 H263.0 Z"/>
+    <path stroke="#8ED8FF" d="M583.0,761.0 V583.0 L761.0,761.0 V583.0"/>
+  </g>
+</svg>

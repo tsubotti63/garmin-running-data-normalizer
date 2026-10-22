@@ -103,6 +103,8 @@ garmin-running-data-normalizer gui --create-shortcut
 ```
 
 - macOS：デスクトップに「Garmin Running Data Normalizer.command」ができます。
+  このアプリの絵（GR と DN を 2 段に重ねた青いタイル）が付き、名前は「.command」を
+  除いて出ます。
   ダブルクリックすると、ターミナルの窓が開いてアドレスを表示し、既定の
   ブラウザで GUI を開きます。コマンドがファイルを書くとき、ターミナルが
   デスクトップを使ってよいかを macOS が聞くことがあります。「許可」を
@@ -110,8 +112,12 @@ garmin-running-data-normalizer gui --create-shortcut
   フォルダー（ダウンロードなど）についても、ターミナルから起動したときと
   同じように macOS が聞きます。
 - Windows：デスクトップとスタートメニューに、ショートカット
-  「Garmin Running Data Normalizer」ができます。窓は最小化されて、タスクバーに
-  入ります。
+  「Garmin Running Data Normalizer」ができ、同じ絵が付きます。窓は最小化されて、
+  タスクバーに入ります。
+- ブラウザのタブにも、同じ絵が出ます。
+- アイコンに絵を付けられなかったときは、コマンドが「The picture of the icon
+  could not be set; the icon still starts the GUI.」と出して、そのまま続けます。
+  アイコンは、ふつうのファイルの見た目のまま GUI を起動します。
 - GUI を使っている間は、アイコンが開いた窓を閉じないでください。閉じると、
   ターミナルを閉じたときと同じく GUI が止まります。
 - アイコンは、このコマンドを動かした Python を起動します。このアプリを pip で
@@ -123,7 +129,8 @@ garmin-running-data-normalizer gui --create-shortcut
   `SHORTCUT_NOT_CREATED`、ほかのシステムでは `SHORTCUT_NOT_SUPPORTED` で止まり、
   GUI は開きません。`--create-shortcut` を付けなければ、コマンドは GUI を開きます。
 - デスクトップを iCloud で同期していると、ほかの Mac にもファイルが写ります。
-  そこでは Python の場所が違うので、起動できないことがあります。
+  そこでは Python の場所が違うので、起動できないことがあります。絵が写らない
+  こともあります。
 - アイコンが要らなくなったら、ごみ箱へ入れてください。`pip uninstall` では
   消えません。
 - Linux にはアイコンがありません。コマンドで起動してください。

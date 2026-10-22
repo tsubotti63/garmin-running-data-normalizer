@@ -71,6 +71,8 @@ EXPECTED_CONTENT_TYPES = {
     "/styles.css": "text/css; charset=utf-8",
     "/i18n/en.json": "application/json",
     "/i18n/ja.json": "application/json",
+    "/favicon.svg": "image/svg+xml",
+    "/favicon.png": "image/png",
 }
 
 Headers = list[tuple[str, str]]

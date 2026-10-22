@@ -70,6 +70,10 @@ STATIC_FILES = {
     "/styles.css": ("styles.css", "text/css; charset=utf-8"),
     "/i18n/en.json": ("i18n/en.json", "application/json"),
     "/i18n/ja.json": ("i18n/ja.json", "application/json"),
+    # The picture of the app in the tab of the browser (stage E1i): SVG, and
+    # PNG for a browser that shows no SVG there.
+    "/favicon.svg": ("favicon.svg", "image/svg+xml"),
+    "/favicon.png": ("favicon.png", "image/png"),
 }
 
 SECURITY_HEADERS = (

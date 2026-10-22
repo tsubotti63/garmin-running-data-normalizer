@@ -810,14 +810,17 @@ def main(argv: list[str] | None = None) -> int:
         # The icon comes first, and the GUI does not open when it cannot be
         # made, as no command goes on after a stop (stage E1d).
         if args.create_shortcut:
-            from .shortcut import ShortcutError, create_shortcut
+            from .shortcut import NO_PICTURE_NOTE, ShortcutError, create_shortcut
 
             try:
-                places = create_shortcut()
+                made = create_shortcut()
             except ShortcutError as exc:
                 return _stop(exc.code, exc.message)
-            for place in places:
+            for place in made.places:
                 print(f"Icon that starts the GUI: {place}", flush=True)
+            # An icon without its picture still starts the GUI (stage E1i).
+            if not made.picture:
+                print(NO_PICTURE_NOTE, flush=True)
         # The GUI has its own Ctrl+C: it cancels a run before the server
         # stops and reports it as the CLI reports a cancelled command
         # (stage D1).

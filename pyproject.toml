@@ -38,10 +38,17 @@ garmin-running-data-normalizer = "garmin_running_data_normalizer.runner:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
+"garmin_running_data_normalizer" = [
+  "assets/*.svg",
+  "assets/*.icns",
+  "assets/*.ico",
+]
 "garmin_running_data_normalizer.gui" = [
   "static/*.html",
   "static/*.mjs",
   "static/*.css",
+  "static/*.svg",
+  "static/*.png",
   "static/i18n/*.json",
 ]
 
