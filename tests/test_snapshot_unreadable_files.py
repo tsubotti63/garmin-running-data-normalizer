@@ -169,6 +169,9 @@ def cases(root: Path) -> dict[str, Path]:
     write(source / "DI-Connect-Fitness/other_summarizedActivities.json", NOT_JSON)
     source = case("JSON nested too deeply")
     write(source / "DI-Connect-Aggregator/UDSFile_deep.json", b"[" * 100_000 + b"]" * 100_000)
+    # More than 256 deep, which every version of Python reads (stage E2d).
+    source = case("JSON nested more than 256 deep")
+    write(source / "DI-Connect-Aggregator/UDSFile_deep.json", b"[" * 300 + b'"\\ud800"' + b"]" * 300)
     source = case("JSON with a number with too many digits")
     write(source / "DI-Connect-Aggregator/UDSFile_long.json", b"[" + b"1" * 5_000 + b"]")
     source = case("JSON that is not UTF-8")

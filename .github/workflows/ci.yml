@@ -164,7 +164,7 @@ jobs:
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_repeated_records.py -q
       - name: Verify Windows files that cannot be read
         shell: powershell
-        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_unreadable_files.py .\tests\test_snapshot_unreadable_files.py -q
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_unreadable_files.py .\tests\test_snapshot_unreadable_files.py .\tests\test_json_depth.py -q
       - name: Verify Windows files not read
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_files_not_read.py -q

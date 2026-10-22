@@ -207,6 +207,13 @@ class StoreAnswerTest(HomeTestCase):
         initialize_store(damaged, ACCOUNT)
         (damaged / "store.json").unlink()
         self.assertEqual(self.assert_nothing_written(open_store, damaged)["error_code"], "SNAPSHOT_STORE_INVALID")
+        # Metadata with a value more than 256 deep (stage E2d).
+        deep = self.root / "deep"
+        initialize_store(deep, ACCOUNT)
+        text = (deep / "store.json").read_text(encoding="utf-8").rstrip()
+        self.assertTrue(text.endswith("}"))
+        (deep / "store.json").write_text(text[:-1] + ', "padding": ' + "[" * 300 + "]" * 300 + "}", encoding="utf-8")
+        self.assertEqual(self.assert_nothing_written(open_store, deep)["error_code"], "SNAPSHOT_STORE_INVALID")
         newer = self.root / "newer"
         initialize_store(newer, ACCOUNT)
         metadata = json.loads((newer / "store.json").read_text(encoding="utf-8"))

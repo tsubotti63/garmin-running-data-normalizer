@@ -410,6 +410,10 @@ class EarlierOutputTest(OutputTestCase):
             json.dumps({**summary, "family_results": {"Activities": {"record_count": 1}}}).encode("utf-8"),
             json.dumps({**summary, "family_results": {"activities": {"record_count": -1}}}).encode("utf-8"),
             json.dumps({**summary, "family_results": {"activities": {"record_count": "1"}}}).encode("utf-8"),
+            # A value more than 256 deep, and JSON that Python 3.11 cannot read
+            # by recursion, as every version reads them (stage E2d).
+            (json.dumps(summary)[:-1] + ', "padding": ' + "[" * 300 + "]" * 300 + "}").encode("utf-8"),
+            b"[" * 30_000 + b"]" * 30_000,
         )
         for data in broken:
             with self.subTest(data=data[:30]):

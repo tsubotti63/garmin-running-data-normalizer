@@ -514,7 +514,9 @@ These apply to Activities, Gear, `activity_gear`, and Personal Records.
     - `json_not_readable`: a JSON file that the run reads and that is not
       UTF-8, is not JSON, is nested too deeply, or has a number with too many
       digits. Only these four errors leave a file out; any other error is a
-      defect of the product and stops the run.
+      defect of the product and stops the run. Lists and objects nested more
+      than 256 deep are too deep, on every version of Python and system
+      (stage E2d): how deep Python itself reads depends on both.
     - `zip_not_readable`: a ZIP file inside the Export that cannot be opened,
       ends early, or has a member that is read and is damaged.
     - `zip_unsafe_member`: a ZIP file inside the Export with a member that

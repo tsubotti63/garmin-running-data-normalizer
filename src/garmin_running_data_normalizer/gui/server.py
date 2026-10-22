@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import __version__
+from ..common.json_depth import check_json_depth
 from ..common.time import DEFAULT_TIMEZONE
 from ..diagnostics.doctor import DoctorError, doctor_input
 from ..intake.source import is_zip_input, place_can_be_shown
@@ -207,7 +208,10 @@ def load_static_files() -> dict[str, tuple[bytes, str]]:
 def _json_object(body: bytes) -> dict[str, Any] | None:
     try:
         value = json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+        check_json_depth(value)
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        # Not UTF-8, not JSON, nested too deeply, or a number with too many
+        # digits, the same on every version of Python (stage E2d).
         return None
     return value if isinstance(value, dict) else None
 
