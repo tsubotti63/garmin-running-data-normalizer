@@ -55,6 +55,37 @@ jobs:
           /tmp/garmin-normalizer-sdist/bin/python -c "import importlib.metadata as m; import garmin_running_data_normalizer as p; assert m.version('garmin-running-data-normalizer') == p.__version__"
           /tmp/garmin-normalizer-sdist/bin/garmin-running-data-normalizer --version
           /tmp/garmin-normalizer-sdist/bin/python -c "from garmin_running_data_normalizer.gui.server import load_static_files; assert all(body for body, _ in load_static_files().values())"
+  test-python-3-15:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Normalize initial-registration refs
+        run: |
+          git update-ref refs/heads/main HEAD
+          git update-ref refs/remotes/origin/main HEAD
+          git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.15"
+      # The tests and the build with the newest Python, which a first-time
+      # user installs from python.org (stage E2c). Twine stays with the job
+      # of 3.11: its dependencies may have no wheels for a new Python yet.
+      - run: python -m pip install -e '.[test]' 'build>=1.2,<2'
+      - run: python -m pytest
+      - name: Build wheel and source distribution
+        run: python -m build
+      - name: Verify isolated wheel installation
+        run: |
+          python -m venv /tmp/garmin-normalizer-wheel
+          /tmp/garmin-normalizer-wheel/bin/python -m pip install --no-deps dist/*.whl
+          /tmp/garmin-normalizer-wheel/bin/python -m pip check
+          /tmp/garmin-normalizer-wheel/bin/python -c "import importlib.metadata as m; import garmin_running_data_normalizer as p; assert m.version('garmin-running-data-normalizer') == p.__version__"
+          /tmp/garmin-normalizer-wheel/bin/garmin-running-data-normalizer --version
+          /tmp/garmin-normalizer-wheel/bin/python -c "from garmin_running_data_normalizer.gui.server import load_static_files; assert all(body for body, _ in load_static_files().values())"
   windows-runtime:
     runs-on: windows-latest
     steps:
@@ -237,3 +268,56 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "isolated sdist Synthetic Run-All failed with exit code $LASTEXITCODE" }
           .\.sdist-venv\Scripts\python.exe -c "import json, pathlib; p=pathlib.Path('workspace/windows-sdist-run-all/run_summary.json'); assert p.is_file(); s=json.loads(p.read_text(encoding='utf-8')); assert s['status'] == 'PASS_WITH_WARNINGS'; assert s['family_results']['activities']['detected_asset_count'] == 1; assert s['family_results']['activities']['processed_asset_count'] == 1"
           if ($LASTEXITCODE -ne 0) { throw "isolated sdist Synthetic Run-All summary check failed with exit code $LASTEXITCODE" }
+  windows-python-3-15:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.15"
+      - name: Create clean editable-install environment with Python 3.15
+        shell: powershell
+        run: |
+          python -m venv .venv
+          if ($LASTEXITCODE -ne 0) { throw "editable-install venv creation failed with exit code $LASTEXITCODE" }
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw "editable-install pip upgrade failed with exit code $LASTEXITCODE" }
+          # The tests and the build, without twine, whose dependencies may have
+          # no wheels for a new Python yet (stage E2c).
+          .\.venv\Scripts\python.exe -m pip install -e ".[test]" "build>=1.2,<2"
+          if ($LASTEXITCODE -ne 0) { throw "editable install failed with exit code $LASTEXITCODE" }
+          .\.venv\Scripts\python.exe -c "import importlib.metadata as m; assert m.version('tzdata')"
+          if ($LASTEXITCODE -ne 0) { throw "tzdata check failed with exit code $LASTEXITCODE" }
+          .\.venv\Scripts\python.exe -c "from zoneinfo import ZoneInfo; assert str(ZoneInfo('Asia/Tokyo')) == 'Asia/Tokyo'"
+          if ($LASTEXITCODE -ne 0) { throw "Asia/Tokyo check failed with exit code $LASTEXITCODE" }
+          .\.venv\Scripts\python.exe -m garmin_running_data_normalizer --version
+          if ($LASTEXITCODE -ne 0) { throw "version check failed with exit code $LASTEXITCODE" }
+      - name: Verify Windows GUI, icon, Export reading, stops, cancellation, and files that cannot be read with Python 3.15
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_server.py .\tests\test_gui_command.py .\tests\test_gui_runs.py .\tests\test_gui_outputs.py .\tests\test_gui_folders.py .\tests\test_gui_chooser.py .\tests\test_gui_stores.py .\tests\test_gui_snapshot_runs.py .\tests\test_gui_settings.py .\tests\test_gui_package_data.py .\tests\test_gui_report.py .\tests\test_shortcut.py .\tests\test_export_reading.py .\tests\test_zip_input.py .\tests\test_snapshot_store_v1_7_1.py .\tests\test_environment_stops.py .\tests\test_snapshot_store_environment.py .\tests\test_snapshot_store_places.py .\tests\test_snapshot_unlock.py .\tests\test_snapshot_store_path_length.py .\tests\test_stops.py .\tests\test_cancellation.py .\tests\test_unreadable_files.py .\tests\test_snapshot_unreadable_files.py .\tests\test_json_depth.py -q
+      - name: Verify isolated wheel installation and Synthetic Run-All with Python 3.15
+        shell: powershell
+        run: |
+          .\.venv\Scripts\python.exe -m build
+          if ($LASTEXITCODE -ne 0) { throw "distribution build failed with exit code $LASTEXITCODE" }
+          python -m venv .wheel-venv
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel venv creation failed with exit code $LASTEXITCODE" }
+          .\.wheel-venv\Scripts\python.exe -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel pip upgrade failed with exit code $LASTEXITCODE" }
+          $wheel = (Get-ChildItem .\dist\*.whl | Select-Object -First 1).FullName
+          .\.wheel-venv\Scripts\python.exe -m pip install $wheel
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel installation failed with exit code $LASTEXITCODE" }
+          .\.wheel-venv\Scripts\python.exe -c "import importlib.metadata as m; from zoneinfo import ZoneInfo; assert m.version('tzdata'); assert str(ZoneInfo('Asia/Tokyo')) == 'Asia/Tokyo'"
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel tzdata check failed with exit code $LASTEXITCODE" }
+          .\.wheel-venv\Scripts\python.exe -m garmin_running_data_normalizer --version
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel version check failed with exit code $LASTEXITCODE" }
+          .\.wheel-venv\Scripts\python.exe -c "from garmin_running_data_normalizer.gui.server import load_static_files; assert all(body for body, _ in load_static_files().values())"
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel GUI static file check failed with exit code $LASTEXITCODE" }
+          # The folder for the outputs must exist; no command makes it (stage A5a).
+          $null = New-Item -ItemType Directory -Force -Path .\workspace
+          .\.wheel-venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-py315-run-all
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel Synthetic Run-All failed with exit code $LASTEXITCODE" }
