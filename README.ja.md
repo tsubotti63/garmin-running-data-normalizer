@@ -6,10 +6,9 @@
 現行の安定版は **v1.7.1** です。[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/latest)と
 [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/)で公開済みです。
 Versionや変更履歴の正本は英語のREADMEとRelease Notesを確認してください。
-試しのバージョン **v2.0.0rc5** は TestPyPI 向けで、ローカルの GUI を
+試しのバージョン **v2.0.0rc5** を TestPyPI に公開しました。ローカルの GUI を
 `garmin-running-data-normalizer gui` で開けます。Production PyPI の安定版は上のとおりです。
-TestPyPI に公開したあとの入れ方は、[GUI の手引き](docs/gui_guide.ja.md)の「用意するもの」に
-あります。
+入れ方は、[GUI の手引き](docs/gui_guide.ja.md)の「用意するもの」にあります。
 
 ## 何をするOSSか
 

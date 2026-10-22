@@ -1,5 +1,71 @@
 # Release Readiness
 
+## v2.0.0rc5 release candidate
+
+Version `2.0.0rc5`, the fifth release candidate of v2.0.0, is published on
+TestPyPI only, for the checks of stage E before the stable release. It is
+v2.0.0rc4 with the limit of the nesting of JSON (#152), the guides with the
+answers to a second reading and to the physical Windows check of
+v2.0.0rc4 (#150), and the CI with Python 3.15 on Linux, Windows, and
+macOS (#151 and #153). Production PyPI and the latest GitHub Release stay
+v1.7.1, and no GitHub Release was made for the release candidate.
+
+From v2.0.0rc4, the package's Python changes in the version in `__init__.py`
+and in the limit of the nesting of JSON: JSON nested more than 256 deep is
+left out as a file that cannot be read, on every Python and operating
+system. The files of the page and the pictures do not change:
+
+```text
+$ git diff --stat v2.0.0rc4 v2.0.0rc5 -- 'src/**/*.py'
+ src/garmin_running_data_normalizer/__init__.py     |  2 +-
+ .../common/json_depth.py                           | 35 ++++++++++++++++++++++
+ src/garmin_running_data_normalizer/gui/outputs.py  |  4 ++-
+ src/garmin_running_data_normalizer/gui/server.py   |  6 +++-
+ src/garmin_running_data_normalizer/gui/settings.py |  2 ++
+ .../intake/accounts.py                             |  2 ++
+ .../intake/discovery.py                            | 22 +++++++++-----
+ .../snapshot/merge.py                              |  4 +++
+ .../snapshot/store.py                              |  3 ++
+ 9 files changed, 69 insertions(+), 11 deletions(-)
+```
+
+The Windows CI ran every Windows step with v2.0.0rc5 and Python 3.11, and with
+Python 3.15 the tests of the GUI, the icon, the reading of the Export, and the
+files that cannot be read, and the isolated wheel installation with a
+Synthetic Run-All. The CI ran the whole test suite with Python 3.15 on Linux
+and macOS as well. No physical Windows machine checks v2.0.0rc5, as the Human
+maintainer decided on 2026-10-22: from v2.0.0rc4, only the reading of JSON
+changes, and the Windows CI checks it.
+
+The release source is `a701e60170baa5f9959be6dcb4f0e872bda9800f` (#154). The annotated `v2.0.0rc5` tag
+(tag object `8aaa4e67b07885d8ebfe75e1de632ccb08f310ae`) points to it, so that the links of the GUI's help
+panel open the documents of that tag. TestPyPI publication through Trusted
+Publishing/OIDC on 2026-10-23 JST and the publish workflow's exact-version
+TestPyPI install verification are complete.
+
+The release source passed main CI run `39808774051` (Ubuntu `test`,
+`windows-runtime`, and the three jobs of Python 3.15) and CodeQL
+(`39808773191`). A build-only publish workflow run (`39809902427`) on the
+release source passed with every upload job skipped. Publish workflow run
+`39859727702` then built and validated the exact source and published to
+TestPyPI; the PyPI jobs were skipped. The Sigstore transparency log (Rekor)
+was read before the run and answered. The publication and the tag ran under
+one Human approval given after their values were shown. The `testpypi`
+Environment deployment was Human-authorized, and the approval was submitted
+through the GitHub API on the Human's instruction.
+`TESTPYPI_PUBLISH_APPROVED` was set to `true` for the publish run and
+returned to `false` as soon as the run finished.
+
+The SHA-256 checksums recorded by that run match TestPyPI: wheel
+`297c832304bf6da43662d29a0fedd2f50fd8c62d3c12308156becdae6c646630` and source distribution `68c6a222ddc216a6bd28e0317427a9fc40c070c7768ad213ef5944c333f634c6`. Each file carries a
+PEP 740 publish attestation from `publish-pypi.yml` of
+`tsubotti63/garmin-running-data-normalizer` in the `testpypi` Environment,
+through GitHub Trusted Publishing. The build-only run produced different
+checksums because the distributions are not byte-reproducible across runs;
+only the publish run's artifacts were published. The documents at the
+`v2.0.0rc5` tag describe the installation from TestPyPI in the words used
+before the publication.
+
 ## v2.0.0rc4 release candidate
 
 Version `2.0.0rc4`, the fourth release candidate of v2.0.0, is published on
@@ -419,6 +485,8 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
   skipped
 - Production PyPI `1.7.1`: Published and exact-version install verified by the
   publish workflow
+- TestPyPI `2.0.0rc5`: Published and exact-version install verified by the
+  publish workflow
 - TestPyPI `2.0.0rc4`: Published and exact-version install verified by the
   publish workflow
 - TestPyPI `2.0.0rc3`: Published and exact-version install verified by the
@@ -427,18 +495,18 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
   publish workflow
 - TestPyPI `2.0.0rc1`: Published and exact-version install verified by the
   publish workflow
-- Release candidate tags: `v2.0.0rc4`, `v2.0.0rc3`, `v2.0.0rc2`, and
-  `v2.0.0rc1`, without a GitHub Release
+- Release candidate tags: `v2.0.0rc5`, `v2.0.0rc4`, `v2.0.0rc3`,
+  `v2.0.0rc2`, and `v2.0.0rc1`, without a GitHub Release
 - Trusted Publishing: Configured for protected `testpypi` and `pypi`
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
 and GitHub Releases remain immutable. v1.7.1 is the current stable release;
-v2.0.0rc4, v2.0.0rc3, v2.0.0rc2, and v2.0.0rc1 are release candidates on
-TestPyPI only; v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 are
-historical releases. The v2.0.0rc4, v2.0.0rc3, v2.0.0rc2, and v2.0.0rc1 tag and
-TestPyPI publication evidence was recorded only after the corresponding
-external state was observed.
+v2.0.0rc5, v2.0.0rc4, v2.0.0rc3, v2.0.0rc2, and v2.0.0rc1 are release
+candidates on TestPyPI only; v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and
+v1.3.3 are historical releases. The v2.0.0rc5, v2.0.0rc4, v2.0.0rc3,
+v2.0.0rc2, and v2.0.0rc1 tag and TestPyPI publication evidence was recorded
+only after the corresponding external state was observed.
 The v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag, GitHub
 Release, and Production PyPI publication evidence was recorded only after the
 corresponding external state was observed.
