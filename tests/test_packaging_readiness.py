@@ -74,11 +74,11 @@ class PackagingReadinessTest(unittest.TestCase):
         self.assertEqual(workflow.count("assert s['status'] == 'PASS_WITH_WARNINGS'"), 3)
 
     def test_ci_runs_the_newest_python_too(self) -> None:
-        # python.org gives the newest Python to a first-time user, so two jobs
-        # run with Python 3.15 besides the jobs of 3.11, which keep their
-        # names, since the ruleset requires them (stage E2c). Twine stays with
-        # the jobs of 3.11: its dependencies may have no wheels for a new
-        # Python yet.
+        # python.org gives the newest Python to a first-time user, so jobs
+        # run with Python 3.15 on Linux and Windows (stage E2c) and on macOS
+        # (stage E2c2) besides the jobs of 3.11, which keep their names, since
+        # the ruleset requires them. Twine stays with the jobs of 3.11: its
+        # dependencies may have no wheels for a new Python yet.
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         parts = re.split(r"^  ([a-z0-9-]+):\n", workflow.split("\njobs:\n", 1)[1], flags=re.M)
         jobs = dict(zip(parts[1::2], parts[2::2]))
@@ -88,11 +88,13 @@ class PackagingReadinessTest(unittest.TestCase):
             {
                 "test": ["3.11"],
                 "test-python-3-15": ["3.15"],
+                "macos-python-3-15": ["3.15"],
                 "windows-runtime": ["3.11"],
                 "windows-python-3-15": ["3.15"],
             },
         )
-        for name in ("test-python-3-15", "windows-python-3-15"):
+        self.assertIn("runs-on: macos-latest", jobs["macos-python-3-15"])
+        for name in ("test-python-3-15", "macos-python-3-15", "windows-python-3-15"):
             with self.subTest(job=name):
                 self.assertIn("-m pytest", jobs[name])
                 self.assertIn("-m build", jobs[name])
