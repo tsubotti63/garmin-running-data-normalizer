@@ -2,8 +2,8 @@
 
 - Status: design record for stage A of the [v2.0.0 GUI Design](gui_design.md),
   agreed by the Human maintainer on 2026-10-11. Stage A pull requests
-  implemented it, and the release candidate v2.0.0rc5 follows it; the current
-  stable release, v1.7.1, keeps its own behavior.
+  implemented it, and v2.0.0 follows it; v1.7.1 and earlier releases keep
+  their own behavior.
 - Applies to: the CLI and the GUI alike, and one-shot `run-all` and Snapshot
   runs alike.
 - Authority: every stage A pull request follows these rules. A pull request
@@ -2491,14 +2491,14 @@ takes at most about 25 seconds.
   why. A golden output for an input that the change does not concern stays
   byte-identical.
 - At the stage A checkpoint, the CLI is checked on its own with the synthetic
-  golden outputs, and the migration notes are drafted
-  ([v2.0.0 Migration Notes Draft](v2_migration_notes_draft.md)).
+  golden outputs, and the migration notes are drafted; the draft became the
+  [v1.7.1 to v2.0.0 Migration Notes](migration_notes.md#v171-to-v200).
 
 ## Migration notes outline (v1.7.1 to v2.0.0)
 
-The [v2.0.0 Migration Notes Draft](v2_migration_notes_draft.md) gives users
-what this outline means for their scripts and readers, from the comparison of
-v1.7.1 with the CLI at the stage A checkpoint.
+The [v1.7.1 to v2.0.0 Migration Notes](migration_notes.md#v171-to-v200) give
+users what this outline means for their scripts and readers, from the
+comparison of v1.7.1 with the CLI at the stage A checkpoint.
 
 - Exit codes: runs that stopped with exit 2 for problems in the data now finish
   with exit 3 or 0, and the warnings say what was left out or kept. A daily

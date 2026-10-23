@@ -40,7 +40,7 @@ CURRENT_DOCUMENTS = (
     "docs/migration_notes.md",
 )
 CURRENT_RELEASE_NOTES_TEMPLATE = "docs/release_notes/v{version}.md"
-CURRENT_STABLE_VERSION = "1.7.1"
+CURRENT_STABLE_VERSION = "2.0.0"
 # Where an implementation candidate is published, as the output contract
 # says it.
 CANDIDATE_PUBLICATION_PLACES = ("not published", "TestPyPI only")
@@ -333,7 +333,7 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
             "I confirm that this report does not contain real Garmin data, personal health data, account identifiers, local private paths, or other sensitive information.",
         ),
         "docs/architecture_overview.md": (
-            "- Compatibility family: stable 1.x",
+            "- Compatibility family: stable 2.x",
             "17 stable normalized datasets",
             "Open-Meteo remains not implemented and deferred.",
         ),
@@ -358,8 +358,9 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
             "Lactate Threshold remains candidate / audit only.",
         ),
         "docs/output_contract.md": (
-            "- Compatibility family: stable 1.x",
+            "- Compatibility family: stable 2.x",
             "## Core stable 1.x layout",
+            "## Additive v2.0 audit records",
             "## Additive v1.1 relationship handoff",
             "## Additive v1.2 Snapshot lifecycle",
             "## Additive v1.3 Wellness / Metrics",

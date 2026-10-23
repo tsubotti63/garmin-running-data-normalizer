@@ -68,15 +68,16 @@ Select either preview to inspect its full-size accessible SVG.
 See the
 [asset sources and reproduction notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/README.md).
 
-Current stable release: **v1.7.1** · Python **3.11+** · Apache License 2.0
+Current stable release: **v2.0.0** · Python **3.11+** · Apache License 2.0
 
-Implementation candidate: **v2.0.0rc5** (the fifth release candidate of
-v2.0.0, published on TestPyPI; Production PyPI and the latest GitHub Release stay v1.7.1). It adds
-a local GUI, opened with `garmin-running-data-normalizer gui`, which v1.7.1
-does not have, and runs that stopped on problems in the data now finish and
-report warnings with codes and counts. **Install** below says how to install
-it. See the
-[draft of the v2.0.0 migration notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/v2_migration_notes_draft.md)
+v2.0.0 adds a local GUI, opened with `garmin-running-data-normalizer gui`,
+which normalizes an Export from a page in the browser of the same computer,
+with the downloaded Export ZIP file as it is. Runs that stopped on problems in
+the data now finish and report warnings with codes and counts, and no value is
+dropped or chosen silently. Existing Snapshot Stores need no migration; rerun
+Run-All into a new folder. See
+[What v2.0.0 changes](#what-v200-changes), the
+[Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md#v171-to-v200),
 and the
 [GUI Guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md).
 
@@ -122,7 +123,7 @@ v1.4.0 adds read-only Export diagnostics and a Human-reviewed public-safe
 Support Bundle without changing normalized datasets, stable keys, Snapshot
 semantics, or the `0 / 0 / 3 / 2` Product exit contract.
 
-v1.7.1 is published as the annotated tag, the latest stable GitHub Release, and
+v2.0.0 is published as the annotated tag, the latest stable GitHub Release, and
 the latest Production PyPI distribution. v1.4.0 remains the Export Evidence and
 Diagnostics release.
 
@@ -133,9 +134,10 @@ Diagnostics release.
 - [FAQ](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/faq.md)
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
-- [v1.7.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.7.1.md)
-- [Published stable Release v1.7.1](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.7.1)
-- [Production PyPI v1.7.1](https://pypi.org/project/garmin-running-data-normalizer/1.7.1/)
+- [GUI Guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md) / [GUI の手引き](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.ja.md)
+- [v2.0.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.0.0.md)
+- [Published stable Release v2.0.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.0.0)
+- [Production PyPI v2.0.0](https://pypi.org/project/garmin-running-data-normalizer/2.0.0/)
 - Project story on Zenn: [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
 
 ## Why this project
@@ -174,6 +176,37 @@ Normalize locally
 The package does not send the export to a hosted processing service. Public
 reproduction uses only synthetic fixtures.
 
+## What v2.0.0 changes
+
+The v2.0.0 release adds a local GUI and changes how problems in the data are
+handled. The CLI stays, with the same commands and options apart from two new
+ones, and the Product exit mapping stays `0 / 0 / 3 / 2`.
+
+- `garmin-running-data-normalizer gui` opens a page in the browser of the same
+  computer. It listens on `127.0.0.1` only, takes the key of its own launch,
+  and sends nothing to the network. One page with four numbered boxes chooses
+  the Export, the Snapshot Store, and the output, and normalizes, in English
+  or Japanese. On macOS and Windows, `gui --create-shortcut` makes an icon
+  that starts the GUI. See the
+  [GUI Guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md).
+- The Export can be the downloaded ZIP file as it is, in the CLI and in the
+  GUI.
+- Runs no longer stop on problems in the data. A file or row that cannot be
+  used is left out with a warning (exit 3), values that disagree are kept
+  empty and marked, with every value in the audit records, and no value is
+  dropped or chosen silently. Runs still stop for safety, for a folder that is
+  not an Export, and for an input that mixes Exports or accounts.
+- The GUI uses Snapshots by default: each Export is kept as a Snapshot, and
+  all Snapshots are normalized together. Normalizing this Export only is also
+  possible. Existing Snapshot Stores need no migration.
+- Outputs gain fields (247, from 224) and four audit records, and
+  `validate-handoff`, `doctor --run-output`, and `support-bundle` refuse an
+  output of v1.7.1. Rerun Run-All into a new folder.
+
+See the
+[v2.0.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.0.0.md)
+and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md#v171-to-v200).
+
 ## What v1.7.1 changes
 
 The v1.7.1 release fixes Snapshot Run-All without changing the 17 normalized
@@ -189,7 +222,7 @@ datasets, stable keys, or the `0 / 0 / 3 / 2` Product exit contract.
   obtain the missing rows.
 - The package also contains internal changes toward v2.0.0 that add no
   user-facing feature, including an internal GUI package that is in
-  development and has no command.
+  development and has no command. v2.0.0 makes it the `gui` command.
 
 See the
 [v1.7.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.7.1.md)
@@ -388,29 +421,19 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. The published v1.7.1
+`python -m garmin_running_data_normalizer --version`. The published v2.0.0
 package installs `tzdata` automatically on Windows so Python can resolve IANA
 timezone data (`Asia/Tokyo` by default, or the timezone given with
 `--timezone`). macOS and Linux continue to use their system timezone data.
 
-The release candidate v2.0.0rc5 is published on TestPyPI. Install it in a
-virtual environment of its own, so that an
-installed v1.7.1 stays as it is. Production PyPI is the extra index for the
-dependencies that TestPyPI may not provide, such as `tzdata` on Windows:
-
-```bash
-python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc5
-garmin-running-data-normalizer gui
-```
-
-On macOS and Windows, `garmin-running-data-normalizer gui --create-shortcut`
-also makes an icon that starts the GUI, so that later launches need no
-command; see
+The GUI starts with `garmin-running-data-normalizer gui`. On macOS and
+Windows, `garmin-running-data-normalizer gui --create-shortcut` also makes an
+icon that starts the GUI, so that later launches need no command; see
 [Start the GUI from an icon](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#start-the-gui-from-an-icon)
 in the GUI Guide. Its
 [What you need](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#what-you-need)
-gives one line for macOS and one for Windows PowerShell that make the virtual
-environment, install the release candidate in it, and make the icon.
+gives one line for macOS and one for Windows PowerShell that make a virtual
+environment, install this app in it, and make the icon.
 
 Maintainers can reproduce the packaging gate without uploading anything:
 
@@ -763,7 +786,7 @@ local directories.
 
 ## Known limitations
 
-Run-All v1 requires Activities; all other dataset families are optional. The
+Run-All requires Activities; all other dataset families are optional. The
 daily Wellness/Metrics outputs described above are included in stable v1.3.0,
 while Health Status remains deferred. Hosted processing,
 Open-Meteo, Parquet, and automatic upload are not
@@ -776,7 +799,7 @@ timezone for a run), so when that timezone differs from where the records were
 made, a record near local midnight can fall on a different calendar date; see
 [Local dates and times](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md#local-dates-and-times).
 The documented CLI and versioned Run-All output contract are the
-stable `1.x` interface; other Python modules may evolve compatibly as their
+stable `2.x` interface; other Python modules may evolve compatibly as their
 contracts mature. See
 [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
 for the

@@ -1,10 +1,10 @@
 # Known Limitations
 
-These limitations describe v2.0.0, the release in preparation, whose release
-candidate v2.0.0rc2 is published on TestPyPI. The current stable release,
-v1.7.1, is described by the documents at its tag `v1.7.1`. These remain
-explicit Product boundaries. The rules for problems in the data, which
-v2.0.0 changes, are in [v2.0.0 Data Handling](v2_data_handling.md).
+These limitations describe v2.0.0, the current stable release. v1.7.1 and
+earlier releases are described by the documents at their tags, such as
+`v1.7.1`. These remain explicit Product boundaries. The rules for problems in
+the data, which v2.0.0 changed, are in
+[v2.0.0 Data Handling](v2_data_handling.md).
 
 ## Input and orchestration
 
@@ -270,20 +270,22 @@ v2.0.0 changes, are in [v2.0.0 Data Handling](v2_data_handling.md).
 - Hosted processing, Garmin authentication, Open-Meteo, JMA, Instagram,
   wellness/coaching interpretation, Parquet output, and automatic personal
   analysis are outside the stable scope.
-- Stable v1.7.1 retains `tzdata` as a Windows-only runtime dependency and emits
+- Stable v2.0.0 retains `tzdata` as a Windows-only runtime dependency and emits
   the bounded `TIMEZONE_DATA_UNAVAILABLE` diagnostic if IANA timezone data is
   unavailable in an incomplete environment. Validation covers GitHub Actions
-  `windows-latest` and one maintainer-owned physical Windows Production PyPI
-  clean install. This does not establish universal Windows compatibility.
+  `windows-latest` with Python 3.11 and 3.15, one maintainer-owned physical
+  Windows Production PyPI clean install of v1.2.1, and the release candidates
+  v2.0.0rc1 and v2.0.0rc4 on one physical Windows 11 x64 machine. This does
+  not establish universal Windows compatibility.
 - External-safe output is opt-in, month-granularity, Activities-only, and does
   not automatically upload or provide provider-specific privacy guarantees.
 - Production PyPI `1.3.3` remains immutable. Its long description preserves the
   publication-time README snapshot, including pre-publication candidate
-  wording. Production PyPI `1.4.0`, `1.4.1`, `1.5.0`, `1.6.0`, and `1.7.0`
-  also remain immutable, and `1.7.1` is the current release artifact; current
+  wording. Production PyPI `1.4.0`, `1.4.1`, `1.5.0`, `1.6.0`, `1.7.0`, and
+  `1.7.1` also remain immutable, and `2.0.0` is the current release artifact; current
   repository documentation is the maintained public truth for future builds.
 
-The documented CLI and versioned Run-All output contract are stable for `1.x`.
+The documented CLI and versioned Run-All output contract are stable for `2.x`.
 Other Python modules are usable but are not all promoted to an independently
 stable third-party API contract.
 

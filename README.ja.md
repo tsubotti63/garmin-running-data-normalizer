@@ -3,17 +3,16 @@
 このファイルは、初めて利用する方向けの短い日本語入口です。仕様や契約の
 正本は、英語の [`README.md`](README.md) とリンク先のProduct文書です。
 
-現行の安定版は **v1.7.1** です。[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/latest)と
+現行の安定版は **v2.0.0** です。[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/latest)と
 [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/)で公開済みです。
 Versionや変更履歴の正本は英語のREADMEとRelease Notesを確認してください。
-試しのバージョン **v2.0.0rc5** を TestPyPI に公開しました。ローカルの GUI を
-`garmin-running-data-normalizer gui` で開けます。Production PyPI の安定版は上のとおりです。
+v2.0.0 から、ローカルの GUI を `garmin-running-data-normalizer gui` で開けます。
 入れ方は、[GUI の手引き](docs/gui_guide.ja.md)の「用意するもの」にあります。
 
 ## 何をするOSSか
 
 Garmin Account Exportをローカルで読み取り、再利用しやすい正規化データと
-分析用のコンテキストを生成するPython CLIです。Exportや生成結果を、この
+分析用のコンテキストを生成するPython CLIと、v2.0.0 から加わったローカルの GUI です。Exportや生成結果を、この
 プロダクトが外部サービスへ自動送信することはありません。
 
 ## 何が得られるか

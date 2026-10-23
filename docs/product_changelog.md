@@ -4,6 +4,27 @@ This file records factual Garmin Running Data Normalizer product changes. The
 Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
 Platform maintains its own separate changelog.
 
+## v2.0.0 — stable Production GUI release
+
+Status: published as the annotated tag, the latest stable GitHub Release, and a
+verified Production PyPI distribution.
+
+- Adds a local GUI (`gui`): one page in the browser of the same computer that
+  chooses the Export, the Snapshot Store, and the output and normalizes, with
+  Snapshots by default, in English and Japanese, and an icon that starts it
+  on macOS and Windows (`gui --create-shortcut`).
+- Changes the handling of problems in the data in the CLI and the GUI alike:
+  files and rows that cannot be used are left out with warnings (exit 3),
+  values that disagree are kept empty and marked with every value in the audit
+  records, and no value is dropped or chosen silently. The downloaded Export
+  ZIP file is read as it is.
+- Adds `snapshot unlock`, four audit records, `disagreeing_fields`, new warning
+  codes, and `run_all_version` 2; `Ctrl+C` ends a command with exit 130.
+- Preserves the 17 datasets, stable keys, the Snapshot lifecycle contract and
+  policy registry `v1.0`, and the `0 / 0 / 3 / 2` Product exit mapping; the
+  field inventory grows from 224 to 247. Outputs of v1.7.1 are refused by the
+  checks of v2.0.0; rerun Run-All into a new folder.
+
 ## v1.7.1 — stable Production Snapshot metrics fix release
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a

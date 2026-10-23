@@ -1,9 +1,8 @@
 # GUI Guide
 
-> **Release candidate of v2.0.0.** The GUI is in v2.0.0rc5, the release
-> candidate of v2.0.0 on TestPyPI; the current stable release, v1.7.1, does
-> not have it. [What you need](#what-you-need) says how to install v2.0.0rc5.
-> With v1.7.1, use the command line as described in
+> **This guide is for v2.0.0.** The GUI is in v2.0.0 and later; v1.7.1 and
+> earlier releases do not have it. [What you need](#what-you-need) says how
+> to install v2.0.0. With v1.7.1, use the command line as described in
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
 
 [日本語](gui_guide.ja.md)
@@ -23,30 +22,33 @@ Everything stays on your computer.
   [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
   Garmin may take some time after your request before you can download the
   Export, so request it early.
-- The release candidate v2.0.0rc5, installed with Python 3.11 or later. The
-  GUI adds no dependency. v2.0.0rc5 is published on TestPyPI. Install it in a
-  virtual environment of its own, so that an installed v1.7.1 stays as
-  it is. The line below takes the dependencies that TestPyPI may not
-  provide, such as `tzdata` on Windows, from Production PyPI, so that you
-  add nothing yourself.
+- Python 3.11 or later, and this app, v2.0.0, which the line below
+  installs. Nothing else needs to be installed for the GUI.
 
   First see whether Python 3.11 or later is installed: run `python3 --version`
   in the Terminal on macOS, or `py --version` in PowerShell on Windows. When
   the number after "3." is 11 or more, as in "Python 3.11.9" or
   "Python 3.14.0", you can use it. When it is 10 or less, as in
   "Python 3.9.6" or "Python 3.10.12", it is too old: install a newer Python.
-  Install it also when the command is not found. To install it, use the
-  **Download Python** button of the page of
-  [python.org](https://www.python.org/downloads/); this app is not checked
-  with the Python of the Microsoft Store. When macOS opens a window that asks
-  whether to install the developer tools as you check, do not install them
-  in that window; install Python from python.org. The Python that those tools
-  bring, such as 3.9, can be too old for this app. After you install Python,
-  open the Terminal again (on Windows, open a new PowerShell window), and see
-  the version again with `--version`.
+  Install it also when the command is not found. Install it from the page of
+  [python.org](https://www.python.org/downloads/):
+
+  - macOS: use the **Download Python** button. When macOS opens a window that
+    asks whether to install the developer tools as you check, do not install
+    them in that window; install Python from python.org. The Python that
+    those tools bring, such as 3.9, can be too old for this app.
+  - Windows: use **Download Python install manager**, open the downloaded
+    file, and choose **Install**. When no Python is installed yet, starting
+    Python with `py`, as `py --version` does, installs the latest Python by
+    itself. When the first Python is installed, you may be asked whether to
+    add a folder to `PATH`; the line below uses `py`, so you can leave it out.
+    This app is not checked with Python installed from the Microsoft Store.
+
+  After you install Python, open the Terminal again (on Windows, open a new
+  PowerShell window), and see the version again with `--version`.
 
   Then one line makes the virtual environment `garmin-normalizer` in your
-  home folder, installs v2.0.0rc5 in it, makes the icon that starts the GUI
+  home folder, installs v2.0.0 in it, makes the icon that starts the GUI
   ([Start the GUI from an icon](#start-the-gui-from-an-icon)), and opens the
   GUI. Each part runs only after the one before it has succeeded. When the
   line makes the icon, macOS may ask whether the Terminal may use the
@@ -61,14 +63,14 @@ Everything stays on your computer.
   macOS:
 
   ```bash
-  python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc5 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
+  python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.0.0 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
   ```
 
   Windows PowerShell, whose version 5.1 has no `&&`, so that the parts are
   joined with `if ($?)`, one inside the other:
 
   ```powershell
-  py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc5; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
+  py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.0.0; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
   ```
 
   - When the line succeeds, the terminal shows three lines at its end, and

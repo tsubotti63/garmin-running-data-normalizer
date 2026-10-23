@@ -8,6 +8,7 @@ import pytest
 
 from garmin_running_data_normalizer import __version__
 from scripts.validate_public_product_state import (
+    CURRENT_STABLE_VERSION,
     DOCUMENTATION_PROBLEM_FORM,
     SYNTHETIC_VALIDATION_FORM,
     CS010_DOCUMENT,
@@ -21,7 +22,7 @@ VERSION_SOURCE = "src/garmin_running_data_normalizer/__init__.py"
 
 
 def _copy_validator_inputs(destination: Path) -> None:
-    for relative in (*current_documents("1.7.1"), VERSION_SOURCE):
+    for relative in (*current_documents(CURRENT_STABLE_VERSION), VERSION_SOURCE):
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / relative, target)
@@ -369,7 +370,7 @@ def test_missing_output_contract_marker_fails(tmp_path: Path) -> None:
     output_contract = tmp_path / "docs/output_contract.md"
     output_contract.write_text(
         output_contract.read_text(encoding="utf-8").replace(
-            "- Compatibility family: stable 1.x",
+            "- Compatibility family: stable 2.x",
             "- Compatibility family: unspecified",
         ),
         encoding="utf-8",
@@ -377,7 +378,7 @@ def test_missing_output_contract_marker_fails(tmp_path: Path) -> None:
 
     _, findings = validate(tmp_path)
 
-    assert any("Compatibility family: stable 1.x" in item for item in findings)
+    assert any("Compatibility family: stable 2.x" in item for item in findings)
 
 
 @pytest.mark.parametrize(
@@ -455,7 +456,7 @@ def test_partial_success_exit_zero_in_current_release_notes_fails(
     tmp_path: Path,
 ) -> None:
     _copy_validator_inputs(tmp_path)
-    release_notes = tmp_path / "docs/release_notes/v1.7.1.md"
+    release_notes = tmp_path / f"docs/release_notes/v{CURRENT_STABLE_VERSION}.md"
     release_notes.write_text(
         release_notes.read_text(encoding="utf-8").replace(
             "`PARTIAL_SUCCESS` / exit 3",
@@ -521,16 +522,16 @@ def test_candidate_contract_marker_says_where_the_candidate_is_published(
 ) -> None:
     # Stage D3: a candidate is not published, or is published on TestPyPI
     # only, as a release candidate is for its checks; nothing else is taken.
+    # A candidate after the stable release (stage E2b).
     _copy_validator_inputs(tmp_path)
+    _start_implementation_candidate(tmp_path, "2.0.1rc1")
     contract = tmp_path / "docs/output_contract.md"
     text = contract.read_text(encoding="utf-8")
-    line = re.search(
-        rf"^- Implementation candidate: v{re.escape(__version__)}\b.*$", text, re.M
-    )
+    line = re.search(r"^- Implementation candidate: v2\.0\.1rc1\b.*$", text, re.M)
     assert line is not None
     contract.write_text(
         text.replace(
-            line.group(0), f"- Implementation candidate: v{__version__} {place}".rstrip()
+            line.group(0), f"- Implementation candidate: v2.0.1rc1 {place}".rstrip()
         ),
         encoding="utf-8",
     )
@@ -577,12 +578,12 @@ def _start_implementation_candidate(root: Path, version: str) -> None:
     (
         (
             "SECURITY.md",
-            "current stable release, v1.7.1",
+            "current stable release, v2.0.0",
             "current stable release, v1.3.3",
         ),
         (
             "docs/roadmap.md",
-            "`v1.7.1` is the current stable",
+            "`v2.0.0` is the current stable",
             "`v1.3.2` is the current stable",
         ),
         (
@@ -592,12 +593,12 @@ def _start_implementation_candidate(root: Path, version: str) -> None:
         ),
         (
             "docs/release_readiness.md",
-            "Current Production PyPI version: `1.7.1`",
+            "Current Production PyPI version: `2.0.0`",
             "Current Production PyPI version: `1.3.3`",
         ),
         (
             "docs/release_readiness.md",
-            "Latest GitHub Release: `v1.7.1`",
+            "Latest GitHub Release: `v2.0.0`",
             "Latest GitHub Release: `v1.3.3`",
         ),
     ),
@@ -621,8 +622,8 @@ def test_missing_current_migration_heading_fails(tmp_path: Path) -> None:
     notes = tmp_path / "docs/migration_notes.md"
     notes.write_text(
         notes.read_text(encoding="utf-8").replace(
-            "## v1.7.0 to v1.7.1",
-            "## v1.7.0 to v1.7.1 draft",
+            "## v1.7.1 to v2.0.0",
+            "## v1.7.1 to v2.0.0 draft",
         ),
         encoding="utf-8",
     )
@@ -631,7 +632,7 @@ def test_missing_current_migration_heading_fails(tmp_path: Path) -> None:
 
     assert (
         "docs/migration_notes.md: migration heading is missing: "
-        "## v<previous version> to v1.7.1"
+        "## v<previous version> to v2.0.0"
     ) in findings
 
 
@@ -643,8 +644,8 @@ def test_current_migration_heading_accepts_any_previous_version(
     notes = tmp_path / "docs/migration_notes.md"
     notes.write_text(
         notes.read_text(encoding="utf-8").replace(
-            "## v1.7.0 to v1.7.1",
-            f"## {previous} to v1.7.1",
+            "## v1.7.1 to v2.0.0",
+            f"## {previous} to v2.0.0",
         ),
         encoding="utf-8",
     )
@@ -656,19 +657,19 @@ def test_current_migration_heading_accepts_any_previous_version(
 
 def test_maintainer_state_follows_candidate_package_version(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
-    _start_implementation_candidate(tmp_path, "1.7.2")
+    _start_implementation_candidate(tmp_path, "2.0.1")
     readiness = tmp_path / "docs/release_readiness.md"
     readiness.write_text(
         readiness.read_text(encoding="utf-8").replace(
             f"Current source and package version: `{__version__}`",
-            "Current source and package version: `1.7.2`",
+            "Current source and package version: `2.0.1`",
         ),
         encoding="utf-8",
     )
 
     version, findings = validate(tmp_path)
 
-    assert version == "1.7.2"
+    assert version == "2.0.1"
     assert not any(
         item.startswith(f"{relative}:")
         for relative in MAINTAINER_STATE_DOCUMENTS
@@ -678,13 +679,13 @@ def test_maintainer_state_follows_candidate_package_version(tmp_path: Path) -> N
 
 def test_candidate_source_version_must_be_recorded(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
-    _start_implementation_candidate(tmp_path, "1.7.2")
+    _start_implementation_candidate(tmp_path, "2.0.1")
 
     _, findings = validate(tmp_path)
 
     assert (
         "docs/release_readiness.md: required marker is missing: "
-        "Current source and package version: `1.7.2`"
+        "Current source and package version: `2.0.1`"
     ) in findings
 
 

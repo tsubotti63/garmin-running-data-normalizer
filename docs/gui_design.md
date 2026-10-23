@@ -1,14 +1,12 @@
 # v2.0.0 GUI Design
 
-- Status: design revised on 2026-10-11; implemented in the release candidate
-  v2.0.0rc5, whose `gui` command opens the GUI; stage E checks the release
-  candidate before the stable release
-- Applies to: the v2.0.0 release in preparation; v1.7.1 remains the current
-  stable release
+- Status: design revised on 2026-10-11; implemented in v2.0.0, whose `gui`
+  command opens the GUI
+- Applies to: stable v2.0.0
 - Authority: maintainer design record agreed by the Human maintainer on
   2026-10-10 and revised by the Human maintainer's decisions of 2026-10-11.
   Product contracts, tests, and the stable release remain the behavior
-  authority until v2.0.0 changes them as described in
+  authority; v2.0.0 changes them as described in
   [Data handling in 2.0.0](#data-handling-in-200).
 
 ## Purpose
@@ -716,7 +714,7 @@ refuses a store that is a symbolic link with `SNAPSHOT_STORE_SYMLINK`
 
 Stage B also changed the CLI where the page needed it, with the same
 functions in both (see [v2.0.0 Data Handling](v2_data_handling.md) and the
-[migration notes draft](v2_migration_notes_draft.md)). The `ERROR` lines of
+[Migration Notes](migration_notes.md#v171-to-v200)). The `ERROR` lines of
 `INPUT_NOT_READABLE` and `SNAPSHOT_STORE_NOT_READABLE` say that this app is
 not allowed to open a folder or file, and the report of `doctor` for a
 person gives the next step of a finding whose code is a stop (stage B2b).
@@ -961,8 +959,9 @@ alone, and reduced motion.
 ## Compatibility and versioning
 
 - v2.0.0 changes the output and exit contracts as described in
-  [Data handling in 2.0.0](#data-handling-in-200). The migration notes for
-  v1.7.1 to v2.0.0 list every change.
+  [Data handling in 2.0.0](#data-handling-in-200). The
+  [migration notes for v1.7.1 to v2.0.0](migration_notes.md#v171-to-v200)
+  list every change.
 - `validate-handoff`, `doctor --run-output`, and `support-bundle` accept
   Product major version 1 and later, as released in v1.7.1. Outputs that
   contain `diagnostics/` are accepted only when they were produced by the
@@ -1022,10 +1021,10 @@ alone, and reduced motion.
 | B | The single-page GUI, in several pull requests, each checked for screen texts and points of hesitation |
 | C | Verification on macOS and browsers, with the keyboard and VoiceOver, and the maintainer real-data check |
 | D | Release candidates on TestPyPI with the `gui` command exposed, before the stable release: v2.0.0rc1, checked on a physical Windows machine (x64) with synthetic data and by two new AI sessions in place of a first-time user; and v2.0.0rc2, with the texts that they found unclear made clearer, checked on macOS with synthetic and real data and by a new AI session |
-| E | Stable 2.0.0 release |
+| E | Stable 2.0.0 release: the documents of v2.0.0; the icon and the line that installs this app (v2.0.0rc3); the pictures of the icon and of the tab of the browser, and the guides that answer what a first reader asked (v2.0.0rc4, also checked on a physical Windows machine); the answers of the guides, Python 3.15 in the CI, and the limit of the nesting of JSON (v2.0.0rc5); and the version 2.0.0 |
 
-Installing the release candidate from TestPyPI uses Production PyPI as an
+Installing a release candidate from TestPyPI used Production PyPI as an
 extra index for dependencies, such as `tzdata` on Windows, that TestPyPI may
-not provide.
+not provide. The stable release is installed from Production PyPI.
 
 Each stage is reviewed before it is merged, and dates are not fixed.

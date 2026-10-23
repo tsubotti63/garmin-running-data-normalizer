@@ -1,7 +1,7 @@
 # Frequently Asked Questions
 
 These short answers apply to the current stable Garmin Running Data Normalizer
-`v1.7.1` release and route to the current product authorities. Version `1.7.1`
+`v2.0.0` release and route to the current product authorities. Version `2.0.0`
 is available from the latest GitHub Release and Production PyPI.
 
 ## Getting started
@@ -39,12 +39,24 @@ them, such as the times that it records for an imported Export.
 
 ### Which version is stable?
 
-`v1.7.1` is the current stable release. It includes the approved Sleep
-contract while preserving the compatible one-shot workflow, optional Snapshot
-Accumulation, the Windows timezone-data hotfix, and the additive
-Wellness/Metrics datasets documented for v1.3. It is published on
-[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v1.7.1)
-and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/1.7.1/).
+`v2.0.0` is the current stable release. It adds the local GUI and the data
+handling of v2.0.0, which finishes a run that has problems in the data and
+reports what it left out or kept, to the approved Sleep contract, the one-shot
+workflow, optional Snapshot Accumulation, the Windows timezone-data hotfix, and
+the additive Wellness/Metrics datasets documented for v1.3. It is published on
+[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.0.0)
+and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/2.0.0/).
+See the [v2.0.0 Release Notes](release_notes/v2.0.0.md) and the
+[Migration Notes](migration_notes.md#v171-to-v200).
+
+### Can I use it without typing commands?
+
+Yes, starting with v2.0.0. The `gui` command opens a page in the browser of
+the same computer that chooses the Export, the Snapshot Store, and the output,
+and normalizes. On macOS and Windows, the line in the
+[GUI Guide](gui_guide.md#what-you-need) installs this app once and makes an
+icon that starts the GUI after that. The GUI runs the same processing as the
+CLI.
 
 ## Garmin Export and Run-All
 
@@ -240,7 +252,7 @@ Public-safe Windows reports are welcome through
 ### Was the v1.2.0 Windows timezone-data issue resolved?
 
 Yes. v1.2.1 introduced the conditional Windows `tzdata` dependency, which
-v1.7.1 retains. The current release also provides the bounded
+v2.0.0 retains. The current release also provides the bounded
 `TIMEZONE_DATA_UNAVAILABLE` diagnostic if the configured IANA timezone data is
 still unavailable in a damaged or incomplete environment. Confirm the
 environment with:
@@ -251,9 +263,9 @@ python -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
 
 If you pass `--timezone`, check that name instead of `Asia/Tokyo`.
 
-For a normal v1.7.1 Production PyPI installation, no separate
+For a normal v2.0.0 Production PyPI installation, no separate
 `pip install tzdata` step is expected. If the check still fails, reinstall
-v1.7.1 in a new environment and include only sanitized environment details in a
+v2.0.0 in a new environment and include only sanitized environment details in a
 support report.
 
 ### Does the product include running dynamics?

@@ -129,14 +129,14 @@ class EarlierOutputTest(StopLines, unittest.TestCase):
             ("1.1.1", 1, "1.1.1"),
             ("1.2.1", 1, "1.2.1"),
             # Versions of 1.4 and later that are not this one, with the stable
-            # release 1.7.1, whose outputs the release candidate names too.
+            # release 1.7.1 before this one, and a later version.
             ("1.4.2", 1, "1.4.2"),
             ("1.7.0", 1, "1.7.0"),
             ("1.7.1", 1, "1.7.1"),
-            ("2.0.0", RUN_ALL_VERSION, "2.0.0"),
-            # Another pre-release, named as a release is (stage D2): the
-            # release candidate before this one (stages D7 and E1e).
-            ("2.0.0rc4", RUN_ALL_VERSION, "2.0.0rc4"),
+            ("2.0.1", RUN_ALL_VERSION, "2.0.1"),
+            # A pre-release, named as a release is (stage D2): the last
+            # release candidate before this release (stage E2b).
+            ("2.0.0rc5", RUN_ALL_VERSION, "2.0.0rc5"),
             # This version's name with the checks of another, as a build of
             # this version in development may have written: named, also when
             # it is a pre-release such as 2.0.0rc1.
