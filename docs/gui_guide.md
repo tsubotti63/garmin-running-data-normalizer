@@ -42,10 +42,19 @@ Everything stays on your computer.
     Python with `py`, as `py --version` does, installs the latest Python by
     itself. When the first Python is installed, you may be asked whether to
     add a folder to `PATH`; the line below uses `py`, so you can leave it out.
-    This app is not checked with Python installed from the Microsoft Store.
+    When an older Python is installed already, `py` starts that one: then run
+    `pymanager install default` in PowerShell, which installs the latest
+    Python. Then open a new PowerShell window and run `py --version` again.
+    When it still shows the older Python, remove the older Python and the
+    Python Launcher in **Installed apps**, as
+    [python.org describes](https://docs.python.org/3/using/windows.html), and
+    check again: remove Python 3.10 and earlier and the Python Launcher, and
+    keep the Python install manager and Python 3.11 and later. This app is
+    not checked with Python installed from the Microsoft Store.
 
   After you install Python, open the Terminal again (on Windows, open a new
-  PowerShell window), and see the version again with `--version`.
+  PowerShell window), and see the version again with `python3 --version` (on
+  Windows, `py --version`).
 
   Then one line makes the virtual environment `garmin-normalizer` in your
   home folder, installs v2.0.0 in it, makes the icon that starts the GUI
@@ -112,9 +121,9 @@ the left column in the lines that it showed.
 |---|---|---|
 | `command not found` (macOS), or `is not recognized` (Windows) | Python is not installed, or the terminal was not opened again after you installed it. | Install Python from python.org, and open the terminal again. |
 | `xcode-select` (macOS) | Python is not installed, and macOS asks whether to install the developer tools. | Do not install them in that window; install Python from python.org, and open the Terminal again. |
-| `Requires-Python` | Python is too old (3.10 or earlier). | Install Python 3.11 or later, move the folder `garmin-normalizer` in your home folder to the Trash, and run the line again. |
+| `Requires-Python` | Python is too old (3.10 or earlier). | Install Python 3.11 or later, move the folder `garmin-normalizer` in your home folder to the Trash, and run the line again. On Windows, when an older Python is installed already, follow its steps in [What you need](#what-you-need) until `py --version` shows 3.11 or later. |
 | `Retrying` and `connection` | The computer cannot reach the internet, or the network of your company stops it. | Check the connection; on a computer of your company, check its rules too. |
-| `No matching distribution found`, without the two lines above | Python is too old (an old pip does not show the line of `Requires-Python`), or this version is not found. | Run `python3 --version` (on Windows, `py --version`). When it is 3.10 or earlier, do as for `Requires-Python` above. When it is 3.11 or later, copy the line of the guide, paste it, and run it again. |
+| `No matching distribution found`, without `Requires-Python` and `Retrying` | Python is too old (an old pip does not show the line of `Requires-Python`), or this version is not found. | Run `python3 --version` (on Windows, `py --version`). When it is 3.10 or earlier, do as for `Requires-Python` above. When it is 3.11 or later, copy the line of the guide, paste it, and run it again. |
 | A line that starts with `ERROR [SHORTCUT_` | The icon could not be made. | See [Start the GUI from an icon](#start-the-gui-from-an-icon). |
 
 After you set it right, run the same line again. When it stops at the same
@@ -270,7 +279,7 @@ garmin-running-data-normalizer gui --create-shortcut
   these:
   - When the icon started the GUI, the easiest is to double-click the icon
     again. A new GUI opens. The earlier GUI has no page, and stops by itself
-    after 10 minutes.
+    after 10 minutes when no run is active.
   - Copy the address that the terminal shows, and paste it in the address bar
     of your browser. In the Terminal of macOS, select the address and press
     the command key and C. In a window of Windows, select the address and
@@ -282,7 +291,7 @@ garmin-running-data-normalizer gui --create-shortcut
 - When you double-click the icon again, or run the command that starts the
   GUI again, one more GUI opens. Use one of them. **Quit** on a page stops the
   GUI of that page only. A GUI whose page you closed stops by itself after 10
-  minutes.
+  minutes when no run is active.
 - While a page is open, it keeps telling the GUI that it is there, so that the
   GUI does not stop, even when you do nothing. It can stop when the browser
   puts the tab to sleep. When no page is open for 10 minutes and no run is
@@ -728,7 +737,7 @@ started shows in every tab, and another run cannot start until it ends
 (`RUN_ACTIVE`).
 
 If the page says that this app is not responding, the GUI may have stopped, for
-example because the terminal window was closed, or because nothing used it for
+example because the terminal window was closed, or because no page was open for
 10 minutes. When the icon started it, double-click the icon again; when you
 started it in the terminal, start it again with the same command; then open
 the new address. Each launch has a new address and key.
@@ -750,8 +759,8 @@ That is as it should be.
   the command line shows for a cancelled command, and the code is 130. A
   second `Ctrl+C` while the GUI stops a run does nothing; the GUI stops once
   the run has ended.
-- When no page has used the GUI for 10 minutes and no run is active, the GUI
-  stops by itself. Closing the browser tab does not stop it at once.
+- When no page is open for 10 minutes and no run is active, the GUI stops by
+  itself. Closing the browser tab does not stop it at once.
 
 ## Remove this app
 

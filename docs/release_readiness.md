@@ -18,7 +18,8 @@ physical Windows machine checks v2.0.0, as the Human maintainer decided on
 2026-10-23. One physical Windows 11 x64 machine checked v2.0.0rc4; from it,
 only the reading of JSON (v2.0.0rc5), the version, and the documents change.
 The lines of the guides about the Python install manager on Windows follow the
-python.org documentation, read on 2026-10-23.
+python.org documentation and the source of the Python install manager 26.4,
+read on 2026-10-23; they are not checked on a physical Windows machine.
 
 The release source is the `main` commit that merges the v2.0.0 release
 preparation pull request. Its annotated tag, GitHub Release, and publish
