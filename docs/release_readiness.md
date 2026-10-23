@@ -21,9 +21,12 @@ The lines of the guides about the Python install manager on Windows follow the
 python.org documentation and the source of the Python install manager 26.4,
 read on 2026-10-23; they are not checked on a physical Windows machine.
 
-The release source is the `main` commit that merges the v2.0.0 release
-preparation pull request. Its annotated tag, GitHub Release, and publish
-workflow evidence are recorded in this section after publication.
+The release source is `dce8b8aa36f4a99ef162bdbdcfd31e1f7e61ea6b` (#156). The
+annotated `v2.0.0` tag (tag object
+`d9ca58b4ec36df907fecb2bfb8cd85db24953ce5`), the latest stable GitHub Release
+published on 2026-10-23 JST, Production PyPI publication through Trusted
+Publishing/OIDC, and the publish workflow's exact-version PyPI install
+verification are complete.
 
 ## v2.0.0rc5 release candidate
 
@@ -506,10 +509,10 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Latest GitHub Release: `v2.0.0`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
-- TestPyPI `2.0.0`: Not used; the release publishes directly to Production
-  PyPI through the protected `pypi` Environment
-- Production PyPI `2.0.0`: Published through Trusted Publishing; the publish
-  workflow verifies the exact-version install
+- TestPyPI `2.0.0`: Not used; the publish workflow's TestPyPI jobs were
+  skipped
+- Production PyPI `2.0.0`: Published and exact-version install verified by the
+  publish workflow
 - TestPyPI `1.7.1`: Not used; the publish workflow's TestPyPI jobs were
   skipped
 - Production PyPI `1.7.1`: Published and exact-version install verified by the
@@ -536,10 +539,9 @@ candidates on TestPyPI only; v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0,
 and v1.3.3 are historical releases. The v2.0.0rc5, v2.0.0rc4, v2.0.0rc3,
 v2.0.0rc2, and v2.0.0rc1 tag and TestPyPI publication evidence was recorded
 only after the corresponding external state was observed.
-The v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag, GitHub
-Release, and Production PyPI publication evidence was recorded only after the
-corresponding external state was observed; the v2.0.0 publication evidence is
-added to this document after it is observed.
+The v2.0.0, v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag,
+GitHub Release, and Production PyPI publication evidence was recorded only
+after the corresponding external state was observed.
 
 ## Windows CI correction
 
@@ -561,8 +563,35 @@ Releases, Production PyPI files, and release notes are unchanged.
 
 ## Current release assessment
 
-The v2.0.0 release assessment is recorded here after publication, from the
-release source's main CI run and the Production publish workflow run.
+The v2.0.0 release source passed main CI run `39970315509` (`test` and
+`test-python-3-15` on Ubuntu, `macos-python-3-15`, and `windows-runtime` and
+`windows-python-3-15`) and CodeQL run `39970316102`. A build-only publish
+workflow run (`39971318269`) on the release source passed with every upload
+job skipped. Production publish workflow run `39972408058` then built and
+validated the exact source, published to Production PyPI, and verified the
+exact-version PyPI install; the TestPyPI jobs were skipped. The tag, the
+GitHub Release, and the Production publication ran under one Human approval
+given after their values were shown. The `pypi` Environment deployment was
+Human-authorized, and the approval was submitted through the GitHub API on the
+Human's instruction.
+
+The SHA-256 checksums recorded by that run match Production PyPI: wheel
+`f1930acb05fd724b75f1766f5e137632d18b6f120dab848ceebffbc7054bbb24` and source
+distribution
+`3cf09a7e08dca2b58341c59706255017c017bbc3c1c8d16f71263e49e0a21428`. Each file
+carries a PEP 740 publish attestation from `publish-pypi.yml` in the `pypi`
+Environment. The build-only run produced different checksums because the
+distributions are not byte-reproducible across runs; only the production run's
+artifacts were published. `PYPI_PUBLISH_APPROVED` was returned to `false`
+after the upload. A clean install from Production PyPI on macOS, with a home
+folder of its own and synthetic data only, held the files of the tag,
+completed the Synthetic Run-All (`PASS_WITH_WARNINGS`, exit 0) with the run
+digest of the README figures, and its output passed `validate-handoff`,
+`doctor --run-output`, and `support-bundle`. The macOS line of the GUI Guide,
+run as written with `--no-browser` at its end, installed 2.0.0 from Production
+PyPI, made the icon, and served the page, twice.
+
+### v1.7.1 release assessment (historical)
 
 The v1.7.1 release source passed main CI run `38125071544` (Ubuntu `test` and
 `windows-runtime`) and CodeQL run `38125071252`. A build-only publish workflow
