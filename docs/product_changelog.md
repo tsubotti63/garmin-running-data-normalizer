@@ -7,7 +7,7 @@ Platform maintains its own separate changelog.
 ## v2.0.0 — stable Production GUI release
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a
-verified Production PyPI distribution.
+verified Production PyPI distribution on 2026-10-23 JST.
 
 - Adds a local GUI (`gui`): one page in the browser of the same computer that
   chooses the Export, the Snapshot Store, and the output and normalizes, with
