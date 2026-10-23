@@ -2,8 +2,10 @@
 
 ## Status
 
-This document describes the performance-metrics contract in the stable v1.3.0
-GitHub Release and Production PyPI distribution.
+This document describes the performance-metrics contract that the stable
+v1.3.0 GitHub Release and Production PyPI distribution introduced, as the
+current stable v2.0.0 keeps it; text that begins "Starting with v2.0.0"
+describes what v2.0.0 changes.
 
 ## Stable daily datasets
 

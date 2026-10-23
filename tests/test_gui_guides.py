@@ -137,29 +137,28 @@ class GuiGuideTest(unittest.TestCase):
                 with self.subTest(language=language, key=key):
                     self.assertIn(quote[language].format(messages[key]), text)
 
-    def test_guides_say_that_the_gui_is_in_the_release_candidate(self) -> None:
-        # The release candidate, such as v2.0.0rc1, has the gui command, and
-        # the stable release does not (stage D2).
+    def test_guides_say_that_the_gui_is_in_this_release(self) -> None:
+        # The stable release v2.0.0 has the gui command, and v1.7.1 does not
+        # (stage E2b; the release candidates said so for themselves from
+        # stage D2).
         english = GUIDES["en"].read_text(encoding="utf-8")
         japanese = GUIDES["ja"].read_text(encoding="utf-8")
-        self.assertTrue(english.startswith("# GUI Guide\n\n> **Release candidate of v2.0.0.**"))
-        self.assertTrue(japanese.startswith("# GUI の手引き\n\n> **v2.0.0 の試しのバージョンです。**"))
-        # The note at the top names this release candidate, and no other
-        # (stage D7).
+        self.assertTrue(english.startswith("# GUI Guide\n\n> **This guide is for v2.0.0.**"))
+        self.assertTrue(japanese.startswith("# GUI の手引き\n\n> **v2.0.0 の手引きです。**"))
+        # The note at the top names this release and v1.7.1, and no
+        # pre-release (stage D7).
         for language, text in (("en", english), ("ja", japanese)):
             with self.subTest(language=language):
                 note = text.split("\n\n", 2)[1]
-                self.assertEqual(set(re.findall(r"v\d+\.\d+\.\d+(?:a|b|rc)\d+", note)), {f"v{__version__}"})
+                self.assertEqual(set(re.findall(r"v\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?", note)), {f"v{__version__}", "v1.7.1"})
+                self.assertIsNone(re.search(r"v\d+\.\d+\.\d+(?:a|b|rc)\d+", note))
         self.assertIn("[日本語](gui_guide.ja.md)", english)
         self.assertIn("[English](gui_guide.md)", japanese)
+        # The index of the documents leads users to the guides first.
         index = (ROOT / "docs/README.md").read_text(encoding="utf-8")
-        entry = re.search(r"^- \[v2\.0\.0 GUI Guide\]\(gui_guide\.md\).*?(?=^- |\Z)", index, re.M | re.S)
-        self.assertIsNotNone(entry)
-        assert entry is not None
-        self.assertIn(
-            f"in the release candidate v{__version__}, not in the stable release",
-            " ".join(entry.group(0).split()),
-        )
+        start = index.split("\n## Start here\n", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("[GUI Guide](gui_guide.md) ([日本語](gui_guide.ja.md))", start)
+        self.assertNotIn("release candidate", index)
 
     def test_the_exit_3_result_reads_the_same_on_the_page_and_in_the_guides(self) -> None:
         # PARTIAL_SUCCESS is a finished run that left out part of the input,
@@ -220,10 +219,12 @@ class GuiGuideTest(unittest.TestCase):
         self.assertEqual(found["en"], found["ja"])
         (mac_language, mac), (windows_language, windows) = found["en"]
         self.assertEqual((mac_language, windows_language), ("bash", "powershell"))
-        install = (
-            "-m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "
-            f"garmin-running-data-normalizer=={__version__}"
-        )
+        # The stable release is installed from Production PyPI only (stage
+        # E2b); the release candidates were installed from TestPyPI.
+        install = f"-m pip install garmin-running-data-normalizer=={__version__}"
+        for language, path in GUIDES.items():
+            with self.subTest(language=language):
+                self.assertNotIn("test.pypi.org", path.read_text(encoding="utf-8"))
         icon = "-m garmin_running_data_normalizer gui --create-shortcut"
         venv = "~/garmin-normalizer"
         self.assertEqual(
@@ -269,7 +270,7 @@ class GuiGuideTest(unittest.TestCase):
                     "`python3 --version`", "`py --version`", "open the Terminal again",
                     "a new release of pip is available", "run the same line again",
                     "move the folder `garmin-normalizer`", "the line of the guide of that version",
-                    "stop the GUI first", "request it early", "you add nothing yourself",
+                    "stop the GUI first", "request it early", "Nothing else needs to be installed",
                 ),
                 "Start the GUI from an icon": ("**Desktop Folder**", "**Files & Folders**", "OneDrive"),
                 "When something goes wrong": ("double-click the icon again", "10 minutes"),
@@ -284,7 +285,7 @@ class GuiGuideTest(unittest.TestCase):
                     "`python3 --version`", "`py --version`", "ターミナルを開き直して",
                     "A new release of pip is available", "同じ 1 行をもう一度動かして",
                     "`garmin-normalizer` をごみ箱へ", "そのバージョンの手引きにある 1 行",
-                    "先に GUI を終えて", "先にリクエストして", "自分で足すものはありません",
+                    "先に GUI を終えて", "先にリクエストして", "ほかに入れるものはありません",
                 ),
                 "アイコンから起動する": ("「デスクトップフォルダ」", "「ファイルとフォルダ」", "OneDrive"),
                 "うまくいかないとき": ("アイコンをもう一度ダブルクリック", "10 分間"),
@@ -305,6 +306,46 @@ class GuiGuideTest(unittest.TestCase):
         for language, phrase in (("en", "double-click the icon again"), ("ja", "アイコンをもう一度ダブルクリック")):
             with self.subTest(language=language):
                 self.assertIn(phrase, catalog(language)["next.restart_gui"])
+
+    def test_guides_say_how_to_install_python_on_windows(self) -> None:
+        # Stage E2b, from the second reading of stage E2a: on Windows,
+        # python.org gives the Python install manager first (its page and
+        # https://docs.python.org/3/using/windows.html, read on 2026-10-23).
+        # Starting Python with py installs the latest Python when none is
+        # installed, and the first one may ask to add a folder to PATH, which
+        # the line, which uses py, does not need. When an older Python is
+        # installed, py starts it, and pymanager install default installs the
+        # latest one; when py still starts the older one, as the legacy Python
+        # Launcher can make it, the older Python and the Launcher are removed
+        # in Installed apps (the documentation, sections 4.1.5, 4.1.9 and
+        # 4.1.15, and the source of the Python install manager 26.4, read on
+        # 2026-10-23; from the new AI session that read the guides of v2.0.0).
+        phrases = {
+            "en": (
+                "**Download Python install manager**", "choose **Install**",
+                "as `py --version` does, installs the latest Python by itself",
+                "add a folder to `PATH`", "the line below uses `py`",
+                "When an older Python is installed already, `py` starts that one",
+                "run `pymanager install default` in PowerShell",
+                "remove the older Python and the Python Launcher in **Installed apps**",
+                "[python.org describes](https://docs.python.org/3/using/windows.html)",
+                "remove Python 3.10 and earlier and the Python Launcher, and keep the Python install manager and "
+                "Python 3.11 and later",
+            ),
+            "ja": (
+                "「Download Python install manager」", "「Install」を押して",
+                "いちばん新しい Python が自動で入ります", "`PATH` にフォルダーを足すか", "下の 1 行は `py` を",
+                "`py` はその古い Python を起動する", "`pymanager install default` を動かして",
+                "「インストールされているアプリ」から古い Python と Python Launcher を外して",
+                "[python.org の説明](https://docs.python.org/3/using/windows.html)",
+                "外すのは 3.10 以前の Python と Python Launcher で、Python install manager と 3.11 以降の Python は残します",
+            ),
+        }
+        for language, wanted in phrases.items():
+            text = flowing(language, WHAT_YOU_NEED[language])
+            for phrase in wanted:
+                with self.subTest(language=language, phrase=phrase):
+                    self.assertIn(phrase, text)
 
     def test_guides_answer_what_a_second_reader_asked(self) -> None:
         # Stage E2a, from a new AI session that read the guides of v2.0.0rc4
@@ -328,21 +369,26 @@ class GuiGuideTest(unittest.TestCase):
                     # The rows of the table, which the words of a row also name.
                     "| `command not found` (macOS), or `is not recognized` (Windows) |", "| `xcode-select` (macOS) |",
                     "| `Requires-Python` |", "| `Retrying` and `connection` |",
-                    "| `No matching distribution found`, without the two lines above |",
+                    "| `No matching distribution found`, without `Requires-Python` and `Retrying` |",
                     "| A line that starts with `ERROR [SHORTCUT_` |",
                     "On macOS as on Windows, stop the GUI first", '"Unable to copy"', "the versions are mixed",
                     "stay as they are", "open a new PowerShell window", "the terminal is the window of PowerShell",
                     "a line that ends with %", "there is nothing to move",
                     "an old pip does not show the line of `Requires-Python`",
                     "[Report a problem on GitHub](#report-a-problem-on-github)",
+                    "see the version again with `python3 --version` (on Windows, `py --version`)",
+                    "follow its steps in [What you need](#what-you-need) until `py --version` shows 3.11 or later",
                 ),
                 "Start the GUI from an icon": ("**Show all filename extensions**", "the icon starts the new version"),
                 "Go back to the GUI that is open": (
                     "A bookmark does not open the GUI", "one more GUI opens", "10 minutes",
                     "the easiest is to double-click the icon again", "the command key and C",
                     "right-click to copy it", "stops the GUI of that page only", "puts the tab to sleep",
+                    "The earlier GUI has no page, and stops by itself after 10 minutes when no run is active",
+                    "A GUI whose page you closed stops by itself after 10 minutes when no run is active",
                 ),
-                "Stop the GUI": ("the control key and C, on macOS too",),
+                "Stop the GUI": ("the control key and C, on macOS too", "When no page is open for 10 minutes"),
+                "When something goes wrong": ("because no page was open for 10 minutes",),
             },
             "ja": {
                 "用意するもの": (
@@ -350,19 +396,25 @@ class GuiGuideTest(unittest.TestCase):
                     "「移動」→「ホーム」",
                     "| `command not found`（macOS）、`認識されません` か `is not recognized`（Windows） |",
                     "| `xcode-select`（macOS） |", "| `Requires-Python` |", "| `Retrying` と `connection` |",
-                    "| `No matching distribution found`（上の 2 つが無いとき） |", "| `ERROR [SHORTCUT_` で始まる行 |",
+                    "| `No matching distribution found`（`Requires-Python` と `Retrying` が無いとき） |",
+                    "| `ERROR [SHORTCUT_` で始まる行 |",
                     "macOS でも Windows でも、先に GUI を終えて", "「Unable to copy」",
                     "バージョンが混ざります", "そのまま残ります", "PowerShell の窓を開き直して",
                     "Windows では PowerShell の窓のことです", "% で終わる行", "そのフォルダーが無ければ",
                     "古い pip は `Requires-Python` の行を出しません", "[GitHub で報告する](#github-で報告する)",
+                    "もう一度 `python3 --version`（Windows では `py --version`）で", "パス（ファイルやフォルダーの場所）",
+                    "[用意するもの](#用意するもの)の Windows の手順で、`py --version` が 3.11 以降と出るまで",
                 ),
                 "アイコンから起動する": ("「すべてのファイル名拡張子を表示」", "アイコンから新しいバージョンが起動します"),
                 "開いている GUI に戻る": (
                     "ブックマークからは開けません", "GUI がもう 1 つ開きます", "10 分たつと",
                     "アイコンをもう一度ダブルクリックするのがかんたんです", "command キーと C", "右クリックで写します",
                     "そのページの GUI だけが終わります", "タブを眠らせた",
+                    "前の GUI は、ページが無いので、実行中でなければ、10 分たつと",
+                    "閉じた GUI は、実行中でなければ、10 分たつと",
                 ),
-                "GUI を終える": ("macOS でも control キーと C",),
+                "GUI を終える": ("macOS でも control キーと C", "どのページも開いていないまま 10 分たつと"),
+                "うまくいかないとき": ("どのページも 10 分間開いていなかった",),
             },
         }
         for language, sections in phrases.items():

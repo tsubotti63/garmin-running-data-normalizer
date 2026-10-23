@@ -2,15 +2,16 @@
 
 ## Status and authority
 
-- Current stable contract: v1.7.1
-- Implementation candidate: v2.0.0rc5 (TestPyPI only)
-- Compatibility family: stable 1.x
+- Current stable contract: v2.0.0
+- Compatibility family: stable 2.x
 
-This document describes the current stable contract and identifies when each
-additive layer entered the `1.x` family. Text that begins "Starting with
-v2.0.0" describes v2.0.0, the release in preparation, whose release candidate
-is published on TestPyPI; [v2.0.0 Data Handling](v2_data_handling.md) gives
-its rules. Executable authority remains in
+This document describes the current stable contract, v2.0.0, the first of the
+`2.x` family. It keeps the core layout and the additive layers of the `1.x`
+family, and identifies when each of them entered; text that begins "Starting
+with v2.0.0" describes what v2.0.0 changes.
+[v2.0.0 Data Handling](v2_data_handling.md) gives its rules, and the
+[Migration Notes](migration_notes.md#v171-to-v200) list every change from
+v1.7.1. Executable authority remains in
 `run_all.py`, the versioned dataset registry, and each run's `run_manifest.json`
 and `run_summary.json`.
 
@@ -86,7 +87,7 @@ when the activity has no explicit link or the FIT value is null. The
 `SCHEMA_CATALOG.json` declares these derived and joined columns. The
 External-safe Pack keeps its own columns and does not include them.
 
-For the released v1.7.1 Sleep contract, `sleep_duration_minutes_ex_awake` is
+In the Sleep contract, `sleep_duration_minutes_ex_awake` is
 an observed-stage sum when any finite deep/light/REM stage exists, with an
 approved direct-source fallback only when all stages are absent. Missing stages
 are not zero-filled; awake and window-minus-awake are not used; conflicting
@@ -142,6 +143,25 @@ anything under `__MACOSX/`), such as those Finder creates when an output
 folder is opened; any other undeclared file still fails validation. An Export
 folder, ZIP members, and Snapshot input ignore the same files; ZIP members also
 skip `Thumbs.db` starting with v1.5.0.
+
+## Additive v2.0 audit records
+
+Starting with v2.0.0, Run-All writes `run_all_version` 2 and four more audit
+records, which keep every value that a row does not hold, such as the values
+of fields that differ and the earlier values across Snapshots:
+
+```text
+<output>/
+  audit/
+    activities.json
+    gear.json
+    activity_gear.json
+    personal_records.json
+```
+
+The paths of the `1.x` family stay where they were. `run_manifest.json` also
+lists the files left out (`files_left_out`) and the files that a run does not
+read (`files_not_read`).
 
 ## Dataset and FIT behavior
 
@@ -271,8 +291,9 @@ Family states include `PROCESSED`, `SKIPPED_NOT_PRESENT`,
 ## Compatibility boundary
 
 The CLI, existing paths, manifest/summary formats, status meanings, completion
-marker, exit behavior, and compatible legacy FIT fields remain stable `1.x`
-contracts. v1.1 adds relationship artifacts, FIT session/lap stable keys,
+marker, exit behavior, and compatible legacy FIT fields are stable `2.x`
+contracts, which v2.0.0 changes from `1.x` as the
+[Migration Notes](migration_notes.md#v171-to-v200) list. v1.1 adds relationship artifacts, FIT session/lap stable keys,
 generated analysis context, and an opt-in safe pack under explicit Product
 approval.
 

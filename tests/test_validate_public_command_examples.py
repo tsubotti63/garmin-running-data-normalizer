@@ -107,12 +107,12 @@ def test_stale_stable_version_fails(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
     quick_start = tmp_path / "docs/product_quick_start.md"
     quick_start.write_text(
-        quick_start.read_text(encoding="utf-8").replace("v1.7.1", "v9.9.9"),
+        quick_start.read_text(encoding="utf-8").replace("v2.0.0", "v9.9.9"),
         encoding="utf-8",
     )
 
     assert (
-        "docs/product_quick_start.md: current stable v1.7.1 is not identified"
+        "docs/product_quick_start.md: current stable v2.0.0 is not identified"
         in validate(tmp_path)
     )
 
@@ -139,15 +139,50 @@ def _add_install_line(root: Path, relative: str, line: str) -> None:
     )
 
 
-def test_a_testpypi_install_takes_its_dependencies_from_production_pypi(tmp_path: Path) -> None:
-    # Stage D2: TestPyPI may not provide a dependency, such as tzdata on
-    # Windows, so Production PyPI is the extra index.
+# A release candidate after this release, which is installed from TestPyPI
+# (stage D2); the stable release is installed from Production PyPI only
+# (stage E2b).
+CANDIDATE = "2.0.1rc1"
+
+
+def _as_candidate(root: Path) -> None:
+    init = root / "src/garmin_running_data_normalizer/__init__.py"
+    init.write_text(
+        init.read_text(encoding="utf-8").replace(f'__version__ = "{__version__}"', f'__version__ = "{CANDIDATE}"'),
+        encoding="utf-8",
+    )
+    readme = root / "README.md"
+    readme.write_text(
+        readme.read_text(encoding="utf-8") + f"\nImplementation candidate: **v{CANDIDATE}**\n",
+        encoding="utf-8",
+    )
+    assert validate(root) == []
+
+
+def test_the_stable_release_is_not_installed_from_testpypi(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
     _add_install_line(
         tmp_path,
         "docs/gui_guide.md",
         "python -m pip install --index-url https://test.pypi.org/simple/ "
-        f"garmin-running-data-normalizer=={__version__}",
+        f"--extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer=={__version__}",
+    )
+
+    assert validate(tmp_path) == [
+        f"docs/gui_guide.md: the stable release {__version__} installs from Production PyPI, not TestPyPI"
+    ]
+
+
+def test_a_testpypi_install_takes_its_dependencies_from_production_pypi(tmp_path: Path) -> None:
+    # Stage D2: TestPyPI may not provide a dependency, such as tzdata on
+    # Windows, so Production PyPI is the extra index.
+    _copy_validator_inputs(tmp_path)
+    _as_candidate(tmp_path)
+    _add_install_line(
+        tmp_path,
+        "docs/gui_guide.md",
+        "python -m pip install --index-url https://test.pypi.org/simple/ "
+        f"garmin-running-data-normalizer=={CANDIDATE}",
     )
 
     assert validate(tmp_path) == [
@@ -159,6 +194,7 @@ def test_a_testpypi_install_names_the_package_version(tmp_path: Path) -> None:
     # Without the exact version, the stable release on Production PyPI is
     # installed instead of the release candidate.
     _copy_validator_inputs(tmp_path)
+    _as_candidate(tmp_path)
     for name in ("garmin-running-data-normalizer", "garmin-running-data-normalizer==0.0.0"):
         _add_install_line(
             tmp_path,
@@ -168,7 +204,7 @@ def test_a_testpypi_install_names_the_package_version(tmp_path: Path) -> None:
         )
 
     assert validate(tmp_path) == [
-        f"README.md: TestPyPI install does not name the package version {__version__}"
+        f"README.md: TestPyPI install does not name the package version {CANDIDATE}"
     ] * 2
 
 
@@ -177,8 +213,9 @@ def test_a_testpypi_install_may_end_a_statement_of_windows_powershell(tmp_path: 
     # install after ";", inside an "if" of its own; the version must still be
     # the exact one.
     _copy_validator_inputs(tmp_path)
+    _as_candidate(tmp_path)
     install = "python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/"
-    _add_install_line(tmp_path, "README.md", f"{install} garmin-running-data-normalizer=={__version__}; if ($?) {{ gui }}")
+    _add_install_line(tmp_path, "README.md", f"{install} garmin-running-data-normalizer=={CANDIDATE}; if ($?) {{ gui }}")
     assert validate(tmp_path) == []
-    _add_install_line(tmp_path, "README.md", f"{install} garmin-running-data-normalizer=={__version__}0; if ($?) {{ gui }}")
-    assert validate(tmp_path) == [f"README.md: TestPyPI install does not name the package version {__version__}"]
+    _add_install_line(tmp_path, "README.md", f"{install} garmin-running-data-normalizer=={CANDIDATE}0; if ($?) {{ gui }}")
+    assert validate(tmp_path) == [f"README.md: TestPyPI install does not name the package version {CANDIDATE}"]

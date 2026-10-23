@@ -1,9 +1,8 @@
 # GUI Guide
 
-> **Release candidate of v2.0.0.** The GUI is in v2.0.0rc5, the release
-> candidate of v2.0.0 on TestPyPI; the current stable release, v1.7.1, does
-> not have it. [What you need](#what-you-need) says how to install v2.0.0rc5.
-> With v1.7.1, use the command line as described in
+> **This guide is for v2.0.0.** The GUI is in v2.0.0 and later; v1.7.1 and
+> earlier releases do not have it. [What you need](#what-you-need) says how
+> to install v2.0.0. With v1.7.1, use the command line as described in
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
 
 [日本語](gui_guide.ja.md)
@@ -23,30 +22,42 @@ Everything stays on your computer.
   [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
   Garmin may take some time after your request before you can download the
   Export, so request it early.
-- The release candidate v2.0.0rc5, installed with Python 3.11 or later. The
-  GUI adds no dependency. v2.0.0rc5 is published on TestPyPI. Install it in a
-  virtual environment of its own, so that an installed v1.7.1 stays as
-  it is. The line below takes the dependencies that TestPyPI may not
-  provide, such as `tzdata` on Windows, from Production PyPI, so that you
-  add nothing yourself.
+- Python 3.11 or later, and this app, v2.0.0, which the line below
+  installs. Nothing else needs to be installed for the GUI.
 
   First see whether Python 3.11 or later is installed: run `python3 --version`
   in the Terminal on macOS, or `py --version` in PowerShell on Windows. When
   the number after "3." is 11 or more, as in "Python 3.11.9" or
   "Python 3.14.0", you can use it. When it is 10 or less, as in
   "Python 3.9.6" or "Python 3.10.12", it is too old: install a newer Python.
-  Install it also when the command is not found. To install it, use the
-  **Download Python** button of the page of
-  [python.org](https://www.python.org/downloads/); this app is not checked
-  with the Python of the Microsoft Store. When macOS opens a window that asks
-  whether to install the developer tools as you check, do not install them
-  in that window; install Python from python.org. The Python that those tools
-  bring, such as 3.9, can be too old for this app. After you install Python,
-  open the Terminal again (on Windows, open a new PowerShell window), and see
-  the version again with `--version`.
+  Install it also when the command is not found. Install it from the page of
+  [python.org](https://www.python.org/downloads/):
+
+  - macOS: use the **Download Python** button. When macOS opens a window that
+    asks whether to install the developer tools as you check, do not install
+    them in that window; install Python from python.org. The Python that
+    those tools bring, such as 3.9, can be too old for this app.
+  - Windows: use **Download Python install manager**, open the downloaded
+    file, and choose **Install**. When no Python is installed yet, starting
+    Python with `py`, as `py --version` does, installs the latest Python by
+    itself. When the first Python is installed, you may be asked whether to
+    add a folder to `PATH`; the line below uses `py`, so you can leave it out.
+    When an older Python is installed already, `py` starts that one: then run
+    `pymanager install default` in PowerShell, which installs the latest
+    Python. Then open a new PowerShell window and run `py --version` again.
+    When it still shows the older Python, remove the older Python and the
+    Python Launcher in **Installed apps**, as
+    [python.org describes](https://docs.python.org/3/using/windows.html), and
+    check again: remove Python 3.10 and earlier and the Python Launcher, and
+    keep the Python install manager and Python 3.11 and later. This app is
+    not checked with Python installed from the Microsoft Store.
+
+  After you install Python, open the Terminal again (on Windows, open a new
+  PowerShell window), and see the version again with `python3 --version` (on
+  Windows, `py --version`).
 
   Then one line makes the virtual environment `garmin-normalizer` in your
-  home folder, installs v2.0.0rc5 in it, makes the icon that starts the GUI
+  home folder, installs v2.0.0 in it, makes the icon that starts the GUI
   ([Start the GUI from an icon](#start-the-gui-from-an-icon)), and opens the
   GUI. Each part runs only after the one before it has succeeded. When the
   line makes the icon, macOS may ask whether the Terminal may use the
@@ -61,14 +72,14 @@ Everything stays on your computer.
   macOS:
 
   ```bash
-  python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc5 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
+  python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.0.0 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
   ```
 
   Windows PowerShell, whose version 5.1 has no `&&`, so that the parts are
   joined with `if ($?)`, one inside the other:
 
   ```powershell
-  py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc5; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
+  py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.0.0; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
   ```
 
   - When the line succeeds, the terminal shows three lines at its end, and
@@ -110,9 +121,9 @@ the left column in the lines that it showed.
 |---|---|---|
 | `command not found` (macOS), or `is not recognized` (Windows) | Python is not installed, or the terminal was not opened again after you installed it. | Install Python from python.org, and open the terminal again. |
 | `xcode-select` (macOS) | Python is not installed, and macOS asks whether to install the developer tools. | Do not install them in that window; install Python from python.org, and open the Terminal again. |
-| `Requires-Python` | Python is too old (3.10 or earlier). | Install Python 3.11 or later, move the folder `garmin-normalizer` in your home folder to the Trash, and run the line again. |
+| `Requires-Python` | Python is too old (3.10 or earlier). | Install Python 3.11 or later, move the folder `garmin-normalizer` in your home folder to the Trash, and run the line again. On Windows, when an older Python is installed already, follow its steps in [What you need](#what-you-need) until `py --version` shows 3.11 or later. |
 | `Retrying` and `connection` | The computer cannot reach the internet, or the network of your company stops it. | Check the connection; on a computer of your company, check its rules too. |
-| `No matching distribution found`, without the two lines above | Python is too old (an old pip does not show the line of `Requires-Python`), or this version is not found. | Run `python3 --version` (on Windows, `py --version`). When it is 3.10 or earlier, do as for `Requires-Python` above. When it is 3.11 or later, copy the line of the guide, paste it, and run it again. |
+| `No matching distribution found`, without `Requires-Python` and `Retrying` | Python is too old (an old pip does not show the line of `Requires-Python`), or this version is not found. | Run `python3 --version` (on Windows, `py --version`). When it is 3.10 or earlier, do as for `Requires-Python` above. When it is 3.11 or later, copy the line of the guide, paste it, and run it again. |
 | A line that starts with `ERROR [SHORTCUT_` | The icon could not be made. | See [Start the GUI from an icon](#start-the-gui-from-an-icon). |
 
 After you set it right, run the same line again. When it stops at the same
@@ -268,7 +279,7 @@ garmin-running-data-normalizer gui --create-shortcut
   these:
   - When the icon started the GUI, the easiest is to double-click the icon
     again. A new GUI opens. The earlier GUI has no page, and stops by itself
-    after 10 minutes.
+    after 10 minutes when no run is active.
   - Copy the address that the terminal shows, and paste it in the address bar
     of your browser. In the Terminal of macOS, select the address and press
     the command key and C. In a window of Windows, select the address and
@@ -280,7 +291,7 @@ garmin-running-data-normalizer gui --create-shortcut
 - When you double-click the icon again, or run the command that starts the
   GUI again, one more GUI opens. Use one of them. **Quit** on a page stops the
   GUI of that page only. A GUI whose page you closed stops by itself after 10
-  minutes.
+  minutes when no run is active.
 - While a page is open, it keeps telling the GUI that it is there, so that the
   GUI does not stop, even when you do nothing. It can stop when the browser
   puts the tab to sleep. When no page is open for 10 minutes and no run is
@@ -726,7 +737,7 @@ started shows in every tab, and another run cannot start until it ends
 (`RUN_ACTIVE`).
 
 If the page says that this app is not responding, the GUI may have stopped, for
-example because the terminal window was closed, or because nothing used it for
+example because the terminal window was closed, or because no page was open for
 10 minutes. When the icon started it, double-click the icon again; when you
 started it in the terminal, start it again with the same command; then open
 the new address. Each launch has a new address and key.
@@ -748,8 +759,8 @@ That is as it should be.
   the command line shows for a cancelled command, and the code is 130. A
   second `Ctrl+C` while the GUI stops a run does nothing; the GUI stops once
   the run has ended.
-- When no page has used the GUI for 10 minutes and no run is active, the GUI
-  stops by itself. Closing the browser tab does not stop it at once.
+- When no page is open for 10 minutes and no run is active, the GUI stops by
+  itself. Closing the browser tab does not stop it at once.
 
 ## Remove this app
 

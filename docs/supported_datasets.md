@@ -1,7 +1,7 @@
 # Supported Datasets
 
 This document defines the supported Garmin dataset and interface scope for the
-current stable `1.7.1` release. All processing is local-first. Public fixtures are
+current stable `2.0.0` release. All processing is local-first. Public fixtures are
 synthetic; real exports and generated personal output must remain local.
 
 ## Stable CLI and output scope
@@ -33,7 +33,7 @@ machine authorities.
 Run-All requires Activities. Gear, Personal Records, and FIT are optional and
 produce explicit `SKIPPED_NOT_PRESENT` evidence when absent. The documented CLI,
 exit-code behavior, fixed output paths, run completion marker, provenance, and
-versioned Run-All manifest fields form the stable `1.x` interface.
+versioned Run-All manifest fields form the stable `2.x` interface.
 
 All v1.3 daily families are optional. Their absence is an expected
 source condition and does not add a warning. Exact duplicates are deduplicated.

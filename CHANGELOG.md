@@ -13,6 +13,50 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
+## v2.0.0 — stable Production release
+
+Published as the annotated `v2.0.0` tag, the latest stable
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.0.0),
+and the verified
+[Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/2.0.0/).
+
+### Added
+
+- A local GUI: `garmin-running-data-normalizer gui` opens a page in the
+  browser of the same computer, listening on `127.0.0.1` only with the key of
+  its launch. One page with four numbered boxes chooses the Export, the
+  Snapshot Store, and the output, and normalizes, in English and Japanese.
+  With `--create-shortcut`, it first makes an icon that starts the GUI on
+  macOS and Windows.
+- `snapshot unlock`, which removes the lock file that a stopped registration
+  left.
+- `--input` takes the downloaded Export ZIP file as it is.
+- Four audit records, `disagreeing_fields` in every row, new warning codes,
+  and `run_all_version` 2.
+
+### Changed
+
+- Problems in the data no longer stop a run: a file or row that cannot be used
+  is left out with a warning (exit 3), values that disagree are kept empty and
+  marked with every value in the audit records, and no value is dropped or
+  chosen silently. Runs still stop for safety, for a folder that is not an
+  Export, and for an input that mixes Exports or accounts.
+- Every `ERROR` line ends with the next step of its code; some codes change.
+- `Ctrl+C` ends every command with exit 130.
+- `validate-handoff`, `doctor --run-output`, and `support-bundle` refuse an
+  output of v1.7.1.
+
+### Compatibility
+
+- The 17 datasets and stable keys are unchanged; the field inventory grows
+  from 224 to 247.
+- The Snapshot lifecycle contract and policy registry stay `v1.0`, and the
+  store format stays 1; existing Snapshot Stores need no migration.
+- The Product exit mapping stays `0 / 0 / 3 / 2`.
+
+See the [v2.0.0 Release Notes](docs/release_notes/v2.0.0.md) and the
+[Migration Notes](docs/migration_notes.md#v171-to-v200).
+
 ## v1.7.1 — stable Production release
 
 Published on 2026-10-11 JST as the annotated `v1.7.1` tag, the latest stable

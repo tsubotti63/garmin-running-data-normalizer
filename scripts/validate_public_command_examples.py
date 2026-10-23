@@ -44,7 +44,7 @@ CURRENT_STABLE_DOCUMENTS = (
     "docs/faq.md",
     "docs/known_limitations.md",
 )
-CURRENT_STABLE_VERSION = "1.7.1"
+CURRENT_STABLE_VERSION = "2.0.0"
 WINDOWS_SOURCE_CONTROL_COMMANDS = re.compile(
     r"(?im)^\s*git\s+(?:clone|fetch|checkout|pull)\b"
 )
@@ -187,6 +187,13 @@ def validate(root: Path = ROOT) -> list[str]:
         for _language, block in _fenced_blocks(text):
             for line in block.splitlines():
                 if "test.pypi.org" not in line:
+                    continue
+                # The stable release installs from Production PyPI only; only
+                # a release candidate is installed from TestPyPI (stage E2b).
+                if current_version == CURRENT_STABLE_VERSION:
+                    findings.append(
+                        f"{relative}: the stable release {current_version} installs from Production PyPI, not TestPyPI"
+                    )
                     continue
                 if TESTPYPI_INDEX not in line or PRODUCTION_EXTRA_INDEX not in line:
                     findings.append(

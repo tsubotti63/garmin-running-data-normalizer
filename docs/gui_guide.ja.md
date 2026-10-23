@@ -1,8 +1,7 @@
 # GUI の手引き
 
-> **v2.0.0 の試しのバージョンです。** GUI は、TestPyPI に出した v2.0.0 の試しの
-> バージョン（release candidate）v2.0.0rc5 に入っています。今の安定したバージョン
-> v1.7.1 には入っていません。v2.0.0rc5 の入れ方は、
+> **v2.0.0 の手引きです。** GUI は v2.0.0 から入っています。v1.7.1 までの
+> バージョンには入っていません。v2.0.0 の入れ方は、
 > [用意するもの](#用意するもの)にあります。v1.7.1 では、
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md)
 > のとおりに、コマンドラインを使ってください。
@@ -23,11 +22,8 @@ GUI は、Garmin のエクスポート（Account Data Export）を、ブラウ�
   [Getting Started from Garmin Export](getting_started_from_garmin_export.md) の
   1 と 2 も見てください。Garmin にリクエストしてから、ダウンロードできるように
   なるまでに時間がかかることがあるので、先にリクエストしておいてください。
-- Python 3.11 以降で入れた、試しのバージョン v2.0.0rc5。GUI のために足す依存は
-  ありません。v2.0.0rc5 は TestPyPI に公開しています。v1.7.1 を入れた環境はそのままに
-  して、別の仮想環境に入れてください。下の 1 行は、TestPyPI に無いことがある依存
-  （Windows の `tzdata` など）を Production PyPI から入れるので、自分で足すものは
-  ありません。
+- Python 3.11 以降と、このアプリ v2.0.0。このアプリは、下の 1 行で入れます。
+  GUI のために、ほかに入れるものはありません。
 
   まず、Python 3.11 以降が入っているかを確かめます。macOS ではターミナルで
   `python3 --version`、Windows では PowerShell で `py --version` を動かします。
@@ -35,15 +31,34 @@ GUI は、Garmin のエクスポート（Account Data Export）を、ブラウ�
   使えます。「Python 3.9.6」や「Python 3.10.12」のように 10 以下なら古いので、
   新しい Python を入れてください。コマンドが見つからないと出るときも、入れて
   ください。入れるときは、[python.org](https://www.python.org/downloads/) の
-  ページの「Download Python」のボタンから入れます。Microsoft Store の Python では、
-  このアプリを確かめていません。macOS で確かめたときに、デベロッパ・ツールを
-  入れるかを聞く窓が出たら、その窓では入れずに、python.org から入れてください。
-  その窓で入る Python（3.9 など）は、このアプリには古いことがあります。Python を
-  入れたあとは、ターミナルを開き直して（Windows では PowerShell の窓を開き直して）、
-  もう一度 `--version` で確かめてください。
+  ページから入れます。
+
+  - macOS：「Download Python」のボタンから入れます。確かめたときに、
+    デベロッパ・ツールを入れるかを聞く窓が出たら、その窓では入れずに、
+    python.org から入れてください。その窓で入る Python（3.9 など）は、
+    このアプリには古いことがあります。
+  - Windows：「Download Python install manager」から落としたファイルを開き、
+    「Install」を押して、Python install manager を入れます。まだ Python が
+    1 つも入っていないときは、`py --version` のように `py` で Python を起動すると、
+    いちばん新しい Python が自動で入ります。最初の Python を入れるとき、
+    `PATH` にフォルダーを足すかを聞かれることがあります。下の 1 行は `py` を
+    使うので、足さなくてもかまいません。古い Python がもう入っているときは、
+    `py` はその古い Python を起動するので、PowerShell で
+    `pymanager install default` を動かして、いちばん新しい Python を入れます。
+    そのあと、新しい PowerShell の窓で `py --version` をもう一度動かします。
+    まだ古い Python が出るときは、
+    [python.org の説明](https://docs.python.org/3/using/windows.html)のとおり、
+    「インストールされているアプリ」から古い Python と Python Launcher を外して、
+    もう一度確かめてください。外すのは 3.10 以前の Python と Python Launcher で、
+    Python install manager と 3.11 以降の Python は残します。
+    Microsoft Store から入れた Python では、このアプリを確かめていません。
+
+  Python を入れたあとは、ターミナルを開き直して（Windows では PowerShell の窓を
+  開き直して）、もう一度 `python3 --version`（Windows では `py --version`）で
+  確かめてください。
 
   そのあと、次の 1 行で、ホームのフォルダーに仮想環境 `garmin-normalizer` を作り、
-  そこに v2.0.0rc5 を入れ、GUI を起動するアイコンを作って
+  そこに v2.0.0 を入れ、GUI を起動するアイコンを作って
   （[アイコンから起動する](#アイコンから起動する)）、GUI を開きます。
   それぞれの部分は、前の部分がうまくいったときだけ動きます。アイコンを作るとき、
   ターミナルがデスクトップを使ってよいかを macOS が聞くことがあります。
@@ -58,14 +73,14 @@ GUI は、Garmin のエクスポート（Account Data Export）を、ブラウ�
   macOS：
 
   ```bash
-  python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc5 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
+  python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.0.0 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
   ```
 
   Windows PowerShell（バージョン 5.1 には `&&` が無いので、`if ($?)` を
   入れ子にしてつなぎます）：
 
   ```powershell
-  py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.0rc5; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
+  py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.0.0; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
   ```
 
   - うまくいくと、最後にターミナルに次の 3 行が出て、ブラウザで GUI の画面が
@@ -106,16 +121,16 @@ GUI は、Garmin のエクスポート（Account Data Export）を、ブラウ�
 |---|---|---|
 | `command not found`（macOS）、`認識されません` か `is not recognized`（Windows） | Python が入っていないか、入れたあとにターミナルを開き直していません。 | python.org から Python を入れて、ターミナルを開き直してください。 |
 | `xcode-select`（macOS） | Python が入っていないので、macOS がデベロッパ・ツールを入れるかを聞いています。 | その窓では入れずに、python.org から Python を入れて、ターミナルを開き直してください。 |
-| `Requires-Python` | Python が古い（3.10 以前）です。 | Python 3.11 以降を入れ、ホームのフォルダーの `garmin-normalizer` をごみ箱へ入れてから、もう一度動かしてください。 |
+| `Requires-Python` | Python が古い（3.10 以前）です。 | Python 3.11 以降を入れ、ホームのフォルダーの `garmin-normalizer` をごみ箱へ入れてから、もう一度動かしてください。Windows で古い Python がもう入っているときは、[用意するもの](#用意するもの)の Windows の手順で、`py --version` が 3.11 以降と出るまで進めてください。 |
 | `Retrying` と `connection` | インターネットにつながっていません。会社のネットワークの制限のこともあります。 | つながりを確かめてください。会社のコンピューターでは、会社の決まりも確かめてください。 |
-| `No matching distribution found`（上の 2 つが無いとき） | Python が古いか（古い pip は `Requires-Python` の行を出しません）、このバージョンが見つかりません。 | `python3 --version`（Windows では `py --version`）で確かめてください。3.10 以前なら、上の `Requires-Python` の行と同じにしてください。3.11 以降なら、手引きの 1 行をコピーして貼り、もう一度動かしてください。 |
+| `No matching distribution found`（`Requires-Python` と `Retrying` が無いとき） | Python が古いか（古い pip は `Requires-Python` の行を出しません）、このバージョンが見つかりません。 | `python3 --version`（Windows では `py --version`）で確かめてください。3.10 以前なら、上の `Requires-Python` の行と同じにしてください。3.11 以降なら、手引きの 1 行をコピーして貼り、もう一度動かしてください。 |
 | `ERROR [SHORTCUT_` で始まる行 | アイコンを作れませんでした。 | [アイコンから起動する](#アイコンから起動する)を見てください。 |
 
 直したら、同じ 1 行をもう一度動かしてください。それでも同じところで止まるときは、
 ホームのフォルダーの `garmin-normalizer` をごみ箱へ入れてから、もう一度
 動かしてください。表に無い行のときや、それでも止まるときは、
 [GitHub で報告する](#github-で報告する)から知らせてください。止まった行を、
-ユーザー名やパスを除いて貼ってください。
+ユーザー名やパス（ファイルやフォルダーの場所）を除いて貼ってください。
 
 ### 新しいバージョンに更新するとき
 
@@ -255,7 +270,7 @@ garmin-running-data-normalizer gui --create-shortcut
   どちらかにします。
   - アイコンから起動したときは、アイコンをもう一度ダブルクリックするのが
     かんたんです。新しい GUI が開きます。前の GUI は、ページが無いので、
-    10 分たつと自分で止まります。
+    実行中でなければ、10 分たつと自分で止まります。
   - ターミナルに出ているアドレスを写して、ブラウザのアドレス欄に貼ります。
     macOS のターミナルでは、アドレスを選んで command キーと C で写します。
     Windows の窓では、アドレスを選んでから右クリックで写します。Windows の
@@ -267,7 +282,7 @@ garmin-running-data-normalizer gui --create-shortcut
 - アイコンをもう一度ダブルクリックしたり、起動のコマンドをもう一度動かしたり
   すると、GUI がもう 1 つ開きます。使うのは 1 つにしてください。どちらかの
   ページで「終了」を押すと、そのページの GUI だけが終わります。ページを
-  閉じた GUI は、10 分たつと自分で止まります。
+  閉じた GUI は、実行中でなければ、10 分たつと自分で止まります。
 - ページを開いているあいだは、ページが GUI に知らせを送るので、操作しなくても
   GUI は止まりません。ブラウザがタブを眠らせたときは、止まることがあります。
   どのページも開いていないまま 10 分たつと、実行中でなければ、GUI は自分で
@@ -681,7 +696,8 @@ GUI は、1 つのタブで使ってください。選ぶ窓は、どのタブ�
 出て、終わるまでほかの正規化は始められません（`RUN_ACTIVE`）。
 
 画面に「このアプリが応答しません」と出たときは、ターミナルの窓を閉じた、
-10 分間使わなかった、などの理由で、GUI が止まっている可能性があります。
+どのページも 10 分間開いていなかった、などの理由で、GUI が止まっている
+可能性があります。
 アイコンから起動したときはアイコンをもう一度ダブルクリックし、ターミナルから
 起動したときは同じコマンドで起動し直して、新しいアドレスを開いてください。
 アドレスと鍵は、起動のたびに変わります。
@@ -701,7 +717,7 @@ GUI を使っている間、ターミナルの窓（アイコンから起動し�
   コマンドラインで取り消したときと同じ行が出て、終了コードは 130 です。
   実行を止めているあいだの 2 回目の `Ctrl+C` は、何もしません。実行が
   終わってから、GUI が止まります。
-- どのページも 10 分間 GUI を使わず、実行もしていないときは、GUI は
+- どのページも開いていないまま 10 分たつと、実行中でなければ、GUI は
   自分で止まります。ブラウザのタブを閉じても、すぐには止まりません。
 
 ## このアプリを片付ける

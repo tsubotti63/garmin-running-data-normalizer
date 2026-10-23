@@ -32,7 +32,7 @@
   third-party notices.
 - Complete dependency lock review, security/privacy checks, documentation, and
   release-specific review evidence.
-- `v1.0.0` remains the first stable release. `v1.7.1` is the current stable
+- `v1.0.0` remains the first stable release. `v2.0.0` is the current stable
   GitHub Release and Production PyPI version. Any future tag, GitHub Release,
   stable release, or package publication requires its own current review and
   separate Human authorization.
@@ -141,7 +141,7 @@
   the Hill Score, Endurance Score, and VO2Max rows that `snapshot build-input`
   merges.
 
-## Milestone 11 — v2.0 local GUI — planned
+## Milestone 11 — v2.0 local GUI — complete
 
 - Add a local GUI, served by the installed package on `127.0.0.1` for a browser
   on the same machine, as a second entry point to the same processing as the
@@ -160,3 +160,6 @@
   access.
 - Publish a release candidate to TestPyPI before the stable release. See the
   [v2.0.0 GUI Design](gui_design.md).
+- Published release candidates `2.0.0rc1` through `2.0.0rc5` on TestPyPI, and
+  version `2.0.0` through the merged release pull requests, the annotated tag,
+  the GitHub Release, and Trusted Publishing to Production PyPI.

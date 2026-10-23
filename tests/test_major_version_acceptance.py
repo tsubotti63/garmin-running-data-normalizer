@@ -111,11 +111,12 @@ class MajorVersionAcceptanceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             output = root / "handoff"
-            run_as("2.0.0", output)
+            # A later major version than the installed 2.0.0 (stage E2b).
+            run_as("3.0.0", output)
             # Told as an output of another version (stage B5b); until then,
             # HANDOFF_INVALID, DOCTOR_AUTHORITY_INVALID, and
             # SUPPORT_BUNDLE_AUTHORITY_INVALID.
-            with self.assertRaisesRegex(OtherVersionError, "made by version 2.0.0 of this app"):
+            with self.assertRaisesRegex(OtherVersionError, "made by version 3.0.0 of this app"):
                 validate_standalone_handoff(output)
             with self.assertRaises(DoctorError) as caught:
                 doctor_run_output(output)

@@ -1,5 +1,30 @@
 # Release Readiness
 
+## v2.0.0 stable release
+
+Version `2.0.0` is published as the release that adds the local GUI and the
+data handling of v2.0.0, the first release of the stable `2.x` family. It is
+v2.0.0rc5 with the version 2.0.0, the documents of the stable release, and
+the two changes of the GUI guides that were left for it: how to install
+Python on Windows with the Python install manager, and the start of
+**What you need**. From v2.0.0rc5, the package's Python changes only in the
+version in `__init__.py`, and the files of the page and the pictures do not
+change. The release publishes directly to Production PyPI through the
+protected `pypi` Environment; it is not published on TestPyPI.
+
+The Windows CI runs every Windows step with v2.0.0 and Python 3.11, and the
+Windows tests and the isolated wheel installation with Python 3.15. No
+physical Windows machine checks v2.0.0, as the Human maintainer decided on
+2026-10-23. One physical Windows 11 x64 machine checked v2.0.0rc4; from it,
+only the reading of JSON (v2.0.0rc5), the version, and the documents change.
+The lines of the guides about the Python install manager on Windows follow the
+python.org documentation and the source of the Python install manager 26.4,
+read on 2026-10-23; they are not checked on a physical Windows machine.
+
+The release source is the `main` commit that merges the v2.0.0 release
+preparation pull request. Its annotated tag, GitHub Release, and publish
+workflow evidence are recorded in this section after publication.
+
 ## v2.0.0rc5 release candidate
 
 Version `2.0.0rc5`, the fifth release candidate of v2.0.0, is published on
@@ -261,7 +286,7 @@ stable release.
 Version `2.0.0rc1`, the release candidate of v2.0.0, is published on TestPyPI
 only, for the checks of stage D before the stable release. It adds the local
 GUI and the data handling of v2.0.0, as the
-[draft of the v2.0.0 migration notes](v2_migration_notes_draft.md) lists.
+[draft of the v2.0.0 migration notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v2.0.0rc1/docs/v2_migration_notes_draft.md) lists.
 Production PyPI and the latest GitHub Release stay v1.7.1, and no GitHub
 Release was made for the release candidate.
 
@@ -476,11 +501,15 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Default branch: `main`
 - License: `Apache-2.0`
 - GitHub Actions: Operational
-- Current source and package version: `2.0.0rc5`
-- Current Production PyPI version: `1.7.1`
-- Latest GitHub Release: `v1.7.1`
+- Current source and package version: `2.0.0`
+- Current Production PyPI version: `2.0.0`
+- Latest GitHub Release: `v2.0.0`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
+- TestPyPI `2.0.0`: Not used; the release publishes directly to Production
+  PyPI through the protected `pypi` Environment
+- Production PyPI `2.0.0`: Published through Trusted Publishing; the publish
+  workflow verifies the exact-version install
 - TestPyPI `1.7.1`: Not used; the publish workflow's TestPyPI jobs were
   skipped
 - Production PyPI `1.7.1`: Published and exact-version install verified by the
@@ -501,15 +530,16 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
-and GitHub Releases remain immutable. v1.7.1 is the current stable release;
+and GitHub Releases remain immutable. v2.0.0 is the current stable release;
 v2.0.0rc5, v2.0.0rc4, v2.0.0rc3, v2.0.0rc2, and v2.0.0rc1 are release
-candidates on TestPyPI only; v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and
-v1.3.3 are historical releases. The v2.0.0rc5, v2.0.0rc4, v2.0.0rc3,
+candidates on TestPyPI only; v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0,
+and v1.3.3 are historical releases. The v2.0.0rc5, v2.0.0rc4, v2.0.0rc3,
 v2.0.0rc2, and v2.0.0rc1 tag and TestPyPI publication evidence was recorded
 only after the corresponding external state was observed.
 The v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag, GitHub
 Release, and Production PyPI publication evidence was recorded only after the
-corresponding external state was observed.
+corresponding external state was observed; the v2.0.0 publication evidence is
+added to this document after it is observed.
 
 ## Windows CI correction
 
@@ -530,6 +560,9 @@ other Windows steps show no failed command in their logs. Tags, GitHub
 Releases, Production PyPI files, and release notes are unchanged.
 
 ## Current release assessment
+
+The v2.0.0 release assessment is recorded here after publication, from the
+release source's main CI run and the Production publish workflow run.
 
 The v1.7.1 release source passed main CI run `38125071544` (Ubuntu `test` and
 `windows-runtime`) and CodeQL run `38125071252`. A build-only publish workflow
