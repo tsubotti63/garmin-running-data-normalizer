@@ -150,6 +150,14 @@ def test_readme_uses_stable_absolute_asset_urls() -> None:
     assert "### Who this is for" in readme
     assert "### What you get" in readme
     assert "### Try it" in readme
+    # The GUI comes first among the ways to try it, and the readers include
+    # people who paste one line for the GUI (stage E5, from an audit by Codex
+    # after the v2.0.0 publication).
+    try_it = readme.split("### Try it", 1)[1].split("###", 1)[0]
+    assert try_it.lstrip().startswith(
+        "- [GUI Guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md)"
+    )
+    assert "or paste one line into a terminal to install the GUI, which runs in your browser" in " ".join(readme.split())
     assert "### See the result" in readme
     assert "one Activity record, three warnings, zero errors" in readme
     assert "four activities and 37.0 km" in readme

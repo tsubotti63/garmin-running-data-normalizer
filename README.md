@@ -21,7 +21,8 @@ and human- and machine-readable analysis context.
 - You want to process a Garmin Account Export locally.
 - You want a stable foundation for long-term retrospective analysis.
 - You do not want missing values or relationships filled by guesswork.
-- You can use a Python CLI.
+- You can use a Python CLI, or paste one line into a terminal to install the
+  GUI, which runs in your browser.
 - You want reproducible outputs that can be reviewed before analysis.
 
 ### What you get
@@ -38,6 +39,9 @@ Select the image to inspect the full-size accessible SVG.
 
 ### Try it
 
+- [GUI Guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md) ([日本語](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.ja.md))
+  — install this app with one line, then normalize an Export from a page in
+  the browser of the same computer.
 - [Product Quick Start](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/product_quick_start.md)
   — run the tracked synthetic fixture without a Garmin account.
 - [Getting Started from Garmin Export](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/getting_started_from_garmin_export.md)
