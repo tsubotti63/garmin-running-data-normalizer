@@ -106,13 +106,16 @@ def section(text: str, heading: str) -> str:
 
 
 # The one line of each system that installs this version and makes the icon
-# (stage E1e): the code blocks inside the list of what you need.
-ONE_LINE = re.compile(r"^  ```(bash|powershell)\n  (.*)\n  ```$", re.M)
+# (stage E1e): the code blocks inside the list of what you need, which are
+# indented by two spaces in a list item, or by three in a numbered step (the
+# steps of v2.0.1 F1).
+ONE_LINE = re.compile(r"^( {2,3})```(bash|powershell)\n\1(.*)\n\1```$", re.M)
 WHAT_YOU_NEED = {"en": "What you need", "ja": "用意するもの"}
 
 
 def one_lines(language: str) -> list[tuple[str, str]]:
-    return ONE_LINE.findall(section(GUIDES[language].read_text(encoding="utf-8"), WHAT_YOU_NEED[language]))
+    text = section(GUIDES[language].read_text(encoding="utf-8"), WHAT_YOU_NEED[language])
+    return [(kind, line) for _indent, kind, line in ONE_LINE.findall(text)]
 
 
 def flowing(language: str, heading: str) -> str:
@@ -316,10 +319,14 @@ class GuiGuideTest(unittest.TestCase):
         # the line, which uses py, does not need. When an older Python is
         # installed, py starts it, and pymanager install default installs the
         # latest one; when py still starts the older one, as the legacy Python
-        # Launcher can make it, the older Python and the Launcher are removed
-        # in Installed apps (the documentation, sections 4.1.5, 4.1.9 and
-        # 4.1.15, and the source of the Python install manager 26.4, read on
-        # 2026-10-23; from the new AI session that read the guides of v2.0.0).
+        # Launcher can make it, the Launcher is removed in Installed apps, and
+        # the older Python too when py still starts it (the documentation,
+        # sections 4.1.5, 4.1.9 and 4.1.15, and the source of the Python
+        # install manager 26.4, read on 2026-10-23; from the new AI session
+        # that read the guides of v2.0.0). v2.0.1 F1 removes the Launcher
+        # first, since the legacy launcher's py overrides the one of the
+        # install manager (sections 4.1.9 and 4.1.15, read again on
+        # 2026-10-24) and other apps may use the older Python.
         phrases = {
             "en": (
                 "**Download Python install manager**", "choose **Install**",
@@ -327,18 +334,19 @@ class GuiGuideTest(unittest.TestCase):
                 "add a folder to `PATH`", "the line below uses `py`",
                 "When an older Python is installed already, `py` starts that one",
                 "run `pymanager install default` in PowerShell",
-                "remove the older Python and the Python Launcher in **Installed apps**",
+                "remove the Python Launcher in **Installed apps**",
                 "[python.org describes](https://docs.python.org/3/using/windows.html)",
-                "remove Python 3.10 and earlier and the Python Launcher, and keep the Python install manager and "
-                "Python 3.11 and later",
+                "Keep the Python install manager and Python 3.11 and later.",
+                "When it still shows the older Python, remove Python 3.10 and earlier too",
             ),
             "ja": (
                 "「Download Python install manager」", "「Install」を押して",
                 "いちばん新しい Python が自動で入ります", "`PATH` にフォルダーを足すか", "下の 1 行は `py` を",
                 "`py` はその古い Python を起動する", "`pymanager install default` を動かして",
-                "「インストールされているアプリ」から古い Python と Python Launcher を外して",
+                "「インストールされているアプリ」で Python Launcher を外し",
                 "[python.org の説明](https://docs.python.org/3/using/windows.html)",
-                "外すのは 3.10 以前の Python と Python Launcher で、Python install manager と 3.11 以降の Python は残します",
+                "Python install manager と 3.11 以降の Python は残します",
+                "それでも古い Python が出るときは、3.10 以前の Python も外して",
             ),
         }
         for language, wanted in phrases.items():
@@ -382,7 +390,7 @@ class GuiGuideTest(unittest.TestCase):
                 "Start the GUI from an icon": ("**Show all filename extensions**", "the icon starts the new version"),
                 "Go back to the GUI that is open": (
                     "A bookmark does not open the GUI", "one more GUI opens", "10 minutes",
-                    "the easiest is to double-click the icon again", "the command key and C",
+                    "When no normalization runs, you may instead double-click the icon again", "the command key and C",
                     "right-click to copy it", "stops the GUI of that page only", "puts the tab to sleep",
                     "The earlier GUI has no page, and stops by itself after 10 minutes when no run is active",
                     "A GUI whose page you closed stops by itself after 10 minutes when no run is active",
@@ -408,7 +416,7 @@ class GuiGuideTest(unittest.TestCase):
                 "アイコンから起動する": ("「すべてのファイル名拡張子を表示」", "アイコンから新しいバージョンが起動します"),
                 "開いている GUI に戻る": (
                     "ブックマークからは開けません", "GUI がもう 1 つ開きます", "10 分たつと",
-                    "アイコンをもう一度ダブルクリックするのがかんたんです", "command キーと C", "右クリックで写します",
+                    "実行中の正規化が無いときは、代わりにアイコンをもう一度ダブルクリック", "command キーと C", "右クリックで写します",
                     "そのページの GUI だけが終わります", "タブを眠らせた",
                     "前の GUI は、ページが無いので、実行中でなければ、10 分たつと",
                     "閉じた GUI は、実行中でなければ、10 分たつと",
@@ -463,6 +471,307 @@ class GuiGuideTest(unittest.TestCase):
             for link in links:
                 with self.subTest(language=language, link=link):
                     self.assertIn(link, anchors)
+
+
+    def test_guides_answer_the_reading_of_v200(self) -> None:
+        # v2.0.1 F1, from the new AI sessions that read the guides of v2.0.0
+        # (stage E2b) and the points left for after it (decision
+        # 20261022-15): numbered steps to install Python and this app, what
+        # to do for each code of an icon that was not made (stops.py), how to
+        # see the version and learn of a new one, how python.org finishes the
+        # install on macOS and removes Python, what to leave out of a
+        # report, the way back to a normalization that runs, and the window
+        # of PowerShell. The guides stay true of the page of v2.0.0, which
+        # links to the guides of main through the README.
+        # The steps are items of a numbered list, each at the start of its
+        # line, in this order ("go on to step 4." ends step 3, so the words
+        # alone would not show a lost number).
+        steps = {
+            "en": (
+                "1. See whether Python 3.11 or later is installed", "2. Install Python from the page of",
+                "3. Open the terminal again", "4. Run the line below.",
+            ),
+            "ja": (
+                "1. Python 3.11 以降が入っているかを確かめます。",
+                "2. [python.org](https://www.python.org/downloads/) のページから",
+                "3. ターミナルを開き直して", "4. 下の 1 行を動かします。",
+            ),
+        }
+        for language, wanted in steps.items():
+            text = section(GUIDES[language].read_text(encoding="utf-8"), WHAT_YOU_NEED[language])
+            places = [match.start() if (match := re.search(rf"^{re.escape(step)}", text, re.M)) else -1 for step in wanted]
+            with self.subTest(language=language, steps=wanted):
+                self.assertNotIn(-1, places)
+                self.assertEqual(places, sorted(places))
+        mac_doc, windows_doc = "https://docs.python.org/3/using/mac.html", "https://docs.python.org/3/using/windows.html"
+        releases = "https://github.com/tsubotti63/garmin-running-data-normalizer/releases"
+        phrases = {
+            "en": {
+                "What you need": (
+                    "the Command Prompt of Windows does not take them",
+                    "double-click **Install Certificates.command**",
+                    f"[python.org describes]({mac_doc})",
+                    "`Ctrl+C` in that window can stop the GUI, and cancel a normalization that runs",
+                    "| A line that starts with `ERROR [SHORTCUT_` | The icon could not be made; this app is installed. |",
+                    "right after `/Users` on macOS or `C:\\Users` on Windows",
+                    "write `USER` in its place",
+                    "Do not paste the address of the GUI either",
+                    "-m garmin_running_data_normalizer --version",
+                    f"[Releases]({releases})",
+                ),
+                "Start the GUI from an icon": (
+                    "This app is installed even then",
+                    "`SHORTCUT_PLACE_TAKEN`: a file that this app did not make has the name of the icon",
+                    "`SHORTCUT_NOT_CREATED`: the icon could not be written",
+                    "do as the macOS item above says after **Don't Allow**",
+                    "`SHORTCUT_NOT_SUPPORTED`: only macOS and Windows have the icon",
+                ),
+                "Go back to the GUI that is open": (
+                    "a normalization that runs goes on to its end",
+                    "the page shows the normalization that runs, if one runs",
+                    "it does not show what the earlier GUI does",
+                    "neither does the history of the browser",
+                    "do not tick the box and press **Remove the lock file** until that normalization has ended",
+                ),
+                "Stop the GUI": ("130 is the code of a cancelled run, not an error of this app",),
+                "Remove this app": (
+                    "This app does not need Python itself to be removed",
+                    f"[macOS]({mac_doc})", f"[Windows]({windows_doc})",
+                ),
+            },
+            "ja": {
+                "用意するもの": (
+                    "Windows のコマンドプロンプトでは動きません",
+                    "「Install Certificates.command」をダブルクリックして、入れるのを終えます",
+                    f"[python.org の説明]({mac_doc})",
+                    "その窓で Ctrl+C を押すと、GUI が止まり、実行中の正規化も取り消されることがあります",
+                    "| `ERROR [SHORTCUT_` で始まる行 | アイコンを作れませんでした。このアプリは入っています。 |",
+                    "macOS では `/Users`、Windows では `C:\\Users` のすぐあと",
+                    "`USER` に書き換えます",
+                    "GUI のアドレスも貼らないでください",
+                    "-m garmin_running_data_normalizer --version",
+                    f"[Releases]({releases})",
+                ),
+                "アイコンから起動する": (
+                    "そのときも、このアプリは入っています",
+                    "`SHORTCUT_PLACE_TAKEN`：このアプリが作っていないファイルが、アイコンと同じ名前でデスクトップにあります",
+                    "`SHORTCUT_NOT_CREATED`：アイコンを書けませんでした",
+                    "上の macOS の項目の「許可しない」を押したあとのとおりにして",
+                    "`SHORTCUT_NOT_SUPPORTED`：アイコンは macOS と Windows だけです",
+                ),
+                "開いている GUI に戻る": (
+                    "実行中の正規化も、最後まで動きます",
+                    "実行中の正規化があれば、そのページに出ます",
+                    "前の GUI でしていることは出ません",
+                    "ブラウザの履歴からも開けません",
+                    "その正規化が終わるまでは、✓ を入れて「目印のファイルを消す」を押さないでください",
+                ),
+                "GUI を終える": ("130 は取り消した実行のコードで、このアプリのエラーではありません",),
+                "このアプリを片付ける": (
+                    "このアプリのために Python そのものを消す要はありません",
+                    f"[macOS]({mac_doc})", f"[Windows]({windows_doc})",
+                ),
+            },
+        }
+        for language, sections in phrases.items():
+            for heading, wanted in sections.items():
+                text = flowing(language, heading)
+                for phrase in wanted:
+                    with self.subTest(language=language, heading=heading, phrase=phrase):
+                        self.assertIn(phrase, text)
+
+    def test_guides_answer_the_reading_of_their_changes(self) -> None:
+        # v2.0.1 F1, from two new AI sessions that read the changed guides: on
+        # a Mac without Python, python3 --version opens the window of the
+        # developer tools, which step 1 names; the cases of Windows one by
+        # one, the Python Launcher before the older Python (which other apps
+        # may use), and either answer to the question on PATH; where to go
+        # when the version is still old, without a loop back; how to tell us
+        # when the GUI does not open (the Bug report form of the repository,
+        # whose fields are required), with the names to write over; the codes
+        # of an icon that was not made in their own part; and the way back,
+        # the end, and the removal. This app does not look for new versions:
+        # it reaches no server by itself.
+        for language in ("en", "ja"):
+            text = section(GUIDES[language].read_text(encoding="utf-8"), WHAT_YOU_NEED[language])
+            step_1 = text[re.search(r"^1\. ", text, re.M).start() : re.search(r"^2\. ", text, re.M).start()]
+            with self.subTest(language=language):
+                self.assertIn("`xcode-select`", step_1)
+        issues = "https://github.com/tsubotti63/garmin-running-data-normalizer/issues"
+        phrases = {
+            "en": {
+                "What you need": (
+                    "You may also install this app first and read **How to use** before you request it",
+                    "(on Windows, the line says that it is not recognized)",
+                    "do not install them in that window (do not choose **Install** there), and go on to step 2",
+                    "it installs the certificates that Python uses for secure connections",
+                    "the folder named like **Python 3.14** in **Applications** of the Finder",
+                    "open a new PowerShell window, and run `py --version`",
+                    "**Installed apps** is under **Apps** in the Settings of Windows (**Apps & features** on Windows 10)",
+                    "when you do not know whether you may remove it, keep it",
+                    "close every window of the terminal (on macOS, quit the Terminal with **Terminal** > **Quit Terminal**"
+                    " in its menu), open it again",
+                    "copy it with the copy button at the top right of its box",
+                    "Windows PowerShell, in any version",
+                    "After `ERROR [SHORTCUT_`, you need not move the folder",
+                    "| Install Python 3.11 or later, open the terminal again,",
+                    "| Do what [When the icon could not be made](#when-the-icon-could-not-be-made) says for the code,",
+                    f"choose **New issue** in [Issues]({issues})",
+                    "You need an account of GitHub",
+                    "do not attach a picture of the screen",
+                    "write `COMPUTER` in its place", "write `FOLDER` in their place",
+                    "This app does not tell you when a new version comes out",
+                    "**Current stable release** names the latest version",
+                    "When more than one GUI is open, stop them all",
+                    "It opens a window of the Terminal, which shows lines in English and stops when it is done",
+                    "either answer works",
+                    "it is usually because the Python Launcher that came with the older Python takes the `py` command",
+                    "from what you have not done yet",
+                    "which you can make for free",
+                    "**Does the tracked synthetic fixture reproduce the problem?**: choose **Not tested**",
+                    f"the version that you were installing, {__version__}.",
+                    "The line of this guide holds no name",
+                    "paste what `python3 --version` or `py --version` showed, and write what you did",
+                    "in a new window of the terminal, not the one where the GUI runs",
+                ),
+                "Start the GUI": ("the line of this guide alone does not make this command work",),
+                "Start the GUI from an icon": (
+                    "When you start the GUI from it, its window opens minimized",
+                    "([When the icon could not be made](#when-the-icon-could-not-be-made))",
+                    "the command of the Python of the virtual environment in [Start the GUI](#start-the-gui)",
+                    "whose folder opens when you type `shell:programs`",
+                    "When it stops again, tell us ([Tell us when the GUI does not open](#tell-us-when-the-gui-does-not-open))",
+                    "The name of the icon is **Garmin Running Data Normalizer**",
+                    "or move it to the Trash when you do not need it",
+                ),
+                "Go back to the GUI that is open": (
+                    "when you do not know whether a normalization runs, use the address",
+                    "the control key and C stops the GUI",
+                    "so choose again from box 1",
+                    "Once the earlier GUI has stopped, its address no longer opens it",
+                    "the one with the normalization that runs if one runs",
+                    "Quit the new GUI then, and go back to the earlier one with its address",
+                    f'When the page says "{catalog("en")["status.unauthorized"]}", select all of the address again',
+                    "Stop the GUI that you do not use with **Quit** on its page",
+                ),
+                "Stop the GUI": (
+                    "when the icon started the GUI on Windows, the window closes by itself",
+                    "a line that starts with `ERROR [RUN_CANCELLED`",
+                ),
+                "Remove this app": (
+                    "write down the places that boxes 2 and 3 show before you forget them",
+                    "The Exports that you downloaded",
+                ),
+                "If something is wrong": (
+                    "When the GUI does not open, do as "
+                    "[Tell us when the GUI does not open](#tell-us-when-the-gui-does-not-open) says",
+                    "When you paste lines of the terminal in what happened, write other words in place of names",
+                ),
+            },
+            "ja": {
+                "用意するもの": (
+                    "このアプリを先に入れて、画面の「使い方」を見てからリクエストしてもかまいません",
+                    "（Windows では「認識されません」か「is not recognized」）",
+                    "その窓では入れずに（そこで「インストール」を押さずに）、2 に進みます",
+                    "Python が安全なつながりに使う証明書を入れます",
+                    "「Python 3.14」のような名前のフォルダーにあります",
+                    "新しい PowerShell の窓を開いて、`py --version` を動かします",
+                    "「インストールされているアプリ」は、Windows の設定の「アプリ」の中にあります（Windows 10 では「アプリと機能」）",
+                    "外してよいか分からないときは、外さずに知らせてください",
+                    "ターミナルの窓をすべて閉じてから（macOS では、メニューの「ターミナル」→「ターミナルを終了」で終えてから）開き直して",
+                    "枠の右上のコピーのボタンで写してから",
+                    "どのバージョンでも、この 1 行を使えます",
+                    "`ERROR [SHORTCUT_` で止まったときは、ごみ箱へ入れる要はありません",
+                    "| Python 3.11 以降を入れてターミナルを開き直し、",
+                    "| [アイコンを作れなかったとき](#アイコンを作れなかったとき)のコードごとのことをするか、",
+                    f"[Issues]({issues}) で「New issue」を押し、「Bug report」の書式で知らせてください",
+                    "GitHub のアカウントが要ります",
+                    "画面の写しは添付しないでください",
+                    "`COMPUTER` に書き換えます", "`FOLDER` に書き換えます",
+                    "このアプリは、新しいバージョンが出ても知らせません",
+                    "「Current stable release」に、いちばん新しいバージョンが書いてあります",
+                    "GUI がいくつか開いているときは、すべて終えます",
+                    "終わって止まったら、その窓は閉じてかまいません",
+                    "どちらに答えてもかまいません",
+                    "たいてい、古い Python と一緒に入った Python Launcher が `py` を受け持っています",
+                    "まだしていない所から続けます",
+                    "無料で作れます",
+                    "「Not tested」を選びます",
+                    f"入れようとしたバージョン（{__version__}）",
+                    "手引きの 1 行には名前が入っていないので",
+                    "`python3 --version`（Windows では `py --version`）が出した行と、したことを書きます",
+                    "GUI を動かしている窓とは別の、新しい窓で",
+                    "「GUI Guide」の横の「日本語」のリンク",
+                ),
+                "GUI を起動する": ("手引きの 1 行で入れただけでは、このコマンドは使えません",),
+                "アイコンから起動する": (
+                    "ショートカットから起動すると、窓は最小化されて",
+                    "（[アイコンを作れなかったとき](#アイコンを作れなかったとき)）",
+                    "仮想環境の Python のコマンド（`--create-shortcut` なし）で、GUI を開けます",
+                    "`shell:programs` と入れて開くフォルダーの中にあります",
+                    "もう一度動かしてまた止まるときは、知らせてください（[GUI を開けないときに知らせる](#gui-を開けないときに知らせる)）",
+                    "アイコンの名前は「Garmin Running Data Normalizer」です",
+                    "要らなければごみ箱へ入れてください",
+                ),
+                "開いている GUI に戻る": (
+                    "実行中かどうか分からないときは、アドレスのほうにします",
+                    "control キーと C を押すと、GUI が止まり、実行中の正規化も取り消されます",
+                    "1 の箱から選び直します",
+                    "前の GUI が止まったあとは、そのアドレスを貼っても開けません",
+                    "実行中の正規化があるときは、その GUI を使います",
+                    "新しい GUI を「終了」で終えて、前の GUI に、そのアドレスから戻ります",
+                    f'「{catalog("ja")["status.unauthorized"]}」と出たときは、アドレスを端から端までもう一度写します',
+                    "使わない GUI は、そのページの「終了」で終えます",
+                ),
+                "GUI を終える": (
+                    "Windows でアイコンから起動したときは、窓が自分で閉じます",
+                    "`ERROR [RUN_CANCELLED` で始まる行が出ます",
+                ),
+                "このアプリを片付ける": (
+                    "2 と 3 の箱に出ている場所を書き留めておきます",
+                    "ダウンロードしたエクスポートの ZIP",
+                ),
+                "困ったとき": (
+                    "GUI を開けないときは、[GUI を開けないときに知らせる](#gui-を開けないときに知らせる)のとおりにします",
+                    "「何が起きたか」にターミナルの行を貼るときは",
+                ),
+            },
+        }
+        for language, sections in phrases.items():
+            for heading, wanted in sections.items():
+                text = flowing(language, heading)
+                for phrase in wanted:
+                    with self.subTest(language=language, heading=heading, phrase=phrase):
+                        self.assertIn(phrase, text)
+
+    def test_links_from_other_files_into_the_guides_find_their_headings(self) -> None:
+        # The anchors of the guides that the README, the release notes, the
+        # other documents, the code, the tests, and the scripts link to stay
+        # when the guides change (v2.0.1 F1 made numbered steps of What you
+        # need; the help panel of the GUI links to the files of the guides
+        # only).
+        def anchor(heading: str) -> str:
+            return re.sub(r"[^\w\- ]", "", heading.strip().lower()).replace(" ", "-")
+
+        anchors = {
+            path.name: {anchor(heading) for heading in re.findall(r"^#{1,6} (.+)$", path.read_text(encoding="utf-8"), re.M)}
+            for path in GUIDES.values()
+        }
+        sources = [ROOT / "README.md", ROOT / "README.ja.md", ROOT / "CHANGELOG.md", *sorted((ROOT / "docs").rglob("*.md"))]
+        sources += [
+            path
+            for folder in ("src", "tests", "scripts")
+            for path in sorted((ROOT / folder).rglob("*"))
+            if path.suffix in {".py", ".mjs", ".json", ".html"}
+        ]
+        found = []
+        for path in sources:
+            for name, fragment in re.findall(r"(gui_guide(?:\.ja)?\.md)#([^\s)\"'`>]+)", path.read_text(encoding="utf-8")):
+                found.append((path.relative_to(ROOT).as_posix(), name, fragment))
+        self.assertTrue(found)
+        for source, name, fragment in found:
+            with self.subTest(source=source, link=f"{name}#{fragment}"):
+                self.assertIn(fragment, anchors[name])
 
 
 if __name__ == "__main__":
