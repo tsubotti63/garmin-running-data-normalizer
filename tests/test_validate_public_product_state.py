@@ -527,12 +527,12 @@ def test_candidate_contract_marker_says_where_the_candidate_is_published(
     _start_implementation_candidate(tmp_path, "2.0.1rc1")
     contract = tmp_path / "docs/output_contract.md"
     text = contract.read_text(encoding="utf-8")
-    line = re.search(r"^- Implementation candidate: v2\.0\.1rc1\b.*$", text, re.M)
-    assert line is not None
+    # Every marker of the candidate: the source may be this candidate, with
+    # its own marker already (v2.0.1 F4e).
+    marker = re.compile(r"^- Implementation candidate: v2\.0\.1rc1\b.*$", re.M)
+    assert marker.search(text) is not None
     contract.write_text(
-        text.replace(
-            line.group(0), f"- Implementation candidate: v2.0.1rc1 {place}".rstrip()
-        ),
+        marker.sub(f"- Implementation candidate: v2.0.1rc1 {place}".rstrip(), text),
         encoding="utf-8",
     )
 

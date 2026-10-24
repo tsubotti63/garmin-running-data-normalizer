@@ -53,5 +53,9 @@ def test_a_release_candidate_sends_its_readers_to_the_stable_release() -> None:
     assert f"for normal use, install the stable release v{CURRENT_STABLE_VERSION}" in readme
     assert f"The release candidate v{__version__} is a test version" in readme
     japanese = flowing("README.ja.md")
-    assert f"試しのバージョン **v{__version__}** は TestPyPI 向け" in japanese
+    # Before the publication, it is for TestPyPI; after it, published there.
+    assert (
+        f"試しのバージョン **v{__version__}** は TestPyPI 向け" in japanese
+        or f"試しのバージョン **v{__version__}** を TestPyPI に公開しました" in japanese
+    )
     assert "ふつうは、上の安定版を入れてください" in japanese
