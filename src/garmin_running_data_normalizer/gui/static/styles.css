@@ -843,8 +843,13 @@ button.primary:disabled {
   content: "\2212\00a0";
 }
 
-/* The bar at the bottom: privacy, version, language, and quit. */
+/* The bar at the bottom: privacy, version, language, and quit. It stays on
+   the screen, so that Quit can be reached without scrolling (v2.0.1 F2);
+   the help panel, which is fixed at the right, lies above it. */
 .statusbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

@@ -199,6 +199,28 @@ class GuiCatalogTest(unittest.TestCase):
             with self.subTest(key=key):
                 self.assertNotIn("いちばん上から", catalogs["ja"][key])
         self.assertNotIn("OS", catalogs["ja"]["open.requested"])
+        # v2.0.1 F2: the tip of the fourth box names the button that shows the
+        # output; the field of the timezone says that it has a list; and the
+        # English words of opening agree with each other and with the
+        # Japanese ones, "this computer".
+        for language, catalog in catalogs.items():
+            with self.subTest(language=language):
+                quote = "“{}”" if language == "en" else "「{}」"
+                self.assertIn(quote.format(catalog["open.folder"]), catalog["hint.run"])
+        self.assertIn("from the list", catalogs["en"]["timezone.help"])
+        self.assertIn("一覧から選んで", catalogs["ja"]["timezone.help"])
+        self.assertIn("this computer", catalogs["en"]["open.requested"])
+        self.assertEqual(catalogs["en"]["stop.open_failed"], "This computer could not open it.")
+        # After Quit, the page says how to start the app again (v2.0.1 F2).
+        for key in ("quit.text", "next_line.stopped"):
+            with self.subTest(key=key):
+                self.assertIn("start it from the icon or with the command", catalogs["en"][key].replace("this app", "it"))
+                self.assertIn("アイコンかコマンドで起動します", catalogs["ja"][key])
+        for key in ("open.requested", "stop.open_failed"):
+            with self.subTest(key=key):
+                self.assertNotIn("your computer", catalogs["en"][key])
+                self.assertNotIn("The system", catalogs["en"][key])
+                self.assertIn("このコンピューター", catalogs["ja"][key])
 
     def test_language_names_are_written_in_their_own_language(self) -> None:
         self.assertEqual(load_catalog("en")["language.name"], "English")
