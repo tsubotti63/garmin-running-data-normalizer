@@ -6,8 +6,8 @@ or a real Garmin export.
 The root `QUICK_START.md` is a short router to the product guides. This file
 contains the complete synthetic Product Quick Start.
 
-Current stable release: v2.0.0. The current release documents currently serve
-stable v2.0.0 guidance, and the same version is available from the latest
+Current stable release: v2.0.1. The current release documents currently serve
+stable v2.0.1 guidance, and the same version is available from the latest
 GitHub Release and Production PyPI. This Quick Start uses the CLI; to use the
 local GUI instead, see the
 [GUI Guide](gui_guide.md).
@@ -18,24 +18,24 @@ local GUI instead, see the
 - Git
 - A local shell: macOS/Linux shell or Windows PowerShell
 
-## Install stable v2.0.0
+## Install stable v2.0.1
 
 Install the current stable distribution from Production PyPI. Pin the exact
 version when release identity must be reproducible:
 
 ```bash
-python -m pip install garmin-running-data-normalizer==2.0.0
+python -m pip install garmin-running-data-normalizer==2.0.1
 garmin-running-data-normalizer --version
 ```
 
 The version command prints
-`python -m garmin_running_data_normalizer 2.0.0`. The equivalent module command
+`python -m garmin_running_data_normalizer 2.0.1`. The equivalent module command
 is `python -m garmin_running_data_normalizer --version`.
 
-On Windows, v2.0.0 automatically installs `tzdata` through its conditional
+On Windows, v2.0.1 automatically installs `tzdata` through its conditional
 runtime dependency. One maintainer-owned physical Windows clean install of
 v1.2.1 previously confirmed that behavior, `Asia/Tokyo` resolution, and the
-tracked Synthetic Run-All without a manual `tzdata` install. Current v2.0.0
+tracked Synthetic Run-All without a manual `tzdata` install. Current v2.0.1
 Windows package paths are also validated by `windows-latest`; this remains
 bounded evidence, not a universal compatibility claim.
 
@@ -398,7 +398,7 @@ file/session/lap identity, and converts selected invalid metric sentinels to
 null before scaling. It emits Activity/FIT links only from evidence-qualified
 mutual unique matches; timestamp-only joins are rejected.
 
-Sleep Daily and HRV Daily are optional stable v2.0.0 Run-All datasets. Sleep
+Sleep Daily and HRV Daily are optional stable v2.0.1 Run-All datasets. Sleep
 performs no filling, day-shift inference, score recalculation, or Activity join.
 HRV is `analysis_reference_only`: conflicting FIT values are not averaged, and
 Health Status JSON is not promoted as equivalent HRV evidence. Health Status

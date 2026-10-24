@@ -13,6 +13,38 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
+## v2.0.1 — stable Production release
+
+Published as the annotated `v2.0.1` tag, the latest stable
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.0.1),
+and the verified
+[Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/2.0.1/).
+
+### Fixed
+
+- The page of the GUI: **Quit** asks first, in the bar at the bottom of the
+  page, and the page says while the app stops and when it has stopped; the
+  bar at the bottom stays on the screen; after a run, a line says what
+  pressing **Run normalization** again does; the Snapshot box no longer says
+  that a Snapshot Store will be made when this Export alone is normalized; the
+  help marks **Read the result** as done only once `START_HERE.md` is opened
+  from the page; and a hint, the help of the timezone, and the English words
+  for a folder or file that could not be opened are clearer.
+
+### Changed
+
+- The GUI Guide answers what a first reading of it asked: the installation in
+  numbered steps, how to report a GUI that does not open, what to do when the
+  icon could not be made, and more about updating, going back to an open GUI,
+  stopping, and removing this app.
+
+### Compatibility
+
+- The processing, the 17 datasets, 247 fields, stable keys, output paths, the
+  command line, the Snapshot Store format, and the Product exit mapping
+  remain those of v2.0.0. Outputs record `2.0.1`; check an output of v2.0.0
+  with v2.0.0. See the [v2.0.1 Release Notes](docs/release_notes/v2.0.1.md).
+
 ## v2.0.0 — stable Production release
 
 Published on 2026-10-23 JST as the annotated `v2.0.0` tag, the latest stable

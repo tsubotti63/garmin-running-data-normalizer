@@ -1,6 +1,6 @@
 # Architecture Overview
 
-- Applies to: stable v2.0.0
+- Applies to: stable v2.0.1
 - Compatibility family: stable 2.x
 - Authority: human-readable architecture overview
 - Last reviewed: 2026-10-07
@@ -9,7 +9,7 @@
 
 Garmin Running Data Normalizer is a local-first Python CLI, with a local GUI
 starting with v2.0.0 (`gui`), which runs the same processing from a page in
-the browser of the same computer. The stable v2.0.0
+the browser of the same computer. The stable v2.0.1
 release reads a local Garmin Account Data Export, as a folder or as the
 downloaded ZIP file, normalizes supported JSON and FIT sources,
 and publishes a deterministic handoff with 17 stable normalized datasets plus

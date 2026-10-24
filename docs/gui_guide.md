@@ -1,9 +1,8 @@
 # GUI Guide
 
-> **This guide is for v2.0.0.** The GUI is in v2.0.0 and later; v1.7.1 and
-> earlier releases do not have it. [What you need](#what-you-need) says how
-> to install v2.0.0. If you keep using v1.7.1 or an earlier release, use the
-> command line as described in
+> **This guide is for v2.0.1.** v1.7.1 and earlier releases do not have the
+> GUI. [What you need](#what-you-need) says how to install v2.0.1. If you keep
+> using v1.7.1 or an earlier release, use the command line as described in
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
 
 [日本語](gui_guide.ja.md)
@@ -24,7 +23,7 @@ Everything stays on your computer.
   Garmin may take some time after your request before you can download the
   Export, so request it early. You may also install this app first and read
   **How to use** before you request it.
-- Python 3.11 or later, and this app, v2.0.0, which the steps below
+- Python 3.11 or later, and this app, v2.0.1, which the steps below
   install. Nothing else needs to be installed for the GUI.
 - A web browser on the same computer, in a window of a desktop or laptop
   computer. The page is not made for phones or tablets.
@@ -98,7 +97,7 @@ guide there: the Command Prompt of Windows does not take them.
    macOS, tell us
    ([Tell us when the GUI does not open](#tell-us-when-the-gui-does-not-open)).
 4. Run the line below. It makes the virtual environment `garmin-normalizer`
-   in your home folder, installs v2.0.0 in it, makes the icon that starts the
+   in your home folder, installs v2.0.1 in it, makes the icon that starts the
    GUI ([Start the GUI from an icon](#start-the-gui-from-an-icon)), and opens
    the GUI. Each part runs only after the one before it has succeeded. When
    the line makes the icon, macOS may ask whether the Terminal may use the
@@ -109,14 +108,14 @@ guide there: the Command Prompt of Windows does not take them.
    macOS:
 
    ```bash
-   python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.0.0 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
+   python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.0.1 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
    ```
 
    Windows PowerShell, in any version (version 5.1 has no `&&`, so that the
    parts are joined with `if ($?)`, one inside the other):
 
    ```powershell
-   py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.0.0; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
+   py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.0.1; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
    ```
 
    - When the line succeeds, the terminal shows three lines at its end, and
@@ -194,7 +193,7 @@ fill in the form. Without the GUI, fill in its fields in this way:
 - **Package version**: the line that `--version` shows
   ([Update to a new version](#update-to-a-new-version)); when the line
   stopped before this app was installed, the version that you were
-  installing, 2.0.0.
+  installing, 2.0.1.
 - **Sanitized reproduction**: the line that you ran. The line of this
   guide holds no name, so you may paste it as it is.
 - **Exit code**: write that you do not know it, when you do not.
@@ -223,7 +222,7 @@ Do not paste the address of the GUI either: it holds the key of the launch.
 ### Update to a new version
 
 The page shows the version of this app at its bottom, for example
-Version 2.0.0, and this command shows it in a new window of the terminal,
+Version 2.0.1, and this command shows it in a new window of the terminal,
 not the one where the GUI runs:
 
 macOS:
@@ -305,6 +304,8 @@ With `--no-browser`, it only prints the address, for you to open.
 - The page follows your browser's language. You can switch between English
   and Japanese under **Language** in the bar at the bottom of the page; the
   choice is kept for that browser tab.
+- The bar at the bottom of the page, with **Language** and **Quit**, stays at
+  the bottom of the window while you scroll the page.
 
 The page has four boxes, numbered in the order in which you set them:
 1 **This export**, 2 **Snapshots**, 3 **Output**, and 4 **Normalize**. The
@@ -433,7 +434,8 @@ above that makes the icon again (the line of this guide makes it too):
 - When you double-click the icon again, or run the command that starts the
   GUI again, one more GUI opens. Use one of them, the one with the
   normalization that runs if one runs. Stop the GUI that you do not use with
-  **Quit** on its page. **Quit** on a page stops the GUI of that page only. A
+  **Quit** on its page (answer its question with **Quit this app**). **Quit**
+  on a page stops the GUI of that page only. A
   GUI whose page you closed stops by itself after 10 minutes when no run is
   active. While the earlier GUI still normalizes, the new GUI may say that the
   Snapshot Store has a lock file (`SNAPSHOT_STORE_LOCKED`): do not tick the box
@@ -519,9 +521,9 @@ exports held; none can be left out.
   copies this export into the store, then normalizes it together with the
   existing Snapshots.
 - **Normalize this export only (no import)**: normalizes this export alone,
-  without the store. The parts of the store turn gray. When there is no store
-  yet, they still say "It is created here when you normalize.", but this
-  way creates no store.
+  without the store. The parts of the store turn gray, and the box says "This
+  way does not use the store: only this export is normalized, and it is not
+  imported into the Snapshots." This way makes no store.
 
 The third way, normalizing the existing Snapshots again, is chosen in the
 first box.
@@ -596,12 +598,13 @@ red when it would import. The default place is usually short enough.
   yet, with up to 200 letters and digits or 66 Japanese characters. It must
   not start with a dot or contain characters such as `/` or `:`. A name that
   you type and that is there already is shown in red before the run starts.
-- **Timezone for local dates and times**: `Asia/Tokyo` by default. Use an
-  IANA name such as `Europe/London`. One normalization gives all dates and
-  times in one timezone, so records made while travelling are not in the
-  local time of that place, and another timezone can move the day of records
-  that span midnight, such as sleep. To compare with an earlier output, use
-  the same timezone.
+- **Timezone for local dates and times**: `Asia/Tokyo` by default. Type an
+  IANA name such as `Europe/London`, or choose one from the list: usually the
+  timezone of where you live (in Japan, the default). One
+  normalization gives all dates and times in one timezone, so records made
+  while travelling are not in the local time of that place, and another
+  timezone can move the day of records that span midnight, such as sleep. To
+  compare with an earlier output, use the same timezone.
 - **Also create a summary that can be given to an AI (dates to the month, distance, time, and so on)**:
   off by default. It is the External-safe Pack of the command line's
   `--external-safe-pack`: one ZIP file, `analysis/external_safe_handoff.zip`
@@ -633,9 +636,9 @@ active at a time.
   shows how many have been read; files with the same content are read once.
   If nothing changes for 30 seconds, a note says so. Large exports can take
   a while, and you can keep waiting.
-- Keep the terminal open. If you close the window, the run goes on; open the
-  same address again to see it. While the computer sleeps, the run does not
-  progress.
+- Keep the terminal open. If you close the tab or the window of the browser,
+  the run goes on; open the same address again to see it. While the computer
+  sleeps, the run does not progress.
 - **Cancel** asks first, in the box: **Cancel the normalization** or
   **Continue**. A run that is cancelled before it finishes creates no output
   folder, and an import that was under way is completed by the next import.
@@ -688,7 +691,15 @@ the output, what was left out, and the warnings.
 **Use the normalized data with AI** opens the part of the help panel about
 using the output with an AI.
 
-After a run, the page proposes a new name for the next one.
+After a run, the page proposes a new name for the next one, and a line under
+**Run normalization** says what pressing it again does: "Pressing it again
+normalizes again, with the name in the name field; the output that this run
+made stays as it is." The name field is **Name of the new folder** in the
+third box. Press it again when you have changed a setting, such as the
+timezone; with the same input and settings, it only makes another output
+with the same content. When the run imported, the line adds "The same export
+is not imported twice.": this export stays in the store once, and the next
+normalization uses it too.
 
 ## Later launches
 
@@ -808,8 +819,10 @@ documents of that release.
 pushes the page aside instead of covering it, and has five parts:
 
 - **How to use**: how to get the export from Garmin, and the four boxes;
-  press a step to light up its box. It links to this guide and to
-  Getting Started from Garmin Export.
+  press a step to light up its box. Its last step, **Read the result**,
+  shows **Done** once **Open START_HERE.md**, under **Next** in the fourth
+  box, has opened the file; opening it in another way does not mark it. It
+  links to this guide and to Getting Started from Garmin Export.
 - **Questions**: answers to common questions, such as whether the ZIP file
   can be used as it is, what this app remembers, and why a date can be one
   day off from Garmin Connect.
@@ -818,7 +831,8 @@ pushes the page aside instead of covering it, and has five parts:
 - **Use with AI**: how to use the output with an AI, with example questions
   that **Copy** copies: for this computer or an AI you trust, and one for an
   outside AI with the summary that can be given to an AI.
-- **If something is wrong**: the report on GitHub, as above.
+- **If something is wrong**: how to report a problem on GitHub, as
+  [Report a problem on GitHub](#report-a-problem-on-github) says.
 
 **Close** or Escape closes the panel.
 
@@ -901,11 +915,18 @@ While you use the GUI, the terminal window (the window that the icon opened,
 when the icon started the GUI) shows the address and seems to stand still.
 That is as it should be.
 
-- Choose **Quit** at the bottom of the page, or press `Ctrl+C` in the
-  terminal (the control key and C, on macOS too). When the icon started the GUI, its window is the terminal. When
-  the GUI stops, the terminal shows "GUI stopped."; you may then close the
-  window (when the icon started the GUI on Windows, the window closes by
-  itself).
+- Choose **Quit** at the bottom of the page. It asks first, in the bar:
+  **Quit this app?** Choose **Quit this app** to stop the GUI, or
+  **Keep using it**, or press Escape, to go on. While the GUI stops, the bar
+  says **Quitting this app…**; then the page says that the app has stopped
+  and how to start it again, and you may close the tab. The outputs that
+  you made stay as they are; after Quit, the buttons of the page no longer
+  open them, so open them in Finder or File Explorer.
+- You may instead press `Ctrl+C` in the terminal (the control key and C, on
+  macOS too). When the icon started the GUI, its window is the terminal.
+- Either way, when the GUI stops, the terminal shows "GUI stopped."; you
+  may then close the window of the terminal (when the icon started the GUI
+  on Windows, the window closes by itself).
 - While a run is active, **Quit** is refused; cancel the run first. `Ctrl+C`
   cancels the run and then stops the GUI.
 - A second `Ctrl+C` while the GUI stops a run does nothing; the GUI stops

@@ -77,6 +77,14 @@ QUOTED_LABELS = (
     "next_actions.ai",
     "result.column_change",
     "hints.toggle",
+    # v2.0.1 F5: the question before Quit, and the step of the help that
+    # reading the result marks done (stage F2).
+    "quit.question",
+    "quit.yes",
+    "quit.no",
+    "status.quitting",
+    "help.step_results",
+    "step_state.done",
     "remembered.search_again",
     "forget.button",
     "tools.heading",
@@ -144,8 +152,31 @@ class GuiGuideTest(unittest.TestCase):
                 with self.subTest(language=language, key=key):
                     self.assertIn(quote[language].format(messages[key]), text)
 
+    def test_guides_quote_the_lines_of_the_page_that_v2_0_1_changed(self) -> None:
+        # v2.0.1 F5, from the checker: the lines of the page that stage F2
+        # changed, quoted from the catalog, so that a changed line fails here
+        # until both guides follow it.
+        quote = {"en": '"{}"', "ja": "「{}」"}
+        sections = {
+            "en": {
+                "how.single_note": "Box 2: Snapshots",
+                "run.again_note": "Box 4: Normalize",
+                "run.again_same_export": "Box 4: Normalize",
+            },
+            "ja": {
+                "how.single_note": "2 の箱：スナップショット",
+                "run.again_note": "4 の箱：正規化",
+                "run.again_same_export": "4 の箱：正規化",
+            },
+        }
+        for language, keys in sections.items():
+            messages = catalog(language)
+            for key, heading in keys.items():
+                with self.subTest(language=language, key=key):
+                    self.assertIn(quote[language].format(messages[key]), flowing(language, heading))
+
     def test_guides_say_that_the_gui_is_in_this_release(self) -> None:
-        # The stable release v2.0.0 has the gui command, and v1.7.1 does not
+        # The stable release has the gui command, and v1.7.1 does not
         # (stage E2b; the release candidates said so for themselves from
         # stage D2).
         english = GUIDES["en"].read_text(encoding="utf-8")

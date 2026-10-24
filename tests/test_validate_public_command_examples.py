@@ -108,12 +108,12 @@ def test_stale_stable_version_fails(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
     quick_start = tmp_path / "docs/product_quick_start.md"
     quick_start.write_text(
-        quick_start.read_text(encoding="utf-8").replace("v2.0.0", "v9.9.9"),
+        quick_start.read_text(encoding="utf-8").replace("v2.0.1", "v9.9.9"),
         encoding="utf-8",
     )
 
     assert (
-        "docs/product_quick_start.md: current stable v2.0.0 is not identified"
+        "docs/product_quick_start.md: current stable v2.0.1 is not identified"
         in validate(tmp_path)
     )
 
@@ -143,7 +143,7 @@ def _add_install_line(root: Path, relative: str, line: str) -> None:
 # A release candidate after this release, which is installed from TestPyPI
 # (stage D2); the stable release is installed from Production PyPI only
 # (stage E2b).
-CANDIDATE = "2.0.1rc1"
+CANDIDATE = "2.0.2rc1"
 
 
 def _as_candidate(root: Path) -> None:

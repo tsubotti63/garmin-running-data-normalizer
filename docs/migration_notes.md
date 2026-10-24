@@ -1,5 +1,26 @@
 # Migration Notes
 
+## v2.0.0 to v2.0.1
+
+v2.0.1 does not require data migration. Existing Snapshot Stores load and
+verify as before, with the same Snapshot lifecycle contract, policy registry,
+and store format. The processing and the outputs are those of v2.0.0, apart
+from `product_version` `2.0.1` and the digests that include it.
+
+- Update as [Update to a new version](gui_guide.md#update-to-a-new-version)
+  of the GUI Guide says: stop the GUI first, on macOS as on Windows, and run
+  the line of the guide of v2.0.1, which installs into the same virtual
+  environment and makes the icon again. The Snapshot Store, the outputs, and
+  the settings that the GUI remembers stay as they are.
+- `validate-handoff`, `doctor --run-output`, and `support-bundle` of v2.0.1
+  stop for an output of v2.0.0 with `OUTPUT_OTHER_VERSION`, and the GUI shows
+  the change since an earlier output only for an output of the same version.
+  Check an output of v2.0.0 with v2.0.0, or rerun Run-All into a new folder.
+- The CLI commands and options are unchanged. The page of the GUI asks before
+  **Quit**; scripts that run the `gui` command are not affected.
+
+See the [v2.0.1 Release Notes](release_notes/v2.0.1.md).
+
 ## v1.7.1 to v2.0.0
 
 v2.0.0 does not require data migration. Existing Snapshot Stores load and

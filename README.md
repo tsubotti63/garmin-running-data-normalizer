@@ -72,7 +72,14 @@ Select either preview to inspect its full-size accessible SVG.
 See the
 [asset sources and reproduction notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/README.md).
 
-Current stable release: **v2.0.0** · Python **3.11+** · Apache License 2.0
+Current stable release: **v2.0.1** · Python **3.11+** · Apache License 2.0
+
+v2.0.1 fixes small things of the page of the GUI: **Quit** asks first and
+then says that the app has stopped, the bar at the bottom of the page stays on
+the screen, and some lines of the page are clearer. The GUI Guide answers what
+a first reading of it asked. The processing, the outputs, the command line, and
+the Snapshot Store are those of v2.0.0. See
+[What v2.0.1 changes](#what-v201-changes).
 
 v2.0.0 adds a local GUI, opened with `garmin-running-data-normalizer gui`,
 which normalizes an Export from a page in the browser of the same computer,
@@ -84,14 +91,6 @@ Run-All into a new folder. See
 [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md#v171-to-v200),
 and the
 [GUI Guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md).
-
-Implementation candidate: **v2.0.1rc1** (the first release candidate of
-v2.0.1, published on TestPyPI; Production PyPI and the latest GitHub Release
-stay v2.0.0). It is a test version, for checking the fixes of v2.0.1 before
-its release: for normal use, install the stable release v2.0.0. It fixes
-small things of the page of the GUI, such as a question before Quit; the
-processing and the outputs are those of v2.0.0. **Install** below says how
-to install it.
 
 v1.7.1 fixes `snapshot run-all`, which had produced no Hill Score, Endurance
 Score, or VO2Max rows since v1.3.0, because Run-All did not recognize the
@@ -135,7 +134,7 @@ v1.4.0 adds read-only Export diagnostics and a Human-reviewed public-safe
 Support Bundle without changing normalized datasets, stable keys, Snapshot
 semantics, or the `0 / 0 / 3 / 2` Product exit contract.
 
-v2.0.0 is published as the annotated tag, the latest stable GitHub Release, and
+v2.0.1 is published as the annotated tag, the latest stable GitHub Release, and
 the latest Production PyPI distribution. v1.4.0 remains the Export Evidence and
 Diagnostics release.
 
@@ -147,9 +146,10 @@ Diagnostics release.
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
 - [GUI Guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md) / [GUI の手引き](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.ja.md)
+- [v2.0.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.0.1.md)
 - [v2.0.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.0.0.md)
-- [Published stable Release v2.0.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.0.0)
-- [Production PyPI v2.0.0](https://pypi.org/project/garmin-running-data-normalizer/2.0.0/)
+- [Published stable Release v2.0.1](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.0.1)
+- [Production PyPI v2.0.1](https://pypi.org/project/garmin-running-data-normalizer/2.0.1/)
 - Project story on Zenn: [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
 
 ## Why this project
@@ -187,6 +187,37 @@ Normalize locally
 
 The package does not send the export to a hosted processing service. Public
 reproduction uses only synthetic fixtures.
+
+## What v2.0.1 changes
+
+The v2.0.1 release fixes small things of the page of the GUI and of the GUI
+Guide. The processing, the outputs, the command line, the Snapshot Store, and
+the `0 / 0 / 3 / 2` Product exit mapping are those of v2.0.0.
+
+- **Quit** asks first, in the bar at the bottom of the page. While the app
+  stops, the bar says so; then the page says that the app has stopped and how
+  to start it again. The language and the help stay usable.
+- The bar at the bottom of the page stays on the screen while the page
+  scrolls.
+- After a run, a line under **Run normalization** says what pressing it again
+  does. When this Export alone is normalized, the Snapshot box no longer says
+  that a Snapshot Store will be made. The help marks **Read the result** as
+  done once `START_HERE.md` is opened from the page. The hint of the box that
+  runs and the help of the timezone are clearer.
+- The GUI Guide gives the installation in numbered steps, how to report a GUI
+  that does not open, and what to do when the icon could not be made, and says
+  more about updating, going back to an open GUI, stopping, and removing this
+  app.
+- Outputs record `2.0.1`. `validate-handoff`, `doctor --run-output`, and
+  `support-bundle` of v2.0.1 stop for an output of v2.0.0 with
+  `OUTPUT_OTHER_VERSION`, as each version does for the outputs of other
+  versions, and the GUI shows the change since an earlier output only for an
+  output of the same version. Check an output of v2.0.0 with v2.0.0, or rerun
+  Run-All into a new folder.
+
+See the
+[v2.0.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.0.1.md)
+and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md#v200-to-v201).
 
 ## What v2.0.0 changes
 
@@ -433,7 +464,7 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. The published v2.0.0
+`python -m garmin_running_data_normalizer --version`. The published v2.0.1
 package installs `tzdata` automatically on Windows so Python can resolve IANA
 timezone data (`Asia/Tokyo` by default, or the timezone given with
 `--timezone`). macOS and Linux continue to use their system timezone data.
@@ -446,18 +477,6 @@ in the GUI Guide. Its
 [What you need](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#what-you-need)
 gives one line for macOS and one for Windows PowerShell that make a virtual
 environment, install this app in it, and make the icon.
-
-The release candidate v2.0.1rc1 is a test version, for checking the fixes
-of v2.0.1 before its release; for normal use, install the stable release as
-above. It is published on TestPyPI. Install it in a virtual environment of
-its own, so that an installed v2.0.0 stays as it is. Production PyPI is the
-extra index for the dependencies that TestPyPI may not provide, such as
-`tzdata` on Windows:
-
-```bash
-python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.0.1rc1
-garmin-running-data-normalizer gui
-```
 
 Maintainers can reproduce the packaging gate without uploading anything:
 
