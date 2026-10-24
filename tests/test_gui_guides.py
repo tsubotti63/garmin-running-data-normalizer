@@ -5,7 +5,11 @@ import re
 import unittest
 from pathlib import Path
 
-from garmin_running_data_normalizer import __version__
+# The guides of main are read by the users of the stable release, through the
+# README, so they name and install the release that is published, which the
+# product state knows, also while the source is a release candidate, whose
+# procedure gives its own line (v2.0.1 F4; decision 20261024-4).
+from scripts.validate_public_product_state import CURRENT_STABLE_VERSION
 from tests import test_gui_i18n
 
 
@@ -146,14 +150,14 @@ class GuiGuideTest(unittest.TestCase):
         # stage D2).
         english = GUIDES["en"].read_text(encoding="utf-8")
         japanese = GUIDES["ja"].read_text(encoding="utf-8")
-        self.assertTrue(english.startswith("# GUI Guide\n\n> **This guide is for v2.0.0.**"))
-        self.assertTrue(japanese.startswith("# GUI の手引き\n\n> **v2.0.0 の手引きです。**"))
+        self.assertTrue(english.startswith(f"# GUI Guide\n\n> **This guide is for v{CURRENT_STABLE_VERSION}.**"))
+        self.assertTrue(japanese.startswith(f"# GUI の手引き\n\n> **v{CURRENT_STABLE_VERSION} の手引きです。**"))
         # The note at the top names this release and v1.7.1, and no
         # pre-release (stage D7).
         for language, text in (("en", english), ("ja", japanese)):
             with self.subTest(language=language):
                 note = text.split("\n\n", 2)[1]
-                self.assertEqual(set(re.findall(r"v\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?", note)), {f"v{__version__}", "v1.7.1"})
+                self.assertEqual(set(re.findall(r"v\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?", note)), {f"v{CURRENT_STABLE_VERSION}", "v1.7.1"})
                 self.assertIsNone(re.search(r"v\d+\.\d+\.\d+(?:a|b|rc)\d+", note))
         self.assertIn("[日本語](gui_guide.ja.md)", english)
         self.assertIn("[English](gui_guide.md)", japanese)
@@ -224,7 +228,7 @@ class GuiGuideTest(unittest.TestCase):
         self.assertEqual((mac_language, windows_language), ("bash", "powershell"))
         # The stable release is installed from Production PyPI only (stage
         # E2b); the release candidates were installed from TestPyPI.
-        install = f"-m pip install garmin-running-data-normalizer=={__version__}"
+        install = f"-m pip install garmin-running-data-normalizer=={CURRENT_STABLE_VERSION}"
         for language, path in GUIDES.items():
             with self.subTest(language=language):
                 self.assertNotIn("test.pypi.org", path.read_text(encoding="utf-8"))
@@ -629,7 +633,7 @@ class GuiGuideTest(unittest.TestCase):
                     "from what you have not done yet",
                     "which you can make for free",
                     "**Does the tracked synthetic fixture reproduce the problem?**: choose **Not tested**",
-                    f"the version that you were installing, {__version__}.",
+                    f"the version that you were installing, {CURRENT_STABLE_VERSION}.",
                     "The line of this guide holds no name",
                     "paste what `python3 --version` or `py --version` showed, and write what you did",
                     "in a new window of the terminal, not the one where the GUI runs",
@@ -697,7 +701,7 @@ class GuiGuideTest(unittest.TestCase):
                     "まだしていない所から続けます",
                     "無料で作れます",
                     "「Not tested」を選びます",
-                    f"入れようとしたバージョン（{__version__}）",
+                    f"入れようとしたバージョン（{CURRENT_STABLE_VERSION}）",
                     "手引きの 1 行には名前が入っていないので",
                     "`python3 --version`（Windows では `py --version`）が出した行と、したことを書きます",
                     "GUI を動かしている窓とは別の、新しい窓で",
