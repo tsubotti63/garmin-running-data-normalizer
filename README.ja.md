@@ -8,9 +8,9 @@
 Versionや変更履歴の正本は英語のREADMEとRelease Notesを確認してください。
 v2.0.0 から、ローカルの GUI を `garmin-running-data-normalizer gui` で開けます。
 入れ方は、[GUI の手引き](docs/gui_guide.ja.md)の「用意するもの」にあります。
-試しのバージョン **v2.0.1rc1** は TestPyPI 向けで、2.0.1 の公開の前に直しを確かめるための
-ものです。ふつうは、上の安定版を入れてください。Production PyPI の安定版と最新の
-GitHub Release は v2.0.0 のままです。
+試しのバージョン **v2.0.1rc1** を TestPyPI に公開しました。2.0.1 の公開の前に直しを
+確かめるためのものです。ふつうは、上の安定版を入れてください。
+Production PyPI の安定版と最新の GitHub Release は v2.0.0 のままです。
 
 ## 何をするOSSか
 
