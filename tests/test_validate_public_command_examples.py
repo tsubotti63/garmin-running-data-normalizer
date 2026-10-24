@@ -5,6 +5,7 @@ from pathlib import Path
 
 from garmin_running_data_normalizer import __version__
 from scripts.validate_public_command_examples import PUBLIC_DOCUMENTS, validate
+from scripts.validate_public_product_state import CURRENT_STABLE_VERSION
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -159,17 +160,35 @@ def _as_candidate(root: Path) -> None:
     assert validate(root) == []
 
 
+def _as_stable(root: Path) -> None:
+    # The source as the stable release that is published, whatever version
+    # it has now (v2.0.1 F4): its version, and a README that has no release
+    # candidate to install from TestPyPI.
+    init = root / "src/garmin_running_data_normalizer/__init__.py"
+    init.write_text(
+        init.read_text(encoding="utf-8").replace(
+            f'__version__ = "{__version__}"', f'__version__ = "{CURRENT_STABLE_VERSION}"'
+        ),
+        encoding="utf-8",
+    )
+    readme = root / "README.md"
+    lines = readme.read_text(encoding="utf-8").splitlines()
+    readme.write_text("\n".join(line for line in lines if "test.pypi.org" not in line) + "\n", encoding="utf-8")
+    assert validate(root) == []
+
+
 def test_the_stable_release_is_not_installed_from_testpypi(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
+    _as_stable(tmp_path)
     _add_install_line(
         tmp_path,
         "docs/gui_guide.md",
         "python -m pip install --index-url https://test.pypi.org/simple/ "
-        f"--extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer=={__version__}",
+        f"--extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer=={CURRENT_STABLE_VERSION}",
     )
 
     assert validate(tmp_path) == [
-        f"docs/gui_guide.md: the stable release {__version__} installs from Production PyPI, not TestPyPI"
+        f"docs/gui_guide.md: the stable release {CURRENT_STABLE_VERSION} installs from Production PyPI, not TestPyPI"
     ]
 
 
