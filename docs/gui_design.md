@@ -2,7 +2,7 @@
 
 - Status: design revised on 2026-10-11; implemented in v2.0.0, whose `gui`
   command opens the GUI
-- Applies to: stable v2.0.0
+- Applies to: stable v2.0.1
 - Authority: maintainer design record agreed by the Human maintainer on
   2026-10-10 and revised by the Human maintainer's decisions of 2026-10-11.
   Product contracts, tests, and the stable release remain the behavior
