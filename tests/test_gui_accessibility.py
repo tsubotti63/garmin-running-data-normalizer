@@ -324,6 +324,67 @@ class GuiPageStructureTest(unittest.TestCase):
                 self.assertEqual((search.tag, search.get("data-i18n")), ("button", "remembered.search_again"))
                 self.assertIn("hidden", search.attributes)
 
+    def test_quitting_asks_first_in_the_bar(self) -> None:
+        # v2.0.1 F2: Quit asks first, in the bar, as forgetting the settings
+        # does: the button says whether its question is open, the question is
+        # hidden until it is asked, and its two buttons are described by the
+        # question and what quitting does, which focus reads once; no live
+        # region repeats it.
+        button = by_id(self.elements, "quit-button")
+        self.assertEqual(
+            (button.tag, button.get("aria-expanded"), button.get("aria-controls")),
+            ("button", "false", "quit-confirm"),
+        )
+        question = by_id(self.elements, "quit-confirm")
+        self.assertIn("hidden", question.attributes)
+        self.assertIsNone(question.get("role"))
+        self.assertIsNone(question.get("aria-live"))
+        for identifier, key in (("quit-yes", "quit.yes"), ("quit-no", "quit.no")):
+            with self.subTest(button=identifier):
+                answer = by_id(self.elements, identifier)
+                self.assertEqual(
+                    (answer.tag, answer.get("type"), answer.get("data-i18n"), answer.get("aria-describedby")),
+                    ("button", "button", key, "quit-question quit-text"),
+                )
+        # The line under Normalize after a run is plain help text.
+        again = by_id(self.elements, "run-again")
+        self.assertEqual((again.tag, again.get("class")), ("p", "help"))
+
+    def test_the_script_asks_before_it_quits_and_remembers_start_here(self) -> None:
+        # v2.0.1 F2, in the page script, which no test runs: Quit opens its
+        # question, whose answers quit or keep the app, Escape keeps it, focus
+        # goes to the safe answer; the state of quitting and the switch of the
+        # tips follow the rules of flow.mjs; and opening START_HERE.md marks
+        # reading the result done in the help panel.
+        script = (STATIC_ROOT / "app.mjs").read_text(encoding="utf-8")
+        for line in (
+            'ui.quit.addEventListener("click", askQuit);',
+            'ui.quitYes.addEventListener("click", quit);',
+            'ui.quitNo.addEventListener("click", keepApp);',
+            "ui.quitConfirm.hidden = !state.quitAsked;",
+            "ui.quitYes.disabled = !enabled.quit;",
+            "ui.hintsToggle.disabled = !enabled.hints;",
+            "replaceLines(ui.runAgain, againNote(current, enabled).map(describe));",
+            "quitting: state.quitting,",
+            'stopped: state.connectionKey === "status.stopped",',
+            "helpSteps(states, current.runState, state.output?.startHereOpened === true)",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, script)
+        ask = re.search(r"function askQuit\(\) \{(.*?)\n\}", script, re.DOTALL)
+        assert ask is not None
+        self.assertIn("ui.quitNo.focus();", ask.group(1))
+        self.assertRegex(
+            script,
+            r'ui\.quitConfirm\.addEventListener\("keydown", \(event\) => \{\s*if \(event\.key === "Escape"\) \{\s*keepApp\(\);',
+        )
+        stop = re.search(r"async function quit\(\) \{(.*?)\n\}", script, re.DOTALL)
+        assert stop is not None
+        self.assertIn('state.connectionKey = "status.quitting";', stop.group(1))
+        self.assertIn("state.quitting = false;", stop.group(1).split("finally")[1])
+        opened = re.search(r'if \(target === "start_here"\) \{\s*output\.startHereOpened = true;', script)
+        self.assertIsNotNone(opened)
+
     def test_the_name_and_the_place_of_the_support_bundle_say_what_they_are(self) -> None:
         # Stage B5a: the name of the output is described by its red lines,
         # the button that chooses the folder of the Support Bundle by its
@@ -554,6 +615,21 @@ class GuiStyleTest(unittest.TestCase):
     def test_focus_stays_visible(self) -> None:
         self.assertRegex(self.source, r":focus-visible \{\s*outline: 3px solid var\(--accent\);")
         self.assertNotRegex(self.source, r"outline:\s*(none|0)\b")
+
+    def test_the_bar_at_the_bottom_stays_on_the_screen(self) -> None:
+        # v2.0.1 F2: Quit and the language can be reached without scrolling to
+        # the end of the page; the help panel, fixed at the right, lies above
+        # the bar.
+        bar = re.search(r"\n\.statusbar \{(.*?)\}", self.source, re.DOTALL)
+        assert bar is not None
+        self.assertIn("position: sticky;", bar.group(1))
+        self.assertIn("bottom: 0;", bar.group(1))
+        layer = re.search(r"z-index: (\d+);", bar.group(1))
+        panel = re.search(r"\n\.help-panel \{(.*?)\}", self.source, re.DOTALL)
+        assert layer is not None and panel is not None
+        panel_layer = re.search(r"z-index: (\d+);", panel.group(1))
+        assert panel_layer is not None
+        self.assertLess(int(layer.group(1)), int(panel_layer.group(1)))
 
     def test_motion_can_be_reduced(self) -> None:
         self.assertIn("@media (prefers-reduced-motion: reduce)", self.source)

@@ -473,7 +473,7 @@ PAGE_STOPS: dict[str, Stop] = {
         "open the output folder from your file manager, such as Finder or File Explorer",
     ),
     "OPEN_FAILED": Stop(
-        "the system could not open it",
+        "this computer could not open it",
         "open the output folder from your file manager, such as Finder or File Explorer",
     ),
     # The system's own dialog to choose an Export (stage B3a).

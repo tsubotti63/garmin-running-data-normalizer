@@ -13,6 +13,7 @@ import {
   HELP_STEPS,
   TERMINAL_STATES,
   afterChange,
+  againNote,
   apartReport,
   announcement,
   boxStates,
@@ -122,6 +123,10 @@ const ui = {
   nextText: byId("next-text"),
   language: byId("language-select"),
   quit: byId("quit-button"),
+  // Quitting asks first, in the bar (v2.0.1 F2).
+  quitConfirm: byId("quit-confirm"),
+  quitYes: byId("quit-yes"),
+  quitNo: byId("quit-no"),
   boxes: {
     export: byId("box-export"),
     snapshot: byId("box-snapshot"),
@@ -216,6 +221,8 @@ const ui = {
   runElapsed: byId("run-elapsed"),
   runAnnouncer: byId("run-announcer"),
   start: byId("start-button"),
+  // What pressing Normalize again does after a run (v2.0.1 F2).
+  runAgain: byId("run-again"),
   cancel: byId("cancel-button"),
   startReason: byId("start-reason"),
   cancelConfirm: byId("cancel-confirm"),
@@ -368,6 +375,10 @@ const state = {
   // The code of a refused run request, shown in the box that it concerns.
   runError: null,
   quitKey: null,
+  // Whether the question of Quit is open, and whether the page waits for
+  // the server to stop (v2.0.1 F2).
+  quitAsked: false,
+  quitting: false,
   browser: null,
   // The check of the finished run's output and the actions on it.
   output: null,
@@ -715,6 +726,9 @@ function view() {
     storeReady: storeReady(how, state.store),
     importProblem: importIssue,
     connected: state.connected,
+    // While the server stops, and after it stopped (v2.0.1 F2).
+    quitting: state.quitting,
+    stopped: state.connectionKey === "status.stopped",
     runState: run.state,
     starting: state.starting,
     checking: state.checking,
@@ -1377,7 +1391,7 @@ function renderHelp(states, current) {
       part.nav.removeAttribute("aria-current");
     }
   }
-  const steps = helpSteps(states, current.runState);
+  const steps = helpSteps(states, current.runState, state.output?.startHereOpened === true);
   for (const [step, walk] of Object.entries(ui.walk)) {
     walk.button.parentElement.className = `walk-${steps[step]}`;
     const words = steps[step] === "done" ? "step_state.done" : steps[step] === "current" ? "badge.current" : null;
@@ -1714,6 +1728,13 @@ function renderControls(states, current) {
   const importing = (state.run.how ?? state.how) === "snapshots";
   setText(ui.cancelConfirmText, t(importing ? "run.cancel_confirm_import" : "run.cancel_confirm"));
   ui.quit.disabled = !enabled.quit;
+  // The question of Quit in the bar (v2.0.1 F2), as the one that forgets the
+  // settings; its answer stops the server only while Quit can.
+  ui.quitConfirm.hidden = !state.quitAsked;
+  ui.quit.setAttribute("aria-expanded", String(state.quitAsked));
+  ui.quitYes.disabled = !enabled.quit;
+  ui.hintsToggle.disabled = !enabled.hints;
+  replaceLines(ui.runAgain, againNote(current, enabled).map(describe));
   ui.openFolder.disabled = !enabled.outputActions;
   ui.openStartHere.disabled = !enabled.outputActions;
   // The bundle's name is fixed, so a second one would be refused.
@@ -1892,6 +1913,10 @@ async function openOutput(target) {
   try {
     await callApi("/api/open-output", { target });
     output.opened = true;
+    // Reading the result is done in the help panel (v2.0.1 F2).
+    if (target === "start_here") {
+      output.startHereOpened = true;
+    }
   } catch (error) {
     if (!connectionFailure(error)) {
       output.openError = error.code;
@@ -2375,9 +2400,27 @@ async function cancelRun() {
   returnFocus(ui.cancel, ui.runHeading);
 }
 
+// Quit asks first, in the bar, as forgetting the settings does (v2.0.1 F2).
+function askQuit() {
+  state.quitAsked = true;
+  render();
+  ui.quitNo.focus();
+}
+
+function keepApp() {
+  state.quitAsked = false;
+  render();
+  ui.quit.focus();
+}
+
+// While the server stops, the bar says so and nothing works (v2.0.1 F2);
+// a lost connection is told as any lost connection.
 async function quit() {
+  state.quitAsked = false;
   state.quitKey = null;
-  ui.quit.disabled = true;
+  state.quitting = true;
+  state.connectionKey = "status.quitting";
+  render();
   try {
     await callApi("/api/shutdown");
     state.connected = false;
@@ -2386,12 +2429,15 @@ async function quit() {
     state.connectionKey = "status.stopped";
   } catch (error) {
     if (!connectionFailure(error)) {
+      state.connectionKey = "status.connected";
       state.quitKey = error.code === "RUN_ACTIVE" ? "quit.blocked" : null;
       if (state.quitKey === null) {
         state.runError = error.code;
         state.runErrorPart = "quit.button";
       }
     }
+  } finally {
+    state.quitting = false;
   }
   render();
 }
@@ -2726,7 +2772,14 @@ function connect() {
   );
   ui.outputName.value = defaultOutputName(new Date());
   ui.language.addEventListener("change", () => changeLanguage(ui.language.value));
-  ui.quit.addEventListener("click", quit);
+  ui.quit.addEventListener("click", askQuit);
+  ui.quitYes.addEventListener("click", quit);
+  ui.quitNo.addEventListener("click", keepApp);
+  ui.quitConfirm.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      keepApp();
+    }
+  });
   ui.chooseZip.addEventListener("click", () => chooseWithDialog("zip", "input", ui.chooseZip));
   ui.chooseFolder.addEventListener("click", () => chooseWithDialog("folder", "input", ui.chooseFolder));
   // The store and the folder for the output are folders (stage B4a).

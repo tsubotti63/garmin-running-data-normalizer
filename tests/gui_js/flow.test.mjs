@@ -66,6 +66,7 @@ test("a checked export with confirmed boxes can start a run", () => {
     start: true,
     cancel: false,
     quit: true,
+    hints: true,
     outputActions: false,
     forget: false,
   });
@@ -74,6 +75,18 @@ test("a checked export with confirmed boxes can start a run", () => {
 test("nothing works without a connection", () => {
   const off = enabled({ ...READY, connected: false });
   assert.ok(Object.values(off).every((value) => value === false));
+});
+
+test("nothing works while the server stops after Quit, and the tips switch needs the server", () => {
+  // v2.0.1 F2: between the answer to the question of Quit and the server's
+  // answer, as without a connection; the tips switch remembers its choice on
+  // the server, so it is off without one (it showed a lost connection after
+  // Quit), while the language and the help panel are no controls of the page.
+  const quitting = enabled({ ...READY, quitting: true });
+  assert.ok(Object.values(quitting).every((value) => value === false));
+  assert.equal(enabled({ ...READY, connected: false, settingsPresent: true }).hints, false);
+  assert.equal(enabled(READY).hints, true);
+  assert.equal(enabled({ ...READY, runState: "running" }).hints, true);
 });
 
 test("a running job can only be cancelled", () => {
@@ -87,6 +100,7 @@ test("a running job can only be cancelled", () => {
     start: false,
     cancel: true,
     quit: false,
+    hints: true,
     outputActions: false,
     forget: false,
   });
@@ -750,6 +764,10 @@ test("the line of what to do next follows the boxes and the run", () => {
   assert.deepEqual(finished({ exit_code: 0, warning_count: 4 }), ["next_line.done_warnings", { warnings: 4 }, {}]);
   assert.deepEqual(finished({ exit_code: 3, warning_count: 8 }), ["next_line.done_partial", { warnings: 8 }, {}]);
   assert.equal(line({ ...READY, connected: false }), null);
+  // After Quit, the line says that the app stopped and how to start it
+  // again (v2.0.1 F2); a lost connection has its own red box.
+  assert.deepEqual(line({ ...READY, connected: false, stopped: true }), ["next_line.stopped", {}, {}]);
+  assert.equal(flow.nextLineKind({ ...READY, connected: false, stopped: true }, boxStates(READY)), "current");
   // After a change, the line follows the boxes again, not the last result.
   assert.deepEqual(
     line({ ...READY, runState: "finished", result: { exit_code: 0, warning_count: 4 }, editedSinceRun: true, outputDecided: false }),
@@ -758,6 +776,27 @@ test("the line of what to do next follows the boxes and the run", () => {
   assert.deepEqual(line({ ...READY, runState: "finished_after_cancel", editedSinceRun: true }), ["next_line.start", {}, {}]);
   // A refused run request points at the box that it concerns.
   assert.deepEqual(line({ ...READY, requestBox: "output" }), ["next_line.fix_box", { box: 3 }, {}]);
+});
+
+test("after a run, a line under Normalize says what pressing it again does", () => {
+  // v2.0.1 F2: Normalize stays enabled after a run that finished, as the
+  // page was made; the line says that it normalizes again with the name in
+  // the name field and that the output stays, and in the way that imports,
+  // that the same export is not imported twice (the registration knows it by
+  // its content). Not after a change, a stop, or a cancellation, and not
+  // while Normalize cannot be pressed.
+  const note = (view) => flow.againNote(view, enabled(view)).map((line) => line.key);
+  const finished = { ...READY, runState: "finished", result: { exit_code: 0, warning_count: 0 } };
+  assert.deepEqual(note({ ...finished, how: "single" }), ["run.again_note"]);
+  assert.deepEqual(note({ ...finished, how: "rerun" }), ["run.again_note"]);
+  assert.deepEqual(note({ ...finished, how: "snapshots" }), ["run.again_note", "run.again_same_export"]);
+  assert.deepEqual(note({ ...finished, runState: "finished_after_cancel", how: "single" }), ["run.again_note"]);
+  assert.deepEqual(note({ ...finished, editedSinceRun: true, how: "single" }), []);
+  assert.deepEqual(note({ ...finished, outputBusy: true, how: "single" }), []);
+  assert.deepEqual(note({ ...finished, connected: false, how: "single" }), []);
+  for (const runState of ["idle", "running", "cancelled", "failed"]) {
+    assert.deepEqual(note({ ...READY, runState, how: "single" }), [], runState);
+  }
 });
 
 test("the line of what to do next follows the dialog, the check, and the extraction", () => {
@@ -1217,17 +1256,21 @@ test("the help panel has five parts, and its steps follow the boxes", () => {
     run: "current",
     results: "todo",
   });
+  // After a run, reading the result is the step to do, and it is done once
+  // START_HERE.md was opened from the page (v2.0.1 F2).
   const finished = { ...READY, runState: "finished" };
   assert.deepEqual(flow.helpSteps(boxStates(finished), "finished"), {
     export: "done",
     snapshot: "done",
     output: "done",
     run: "done",
-    results: "done",
+    results: "current",
   });
+  assert.equal(flow.helpSteps(boxStates(finished), "finished", true).results, "done");
+  assert.equal(flow.helpSteps(boxStates({ ...READY, runState: "finished_after_cancel" }), "finished_after_cancel").results, "current");
   // A box that changed after the run is to be set again; the result is old.
   const edited = { ...finished, editedSinceRun: true, outputDecided: false };
-  const editedSteps = flow.helpSteps(boxStates(edited), "finished");
+  const editedSteps = flow.helpSteps(boxStates(edited), "finished", true);
   assert.equal(editedSteps.output, "current");
   assert.equal(editedSteps.results, "todo");
   // A stop in the third box makes it the step to do; the fourth box waits.
@@ -1261,11 +1304,16 @@ test("the store's lines: what the page does, the problem, the notices, the cloud
   ]);
   // Nothing is known yet.
   assert.deepEqual(flow.storeMessages({ answer: null }), []);
-  // A place for a new store, which a cloud may copy.
-  assert.deepEqual(lineShapes(flow.storeMessages({ answer: { state: "new", path: "/x", cloud: "desktop_documents" } })), [
+  // A place for a new store, which a cloud may copy; this Export alone does
+  // not use the store, so the page does not say that it makes one there
+  // (v2.0.1 F2).
+  const place = { answer: { state: "new", path: "/x", cloud: "desktop_documents" } };
+  assert.deepEqual(lineShapes(flow.storeMessages(place, "snapshots")), [
     ["warn", true, "place.cloud_desktop"],
     ["info", true, "store.new"],
   ]);
+  assert.deepEqual(lineShapes(flow.storeMessages(place, "single")), [["warn", true, "place.cloud_desktop"]]);
+  assert.deepEqual(lineShapes(flow.storeMessages(place)), [["warn", true, "place.cloud_desktop"]]);
   // A store with two Snapshots and both notices, in yellow.
   const opened = {
     state: "store",

@@ -267,6 +267,7 @@
         <button type="button" id="cancel-button" class="big" data-i18n="run.cancel" disabled></button>
       </div>
       <p id="start-reason" class="help"></p>
+      <p id="run-again" class="help"></p>
       <div id="cancel-confirm" class="confirm" hidden>
         <p id="cancel-confirm-text" data-i18n="run.cancel_confirm"></p>
         <div class="button-row">
@@ -596,6 +597,14 @@
   </div>
 </aside>
 <footer class="statusbar">
+  <div id="quit-confirm" class="confirm" hidden>
+    <p id="quit-question" class="question" data-i18n="quit.question"></p>
+    <p id="quit-text" data-i18n="quit.text"></p>
+    <div class="button-row">
+      <button type="button" id="quit-yes" data-i18n="quit.yes" aria-describedby="quit-question quit-text"></button>
+      <button type="button" id="quit-no" data-i18n="quit.no" aria-describedby="quit-question quit-text"></button>
+    </div>
+  </div>
   <div id="forget-confirm" class="confirm" hidden>
     <p id="forget-question" class="question" data-i18n="forget.question"></p>
     <p id="forget-text" data-i18n="forget.text"></p>
@@ -610,7 +619,7 @@
   <p id="product-version" class="version"></p>
   <label for="language-select" data-i18n="language.label"></label>
   <select id="language-select"></select>
-  <button type="button" id="quit-button" data-i18n="quit.button" disabled></button>
+  <button type="button" id="quit-button" data-i18n="quit.button" aria-expanded="false" aria-controls="quit-confirm" disabled></button>
   <p id="connection-status" class="status" role="status" aria-live="polite"></p>
   <p id="info-announcer" class="visually-hidden" role="status" aria-live="polite"></p>
 </footer>

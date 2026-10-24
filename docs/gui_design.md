@@ -99,6 +99,20 @@ with the seconds of each step, and the results by data family (stage B1a).
   while FIT files are read.
 - Cancelling asks for confirmation in the fourth box, not in a dialog of the
   browser.
+- Quitting asks for confirmation in the bar at the bottom, as forgetting the
+  settings does (v2.0.1, stage F2). While the server stops, the bar says so
+  and the page takes no action; once it stopped, the line above the boxes
+  says that the app has stopped and how to start it again. A connection lost
+  on the way is told as any lost connection. The language and the help
+  panel keep working, since they do not use the server; "Show tips", whose
+  choice the server remembers, does not.
+- The bar at the bottom stays on the screen, so that Quit and the language
+  can be reached without scrolling (v2.0.1, stage F2).
+- After a run that finished, while no box changed, "Run normalization" can
+  be pressed again, and a line under it says that it normalizes again with
+  the name in the name field and that the output stays; in the way that
+  imports, that the same Export is not imported twice, since the
+  registration knows it by its content (v2.0.1, stage F2).
 - "If something is wrong", with the output check and the Support Bundle, is
   folded to one line until it is opened.
 - The page changes text with `textContent` only, never with HTML, so that a
@@ -191,7 +205,9 @@ Importing (stage B4b-1): the second box offers three ways to normalize.
   the page proposes the next name again, also when the person typed the one
   that the import took.
 - Normalize this Export only, without the Snapshots. The parts of the store
-  turn gray, and a note says that this way does not use the store.
+  turn gray, and a note says that this way does not use the store; the
+  store's line that a new store is made there does not show then (v2.0.1,
+  stage F2).
 - Normalize the existing Snapshots again, without an Export, for example
   with a new version or other settings of the output. A link under the first
   box chooses it when the store has Snapshots; the first box then takes no
@@ -256,7 +272,10 @@ shows the name and location of the file that will be created.
 The Help button at the top right opens a help panel at the right of the window
 (stage B1b). The panel pushes the page aside instead of covering it, and the
 boxes fold to two columns while it is open on a window narrower than 1680
-pixels. It has five parts: how to use, in which each step lights up its box;
+pixels. It has five parts: how to use, in which each step lights up its box,
+and whose last step, reading the result, is the step to do after a run that
+finished and is done once START_HERE.md was opened from the page, which only
+the page remembers, until the next run (v2.0.1, stage F2);
 questions; words; using the normalized data with an AI, with example
 questions that can be copied; and "If something is wrong", which reports a
 problem on GitHub (stage B5c). Close or Escape closes it, and focus returns to
@@ -903,7 +922,7 @@ these codes; the CLI never stops with them. The table is made from
 | `OUTPUT_CHANGED` | the output folder does not match what the normalization wrote | if you did not change the folder, please report the code; if you did, normalize again |
 | `OUTPUT_NOT_AVAILABLE` | the output folder or a file in it is missing, or was replaced by a link | check that the output folder is still where it was |
 | `OPEN_NOT_AVAILABLE` | no program to open it (xdg-open) was found | open the output folder from your file manager, such as Finder or File Explorer |
-| `OPEN_FAILED` | the system could not open it | open the output folder from your file manager, such as Finder or File Explorer |
+| `OPEN_FAILED` | this computer could not open it | open the output folder from your file manager, such as Finder or File Explorer |
 | `CHOOSER_NOT_AVAILABLE` | this system's dialog to choose could not be opened | choose from the list below, or paste the place |
 | `CHOOSER_TIMEOUT` | the dialog to choose was not answered in time | press Choose ZIP file… or Choose extracted folder… again |
 | `CHOOSER_BUSY` | another dialog to choose is open | choose in it or close it, and press the button again |

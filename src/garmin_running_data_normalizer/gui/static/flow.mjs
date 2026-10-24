@@ -733,8 +733,12 @@ export function storeMessages(store, how = "single") {
     }
   }
   add("warn", cloudMessages(answer.cloud));
+  // This Export alone does not use the store, so the page does not say that
+  // it makes one there (v2.0.1 F2).
   if (answer.state === "new") {
-    add("info", [message("store.new")]);
+    if (how !== "single") {
+      add("info", [message("store.new")]);
+    }
   } else if (answer.state === "store" && checked?.state !== "error") {
     // The count is green while no check failed.
     const count = Array.isArray(answer.snapshots) ? answer.snapshots.length : 0;
@@ -1580,7 +1584,9 @@ export function boxNumber(box) {
 export function nextLine(view, states) {
   const runState = view.runState;
   if (!view.connected) {
-    return null;
+    // After Quit, the line says so, and how to start the app again (v2.0.1
+    // F2); a lost connection has its own red box with its next step.
+    return view.stopped === true ? message("next_line.stopped") : null;
   }
   if (view.starting || runState === "running") {
     return message("next_line.running");
@@ -1637,6 +1643,9 @@ export function nextLine(view, states) {
 // while a box has a problem, and blue otherwise (stage B3a).
 export function nextLineKind(view, states) {
   const runState = view.runState;
+  if (!view.connected) {
+    return "current";
+  }
   if (view.starting || ACTIVE_STATES.includes(runState) || view.choosing === true) {
     return "current";
   }
@@ -2082,19 +2091,22 @@ export function shouldFocusResult(active, body, runSection) {
 // third box takes back its confirmation, and one in the first its check.
 export function controls(view, states) {
   const running = ACTIVE_STATES.includes(view.runState) || view.starting;
+  // Nothing works while the server stops after Quit (v2.0.1 F2), as without
+  // a connection.
+  const connected = view.connected && view.quitting !== true;
   const busy = running || view.checking || view.outputBusy || view.choosing === true;
   const filled = (value) => typeof value === "string" && value.trim() !== "";
   const outputReady =
     filled(view.outputParent) && filled(view.timezone) && isValidOutputName(view.outputName);
   return {
-    form: view.connected && !running,
-    choose: view.connected && !busy,
-    browse: view.connected && !busy,
-    check: view.connected && !busy && filled(view.inputPath),
-    decideSnapshot: view.connected && !busy && states.snapshot === "current",
-    decideOutput: view.connected && !busy && states.output === "current" && outputReady,
+    form: connected && !running,
+    choose: connected && !busy,
+    browse: connected && !busy,
+    check: connected && !busy && filled(view.inputPath),
+    decideSnapshot: connected && !busy && states.snapshot === "current",
+    decideOutput: connected && !busy && states.output === "current" && outputReady,
     start:
-      view.connected &&
+      connected &&
       !busy &&
       view.checkedReady &&
       outputReady &&
@@ -2104,13 +2116,16 @@ export function controls(view, states) {
         ((FINISHED_STATES.includes(view.runState) || view.runState === "failed") &&
           (view.snapshotDecided || view.snapshotAuto === true) &&
           (view.outputDecided || view.outputAuto === true))),
-    cancel: view.connected && view.runState === "running",
-    quit: view.connected && !running && !view.outputBusy,
-    outputActions: view.connected && !busy && FINISHED_STATES.includes(view.runState),
+    cancel: connected && view.runState === "running",
+    quit: connected && !running && !view.outputBusy,
+    // The tips switch remembers its choice on the server, so it needs the
+    // connection; the language and the help panel do not (v2.0.1 F2).
+    hints: connected,
+    outputActions: connected && !busy && FINISHED_STATES.includes(view.runState),
     // The settings are not forgotten while a run, which remembers its places
     // when it ends, is active (stage B4c), nor when there is no file of them
     // (stage C1).
-    forget: view.connected && !running && view.forgetBusy !== true && view.settingsPresent === true,
+    forget: connected && !running && view.forgetBusy !== true && view.settingsPresent === true,
   };
 }
 
@@ -2132,6 +2147,22 @@ export function primaryControl(view, states, enabled) {
     return "outputDecide";
   }
   return enabled.start ? "start" : null;
+}
+
+// The line under Normalize after a run that finished, while no box changed
+// since and Normalize can be pressed (v2.0.1 F2): pressing it again
+// normalizes again, with the name in the name field, and the output stays;
+// in the way that imports, the same Export is not imported twice, since the
+// registration knows it by its content.
+export function againNote(view, enabled) {
+  if (!FINISHED_STATES.includes(view.runState) || view.editedSinceRun || enabled.start !== true) {
+    return [];
+  }
+  const lines = [message("run.again_note")];
+  if (view.how === "snapshots") {
+    lines.push(message("run.again_same_export"));
+  }
+  return lines;
 }
 
 // Which boxes must still be confirmed before a run can start, by number.
@@ -2181,15 +2212,18 @@ export const HELP_STEPS = [...BOXES, "results"];
 
 // The state of each step of "How to use", from the states of the boxes:
 // "done", "current" (what to do now, or a box to fix), or "todo". Reading the
-// result is done once a run has finished and no box has changed since.
-export function helpSteps(states, runState) {
+// result is what to do once a run has finished and no box has changed since,
+// and done when START_HERE.md was opened from the page, which only the page
+// remembers, until the next run (v2.0.1 F2).
+export function helpSteps(states, runState, startHereOpened = false) {
   const steps = {};
   for (const box of BOXES) {
     const boxState = states[box];
     steps[box] =
       boxState === "done" ? "done" : boxState === "current" || boxState === "error" ? "current" : "todo";
   }
-  steps.results = FINISHED_STATES.includes(runState) && states.run === "done" ? "done" : "todo";
+  const read = FINISHED_STATES.includes(runState) && states.run === "done";
+  steps.results = read ? (startHereOpened === true ? "done" : "current") : "todo";
   return steps;
 }
 
