@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n="view.title"></title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="64x64" href="/favicon.png">
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/view.css">
+<script type="module" src="/view.mjs"></script>
+</head>
+<body class="view-page">
+<div id="connection-problem" class="problem messages" role="alert" hidden></div>
+<div class="view-app">
+<header class="view-top">
+  <div class="view-title-row">
+    <h1 data-i18n="app.title"></h1>
+    <p class="page-note" data-i18n="view.other_tab"></p>
+    <button type="button" id="to-normalize" class="small" data-i18n="view.to_normalize"></button>
+    <p id="next-line" class="next-line view-next" aria-live="polite"><span id="next-label" class="next-label"></span> <span id="next-text"></span></p>
+    <span class="spacer"></span>
+    <div class="switch">
+      <input id="hints-toggle" type="checkbox" role="switch" disabled>
+      <label for="hints-toggle" data-i18n="hints.toggle"></label>
+    </div>
+    <button type="button" id="help-button" class="help-button" aria-expanded="false" aria-controls="help-panel" data-i18n="help.button"></button>
+  </div>
+</header>
+<main class="view-main">
+  <div id="filters" class="filters">
+    <div id="output-filter" class="filter output-filter">
+      <p class="filter-label"><label for="output-select" data-i18n="view.output.label"></label><span id="output-badge" class="badge-now" data-i18n="badge.current" hidden></span></p>
+      <div class="filter-row">
+        <select id="output-select" disabled></select>
+        <button type="button" id="open-latest" class="primary small" hidden></button>
+        <button type="button" id="choose-output" class="small with-icon" data-i18n="target.other" disabled></button>
+      </div>
+    </div>
+    <div class="filter">
+      <p id="period-label" class="filter-label" data-i18n="view.period.label"></p>
+      <div class="filter-row">
+        <div id="period-choices" class="segmented" role="group" aria-labelledby="period-label">
+          <button type="button" data-period="all" aria-pressed="false" data-i18n="view.period.all" disabled></button>
+          <button type="button" data-period="10y" aria-pressed="false" data-i18n="view.period.years10" disabled></button>
+          <button type="button" data-period="5y" aria-pressed="false" data-i18n="view.period.years5" disabled></button>
+          <button type="button" data-period="3y" aria-pressed="false" data-i18n="view.period.years3" disabled></button>
+          <button type="button" data-period="1y" aria-pressed="false" data-i18n="view.period.years1" disabled></button>
+          <button type="button" data-period="custom" aria-pressed="false" aria-controls="range-row" data-i18n="view.period.custom" disabled></button>
+        </div>
+        <span class="shift">
+          <button type="button" id="period-back" class="icon-button" data-i18n-label="view.period.back" disabled><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M10 3.5L5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button type="button" id="period-next" class="icon-button" data-i18n-label="view.period.next" disabled><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </span>
+      </div>
+      <div id="range-row" class="range-row" hidden>
+        <label for="range-from" data-i18n="view.range.from"></label>
+        <input id="range-from" type="date" aria-describedby="range-problem">
+        <label for="range-to" data-i18n="view.range.to"></label>
+        <input id="range-to" type="date" aria-describedby="range-problem">
+        <p id="range-problem" class="range-problem" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+    <div class="filter">
+      <p id="grain-label" class="filter-label" data-i18n="view.grain.label"></p>
+      <div id="grain-choices" class="segmented" role="group" aria-labelledby="grain-label">
+        <button type="button" data-grain="auto" aria-pressed="false" disabled><span data-i18n="view.grain.auto"></span><span id="grain-auto-now" class="auto-now"></span></button>
+        <button type="button" data-grain="day" aria-pressed="false" data-i18n="view.grain.day" disabled></button>
+        <button type="button" data-grain="week" aria-pressed="false" data-i18n="view.grain.week" disabled></button>
+        <button type="button" data-grain="month" aria-pressed="false" data-i18n="view.grain.month" disabled></button>
+        <button type="button" data-grain="year" aria-pressed="false" data-i18n="view.grain.year" disabled></button>
+      </div>
+    </div>
+    <div class="filter types-filter">
+      <p id="types-label" class="filter-label" data-i18n="view.types.label"></p>
+      <button type="button" id="types-button" class="field-button" aria-expanded="false" aria-controls="types-pop" aria-labelledby="types-label types-summary" disabled><span id="types-summary"></span><svg class="caret" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div id="types-pop" class="pop types-pop" hidden>
+        <fieldset>
+          <legend data-i18n="view.types.label"></legend>
+          <div id="types-list" class="types-list"></div>
+        </fieldset>
+        <p class="note" data-i18n="view.types.note"></p>
+        <div class="button-row">
+          <button type="button" id="types-close" class="small" data-i18n="help.close"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p id="filters-hint" class="hint filters-hint" data-i18n="view.hint.filters" hidden></p>
+  <div id="view-body" class="view-body">
+    <aside id="shelf" class="shelf" aria-labelledby="shelf-heading">
+      <div class="shelf-head">
+        <h2 id="shelf-heading" data-i18n="view.shelf.heading"></h2>
+        <span id="shelf-count" class="note"></span>
+        <button type="button" id="coverage-button" class="info-button" aria-expanded="false" aria-controls="coverage-text" data-i18n="view.shelf.bars"></button>
+        <span class="spacer"></span>
+        <button type="button" id="shelf-fold" class="icon-button" aria-expanded="true" aria-controls="shelf" data-i18n-label="view.shelf.fold"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M10 3.5L5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <div id="coverage-text" class="info-text" hidden>
+        <ul class="note-list">
+          <li data-i18n="view.shelf.bars_month"></li>
+          <li data-i18n="view.shelf.bars_types"></li>
+          <li data-i18n="view.shelf.bars_start"></li>
+        </ul>
+      </div>
+      <label for="shelf-search" class="visually-hidden" data-i18n="view.shelf.search_label"></label>
+      <input id="shelf-search" class="shelf-search" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="view.shelf.search" disabled>
+      <p id="shelf-hint" class="hint" hidden></p>
+      <div class="shelf-columns" aria-hidden="true"><span></span><span data-i18n="view.shelf.item"></span><span data-i18n="view.shelf.when"></span></div>
+      <div id="shelf-groups" class="shelf-groups"></div>
+    </aside>
+    <div id="shelf-rail" class="rail" hidden>
+      <button type="button" id="shelf-open" class="rail-button" aria-expanded="false" aria-controls="shelf" data-i18n-label="view.shelf.open"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rail-text" data-i18n="view.shelf.rail" aria-hidden="true"></span></button>
+      <span id="rail-count" class="rail-count"></span>
+    </div>
+    <section id="stage" class="stage" aria-labelledby="stage-heading">
+      <h2 id="stage-heading" class="visually-hidden" data-i18n="view.stage.heading"></h2>
+      <div id="full-bar" class="full-bar" hidden>
+        <p id="full-text" class="full-text"></p>
+        <span class="spacer"></span>
+        <button type="button" id="full-back" class="small" data-i18n="view.full.back"></button>
+      </div>
+      <div id="part-note" class="part-note" hidden>
+        <svg class="icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M8 1.9l6.5 11.8h-13z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.3v3.4M8 11.6v.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <p><strong data-i18n="view.partial.title"></strong> <span id="part-text"></span></p>
+      </div>
+      <div id="empty-box" class="empty-box">
+        <div class="empty-inner">
+          <h3 id="empty-heading" tabindex="-1"></h3>
+          <p id="empty-text"></p>
+          <div id="empty-buttons" class="button-row">
+            <button type="button" id="empty-primary" class="primary"></button>
+            <button type="button" id="empty-other" class="with-icon" data-i18n="target.other"></button>
+          </div>
+        </div>
+      </div>
+      <div id="stop-box" class="errbox view-stop" hidden>
+        <h3 id="stop-heading" tabindex="-1"></h3>
+        <div id="stop-lines" class="messages"></div>
+        <div class="button-row">
+          <button type="button" id="stop-normalize" class="primary" data-i18n="view.stop.normalize_again" hidden></button>
+          <button type="button" id="stop-other" class="with-icon" data-i18n="target.other"></button>
+        </div>
+        <p id="stop-code" class="stop-code"></p>
+      </div>
+      <div id="caveat" class="caveat" hidden>
+        <span id="add-wrap" class="add-wrap" hidden>
+          <button type="button" id="add-items" class="small with-plus" aria-expanded="false" aria-controls="picker" data-i18n="view.add.button"></button>
+          <span id="picker" class="pop picker" hidden>
+            <span class="pop-head"><span id="picker-heading" class="pop-title"></span><button type="button" id="picker-close" class="small" data-i18n="help.close"></button></span>
+            <span id="picker-full" class="note" data-i18n="view.add.full" hidden></span>
+            <span id="picker-groups" class="picker-groups"></span>
+          </span>
+        </span>
+        <p class="caveat-text" data-i18n="view.caveat"></p>
+        <p id="loading" class="loading" role="status" aria-live="polite"></p>
+        <span class="spacer"></span>
+        <span class="align-row">
+          <input id="align-scales" type="checkbox">
+          <label for="align-scales" data-i18n="view.align"></label>
+        </span>
+        <button type="button" id="full-enter" class="small full-enter"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="view.full.enter"></span></button>
+      </div>
+      <div id="series-stop" class="errbox view-stop" hidden>
+        <h3 id="series-stop-heading" tabindex="-1" data-i18n="view.stop.series_heading"></h3>
+        <div id="series-stop-lines" class="messages"></div>
+        <p id="series-stop-code" class="stop-code"></p>
+      </div>
+      <div id="stack" class="stack" hidden>
+        <div id="panels" class="panels"></div>
+        <div id="time-axis" class="time-axis" aria-hidden="true"></div>
+        <p id="cross-announcer" class="visually-hidden" aria-live="polite"></p>
+      </div>
+      <div id="overview" class="overview" hidden>
+        <p id="overview-label" class="overview-label"></p>
+        <div id="overview-plot" class="overview-plot"></div>
+      </div>
+    </section>
+  </div>
+</main>
+<footer class="statusbar view-bar">
+  <div id="quit-confirm" class="confirm" hidden>
+    <p id="quit-question" class="question" data-i18n="quit.question"></p>
+    <p id="quit-text" data-i18n="quit.text"></p>
+    <div class="button-row">
+      <button type="button" id="quit-yes" data-i18n="quit.yes" aria-describedby="quit-question quit-text"></button>
+      <button type="button" id="quit-no" data-i18n="quit.no" aria-describedby="quit-question quit-text"></button>
+    </div>
+  </div>
+  <label for="language-select" data-i18n="language.label"></label>
+  <select id="language-select"></select>
+  <fieldset class="theme-choice" aria-labelledby="theme-label">
+    <div class="theme-row">
+      <span id="theme-label" class="theme-label" data-i18n="theme.label"></span>
+      <span class="segments">
+        <input type="radio" name="theme" id="theme-auto" value="auto" checked disabled>
+        <label for="theme-auto"><span data-i18n="theme.auto"></span> <span id="theme-now" class="theme-now"></span></label>
+        <input type="radio" name="theme" id="theme-light" value="light" disabled>
+        <label for="theme-light" data-i18n="theme.light"></label>
+        <input type="radio" name="theme" id="theme-dark" value="dark" disabled>
+        <label for="theme-dark" data-i18n="theme.dark"></label>
+      </span>
+    </div>
+  </fieldset>
+  <p id="settings-status" class="status" role="status" aria-live="polite"></p>
+  <span class="spacer"></span>
+  <p id="product-version" class="version"></p>
+  <button type="button" id="quit-button" data-i18n="view.quit" aria-expanded="false" aria-controls="quit-confirm" disabled></button>
+  <p id="connection-status" class="status" role="status" aria-live="polite"></p>
+</footer>
+</div>
+<aside id="help-panel" class="help-panel" aria-labelledby="help-heading" hidden>
+  <div class="help-head">
+    <h2 id="help-heading" tabindex="-1" data-i18n="help.heading"></h2>
+    <button type="button" id="help-close" data-i18n="help.close"></button>
+  </div>
+  <div class="help-body">
+    <section class="help-section" aria-labelledby="help-use-heading">
+      <h3 id="help-use-heading" tabindex="-1" data-i18n="view.help.use"></h3>
+      <p data-i18n="view.help.use_text"></p>
+    </section>
+    <section class="help-section" aria-labelledby="help-shelf-heading">
+      <h3 id="help-shelf-heading" tabindex="-1" data-i18n="view.help.shelf"></h3>
+      <p data-i18n="view.help.shelf_text"></p>
+    </section>
+    <section class="help-section" aria-labelledby="help-big-heading">
+      <h3 id="help-big-heading" tabindex="-1" data-i18n="view.help.big"></h3>
+      <p data-i18n="view.help.big_text"></p>
+    </section>
+    <section class="help-section" aria-labelledby="help-zero-heading">
+      <h3 id="help-zero-heading" tabindex="-1" data-i18n="view.help.zero"></h3>
+      <p data-i18n="view.help.zero_text"></p>
+    </section>
+    <section class="help-section" aria-labelledby="help-calculated-heading">
+      <h3 id="help-calculated-heading" tabindex="-1" data-i18n="view.help.calculated"></h3>
+      <p data-i18n="view.help.calculated_text"></p>
+    </section>
+    <section class="help-section" aria-labelledby="help-records-heading">
+      <h3 id="help-records-heading" tabindex="-1" data-i18n="view.help.records"></h3>
+      <p data-i18n="view.help.records_text"></p>
+    </section>
+    <section class="help-section" aria-labelledby="help-colors-heading">
+      <h3 id="help-colors-heading" tabindex="-1" data-i18n="view.help.colors"></h3>
+      <p data-i18n="view.help.colors_text"></p>
+    </section>
+    <section class="help-section" aria-labelledby="help-faq-heading">
+      <h3 id="help-faq-heading" tabindex="-1" data-i18n="view.help.faq"></h3>
+      <p><strong data-i18n="view.help.faq_q"></strong></p>
+      <p data-i18n="view.help.faq_a"></p>
+    </section>
+  </div>
+</aside>
+</body>
+</html>

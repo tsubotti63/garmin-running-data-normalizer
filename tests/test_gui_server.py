@@ -5,6 +5,7 @@ import http.client
 import io
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -70,6 +71,13 @@ EXPECTED_CONTENT_TYPES = {
     "/i18n.mjs": "text/javascript; charset=utf-8",
     "/theme.js": "text/javascript; charset=utf-8",
     "/styles.css": "text/css; charset=utf-8",
+    # The view page and what both pages share (stage G3b).
+    "/launch.mjs": "text/javascript; charset=utf-8",
+    "/view": "text/html; charset=utf-8",
+    "/view.mjs": "text/javascript; charset=utf-8",
+    "/view_flow.mjs": "text/javascript; charset=utf-8",
+    "/view_chart.mjs": "text/javascript; charset=utf-8",
+    "/view.css": "text/css; charset=utf-8",
     "/i18n/en.json": "application/json",
     "/i18n/ja.json": "application/json",
     "/favicon.svg": "image/svg+xml",
@@ -552,21 +560,153 @@ class GuiPageScriptTest(unittest.TestCase):
     def test_the_colors_are_set_by_a_classic_script_before_the_page_is_drawn(self) -> None:
         # A classic script in the head runs before anything is drawn; the
         # module runs later. The policy allows no script in the page, so it is
-        # a file of its own.
-        head = (STATIC_ROOT / "index.html").read_text(encoding="utf-8").split("</head>", 1)[0]
-        self.assertIn('\n<script src="/theme.js"></script>\n', head)
-        self.assertLess(head.index('src="/theme.js"'), head.index('href="/styles.css"'))
-        self.assertLess(head.index('src="/theme.js"'), head.index('src="/app.mjs"'))
+        # a file of its own. The view page too (stage G3b).
+        for page, stylesheets, module in (
+            ("index.html", ("/styles.css",), "/app.mjs"),
+            ("view.html", ("/styles.css", "/view.css"), "/view.mjs"),
+        ):
+            with self.subTest(page=page):
+                head = (STATIC_ROOT / page).read_text(encoding="utf-8").split("</head>", 1)[0]
+                self.assertIn('\n<script src="/theme.js"></script>\n', head)
+                for stylesheet in stylesheets:
+                    self.assertLess(head.index('src="/theme.js"'), head.index(f'href="{stylesheet}"'))
+                self.assertLess(head.index('src="/theme.js"'), head.index(f'src="{module}"'))
 
     def test_the_page_reads_the_key_alone_and_removes_the_whole_fragment(self) -> None:
         # The fragment holds the key and the colors, separated by "&". The
         # page reads the key with fragmentValue of flow.mjs, which the node
-        # tests check, and leaves only the path in the address bar.
-        source = (STATIC_ROOT / "app.mjs").read_text(encoding="utf-8")
-        reading = source.split("function readLaunchKey() {", 1)[1].split("\n}\n", 1)[0]
+        # tests check, and leaves only the path in the address bar; both pages
+        # read it with launch.mjs (stage G3b).
+        source = (STATIC_ROOT / "launch.mjs").read_text(encoding="utf-8")
+        reading = source.split("export function readLaunchKey() {", 1)[1].split("\n}\n", 1)[0]
         self.assertIn('fragmentValue(window.location.hash, "key")', reading)
         self.assertIn('window.history.replaceState(null, "", window.location.pathname);', reading)
         self.assertNotIn("location.hash.", reading)
+
+    def test_both_pages_take_the_key_and_the_api_from_launch_mjs(self) -> None:
+        # Stage G3b: the rules of the key are written once, in launch.mjs,
+        # whose header is the server's; neither page has a key, a header, or
+        # a request of its own.
+        launch = (STATIC_ROOT / "launch.mjs").read_text(encoding="utf-8")
+        self.assertIn(f'export const LAUNCH_KEY_HEADER = "{LAUNCH_KEY_HEADER}";', launch)
+        self.assertEqual(launch.count("fetch("), 1)
+        for page in ("app.mjs", "view.mjs"):
+            with self.subTest(page=page):
+                source = (STATIC_ROOT / page).read_text(encoding="utf-8")
+                imported = re.search(r'import \{([^}]*)\} from "\./launch\.mjs";', source)
+                assert imported is not None
+                names = {name.strip() for name in imported.group(1).split(",")}
+                self.assertLessEqual({"ApiError", "callWithKey", "readLaunchKey"}, names)
+                for own in ("X-Launch-Key", "LAUNCH_KEY", '"launchKey"', "sessionStorage", "replaceState", "location.hash"):
+                    self.assertNotIn(own, source)
+                # Every request of the API goes through callWithKey; the only
+                # fetch of a page is that of its catalogs.
+                self.assertEqual(source.count("fetch("), 1)
+                self.assertIn("fetch(`/i18n/${language}.json`", source)
+                self.assertIn("return callWithKey(state.launchKey, path, payload);", source)
+
+    def test_a_tab_opened_again_with_an_address_reads_it_and_clears_it(self) -> None:
+        # Stage G3b: the normalization page opens the view page again in its
+        # tab, with the key and the output in the fragment of the address,
+        # which only changes the fragment of the page that is open; the view
+        # page reads them then, and leaves only the path again.
+        source = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        self.assertIn('window.addEventListener("hashchange", addressChanged);', source)
+        changed = re.search(r"async function addressChanged\(\) \{(.*?)\n\}", source, re.DOTALL)
+        assert changed is not None
+        self.assertLess(changed.group(1).index('addressValue("output")'), changed.group(1).index("readLaunchKey()"))
+        started = re.search(r"async function start\(\) \{(.*?)\n\}", source, re.DOTALL)
+        assert started is not None
+        self.assertLess(started.group(1).index('addressValue("output")'), started.group(1).index("readLaunchKey()"))
+        # The tabs find each other by their names.
+        app = (STATIC_ROOT / "app.mjs").read_text(encoding="utf-8")
+        self.assertIn('const VIEW_TAB = "garmin-running-view";', app)
+        self.assertIn('const NORMALIZE_TAB = "garmin-running-normalize";', app)
+        self.assertIn("window.name = NORMALIZE_TAB;", app)
+        self.assertIn('const VIEW_TAB = "garmin-running-view";', source)
+        self.assertIn('const NORMALIZE_TAB = "garmin-running-normalize";', source)
+        self.assertIn("window.name = VIEW_TAB;", source)
+        # The addresses are those of flow.mjs, which the node tests check.
+        self.assertIn("window.open(viewPageAddress(state.launchKey, state.theme, withOutput), VIEW_TAB)?.focus();", app)
+        self.assertIn('window.open("", NORMALIZE_TAB);', source)
+        to_normalize = re.search(r"function toNormalize\(\) \{(.*?)\n\}", source, re.DOTALL)
+        assert to_normalize is not None
+        for line in (
+            "const address = normalizePageAddress(href, state.launchKey, state.theme);",
+            "if (address !== null) {\n    tab.location.href = address;\n  }",
+            "tab.focus();",
+        ):
+            self.assertIn(line, to_normalize.group(1))
+        # The fourth box gives the output of its run; the bar opens the page.
+        self.assertIn('ui.viewOutput.addEventListener("click", () => openViewPage(true));', app)
+        self.assertIn('ui.openView.addEventListener("click", () => openViewPage(false));', app)
+        self.assertIn('if (opening === "run" && state.runOutput !== null) {', source)
+
+    def test_the_view_page_keeps_the_app_running(self) -> None:
+        # Stage G3b: the view page alone keeps the server from stopping when
+        # no request comes, as the normalization page does.
+        source = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        self.assertIn("const HEARTBEAT_INTERVAL_MS = 30000;", source)
+        self.assertIn('callApi("/api/heartbeat")', source)
+        started = re.search(r"async function start\(\) \{(.*?)\n\}", source, re.DOTALL)
+        assert started is not None
+        self.assertIn("startHeartbeat();", started.group(1))
+
+    def test_quitting_in_one_tab_stops_the_other(self) -> None:
+        # Stage G3b: a page that quit the app tells the other tab, which then
+        # says that the app stopped rather than that it lost it; nothing else
+        # goes on that channel.
+        for page in ("app.mjs", "view.mjs"):
+            with self.subTest(page=page):
+                source = (STATIC_ROOT / page).read_text(encoding="utf-8")
+                self.assertIn("new BroadcastChannel(QUIT_CHANNEL)", source)
+                self.assertEqual(source.count("quitChannel?.postMessage("), 1)
+                self.assertIn("quitChannel?.postMessage({ stopped: true });", source)
+                # Each page listens, and takes only that message.
+                self.assertIn('quitChannel?.addEventListener("message", quitHeard);', source)
+                heard = re.search(r"function quitHeard\(event\) \{(.*?)\n\}", source, re.DOTALL)
+                assert heard is not None
+                self.assertIn("if (stoppedMessage(event.data)) {", heard.group(1))
+
+    def test_a_ticket_that_the_server_no_longer_keeps_opens_the_output_once(self) -> None:
+        # Stage G3b: a request refused with VIEW_NOT_OPEN opens the output
+        # again and asks once more, only if no newer request was made since;
+        # the second refusal is a stop of the panels.
+        source = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        self.assertIn(
+            "if (await reopen()) {\n"
+            "        if (seq !== state.seriesSeq) {\n"
+            "          return;\n"
+            "        }\n"
+            "        state.loading = false;\n"
+            "        requestSeries(false);\n"
+            "        return;\n"
+            "      }",
+            source,
+        )
+        self.assertIn('error.code === "VIEW_NOT_OPEN" && again && state.target !== null', source)
+
+    def test_the_view_page_writes_no_settings_that_the_other_tab_forgot(self) -> None:
+        # The checker's review of stage G3b-2: after the normalization page
+        # forgot the settings, the view page keeps what it shows, forgets what
+        # it remembered, and writes its items and its shelf again only when
+        # the person changes them, not when an output opens.
+        source = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        heard = re.search(r"function themeHeard\(event\) \{(.*?)\n\}", source, re.DOTALL)
+        assert heard is not None
+        self.assertIn("state.settings = settingsAfterForget(state.settings);", heard.group(1))
+        self.assertIn("state.forgotten = true;", heard.group(1))
+        remember = re.search(r"function rememberItems\(byPerson = false\) \{(.*?)\n\}", source, re.DOTALL)
+        assert remember is not None
+        self.assertIn("if (byPerson) {\n    state.forgotten = false;\n  }", remember.group(1))
+        self.assertIn("if (state.forgotten || !state.items.length) {\n    return;\n  }", remember.group(1))
+        # An output that opens remembers by itself; the person's changes of
+        # the items and the shelf by the person.
+        self.assertEqual(source.count("rememberItems();"), 1)
+        opened = re.search(r"async function openOutput\(target, focus = false\) \{(.*?)\n\}", source, re.DOTALL)
+        assert opened is not None
+        self.assertIn("rememberItems();", opened.group(1))
+        self.assertEqual(source.count("rememberItems(true);"), 3)
 
 
 class GuiServerLifecycleTest(GuiServerTestCase):

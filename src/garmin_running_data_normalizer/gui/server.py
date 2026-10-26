@@ -85,6 +85,14 @@ STATIC_FILES = {
     # (stage G3a).
     "/theme.js": ("theme.js", "text/javascript; charset=utf-8"),
     "/styles.css": ("styles.css", "text/css; charset=utf-8"),
+    # The key of a launch and the calls of the API, which both pages share,
+    # and the view page, in a tab of its own (stage G3b).
+    "/launch.mjs": ("launch.mjs", "text/javascript; charset=utf-8"),
+    "/view": ("view.html", "text/html; charset=utf-8"),
+    "/view.mjs": ("view.mjs", "text/javascript; charset=utf-8"),
+    "/view_flow.mjs": ("view_flow.mjs", "text/javascript; charset=utf-8"),
+    "/view_chart.mjs": ("view_chart.mjs", "text/javascript; charset=utf-8"),
+    "/view.css": ("view.css", "text/css; charset=utf-8"),
     "/i18n/en.json": ("i18n/en.json", "application/json"),
     "/i18n/ja.json": ("i18n/ja.json", "application/json"),
     # The picture of the app in the tab of the browser (stage E1i): SVG, and

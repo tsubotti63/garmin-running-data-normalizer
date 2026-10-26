@@ -37,6 +37,10 @@ def load_catalog(language: str) -> dict[str, str]:
     return json.loads((STATIC_ROOT / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
 
 
+# The pages of the GUI: the normalization page, and the view page (stage G3b).
+PAGES = ("index.html", "view.html")
+
+
 class _PageParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -48,8 +52,11 @@ class _PageParser(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = dict(attrs)
-        if attributes.get("data-i18n"):
-            self.keys.add(str(attributes["data-i18n"]))
+        # The words of an element, and the name and the placeholder of an
+        # element that shows none (stage G3b).
+        for name in ("data-i18n", "data-i18n-label", "data-i18n-placeholder"):
+            if attributes.get(name):
+                self.keys.add(str(attributes[name]))
         if tag == "script" and not attributes.get("src"):
             self.inline_scripts += 1
         if tag == "style" or "style" in attributes:
@@ -61,11 +68,15 @@ class _PageParser(HTMLParser):
             self.text.append(data.strip())
 
 
-def page() -> _PageParser:
+def page(name: str = "index.html") -> _PageParser:
     parser = _PageParser()
-    parser.feed((STATIC_ROOT / "index.html").read_text(encoding="utf-8"))
+    parser.feed((STATIC_ROOT / name).read_text(encoding="utf-8"))
     parser.close()
     return parser
+
+
+def page_keys() -> set[str]:
+    return set().union(*(page(name).keys for name in PAGES))
 
 
 def page_scripts() -> list[Path]:
@@ -129,8 +140,10 @@ class GuiCatalogTest(unittest.TestCase):
             path for path in STATIC_FILES if path.startswith("/i18n/") and path.endswith(".json")
         }
         self.assertEqual(catalog_paths, {f"/i18n/{language}.json" for language in LANGUAGES})
-        source = (STATIC_ROOT / "app.mjs").read_text(encoding="utf-8")
-        self.assertIn('const LANGUAGES = ["en", "ja"];', source)
+        for script in ("app.mjs", "view.mjs"):
+            with self.subTest(script=script):
+                source = (STATIC_ROOT / script).read_text(encoding="utf-8")
+                self.assertIn('const LANGUAGES = ["en", "ja"];', source)
 
     def test_catalogs_have_the_same_keys_and_placeholders(self) -> None:
         catalogs = {language: load_catalog(language) for language in LANGUAGES}
@@ -149,7 +162,7 @@ class GuiCatalogTest(unittest.TestCase):
                     )
 
     def test_every_used_key_exists_and_every_key_is_used(self) -> None:
-        used = page().keys | script_keys()
+        used = page_keys() | script_keys()
         catalog_keys = set(load_catalog("en"))
         self.assertEqual(sorted(used - catalog_keys), [], "keys missing from the catalogs")
         self.assertEqual(sorted(catalog_keys - used), [], "catalog keys that are never used")
@@ -178,6 +191,11 @@ class GuiCatalogTest(unittest.TestCase):
         self.assertIn("the appearance when you choose Light or Dark", catalogs["en"]["faq.remember_a"])
         self.assertIn("画面の色", catalogs["ja"]["forget.text_also"])
         self.assertIn("appearance", catalogs["en"]["forget.text_also"])
+        # And the items and the shelf of the view page (stage G3b).
+        self.assertIn("見るページで並べた項目と棚の開け閉め", catalogs["ja"]["forget.text_also"])
+        self.assertIn("the items and the item shelf of the view page", catalogs["en"]["forget.text_also"])
+        self.assertIn("見るページで並べた項目の名前と棚の開け閉め", catalogs["ja"]["faq.remember_a"])
+        self.assertIn("the names of the items shown on the view page", catalogs["en"]["faq.remember_a"])
 
     def test_texts_keep_the_corrections_of_the_first_time_check(self) -> None:
         # Stage D6, after two new AI sessions used the page of v2.0.0rc1 with
@@ -239,11 +257,39 @@ class GuiCatalogTest(unittest.TestCase):
         self.assertEqual(load_catalog("ja")["language.name"], "日本語")
 
     def test_page_has_no_text_inline_script_style_or_handler(self) -> None:
-        parsed = page()
-        self.assertEqual(parsed.text, [], "visible text must come from the catalogs")
-        self.assertEqual(parsed.inline_scripts, 0)
-        self.assertEqual(parsed.styles, [])
-        self.assertEqual(parsed.event_handlers, [])
+        for name in PAGES:
+            with self.subTest(page=name):
+                parsed = page(name)
+                self.assertEqual(parsed.text, [], "visible text must come from the catalogs")
+                self.assertEqual(parsed.inline_scripts, 0)
+                self.assertEqual(parsed.styles, [])
+                self.assertEqual(parsed.event_handlers, [])
+
+    def test_the_view_page_quotes_the_words_of_its_controls(self) -> None:
+        # Stage G3b: a text of the view page that names a control or a mark of
+        # the page quotes its words as the page shows them, in both languages.
+        catalogs = {language: load_catalog(language) for language in LANGUAGES}
+        for language, catalog in catalogs.items():
+            quote = "“{}”" if language == "en" else "「{}」"
+            for key, named in (
+                ("view.help.shelf_text", "view.add.button"),
+                ("view.help.big_text", "view.panel.unbig"),
+                ("view.shelf.bars_types", "view.types.label"),
+            ):
+                with self.subTest(language=language, key=key):
+                    self.assertIn(quote.format(catalog[named]), catalog[key])
+            with self.subTest(language=language, key="view.note.partial"):
+                mark = catalog["view.period.partial"].replace("{period}", "").strip()
+                self.assertIn(quote.format(mark), catalog["view.note.partial"])
+            # The other words are put in their places by the page itself.
+            for key, name in (
+                ("view.empty.first_text", "{other}"),
+                ("view.empty.items_add", "{button}"),
+                ("view.partial.text", "{table}"),
+                ("view.stop.other_version_next", "{button}"),
+            ):
+                with self.subTest(language=language, key=key):
+                    self.assertIn(quote.format(name), catalog[key])
 
     def test_page_scripts_change_text_without_markup(self) -> None:
         # Paths and names from the computer reach the page; it sets them with

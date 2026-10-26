@@ -46,6 +46,7 @@ TEXT_PAIRS = (
     ("surface", "ok"),  # the mark in a confirmed box's number
     ("surface", "ng"),  # the mark in a red box's number
     ("surface", "text"),  # the open part of the help panel, and Help while it is open
+    ("text", "warn-soft"),  # the note of an output with part of its input left out (stage G3b)
 )
 # The bar beside a warning row is decoration: the icon and the words carry
 # the meaning, so it is not a pair here.
@@ -59,6 +60,17 @@ CONTROL_PAIRS = (
     ("accent", "ng-tint"),
     ("ng", "surface"),  # the edge of a box that needs a fix, and of a stop
     ("ok", "surface"),  # the edge of a confirmed box
+)
+# The marks of the charts of the view page (stage G3b), always drawn on the
+# surface: the two series, the hollow dots of 0, and the cross line, as
+# graphical objects that carry meaning (3:1). The grid and the baseline are
+# recessive, and the light bars of a period cut by the period are also said in
+# words and in the table.
+CHART_PAIRS = (
+    ("d1", "surface"),
+    ("d2", "surface"),
+    ("zero", "surface"),
+    ("cross", "surface"),
 )
 
 
@@ -101,9 +113,9 @@ class _PageParser(HTMLParser):
                 return
 
 
-def page() -> list[Element]:
+def page(name: str = "index.html") -> list[Element]:
     parser = _PageParser()
-    parser.feed((STATIC_ROOT / "index.html").read_text(encoding="utf-8"))
+    parser.feed((STATIC_ROOT / name).read_text(encoding="utf-8"))
     parser.close()
     return parser.elements
 
@@ -127,7 +139,7 @@ DARK_FOR_THE_CHOICE = r'^:root\[data-theme="dark"\] \{(.*?)^\}'
 
 def declarations(block: str) -> dict[str, str]:
     """The colors and the color scheme that a block of styles.css sets."""
-    return dict(re.findall(r"(--[a-z-]+|color-scheme):\s*([^;]+);", block))
+    return dict(re.findall(r"(--[a-z0-9-]+|color-scheme):\s*([^;]+);", block))
 
 
 def theme_colors() -> dict[str, dict[str, str]]:
@@ -139,7 +151,7 @@ def theme_colors() -> dict[str, dict[str, str]]:
         raise AssertionError("styles.css has no light or dark color variables")
 
     def colors(block: str) -> dict[str, str]:
-        return dict(re.findall(r"--([a-z-]+):\s*(#[0-9a-fA-F]{6});", block))
+        return dict(re.findall(r"--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6});", block))
 
     light = colors(light_block.group(1))
     return {"light": light, "dark": {**light, **colors(dark_block.group(1))}}
@@ -621,15 +633,264 @@ class GuiPageStructureTest(unittest.TestCase):
         self.assertEqual(hints, ["hint.export", "hint.snapshot", "hint.output", "hint.run"])
 
 
+class GuiViewPageStructureTest(unittest.TestCase):
+    """The view page (stage G3b), with the rules of the normalization page.
+    Its panels, which the script draws, are checked in the script."""
+
+    def setUp(self) -> None:
+        self.elements = page("view.html")
+        self.catalogs = {
+            language: json.loads((STATIC_ROOT / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
+            for language in LANGUAGES
+        }
+        self.script = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+
+    def named(self, key: str | None) -> bool:
+        return all(self.catalogs[language].get(str(key), "").strip() for language in LANGUAGES)
+
+    def test_every_field_has_a_label(self) -> None:
+        labelled = {element.get("for") for element in self.elements if element.tag == "label"}
+        fields = [element for element in self.elements if element.tag in {"input", "select", "textarea"}]
+        self.assertEqual(len(fields), 10)
+        for field in fields:
+            with self.subTest(field=field.get("id")):
+                self.assertTrue(field.get("id") in labelled or field.get("aria-label") or field.get("aria-labelledby"))
+
+    def test_every_button_has_a_name_in_both_languages(self) -> None:
+        # Its words, its name for an icon (data-i18n-label), the words of its
+        # parts, or the words that label it.
+        buttons = [element for element in self.elements if element.tag == "button"]
+        self.assertTrue(buttons)
+        for button in buttons:
+            with self.subTest(button=button.get("id") or button.get("data-period") or button.get("data-grain")):
+                self.assertEqual(button.get("type"), "button")
+                parts = [element.get("data-i18n") for element in self.elements if button in element.ancestors() and element.get("data-i18n")]
+                labels = str(button.get("aria-labelledby") or "").split()
+                if button.get("data-i18n"):
+                    self.assertTrue(self.named(button.get("data-i18n")))
+                elif button.get("data-i18n-label"):
+                    self.assertTrue(self.named(button.get("data-i18n-label")))
+                elif labels:
+                    self.assertTrue(self.named(by_id(self.elements, labels[0]).get("data-i18n")))
+                elif button.get("id") in ("open-latest", "empty-primary"):
+                    # The script gives them the words of what they do.
+                    self.assertIn(f'ui.{"openLatest" if button.get("id") == "open-latest" else "emptyPrimary"}', self.script)
+                else:
+                    self.assertTrue(parts and all(self.named(key) for key in parts))
+        # An icon button says what it does to screen readers only.
+        for identifier, key in (
+            ("period-back", "view.period.back"),
+            ("period-next", "view.period.next"),
+            ("shelf-fold", "view.shelf.fold"),
+            ("shelf-open", "view.shelf.open"),
+        ):
+            with self.subTest(icon=identifier):
+                self.assertEqual(by_id(self.elements, identifier).get("data-i18n-label"), key)
+
+    def test_headings_do_not_skip_levels(self) -> None:
+        levels = [int(element.tag[1]) for element in self.elements if re.fullmatch(r"h[1-6]", element.tag)]
+        self.assertEqual(levels[0], 1)
+        self.assertEqual(levels.count(1), 1)
+        for previous, current in zip(levels, levels[1:]):
+            self.assertLessEqual(current, previous + 1, levels)
+        # The panels are named by headings under the stage's.
+        self.assertEqual(by_id(self.elements, "stage-heading").tag, "h2")
+        self.assertIn('const heading = element("h3", "panel-name", name);', self.script)
+        self.assertIn('section.setAttribute("aria-labelledby", headingId);', self.script)
+
+    def test_live_regions_are_polite_apart_from_the_connection_alert(self) -> None:
+        for element in self.elements:
+            if element.get("aria-live") is not None:
+                with self.subTest(element=element.get("id")):
+                    self.assertEqual(element.get("aria-live"), "polite")
+        alerts = [element.get("id") for element in self.elements if element.get("role") == "alert"]
+        self.assertEqual(alerts, ["connection-problem"])
+        # The values of the cross line are said by a hidden region, which the
+        # page fills only when the keyboard moves the line.
+        announcer = by_id(self.elements, "cross-announcer")
+        self.assertEqual(announcer.get("aria-live"), "polite")
+        self.assertIn("visually-hidden", str(announcer.get("class")).split())
+        self.assertEqual(self.script.count("setText(ui.announcer,"), 1)
+        self.assertIn("if (speak) {", self.script)
+        speaking = [line.strip() for line in self.script.splitlines() if "moveCross(" in line and ", true)" in line]
+        self.assertEqual(speaking, [
+            "moveCross((state.cursor ?? 0) + CROSS_KEYS[event.key], true);",
+            "moveCross(0, true);",
+            "moveCross((state.answer?.periods.length ?? 1) - 1, true);",
+        ])
+        self.assertIn("moveCross(index, false);", self.script)
+
+    def test_focus_targets_after_actions_can_take_focus(self) -> None:
+        for identifier in (
+            "empty-heading",
+            "stop-heading",
+            "series-stop-heading",
+            "help-heading",
+            "help-zero-heading",
+            "help-calculated-heading",
+            "help-records-heading",
+        ):
+            with self.subTest(heading=identifier):
+                self.assertEqual(by_id(self.elements, identifier).get("tabindex"), "-1")
+
+    def test_the_controls_say_what_they_open(self) -> None:
+        for button, region, expanded in (
+            ("help-button", "help-panel", "false"),
+            ("types-button", "types-pop", "false"),
+            ("coverage-button", "coverage-text", "false"),
+            ("add-items", "picker", "false"),
+            ("quit-button", "quit-confirm", "false"),
+            # The shelf is open at first; its rail opens it when it is folded.
+            ("shelf-fold", "shelf", "true"),
+            ("shelf-open", "shelf", "false"),
+        ):
+            with self.subTest(button=button):
+                element = by_id(self.elements, button)
+                self.assertEqual((element.get("aria-expanded"), element.get("aria-controls")), (expanded, region))
+        for region in ("help-panel", "types-pop", "coverage-text", "picker", "quit-confirm", "shelf-rail", "range-row"):
+            with self.subTest(region=region):
+                self.assertIn("hidden", by_id(self.elements, region).attributes)
+        # The choices of the period and the grouping are pressed buttons in a
+        # group named by its words.
+        for group, label, attribute in (("period-choices", "period-label", "data-period"), ("grain-choices", "grain-label", "data-grain")):
+            with self.subTest(group=group):
+                element = by_id(self.elements, group)
+                self.assertEqual((element.get("role"), element.get("aria-labelledby")), ("group", label))
+                members = [child for child in self.elements if child.parent is element]
+                self.assertTrue(members)
+                for member in members:
+                    self.assertEqual((member.tag, member.get("aria-pressed")), ("button", "false"))
+                    self.assertTrue(member.get(attribute))
+        self.assertEqual(by_id(self.elements, "types-button").get("aria-labelledby"), "types-label types-summary")
+
+    def test_quitting_asks_first_in_the_bar(self) -> None:
+        # As on the normalization page, with words that say what it quits:
+        # the view page is a tab of its own.
+        self.assertEqual(by_id(self.elements, "quit-button").get("data-i18n"), "view.quit")
+        for identifier, key in (("quit-yes", "quit.yes"), ("quit-no", "quit.no")):
+            with self.subTest(button=identifier):
+                answer = by_id(self.elements, identifier)
+                self.assertEqual((answer.get("data-i18n"), answer.get("aria-describedby")), (key, "quit-question quit-text"))
+        ask = re.search(r"function askQuit\(\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert ask is not None
+        self.assertIn("ui.quitNo.focus();", ask.group(1))
+
+    def test_the_colors_are_one_group_of_three_choices(self) -> None:
+        group = [element for element in self.elements if element.tag == "fieldset" and element.get("aria-labelledby") == "theme-label"]
+        self.assertEqual(len(group), 1)
+        for identifier, value in (("theme-auto", "auto"), ("theme-light", "light"), ("theme-dark", "dark")):
+            with self.subTest(choice=identifier):
+                choice = by_id(self.elements, identifier)
+                self.assertEqual((choice.get("type"), choice.get("name"), choice.get("value")), ("radio", "theme", value))
+                self.assertIn("disabled", choice.attributes)
+
+    def test_the_help_panel_is_a_closed_side_panel(self) -> None:
+        panel = by_id(self.elements, "help-panel")
+        self.assertEqual((panel.tag, panel.get("role"), panel.get("aria-labelledby")), ("aside", None, "help-heading"))
+        sections = [element for element in self.elements if element.get("class") == "help-section"]
+        self.assertEqual(len(sections), 8)
+        for section in sections:
+            with self.subTest(section=section.get("aria-labelledby")):
+                self.assertEqual(by_id(self.elements, str(section.get("aria-labelledby"))).tag, "h3")
+
+    def test_the_panels_drawn_by_the_script_are_named(self) -> None:
+        # A chart is an image named by its item and period, which the keyboard
+        # can reach; a table has a caption and heads of its columns and rows;
+        # each tool of a panel names the item that it acts on.
+        for line in (
+            "plot.tabIndex = 0;",
+            'plot.setAttribute("role", "img");',
+            '"view.chart.label"',
+            'const caption = element("caption", "visually-hidden",',
+            'cell.scope = "col";',
+            'period.scope = "row";',
+            'wrap.setAttribute("aria-label", t("view.table.label", { name }));',
+            'iconButton("expand", t("view.panel.big", { name }), "big", key)',
+            'iconButton("up", t("view.panel.up", { name }), "up", key, index === 0)',
+            'iconButton("down", t("view.panel.down", { name }), "down", key, index === count - 1)',
+            'iconButton("close", t("view.panel.remove", { name }), "remove", key)',
+            'tableButton.setAttribute("aria-pressed", String(table));',
+            'button.setAttribute("aria-controls", popId);',
+            'read.setAttribute("aria-hidden", "true");',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+        self.assertRegex(self.script, r"const CROSS_KEYS = \{ ArrowLeft: -1, ArrowRight: 1, PageUp: -12, PageDown: 12 \};")
+
+    def test_the_line_of_what_to_do_next_is_in_the_bar_of_the_app(self) -> None:
+        # One row at the top, so that the panels keep the height, and the
+        # filters in one row from a width of 1366 (the Human maintainer,
+        # 2026-10-27).
+        self.assertEqual(by_id(self.elements, "next-line").parent.get("class"), "view-title-row")
+        view = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        self.assertRegex(view, r"\.output-filter \{\s*flex: 1 1 320px;\s*min-width: 300px;\s*max-width: 430px;")
+
+    def test_graphs_only_hides_the_rest_and_goes_back(self) -> None:
+        # Graphs only (the Human maintainer, 2026-10-27): the parts around the
+        # panels are hidden, and the panels, the time axis, and the overview
+        # stay, under a line that says what they show; Esc, the button of that
+        # line, and the browser's own end of its full screen go back, with the
+        # focus on the button that went there.
+        view = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        rule = re.search(r"((?:\.view-app\.full \.[a-z-]+,\s*)+\.view-app\.full \.[a-z-]+) \{\s*display: none;", view)
+        assert rule is not None
+        hidden = re.findall(r"\.view-app\.full \.([a-z-]+)", rule.group(1))
+        self.assertEqual(hidden, ["view-top", "filters", "filters-hint", "shelf", "rail", "caveat", "view-bar"])
+        self.assertIn("hidden", by_id(self.elements, "full-bar").attributes)
+        self.assertEqual(by_id(self.elements, "full-back").get("data-i18n"), "view.full.back")
+        enter = re.search(r"function enterFull\(\) \{(.*?)\n\}", self.script, re.DOTALL)
+        leave = re.search(r"function leaveFull\(\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert enter is not None and leave is not None
+        self.assertIn("ui.fullBack.focus();", enter.group(1))
+        # Back before the browser's full screen came leaves it again.
+        self.assertIn("if (!state.full) {\n          leaveScreen();", enter.group(1))
+        self.assertIn("ui.fullEnter.focus();", leave.group(1))
+        # The browser takes the first Esc of its full screen: a drag of the
+        # overview ends there, and does not choose a period afterwards.
+        self.assertIn("  if (dragging) {\n    endDrag();\n  }", leave.group(1))
+        # A stop hides the button that had the focus: the focus goes to the
+        # heading of what shows instead.
+        self.assertIn("[ui.seriesStopHeading, ui.stopHeading, ui.emptyHeading].find(", self.script)
+        for line in (
+            'document.addEventListener("fullscreenchange", () => {',
+            "if (document.fullscreenElement === null && state.full) {",
+            "} else if (state.full) {",
+            "if (state.full && !showPanels) {",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+
+    def test_the_pointer_says_what_a_drag_on_the_overview_does(self) -> None:
+        # A new period where the pointer is a cross, an edge of the frame where
+        # it is a double arrow, and the days in the label while it moves; a
+        # drag selects no text of the page.
+        view = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        self.assertRegex(view, r"\.overview-plot \{[^}]*cursor: crosshair;")
+        self.assertRegex(view, r"\.overview-plot\[data-grip\],\s*\.overview-plot\[data-drag\] \{\s*cursor: ew-resize;")
+        self.assertRegex(view, r"\.overview \{[^}]*user-select: none;")
+        for line in (
+            'ui.overviewPlot.addEventListener("pointermove", overviewMove);',
+            "ui.overviewPlot.dataset.grip = grip;",
+            'ui.overviewPlot.dataset.drag = drag.grip ?? "new";',
+            't("view.overview_range", {',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+
+
 class GuiStyleTest(unittest.TestCase):
     def setUp(self) -> None:
         self.source = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
         self.themes = theme_colors()
 
     def test_every_color_variable_is_defined_in_both_themes(self) -> None:
-        used = set(re.findall(r"var\(--([a-z-]+)\)", self.source))
+        # The view page uses the colors of styles.css only (stage G3b).
+        view = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        used = set(re.findall(r"var\(--([a-z0-9-]+)\)", self.source + view))
         light = theme_colors()["light"]
         self.assertEqual(sorted(used - set(light)), [])
+        self.assertNotRegex(view, r"--[a-z0-9-]+:")
+        self.assertLessEqual({"d1", "d2", "grid", "axis", "cross", "zero"}, set(light))
         # The dark theme sets every color, so none falls back to a light one,
         # where the browser reports dark and where the person chose Dark
         # (stage G3a).
@@ -637,7 +898,7 @@ class GuiStyleTest(unittest.TestCase):
             with self.subTest(pattern=pattern):
                 block = re.search(pattern, self.source, re.MULTILINE | re.DOTALL)
                 assert block is not None
-                self.assertEqual(sorted(re.findall(r"--([a-z-]+):", block.group(1))), sorted(light))
+                self.assertEqual(sorted(re.findall(r"--([a-z0-9-]+):", block.group(1))), sorted(light))
 
     def test_the_dark_colors_of_the_browser_and_of_the_choice_are_the_same(self) -> None:
         # Stage G3a: CSS cannot join a media query and an attribute in one
@@ -671,7 +932,7 @@ class GuiStyleTest(unittest.TestCase):
 
     def test_colors_meet_wcag_aa_contrast_in_both_themes(self) -> None:
         for theme, colors in self.themes.items():
-            for pairs, minimum in ((TEXT_PAIRS, 4.5), (CONTROL_PAIRS, 3.0)):
+            for pairs, minimum in ((TEXT_PAIRS, 4.5), (CONTROL_PAIRS, 3.0), (CHART_PAIRS, 3.0)):
                 for foreground, background in pairs:
                     with self.subTest(theme=theme, foreground=foreground, background=background):
                         ratio = contrast(colors[foreground], colors[background])
@@ -695,6 +956,30 @@ class GuiStyleTest(unittest.TestCase):
         panel_layer = re.search(r"z-index: (\d+);", panel.group(1))
         assert panel_layer is not None
         self.assertLess(int(layer.group(1)), int(panel_layer.group(1)))
+
+    def test_the_charts_keep_their_marks_where_the_system_forces_its_colors(self) -> None:
+        # Stage G3b: where the system forces its own colors, the marks take
+        # the color of the text, the later series of VO2 Max that of links, and
+        # the light marks that of gray text; the dashes of the sports are
+        # attributes of the lines, which stay.
+        view = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        forced = view.split("@media (forced-colors: active) {", 1)
+        self.assertEqual(len(forced), 2)
+        block = forced[1]
+        for rule in (
+            r"\.chart-bar\.c1,[^{]*\{\s*fill: CanvasText;",
+            r"\.chart-bar\.c2 \{\s*fill: LinkText;",
+            r"\.chart-line\.c1,[^{]*\{\s*stroke: CanvasText;",
+            r"\.chart-line\.c2,[^{]*\{\s*stroke: LinkText;",
+            r"\.chart-bar\.partial \{\s*fill: GrayText;",
+            r"\.chart-zero,[^{]*\{\s*stroke: GrayText;",
+            r"\.chart-cross,[^{]*\{\s*stroke: Highlight;",
+            r"\.overview-handle\.on \{\s*fill: Highlight;",
+        ):
+            with self.subTest(rule=rule):
+                self.assertRegex(block, rule)
+        script = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        self.assertIn('"stroke-dasharray": dash', script)
 
     def test_motion_can_be_reduced(self) -> None:
         self.assertIn("@media (prefers-reduced-motion: reduce)", self.source)

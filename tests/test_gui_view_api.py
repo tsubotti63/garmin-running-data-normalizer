@@ -206,6 +206,21 @@ class ViewApiTest(GuiServerTestCase):
             self.assertEqual(self.call("/api/view/series", payload), (422, {"error": "VIEW_ANSWER_TOO_LARGE"}))
         self.assertEqual(self.call("/api/view/series", payload)[0], 200)
 
+    def test_an_unexpected_error_of_the_numbers_answers_as_the_server_does(self) -> None:
+        # The checker's review of stage G3b-1: an error that no code
+        # describes, in the numbers or in the bars of the shelf, answers as
+        # any unexpected error of the server, without its words; the page
+        # then says that something went wrong, and the server goes on.
+        ticket = self.open(made_output())
+        payload = {"view": ticket, "items": ["dist"], "period": "all", "grain": "auto", "types": None}
+        body = json.dumps(payload).encode("utf-8")
+        for name in ("view_answer", "coverage"):
+            with self.subTest(function=name), patch.object(gui_server, name, side_effect=RuntimeError("unexpected words")):
+                status, _, answer = self.post_api("/api/view/series", self.api_headers(body), body)
+                self.assertEqual(status, 500)
+                self.assertNotIn(b"unexpected words", answer)
+        self.assertEqual(self.call("/api/view/series", payload)[0], 200)
+
     def test_the_numbers_are_read_once_and_again_when_the_output_changes(self) -> None:
         output = self.copied()
         loads: list[Path] = []

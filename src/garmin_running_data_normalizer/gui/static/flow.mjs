@@ -1339,6 +1339,42 @@ export function themeMessage(data) {
   return THEME_CHOICES.includes(data.theme) ? { theme: data.theme } : null;
 }
 
+// The addresses of the two pages of a launch (stage G3b), with the key and
+// the colors in the fragment, as a launch gives them: the view page, with
+// the output of this launch's run to show when asked.
+function launchFragment(key, theme) {
+  const fragment = new URLSearchParams({ key: key ?? "" });
+  const attribute = themeAttribute(theme);
+  if (attribute !== null) {
+    fragment.set("theme", attribute);
+  }
+  return fragment;
+}
+
+export function viewPageAddress(key, theme, showRun) {
+  const fragment = launchFragment(key, theme);
+  if (showRun) {
+    fragment.set("output", "run");
+  }
+  return `/view#${fragment}`;
+}
+
+// The address that the tab of the normalization page opens: none for a tab
+// that shows a page already, and the page with the key and the colors for an
+// empty tab, which window.open made for a name that no tab had.
+export function normalizePageAddress(href, key, theme) {
+  return href === "about:blank" ? `/#${launchFragment(key, theme)}` : null;
+}
+
+// The channel that tells the other tabs of this launch that the app was quit
+// (stage G3b), so that each shows that it stopped, rather than that it lost
+// the app; nothing else goes on it.
+export const QUIT_CHANNEL = "quit";
+
+export function stoppedMessage(data) {
+  return data !== null && typeof data === "object" && Object.keys(data).length === 1 && data.stopped === true;
+}
+
 // Send one value at a time (stage G3a): of the values given while one is
 // sent, only the last goes after it, so that the server keeps the last
 // choice however fast the person changes it. A send that fails does not keep

@@ -1796,6 +1796,31 @@ test("another tab tells a choice of the colors or that the settings were forgott
   }
 });
 
+test("the two pages give each other the key and the colors in the fragment (stage G3b)", () => {
+  assert.equal(flow.viewPageAddress("a b&c", "dark", true), "/view#key=a+b%26c&theme=dark&output=run");
+  assert.equal(flow.viewPageAddress("k", "auto", false), "/view#key=k");
+  assert.equal(flow.viewPageAddress(null, "light", false), "/view#key=&theme=light");
+  // The page reads them back as it reads a launch's address.
+  const address = flow.viewPageAddress("a&output=x", "dark", true);
+  const hash = address.slice(address.indexOf("#"));
+  assert.deepEqual(["key", "theme", "output"].map((name) => flow.fragmentValue(hash, name)), ["a&output=x", "dark", "run"]);
+  // The normalization page opens in an empty tab only.
+  assert.equal(flow.normalizePageAddress("about:blank", "k", "light"), "/#key=k&theme=light");
+  assert.equal(flow.normalizePageAddress("about:blank", "k", "auto"), "/#key=k");
+  for (const href of ["http://127.0.0.1:5000/", "http://127.0.0.1:5000/#key=k", null, ""]) {
+    assert.equal(flow.normalizePageAddress(href, "k", "dark"), null, String(href));
+  }
+});
+
+test("another tab tells only that the app was quit (stage G3b)", () => {
+  assert.equal(flow.QUIT_CHANNEL, "quit");
+  assert.notEqual(flow.QUIT_CHANNEL, "theme");
+  assert.equal(flow.stoppedMessage({ stopped: true }), true);
+  for (const data of [null, undefined, "stopped", true, [], {}, { stopped: false }, { stopped: "true" }, { stopped: true, key: "k" }]) {
+    assert.equal(flow.stoppedMessage(data), false, JSON.stringify(data));
+  }
+});
+
 test("of the values given while one is sent, only the last goes after it", async () => {
   const sent = [];
   const answers = [];
