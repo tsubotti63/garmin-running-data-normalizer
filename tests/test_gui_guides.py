@@ -175,6 +175,26 @@ class GuiGuideTest(unittest.TestCase):
                 with self.subTest(language=language, key=key):
                     self.assertIn(quote[language].format(messages[key]), flowing(language, heading))
 
+    def test_guides_name_the_lines_of_the_line_for_macos_in_powershell_5_1(self) -> None:
+        # v2.0.1 F5, from the check of v2.0.1rc1 on a physical Windows machine
+        # (stage F4d): the line for macOS, pasted in Windows PowerShell 5.1,
+        # stops before any part of it runs, since 5.1 has no "&&". The red
+        # lines are in the language of Windows: "The token '&&' is not a valid
+        # statement separator in this version." in English.
+        for language, row, action in (
+            ("en", "| `'&&'` and `is not a valid statement separator` (Windows) | The line for macOS was pasted in "
+                   "Windows PowerShell 5.1, which has no `&&`. PowerShell ran no part of it, and nothing changed. |",
+             "Run the line for Windows PowerShell in [What you need](#what-you-need) instead. There is nothing to "
+             "move to the Recycle Bin."),
+            ("ja", "| `'&&'` と、`有効なステートメント区切りではありません` か `is not a valid statement separator`（Windows） | "
+                   "macOS の 1 行を Windows PowerShell 5.1 に貼りました。",
+             "[用意するもの](#用意するもの)の Windows PowerShell の 1 行を、代わりに動かしてください。ごみ箱へ入れる物はありません。"),
+        ):
+            with self.subTest(language=language):
+                text = flowing(language, WHAT_YOU_NEED[language])
+                self.assertIn(row, text)
+                self.assertIn(action, text)
+
     def test_guides_say_that_the_gui_is_in_this_release(self) -> None:
         # The stable release has the gui command, and v1.7.1 does not
         # (stage E2b; the release candidates said so for themselves from

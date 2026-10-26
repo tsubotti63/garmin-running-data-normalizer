@@ -159,6 +159,7 @@ the left column in the lines that it showed.
 | A line that says | The usual reason | What to do |
 |---|---|---|
 | `command not found` (macOS), or `is not recognized` (Windows) | Python is not installed, or the terminal was not opened again after you installed it. | Install Python from python.org, and open the terminal again. |
+| `'&&'` and `is not a valid statement separator` (Windows) | The line for macOS was pasted in Windows PowerShell 5.1, which has no `&&`. PowerShell ran no part of it, and nothing changed. | Run the line for Windows PowerShell in [What you need](#what-you-need) instead. There is nothing to move to the Recycle Bin. |
 | `xcode-select` (macOS) | Python is not installed, and macOS asks whether to install the developer tools. | Do not install them in that window (do not choose **Install** there); install Python from python.org, and open the Terminal again. |
 | `Requires-Python` | Python is too old (3.10 or earlier). | Install Python 3.11 or later, open the terminal again, move the folder `garmin-normalizer` in your home folder to the Trash, and run the line again. On Windows, when an older Python is installed already, follow its steps in [What you need](#what-you-need) until `py --version` shows 3.11 or later. |
 | `Retrying` and `connection` | The computer cannot reach the internet, or the network of your company stops it. | Check the connection; on a computer of your company, check its rules too. |

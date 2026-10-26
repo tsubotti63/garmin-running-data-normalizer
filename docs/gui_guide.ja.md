@@ -154,6 +154,7 @@ Linux にはアイコンが無いので、`--create-shortcut` を外してくだ
 | 出た行（の一部） | よくある理由 | すること |
 |---|---|---|
 | `command not found`（macOS）、`認識されません` か `is not recognized`（Windows） | Python が入っていないか、入れたあとにターミナルを開き直していません。 | python.org から Python を入れて、ターミナルを開き直してください。 |
+| `'&&'` と、`有効なステートメント区切りではありません` か `is not a valid statement separator`（Windows） | macOS の 1 行を Windows PowerShell 5.1 に貼りました。5.1 には `&&` が無いので、PowerShell はこの 1 行を動かしていません。何も変わっていません。 | [用意するもの](#用意するもの)の Windows PowerShell の 1 行を、代わりに動かしてください。ごみ箱へ入れる物はありません。 |
 | `xcode-select`（macOS） | Python が入っていないので、macOS がデベロッパ・ツールを入れるかを聞いています。 | その窓では入れずに（そこで「インストール」を押さずに）、python.org から Python を入れて、ターミナルを開き直してください。 |
 | `Requires-Python` | Python が古い（3.10 以前）です。 | Python 3.11 以降を入れてターミナルを開き直し、ホームのフォルダーの `garmin-normalizer` をごみ箱へ入れてから、もう一度動かしてください。Windows で古い Python がもう入っているときは、[用意するもの](#用意するもの)の Windows の手順で、`py --version` が 3.11 以降と出るまで進めてください。 |
 | `Retrying` と `connection` | インターネットにつながっていません。会社のネットワークの制限のこともあります。 | つながりを確かめてください。会社のコンピューターでは、会社の決まりも確かめてください。 |

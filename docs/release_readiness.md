@@ -11,10 +11,19 @@ change. The release publishes directly to Production PyPI through the
 protected `pypi` Environment; it is not published on TestPyPI.
 
 The Windows CI runs every Windows step with v2.0.1 and Python 3.11, and the
-Windows tests and the isolated wheel installation with Python 3.15. One
-physical Windows 11 x64 machine checked v2.0.1rc1, and macOS checked its
-installation from TestPyPI, the line of the guide, and the page by hand with
-synthetic data; from v2.0.1rc1, only the version and the documents change.
+Windows tests and the isolated wheel installation with Python 3.15. macOS
+checked the installation of v2.0.1rc1 from TestPyPI, the line of the guide,
+and the page by hand with synthetic data. On one physical Windows 11 x64
+machine, with Windows PowerShell 5.1 and Python 3.14, the line of the guide
+for Windows PowerShell, with the index of TestPyPI, installed v2.0.1rc1 and
+made the two icons. The page, opened in Microsoft Edge, showed the bar at the
+bottom, the hint of the box that runs, and the help of the timezone as they
+were fixed, and normalized a synthetic Export without and with the import
+into the Snapshots. The line for macOS, pasted there, ran nothing, and the
+GUI Guide now names the lines that it shows. The rest of that check (the line
+that a second normalization of the same Export shows, what the bar says on
+**Quit**, and starting the GUI from the icon) was not observed there. From
+v2.0.1rc1, only the version and the documents change.
 
 The release source is the `main` commit that merges the v2.0.1 release
 preparation pull request. Its annotated tag, GitHub Release, and publish
