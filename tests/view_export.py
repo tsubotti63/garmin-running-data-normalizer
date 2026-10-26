@@ -103,7 +103,8 @@ def write_view_export(root: Path) -> Path:
                 "deepSleepSeconds": 3600 + offset % 5 * 60,
                 "lightSleepSeconds": 14400,
                 "remSleepSeconds": 5400,
-                "sleepScores": {"overallScore": {"value": 70 + offset % 20}},
+                # The shape that the normalization reads.
+                "sleepScores": {"overall": {"value": 70 + offset % 20}},
             }
             if offset % 25 == 0:
                 row.pop("sleepStartTimestampGMT")

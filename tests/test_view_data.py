@@ -26,7 +26,7 @@ from garmin_running_data_normalizer.run_all import ACTIVITIES_CSV_FIT_SESSION_CO
 from garmin_running_data_normalizer.view import data as data_module
 from garmin_running_data_normalizer.view.data import load_view_data
 from garmin_running_data_normalizer.view.items import ACTIVITIES, DATASETS, ITEMS
-from garmin_running_data_normalizer.view.series import activity_types, item_series, period_bounds
+from garmin_running_data_normalizer.view.series import activity_types, coverage, item_series, period_bounds
 from tests.test_gui_runs import SYNTHETIC_EXPORT
 from tests.test_local_timezone import EVENING_IN_NEW_YORK, NEW_YORK, activity_row, write_export
 from tests.v1_3_outputs import as_release, as_v1_3
@@ -203,6 +203,26 @@ class ViewOutputTest(unittest.TestCase):
         found = panel_by_month(self.data, "sleep")
         self.assert_means(found["lines"][0], used)
         self.assertEqual(found["left_out"]["sleep_review_days"], len(review))
+
+    def test_the_sleep_score_is_a_mean_of_the_sleeps_that_may_be_used(self) -> None:
+        rows = self.rows("sleep_daily")
+        used = [
+            (row["sleep_day"], row["sleep_score"])
+            for row in rows
+            if row["sleep_normalization_status"] == "available"
+            and row["sleep_source_available_for_analysis_flag"] is True
+            and row["sleep_score"] is not None
+        ]
+        self.assertTrue(used)
+        found = panel_by_month(self.data, "sscore")
+        self.assert_means(found["lines"][0], used)
+
+    def test_every_item_has_values_in_the_synthetic_export(self) -> None:
+        # The synthetic Export gives values of every item, so that a shape of
+        # the test data that the normalization does not read is noticed, as
+        # that of the sleep scores was (the checker's review, 2026-10-26).
+        shelf = coverage(self.data)
+        self.assertEqual([item.key for item in ITEMS if not shelf[item.key]["months"]], [])
 
     def test_the_records_of_a_day_are_all_points(self) -> None:
         rows = [row for row in self.rows("training_readiness_daily") if row["calendar_date"].startswith("2024-03")]
