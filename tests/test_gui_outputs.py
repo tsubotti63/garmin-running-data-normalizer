@@ -17,6 +17,7 @@ from unittest.mock import Mock, call, patch
 # Import the diagnostics package before modules that import standalone:
 # the other order meets a circular import when this file runs on its own.
 from garmin_running_data_normalizer import diagnostics  # noqa: F401
+from garmin_running_data_normalizer import output_check
 from garmin_running_data_normalizer.diagnostics.doctor import DoctorError, doctor_run_output
 from garmin_running_data_normalizer.gui import outputs, places
 from garmin_running_data_normalizer.gui.outputs import (
@@ -148,27 +149,29 @@ class OutputCheckTest(OutputTestCase):
         self.assert_code("HANDOFF_INVALID", check_output, link)
 
     def test_doctor_answers_other_than_a_current_completed_run_are_refused(self) -> None:
+        # The checks are in output_check, which the view page also calls (stage G1).
         with patch.object(
-            outputs,
+            output_check,
             "doctor_run_output",
             return_value={"completion_state": "NOT_COMPLETED", "diagnostic_contract_availability": "NOT_EVALUATED"},
         ):
             self.assert_code("OUTPUT_CHANGED", check_output, self.output)
         with patch.object(
-            outputs,
+            output_check,
             "doctor_run_output",
             return_value={"completion_state": "NOT_COMPLETED", "diagnostic_contract_availability": "LEGACY_NOT_AVAILABLE"},
         ):
             self.assert_code("OUTPUT_CHANGED", check_output, self.output)
         with patch.object(
-            outputs,
+            output_check,
             "doctor_run_output",
             side_effect=DoctorError("DOCTOR_AUTHORITY_INVALID", "diagnostic authorities disagree"),
         ):
             self.assert_code("DOCTOR_AUTHORITY_INVALID", check_output, self.output)
 
     def test_an_output_that_cannot_be_read_is_reported_by_code(self) -> None:
-        with patch.object(outputs, "validate_standalone_handoff", side_effect=PermissionError("denied")):
+        # The checks are in output_check, which the view page also calls (stage G1).
+        with patch.object(output_check, "validate_standalone_handoff", side_effect=PermissionError("denied")):
             self.assert_code("OUTPUT_NOT_AVAILABLE", check_output, self.output)
 
 

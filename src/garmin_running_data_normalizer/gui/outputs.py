@@ -27,9 +27,9 @@ from pathlib import Path
 from typing import Any
 
 from ..common.json_depth import check_json_depth
-from ..diagnostics.doctor import DoctorError, doctor_run_output
 from ..diagnostics.support_bundle import SupportBundleError, build_support_bundle
-from ..standalone import VERSION_FORM, OtherVersionError, StandaloneHandoffError, validate_standalone_handoff
+from ..output_check import OutputActionError, checked_output
+from ..standalone import VERSION_FORM, OtherVersionError
 
 OPEN_TARGETS = ("folder", "start_here", "bundle", "safe_pack")
 # What is read from the summary of an earlier output (stage B5b).
@@ -44,16 +44,6 @@ MACOS_OPEN = "/usr/bin/open"
 _REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
 
 
-class OutputActionError(ValueError):
-    """An output action that failed, reported to the page as a code, and for
-    an output that another version made, that version (stage B5b)."""
-
-    def __init__(self, code: str, version: str | None = None) -> None:
-        super().__init__(code)
-        self.code = code
-        self.version = version
-
-
 def _made_by(exc: BaseException | None) -> str | None:
     """The version that made an output that this version cannot check, from
     the error that told it, through the errors that it caused."""
@@ -65,27 +55,9 @@ def _made_by(exc: BaseException | None) -> str | None:
 
 
 def check_output(output: Path) -> dict[str, Any]:
-    """Run handoff validation and the post-run Doctor; return codes and counts."""
-    try:
-        handoff = validate_standalone_handoff(output)
-        report = doctor_run_output(output)
-    except OtherVersionError as exc:
-        # Another version made the output (stage B5b).
-        raise OutputActionError("OUTPUT_OTHER_VERSION", exc.version) from exc
-    except StandaloneHandoffError as exc:
-        raise OutputActionError("HANDOFF_INVALID") from exc
-    except DoctorError as exc:
-        raise OutputActionError(exc.code) from exc
-    except OSError as exc:
-        raise OutputActionError("OUTPUT_NOT_AVAILABLE") from exc
-    # An output of 1.3 has no diagnostics, and is told so (stage B5b); a run
-    # of this version wrote a completed output with its diagnostics, so any
-    # other answer means that the folder changed after the run.
-    legacy = report["diagnostic_contract_availability"] == "LEGACY_NOT_AVAILABLE"
-    if report["completion_state"] != "COMPLETED" or (
-        report["diagnostic_contract_availability"] != "CURRENT" and not legacy
-    ):
-        raise OutputActionError("OUTPUT_CHANGED")
+    """Run handoff validation and the post-run Doctor; return codes and counts.
+    The view page runs the same checks, with the same codes (stage G1)."""
+    handoff, report, legacy = checked_output(output)
     version = report.get("product_version")
     return {
         "handoff": {

@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Any
 
 from .common.identity import IDENTIFIER, MISSING, is_ascii_digits, read_identifier
+from .common.sport import activity_sport, sport_group
 
 
 class RelationshipContractError(ValueError):
@@ -613,34 +614,6 @@ def _instant(value: Any) -> datetime | None:
     return parsed
 
 
-def _sport_group(value: Any) -> str | None:
-    text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-    if not text:
-        return None
-    legacy_fit_sports = {
-        "10": "strength_training",
-        "11": "walking",
-        "17": "hiking",
-    }
-    if text in legacy_fit_sports:
-        return legacy_fit_sports[text]
-    if "run" in text or text in {"street", "trail"}:
-        return "running"
-    if "strength" in text or text in {"training", "fitness_equipment"}:
-        return "strength_training"
-    if "walk" in text:
-        return "walking"
-    if "hik" in text:
-        return "hiking"
-    return text
-
-
-def _activity_sport(record: dict[str, Any]) -> str | None:
-    return _sport_group(record.get("sport_type")) or _sport_group(
-        record.get("activity_type")
-    )
-
-
 def _activity_eligibility_exclusion(record: dict[str, Any]) -> str | None:
     if _instant(record.get("activity_datetime_local")) is None:
         return "missing_or_invalid_start_datetime"
@@ -685,8 +658,8 @@ def _candidate(
     if fit_duration is None:
         fit_duration = _number(session.get("elapsed_time_sec"))
     sport_match = (
-        _activity_sport(activity) is not None
-        and _activity_sport(activity) == _sport_group(session.get("sport"))
+        activity_sport(activity) is not None
+        and activity_sport(activity) == sport_group(session.get("sport"))
     )
     distance_delta = (
         abs(activity_distance - fit_distance)
