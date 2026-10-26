@@ -309,6 +309,10 @@ class GuiMessageCoverageTest(unittest.TestCase):
             | codes_in("snapshot/merge.py", r'"(SNAPSHOT_[A-Z_]+)"')
             | codes_in("gui/run_worker.py", r'"([A-Z_]+_FAILED)"')
             | codes_in("gui/outputs.py", r'OutputActionError\("([A-Z_]+)"\)')
+            # The checks of an output, which the view page shares, and what
+            # the view page reads (stage G1).
+            | codes_in("output_check.py", r'OutputActionError\("([A-Z_]+)"\)')
+            | codes_in("view/data.py", r'OutputActionError\("([A-Z_]+)"\)')
             | codes_in("diagnostics/doctor.py", r'DoctorError\(\s*"([A-Z_]+)"')
             | codes_in("diagnostics/support_bundle.py", r'SupportBundleError\(\s*"([A-Z_]+)"')
             # The answers of the Snapshot Store (stage B4a).
@@ -329,12 +333,28 @@ class GuiMessageCoverageTest(unittest.TestCase):
         # error passed on as it is would need its codes collected as well.
         # A Support Bundle of an output that another version made also passes
         # on that version (stage B5b).
-        source = (SOURCE / "gui/outputs.py").read_text(encoding="utf-8")
+        # The checks moved to output_check.py, and the view page passes on
+        # the code of the timezone data, which common/time.py gives (stage G1).
+        sources = {
+            name: (SOURCE / name).read_text(encoding="utf-8")
+            for name in ("gui/outputs.py", "output_check.py", "view/data.py")
+        }
         self.assertEqual(
-            re.findall(r"except (\w+) as exc:\n\s+raise OutputActionError\(exc\.code(?:, _made_by\(exc\))?\)", source),
-            ["DoctorError", "SupportBundleError"],
+            {
+                name: re.findall(
+                    r"except (\w+) as exc:\n\s+raise OutputActionError\(exc\.code(?:, _made_by\(exc\))?\)", source
+                )
+                for name, source in sources.items()
+            },
+            {
+                "gui/outputs.py": ["SupportBundleError"],
+                "output_check.py": ["DoctorError"],
+                "view/data.py": ["TimezoneDataUnavailableError"],
+            },
         )
-        self.assertEqual(len(re.findall(r"OutputActionError\(exc\.code[,)]", source)), 2)
+        self.assertEqual(
+            sum(len(re.findall(r"OutputActionError\(exc\.code[,)]", source)) for source in sources.values()), 3
+        )
 
     def test_every_progress_stage_and_step_has_a_message(self) -> None:
         # The stages of a Snapshot run come before and after those of Run-All

@@ -40,6 +40,7 @@ def synthetic_fit(
     session_running_dynamics: tuple[int, int, int, int, int, int] | None = None,
     lap_running_dynamics: tuple[int, int, int, int, int, int] | None = None,
     extra_body: bytes = b"",
+    first_start: int = 1_000_000,
 ) -> bytes:
     """Create a visibly synthetic FIT activity without using user data.
 
@@ -47,6 +48,8 @@ def synthetic_fit(
     added only when given, so the default bytes stay unchanged. ``extra_body``
     holds further definitions and records, such as those of other messages,
     written after the sessions and laps (local message numbers 2 and up).
+    ``first_start`` is the FIT time of the start of the first session; the
+    others start 10,000 seconds apart (stage G1).
     """
     session_fields = [
         (2, 4, 0x86), (5, 1, 0x00), (6, 1, 0x00),
@@ -81,7 +84,7 @@ def synthetic_fit(
     body = bytearray(_definition(0, 18, session_fields))
     body.extend(_definition(1, 19, lap_fields))
     for ordinal in range(sessions):
-        start = 1_000_000 + ordinal * 10_000
+        start = first_start + ordinal * 10_000
         body.extend(
             _record(
                 0,

@@ -300,6 +300,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "isolated sdist Synthetic Run-All failed with exit code $LASTEXITCODE" }
           .\.sdist-venv\Scripts\python.exe -c "import json, pathlib; p=pathlib.Path('workspace/windows-sdist-run-all/run_summary.json'); assert p.is_file(); s=json.loads(p.read_text(encoding='utf-8')); assert s['status'] == 'PASS_WITH_WARNINGS'; assert s['family_results']['activities']['detected_asset_count'] == 1; assert s['family_results']['activities']['processed_asset_count'] == 1"
           if ($LASTEXITCODE -ne 0) { throw "isolated sdist Synthetic Run-All summary check failed with exit code $LASTEXITCODE" }
+      - name: Verify Windows numbers of the view page
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_view_data.py -q
   windows-python-3-15:
     runs-on: windows-latest
     steps:
@@ -353,3 +356,6 @@ jobs:
           $null = New-Item -ItemType Directory -Force -Path .\workspace
           .\.wheel-venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-py315-run-all
           if ($LASTEXITCODE -ne 0) { throw "isolated wheel Synthetic Run-All failed with exit code $LASTEXITCODE" }
+      - name: Verify Windows numbers of the view page with Python 3.15
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_view_data.py -q
