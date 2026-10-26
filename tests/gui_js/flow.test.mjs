@@ -67,6 +67,7 @@ test("a checked export with confirmed boxes can start a run", () => {
     cancel: false,
     quit: true,
     hints: true,
+    theme: true,
     outputActions: false,
     forget: false,
   });
@@ -87,6 +88,9 @@ test("nothing works while the server stops after Quit, and the tips switch needs
   assert.equal(enabled({ ...READY, connected: false, settingsPresent: true }).hints, false);
   assert.equal(enabled(READY).hints, true);
   assert.equal(enabled({ ...READY, runState: "running" }).hints, true);
+  // The colors of the page too (stage G3a).
+  assert.equal(enabled({ ...READY, connected: false }).theme, false);
+  assert.equal(enabled({ ...READY, runState: "running" }).theme, true);
 });
 
 test("a running job can only be cancelled", () => {
@@ -101,6 +105,7 @@ test("a running job can only be cancelled", () => {
     cancel: true,
     quit: false,
     hints: true,
+    theme: true,
     outputActions: false,
     forget: false,
   });
@@ -1711,6 +1716,7 @@ test("the settings of an earlier launch: a later launch needs a place, and the t
     store: null,
     outputParent: null,
     hints: null,
+    theme: "auto",
     notice: null,
     present: false,
   });
@@ -1718,7 +1724,7 @@ test("the settings of an earlier launch: a later launch needs a place, and the t
     flow.launchSettings({
       settings: { launch: "later", store: "/path/to/store", output_parent: "/path/to", hints: false, notice: "SETTINGS_INVALID" },
     }),
-    { launch: "later", store: "/path/to/store", outputParent: "/path/to", hints: false, notice: "SETTINGS_INVALID", present: false },
+    { launch: "later", store: "/path/to/store", outputParent: "/path/to", hints: false, theme: "auto", notice: "SETTINGS_INVALID", present: false },
   );
   // A later launch without a place, and values of another form, are not taken.
   assert.equal(flow.launchSettings({ settings: { launch: "later", store: null, output_parent: "" } }).launch, "first");
@@ -1726,7 +1732,7 @@ test("the settings of an earlier launch: a later launch needs a place, and the t
     flow.launchSettings({
       settings: { launch: "later", store: 3, output_parent: "/path/to", hints: "no", notice: "/path/to/private" },
     }),
-    { launch: "later", store: null, outputParent: "/path/to", hints: null, notice: null, present: false },
+    { launch: "later", store: null, outputParent: "/path/to", hints: null, theme: "auto", notice: null, present: false },
   );
   // The tips: as the person last switched them, otherwise on at a first
   // launch and off at a later one (the mockup v10).
@@ -1734,6 +1740,94 @@ test("the settings of an earlier launch: a later launch needs a place, and the t
   assert.equal(flow.hintsShown({ launch: "later", hints: null }), false);
   assert.equal(flow.hintsShown({ launch: "later", hints: true }), true);
   assert.equal(flow.hintsShown({ launch: "first", hints: false }), false);
+});
+
+// The colors of the page (stage G3a).
+test("the colors that the settings remember are Light or Dark, and otherwise follow the browser", () => {
+  assert.deepEqual(flow.THEME_CHOICES, ["auto", "light", "dark"]);
+  assert.equal(flow.launchSettings({ settings: { theme: "dark" } }).theme, "dark");
+  assert.equal(flow.launchSettings({ settings: { theme: "light" } }).theme, "light");
+  for (const theme of [null, undefined, "auto", "Dark", "blue", "", 1, true, ["dark"]]) {
+    assert.equal(flow.launchSettings({ settings: { theme } }).theme, "auto", String(theme));
+  }
+  assert.equal(flow.themeAttribute("light"), "light");
+  assert.equal(flow.themeAttribute("dark"), "dark");
+  assert.equal(flow.themeAttribute("auto"), null);
+  assert.equal(flow.themeAttribute("blue"), null);
+  // The words after "Match this computer".
+  assert.equal(flow.themeNowKey(true), "theme.mode_dark");
+  assert.equal(flow.themeNowKey(false), "theme.mode_light");
+});
+
+test("the key and the colors of the fragment of the address are read apart", () => {
+  // The values are separated by "&": the key never takes what follows it.
+  const cases = [
+    ["#key=abc", "abc", null],
+    ["#key=abc&theme=dark", "abc", "dark"],
+    ["#theme=light&key=abc", "abc", "light"],
+    ["#key=a%26b&theme=dark", "a&b", "dark"],
+    ["#key=abc&theme=", "abc", ""],
+    ["#", null, null],
+    ["", null, null],
+  ];
+  for (const [hash, key, theme] of cases) {
+    assert.equal(flow.fragmentValue(hash, "key"), key, hash);
+    assert.equal(flow.fragmentValue(hash, "theme"), theme, hash);
+  }
+});
+
+test("another tab tells a choice of the colors or that the settings were forgotten, and nothing else", () => {
+  assert.deepEqual(flow.themeMessage({ theme: "dark" }), { theme: "dark" });
+  assert.deepEqual(flow.themeMessage({ theme: "auto" }), { theme: "auto" });
+  assert.deepEqual(flow.themeMessage({ forgotten: true }), { forgotten: true });
+  for (const data of [
+    null,
+    undefined,
+    "dark",
+    1,
+    [],
+    {},
+    { theme: "blue" },
+    { theme: "dark", key: "k" },
+    { forgotten: "yes" },
+    { forgotten: true, theme: "dark" },
+  ]) {
+    assert.equal(flow.themeMessage(data), null, JSON.stringify(data));
+  }
+});
+
+test("of the values given while one is sent, only the last goes after it", async () => {
+  const sent = [];
+  const answers = [];
+  const send = (value) =>
+    new Promise((resolve, reject) => {
+      sent.push(value);
+      answers.push({ resolve, reject });
+    });
+  // The loop of sendLatest goes on after the promises that it waits for.
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  const latest = flow.sendLatest(send);
+  const first = latest("light");
+  latest("dark");
+  latest("auto");
+  assert.deepEqual(sent, ["light"]);
+  answers.shift().resolve();
+  await settle();
+  assert.deepEqual(sent, ["light", "auto"]);
+  // A send that fails does not keep the next one from going.
+  latest("dark");
+  answers.shift().reject(new Error("lost"));
+  await settle();
+  assert.deepEqual(sent, ["light", "auto", "dark"]);
+  answers.shift().resolve();
+  await first;
+  assert.deepEqual(sent, ["light", "auto", "dark"]);
+  // Once nothing is sent, the next value goes at once.
+  latest("light");
+  assert.deepEqual(sent, ["light", "auto", "dark", "light"]);
+  answers.shift().resolve();
+  await settle();
+  assert.equal(answers.length, 0);
 });
 
 test("on a later launch, the boxes that hold the remembered places are set by themselves", () => {

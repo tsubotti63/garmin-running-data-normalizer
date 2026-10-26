@@ -42,6 +42,7 @@ import {
   forgetOutcome,
   formatElapsed,
   foundChoices,
+  fragmentValue,
   helpReturnTarget,
   helpSteps,
   hintsShown,
@@ -76,6 +77,7 @@ import {
   resultTotal,
   runSummary,
   sameContentNoted,
+  sendLatest,
   settingsMessages,
   settingsPresentAfterRun,
   shouldFocusResult,
@@ -88,6 +90,9 @@ import {
   storeProblem,
   storeReady,
   storeSetBySettings,
+  themeAttribute,
+  themeMessage,
+  themeNowKey,
   warningMessages,
 } from "./flow.mjs";
 
@@ -95,6 +100,11 @@ const LANGUAGES = ["en", "ja"];
 const LAUNCH_KEY_HEADER = "X-Launch-Key";
 const LAUNCH_KEY_STORAGE = "launchKey";
 const LANGUAGE_STORAGE = "language";
+// The colors of the page that this tab took last (stage G3a), which theme.js
+// reads before a reload is drawn, and the channel that tells the other tabs
+// of this launch; the browser keeps both to this launch's port.
+const THEME_STORAGE = "theme";
+const THEME_CHANNEL = "theme";
 const HEARTBEAT_INTERVAL_MS = 30000;
 const POLL_INTERVAL_MS = 1000;
 // The time before an explanation that opened is given to its live region,
@@ -274,6 +284,9 @@ const ui = {
   resultsPanel: byId("results-panel"),
   runExitRow: byId("run-exit-row"),
   hintsToggle: byId("hints-toggle"),
+  // The colors of the page in the bar (stage G3a).
+  themeChoices: document.querySelectorAll('input[name="theme"]'),
+  themeNow: byId("theme-now"),
   // The settings of an earlier launch, and forgetting them (stage B4c).
   settingsStatus: byId("settings-status"),
   infoAnnouncer: byId("info-announcer"),
@@ -399,6 +412,10 @@ const state = {
   // off at a later one, and as the person last switched them, which the
   // settings remember (stage B4c).
   hintsOn: true,
+  // The colors of the page (stage G3a): "auto", "light", or "dark", as the
+  // person chose them, which the settings remember. theme.js set them before
+  // the page was drawn.
+  theme: initialTheme(),
   // The settings of an earlier launch (stage B4c): the places that they
   // remembered, what to tell of them (a code, and whether it came from
   // writing them), whether the second and third boxes still hold the
@@ -438,6 +455,32 @@ const state = {
   spot: null,
   spotTimer: null,
 };
+
+// The other tabs of this launch take the colors at once (stage G3a); without
+// the channel, they take them when they are loaded again.
+const themeChannel = typeof BroadcastChannel === "function" ? new BroadcastChannel(THEME_CHANNEL) : null;
+// The colors that the browser reports, for the words after "Match this
+// computer" (stage G3a).
+const darkScheme = window.matchMedia("(prefers-color-scheme: dark)");
+
+// The colors that theme.js set from this tab or the address.
+function initialTheme() {
+  const attribute = document.documentElement.dataset.theme;
+  return attribute === "light" || attribute === "dark" ? attribute : "auto";
+}
+
+// Take the colors of a choice (stage G3a): the attribute that styles.css
+// reads, and this tab's storage, which theme.js reads on a reload.
+function applyTheme(choice) {
+  state.theme = choice;
+  const attribute = themeAttribute(choice);
+  if (attribute === null) {
+    delete document.documentElement.dataset.theme;
+  } else {
+    document.documentElement.dataset.theme = attribute;
+  }
+  writeStorage(THEME_STORAGE, choice);
+}
 
 class ApiError extends Error {
   constructor(status, code, detail = null) {
@@ -584,10 +627,12 @@ function writeStorage(name, value) {
   }
 }
 
-// The key arrives in the URL fragment, which is never sent to the server. Keep
-// it for this tab only, and remove it from the address bar and the history.
+// The key arrives in the URL fragment, which is never sent to the server, and
+// the colors that the settings remember after it (stage G3a). Keep the key for
+// this tab only, and remove the fragment, the colors too, from the address bar
+// and the history.
 function readLaunchKey() {
-  const fromFragment = new URLSearchParams(window.location.hash.slice(1)).get("key");
+  const fromFragment = fragmentValue(window.location.hash, "key");
   if (fromFragment) {
     writeStorage(LAUNCH_KEY_STORAGE, fromFragment);
     window.history.replaceState(null, "", window.location.pathname);
@@ -1472,6 +1517,15 @@ function renderHints() {
   }
 }
 
+// The colors of the page in the bar (stage G3a), and the colors that the
+// browser reports now.
+function renderTheme() {
+  for (const choice of ui.themeChoices) {
+    choice.checked = choice.value === state.theme;
+  }
+  setText(ui.themeNow, t("theme.now", { mode: t(themeNowKey(darkScheme.matches)) }));
+}
+
 // An information button opens what it explains under it. The meaning of the
 // exit code shows only while the exit code shows.
 function renderInfos() {
@@ -1734,6 +1788,9 @@ function renderControls(states, current) {
   ui.quit.setAttribute("aria-expanded", String(state.quitAsked));
   ui.quitYes.disabled = !enabled.quit;
   ui.hintsToggle.disabled = !enabled.hints;
+  for (const choice of ui.themeChoices) {
+    choice.disabled = !enabled.theme;
+  }
   replaceLines(ui.runAgain, againNote(current, enabled).map(describe));
   ui.openFolder.disabled = !enabled.outputActions;
   ui.openStartHere.disabled = !enabled.outputActions;
@@ -1782,6 +1839,7 @@ function render() {
   renderReport(current);
   renderOutsideLinks();
   renderHints();
+  renderTheme();
   renderInfos();
 }
 
@@ -2680,6 +2738,41 @@ async function changeHints() {
   render();
 }
 
+// The person chose the colors (stage G3a): this tab and the other tabs of this
+// launch take them at once, and the server remembers the last choice.
+function changeTheme(event) {
+  applyTheme(event.target.value);
+  state.forget.key = null;
+  themeChannel?.postMessage({ theme: state.theme });
+  render();
+  rememberTheme(state.theme);
+}
+
+const rememberTheme = sendLatest(async (choice) => {
+  try {
+    const answer = await callApi("/api/settings/theme", { theme: choice });
+    state.settingsNotice = answer?.remembered === true ? null : { code: answer?.notice, writing: true };
+    // The file of the settings is there to forget now (stage C1).
+    if (answer?.remembered === true) {
+      state.settingsPresent = true;
+    }
+  } catch (error) {
+    connectionFailure(error);
+  }
+  render();
+});
+
+// Another tab of this launch chose the colors, or forgot the settings.
+function themeHeard(event) {
+  const message = themeMessage(event.data);
+  if (message?.forgotten === true) {
+    writeStorage(THEME_STORAGE, "auto");
+  } else if (message !== null) {
+    applyTheme(message.theme);
+    render();
+  }
+}
+
 // Forgetting the remembered settings asks first, above the bar (stage B4c).
 function askForget() {
   state.forget.asked = true;
@@ -2703,6 +2796,12 @@ async function forgetSettings() {
     state.forget.key = outcome.key;
     state.settingsPresent = outcome.present;
     state.settingsNotice = outcome.notice === null ? null : { code: outcome.notice, writing: false };
+    // The colors stay on the open pages, as the tips do; a reload, here or in
+    // another tab, follows the browser (stage G3a).
+    if (!outcome.present) {
+      writeStorage(THEME_STORAGE, "auto");
+      themeChannel?.postMessage({ forgotten: true });
+    }
   } catch (error) {
     if (!connectionFailure(error) && error.code !== "RUN_ACTIVE") {
       state.settingsNotice = { code: "SETTINGS_NOT_REMOVED", writing: false };
@@ -2864,6 +2963,11 @@ function connect() {
   ui.safePack.addEventListener("change", fieldChanged);
   ui.extractConfirm.addEventListener("change", fieldChanged);
   ui.hintsToggle.addEventListener("change", changeHints);
+  for (const choice of ui.themeChoices) {
+    choice.addEventListener("change", changeTheme);
+  }
+  darkScheme.addEventListener("change", render);
+  themeChannel?.addEventListener("message", themeHeard);
   ui.helpButton.addEventListener("click", toggleHelp);
   ui.helpClose.addEventListener("click", closeHelp);
   ui.helpPanel.addEventListener("keydown", (event) => {
@@ -2935,6 +3039,8 @@ async function start() {
     state.settingsPresent = settings.present;
     state.settingsNotice = settings.notice === null ? null : { code: settings.notice, writing: false };
     state.hintsOn = hintsShown(settings);
+    // The colors that the settings remember win over this tab's (stage G3a).
+    applyTheme(settings.theme);
     Object.assign(state, boxesSetBySettings(settings));
     if (settings.outputParent !== null && ui.outputParent.value === "") {
       ui.outputParent.value = settings.outputParent;

@@ -20,13 +20,14 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from unittest import mock
 from unittest.mock import patch
 
 from garmin_running_data_normalizer import runner, shortcut
-from garmin_running_data_normalizer.gui import command
+from garmin_running_data_normalizer.gui import command, places, settings
 from garmin_running_data_normalizer.gui.server import LAUNCH_KEY_HEADER
 from garmin_running_data_normalizer.runner import build_parser
 from tests.test_gui_runs import child_environment
@@ -132,6 +133,16 @@ class GuiCommandRunTest(unittest.TestCase):
         code, lines, _err, opened = self.run_gui(None, open_browser=False)
         self.assertEqual((code, lines[1], opened), (0, FakeServer.url, []))
 
+    def test_the_address_carries_the_colors_that_the_settings_remember(self) -> None:
+        # Stage G3a: after the key, in the fragment that the browser never
+        # sends, never in the query; the address is the server's without them.
+        with patch.object(command, "launch_theme", return_value="dark"):
+            code, lines, _err, opened = self.run_gui(None)
+        address = FakeServer.url + "&theme=dark"
+        self.assertEqual((code, lines[1], opened), (0, address, [address]))
+        self.assertNotIn("?", address)
+        self.assertEqual(command.launch_address(FakeServer.url, None), FakeServer.url)
+
     def test_a_run_that_ctrl_c_stopped_is_reported_as_the_cli_reports_it(self) -> None:
         code, lines, err, _opened = self.run_gui({"state": "cancelled", "staging_folders": [".staging-synthetic"]})
         self.assertEqual((code, lines[-1]), (130, "GUI stopped."))
@@ -211,7 +222,7 @@ class GuiCommandProcessTest(unittest.TestCase):
             # would open one.
             self.environment["BROWSER"] = "true"
 
-    def start(self) -> tuple[subprocess.Popen[str], str, str]:
+    def start(self, theme: str | None = None) -> tuple[subprocess.Popen[str], str, str]:
         process = subprocess.Popen(
             [sys.executable, "-m", "garmin_running_data_normalizer", "gui", "--no-browser"],
             stdout=subprocess.PIPE,
@@ -230,9 +241,12 @@ class GuiCommandProcessTest(unittest.TestCase):
         except queue.Empty:
             self.fail("the command printed no address")
         self.assertEqual((first[0], first[2]), (ADDRESS_LINE, STOP_LINE))
-        self.assertRegex(first[1], r"^http://127\.0\.0\.1:\d+/#key=[A-Za-z0-9_-]+$")
-        origin, key = first[1].split("/#key=")
-        return process, origin, key
+        colors = "" if theme is None else f"&theme={theme}"
+        self.assertRegex(first[1], rf"^http://127\.0\.0\.1:\d+/#key=[A-Za-z0-9_-]+{colors}$")
+        # The key is read as the page reads it: the values of the fragment
+        # are separated by "&" (stage G3a).
+        origin, fragment = first[1].split("/#", 1)
+        return process, origin, urllib.parse.parse_qs(fragment)["key"][0]
 
     def post(self, origin: str, key: str, path: str) -> dict[str, object]:
         request = urllib.request.Request(
@@ -246,6 +260,18 @@ class GuiCommandProcessTest(unittest.TestCase):
 
     def test_the_command_stops_with_the_quit_request(self) -> None:
         process, origin, key = self.start()
+        self.assertEqual(self.post(origin, key, "/api/shutdown"), {"status": "stopping"})
+        out, err = process.communicate(timeout=TIMEOUT_SECONDS)
+        self.assertEqual((process.returncode, out.strip(), err), (0, "GUI stopped.", ""))
+
+    def test_the_key_of_an_address_with_the_colors_opens_the_api(self) -> None:
+        # Stage G3a: the child's settings remember Dark, in its own home.
+        home = Path(self.environment["HOME"])
+        path = places.settings_file_for(sys.platform, self.environment, home)
+        path.parent.parent.mkdir(parents=True, exist_ok=True)
+        self.assertIsNone(settings.write_settings(path, {"theme": "dark"}))
+        process, origin, key = self.start(theme="dark")
+        self.assertEqual(self.post(origin, key, "/api/status")["settings"]["theme"], "dark")
         self.assertEqual(self.post(origin, key, "/api/shutdown"), {"status": "stopping"})
         out, err = process.communicate(timeout=TIMEOUT_SECONDS)
         self.assertEqual((process.returncode, out.strip(), err), (0, "GUI stopped.", ""))

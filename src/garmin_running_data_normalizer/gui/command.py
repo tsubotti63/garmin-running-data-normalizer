@@ -6,6 +6,9 @@ run: the terminal then gets the lines that the CLI prints for a cancelled
 command, and the command ends with the CLI's exit code for it, 130. A second
 `Ctrl+C` while the server stops and reports is ignored, as the CLI ignores
 one while it reports (stage A5c), so that the run's child always ends first.
+
+The address also carries the colors that the settings remember (stage G3a),
+after the key, so that the page is drawn in them from the start.
 """
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ from collections.abc import Callable
 from typing import Any
 
 from .server import GuiServer, cancel_report, serve_until_stopped
+from .settings import launch_theme
 
 # The CLI's exit code for a command that Ctrl+C cancelled (stage A5c).
 CANCELLED_EXIT_CODE = 130
@@ -59,6 +63,13 @@ def _give_back(saved: list[tuple[int, Any]]) -> None:
             signal.signal(number, previous)
 
 
+def launch_address(url: str, theme: str | None) -> str:
+    """The address that a launch prints and opens: the server's, and the
+    colors that the settings remember, in the fragment with the key, which
+    the browser never sends (stage G3a)."""
+    return url if theme is None else f"{url}&theme={theme}"
+
+
 def _open_in_browser(url: str) -> object:
     # Only a launch that opens the browser loads the module.
     import webbrowser
@@ -77,11 +88,12 @@ def run_gui(
     saved = _stop_once_on_ctrl_c()
     try:
         try:
+            address = launch_address(server.url, launch_theme())
             print("GUI address (it contains the launch key; do not share it):")
-            print(server.url)
+            print(address)
             print("Stop with Ctrl+C or the Quit button on the page.", flush=True)
             if open_browser:
-                opener(server.url)
+                opener(address)
             stopped = serve_until_stopped(server)
         except KeyboardInterrupt:
             # Ctrl+C before the server serves, which takes it when it
@@ -96,4 +108,4 @@ def run_gui(
         _give_back(saved)
 
 
-__all__ = ["CANCELLED_EXIT_CODE", "exit_code", "run_gui"]
+__all__ = ["CANCELLED_EXIT_CODE", "exit_code", "launch_address", "run_gui"]

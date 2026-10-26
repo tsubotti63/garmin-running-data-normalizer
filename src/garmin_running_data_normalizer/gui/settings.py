@@ -2,8 +2,9 @@
 
 The GUI remembers, in one file on this computer (decision 20261017-15): the
 Snapshot Store and the folder for the output of the last run that made its
-output, the outputs that runs made (the latest ten), and whether the tips
-show. Only the names of places are kept, never what is in them, and never the
+output, the outputs that runs made (the latest ten), whether the tips show,
+and the colors of the page when the person chose Light or Dark (stage G3a).
+Only the names of places are kept, never what is in them, and never the
 place of an Export. The CLI remembers nothing.
 
 The file is the person's own: an owner-only folder and file, written whole
@@ -12,9 +13,16 @@ left. It is read with care: a link, a folder, a file over 64 KiB, or a file
 of another form is not used, and the next settings replace it; a file of a
 newer version is not used and never written over, so that going back to an
 older version leaves the newer settings as they are. Keys that this version
-does not know are left out. Places read from it are absolute places of this
-system without control characters, and the server checks them again as it
-checks places that the page sends.
+does not know are left out, and so is a value of another form of a key that
+2.1.0 added (the colors), so that the other settings are still used. Places
+read from it are absolute places of this system without control characters,
+and the server checks them again as it checks places that the page sends.
+
+The settings change one at a time: a change reads the file, adds its
+value, and writes it whole under one lock, so that a run that ends while the
+person switches the tips or the colors keeps both. The lock holds for the
+threads of one server only; two GUIs that write at the same moment can still
+keep only one of the two values.
 """
 from __future__ import annotations
 
@@ -22,6 +30,7 @@ import json
 import os
 import secrets
 import stat
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +45,12 @@ MAX_SETTINGS_BYTES = 64 * 1024
 MAX_RECENT_OUTPUTS = 10
 MAX_PLACE_LENGTH = 4096
 PLACE_KEYS = ("store", "output_parent")
+# The colors that the person can choose; without one, the page follows the
+# colors that the browser reports (stage G3a).
+THEMES = ("light", "dark")
+# One change of the settings at a time: each reads the file and writes it
+# whole, so that two at once would keep only one of them.
+_CHANGE_LOCK = threading.Lock()
 
 # What the settings tell the page, codes only.
 SETTINGS_INVALID = "SETTINGS_INVALID"
@@ -92,6 +107,10 @@ def _known(data: Any) -> dict[str, Any] | None:
         if not isinstance(data["hints"], bool):
             return None
         values["hints"] = data["hints"]
+    # A key that 2.1.0 added is left out alone when it is of another form,
+    # such as a color of a later version (stage G3a).
+    if data.get("theme") in THEMES:
+        values["theme"] = data["theme"]
     return values
 
 
@@ -220,26 +239,27 @@ def remove_settings(path: Path) -> str | None:
     """Forget the settings: remove the file at ``path`` (a link there is
     removed, not what it points to) and this app's folder when nothing else
     is in it. None when there is no file now, or SETTINGS_NOT_REMOVED."""
-    try:
-        status = os.lstat(path)
-    except FileNotFoundError:
-        status = None
-    except OSError:
-        return SETTINGS_NOT_REMOVED
-    if status is not None:
-        if stat.S_ISDIR(status.st_mode):
-            return SETTINGS_NOT_REMOVED
+    with _CHANGE_LOCK:
         try:
-            os.unlink(path)
+            status = os.lstat(path)
         except FileNotFoundError:
-            pass
+            status = None
         except OSError:
             return SETTINGS_NOT_REMOVED
-    try:
-        os.rmdir(path.parent)
-    except OSError:
-        pass
-    return None
+        if status is not None:
+            if stat.S_ISDIR(status.st_mode):
+                return SETTINGS_NOT_REMOVED
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                return SETTINGS_NOT_REMOVED
+        try:
+            os.rmdir(path.parent)
+        except OSError:
+            pass
+        return None
 
 
 def remember_run_at(path: Path, output: Path, store: Path | None, makeable: tuple[Path, ...] = ()) -> str | None:
@@ -248,30 +268,45 @@ def remember_run_at(path: Path, output: Path, store: Path | None, makeable: tupl
     run (a run of this Export alone keeps the store that was remembered).
     None when they are written, or a code: SETTINGS_NEWER leaves the file of
     a newer version as it is."""
-    current, notice = read_settings(path)
-    if notice == SETTINGS_NEWER:
-        return SETTINGS_NEWER
-    made = str(output)
-    recent = [made, *(item for item in current.get("recent_outputs", []) if item != made)]
-    values = {**current, "output_parent": str(output.parent), "recent_outputs": recent[:MAX_RECENT_OUTPUTS]}
-    if store is not None:
-        values["store"] = str(store)
-    return write_settings(path, values, makeable)
+    with _CHANGE_LOCK:
+        current, notice = read_settings(path)
+        if notice == SETTINGS_NEWER:
+            return SETTINGS_NEWER
+        made = str(output)
+        recent = [made, *(item for item in current.get("recent_outputs", []) if item != made)]
+        values = {**current, "output_parent": str(output.parent), "recent_outputs": recent[:MAX_RECENT_OUTPUTS]}
+        if store is not None:
+            values["store"] = str(store)
+        return write_settings(path, values, makeable)
 
 
 def remember_hints_at(path: Path, on: bool, makeable: tuple[Path, ...] = ()) -> str | None:
     """Remember whether the tips show, as the person switched them."""
-    current, notice = read_settings(path)
-    if notice == SETTINGS_NEWER:
-        return SETTINGS_NEWER
-    return write_settings(path, {**current, "hints": on}, makeable)
+    with _CHANGE_LOCK:
+        current, notice = read_settings(path)
+        if notice == SETTINGS_NEWER:
+            return SETTINGS_NEWER
+        return write_settings(path, {**current, "hints": on}, makeable)
+
+
+def remember_theme_at(path: Path, theme: str | None, makeable: tuple[Path, ...] = ()) -> str | None:
+    """Remember the colors that the person chose (stage G3a): one of THEMES,
+    or None to follow the colors that the browser reports."""
+    with _CHANGE_LOCK:
+        current, notice = read_settings(path)
+        if notice == SETTINGS_NEWER:
+            return SETTINGS_NEWER
+        values = {key: value for key, value in current.items() if key != "theme"}
+        if theme is not None:
+            values["theme"] = theme
+        return write_settings(path, values, makeable)
 
 
 def launch_answer(values: dict[str, Any], notice: str | None, *, present: bool) -> dict[str, Any]:
     """What the page takes from the settings when it starts: a later launch
     when a place is remembered (the tips alone do not make one), the places,
-    the tips, what to tell of the file, and whether there is a file to forget
-    (stage C1)."""
+    the tips, the colors (stage G3a), what to tell of the file, and whether
+    there is a file to forget (stage C1)."""
     store = values.get("store")
     parent = values.get("output_parent")
     return {
@@ -279,6 +314,7 @@ def launch_answer(values: dict[str, Any], notice: str | None, *, present: bool) 
         "store": store,
         "output_parent": parent,
         "hints": values.get("hints"),
+        "theme": values.get("theme"),
         "notice": notice,
         "present": present,
     }
@@ -293,6 +329,13 @@ def _target() -> tuple[Path, tuple[Path, ...]]:
 def launch_settings() -> dict[str, Any]:
     path, _makeable = _target()
     return launch_answer(*read_settings(path), present=settings_present(path))
+
+
+def launch_theme() -> str | None:
+    """The colors that the settings remember, for the address that a launch
+    opens (stage G3a); None when there are none or the file is not used."""
+    path, _makeable = _target()
+    return read_settings(path)[0].get("theme")
 
 
 def recent_outputs() -> list[str]:
@@ -313,6 +356,11 @@ def remember_hints(on: bool) -> str | None:
     return remember_hints_at(path, on, makeable)
 
 
+def remember_theme(theme: str | None) -> str | None:
+    path, makeable = _target()
+    return remember_theme_at(path, theme, makeable)
+
+
 def forget_settings() -> tuple[str | None, bool]:
     """Forget the settings: what to tell (None when no file is left), and
     whether there was anything to forget (stage C1)."""
@@ -330,15 +378,19 @@ __all__ = [
     "SETTINGS_NEWER",
     "SETTINGS_NOT_REMOVED",
     "SETTINGS_NOT_WRITTEN",
+    "THEMES",
     "forget_settings",
     "launch_answer",
     "launch_settings",
+    "launch_theme",
     "read_settings",
     "recent_outputs",
     "remember_hints",
     "remember_hints_at",
     "remember_run",
     "remember_run_at",
+    "remember_theme",
+    "remember_theme_at",
     "remove_settings",
     "settings_present",
     "write_settings",
