@@ -7,7 +7,7 @@ Platform maintains its own separate changelog.
 ## v2.0.1 — stable Production GUI fix release
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a
-verified Production PyPI distribution.
+verified Production PyPI distribution on 2026-10-26 JST.
 
 - Fixes small things of the page of the GUI: **Quit** asks first and the page
   says when the app has stopped, the bar at the bottom of the page stays on
