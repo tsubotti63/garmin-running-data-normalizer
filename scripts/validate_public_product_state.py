@@ -40,7 +40,7 @@ CURRENT_DOCUMENTS = (
     "docs/migration_notes.md",
 )
 CURRENT_RELEASE_NOTES_TEMPLATE = "docs/release_notes/v{version}.md"
-CURRENT_STABLE_VERSION = "2.0.0"
+CURRENT_STABLE_VERSION = "2.0.1"
 # Where an implementation candidate is published, as the output contract
 # says it.
 CANDIDATE_PUBLICATION_PLACES = ("not published", "TestPyPI only")
@@ -353,6 +353,8 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
         ),
         "docs/product_quick_start.md": (
             "The root `QUICK_START.md` is a short router to the product guides.",
+            # The first line names the stable release too (v2.0.1 F5).
+            f"Current stable release: v{CURRENT_STABLE_VERSION}.",
             stable_run_all_marker,
             "Health Status remains library-level / deferred.",
             "Lactate Threshold remains candidate / audit only.",
@@ -418,6 +420,15 @@ def validate(root: Path = ROOT) -> tuple[str | None, list[str]]:
                     findings.append(
                         f"{relative}: implementation candidate marker is missing: "
                         + " or ".join(markers)
+                    )
+        else:
+            # The stable release names no candidate: a marker that the
+            # release candidate left is a finding (v2.0.1 F5).
+            for relative in ("README.md", "docs/output_contract.md"):
+                if "Implementation candidate:" in contents.get(relative, ""):
+                    findings.append(
+                        f"{relative}: implementation candidate marker remains "
+                        "in the stable release"
                     )
     for relative, markers in required_markers.items():
         text = contents.get(relative, "")

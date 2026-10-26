@@ -1,7 +1,7 @@
 # Frequently Asked Questions
 
 These short answers apply to the current stable Garmin Running Data Normalizer
-`v2.0.0` release and route to the current product authorities. Version `2.0.0`
+`v2.0.1` release and route to the current product authorities. Version `2.0.1`
 is available from the latest GitHub Release and Production PyPI.
 
 ## Getting started
@@ -39,15 +39,18 @@ them, such as the times that it records for an imported Export.
 
 ### Which version is stable?
 
-`v2.0.0` is the current stable release. It adds the local GUI and the data
-handling of v2.0.0, which finishes a run that has problems in the data and
-reports what it left out or kept, to the approved Sleep contract, the one-shot
-workflow, optional Snapshot Accumulation, the Windows timezone-data hotfix, and
-the additive Wellness/Metrics datasets documented for v1.3. It is published on
-[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.0.0)
-and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/2.0.0/).
-See the [v2.0.0 Release Notes](release_notes/v2.0.0.md) and the
-[Migration Notes](migration_notes.md#v171-to-v200).
+`v2.0.1` is the current stable release. It fixes small things of the page of
+the GUI and answers what a reading of the GUI Guide asked. It keeps the local
+GUI and the data handling of v2.0.0, which finishes a run that has problems in
+the data and reports what it left out or kept, with the approved Sleep
+contract, the one-shot workflow, optional Snapshot Accumulation, the Windows
+timezone-data hotfix, and the additive Wellness/Metrics datasets documented
+for v1.3. It is published on
+[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.0.1)
+and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/2.0.1/).
+See the [v2.0.1 Release Notes](release_notes/v2.0.1.md), the
+[v2.0.0 Release Notes](release_notes/v2.0.0.md), and the
+[Migration Notes](migration_notes.md#v200-to-v201).
 
 ### Can I use it without typing commands?
 
@@ -252,7 +255,7 @@ Public-safe Windows reports are welcome through
 ### Was the v1.2.0 Windows timezone-data issue resolved?
 
 Yes. v1.2.1 introduced the conditional Windows `tzdata` dependency, which
-v2.0.0 retains. The current release also provides the bounded
+v2.0.1 retains. The current release also provides the bounded
 `TIMEZONE_DATA_UNAVAILABLE` diagnostic if the configured IANA timezone data is
 still unavailable in a damaged or incomplete environment. Confirm the
 environment with:
@@ -263,9 +266,9 @@ python -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
 
 If you pass `--timezone`, check that name instead of `Asia/Tokyo`.
 
-For a normal v2.0.0 Production PyPI installation, no separate
+For a normal v2.0.1 Production PyPI installation, no separate
 `pip install tzdata` step is expected. If the check still fails, reinstall
-v2.0.0 in a new environment and include only sanitized environment details in a
+v2.0.1 in a new environment and include only sanitized environment details in a
 support report.
 
 ### Does the product include running dynamics?

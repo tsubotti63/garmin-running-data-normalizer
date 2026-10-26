@@ -2,14 +2,14 @@
 
 ## Status and authority
 
-- Current stable contract: v2.0.0
+- Current stable contract: v2.0.1
 - Compatibility family: stable 2.x
-- Implementation candidate: v2.0.1rc1 (TestPyPI only)
 
-This document describes the current stable contract, v2.0.0, the first of the
-`2.x` family. It keeps the core layout and the additive layers of the `1.x`
-family, and identifies when each of them entered; text that begins "Starting
-with v2.0.0" describes what v2.0.0 changes.
+This document describes the current stable contract, v2.0.1, which keeps the
+contract of v2.0.0, the first of the `2.x` family. It keeps the core layout and
+the additive layers of the `1.x` family, and identifies when each of them
+entered; text that begins "Starting with v2.0.0" describes what v2.0.0
+changes.
 [v2.0.0 Data Handling](v2_data_handling.md) gives its rules, and the
 [Migration Notes](migration_notes.md#v171-to-v200) list every change from
 v1.7.1. Executable authority remains in

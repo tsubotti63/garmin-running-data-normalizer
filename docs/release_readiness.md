@@ -1,5 +1,34 @@
 # Release Readiness
 
+## v2.0.1 stable release
+
+Version `2.0.1` is published as the release that fixes small things of the
+page of the local GUI and of the GUI Guide. It is v2.0.1rc1 with the version
+2.0.1, the documents of the stable release, and the GUI Guides that describe
+the page of v2.0.1. From v2.0.1rc1, the package's Python changes only in the
+version in `__init__.py`, and the files of the page and the pictures do not
+change. The release publishes directly to Production PyPI through the
+protected `pypi` Environment; it is not published on TestPyPI.
+
+The Windows CI runs every Windows step with v2.0.1 and Python 3.11, and the
+Windows tests and the isolated wheel installation with Python 3.15. macOS
+checked the installation of v2.0.1rc1 from TestPyPI, the line of the guide,
+and the page by hand with synthetic data. On one physical Windows 11 x64
+machine, with Windows PowerShell 5.1 and Python 3.14, the line of the guide
+for Windows PowerShell, with the index of TestPyPI, installed v2.0.1rc1 and
+made the two icons. The page, opened in Microsoft Edge, showed the bar at the
+bottom, the hint of the box that runs, and the help of the timezone as they
+were fixed, and normalized a synthetic Export without and with the import
+into the Snapshots. The line for macOS, pasted there, ran nothing, and the
+GUI Guide now names the lines that it shows. The rest of that check (the line
+that a second normalization of the same Export shows, what the bar says on
+**Quit**, and starting the GUI from the icon) was not observed there. From
+v2.0.1rc1, only the version and the documents change.
+
+The release source is the `main` commit that merges the v2.0.1 release
+preparation pull request. Its annotated tag, GitHub Release, and publish
+workflow evidence are recorded in this section after publication.
+
 ## v2.0.1rc1 release candidate
 
 Version `2.0.1rc1`, the first release candidate of v2.0.1, is published on
@@ -573,11 +602,15 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Default branch: `main`
 - License: `Apache-2.0`
 - GitHub Actions: Operational
-- Current source and package version: `2.0.1rc1`
-- Current Production PyPI version: `2.0.0`
-- Latest GitHub Release: `v2.0.0`
+- Current source and package version: `2.0.1`
+- Current Production PyPI version: `2.0.1`
+- Latest GitHub Release: `v2.0.1`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
+- TestPyPI `2.0.1`: Not used; the release publishes directly to Production
+  PyPI through the protected `pypi` Environment
+- Production PyPI `2.0.1`: Published through Trusted Publishing; the publish
+  workflow verifies the exact-version install
 - TestPyPI `2.0.0`: Not used; the publish workflow's TestPyPI jobs were
   skipped
 - Production PyPI `2.0.0`: Published and exact-version install verified by the
@@ -604,16 +637,17 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
-and GitHub Releases remain immutable. v2.0.0 is the current stable release;
+and GitHub Releases remain immutable. v2.0.1 is the current stable release;
 v2.0.1rc1, v2.0.0rc5, v2.0.0rc4, v2.0.0rc3, v2.0.0rc2, and v2.0.0rc1 are
-release candidates on TestPyPI only; v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1,
-v1.4.0, and v1.3.3 are historical releases. The v2.0.1rc1, v2.0.0rc5,
+release candidates on TestPyPI only; v2.0.0, v1.7.1, v1.7.0, v1.6.0, v1.5.0,
+v1.4.1, v1.4.0, and v1.3.3 are historical releases. The v2.0.1rc1, v2.0.0rc5,
 v2.0.0rc4, v2.0.0rc3, v2.0.0rc2, and v2.0.0rc1 tag and TestPyPI publication
 evidence was recorded only after the corresponding external state was
 observed.
 The v2.0.0, v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag,
 GitHub Release, and Production PyPI publication evidence was recorded only
-after the corresponding external state was observed.
+after the corresponding external state was observed; the v2.0.1 publication
+evidence is added to this document after it is observed.
 
 ## Windows CI correction
 
@@ -634,6 +668,9 @@ other Windows steps show no failed command in their logs. Tags, GitHub
 Releases, Production PyPI files, and release notes are unchanged.
 
 ## Current release assessment
+
+The v2.0.1 release assessment is recorded here after publication, from the
+release source's main CI run and the Production publish workflow run.
 
 The v2.0.0 release source passed main CI run `39970315509` (`test` and
 `test-python-3-15` on Ubuntu, `macos-python-3-15`, and `windows-runtime` and

@@ -8,7 +8,7 @@ from garmin_running_data_normalizer.runner import main
 
 class PackageIdentityTest(unittest.TestCase):
     def test_implementation_candidate_identity(self) -> None:
-        self.assertEqual(__version__, "2.0.1rc1")
+        self.assertEqual(__version__, "2.0.1")
         self.assertEqual(IMPLEMENTATION_STATUS, "IMPLEMENTATION_CANDIDATE")
 
     def test_cli_reports_package_version(self) -> None:
