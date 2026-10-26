@@ -15,6 +15,7 @@ import secrets
 import socket
 import threading
 import time
+from datetime import date
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
@@ -48,8 +49,20 @@ from .runs import (
     absolute_path,
     output_name_problem,
 )
-from .settings import THEMES, forget_settings, launch_settings, recent_outputs, remember_hints, remember_theme
+from .settings import (
+    SHELF_STATES,
+    THEMES,
+    forget_settings,
+    launch_settings,
+    recent_outputs,
+    remember_hints,
+    remember_theme,
+    remember_view,
+)
 from .stores import check_store, download_time, open_store, store_place, unlock_store
+from .views import ViewNotOpenError, ViewRequestError, Views, item_table, series_request
+from ..view.items import ITEMS_BY_KEY
+from ..view.series import MAX_ANSWER_BYTES, MAX_PANELS, activity_types, coverage, default_items, view_answer
 
 
 HOST = "127.0.0.1"
@@ -130,7 +143,11 @@ API_ROUTES = {
     "/api/open-output": "_api_open_output",
     "/api/settings/hints": "_api_settings_hints",
     "/api/settings/theme": "_api_settings_theme",
+    "/api/settings/view": "_api_settings_view",
     "/api/settings/forget": "_api_settings_forget",
+    # The view page (stage G3b): an output opened, and its numbers.
+    "/api/view/open": "_api_view_open",
+    "/api/view/series": "_api_view_series",
 }
 
 
@@ -190,11 +207,20 @@ def _not_readable(places: Any) -> dict[str, Any] | None:
     return {"place": first if place_can_be_shown(first) else None, "more": len(places) - 1}
 
 
+def _iso(day: int | None) -> str | None:
+    return None if day is None else date.fromordinal(day).isoformat()
+
+
 def _command_failed() -> ApiError:
     """The answer to an unexpected error of a check, the Support Bundle, or
     opening the output: the code with which the CLI's commands stop for one
     (stage A5b-2). The server's own errors answer INTERNAL_ERROR."""
     return ApiError(HTTPStatus.INTERNAL_SERVER_ERROR, "COMMAND_FAILED")
+
+
+def json_body(payload: dict[str, Any]) -> bytes:
+    """The bytes of an answer, as the server sends it."""
+    return (json.dumps(payload, sort_keys=True) + "\n").encode("utf-8")
 
 
 def load_static_files() -> dict[str, tuple[bytes, str]]:
@@ -245,6 +271,9 @@ class GuiServer(ThreadingHTTPServer):
         # number in the last list that it was given, and the mark of that list
         # (stage B5b).
         self.earlier: tuple[int, list[Path]] = (0, [])
+        # The outputs that the view page opened, by their tickets, and what
+        # it read of them, in memory only (stage G3b).
+        self.views = Views()
         self.idle_timeout = idle_timeout
         self._last_request = time.monotonic()
         self._lock = threading.Lock()
@@ -586,8 +615,13 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         # page compares a run with (stage B5b). A list given to another tab
         # since then makes a number of this one refused.
         found = earlier_outputs(recent_outputs(), self.server.runs.finished_output())
+        # A list of the same outputs keeps its mark, so that the numbers that
+        # the other tab was given still name them (stage G3b: the view page is
+        # always another tab); a changed list gets a new mark.
         with self.server._lock:
-            mark = self.server.earlier[0] + 1
+            mark, given = self.server.earlier
+            if found != given:
+                mark += 1
             self.server.earlier = (mark, found)
         previous = None
         for index, output in enumerate(found):
@@ -686,6 +720,72 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         notice = remember_theme(None if theme == "auto" else theme)
         return {"remembered": notice is None, "notice": notice}
 
+    def _api_settings_view(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The items that the view page shows and whether its item shelf is
+        # open, which its next opening shows again (stage G3b).
+        items, shelf = payload.get("items"), payload.get("shelf")
+        if (
+            not isinstance(items, list)
+            or len(items) > MAX_PANELS
+            or any(not isinstance(key, str) or key not in ITEMS_BY_KEY for key in items)
+            or len(set(items)) != len(items)
+            or shelf not in SHELF_STATES
+        ):
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+        notice = remember_view(items, shelf)
+        return {"remembered": notice is None, "notice": notice}
+
+    def _api_view_open(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The view page opens an output as an action of the fourth box
+        # chooses one (stage B5b), and checks it as the check of an output
+        # does; the answer names the output by its ticket, never by its
+        # place (stage G3b).
+        output = self._target_output(payload)
+        try:
+            ticket, data = self.server.views.open(output)
+        except OutputActionError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code, exc.version) from exc
+        except Exception as exc:
+            raise _command_failed() from exc
+        return {
+            "view": ticket,
+            "name": output.name,
+            "version": data.version,
+            "partial": data.partial,
+            "first_day": _iso(data.first_day),
+            "last_day": _iso(data.last_day),
+            "items": item_table(),
+            "types": activity_types(data),
+            "first_items": default_items(data),
+            "coverage": coverage(data),
+        }
+
+    def _api_view_series(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The numbers of the view page for an output that it opened (stage
+        # G3b), with the bars of the item shelf for the activity types.
+        ticket = payload.get("view")
+        try:
+            if not isinstance(ticket, str):
+                raise ViewRequestError("view")
+            items, period, grain, types = series_request(payload)
+        except ViewRequestError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
+        try:
+            data = self.server.views.data(ticket)
+        except ViewNotOpenError as exc:
+            raise ApiError(HTTPStatus.CONFLICT, "VIEW_NOT_OPEN") from exc
+        except OutputActionError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code, exc.version) from exc
+        except Exception as exc:
+            raise _command_failed() from exc
+        if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+        answer = view_answer(data, items, period, grain, types)
+        answer["coverage"] = coverage(data, types)
+        if len(json_body(answer)) > MAX_ANSWER_BYTES:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
+        return answer
+
     def _api_settings_forget(self, payload: dict[str, Any]) -> dict[str, Any]:
         # Forget the remembered settings (stage B4c): never while a run of
         # this page is active, which remembers its places when it ends. The
@@ -713,7 +813,7 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         allow: str | None = None,
         close: bool = False,
     ) -> None:
-        body = (json.dumps(payload, sort_keys=True) + "\n").encode("utf-8")
+        body = json_body(payload)
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))

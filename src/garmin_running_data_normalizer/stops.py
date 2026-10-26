@@ -513,6 +513,15 @@ PAGE_STOPS: dict[str, Stop] = {
         "the list of earlier outputs changed since the page showed it",
         "choose the output again from the list",
     ),
+    # The view page (stage G3b): an output that the server no longer keeps,
+    # and an answer over the limit of its size.
+    "VIEW_NOT_OPEN": Stop(
+        "the output that the page shows is no longer open in this app", "choose the output again"
+    ),
+    "VIEW_ANSWER_TOO_LARGE": Stop(
+        "there are too many numbers to show at once",
+        "choose a shorter period, or group by week or month",
+    ),
     "OPEN_NOT_AVAILABLE": Stop(
         "no program to open it (xdg-open) was found",
         "open the output folder from your file manager, such as Finder or File Explorer",

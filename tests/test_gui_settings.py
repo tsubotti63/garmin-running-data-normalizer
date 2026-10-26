@@ -38,6 +38,7 @@ from garmin_running_data_normalizer.gui.settings import (
     remember_hints_at,
     remember_run_at,
     remember_theme_at,
+    remember_view_at,
     remove_settings,
     settings_present,
     write_settings,
@@ -305,6 +306,54 @@ class SettingsFileTest(unittest.TestCase):
         self.assertEqual((values, notice), ({key: value for key, value in older.items() if key != "format"}, None))
         self.assertIsNone(launch_answer(values, notice, present=True)["theme"])
 
+    def test_the_view_page_remembers_its_items_and_shelf(self) -> None:
+        # Stage G3b: the names of the items only, and whether the item shelf
+        # is open; the other settings stay as they are.
+        self.assertIsNone(remember_run_at(self.path, self.root / "outputs" / "o1", Path(self.store)))
+        self.assertIsNone(remember_theme_at(self.path, "dark"))
+        before = read_settings(self.path)[0]
+        self.assertIsNone(remember_view_at(self.path, ["dist", "rhr", "vo2"], "closed"))
+        values = read_settings(self.path)[0]
+        self.assertEqual(values, {**before, "view_items": ["dist", "rhr", "vo2"], "view_shelf": "closed"})
+        self.assertEqual(self.written()["format"], SETTINGS_FORMAT)
+        answer = launch_answer(values, None, present=True)
+        self.assertEqual((answer["view_items"], answer["view_shelf"]), (["dist", "rhr", "vo2"], "closed"))
+        # No items is an answer of its own; a run, the tips, and the colors
+        # keep them.
+        self.assertIsNone(remember_view_at(self.path, [], "open"))
+        self.assertIsNone(remember_run_at(self.path, self.root / "outputs" / "o2", None))
+        self.assertIsNone(remember_hints_at(self.path, True))
+        self.assertIsNone(remember_theme_at(self.path, None))
+        values = read_settings(self.path)[0]
+        self.assertEqual((values["view_items"], values["view_shelf"]), ([], "open"))
+        # A file of a newer version is not written over.
+        newer = json.dumps({"format": "garmin-running-data-normalizer-gui-settings-v2"}).encode()
+        self.path.write_bytes(newer)
+        self.assertEqual(remember_view_at(self.path, ["dist"], "open"), SETTINGS_NEWER)
+        self.assertEqual(self.path.read_bytes(), newer)
+
+    def test_items_and_shelf_of_another_form_are_left_out_alone(self) -> None:
+        # Stage G3b: of the items, the names that this version does not know,
+        # the names given twice, and those after the sixth are left out; a
+        # key of another form is left out alone, and the places, the outputs,
+        # and the tips are still used.
+        values = {"store": self.store, "output_parent": self.parent, "recent_outputs": [self.parent + "-1"], "hints": True}
+        self.path.parent.mkdir()
+        names = ["dist", "nope", "dist", 1, ["rhr"], "rhr", "vo2", "hr", "mx", "pace", "time", "count"]
+        self.path.write_bytes(json.dumps({"format": SETTINGS_FORMAT, **values, "view_items": names, "view_shelf": "open"}).encode())
+        self.assertEqual(
+            read_settings(self.path),
+            ({**values, "view_items": ["dist", "rhr", "vo2", "hr", "mx", "pace"], "view_shelf": "open"}, None),
+        )
+        for items in ("dist", {"dist": True}, 3, True):
+            with self.subTest(items=items):
+                self.path.write_bytes(json.dumps({"format": SETTINGS_FORMAT, **values, "view_items": items}).encode())
+                self.assertEqual(read_settings(self.path), (values, None))
+        for shelf in ("Open", "", 1, ["open"]):
+            with self.subTest(shelf=shelf):
+                self.path.write_bytes(json.dumps({"format": SETTINGS_FORMAT, **values, "view_shelf": shelf}).encode())
+                self.assertEqual(read_settings(self.path), (values, None))
+
     def test_two_changes_at_once_keep_both(self) -> None:
         # Stage G3a: a change reads the file and writes it whole, so that two
         # at once could keep only one of them; the second waits for the first
@@ -381,7 +430,17 @@ class SettingsFileTest(unittest.TestCase):
     def test_a_later_launch_needs_a_remembered_place(self) -> None:
         self.assertEqual(
             launch_answer({}, None, present=False),
-            {"launch": "first", "store": None, "output_parent": None, "hints": None, "theme": None, "notice": None, "present": False},
+            {
+                "launch": "first",
+                "store": None,
+                "output_parent": None,
+                "hints": None,
+                "theme": None,
+                "view_items": None,
+                "view_shelf": None,
+                "notice": None,
+                "present": False,
+            },
         )
         self.assertEqual(launch_answer({"hints": False}, None, present=True)["launch"], "first")
         self.assertEqual(launch_answer({"store": self.store}, None, present=True)["launch"], "later")
@@ -412,6 +471,8 @@ class SettingsApiTest(GuiServerTestCase):
                     "output_parent": str(path.parent.parent / "outputs"),
                     "hints": None,
                     "theme": None,
+                    "view_items": None,
+                    "view_shelf": None,
                     "notice": None,
                     "present": True,
                 },
@@ -459,6 +520,36 @@ class SettingsApiTest(GuiServerTestCase):
             (200, {"remembered": False, "notice": SETTINGS_NEWER}),
         )
         self.assertEqual(path.read_bytes(), newer)
+
+    def test_the_items_and_the_shelf_of_the_view_page_are_remembered(self) -> None:
+        # Stage G3b: up to six names of items that this version knows, each
+        # once, and the shelf open or closed.
+        path = places.settings_file()
+        self.assertEqual(
+            self.post("/api/settings/view", {"items": ["dist", "rhr"], "shelf": "closed"}),
+            (200, {"remembered": True, "notice": None}),
+        )
+        settings_answer = self.post("/api/status")[1]["settings"]
+        self.assertEqual((settings_answer["view_items"], settings_answer["view_shelf"]), (["dist", "rhr"], "closed"))
+        self.assertEqual(self.post("/api/settings/view", {"items": [], "shelf": "open"})[0], 200)
+        self.assertEqual(read_settings(path)[0]["view_items"], [])
+        for payload in (
+            {},
+            {"items": ["dist"]},
+            {"items": ["dist"], "shelf": "Open"},
+            {"items": "dist", "shelf": "open"},
+            {"items": ["nope"], "shelf": "open"},
+            {"items": ["dist", "dist"], "shelf": "open"},
+            {"items": ["dist", "time", "count", "pace", "hr", "mx", "cad"], "shelf": "open"},
+            {"items": [1], "shelf": "open"},
+        ):
+            with self.subTest(payload=payload):
+                self.assertEqual(self.post("/api/settings/view", payload), (422, {"error": "REQUEST_INVALID"}))
+        with patch.object(settings, "write_settings", return_value=SETTINGS_NOT_WRITTEN):
+            self.assertEqual(
+                self.post("/api/settings/view", {"items": ["dist"], "shelf": "open"}),
+                (200, {"remembered": False, "notice": SETTINGS_NOT_WRITTEN}),
+            )
 
     def test_the_settings_are_forgotten_on_request_and_never_while_a_run_is_active(self) -> None:
         path = places.settings_file()

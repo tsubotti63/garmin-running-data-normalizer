@@ -87,6 +87,8 @@ export const STOP_KEYS = {
   RUN_ACTIVE: "stop.run_active",
   NO_FINISHED_OUTPUT: "stop.no_finished_output",
   OUTPUT_LIST_CHANGED: "stop.output_list_changed",
+  VIEW_NOT_OPEN: "stop.view_not_open",
+  VIEW_ANSWER_TOO_LARGE: "stop.view_answer_too_large",
   HANDOFF_INVALID: "stop.handoff_invalid",
   // An output that another version made (stage B5b).
   OUTPUT_OTHER_VERSION: "stop.output_other_version",
@@ -193,6 +195,8 @@ export const STOP_NEXT_KEYS = {
   RUN_ACTIVE: "stop_next.run_active",
   NO_FINISHED_OUTPUT: "stop_next.no_finished_output",
   OUTPUT_LIST_CHANGED: "stop_next.output_list_changed",
+  VIEW_NOT_OPEN: "stop_next.view_not_open",
+  VIEW_ANSWER_TOO_LARGE: "stop_next.view_answer_too_large",
   HANDOFF_INVALID: "stop_next.handoff_invalid",
   OUTPUT_OTHER_VERSION: "stop_next.output_other_version",
   OUTPUT_CHANGED: "stop_next.output_changed",

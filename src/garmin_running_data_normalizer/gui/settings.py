@@ -3,9 +3,11 @@
 The GUI remembers, in one file on this computer (decision 20261017-15): the
 Snapshot Store and the folder for the output of the last run that made its
 output, the outputs that runs made (the latest ten), whether the tips show,
-and the colors of the page when the person chose Light or Dark (stage G3a).
-Only the names of places are kept, never what is in them, and never the
-place of an Export. The CLI remembers nothing.
+the colors of the page when the person chose Light or Dark (stage G3a), and
+the items that the view page showed and whether its item shelf was open
+(stage G3b), by the names of the items only. Only the names of places are
+kept, never what is in them, and never the place of an Export. The CLI
+remembers nothing.
 
 The file is the person's own: an owner-only folder and file, written whole
 through a temporary file in the same folder, so that no half-written file is
@@ -14,7 +16,9 @@ of another form is not used, and the next settings replace it; a file of a
 newer version is not used and never written over, so that going back to an
 older version leaves the newer settings as they are. Keys that this version
 does not know are left out, and so is a value of another form of a key that
-2.1.0 added (the colors), so that the other settings are still used. Places
+2.1.0 added (the colors, the items, the shelf), so that the other settings are
+still used; of the items, the names that this version does not know, the
+names given twice, and those after the sixth are left out. Places
 read from it are absolute places of this system without control characters,
 and the server checks them again as it checks places that the page sends.
 
@@ -36,6 +40,8 @@ from typing import Any
 
 from ..common.json_depth import check_json_depth
 from ..common.private_files import PRIVATE_DIRECTORY_MODE, PRIVATE_FILE_MODE
+from ..view.items import ITEMS_BY_KEY
+from ..view.series import MAX_PANELS
 from . import places
 
 SETTINGS_FORMAT = "garmin-running-data-normalizer-gui-settings-v1"
@@ -48,6 +54,8 @@ PLACE_KEYS = ("store", "output_parent")
 # The colors that the person can choose; without one, the page follows the
 # colors that the browser reports (stage G3a).
 THEMES = ("light", "dark")
+# Whether the item shelf of the view page is open (stage G3b).
+SHELF_STATES = ("open", "closed")
 # One change of the settings at a time: each reads the file and writes it
 # whole, so that two at once would keep only one of them.
 _CHANGE_LOCK = threading.Lock()
@@ -111,6 +119,13 @@ def _known(data: Any) -> dict[str, Any] | None:
     # such as a color of a later version (stage G3a).
     if data.get("theme") in THEMES:
         values["theme"] = data["theme"]
+    # The items that the view page showed (stage G3b): the names of the items
+    # that this version knows, each once, six at most.
+    if isinstance(data.get("view_items"), list):
+        names = [name for name in data["view_items"] if isinstance(name, str) and name in ITEMS_BY_KEY]
+        values["view_items"] = list(dict.fromkeys(names))[:MAX_PANELS]
+    if data.get("view_shelf") in SHELF_STATES:
+        values["view_shelf"] = data["view_shelf"]
     return values
 
 
@@ -302,11 +317,24 @@ def remember_theme_at(path: Path, theme: str | None, makeable: tuple[Path, ...] 
         return write_settings(path, values, makeable)
 
 
+def remember_view_at(
+    path: Path, items: list[str], shelf: str, makeable: tuple[Path, ...] = ()
+) -> str | None:
+    """Remember the items that the view page shows and whether its item shelf
+    is open (stage G3b), by the names of the items only."""
+    with _CHANGE_LOCK:
+        current, notice = read_settings(path)
+        if notice == SETTINGS_NEWER:
+            return SETTINGS_NEWER
+        return write_settings(path, {**current, "view_items": list(items), "view_shelf": shelf}, makeable)
+
+
 def launch_answer(values: dict[str, Any], notice: str | None, *, present: bool) -> dict[str, Any]:
     """What the page takes from the settings when it starts: a later launch
     when a place is remembered (the tips alone do not make one), the places,
-    the tips, the colors (stage G3a), what to tell of the file, and whether
-    there is a file to forget (stage C1)."""
+    the tips, the colors (stage G3a), the items and the shelf of the view page
+    (stage G3b), what to tell of the file, and whether there is a file to
+    forget (stage C1)."""
     store = values.get("store")
     parent = values.get("output_parent")
     return {
@@ -315,6 +343,8 @@ def launch_answer(values: dict[str, Any], notice: str | None, *, present: bool) 
         "output_parent": parent,
         "hints": values.get("hints"),
         "theme": values.get("theme"),
+        "view_items": values.get("view_items"),
+        "view_shelf": values.get("view_shelf"),
         "notice": notice,
         "present": present,
     }
@@ -361,6 +391,11 @@ def remember_theme(theme: str | None) -> str | None:
     return remember_theme_at(path, theme, makeable)
 
 
+def remember_view(items: list[str], shelf: str) -> str | None:
+    path, makeable = _target()
+    return remember_view_at(path, items, shelf, makeable)
+
+
 def forget_settings() -> tuple[str | None, bool]:
     """Forget the settings: what to tell (None when no file is left), and
     whether there was anything to forget (stage C1)."""
@@ -378,6 +413,7 @@ __all__ = [
     "SETTINGS_NEWER",
     "SETTINGS_NOT_REMOVED",
     "SETTINGS_NOT_WRITTEN",
+    "SHELF_STATES",
     "THEMES",
     "forget_settings",
     "launch_answer",
@@ -391,6 +427,8 @@ __all__ = [
     "remember_run_at",
     "remember_theme",
     "remember_theme_at",
+    "remember_view",
+    "remember_view_at",
     "remove_settings",
     "settings_present",
     "write_settings",

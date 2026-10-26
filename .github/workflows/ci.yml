@@ -306,6 +306,9 @@ jobs:
       - name: Verify Windows series command
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_series.py -q
+      - name: Verify Windows server of the view page
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_view_api.py -q
   windows-python-3-15:
     runs-on: windows-latest
     steps:
@@ -365,3 +368,6 @@ jobs:
       - name: Verify Windows series command with Python 3.15
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_series.py -q
+      - name: Verify Windows server of the view page with Python 3.15
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_view_api.py -q

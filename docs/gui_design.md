@@ -911,6 +911,10 @@ reads it; they are in the table of the stops of the CLI
 ([Data handling of v2](v2_data_handling.md)), and the page keeps its words
 for them.
 
+Starting with v2.1.0, the view page also gives `VIEW_NOT_OPEN`, for an
+output that the server no longer keeps, and `VIEW_ANSWER_TOO_LARGE`, for
+numbers over the limit of the size of an answer.
+
 | Code | What it means | Next step |
 |---|---|---|
 | `PATH_NOT_ABSOLUTE` | the place is not a full path | choose it with a button that says Choose, or paste a place that starts with / on a Mac or Linux, or with a drive such as C:\\ on Windows |
@@ -925,6 +929,8 @@ for them.
 | `RUN_START_FAILED` | the normalization could not be started | press Run normalization again; if it stops again, please report the code |
 | `NO_FINISHED_OUTPUT` | there is no finished output to check yet | normalize first, or choose an earlier output |
 | `OUTPUT_LIST_CHANGED` | the list of earlier outputs changed since the page showed it | choose the output again from the list |
+| `VIEW_NOT_OPEN` | the output that the page shows is no longer open in this app | choose the output again |
+| `VIEW_ANSWER_TOO_LARGE` | there are too many numbers to show at once | choose a shorter period, or group by week or month |
 | `OPEN_NOT_AVAILABLE` | no program to open it (xdg-open) was found | open the output folder from your file manager, such as Finder or File Explorer |
 | `OPEN_FAILED` | this computer could not open it | open the output folder from your file manager, such as Finder or File Explorer |
 | `CHOOSER_NOT_AVAILABLE` | this system's dialog to choose could not be opened | choose from the list below, or paste the place |
