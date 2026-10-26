@@ -25,6 +25,9 @@ from .contracts import (
     SAFE_WARNING_CODES,
     validate_state_validity,
 )
+# The bundle is written by common/new_file (stage G2); os and tempfile stay
+# here, through which the tests break the system calls that it makes.
+from ..common.new_file import NewFileError, check_new_file_place, put_in_place, write_new_file
 from .doctor import DoctorError, doctor_run_output
 from ..run_all import RUN_ALL_VERSION
 
@@ -965,59 +968,28 @@ EXISTS_MESSAGE = "a file or a link is there already in the place of the Support 
 NOT_WRITTEN_MESSAGE = "the Support Bundle could not be written"
 
 
-def _inside(folder: Path, root: Path) -> bool:
-    """Whether ``folder`` is ``root`` or inside it, as the system finds the
-    two, through links and the case of the names."""
-    for place in (Path(os.path.realpath(folder)), *Path(os.path.realpath(folder)).parents):
-        try:
-            if os.path.samefile(place, root):
-                return True
-        except OSError:
-            continue
-    return False
+# What gives the written bundle its name: the tests replace it here (stages
+# A5c and B5a).
+_put_in_place = put_in_place
 
 
 def check_support_bundle_place(run_output: Path, destination: Path) -> None:
     """The place of a new Support Bundle, for the CLI and the GUI alike
     (stage B5a): its folder must be there (no folder is made, as for the
     output, decision 20261016-13), never inside the run output, whose
-    checks it would fail, and nothing may be there already (stage A5b-2)."""
-    parent = destination.parent
-    if not parent.is_dir():
-        raise SupportBundleError(
-            "SUPPORT_BUNDLE_PARENT_NOT_FOUND",
-            "the folder for the Support Bundle does not exist or is not a folder",
-        )
-    if _inside(parent, run_output):
-        raise SupportBundleError("SUPPORT_BUNDLE_INSIDE_OUTPUT", "the place of the Support Bundle is inside the run output")
-    if destination.is_symlink() or destination.exists():
-        raise SupportBundleError("SUPPORT_BUNDLE_EXISTS", EXISTS_MESSAGE)
-
-
-def _put_in_place(temporary: Path, destination: Path) -> None:
-    """Give the written bundle its name without replacing what is there,
-    also a file put there since the place was checked: a hard link fails
-    when the name is taken, and where the disk makes no hard links, the
-    bundle is copied into a file that only a new name can be."""
+    checks it would fail, and nothing may be there already (stage A5b-2).
+    The rules are those of every new file beside an output (stage G2)."""
     try:
-        os.link(temporary, destination)
-        return
-    except FileExistsError as exc:
-        raise SupportBundleError("SUPPORT_BUNDLE_EXISTS", EXISTS_MESSAGE) from exc
-    except OSError:
-        pass
-    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
-    try:
-        descriptor = os.open(destination, flags, 0o600)
-    except FileExistsError as exc:
-        raise SupportBundleError("SUPPORT_BUNDLE_EXISTS", EXISTS_MESSAGE) from exc
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(temporary.read_bytes())
-    except BaseException:
-        # The copy is this command's own file, made with its new name.
-        destination.unlink(missing_ok=True)
-        raise
+        check_new_file_place(run_output, destination)
+    except NewFileError as exc:
+        if exc.reason == "parent":
+            raise SupportBundleError(
+                "SUPPORT_BUNDLE_PARENT_NOT_FOUND",
+                "the folder for the Support Bundle does not exist or is not a folder",
+            ) from None
+        if exc.reason == "inside":
+            raise SupportBundleError("SUPPORT_BUNDLE_INSIDE_OUTPUT", "the place of the Support Bundle is inside the run output") from None
+        raise SupportBundleError("SUPPORT_BUNDLE_EXISTS", EXISTS_MESSAGE) from None
 
 
 def build_support_bundle(run_output: str | Path, output_path: str | Path) -> dict[str, Any]:
@@ -1092,22 +1064,15 @@ def build_support_bundle(run_output: str | Path, output_path: str | Path) -> dic
     _validate_archive(archive_bytes, all_payloads)
     # Written beside its place, then given its name in one step that never
     # replaces a file (stage B5a); a folder that cannot be written gives the
-    # same code in the CLI and the GUI.
+    # same code in the CLI and the GUI. The temporary name goes, also on
+    # Ctrl+C (stage A5c); a file that another program put in the place of
+    # the bundle stays.
     try:
-        file_descriptor, temporary_name = tempfile.mkstemp(prefix=f".{destination.name}.", dir=destination.parent)
-    except OSError as exc:
+        write_new_file(destination, archive_bytes, put_in_place=_put_in_place)
+    except NewFileError as exc:
+        if exc.reason == "exists":
+            raise SupportBundleError("SUPPORT_BUNDLE_EXISTS", EXISTS_MESSAGE) from exc
         raise SupportBundleError("SUPPORT_BUNDLE_NOT_WRITTEN", NOT_WRITTEN_MESSAGE) from exc
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(file_descriptor, "wb") as handle:
-            handle.write(archive_bytes)
-        _put_in_place(temporary, destination)
-    except OSError as exc:
-        raise SupportBundleError("SUPPORT_BUNDLE_NOT_WRITTEN", NOT_WRITTEN_MESSAGE) from exc
-    finally:
-        # The temporary name goes, also on Ctrl+C (stage A5c); a file that
-        # another program put in the place of the bundle stays.
-        temporary.unlink(missing_ok=True)
     return {
         "status": "PASS",
         "path": destination.name,

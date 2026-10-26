@@ -336,8 +336,9 @@ class ViewOutputRefusalTest(unittest.TestCase):
         self.assertEqual(len(data.rows[ACTIVITIES]), 1)
 
     def test_an_output_of_1_3_is_refused_with_its_version(self) -> None:
+        # It passes its checks, but its numbers are not given (stage G2).
         as_v1_3(self.output)
-        self.assert_code("OUTPUT_OTHER_VERSION", "1.3.3")
+        self.assert_code("SERIES_OUTPUT_OTHER_VERSION", "1.3.3")
 
     def test_an_output_of_another_version_is_refused_with_its_version(self) -> None:
         written = json.loads((self.output / "run_summary.json").read_text(encoding="utf-8"))["generated_paths"]

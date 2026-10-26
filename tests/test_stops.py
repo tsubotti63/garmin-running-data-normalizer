@@ -55,6 +55,10 @@ ARGUMENT_CODES = {
     "OutputLocationError": (0, None),
     # The icon of gui --create-shortcut (stage E1d).
     "ShortcutError": (0, None),
+    # The reading of an output for the numbers of the view page, which the
+    # series command and the GUI share, and the series command (stage G2).
+    "OutputActionError": (0, None),
+    "SeriesError": (0, None),
     # The class of a store error that verification_error is given.
     "error_class": (1, "SNAPSHOT_LIFECYCLE_FAILED"),
 }
@@ -73,6 +77,8 @@ MESSAGE_ARGUMENTS = {
     "ExportTooLargeError": 0,
     "ActivitiesNotReadableError": 0,
     "ShortcutError": 1,
+    # The series command (stage G2).
+    "SeriesError": 1,
 }
 FIXED_CODES = {
     "ActivitiesNotReadableError": "ACTIVITIES_EMPTY",

@@ -1,10 +1,11 @@
 """What the view page reads of an output (stage G1).
 
-The page shows the numbers of an output that this version made. Before it
-reads one, it checks it with the checks of the GUI (``checked_output``), and
-it refuses an output of another version, one of 1.3 included, with
-OUTPUT_OTHER_VERSION: how normalization makes the numbers can change between
-versions.
+The page shows the numbers of an output that this version made: how
+normalization makes the numbers can change between versions. Before it reads
+one, it checks it with the checks of the GUI (``checked_output``), which stop
+for an output of another version with OUTPUT_OTHER_VERSION; an output of 1.3
+passes them, and is refused with SERIES_OUTPUT_OTHER_VERSION, which the
+series command gives as well (stage G2).
 
 It keeps the bytes of run_manifest.json that it read before the checks, and
 reads each file once, comparing its size and SHA-256 with that manifest. A
@@ -104,7 +105,7 @@ def load_view_data(
     version = report.get("product_version")
     if legacy or version != __version__:
         named = version if isinstance(version, str) and VERSION_FORM.fullmatch(version) else None
-        raise OutputActionError("OUTPUT_OTHER_VERSION", named)
+        raise OutputActionError("SERIES_OUTPUT_OTHER_VERSION", named)
     # The manifest of the checks, unchanged since before them; the sizes and
     # the hashes come from it, never from a manifest read again.
     if kept is None:
