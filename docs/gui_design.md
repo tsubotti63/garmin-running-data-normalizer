@@ -905,6 +905,12 @@ The GUI's server, its folder list, and the actions on a finished output give
 these codes; the CLI never stops with them. The table is made from
 `stops.PAGE_STOPS`.
 
+Starting with v2.1.0, `OUTPUT_CHANGED` and `OUTPUT_NOT_AVAILABLE` are also
+codes of the CLI, whose series command reads an output as the view page
+reads it; they are in the table of the stops of the CLI
+([Data handling of v2](v2_data_handling.md)), and the page keeps its words
+for them.
+
 | Code | What it means | Next step |
 |---|---|---|
 | `PATH_NOT_ABSOLUTE` | the place is not a full path | choose it with a button that says Choose, or paste a place that starts with / on a Mac or Linux, or with a drive such as C:\\ on Windows |
@@ -919,8 +925,6 @@ these codes; the CLI never stops with them. The table is made from
 | `RUN_START_FAILED` | the normalization could not be started | press Run normalization again; if it stops again, please report the code |
 | `NO_FINISHED_OUTPUT` | there is no finished output to check yet | normalize first, or choose an earlier output |
 | `OUTPUT_LIST_CHANGED` | the list of earlier outputs changed since the page showed it | choose the output again from the list |
-| `OUTPUT_CHANGED` | the output folder does not match what the normalization wrote | if you did not change the folder, please report the code; if you did, normalize again |
-| `OUTPUT_NOT_AVAILABLE` | the output folder or a file in it is missing, or was replaced by a link | check that the output folder is still where it was |
 | `OPEN_NOT_AVAILABLE` | no program to open it (xdg-open) was found | open the output folder from your file manager, such as Finder or File Explorer |
 | `OPEN_FAILED` | this computer could not open it | open the output folder from your file manager, such as Finder or File Explorer |
 | `CHOOSER_NOT_AVAILABLE` | this system's dialog to choose could not be opened | choose from the list below, or paste the place |

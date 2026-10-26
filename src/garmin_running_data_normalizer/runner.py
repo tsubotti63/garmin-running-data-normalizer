@@ -65,6 +65,7 @@ from .diagnostics.doctor import (
     render_doctor_human,
 )
 from .diagnostics.support_bundle import SupportBundleError, build_support_bundle
+from .output_check import OutputActionError
 from .snapshot import (
     NOTICE_MESSAGES,
     SnapshotLifecycleError,
@@ -74,6 +75,9 @@ from .snapshot import (
 from .snapshot.store import cancel_notices, lock_exists, remove_lock
 from .standalone import OtherVersionError, StandaloneHandoffError, validate_standalone_handoff
 from .stops import MIX_STOPS, STOPS, stop_line
+from .view.items import ITEMS
+from .view.series import GRAINS
+from .view.series_file import PERIODS, SeriesError, write_series
 
 
 OUTPUT_FILES = (
@@ -87,7 +91,7 @@ CANCELLED_EXIT_CODE = 130
 # The commands that write a new output, which is there whole once it is
 # renamed into place.
 _OUTPUT_COMMANDS = frozenset(
-    {"run-all", "normalize-activities", "support-bundle", "snapshot run-all", "snapshot build-input"}
+    {"run-all", "normalize-activities", "support-bundle", "series", "snapshot run-all", "snapshot build-input"}
 )
 
 
@@ -589,6 +593,20 @@ def stop_of(exc: BaseException) -> KnownStop | None:
         return KnownStop("INPUT_TOO_LARGE", STOPS["INPUT_TOO_LARGE"].what)
     if isinstance(exc, TempSpaceError):
         return KnownStop("TEMP_SPACE_INSUFFICIENT", TEMP_SPACE_MESSAGE)
+    # The reading of an output for the numbers of the view page, as the GUI
+    # reads it (stage G2): its code, with the message of the check that
+    # stopped it when it has one.
+    if isinstance(exc, OutputActionError):
+        if exc.code == "SERIES_OUTPUT_OTHER_VERSION" and exc.version:
+            return KnownStop(
+                exc.code,
+                f"the output passed its checks, but was made by version {exc.version} of this app, "
+                "and this version gives the numbers of its own outputs only",
+            )
+        cause = stop_of(exc.__cause__) if exc.__cause__ is not None else None
+        return KnownStop(exc.code, cause.message if cause is not None else STOPS[exc.code].what)
+    if isinstance(exc, SeriesError):
+        return KnownStop(exc.code, exc.safe_message)
     return None
 
 
@@ -784,6 +802,43 @@ def build_parser() -> argparse.ArgumentParser:
     )
     support_bundle.add_argument("--run-output", required=True, help="Completed v1.4 Run-All output")
     support_bundle.add_argument("--output", required=True, help="New Support Bundle ZIP path")
+    # The numbers of the view page in a new CSV file (stage G2).
+    series = commands.add_parser(
+        "series",
+        help="Write the numbers of the view page of a completed output to a new CSV file.",
+        epilog="items: " + ", ".join(item.key for item in ITEMS),
+    )
+    series.add_argument("--run-output", required=True, help="Completed Run-All output of this version")
+    series.add_argument("--output", required=True, help="New CSV file path, outside the run output")
+    series.add_argument(
+        "--item",
+        action="append",
+        metavar="KEY",
+        help="Key of an item, again for each further item (default: every item, in the order below)",
+    )
+    series.add_argument(
+        "--period",
+        choices=PERIODS,
+        help="Period that ends on the last day of the output (default: all)",
+    )
+    series.add_argument("--from", dest="start", metavar="YYYY-MM-DD", help="First day of a range, with --to")
+    series.add_argument("--to", dest="end", metavar="YYYY-MM-DD", help="Last day of a range, with --from")
+    series.add_argument(
+        "--grain",
+        choices=("auto", *GRAINS),
+        default="auto",
+        help="Grouping of the periods (default: auto, by the length of the period)",
+    )
+    series_types = series.add_mutually_exclusive_group()
+    series_types.add_argument(
+        "--type",
+        action="append",
+        dest="types",
+        metavar="NAME",
+        help="Activity type to count, as the output names it, again for each further type "
+        "(default: the running types)",
+    )
+    series_types.add_argument("--all-types", action="store_true", help="Count every activity type")
     gui = commands.add_parser(
         "gui",
         help="Open the local GUI in the default browser; the terminal shows its address.",
@@ -898,6 +953,18 @@ def _main(args: argparse.Namespace, watch: _Watch, interrupts: _Interrupts) -> i
             )
         elif args.command == "support-bundle":
             result = build_support_bundle(args.run_output, args.output)
+        elif args.command == "series":
+            result = write_series(
+                args.run_output,
+                args.output,
+                items=args.item,
+                period=args.period,
+                start=args.start,
+                end=args.end,
+                grain=args.grain,
+                types=args.types,
+                all_types=args.all_types,
+            )
         else:
             raise GoldenPathError("unsupported command", "COMMAND_UNSUPPORTED")
     # Ctrl+C: a line instead of a traceback, and exit 130 (stage A5c).
@@ -988,6 +1055,23 @@ def _main(args: argparse.Namespace, watch: _Watch, interrupts: _Interrupts) -> i
         print(f"members: {result['member_count']}")
         print(f"digest: {result['archive_sha256']}")
         print("Human review required before sharing")
+        return 0
+
+    if args.command == "series":
+        print("PASS")
+        print(f"generated: {result['path']}")
+        print(f"rows: {result['rows']}")
+        print(f"items: {result['items']}")
+        if result["start"] is None:
+            print("period: none")
+        else:
+            print(f"period: {result['start']} to {result['end']}")
+            print(f"grain: {result['grain']}")
+        # By item, what the numbers leave out, and the periods made 0: counts
+        # and names only, never a value (stage G2).
+        for key, counts in result["about"].items():
+            print(f"about {key}: " + " ".join(f"{name}={count}" for name, count in counts.items()))
+        print("The CSV file holds the values of the output: share it as you would share the output")
         return 0
 
     print("PASS")

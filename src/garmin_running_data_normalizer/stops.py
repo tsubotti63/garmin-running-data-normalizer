@@ -260,6 +260,21 @@ STOPS: dict[str, Stop] = {
         "the output was made by another version of this app, which this version cannot check",
         "normalize again with this version into a new folder",
     ),
+    # The reading of an output for the numbers of the view page, which the
+    # series command and the GUI share (stage G2); until then only the GUI
+    # gave these two codes.
+    "OUTPUT_CHANGED": Stop(
+        "the files of the output changed after they were checked, or do not have the form "
+        "that this version writes",
+        "if you did not change the folder, please report the code; if you did, run Run-All "
+        "again into a new folder",
+    ),
+    "OUTPUT_NOT_AVAILABLE": Stop(
+        "a file of the output is missing, was replaced by a link, or is too large for this "
+        "app to read",
+        "check that the output folder is still where it was; if a file is too large, please "
+        "report the code",
+    ),
     "DOCTOR_AUTHORITY_INVALID": Stop(
         "the diagnostics of the output are missing, invalid, or disagree", _NEW_OUTPUT
     ),
@@ -317,6 +332,44 @@ STOPS: dict[str, Stop] = {
     "SUPPORT_BUNDLE_UNREGISTERED_DIAGNOSTIC": Stop(
         "the Support Bundle would hold a diagnostic code that is not registered",
         _BUNDLE_REFUSED,
+    ),
+    # The numbers of the view page in a new CSV file (stage G2). An output of
+    # 1.3 passes its checks, but its numbers are not given.
+    "SERIES_OUTPUT_OTHER_VERSION": Stop(
+        "the output passed its checks, but was made by another version of this app, and "
+        "this version gives the numbers of its own outputs only",
+        "normalize again with this version into a new folder",
+    ),
+    # The place of the CSV file, as for a Support Bundle.
+    "SERIES_PARENT_NOT_FOUND": Stop(
+        "the folder for the CSV file does not exist or is not a folder",
+        "give a file in an existing folder for the CSV file, or create the folder first",
+    ),
+    "SERIES_INSIDE_OUTPUT": Stop(
+        "the place of the CSV file is inside the run output",
+        "give a file outside the run output for the CSV file, such as next to it",
+    ),
+    "SERIES_EXISTS": Stop(
+        "a file or a link is there already in the place of the CSV file",
+        "move or rename it, or give another file for the CSV file",
+    ),
+    "SERIES_NOT_WRITTEN": Stop(
+        "the CSV file could not be written",
+        "check that the folder for it is still there and that this app can write in it",
+    ),
+    "SERIES_ITEM_UNKNOWN": Stop(
+        "an item key that this app does not know was given",
+        "give the keys of the items as the help of the series command lists them",
+    ),
+    "SERIES_TYPE_UNKNOWN": Stop(
+        "an activity type that the output does not have was given",
+        "give a name of the column activity_type of analysis/activities.csv in the output "
+        "as it is written there, or --all-types",
+    ),
+    "SERIES_RANGE_INVALID": Stop(
+        "the period that was given is not a range of dates",
+        "give --from and --to together as YYYY-MM-DD, with --from not after --to, and "
+        "without --period",
     ),
     # The icon that gui --create-shortcut makes before the GUI opens (stage
     # E1d); the GUI does not open when it cannot be made.
@@ -460,14 +513,6 @@ PAGE_STOPS: dict[str, Stop] = {
         "the list of earlier outputs changed since the page showed it",
         "choose the output again from the list",
     ),
-    "OUTPUT_CHANGED": Stop(
-        "the output folder does not match what the normalization wrote",
-        "if you did not change the folder, please report the code; if you did, normalize again",
-    ),
-    "OUTPUT_NOT_AVAILABLE": Stop(
-        "the output folder or a file in it is missing, or was replaced by a link",
-        "check that the output folder is still where it was",
-    ),
     "OPEN_NOT_AVAILABLE": Stop(
         "no program to open it (xdg-open) was found",
         "open the output folder from your file manager, such as Finder or File Explorer",
@@ -515,6 +560,16 @@ PAGE_WORDING: dict[str, Stop] = {
     "COMMAND_FAILED": Stop(
         "this app stopped unexpectedly while it did this",
         "press the button again; if it stops again, please report the code",
+    ),
+    # The two codes of the reading of an output, which the CLI gives too from
+    # stage G2: the page keeps its words.
+    "OUTPUT_CHANGED": Stop(
+        "the output folder does not match what the normalization wrote",
+        "if you did not change the folder, please report the code; if you did, normalize again",
+    ),
+    "OUTPUT_NOT_AVAILABLE": Stop(
+        "the output folder or a file in it is missing, or was replaced by a link",
+        "check that the output folder is still where it was",
     ),
     # The page checks the output that it made, and from stage B5b one that the
     # person chose.

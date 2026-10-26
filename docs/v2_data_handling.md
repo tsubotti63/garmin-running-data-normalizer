@@ -1715,6 +1715,15 @@ its order, and a test checks that they are the same. The GUI's page gives the
 same content in its own words from stage B; the codes that only the GUI
 gives, for its entries and controls, are not in this table.
 
+Starting with v2.1.0, the series command gives the numbers of the view
+page in a new CSV file, and adds the codes `SERIES_OUTPUT_OTHER_VERSION`,
+`SERIES_PARENT_NOT_FOUND`, `SERIES_INSIDE_OUTPUT`, `SERIES_EXISTS`,
+`SERIES_NOT_WRITTEN`, `SERIES_ITEM_UNKNOWN`, `SERIES_TYPE_UNKNOWN`, and
+`SERIES_RANGE_INVALID`. It reads an output as the GUI's view page reads it,
+so that `OUTPUT_CHANGED` and `OUTPUT_NOT_AVAILABLE`, which only the GUI gave
+until then, are codes of the CLI as well. A version before v2.1.0 has none
+of these rows.
+
 | Code | What happened | Next step |
 |---|---|---|
 | `INPUT_SYMLINK` | the input is a symbolic link | select the Export folder or ZIP file itself, not a link to it |
@@ -1764,6 +1773,8 @@ gives, for its entries and controls, are not in this table.
 | `SNAPSHOT_LIFECYCLE_FAILED` | a snapshot command cannot do what it was asked | correct the command or its input as the message says, and run it again |
 | `HANDOFF_INVALID` | the folder is not the output of a run, or the files of the output do not pass their checks | check that the folder is the output of Run-All; if it is, do not change its files, and run Run-All again into a new folder |
 | `OUTPUT_OTHER_VERSION` | the output was made by another version of this app, which this version cannot check | normalize again with this version into a new folder |
+| `OUTPUT_CHANGED` | the files of the output changed after they were checked, or do not have the form that this version writes | if you did not change the folder, please report the code; if you did, run Run-All again into a new folder |
+| `OUTPUT_NOT_AVAILABLE` | a file of the output is missing, was replaced by a link, or is too large for this app to read | check that the output folder is still where it was; if a file is too large, please report the code |
 | `DOCTOR_AUTHORITY_INVALID` | the diagnostics of the output are missing, invalid, or disagree | do not change the files of an output; run Run-All again into a new folder |
 | `DOCTOR_UNREGISTERED_DIAGNOSTIC` | the output holds a diagnostic code that this version of the app does not know | use the version of this app that made the output, or run Run-All again into a new folder |
 | `DOCTOR_VERSION_UNSUPPORTED` | a version of this app that this version does not know made the output | use the version of this app that made the output, or run Run-All again into a new folder |
@@ -1779,6 +1790,14 @@ gives, for its entries and controls, are not in this table.
 | `SUPPORT_BUNDLE_SIZE_LIMIT_EXCEEDED` | the Support Bundle would be larger than its limit | the Support Bundle was not made; please report the code |
 | `SUPPORT_BUNDLE_UNCLASSIFIED_FIELD` | the Support Bundle would hold a field that is not classified as safe | the Support Bundle was not made; please report the code |
 | `SUPPORT_BUNDLE_UNREGISTERED_DIAGNOSTIC` | the Support Bundle would hold a diagnostic code that is not registered | the Support Bundle was not made; please report the code |
+| `SERIES_OUTPUT_OTHER_VERSION` | the output passed its checks, but was made by another version of this app, and this version gives the numbers of its own outputs only | normalize again with this version into a new folder |
+| `SERIES_PARENT_NOT_FOUND` | the folder for the CSV file does not exist or is not a folder | give a file in an existing folder for the CSV file, or create the folder first |
+| `SERIES_INSIDE_OUTPUT` | the place of the CSV file is inside the run output | give a file outside the run output for the CSV file, such as next to it |
+| `SERIES_EXISTS` | a file or a link is there already in the place of the CSV file | move or rename it, or give another file for the CSV file |
+| `SERIES_NOT_WRITTEN` | the CSV file could not be written | check that the folder for it is still there and that this app can write in it |
+| `SERIES_ITEM_UNKNOWN` | an item key that this app does not know was given | give the keys of the items as the help of the series command lists them |
+| `SERIES_TYPE_UNKNOWN` | an activity type that the output does not have was given | give a name of the column activity_type of analysis/activities.csv in the output as it is written there, or --all-types |
+| `SERIES_RANGE_INVALID` | the period that was given is not a range of dates | give --from and --to together as YYYY-MM-DD, with --from not after --to, and without --period |
 | `SHORTCUT_NOT_SUPPORTED` | an icon that starts the GUI can be made only on macOS and Windows | start the GUI with garmin-running-data-normalizer gui, without --create-shortcut |
 | `SHORTCUT_PLACE_TAKEN` | a file that this app did not make has the name of the icon that starts the GUI | rename or move that file and run the command again, or start the GUI with garmin-running-data-normalizer gui, without --create-shortcut |
 | `SHORTCUT_NOT_CREATED` | the icon that starts the GUI could not be made | check that this app may write on the desktop (on a Mac, allow the Terminal in System Settings > Privacy & Security > Files and Folders) and run the command again, or start the GUI with garmin-running-data-normalizer gui, without --create-shortcut |
