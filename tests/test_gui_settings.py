@@ -1,11 +1,12 @@
 """The settings of an earlier launch of the GUI (stage B4c).
 
 The GUI remembers the store and the folder for the output of the last run that
-made its output, the latest outputs, and whether the tips show, in one
-owner-only file in the place that the system keeps for each person's
-application data. The file is written whole, read with care, never written
-over when a newer version wrote it, and forgotten on request. Every test
-keeps it in its own folder (``tests/conftest.py``); synthetic data only.
+made its output, the latest outputs, whether the tips show, and the colors of
+the page that the person chose (stage G3a), in one owner-only file in the
+place that the system keeps for each person's application data. The file is
+written whole, read with care, never written over when a newer version wrote
+it, and forgotten on request. Every test keeps it in its own folder
+(``tests/conftest.py``); synthetic data only.
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ import os
 import stat
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from typing import Any
@@ -31,9 +33,11 @@ from garmin_running_data_normalizer.gui.settings import (
     SETTINGS_NOT_REMOVED,
     SETTINGS_NOT_WRITTEN,
     launch_answer,
+    launch_theme,
     read_settings,
     remember_hints_at,
     remember_run_at,
+    remember_theme_at,
     remove_settings,
     settings_present,
     write_settings,
@@ -46,6 +50,7 @@ from tests.test_gui_snapshot_runs import ACCOUNT, STAMP, register
 APP = places.SETTINGS_FOLDER_NAME
 NAME = places.SETTINGS_FILE_NAME
 POSIX_MODES = unittest.skipIf(os.name == "nt", "Windows keeps no POSIX modes")
+TIMEOUT_SECONDS = 10.0
 
 
 class SettingsPlaceTest(unittest.TestCase):
@@ -212,6 +217,7 @@ class SettingsFileTest(unittest.TestCase):
         self.assertEqual(read_settings(self.path), ({}, SETTINGS_NEWER))
         self.assertEqual(remember_hints_at(self.path, True), SETTINGS_NEWER)
         self.assertEqual(remember_run_at(self.path, self.root / "outputs" / "o1", Path(self.store)), SETTINGS_NEWER)
+        self.assertEqual(remember_theme_at(self.path, "dark"), SETTINGS_NEWER)
         self.assertEqual(self.path.read_bytes(), newer)
         # Forgetting removes it.
         self.assertIsNone(remove_settings(self.path))
@@ -246,6 +252,89 @@ class SettingsFileTest(unittest.TestCase):
         self.assertEqual(values["recent_outputs"][:3], [str(outputs / "o10"), str(outputs / "o14"), str(outputs / "o13")])
         self.assertEqual(len(set(values["recent_outputs"])), MAX_RECENT_OUTPUTS)
         self.assertIs(values["hints"], False)
+
+    def test_the_colors_are_remembered_with_the_other_settings(self) -> None:
+        # Stage G3a: Light or Dark, or none to follow the browser; the other
+        # settings stay as they are, and the format stays the one of 2.0.x,
+        # which leaves out a key that it does not know.
+        self.assertIsNone(remember_run_at(self.path, self.root / "outputs" / "o1", Path(self.store)))
+        self.assertIsNone(remember_hints_at(self.path, False))
+        before = read_settings(self.path)[0]
+        for theme in ("light", "dark"):
+            with self.subTest(theme=theme):
+                self.assertIsNone(remember_theme_at(self.path, theme))
+                self.assertEqual(read_settings(self.path), ({**before, "theme": theme}, None))
+                self.assertEqual(self.written(), {"format": SETTINGS_FORMAT, **before, "theme": theme})
+                self.assertEqual(launch_answer(read_settings(self.path)[0], None, present=True)["theme"], theme)
+        self.assertIsNone(remember_theme_at(self.path, None))
+        self.assertEqual(read_settings(self.path), (before, None))
+        self.assertEqual(self.written(), {"format": SETTINGS_FORMAT, **before})
+        # A run and the tips keep the colors.
+        self.assertIsNone(remember_theme_at(self.path, "dark"))
+        self.assertIsNone(remember_run_at(self.path, self.root / "outputs" / "o2", None))
+        self.assertIsNone(remember_hints_at(self.path, True))
+        self.assertEqual(read_settings(self.path)[0]["theme"], "dark")
+
+    def test_colors_of_another_form_are_left_out_alone(self) -> None:
+        # Stage G3a: a key that 2.1.0 added is left out when it is of another
+        # form, such as a color of a later version; the places, the outputs,
+        # and the tips are still used.
+        values = {"store": self.store, "output_parent": self.parent, "recent_outputs": [self.parent + "-1"], "hints": True}
+        self.path.parent.mkdir()
+        for theme in ("blue", "Dark", "", 1, True, ["dark"], {"dark": True}):
+            with self.subTest(theme=theme):
+                self.path.write_bytes(json.dumps({"format": SETTINGS_FORMAT, **values, "theme": theme}).encode())
+                self.assertEqual(read_settings(self.path), (values, None))
+        # The next change writes the settings without it.
+        self.assertIsNone(remember_hints_at(self.path, False))
+        self.assertEqual(self.written(), {"format": SETTINGS_FORMAT, **values, "hints": False})
+
+    def test_settings_that_2_0_wrote_are_read_without_colors(self) -> None:
+        # The file of 2.0.x, as it writes it, has no colors: the page follows
+        # the browser.
+        older = {
+            "format": SETTINGS_FORMAT,
+            "hints": False,
+            "output_parent": self.parent,
+            "recent_outputs": [self.parent + "-1"],
+            "store": self.store,
+        }
+        self.path.parent.mkdir()
+        self.path.write_bytes((json.dumps(older, ensure_ascii=False, indent=1, sort_keys=True) + "\n").encode())
+        values, notice = read_settings(self.path)
+        self.assertEqual((values, notice), ({key: value for key, value in older.items() if key != "format"}, None))
+        self.assertIsNone(launch_answer(values, notice, present=True)["theme"])
+
+    def test_two_changes_at_once_keep_both(self) -> None:
+        # Stage G3a: a change reads the file and writes it whole, so that two
+        # at once could keep only one of them; the second waits for the first
+        # now. A run that ends while the person chooses the colors keeps both.
+        reading = threading.Event()
+        release = threading.Event()
+        real = settings.write_settings
+
+        def held(path: Path, values: dict[str, Any], makeable: tuple[Path, ...] = ()) -> str | None:
+            if values.get("theme") == "dark" and not release.is_set():
+                # The first change holds after it read the file.
+                reading.set()
+                if not release.wait(TIMEOUT_SECONDS):
+                    raise AssertionError("the test did not let the change go on")
+            return real(path, values, makeable)
+
+        with patch.object(settings, "write_settings", held):
+            first = threading.Thread(target=remember_theme_at, args=(self.path, "dark"))
+            first.start()
+            self.assertTrue(reading.wait(TIMEOUT_SECONDS))
+            second = threading.Thread(target=remember_run_at, args=(self.path, self.root / "outputs" / "o1", Path(self.store)))
+            second.start()
+            second.join(0.2)
+            self.assertTrue(second.is_alive(), "the run's change did not wait")
+            release.set()
+            first.join(TIMEOUT_SECONDS)
+            second.join(TIMEOUT_SECONDS)
+        self.assertFalse(first.is_alive() or second.is_alive())
+        values = read_settings(self.path)[0]
+        self.assertEqual((values.get("theme"), values.get("store")), ("dark", self.store))
 
     def test_settings_that_cannot_be_written_leave_nothing_behind(self) -> None:
         with patch("os.replace", side_effect=PermissionError("denied")):
@@ -292,7 +381,7 @@ class SettingsFileTest(unittest.TestCase):
     def test_a_later_launch_needs_a_remembered_place(self) -> None:
         self.assertEqual(
             launch_answer({}, None, present=False),
-            {"launch": "first", "store": None, "output_parent": None, "hints": None, "notice": None, "present": False},
+            {"launch": "first", "store": None, "output_parent": None, "hints": None, "theme": None, "notice": None, "present": False},
         )
         self.assertEqual(launch_answer({"hints": False}, None, present=True)["launch"], "first")
         self.assertEqual(launch_answer({"store": self.store}, None, present=True)["launch"], "later")
@@ -322,6 +411,7 @@ class SettingsApiTest(GuiServerTestCase):
                     "store": store,
                     "output_parent": str(path.parent.parent / "outputs"),
                     "hints": None,
+                    "theme": None,
                     "notice": None,
                     "present": True,
                 },
@@ -344,6 +434,31 @@ class SettingsApiTest(GuiServerTestCase):
                 self.post("/api/settings/hints", {"on": True}),
                 (200, {"remembered": False, "notice": SETTINGS_NOT_WRITTEN}),
             )
+
+    def test_the_colors_are_remembered_as_they_are_chosen(self) -> None:
+        # Stage G3a: "auto" follows the browser, and is remembered as no
+        # choice.
+        path = places.settings_file()
+        for theme, kept in (("dark", "dark"), ("light", "light"), ("auto", None)):
+            with self.subTest(theme=theme):
+                self.assertEqual(self.post("/api/settings/theme", {"theme": theme}), (200, {"remembered": True, "notice": None}))
+                self.assertEqual(read_settings(path)[0].get("theme"), kept)
+                self.assertEqual(self.post("/api/status")[1]["settings"]["theme"], kept)
+        for payload in ({}, {"theme": "Dark"}, {"theme": "system"}, {"theme": 1}, {"theme": None}, {"theme": ["dark"]}):
+            with self.subTest(payload=payload):
+                self.assertEqual(self.post("/api/settings/theme", payload), (422, {"error": "REQUEST_INVALID"}))
+        with patch.object(settings, "write_settings", return_value=SETTINGS_NOT_WRITTEN):
+            self.assertEqual(
+                self.post("/api/settings/theme", {"theme": "dark"}),
+                (200, {"remembered": False, "notice": SETTINGS_NOT_WRITTEN}),
+            )
+        newer = json.dumps({"format": "garmin-running-data-normalizer-gui-settings-v2"}).encode()
+        path.write_bytes(newer)
+        self.assertEqual(
+            self.post("/api/settings/theme", {"theme": "dark"}),
+            (200, {"remembered": False, "notice": SETTINGS_NEWER}),
+        )
+        self.assertEqual(path.read_bytes(), newer)
 
     def test_the_settings_are_forgotten_on_request_and_never_while_a_run_is_active(self) -> None:
         path = places.settings_file()
@@ -371,6 +486,18 @@ class SettingsApiTest(GuiServerTestCase):
             self.post("/api/settings/forget"),
             (200, {"forgotten": False, "had_settings": True, "notice": SETTINGS_NOT_REMOVED}),
         )
+
+
+class LaunchThemeTest(unittest.TestCase):
+    def test_a_launch_opens_in_the_remembered_colors(self) -> None:
+        # Stage G3a: the address of a launch carries them; none without a
+        # choice, or with a file that is not used.
+        path = places.settings_file()
+        self.assertIsNone(launch_theme())
+        self.assertIsNone(remember_theme_at(path, "light"))
+        self.assertEqual(launch_theme(), "light")
+        path.write_bytes(b"{not json")
+        self.assertIsNone(launch_theme())
 
 
 class RunRemembersTest(unittest.TestCase):

@@ -34,8 +34,18 @@
   line-height: 1.55;
 }
 
+/* The colors that the person chose in the bar (stage G3a): Light keeps the
+   colors above whatever the browser reports, and Dark takes the dark ones
+   below. Without a choice, the page follows the browser. The dark colors
+   are written twice, for the browser and for the choice, and the tests
+   check that the two are the same. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --page: #121418;
     --surface: #1c1f24;
     --group: #2a2d33;
@@ -59,6 +69,32 @@
     --none: #a3a9b4;
     --none-soft: #2d3036;
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #121418;
+  --surface: #1c1f24;
+  --group: #2a2d33;
+  --line: #3d414a;
+  --edge: #7b8494;
+  --text: #e8eaee;
+  --sub: #a9afba;
+  --muted: #9aa1ad;
+  --dis: #666d79;
+  --accent: #5b9bff;
+  --accent-soft: #1f2e48;
+  --on-accent: #0b1424;
+  --ok: #52c98a;
+  --ok-soft: #1b3326;
+  --warn: #f0c04a;
+  --warn-soft: #3a3120;
+  --warn-line: #e0a800;
+  --ng: #ff7b6e;
+  --ng-soft: #41241f;
+  --ng-tint: #2c2020;
+  --none: #a3a9b4;
+  --none-soft: #2d3036;
 }
 
 [hidden] {
@@ -863,6 +899,97 @@ button.primary:disabled {
 
 .statusbar label {
   margin: 0;
+}
+
+/* The colors of the page in the bar (stage G3a), as the mockup v2 has them:
+   three parts of one control, the chosen one filled with the color of the
+   text. The radio buttons stay for the keyboard and screen readers, out of
+   sight; where the system forces its own colors, they show. */
+.theme-choice {
+  min-width: 0;
+  margin: 0;
+}
+
+.theme-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.theme-label {
+  color: var(--sub);
+}
+
+.theme-choice .segments {
+  display: inline-flex;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.theme-choice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+
+.theme-choice .segments label {
+  display: block;
+  padding: 3px 10px;
+  border-left: 1px solid var(--line);
+  color: var(--text);
+  font-size: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.theme-choice input:first-child + label {
+  border-left: 0;
+  border-radius: 5px 0 0 5px;
+}
+
+.theme-choice .segments label:last-child {
+  border-radius: 0 5px 5px 0;
+}
+
+.theme-choice input:checked + label {
+  background: var(--text);
+  color: var(--surface);
+  font-weight: 600;
+}
+
+/* The ring is drawn outside, as everywhere on the page, so that it stands
+   out from the bar and not from the filled part. */
+.theme-choice input:focus-visible + label {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.theme-choice input:disabled + label {
+  color: var(--dis);
+  cursor: not-allowed;
+}
+
+.theme-choice input:checked:disabled + label {
+  background: var(--none-soft);
+  color: var(--dis);
+}
+
+.theme-now {
+  font-size: 0.92em;
+  font-weight: 400;
+}
+
+@media (forced-colors: active) {
+  .theme-choice input {
+    position: static;
+    width: auto;
+    height: auto;
+    opacity: 1;
+  }
 }
 
 /* Looking again for a remembered folder for the output, under its lines

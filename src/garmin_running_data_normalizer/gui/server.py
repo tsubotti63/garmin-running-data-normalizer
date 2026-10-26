@@ -48,7 +48,7 @@ from .runs import (
     absolute_path,
     output_name_problem,
 )
-from .settings import forget_settings, launch_settings, recent_outputs, remember_hints
+from .settings import THEMES, forget_settings, launch_settings, recent_outputs, remember_hints, remember_theme
 from .stores import check_store, download_time, open_store, store_place, unlock_store
 
 
@@ -68,6 +68,9 @@ STATIC_FILES = {
     "/app.mjs": ("app.mjs", "text/javascript; charset=utf-8"),
     "/flow.mjs": ("flow.mjs", "text/javascript; charset=utf-8"),
     "/i18n.mjs": ("i18n.mjs", "text/javascript; charset=utf-8"),
+    # The classic script that sets the colors before the page is drawn
+    # (stage G3a).
+    "/theme.js": ("theme.js", "text/javascript; charset=utf-8"),
     "/styles.css": ("styles.css", "text/css; charset=utf-8"),
     "/i18n/en.json": ("i18n/en.json", "application/json"),
     "/i18n/ja.json": ("i18n/ja.json", "application/json"),
@@ -126,6 +129,7 @@ API_ROUTES = {
     "/api/support-bundle": "_api_support_bundle",
     "/api/open-output": "_api_open_output",
     "/api/settings/hints": "_api_settings_hints",
+    "/api/settings/theme": "_api_settings_theme",
     "/api/settings/forget": "_api_settings_forget",
 }
 
@@ -670,6 +674,16 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         if not isinstance(on, bool):
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
         notice = remember_hints(on)
+        return {"remembered": notice is None, "notice": notice}
+
+    def _api_settings_theme(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The person chose the colors of the page, and the next launch opens
+        # in them (stage G3a); "auto" follows the colors that the browser
+        # reports, and is remembered as no choice.
+        theme = payload.get("theme")
+        if theme != "auto" and theme not in THEMES:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+        notice = remember_theme(None if theme == "auto" else theme)
         return {"remembered": notice is None, "notice": notice}
 
     def _api_settings_forget(self, payload: dict[str, Any]) -> dict[str, Any]:

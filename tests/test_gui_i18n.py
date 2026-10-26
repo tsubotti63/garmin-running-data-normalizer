@@ -68,10 +68,16 @@ def page() -> _PageParser:
     return parser
 
 
+def page_scripts() -> list[Path]:
+    """The scripts of the page: the modules, and the classic script that sets
+    the colors before the page is drawn (stage G3a)."""
+    return sorted([*STATIC_ROOT.glob("*.mjs"), *STATIC_ROOT.glob("*.js")])
+
+
 def script_keys() -> set[str]:
     """Return the message keys that the page scripts use as literal strings."""
     keys: set[str] = set()
-    for script in sorted(STATIC_ROOT.glob("*.mjs")):
+    for script in page_scripts():
         source = script.read_text(encoding="utf-8")
         keys.update(
             literal
@@ -166,6 +172,12 @@ class GuiCatalogTest(unittest.TestCase):
         self.assertIn("only the fields whose values differ", catalogs["en"]["faq.values_a"])
         self.assertIn("範囲の外の行", catalogs["ja"]["info.exit_foot"])
         self.assertIn("out of range", catalogs["en"]["info.exit_foot"])
+        # The answer about what this app remembers names the colors of the
+        # page too (stage G3a), and forgetting says that it forgets them.
+        self.assertIn("画面の色（ライトかダークを選んだとき）", catalogs["ja"]["faq.remember_a"])
+        self.assertIn("the appearance when you choose Light or Dark", catalogs["en"]["faq.remember_a"])
+        self.assertIn("画面の色", catalogs["ja"]["forget.text_also"])
+        self.assertIn("appearance", catalogs["en"]["forget.text_also"])
 
     def test_texts_keep_the_corrections_of_the_first_time_check(self) -> None:
         # Stage D6, after two new AI sessions used the page of v2.0.0rc1 with
@@ -236,7 +248,9 @@ class GuiCatalogTest(unittest.TestCase):
     def test_page_scripts_change_text_without_markup(self) -> None:
         # Paths and names from the computer reach the page; it sets them with
         # textContent only, so that none of them is read as HTML (stage B1a).
-        for script in sorted(STATIC_ROOT.glob("*.mjs")):
+        scripts = page_scripts()
+        self.assertIn(STATIC_ROOT / "theme.js", scripts)
+        for script in scripts:
             source = script.read_text(encoding="utf-8")
             for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write"):
                 with self.subTest(script=script.name, sink=sink):

@@ -68,6 +68,7 @@ EXPECTED_CONTENT_TYPES = {
     "/app.mjs": "text/javascript; charset=utf-8",
     "/flow.mjs": "text/javascript; charset=utf-8",
     "/i18n.mjs": "text/javascript; charset=utf-8",
+    "/theme.js": "text/javascript; charset=utf-8",
     "/styles.css": "text/css; charset=utf-8",
     "/i18n/en.json": "application/json",
     "/i18n/ja.json": "application/json",
@@ -287,6 +288,7 @@ class GuiApiRequestTest(GuiServerTestCase):
                     "store": None,
                     "output_parent": None,
                     "hints": None,
+                    "theme": None,
                     "notice": None,
                     "present": False,
                 },
@@ -539,6 +541,30 @@ class GuiResponseTest(GuiServerTestCase):
                 f"GET / HTTP/1.1\r\nHost: {HOST}:{self.port}\r\n\r\n".encode("ascii")
             )
         self.assertEqual(self.get("/")[0], 200)
+
+
+class GuiPageScriptTest(unittest.TestCase):
+    """Stage G3a: the colors that the person chose are set before the page is
+    drawn, from the fragment of the address, where the key is too."""
+
+    def test_the_colors_are_set_by_a_classic_script_before_the_page_is_drawn(self) -> None:
+        # A classic script in the head runs before anything is drawn; the
+        # module runs later. The policy allows no script in the page, so it is
+        # a file of its own.
+        head = (STATIC_ROOT / "index.html").read_text(encoding="utf-8").split("</head>", 1)[0]
+        self.assertIn('\n<script src="/theme.js"></script>\n', head)
+        self.assertLess(head.index('src="/theme.js"'), head.index('href="/styles.css"'))
+        self.assertLess(head.index('src="/theme.js"'), head.index('src="/app.mjs"'))
+
+    def test_the_page_reads_the_key_alone_and_removes_the_whole_fragment(self) -> None:
+        # The fragment holds the key and the colors, separated by "&". The
+        # page reads the key with fragmentValue of flow.mjs, which the node
+        # tests check, and leaves only the path in the address bar.
+        source = (STATIC_ROOT / "app.mjs").read_text(encoding="utf-8")
+        reading = source.split("function readLaunchKey() {", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('fragmentValue(window.location.hash, "key")', reading)
+        self.assertIn('window.history.replaceState(null, "", window.location.pathname);', reading)
+        self.assertNotIn("location.hash.", reading)
 
 
 class GuiServerLifecycleTest(GuiServerTestCase):

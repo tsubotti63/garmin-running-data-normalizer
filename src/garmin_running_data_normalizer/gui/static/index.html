@@ -6,6 +6,7 @@
 <title data-i18n="app.title"></title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png">
+<script src="/theme.js"></script>
 <link rel="stylesheet" href="/styles.css">
 <script type="module" src="/app.mjs"></script>
 </head>
@@ -608,9 +609,10 @@
   <div id="forget-confirm" class="confirm" hidden>
     <p id="forget-question" class="question" data-i18n="forget.question"></p>
     <p id="forget-text" data-i18n="forget.text"></p>
+    <p id="forget-text-also" data-i18n="forget.text_also"></p>
     <div class="button-row">
-      <button type="button" id="forget-yes" data-i18n="forget.yes" aria-describedby="forget-question forget-text"></button>
-      <button type="button" id="forget-no" data-i18n="forget.no" aria-describedby="forget-question forget-text"></button>
+      <button type="button" id="forget-yes" data-i18n="forget.yes" aria-describedby="forget-question forget-text forget-text-also"></button>
+      <button type="button" id="forget-no" data-i18n="forget.no" aria-describedby="forget-question forget-text forget-text-also"></button>
     </div>
   </div>
   <p class="privacy" data-i18n="app.privacy"></p>
@@ -619,6 +621,19 @@
   <p id="product-version" class="version"></p>
   <label for="language-select" data-i18n="language.label"></label>
   <select id="language-select"></select>
+  <fieldset class="theme-choice" aria-labelledby="theme-label">
+    <div class="theme-row">
+      <span id="theme-label" class="theme-label" data-i18n="theme.label"></span>
+      <span class="segments">
+        <input type="radio" name="theme" id="theme-auto" value="auto" checked disabled>
+        <label for="theme-auto"><span data-i18n="theme.auto"></span> <span id="theme-now" class="theme-now"></span></label>
+        <input type="radio" name="theme" id="theme-light" value="light" disabled>
+        <label for="theme-light" data-i18n="theme.light"></label>
+        <input type="radio" name="theme" id="theme-dark" value="dark" disabled>
+        <label for="theme-dark" data-i18n="theme.dark"></label>
+      </span>
+    </div>
+  </fieldset>
   <button type="button" id="quit-button" data-i18n="quit.button" aria-expanded="false" aria-controls="quit-confirm" disabled></button>
   <p id="connection-status" class="status" role="status" aria-live="polite"></p>
   <p id="info-announcer" class="visually-hidden" role="status" aria-live="polite"></p>

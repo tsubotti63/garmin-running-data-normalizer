@@ -1267,6 +1267,9 @@ export function launchSettings(status) {
     store,
     outputParent,
     hints: typeof settings?.hints === "boolean" ? settings.hints : null,
+    // The colors that the person chose (stage G3a); "auto" follows the
+    // browser.
+    theme: settings?.theme === "light" || settings?.theme === "dark" ? settings.theme : "auto",
     notice: lookup(SETTINGS_KEYS, settings?.notice, null) === null ? null : settings.notice,
     // Whether there is a file of the settings to forget (stage C1).
     present: settings?.present === true,
@@ -1294,6 +1297,77 @@ export function forgetOutcome(answer) {
 // otherwise on at a first launch and off at a later one (stage B4c).
 export function hintsShown(settings) {
   return typeof settings?.hints === "boolean" ? settings.hints : settings?.launch !== "later";
+}
+
+// The colors of the page that the bar offers (stage G3a): "auto" follows the
+// colors that the browser reports.
+export const THEME_CHOICES = ["auto", "light", "dark"];
+
+// A value of the fragment of the address, where a launch puts the key and the
+// colors (stage G3a): the values are separated by "&", so that the key never
+// takes what follows it. theme.js reads the colors with the same expression.
+export function fragmentValue(hash, name) {
+  return new URLSearchParams(String(hash ?? "").slice(1)).get(name);
+}
+
+// The data-theme attribute of the page for a choice: none for "auto", which
+// leaves the colors to the browser.
+export function themeAttribute(choice) {
+  return choice === "light" || choice === "dark" ? choice : null;
+}
+
+// The words after "Match this computer": the colors that the browser reports
+// now.
+export function themeNowKey(dark) {
+  return dark ? "theme.mode_dark" : "theme.mode_light";
+}
+
+// What another tab of this launch said of the colors (stage G3a): a choice,
+// or that the settings were forgotten; null for anything else. Nothing more
+// goes between the tabs: never the key, never a remembered place.
+export function themeMessage(data) {
+  if (data === null || typeof data !== "object" || Object.keys(data).length !== 1) {
+    return null;
+  }
+  if (data.forgotten === true) {
+    return { forgotten: true };
+  }
+  return THEME_CHOICES.includes(data.theme) ? { theme: data.theme } : null;
+}
+
+// Send one value at a time (stage G3a): of the values given while one is
+// sent, only the last goes after it, so that the server keeps the last
+// choice however fast the person changes it. A send that fails does not keep
+// the next one from going; the send tells its own failure.
+export function sendLatest(send) {
+  let sending = false;
+  let waiting = false;
+  let latest;
+  return async (value) => {
+    latest = value;
+    if (sending) {
+      waiting = true;
+      return;
+    }
+    sending = true;
+    try {
+      let next = value;
+      for (;;) {
+        waiting = false;
+        try {
+          await send(next);
+        } catch {
+          // The send tells its own failure.
+        }
+        if (!waiting) {
+          break;
+        }
+        next = latest;
+      }
+    } finally {
+      sending = false;
+    }
+  };
 }
 
 export function settingsMessages(code, writing = false) {
@@ -2119,8 +2193,10 @@ export function controls(view, states) {
     cancel: connected && view.runState === "running",
     quit: connected && !running && !view.outputBusy,
     // The tips switch remembers its choice on the server, so it needs the
-    // connection; the language and the help panel do not (v2.0.1 F2).
+    // connection; the language and the help panel do not (v2.0.1 F2). The
+    // colors of the page are remembered there too (stage G3a).
     hints: connected,
+    theme: connected,
     outputActions: connected && !busy && FINISHED_STATES.includes(view.runState),
     // The settings are not forgotten while a run, which remembers its places
     // when it ends, is active (stage B4c), nor when there is no file of them

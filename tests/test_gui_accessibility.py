@@ -119,13 +119,22 @@ def is_live(element: Element) -> bool:
     return element.get("aria-live") is not None or element.get("role") in {"status", "alert"}
 
 
+# The dark colors, where the browser reports dark and the person chose no
+# colors, and where the person chose Dark (stage G3a).
+DARK_FOR_THE_BROWSER = r'@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme="light"\]\) \{(.*?)\}\s*\}'
+DARK_FOR_THE_CHOICE = r'^:root\[data-theme="dark"\] \{(.*?)^\}'
+
+
+def declarations(block: str) -> dict[str, str]:
+    """The colors and the color scheme that a block of styles.css sets."""
+    return dict(re.findall(r"(--[a-z-]+|color-scheme):\s*([^;]+);", block))
+
+
 def theme_colors() -> dict[str, dict[str, str]]:
     """Return the color variables of the light theme and the dark theme."""
     source = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
     light_block = re.search(r"^:root \{(.*?)^\}", source, re.MULTILINE | re.DOTALL)
-    dark_block = re.search(
-        r"@media \(prefers-color-scheme: dark\) \{\s*:root \{(.*?)\}\s*\}", source, re.DOTALL
-    )
+    dark_block = re.search(DARK_FOR_THE_CHOICE, source, re.MULTILINE | re.DOTALL)
     if light_block is None or dark_block is None:
         raise AssertionError("styles.css has no light or dark color variables")
 
@@ -315,7 +324,12 @@ class GuiPageStructureTest(unittest.TestCase):
         for identifier in ("forget-yes", "forget-no"):
             with self.subTest(button=identifier):
                 answer = by_id(self.elements, identifier)
-                self.assertEqual((answer.tag, answer.get("aria-describedby")), ("button", "forget-question forget-text"))
+                self.assertEqual(
+                    (answer.tag, answer.get("aria-describedby")),
+                    ("button", "forget-question forget-text forget-text-also"),
+                )
+        # Stage G3a: what 2.1.0 also forgets comes after the words of 2.0.x.
+        self.assertEqual(by_id(self.elements, "forget-text-also").get("data-i18n"), "forget.text_also")
         self.assertEqual(by_id(self.elements, "settings-status").get("role"), "status")
         # Looking again for a remembered store or folder that is not found.
         for identifier in ("store-search", "output-search"):
@@ -323,6 +337,26 @@ class GuiPageStructureTest(unittest.TestCase):
                 search = by_id(self.elements, identifier)
                 self.assertEqual((search.tag, search.get("data-i18n")), ("button", "remembered.search_again"))
                 self.assertIn("hidden", search.attributes)
+
+    def test_the_colors_are_one_group_of_three_choices(self) -> None:
+        # Stage G3a: in the bar, named by the words beside it, as the choice
+        # of the fourth box is named by its heading.
+        group = [element for element in self.elements if element.tag == "fieldset" and element.get("aria-labelledby") == "theme-label"]
+        self.assertEqual(len(group), 1)
+        self.assertEqual(by_id(self.elements, "theme-label").get("data-i18n"), "theme.label")
+        labels = {element.get("for"): element for element in self.elements if element.tag == "label"}
+        for identifier, value in (("theme-auto", "auto"), ("theme-light", "light"), ("theme-dark", "dark")):
+            with self.subTest(choice=identifier):
+                choice = by_id(self.elements, identifier)
+                self.assertEqual(
+                    (choice.tag, choice.get("type"), choice.get("name"), choice.get("value")),
+                    ("input", "radio", "theme", value),
+                )
+                # Nothing works before the page has the connection.
+                self.assertIn("disabled", choice.attributes)
+                self.assertIn(identifier, labels)
+        self.assertEqual(labels["theme-light"].get("data-i18n"), "theme.light")
+        self.assertEqual(labels["theme-dark"].get("data-i18n"), "theme.dark")
 
     def test_quitting_asks_first_in_the_bar(self) -> None:
         # v2.0.1 F2: Quit asks first, in the bar, as forgetting the settings
@@ -595,14 +629,45 @@ class GuiStyleTest(unittest.TestCase):
     def test_every_color_variable_is_defined_in_both_themes(self) -> None:
         used = set(re.findall(r"var\(--([a-z-]+)\)", self.source))
         light = theme_colors()["light"]
-        dark_only = re.search(
-            r"@media \(prefers-color-scheme: dark\) \{\s*:root \{(.*?)\}\s*\}", self.source, re.DOTALL
-        )
-        assert dark_only is not None
-        dark = set(re.findall(r"--([a-z-]+):", dark_only.group(1)))
         self.assertEqual(sorted(used - set(light)), [])
-        # The dark theme sets every color, so none falls back to a light one.
-        self.assertEqual(sorted(dark), sorted(light))
+        # The dark theme sets every color, so none falls back to a light one,
+        # where the browser reports dark and where the person chose Dark
+        # (stage G3a).
+        for pattern in (DARK_FOR_THE_BROWSER, DARK_FOR_THE_CHOICE):
+            with self.subTest(pattern=pattern):
+                block = re.search(pattern, self.source, re.MULTILINE | re.DOTALL)
+                assert block is not None
+                self.assertEqual(sorted(re.findall(r"--([a-z-]+):", block.group(1))), sorted(light))
+
+    def test_the_dark_colors_of_the_browser_and_of_the_choice_are_the_same(self) -> None:
+        # Stage G3a: CSS cannot join a media query and an attribute in one
+        # rule, so the dark colors are written twice. Light keeps the light
+        # colors also where the browser reports dark, and without a choice
+        # the page follows the browser.
+        browser = re.search(DARK_FOR_THE_BROWSER, self.source, re.MULTILINE | re.DOTALL)
+        choice = re.search(DARK_FOR_THE_CHOICE, self.source, re.MULTILINE | re.DOTALL)
+        assert browser is not None and choice is not None
+        self.assertEqual(declarations(browser.group(1)), declarations(choice.group(1)))
+        self.assertEqual(declarations(choice.group(1))["color-scheme"], "dark")
+        light = re.search(r'^:root\[data-theme="light"\] \{(.*?)^\}', self.source, re.MULTILINE | re.DOTALL)
+        assert light is not None
+        self.assertEqual(declarations(light.group(1)), {"color-scheme": "light"})
+        root = re.search(r"^:root \{(.*?)^\}", self.source, re.MULTILINE | re.DOTALL)
+        assert root is not None
+        self.assertEqual(declarations(root.group(1))["color-scheme"], "light dark")
+
+    def test_the_chosen_colors_show_without_color_and_with_the_keyboard(self) -> None:
+        # Stage G3a: the chosen part is filled and bold, the part that has
+        # the keyboard has the ring of the page, and where the system forces
+        # its own colors, the radio buttons show.
+        self.assertRegex(self.source, r"\.theme-choice input:checked \+ label \{[^}]*font-weight: 600;")
+        self.assertRegex(
+            self.source,
+            r"\.theme-choice input:focus-visible \+ label \{\s*outline: 3px solid var\(--accent\);\s*outline-offset: 2px;",
+        )
+        forced = re.search(r"@media \(forced-colors: active\) \{\s*\.theme-choice input \{(.*?)\}\s*\}", self.source, re.DOTALL)
+        assert forced is not None
+        self.assertIn("opacity: 1;", forced.group(1))
 
     def test_colors_meet_wcag_aa_contrast_in_both_themes(self) -> None:
         for theme, colors in self.themes.items():

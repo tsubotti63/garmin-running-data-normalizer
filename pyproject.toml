@@ -46,6 +46,7 @@ where = ["src"]
 "garmin_running_data_normalizer.gui" = [
   "static/*.html",
   "static/*.mjs",
+  "static/*.js",
   "static/*.css",
   "static/*.svg",
   "static/*.png",
