@@ -1,7 +1,9 @@
 # v2.0.0 GUI Design
 
 - Status: design revised on 2026-10-11; implemented in v2.0.0, whose `gui`
-  command opens the GUI
+  command opens the GUI. The view page and the colors of the page are added
+  for v2.1.0, which is not released yet; the sections marked v2.1.0 describe
+  them.
 - Applies to: stable v2.0.1
 - Authority: maintainer design record agreed by the Human maintainer on
   2026-10-10 and revised by the Human maintainer's decisions of 2026-10-11.
@@ -38,10 +40,12 @@ output and exit contracts.
    Snapshot Store and can also normalize one Export without Snapshots.
 4. An Export can be selected as the downloaded ZIP file or as the extracted
    folder, in the CLI and in the GUI.
-5. The GUI is for desktop and laptop computers. It is one page that does not
-   switch screens and does not use a step-by-step wizard. It offers every
-   function in this design, and controls that cannot be used yet are shown
-   disabled.
+5. The GUI is for desktop and laptop computers. The normalization page is one
+   page that does not switch screens and does not use a step-by-step wizard.
+   Since v2.1.0, the view page is a second page in the next tab, and it does
+   not switch screens either (decision 20261026-11).
+   Each page offers every function in this design, and controls that cannot
+   be used yet are shown disabled.
 
 ## Decisions
 
@@ -49,6 +53,7 @@ output and exit contracts.
 |---|---|
 | Architecture | A browser page served by the installed package on the loopback address `127.0.0.1`. Processing runs in the local Python with the same functions as the CLI, and results are written directly to local folders. |
 | Scope of 2.0.0 | The single-page GUI with Snapshots and ZIP input, and the data-handling and CLI changes in this document. |
+| Scope of 2.1.0 | The view page in the tab next to the normalization page, which shows the numbers of an output that this version made as panels on one time axis; the `series` command, which writes the same numbers to a CSV file; and the colors of the page. Nothing is sent, and the numbers are not interpreted (decisions 20261026-9, 20261026-10, and 20261026-11). |
 | CLI | `gui` is the new command. `run-all`, `doctor --input`, and `snapshot register` also accept a ZIP file. Errors, pre-run checks, warning totals, and cancellation are aligned with the GUI. |
 | Languages | English and Japanese at first, from message catalogs; more languages can be added as catalogs. CLI messages and generated output stay in English. |
 | Dependencies | No new runtime dependency. The GUI uses the standard library, its own static files, a web browser on the same machine, and the operating system's own file dialog. |
@@ -59,9 +64,22 @@ output and exit contracts.
 ## Out of scope for 2.0.0
 
 - Leaving out individual Snapshots
-- Viewing or analyzing the normalized data
+- Viewing or analyzing the normalized data (v2.1.0 adds viewing, without
+  interpreting: see [The view page](#the-view-page-v210))
 - A hosted or no-install web version
 - Any outbound network feature, including weather enrichment and Garmin sign-in
+- Phones and tablets
+
+## Out of scope for 2.1.0
+
+- Laying the years over each other, aligning the starts of periods, and
+  relating two items
+- Views by shoe or of personal records, the bands of the training status, and
+  moving averages
+- Saving a chart as a picture or a file
+- Outputs of other versions on the view page
+- Interpreting the numbers, and coaching
+- Any outbound network feature; weather enrichment (Open-Meteo) stays deferred
 - Phones and tablets
 
 ## Page
@@ -104,8 +122,9 @@ with the seconds of each step, and the results by data family (stage B1a).
   and the page takes no action; once it stopped, the line above the boxes
   says that the app has stopped and how to start it again. A connection lost
   on the way is told as any lost connection. The language and the help
-  panel keep working, since they do not use the server; "Show tips", whose
-  choice the server remembers, does not.
+  panel keep working, since they do not use the server; "Show tips" and,
+  from v2.1.0, the colors of the page, whose choices the server remembers,
+  do not.
 - The bar at the bottom stays on the screen, so that Quit and the language
   can be reached without scrolling (v2.0.1, stage F2).
 - After a run that finished, while no box changed, "Run normalization" can
@@ -160,6 +179,18 @@ a run is active; the stores and the outputs stay, and the next launch is a
 first one. A file that cannot be used is told in the bar, and the launch is a
 first one: one of another form is replaced by the next settings, and one of a
 newer version is never written over. The CLI remembers nothing.
+
+From v2.1.0 the settings also remember the colors of the page when the person
+chose Light or Dark (`theme`), and the items that the view page showed and
+whether its item shelf was open (`view_items` and `view_shelf`, by the names
+of the items only); a value of another form of one of these keys is left out
+alone, and the other settings are still used. "Forget the remembered
+settings…" forgets them too, and says so in a sentence after the words of
+2.0.x. The settings change one at a time under a lock of the server, so that
+a run that ends while the person switches the tips or the colors keeps both
+(a fix of 2.0.x); two GUIs of two processes that write at the same moment can
+still keep only one of the two values, and the other keeps the value that it
+had before.
 
 The Snapshot Store (stage B4a): the second box shows the place of the store
 and its Snapshots, in the order of the times of their Exports, with the
@@ -327,11 +358,42 @@ Stage A settled the codes `INPUT_ZIP_CORRUPT` (stage A1a),
 `INPUT_MULTIPLE_EXPORTS` (stage A3a), and `SNAPSHOT_STORE_LOCKED` (stage
 A3d-3b).
 
+## Colors of the page (v2.1.0)
+
+The bar at the bottom of both pages offers Appearance: Match this computer,
+Light, or Dark (stage G3a, decision 20261026-10). Match this computer uses the
+colors that the browser reports, as 2.0.x does. The settings remember Light
+and Dark as `theme` (Match this computer is no key), in the file of format 1,
+so that 2.0.x still reads the file and leaves the colors out.
+
+- The page never shows the other colors first. `theme.js`, a classic script in
+  the head of both pages, sets `data-theme` on the root element before the
+  page is drawn, from this tab's `sessionStorage`, or, on the first page of a
+  launch, from the address: the launch puts the colors after the key in the
+  fragment (`#key=…&theme=dark`), which the browser never sends, and the
+  values there are separated by `&` and read as the key is read. It also
+  keeps a choice from the address in this tab's `sessionStorage`, since a
+  reload has no fragment; it writes nothing else, and the page removes the
+  fragment with the key.
+- The dark colors are one set, in two blocks of `styles.css`: one for the
+  browser's dark (`prefers-color-scheme: dark`) unless Light was chosen, and
+  one for Dark. A test checks that the two blocks are the same, and that both
+  set every color. Light keeps the light colors also where the browser is
+  dark.
+- A change is told to the other tabs of the launch with a `BroadcastChannel`,
+  which carries the colors, and the notice that the settings were forgotten,
+  only; never the key.
+- Where the system forces its own colors, the page takes the system's colors,
+  and the radio buttons of Appearance still show.
+- While the page has no connection to the server, the choice cannot be
+  changed, as "Show tips" cannot.
+
 ## Architecture
 
 ```text
 Browser on the same machine
   -> http://127.0.0.1:<port>/  static page and message catalogs
+  -> http://127.0.0.1:<port>/view  the view page in the next tab (v2.1.0)
   -> JSON API on the same origin
 Local GUI server (standard library, started by the gui command)
   -> pre-run check, post-run checks, Support Bundle (same functions as the CLI)
@@ -350,7 +412,15 @@ Local Snapshot Store and new output folders
   build step are used. The server answers only the paths in a fixed table,
   which also fixes the content type of each file. `mimetypes` is not used,
   because Windows can map `.js` to `text/plain` through the registry, and
-  `nosniff` then blocks the script.
+  `nosniff` then blocks the script. From v2.1.0 the table also has `/view`
+  (`view.html`) with `view.css`, `view.mjs`, `view_flow.mjs`, and
+  `view_chart.mjs`; `launch.mjs`, which holds the key of a launch and the
+  calls of the API for both pages; and `theme.js`.
+- From v2.1.0 the server also opens an output for the view page and answers
+  its numbers in its own process (`/api/view/open` and `/api/view/series`),
+  and remembers the colors and the items of the view page
+  (`/api/settings/theme` and `/api/settings/view`); see
+  [The view page](#the-view-page-v210).
 - Runs (`run-all`, `snapshot register`, and `snapshot run-all`) run in a child
   process started from an argument list (`sys.executable`, `-P`, `-m`, an
   internal GUI module, and the same arguments that the CLI takes, with absolute
@@ -620,6 +690,156 @@ the page's own folder list without one (stage B4a).
   `/select` of a place with a space); and `xdg-open` elsewhere, with the
   folder that holds a file that it shows. The page sends no place to open.
 
+## The view page (v2.1.0)
+
+Version 2.1.0 adds a page that shows the numbers of an output that this
+version made, as panels on one time axis (stages G1 to G3b-2, decisions
+20261026-9 to 20261026-11). It reads outputs only, sends nothing, and does
+not interpret the numbers: it does not say what a value means, which item
+causes another, or what to do. The `series` command of the CLI writes the
+same numbers to a CSV file, with the same functions (stage G2).
+
+Place and tabs:
+
+- The view page is `/view`, in the tab next to the normalization page. The
+  two pages are named tabs (`garmin-running-normalize` and
+  `garmin-running-view`) and find each other with `window.open("", name)`, so
+  that a page that is open comes to the front instead of a new tab; a tab
+  that opens empty is given the address of the launch, with the key in the
+  fragment.
+- The normalization page opens the view page from "View this output" in its
+  fourth box, with the output of its run, and from "Open the view page" in its
+  bar; the view page goes back with "Go to the normalization page".
+- Quitting one page tells the other through a `BroadcastChannel` that carries
+  `{stopped: true}` only, and the other page says that the app has stopped,
+  not that the connection was lost.
+
+Which outputs:
+
+- Only outputs that this version made, since how normalization makes the
+  numbers can change between versions. An output of another version stops
+  with `OUTPUT_OTHER_VERSION`, and one of 1.3, which the checks pass, with
+  `SERIES_OUTPUT_OTHER_VERSION`; the red box offers to normalize again on the
+  normalization page.
+- The page opens the latest output, this launch's or the newest earlier one,
+  with the items shown last time, and at first with Distance, Resting heart
+  rate, and VO2 Max. Another output comes from the list of earlier outputs of
+  [After a run](#after-a-run), with its mark, or from the system's dialog.
+  The list keeps its mark while it holds the same outputs, so that the
+  numbers given to another tab still name the same outputs (a fix of 2.0.x in
+  stage G3b-1); until the list first holds an output, its mark is 0.
+- An output is named by its name and the version that made it. No date of
+  normalization is shown: an output holds none, so that the same input gives
+  the same bytes, and the times of a folder change when it is copied.
+
+Reading an output:
+
+- The server checks the output with the checks of the GUI, and reads only the
+  dates and the values of the items, of ten files at most, each compared by
+  size and SHA-256 with the manifest that it read before the checks. A file
+  or a manifest that changed stops the reading with `OUTPUT_CHANGED`. A file
+  over 128 MiB, files over 512 MiB together, or a manifest over 256 MiB are
+  not read, and stop it with `OUTPUT_NOT_AVAILABLE`.
+- Rows without a date, and rows dated after today in the output's timezone,
+  are counted and left out: one date far ahead, from a wrong clock, would
+  stretch the time axis and leave the last years empty.
+- The server keeps what it read in memory, under a ticket of random
+  characters that holds no place, for four outputs at most; the one used
+  longest ago leaves first. Every request for numbers looks at the output
+  again by the size, the time of change, and the inode of its folder and of
+  the files that the page reads, and by the date of today; when one of them
+  changed, the output is checked and read again. The contents (their
+  SHA-256) are checked when an output is opened and when it is read again,
+  not at every request, so a file rewritten with the same size and an
+  earlier time of change is not noticed; this is accepted for the person's
+  own output on the same computer.
+- An answer of numbers is at most 4 MiB (`VIEW_ANSWER_TOO_LARGE`; six panels
+  by day over 15 years take about 2 MiB). A ticket that the server no longer
+  keeps is `VIEW_NOT_OPEN`, and the page opens the output again once. Reading
+  an output writes nothing, not even a temporary file; the settings keep the
+  items and the shelf as the person changes them.
+
+Items and numbers:
+
+- 38 items in four groups (Training (per activity), Running form (FIT), Body
+  (daily), and Garmin estimates), with the months that have data. Up to six
+  panels are shown.
+- The activity types counted are those of running at first, the names that
+  the link between an activity and a FIT session counts as running, and can
+  be chosen again; they apply to every panel.
+- The period is all the time, the last 10, 5, 3, or 1 years, a range, or the
+  same length before or after. The grouping is Auto, day, week, month, or
+  year; Auto groups by month for a period longer than three years, by week
+  for one longer than a year, and by day otherwise. The first and the last
+  period, cut by the period, are marked as partial.
+- A total (distance, time, count) is that of the recorded activities: a
+  period without one is 0 between the first and the last activity of the
+  types counted, and empty before and after them. 0 means no record, not
+  that there was no run, and it is drawn as a light point. The pace is the
+  total time divided by the total distance of the activities with both; a
+  mean of activities is weighted by their durations; a daily item is the
+  mean of the days with a value, and a sleep counts only on the days that it
+  may be used.
+- An item with several records a day, such as VO2 Max, shows every record at
+  the grain of a day, and otherwise the mean of all the records, so that a
+  day with more records weighs more; the second line of its panel counts the
+  days with more than one record. The two series of VO2 Max (the activity
+  record and MaxMet) stay in separate lines, told apart by color by the name
+  of the series and never by their order, and the sports by a dashed line or
+  hollow points.
+- Values that are missing are never filled, carried, or made 0, and what is
+  left out is counted in the notes of the panel. The numbers are rounded only
+  when they are shown.
+
+The page (the Human maintainer's mockup v2, and the check in Safari on
+2026-10-27):
+
+- The bar of the app is one row, with the line of what to do next in it. The
+  filters (the output, the period, the grouping, and the activity types)
+  apply to every panel and stay in one row from a width of 1366 in Japanese,
+  so that the panels keep the height.
+- The item shelf at the left lists the items with bars of the months that
+  have data, finds them by name, and folds to a rail.
+- Panels of at least 150 pixels stand on one time axis; when they do not fit,
+  only the panels scroll. A panel names its item, unit, and kind, gives the
+  period and the values at the cross line, a second line of counts and the
+  lowest, highest, and latest values, and notes of what is left out, and can
+  be shown as a table (newest first, 400 rows at a time), enlarged, moved, or
+  removed; one panel enlarged makes the others low strips on the same axis.
+  Panels of the same unit can share one scale on request. Acute and chronic
+  training load are both Garmin's values as they are, but two columns of the
+  same source, so they share it.
+- The overview under the panels shows the whole output by month, of the first
+  panel or of the one enlarged, and frames the period shown. A drag chooses a
+  period: the frame follows it, with its days in the label, and a drag
+  shorter than a week changes nothing. Within 8 pixels of an edge of the
+  frame, the pointer is a double arrow, and a drag moves that edge as far as
+  the pointer moves, never under a week. Escape cancels a drag.
+- Full screen shows the panels and the overview alone, under one line that
+  names the output, the period, and the activity types, filling the screen
+  where the browser allows it and the window where it does not. Escape,
+  Back, or the browser's own end of its full screen goes back, with the focus
+  on the button that went there; in the browser's full screen, the browser
+  takes the first Escape, which also ends a drag. A stop shows the whole page
+  again, with the focus on its heading. Full screen is not remembered.
+- Each chart is an image named by its item and its period, which the
+  keyboard can reach. The arrow keys move the cross line by one period,
+  PageUp and PageDown by twelve, and Home and End to the ends, and a hidden
+  live region says the period and the value of each line, with the line
+  named; the mouse moves the line without making it speak.
+- The charts use two colors, violet (`#6250d6`, and `#9085e9` in dark) and
+  orange (`#eb6834`, and `#d95926` in dark), which pass the checks for color
+  vision deficiencies on the surface of the panels (`#ffffff`, and `#1c1f24`
+  in dark). The charts are always drawn on that surface, since the orange on
+  the page's background (`#e8ebf0`) has a contrast of 2.68. Four colors for
+  the four lines of VO2 Max did not pass, so the color tells the series and
+  the dash the sport. Where the system forces its own colors, the marks take
+  the colors of the text, of links, and of gray text, and stay apart.
+- The settings remember the items shown and whether the shelf is open
+  (`view_items` and `view_shelf`), by the names of the items only; names that
+  this version does not know, names given twice, and those after the sixth
+  are left out. Nothing is remembered for each output.
+
 ## Data handling in 2.0.0
 
 These rules apply to the CLI and the GUI. The exact lists and output shapes are
@@ -712,6 +932,10 @@ Many cases that stop with exit 2 in v1.x finish with exit 0 or 3 in v2.0.0.
   Python traceback.
 - Warning totals report the total and the counts per family, with the warnings
   that belong to no family on a separate line.
+- `series` (v2.1.0, stage G2) writes the numbers of the view page of an output
+  to a new CSV file, with the same functions as the page and the rules of a
+  new file beside an output that the Support Bundle follows; its stops are in
+  [Stops and next steps](v2_data_handling.md#stops-and-next-steps).
 
 Stage A5a applies the rules for the output's name and its existing parent
 folder to `run-all`, `normalize-activities`, `snapshot build-input`, and
@@ -792,13 +1016,16 @@ Requests:
 - Request logging is disabled, and errors are answered with short JSON codes
   that do not repeat the request, so that paths and secrets are not written to
   the terminal.
+- The requests of the view page (v2.1.0) are API requests as the others, with
+  the same key and the same checks; both pages take the key and the calls of
+  the API from `launch.mjs`. An answer of numbers is at most 4 MiB.
 
 Response headers:
 
 - `Content-Security-Policy` is sent as an HTTP header: same-origin scripts,
   styles, connections, and images only, no inline script or style, no external
   resources, and `frame-ancestors 'none'`, `base-uri 'none'`, and
-  `form-action 'none'`.
+  `form-action 'none'`. The view page (v2.1.0) has the same policy.
 - `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
   `X-Content-Type-Options: nosniff`, and `Cache-Control: no-store`.
 
@@ -825,6 +1052,10 @@ Processing:
   checks the places that the page sends. They are written whole through a
   temporary file in an owner-only folder and file. Only the tests' own place
   is used by the tests.
+- The messages between the tabs of a launch (`BroadcastChannel`, v2.1.0)
+  carry the colors, the notice that the settings were forgotten, and the
+  notice that the app stopped; never the key. The view page reads outputs
+  through the server only, and opens nothing outside the page.
 
 ## Privacy
 
@@ -850,6 +1081,10 @@ Processing:
 - The settings of an earlier launch hold the names of places only (stage
   B4c), stay on this computer, and are never part of the Support Bundle;
   "Forget the remembered settings…" removes them, as on a shared computer.
+  From v2.1.0 they also hold the colors of the page, and the names of the
+  items that the view page showed and whether its shelf was open.
+- The view page (v2.1.0) writes nothing in an output. The server keeps what
+  it read in memory only, under a ticket that holds no place.
 - A Snapshot Store or a folder for the output in a folder that a cloud may
   copy is marked in yellow, without a stop (stage B4a): a folder that a cloud
   app keeps (on a Mac, iCloud Drive in `Library/Mobile Documents` and the
@@ -970,6 +1205,10 @@ alone, and reduced motion.
   word and adds what it explains, such as "About Timezone for local dates and
   times". When it opens, a hidden live region says the text of its
   explanation once, and focus stays on the button (stage C1).
+- The view page (v2.1.0) names each chart and moves its cross line with the
+  keys, and a hidden live region speaks only when the keys move the line (see
+  [The view page](#the-view-page-v210)). Its buttons that show only an icon
+  have names, and Escape closes what the page opened.
 - Tests check labels, button names, heading order, live regions, focus
   targets, and the contrast of the stylesheet's colors. Keyboard-only use and
   a screen reader (VoiceOver on macOS) are checked by hand in stage C; a
@@ -998,6 +1237,13 @@ alone, and reduced motion.
 - `run_all_version` becomes 2 if the output layout changes; stage A decides.
 - Existing Snapshot Stores are read without migration, or with an automatic
   migration that keeps the original data intact.
+- v2.1.0 keeps the settings file in format 1, with three more keys (`theme`,
+  `view_items`, and `view_shelf`). 2.0.x reads the file and leaves the keys
+  out, and drops them when it writes the file again, so that going back to
+  2.0.x and then to 2.1.0 forgets the colors and the items and the shelf of
+  the view page.
+- The view page reads outputs of the installed version only; the checks of
+  earlier outputs stay as above.
 
 ## Testing
 
@@ -1038,6 +1284,20 @@ alone, and reduced motion.
   hand. Linux is covered by CI only.
 - The maintainer compares GUI and CLI output on a real Export by counts and
   identity only, as for earlier releases.
+- v2.1.0 (stages G1 to G3b-2): node tests of the view page's rules and charts
+  (`launch`, `view_flow`, and `view_chart`); pytest of the numbers
+  (`test_view_data`), the `series` command (`test_series`), the view page's
+  server and page (`test_gui_view_api`, `test_gui_view_page`, and
+  `test_gui_accessibility`); a script read the settings with the tags of
+  2.0.x, each in a process of its own (stage G3a). The tests of the
+  numbers, of the CSV file, and of the view page's server also run as the
+  last steps of the two Windows jobs, for the files on Windows. Each stage
+  broke one thing at a time in a copy to see the tests fail. The view page
+  was checked with Chrome without a window, driven by a script, at widths
+  from 1366 to 3008 pixels, light and dark, in English and Japanese, and with
+  forced colors, and by the Human maintainer in Safari and Chrome on macOS;
+  VoiceOver was not used. The maintainer compared the numbers of real
+  outputs by counts only.
 
 ## Release plan
 
@@ -1051,6 +1311,8 @@ alone, and reduced motion.
 | C | Verification on macOS and browsers, with the keyboard and VoiceOver, and the maintainer real-data check |
 | D | Release candidates on TestPyPI with the `gui` command exposed, before the stable release: v2.0.0rc1, checked on a physical Windows machine (x64) with synthetic data and by two new AI sessions in place of a first-time user; and v2.0.0rc2, with the texts that they found unclear made clearer, checked on macOS with synthetic and real data and by a new AI session |
 | E | Stable 2.0.0 release: the documents of v2.0.0; the icon and the line that installs this app (v2.0.0rc3); the pictures of the icon and of the tab of the browser, and the guides that answer what a first reader asked (v2.0.0rc4, also checked on a physical Windows machine); the answers of the guides, Python 3.15 in the CI, and the limit of the nesting of JSON (v2.0.0rc5); and the version 2.0.0 |
+| G0–G4 (v2.1.0) | The view page: its design and texts (G0), its numbers (G1, #165), the `series` command (G2, #166), the colors of the page (G3a, #167), its server (G3b-1, #168) and its page (G3b-2, #169), and this design (G4) |
+| G5–G7 (v2.1.0) | A release candidate on TestPyPI, checked on macOS and a physical Windows machine and read by a new AI session; then the documents that users read, the version 2.1.0, its publication, and its record |
 
 Installing a release candidate from TestPyPI used Production PyPI as an
 extra index for dependencies, such as `tzdata` on Windows, that TestPyPI may
