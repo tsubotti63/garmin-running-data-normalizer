@@ -5,11 +5,13 @@
 // that a path or a name from the computer is never read as markup.
 
 import { DEFAULT_LANGUAGE, chooseLanguage, translate } from "./i18n.mjs";
+import { ApiError, callWithKey, readLaunchKey, readStorage, writeStorage } from "./launch.mjs";
 import {
   ACTIVE_STATES,
   BOXES,
   FINISHED_STATES,
   HELP_SECTIONS,
+  QUIT_CHANNEL,
   HELP_STEPS,
   TERMINAL_STATES,
   afterChange,
@@ -42,7 +44,6 @@ import {
   forgetOutcome,
   formatElapsed,
   foundChoices,
-  fragmentValue,
   helpReturnTarget,
   helpSteps,
   hintsShown,
@@ -85,6 +86,7 @@ import {
   snapshotRows,
   stalledSeconds,
   stepRows,
+  stoppedMessage,
   storeMessages,
   storeMissingRemembered,
   storeProblem,
@@ -93,18 +95,21 @@ import {
   themeAttribute,
   themeMessage,
   themeNowKey,
+  viewPageAddress,
   warningMessages,
 } from "./flow.mjs";
 
 const LANGUAGES = ["en", "ja"];
-const LAUNCH_KEY_HEADER = "X-Launch-Key";
-const LAUNCH_KEY_STORAGE = "launchKey";
 const LANGUAGE_STORAGE = "language";
 // The colors of the page that this tab took last (stage G3a), which theme.js
 // reads before a reload is drawn, and the channel that tells the other tabs
 // of this launch; the browser keeps both to this launch's port.
 const THEME_STORAGE = "theme";
 const THEME_CHANNEL = "theme";
+// The names of the two tabs of a launch (stage G3b): the view page opens in
+// its own tab, and finds this one by its name.
+const NORMALIZE_TAB = "garmin-running-normalize";
+const VIEW_TAB = "garmin-running-view";
 const HEARTBEAT_INTERVAL_MS = 30000;
 const POLL_INTERVAL_MS = 1000;
 // The time before an explanation that opened is given to its live region,
@@ -243,6 +248,9 @@ const ui = {
   nextActions: byId("next-actions"),
   openFolder: byId("open-folder-button"),
   openStartHere: byId("open-start-here-button"),
+  // The view page (stage G3b): the output of this run, and the page itself.
+  viewOutput: byId("view-output-button"),
+  openView: byId("open-view-button"),
   openResult: byId("open-result"),
   toolsToggle: byId("tools-toggle"),
   toolsBody: byId("tools-body"),
@@ -459,6 +467,8 @@ const state = {
 // The other tabs of this launch take the colors at once (stage G3a); without
 // the channel, they take them when they are loaded again.
 const themeChannel = typeof BroadcastChannel === "function" ? new BroadcastChannel(THEME_CHANNEL) : null;
+// The other tabs of this launch learn that the app was quit (stage G3b).
+const quitChannel = typeof BroadcastChannel === "function" ? new BroadcastChannel(QUIT_CHANNEL) : null;
 // The colors that the browser reports, for the words after "Match this
 // computer" (stage G3a).
 const darkScheme = window.matchMedia("(prefers-color-scheme: dark)");
@@ -480,17 +490,6 @@ function applyTheme(choice) {
     document.documentElement.dataset.theme = attribute;
   }
   writeStorage(THEME_STORAGE, choice);
-}
-
-class ApiError extends Error {
-  constructor(status, code, detail = null) {
-    super(`API request failed with HTTP ${status}`);
-    this.status = status;
-    this.code = code;
-    // The version that made an output that this version cannot check
-    // (stage B5b).
-    this.detail = detail;
-  }
 }
 
 function t(key, params) {
@@ -611,36 +610,6 @@ function returnFocus(button, fallback) {
   (button.disabled ? fallback : button).focus();
 }
 
-function readStorage(name) {
-  try {
-    return window.sessionStorage.getItem(name);
-  } catch {
-    return null;
-  }
-}
-
-function writeStorage(name, value) {
-  try {
-    window.sessionStorage.setItem(name, value);
-  } catch {
-    // Without storage, the page still works until it is reloaded.
-  }
-}
-
-// The key arrives in the URL fragment, which is never sent to the server, and
-// the colors that the settings remember after it (stage G3a). Keep the key for
-// this tab only, and remove the fragment, the colors too, from the address bar
-// and the history.
-function readLaunchKey() {
-  const fromFragment = fragmentValue(window.location.hash, "key");
-  if (fromFragment) {
-    writeStorage(LAUNCH_KEY_STORAGE, fromFragment);
-    window.history.replaceState(null, "", window.location.pathname);
-    return fromFragment;
-  }
-  return readStorage(LAUNCH_KEY_STORAGE);
-}
-
 async function loadCatalog(language) {
   try {
     const response = await fetch(`/i18n/${language}.json`, {
@@ -653,31 +622,10 @@ async function loadCatalog(language) {
   }
 }
 
+// The key and the calls of the API are those of launch.mjs, which the view
+// page uses too (stage G3b).
 async function callApi(path, payload = {}) {
-  if (!state.launchKey) {
-    throw new ApiError(403, null);
-  }
-  const response = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", [LAUNCH_KEY_HEADER]: state.launchKey },
-    body: JSON.stringify(payload),
-    cache: "no-store",
-    credentials: "omit",
-  });
-  let body = null;
-  try {
-    body = await response.json();
-  } catch {
-    body = null;
-  }
-  if (!response.ok) {
-    throw new ApiError(
-      response.status,
-      typeof body?.error === "string" ? body.error : null,
-      typeof body?.version === "string" ? { version: body.version } : null,
-    );
-  }
-  return body;
+  return callWithKey(state.launchKey, path, payload);
 }
 
 // Return true when the page lost the server; other errors carry a code.
@@ -1794,6 +1742,10 @@ function renderControls(states, current) {
   replaceLines(ui.runAgain, againNote(current, enabled).map(describe));
   ui.openFolder.disabled = !enabled.outputActions;
   ui.openStartHere.disabled = !enabled.outputActions;
+  // The view page shows the output of a run that made it, and opens while
+  // the app runs (stage G3b).
+  ui.viewOutput.disabled = !enabled.outputActions;
+  ui.openView.disabled = !state.connected;
   // The bundle's name is fixed, so a second one would be refused.
   ui.bundle.disabled = !toolsFree || !targetReady() || state.tools.bundle !== null;
   // The report waits for a run to end, as the mockup v10 has it (stage B5c).
@@ -2485,6 +2437,7 @@ async function quit() {
     stopHeartbeat();
     stopPolling();
     state.connectionKey = "status.stopped";
+    quitChannel?.postMessage({ stopped: true });
   } catch (error) {
     if (!connectionFailure(error)) {
       state.connectionKey = "status.connected";
@@ -2719,6 +2672,26 @@ function speakInfo(name) {
   }, INFO_SPEAK_DELAY_MS);
 }
 
+// The view page in its tab (stage G3b): a tab of that name opens the address
+// again, which gives it the key, the colors, and, from the fourth box, the
+// output of this run to show; otherwise a new tab opens.
+function openViewPage(withOutput) {
+  window.open(viewPageAddress(state.launchKey, state.theme, withOutput), VIEW_TAB)?.focus();
+}
+
+// The view page quit the app: this page says that it stopped, as after its
+// own Quit.
+function quitHeard(event) {
+  if (stoppedMessage(event.data)) {
+    state.connected = false;
+    stopHeartbeat();
+    stopPolling();
+    state.quitAsked = false;
+    state.connectionKey = "status.stopped";
+    render();
+  }
+}
+
 // The person switched the tips: the next launch shows them so too
 // (stage B4c).
 async function changeHints() {
@@ -2922,6 +2895,9 @@ function connect() {
   ui.cancelYes.addEventListener("click", cancelRun);
   ui.cancelNo.addEventListener("click", keepRunning);
   ui.openFolder.addEventListener("click", () => openOutput("folder"));
+  ui.viewOutput.addEventListener("click", () => openViewPage(true));
+  ui.openView.addEventListener("click", () => openViewPage(false));
+  quitChannel?.addEventListener("message", quitHeard);
   ui.openStartHere.addEventListener("click", () => openOutput("start_here"));
   ui.bundle.addEventListener("click", makeBundle);
   ui.bundleChoose.addEventListener("click", () => chooseWithDialog("folder", "bundle", ui.bundleChoose));
@@ -3009,6 +2985,7 @@ function connect() {
 
 async function start() {
   state.launchKey = readLaunchKey();
+  window.name = NORMALIZE_TAB;
   const catalogs = await Promise.all(LANGUAGES.map(loadCatalog));
   state.catalogs = Object.fromEntries(
     LANGUAGES.map((language, index) => [language, catalogs[index]]),

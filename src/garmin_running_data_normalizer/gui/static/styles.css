@@ -28,6 +28,15 @@
   --ng-tint: #fdf3f1;
   --none: #5f6878;
   --none-soft: #eceef2;
+  /* The charts of the view page (stage G3b): the two colors of its series,
+     checked on the surface with the checks of the charts, and its grid, its
+     baseline, its cross line, and its dots of 0. */
+  --d1: #6250d6;
+  --d2: #eb6834;
+  --grid: #e6e9ee;
+  --axis: #b9c0cb;
+  --cross: #7a8290;
+  --zero: #7a8290;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
     "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo UI", "Noto Sans CJK JP", sans-serif;
   font-size: 14px;
@@ -68,6 +77,12 @@
     --ng-tint: #2c2020;
     --none: #a3a9b4;
     --none-soft: #2d3036;
+    --d1: #9085e9;
+    --d2: #d95926;
+    --grid: #2c3037;
+    --axis: #4a505a;
+    --cross: #9aa1ad;
+    --zero: #7b8494;
   }
 }
 
@@ -95,6 +110,12 @@
   --ng-tint: #2c2020;
   --none: #a3a9b4;
   --none-soft: #2d3036;
+  --d1: #9085e9;
+  --d2: #d95926;
+  --grid: #2c3037;
+  --axis: #4a505a;
+  --cross: #9aa1ad;
+  --zero: #7b8494;
 }
 
 [hidden] {
