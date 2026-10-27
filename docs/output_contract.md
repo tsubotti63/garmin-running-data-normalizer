@@ -4,6 +4,7 @@
 
 - Current stable contract: v2.0.1
 - Compatibility family: stable 2.x
+- Implementation candidate: v2.1.0rc1 (not published)
 
 This document describes the current stable contract, v2.0.1, which keeps the
 contract of v2.0.0, the first of the `2.x` family. It keeps the core layout and

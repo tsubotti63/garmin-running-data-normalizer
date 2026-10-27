@@ -1248,7 +1248,7 @@ class V14DiagnosticsTest(unittest.TestCase):
         )
 
     def test_version_is_v14_candidate(self) -> None:
-        self.assertEqual(__version__, "2.0.1")
+        self.assertEqual(__version__, "2.1.0rc1")
 
 
 if __name__ == "__main__":

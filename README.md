@@ -92,6 +92,15 @@ Run-All into a new folder. See
 and the
 [GUI Guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md).
 
+Implementation candidate: **v2.1.0rc1** (the first release candidate of
+v2.1.0, for TestPyPI; Production PyPI and the latest GitHub Release stay
+v2.0.1). It is a test version, for checking v2.1.0 before its release: for
+normal use, install the stable release v2.0.1. It adds a page that shows the
+numbers of an output of this version as charts on one time axis, the `series`
+command that writes the same numbers to a CSV file, and the colors of the
+page; the processing and the outputs are those of v2.0.1. **Install** below
+says how to install it once it is published.
+
 v1.7.1 fixes `snapshot run-all`, which had produced no Hill Score, Endurance
 Score, or VO2Max rows since v1.3.0, because Run-All did not recognize the
 merged files that `snapshot build-input` writes for them. One-shot `run-all`
@@ -477,6 +486,18 @@ in the GUI Guide. Its
 [What you need](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#what-you-need)
 gives one line for macOS and one for Windows PowerShell that make a virtual
 environment, install this app in it, and make the icon.
+
+The release candidate v2.1.0rc1 is a test version, for checking v2.1.0 before
+its release; for normal use, install the stable release as above. It can be
+installed once it is published on TestPyPI. Install it in a virtual
+environment of its own, so that an installed v2.0.1 stays as it is.
+Production PyPI is the extra index for the dependencies that TestPyPI may not
+provide, such as `tzdata` on Windows:
+
+```bash
+python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.1.0rc1
+garmin-running-data-normalizer gui
+```
 
 Maintainers can reproduce the packaging gate without uploading anything:
 
