@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import http.client
+import inspect
 import io
 import json
 import os
@@ -737,6 +738,30 @@ class GuiServerLifecycleTest(GuiServerTestCase):
         self.assertTrue(self.thread.is_alive())
         self.thread.join(timeout=10)
         self.assertFalse(self.thread.is_alive())
+
+    def test_the_server_waits_an_hour_and_the_help_says_so(self) -> None:
+        # As the Human maintainer decided on 2026-10-27 (stage G5p): Safari
+        # stops the timers of a window hidden with Command-H a few minutes
+        # later, and with 10 minutes the GUI stopped about 14 minutes after
+        # Safari was hidden; an hour keeps a page that is hidden for a while.
+        # The answer of the help about a closed window names the same minutes.
+        from garmin_running_data_normalizer.gui import server as gui_server
+
+        self.assertEqual(gui_server.IDLE_TIMEOUT_SECONDS, 3600.0)
+        self.assertEqual(
+            inspect.signature(GuiServer.__init__).parameters["idle_timeout"].default,
+            gui_server.IDLE_TIMEOUT_SECONDS,
+        )
+        minutes = int(gui_server.IDLE_TIMEOUT_SECONDS // 60)
+        catalogs = Path(gui_server.__file__).parent / "static" / "i18n"
+        answers = {
+            language: json.loads((catalogs / f"{language}.json").read_text(encoding="utf-8"))["faq.window_a"]
+            for language in ("en", "ja")
+        }
+        self.assertIn(f"no window has been connected for {minutes} minutes", answers["en"])
+        self.assertIn(f"どの窓からも {minutes} 分つながりが無いと", answers["ja"])
+        self.assertNotIn("10 minutes", answers["en"])
+        self.assertNotIn("10 分", answers["ja"])
 
     def test_requests_without_the_launch_key_do_not_keep_the_server_running(self) -> None:
         started = time.monotonic()

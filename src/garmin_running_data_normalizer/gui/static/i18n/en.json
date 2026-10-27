@@ -145,7 +145,7 @@
   "faq.time_q": "Should I change the download time?",
   "faq.values_a": "The normalization does not stop. In the normalized table, only the fields whose values differ are left empty and marked, and every value is kept in the records (audit). A warning tells you about it.",
   "faq.values_q": "What happens when a day has two different values?",
-  "faq.window_a": "If you close the window, the normalization goes on while the terminal stays open. Open the same address again to see it. When no normalization is running and no window has been connected for 10 minutes, this app quits. The result of a normalization stays in the output folder. While the computer sleeps, the normalization does not progress.",
+  "faq.window_a": "If you close the window, the normalization goes on while the terminal stays open. Open the same address again to see it. When no normalization is running and no window has been connected for 60 minutes, this app quits; a browser may stop connecting while its window is hidden, as Safari does with Command-H. The result of a normalization stays in the output folder. While the computer sleeps, the normalization does not progress.",
   "faq.window_q": "What if I close the window or the computer sleeps during a normalization?",
   "faq.zip_a": "Yes. Choose the downloaded ZIP file with “Choose ZIP file…”; it needs no check of the extraction. ZIP files inside it are read one level deep.",
   "faq.zip_q": "Can I use the downloaded ZIP file as it is?",

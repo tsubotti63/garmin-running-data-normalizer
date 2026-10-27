@@ -496,10 +496,19 @@ Local Snapshot Store and new output folders
 - Only one run at a time. Other browser tabs show the running state. While a
   run is active, the Quit button is refused, and `Ctrl+C` cancels the run
   before the server stops and reports the outcome in the terminal.
-- The server stops on `Ctrl+C`, on the page's Quit button, or after 10 minutes
-  without an API request from the page while no run is active. The page sends
-  a heartbeat every 30 seconds; the long margin covers browsers that slow the
-  timers of background tabs to once a minute.
+- The server stops on `Ctrl+C`, on the page's Quit button, or after 60 minutes
+  (10 minutes before v2.1.0) without an API request from the page while no run
+  is active. The page sends a heartbeat every 30 seconds; the long margin
+  covers browsers that slow the timers of background tabs to once a minute,
+  and Safari, which stops them a few minutes after its window is hidden with
+  Command-H: in a check on 2026-10-27 with 10 minutes, the GUI stopped about
+  14 minutes after Safari was hidden, and kept running while Safari was only
+  behind other windows, with the normalization page alone and with the view
+  page as well. A page that was closed leaves the server running for up to an
+  hour, and the help says so. The `gui` command does not look for a GUI that
+  is running, so launching it again within that hour starts a second server
+  beside the first, on a port of its own; the first one stops by itself an
+  hour after the last request of its page.
 
 ## Selecting an Export
 
@@ -1312,7 +1321,7 @@ alone, and reduced motion.
 | D | Release candidates on TestPyPI with the `gui` command exposed, before the stable release: v2.0.0rc1, checked on a physical Windows machine (x64) with synthetic data and by two new AI sessions in place of a first-time user; and v2.0.0rc2, with the texts that they found unclear made clearer, checked on macOS with synthetic and real data and by a new AI session |
 | E | Stable 2.0.0 release: the documents of v2.0.0; the icon and the line that installs this app (v2.0.0rc3); the pictures of the icon and of the tab of the browser, and the guides that answer what a first reader asked (v2.0.0rc4, also checked on a physical Windows machine); the answers of the guides, Python 3.15 in the CI, and the limit of the nesting of JSON (v2.0.0rc5); and the version 2.0.0 |
 | G0–G4 (v2.1.0) | The view page: its design and texts (G0), its numbers (G1, #165), the `series` command (G2, #166), the colors of the page (G3a, #167), its server (G3b-1, #168) and its page (G3b-2, #169), and this design (G4) |
-| G5–G7 (v2.1.0) | A release candidate on TestPyPI, checked on macOS and a physical Windows machine and read by a new AI session; then the documents that users read, the version 2.1.0, its publication, and its record |
+| G5–G7 (v2.1.0) | An hour before the server stops by itself, after a check in Safari (G5p); a release candidate on TestPyPI, checked on macOS and a physical Windows machine and read by a new AI session; then the documents that users read, the version 2.1.0, its publication, and its record |
 
 Installing a release candidate from TestPyPI used Production PyPI as an
 extra index for dependencies, such as `tzdata` on Windows, that TestPyPI may

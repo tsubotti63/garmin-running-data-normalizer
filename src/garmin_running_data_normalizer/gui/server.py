@@ -69,8 +69,11 @@ HOST = "127.0.0.1"
 LAUNCH_KEY_HEADER = "X-Launch-Key"
 LANGUAGES = ("en", "ja")
 # The page sends a heartbeat every 30 seconds. Browsers may slow the timers of
-# background tabs to once a minute, so the server waits much longer than that.
-IDLE_TIMEOUT_SECONDS = 600.0
+# background tabs to once a minute, and Safari stops those of a window hidden
+# with Command-H a few minutes later: with 10 minutes, the GUI stopped about
+# 14 minutes after Safari was hidden (stage G5p). So the server waits an hour;
+# a page that was closed leaves it running for that long.
+IDLE_TIMEOUT_SECONDS = 3600.0
 MAX_REQUEST_BYTES = 64 * 1024
 REQUEST_TIMEOUT_SECONDS = 30.0
 
