@@ -44,7 +44,7 @@ CURRENT_STABLE_DOCUMENTS = (
     "docs/faq.md",
     "docs/known_limitations.md",
 )
-CURRENT_STABLE_VERSION = "2.0.1"
+CURRENT_STABLE_VERSION = "2.1.0"
 WINDOWS_SOURCE_CONTROL_COMMANDS = re.compile(
     r"(?im)^\s*git\s+(?:clone|fetch|checkout|pull)\b"
 )
@@ -258,7 +258,8 @@ def validate(root: Path = ROOT) -> list[str]:
             )
 
     getting_started = contents.get("docs/getting_started_from_garmin_export.md", "")
-    for command in ("run-all", "validate-handoff", "snapshot"):
+    # series is the command of v2.1.0 (stage G6a).
+    for command in ("run-all", "validate-handoff", "snapshot", "series"):
         if not re.search(
             rf"```powershell\n(?:(?!```).)*\b{re.escape(command)}\b",
             getting_started,

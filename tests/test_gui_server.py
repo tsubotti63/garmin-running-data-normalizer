@@ -1404,11 +1404,11 @@ class GuiRunApiTest(GuiServerTestCase):
         shutil.copytree(older, other)
         written = json.loads((other / "run_summary.json").read_text(encoding="utf-8"))["generated_paths"]
         # A version that is not this one: the stable release before it,
-        # 2.0.0 (stage E2b, v2.0.1 F5).
-        as_release(other, "2.0.0", tuple(written), RUN_ALL_VERSION)
+        # 2.0.1 (stage E2b, v2.1.0 G6a).
+        as_release(other, "2.0.1", tuple(written), RUN_ALL_VERSION)
         chosen = {"output": "chosen", "path": str(other)}
-        self.assertEqual(self.call("/api/check-output", chosen), (422, {"error": "OUTPUT_OTHER_VERSION", "version": "2.0.0"}))
-        self.assertEqual(self.call("/api/support-bundle", chosen), (422, {"error": "OUTPUT_OTHER_VERSION", "version": "2.0.0"}))
+        self.assertEqual(self.call("/api/check-output", chosen), (422, {"error": "OUTPUT_OTHER_VERSION", "version": "2.0.1"}))
+        self.assertEqual(self.call("/api/support-bundle", chosen), (422, {"error": "OUTPUT_OTHER_VERSION", "version": "2.0.1"}))
         self.assertFalse((self.parent / "other-support-bundle.zip").exists())
         # Without a run of this launch, its own output is not there.
         self.assertEqual(self.call("/api/check-output", {}), (409, {"error": "NO_FINISHED_OUTPUT"}))

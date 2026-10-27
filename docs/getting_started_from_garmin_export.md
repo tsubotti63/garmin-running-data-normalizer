@@ -2,7 +2,7 @@
 
 This guide takes a first-time user from an official Garmin Account Data Export
 to a completed local Run-All handoff with the CLI. It applies to the current
-stable v2.0.1 Garmin Running Data Normalizer release published on GitHub and
+stable v2.1.0 Garmin Running Data Normalizer release published on GitHub and
 Production PyPI. To normalize from a page in the browser instead, see the
 [GUI Guide](gui_guide.md).
 
@@ -64,17 +64,17 @@ baseline from Production PyPI:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install garmin-running-data-normalizer==2.0.1
+.venv/bin/python -m pip install garmin-running-data-normalizer==2.1.0
 .venv/bin/python -m garmin_running_data_normalizer --version
 ```
 
-The version command for this guide should report `2.0.1`.
+The version command for this guide should report `2.1.0`.
 
 ### Windows PowerShell
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer==2.0.1
+.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer==2.1.0
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer --version
 ```
 
@@ -86,7 +86,7 @@ The remaining commands in this guide call the environment's Python directly,
 so activating the environment is not required. Run them from the directory
 that contains `.venv`.
 
-The v2.0.1 release installs `tzdata` automatically on Windows. Confirm both the
+The v2.1.0 release installs `tzdata` automatically on Windows. Confirm both the
 package version and the existing IANA timezone contract with:
 
 ```powershell
@@ -95,8 +95,8 @@ package version and the existing IANA timezone contract with:
 
 Earlier maintainer-owned physical Windows validation from Production PyPI
 confirmed automatic `tzdata` installation and successful `Asia/Tokyo`
-resolution without any manual dependency install. Current v2.0.1 CI covers the
-packaged Windows path and the published v2.0.1 package retains this contract.
+resolution without any manual dependency install. Current v2.1.0 CI covers the
+packaged Windows path and the published v2.1.0 package retains this contract.
 Both remain bounded evidence rather than a universal compatibility claim.
 
 ## 4. Run one-shot normalization first
@@ -269,6 +269,37 @@ Read the
 [v1.2 Snapshot Migration Guide](project/v1_2_snapshot_migration_guide_v1_0.md)
 before adoption. The bounded public-safe validation is documented in
 [CS-007](case_studies/cs-007-preserving-garmin-history-across-incomplete-repeated-exports.md).
+
+## 8. Optionally write the numbers to a CSV file
+
+Starting with v2.1.0, `series` writes the numbers that the view page of the
+GUI shows to a new CSV file, for a spreadsheet or another tool. It reads a
+completed Run-All output of this version and changes nothing in it:
+
+### macOS / Linux
+
+```bash
+.venv/bin/python -m garmin_running_data_normalizer series \
+  --run-output /path/to/outputs/run-all-01 \
+  --output /path/to/outputs/run-all-01-distance.csv \
+  --item dist --period 3y --grain month
+```
+
+### Windows PowerShell
+
+```powershell
+.\.venv\Scripts\python.exe -m garmin_running_data_normalizer series --run-output "C:\Garmin\Output\run-all-01" --output "C:\Garmin\Output\run-all-01-distance.csv" --item dist --period 3y --grain month
+```
+
+Without `--item`, every item is written, in the order that `series --help`
+lists them; give `--item` again for each further item. `--period` counts back
+from the last day of the output, not from today, and `--from` and `--to` give
+a range of dates instead. Without `--type`, the running types are counted. The
+CSV file must not exist yet and must be outside the output. The command prints
+by item what the numbers leave out, as counts: give these lines with the file
+to whoever reads it. The file holds the values of the output, so keep it as
+private as the output. [Additive v2.1 series CSV](output_contract.md#additive-v21-series-csv)
+gives its columns.
 
 ## Platform status
 

@@ -3,7 +3,7 @@
 このファイルは、初めて利用する方向けの短い日本語入口です。仕様や契約の
 正本は、英語の [`README.md`](README.md) とリンク先のProduct文書です。
 
-現行の安定版は **v2.0.1** です。[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/latest)と
+現行の安定版は **v2.1.0** です。[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/latest)と
 [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/)で公開済みです。
 Versionや変更履歴の正本は英語のREADMEとRelease Notesを確認してください。
 v2.0.0 から、ローカルの GUI を `garmin-running-data-normalizer gui` で開けます。
@@ -11,9 +11,21 @@ v2.0.0 から、ローカルの GUI を `garmin-running-data-normalizer gui` で
 v2.0.1 は、GUI の画面の小さな直し（「終了」の前に問いが出る、画面の下の帯が
 見えたままになる など）と、手引きの答えを入れた、直しのバージョンです。処理・出力・
 コマンドライン・保管場所は v2.0.0 と同じです。
-試しのバージョン **v2.1.0rc1** を TestPyPI に公開しました。2.1.0 の公開の前に、見るページなどを
-確かめるためのものです。ふつうは、上の安定版を入れてください。Production PyPI の安定版と
-最新の GitHub Release は v2.0.1 のままです。
+v2.1.0 は、正規化した出力の数字を時間の軸をそろえたグラフで見る「見るページ」と、同じ数字を
+CSV のファイルに書く `series` の命令と、画面の色（パソコンに合わせる・ライト・ダーク）を足した
+バージョンです。見るページは、このバージョンで作った出力だけを開きます。処理・出力・保管場所は
+v2.0.1 と同じです。
+
+## GUI で使う
+
+1. [GUI の手引き](docs/gui_guide.ja.md)の「用意するもの」にある 1 行を、ターミナルに
+   貼って動かします（1 回だけ）。このアプリが入り、GUI を開くアイコンができて、
+   ブラウザーで GUI が開きます。
+2. Garmin からダウンロードしたエクスポートの ZIP を選び、画面の 4 つの箱で
+   正規化します。
+3. 「この出力を見る」を押すと、見るページに、出力の数字がグラフで出ます。
+
+![見るページ。距離・安静時心拍数・VO2 Max の段と全体図（見本のために作ったデータ）](docs/assets/gui-guide/view-page.ja.png)
 
 ## 何をするOSSか
 

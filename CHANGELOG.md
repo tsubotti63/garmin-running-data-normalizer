@@ -13,6 +13,48 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
+## v2.1.0 — stable Production release
+
+Published as the annotated `v2.1.0` tag, the latest stable
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.1.0),
+and the verified
+[Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/2.1.0/).
+
+### Added
+
+- The view page of the GUI, in the tab next to the page of the GUI: the
+  numbers of an output of this version in panels on one time axis, with the
+  period, the grouping by day, week, month, or year, an overview to choose the
+  range, a full screen of the charts, a table for each panel, and a shelf of
+  the items. The GUI remembers the items.
+- The `series` command, which writes the numbers that the view page shows to
+  a new CSV file.
+- The colors of the page: **Match this computer**, **Light**, or **Dark**, in
+  the bar at the bottom of both pages.
+
+### Changed
+
+- The GUI stops by itself when none of its pages has been open for an hour,
+  instead of 10 minutes, unless a run is going on.
+- The GUI Guide describes the view page, the colors, what the GUI remembers,
+  and the hour.
+
+### Fixed
+
+- Two changes of the settings at the same time, in the same GUI, could lose
+  one of them; a change now waits for the other one.
+- A second tab that asked for the list of earlier outputs made the numbers of
+  the first tab refused, even for the same outputs; the list now keeps its
+  mark while its outputs stay the same.
+
+### Compatibility
+
+- The processing, the 17 datasets, 247 fields, stable keys, output paths, the
+  Snapshot Store format, and the Product exit mapping remain those of v2.0.1,
+  and the command line adds `series`. Outputs record `2.1.0`; the view page
+  and `series` read only outputs of this version. See the
+  [v2.1.0 Release Notes](docs/release_notes/v2.1.0.md).
+
 ## v2.0.1 — stable Production release
 
 Published on 2026-10-26 JST as the annotated `v2.0.1` tag, the latest stable

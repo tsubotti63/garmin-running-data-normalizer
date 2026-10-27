@@ -1,6 +1,6 @@
 # Known Limitations
 
-These limitations describe v2.0.1, the current stable release. v1.7.1 and
+These limitations describe v2.1.0, the current stable release. v1.7.1 and
 earlier releases are described by the documents at their tags, such as
 `v1.7.1`. These remain explicit Product boundaries. The rules for problems in
 the data, which v2.0.0 changed, are in
@@ -97,6 +97,11 @@ the data, which v2.0.0 changed, are in
   [Checks of earlier outputs](v2_data_handling.md#checks-of-earlier-outputs)).
   After upgrading the package, rerun Run-All before using these commands on
   that output, or keep the producing version available.
+- The view page of the GUI and `series` (v2.1.0) read only outputs that the
+  installed version produced. They stop for an output of another version
+  with `OUTPUT_OTHER_VERSION`, and for an output of v1.3, which passes the
+  checks, with `SERIES_OUTPUT_OTHER_VERSION`. Normalize the Export again with
+  the installed version into a new folder to look at its numbers.
 
 ## Snapshot lifecycle
 
@@ -265,26 +270,49 @@ the data, which v2.0.0 changed, are in
   relationships remain `not_yet_defined`; documented same-day comparison is
   context only and must not create row identity or imply causality.
 
+## The GUI, the view page, and `series`
+
+- The GUI stops by itself when none of its pages has asked it anything for an
+  hour and no run is active. A browser can stop the requests of a page that it
+  hides: Safari stops them a few minutes after its window is hidden with
+  Command-H, so that the GUI stops about an hour later, and it keeps running
+  while Safari is only behind other windows. Start the GUI again from the icon
+  or with the command.
+- The `gui` command does not look for a GUI that is running. Started again
+  within the hour after a page was closed, it starts a second GUI beside the
+  first, on a port of its own, and the first one stops by itself an hour after
+  the last request of its page. On Windows, the window of a GUI started from
+  the icon is minimized, which makes the first one easy to miss.
+- **Go to the normalization page** of the view page asks the browser for the
+  tab of the normalization page by its name. A browser that does not give it,
+  as a browser pane inside another app may not, leaves the button doing
+  nothing; switch to that tab by hand then.
+- `series` writes its CSV file as readable by its owner only on macOS and
+  Linux. On Windows, the file takes the permissions of its folder.
+- The view page and `series` give numbers to look at and to count: they do not
+  say what causes what, or what to do, and a value that Garmin did not record
+  stays empty.
+
 ## Distribution and integrations
 
 - Hosted processing, Garmin authentication, Open-Meteo, JMA, Instagram,
   wellness/coaching interpretation, Parquet output, and automatic personal
   analysis are outside the stable scope.
-- Stable v2.0.1 retains `tzdata` as a Windows-only runtime dependency and emits
+- Stable v2.1.0 retains `tzdata` as a Windows-only runtime dependency and emits
   the bounded `TIMEZONE_DATA_UNAVAILABLE` diagnostic if IANA timezone data is
   unavailable in an incomplete environment. Validation covers GitHub Actions
   `windows-latest` with Python 3.11 and 3.15, one maintainer-owned physical
   Windows Production PyPI clean install of v1.2.1, and the release candidates
-  v2.0.0rc1, v2.0.0rc4, and v2.0.1rc1 on one physical Windows 11 x64 machine.
-  This does not establish universal Windows compatibility.
+  v2.0.0rc1, v2.0.0rc4, v2.0.1rc1, and v2.1.0rc1 on one physical Windows 11 x64
+  machine. This does not establish universal Windows compatibility.
 - External-safe output is opt-in, month-granularity, Activities-only, and does
   not automatically upload or provide provider-specific privacy guarantees.
 - Production PyPI `1.3.3` remains immutable. Its long description preserves the
   publication-time README snapshot, including pre-publication candidate
   wording. Production PyPI `1.4.0`, `1.4.1`, `1.5.0`, `1.6.0`, `1.7.0`,
-  `1.7.1`, and `2.0.0` also remain immutable, and `2.0.1` is the current
-  release artifact; current repository documentation is the maintained public
-  truth for future builds.
+  `1.7.1`, `2.0.0`, and `2.0.1` also remain immutable, and `2.1.0` is the
+  current release artifact; current repository documentation is the
+  maintained public truth for future builds.
 
 The documented CLI and versioned Run-All output contract are stable for `2.x`.
 Other Python modules are usable but are not all promoted to an independently

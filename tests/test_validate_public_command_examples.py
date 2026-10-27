@@ -108,12 +108,12 @@ def test_stale_stable_version_fails(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
     quick_start = tmp_path / "docs/product_quick_start.md"
     quick_start.write_text(
-        quick_start.read_text(encoding="utf-8").replace("v2.0.1", "v9.9.9"),
+        quick_start.read_text(encoding="utf-8").replace("v2.1.0", "v9.9.9"),
         encoding="utf-8",
     )
 
     assert (
-        "docs/product_quick_start.md: current stable v2.0.1 is not identified"
+        "docs/product_quick_start.md: current stable v2.1.0 is not identified"
         in validate(tmp_path)
     )
 
@@ -143,7 +143,7 @@ def _add_install_line(root: Path, relative: str, line: str) -> None:
 # A release candidate after this release, which is installed from TestPyPI
 # (stage D2); the stable release is installed from Production PyPI only
 # (stage E2b).
-CANDIDATE = "2.1.0rc1"
+CANDIDATE = "2.1.1rc1"
 
 
 def _as_candidate(root: Path) -> None:
@@ -225,6 +225,21 @@ def test_a_testpypi_install_names_the_package_version(tmp_path: Path) -> None:
     assert validate(tmp_path) == [
         f"README.md: TestPyPI install does not name the package version {CANDIDATE}"
     ] * 2
+
+
+def test_getting_started_gives_series_in_windows_powershell(tmp_path: Path) -> None:
+    # v2.1.0 G6a: Getting Started gives the series command of v2.1.0 in
+    # Windows PowerShell, as it gives run-all, validate-handoff, and snapshot.
+    _copy_validator_inputs(tmp_path)
+    guide = tmp_path / "docs/getting_started_from_garmin_export.md"
+    text = guide.read_text(encoding="utf-8")
+    start = text.index("```powershell\n.\\.venv\\Scripts\\python.exe -m garmin_running_data_normalizer series ")
+    end = text.index("```", start + 3) + 3
+    guide.write_text(text[:start] + text[end:], encoding="utf-8")
+
+    assert validate(tmp_path) == [
+        "docs/getting_started_from_garmin_export.md: PowerShell series example is missing"
+    ]
 
 
 def test_a_testpypi_install_may_end_a_statement_of_windows_powershell(tmp_path: Path) -> None:
