@@ -17,22 +17,33 @@ in Safari and Chrome with a synthetic Export of fifteen and a half years: its
 overview, its full screen, and quitting from it. A script checked v2.1.0rc1
 with the maintainer's own real Export on macOS and recorded only whether each
 check passed. On one physical Windows 11 PC, with Windows PowerShell 5.1,
-Python 3.14.5, Microsoft Edge, and the display at 150%, the line of the guide
-for Windows PowerShell, with the index of TestPyPI, installed v2.1.0rc1 and
-made the two icons, and the page normalized a synthetic Export. The view page
-opened in the next tab with no overlapping or cut text in its top rows and
-with the light colors that Windows was set to, moved to and from the tab of
-the page of the GUI without opening new tabs, chose a range on its overview,
-went to and from its full screen, and quit the app, after which no process of
-the app was left. The line that removes this app then removed its six places;
-Windows first reported the folder of the virtual environment in use, and a
-retry went on. Two new AI sessions with no context read the draft of the part
-of the guide about the view page and used the view page from its screen only.
-From v2.1.0rc1, only the version and the documents change.
+Python 3.14.5 (a version that the CI does not run: it runs 3.11 and 3.15),
+Microsoft Edge, and the display at 150%, the line of the guide for Windows
+PowerShell, with the index of TestPyPI, installed v2.1.0rc1 and made the two
+icons, and the page normalized a synthetic Export. That Export, the same
+fifteen and a half years of made-up records as on macOS, made from the parts
+of the tests at the tag `v2.1.0rc1` and copied as a ZIP, took the place of the
+tracked synthetic fixture that the
+[Windows validation workflow policy](release_closeout/v1.2.1.md#windows-validation-workflow-policy)
+of v1.2.1 names, since that fixture holds a single activity, too little to
+check the panels, the overview, and the full screen of the view page; no Git
+command ran on Windows. The view page opened in the next tab with no
+overlapping or cut text in its top rows and with the light colors that Windows
+was set to, moved to and from the tab of the page of the GUI without opening
+new tabs, chose a range on its overview, went to and from its full screen, and
+quit the app, after which no process of the app was left. The line that
+removes this app then removed its six places; Windows first reported the
+folder of the virtual environment in use, and a retry went on. Two new AI
+sessions with no context read the draft of the part of the guide about the
+view page and used the view page from its screen only. From v2.1.0rc1, only
+the version and the documents change.
 
-The release source is the `main` commit that merges the v2.1.0 release
-preparation pull request. Its annotated tag, GitHub Release, and publish
-workflow evidence are recorded in this section after publication.
+The release source is `4ad43f509f81dad4dbb57a7c0d0d14bc1022ddf9` (#174). The
+annotated `v2.1.0` tag (tag object
+`79126489f9b8dac48d76b7436051b17c55920d1b`), the latest stable GitHub Release
+published on 2026-10-28 JST, Production PyPI publication through Trusted
+Publishing/OIDC, and the publish workflow's exact-version PyPI install
+verification are complete.
 
 ## v2.1.0rc1 release candidate
 
@@ -737,10 +748,10 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Latest GitHub Release: `v2.1.0`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
-- TestPyPI `2.1.0`: Not used; the release publishes directly to Production
-  PyPI through the protected `pypi` Environment
-- Production PyPI `2.1.0`: Published through Trusted Publishing; the publish
-  workflow verifies the exact-version install
+- TestPyPI `2.1.0`: Not used; the publish workflow's TestPyPI jobs were
+  skipped
+- Production PyPI `2.1.0`: Published and exact-version install verified by the
+  publish workflow
 - TestPyPI `2.0.1`: Not used; the publish workflow's TestPyPI jobs were
   skipped
 - Production PyPI `2.0.1`: Published and exact-version install verified by the
@@ -781,10 +792,9 @@ v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and v1.3.3 are historical releases. The
 v2.1.0rc1, v2.0.1rc1, v2.0.0rc5, v2.0.0rc4, v2.0.0rc3, v2.0.0rc2, and
 v2.0.0rc1 tag and TestPyPI publication evidence was recorded only after the
 corresponding external state was observed.
-The v2.0.1, v2.0.0, v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and
-v1.3.3 tag, GitHub Release, and Production PyPI publication evidence was
-recorded only after the corresponding external state was observed; the
-v2.1.0 publication evidence is added to this document after it is observed.
+The v2.1.0, v2.0.1, v2.0.0, v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0,
+and v1.3.3 tag, GitHub Release, and Production PyPI publication evidence was
+recorded only after the corresponding external state was observed.
 
 ## Windows CI correction
 
@@ -806,8 +816,35 @@ Releases, Production PyPI files, and release notes are unchanged.
 
 ## Current release assessment
 
-The v2.1.0 release assessment is recorded here after publication, from the
-release source's main CI run and the Production publish workflow run.
+The v2.1.0 release source passed main CI run `40591156433` (`test` and
+`test-python-3-15` on Ubuntu, `macos-python-3-15`, and `windows-runtime` and
+`windows-python-3-15`) and CodeQL run `40591155986`. A build-only publish
+workflow run (`40591514066`) on the release source passed with every upload
+job skipped. Production publish workflow run `40599011436` then built and
+validated the exact source, published to Production PyPI, and verified the
+exact-version PyPI install; the TestPyPI jobs were skipped. The tag, the
+GitHub Release, and the Production publication ran under one Human approval
+given after their values were shown. The `pypi` Environment deployment was
+Human-authorized, and the approval was submitted through the GitHub API on the
+Human's instruction.
+
+The SHA-256 checksums recorded by that run match Production PyPI: wheel
+`c9569a10afdf6501abcfe9da7eced5095b29b98fb9c2b9170137bdfe2305392d` and source
+distribution
+`c88d6935d2ca3a1058d51bd8eaec39f357c94610da145d8cc3d70f509092d309`. Each file
+carries a PEP 740 publish attestation from `publish-pypi.yml` in the `pypi`
+Environment. The build-only run produced different checksums because the
+distributions are not byte-reproducible across runs; only the production run's
+artifacts were published. `PYPI_PUBLISH_APPROVED` was returned to `false`
+after the upload. A clean install from Production PyPI on macOS, with a home
+folder of its own and synthetic data only, held the files of the tag,
+completed the Synthetic Run-All (`PASS_WITH_WARNINGS`, exit 0) with the run
+digest of the README figures, and its output passed `validate-handoff`,
+`doctor --run-output`, and `support-bundle`. The macOS line of the GUI Guide,
+run as written with `--no-browser` at its end, installed 2.1.0 from Production
+PyPI, made the icon, and served the page, twice.
+
+### v2.0.1 release assessment (historical)
 
 The v2.0.1 release source passed main CI run `40332848244` (`test` and
 `test-python-3-15` on Ubuntu, `macos-python-3-15`, and `windows-runtime` and

@@ -7,7 +7,7 @@ Platform maintains its own separate changelog.
 ## v2.1.0 — stable Production view release
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a
-verified Production PyPI distribution.
+verified Production PyPI distribution on 2026-10-28 JST.
 
 - Adds the view page of the GUI, which shows the numbers of an output of this
   version in panels on one time axis, and the `series` command, which writes
