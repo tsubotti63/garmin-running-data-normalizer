@@ -2,12 +2,12 @@
 
 ## Status and authority
 
-- Current stable contract: v2.0.1
+- Current stable contract: v2.1.0
 - Compatibility family: stable 2.x
-- Implementation candidate: v2.1.0rc1 (TestPyPI only)
 
-This document describes the current stable contract, v2.0.1, which keeps the
-contract of v2.0.0, the first of the `2.x` family. It keeps the core layout and
+This document describes the current stable contract, v2.1.0, which keeps the
+Run-All contract of v2.0.0, the first of the `2.x` family, and adds the CSV
+file of the `series` command ([Additive v2.1 series CSV](#additive-v21-series-csv)). It keeps the core layout and
 the additive layers of the `1.x` family, and identifies when each of them
 entered; text that begins "Starting with v2.0.0" describes what v2.0.0
 changes.
@@ -416,6 +416,62 @@ Race Prediction, Sleep, UDS, Acute Training Load, Training Readiness, VO2Max,
 HRV, and Training History remain separate context. Their detailed fields,
 generation boundary, source-series behavior, missing-value policy, and
 interpretation limits are defined in [Wellness and Daily Metrics](wellness_metrics.md).
+
+## Additive v2.1 series CSV
+
+Starting with v2.1.0, `series` writes the numbers of the view page of the GUI
+to a new CSV file. It reads a completed Run-All output that the installed
+version produced, after the checks of `validate-handoff` and
+`doctor --run-output`, and writes nothing inside it:
+
+```bash
+garmin-running-data-normalizer series --run-output <run output> --output <new file>.csv
+```
+
+- The file is UTF-8 without a byte order mark, with `\n` line ends and one
+  header row: `item,line,kind,unit,vo2max_source_series,sport,period_start,period_end,partial,value,count`.
+  The same output and options give the same bytes.
+- One row is one period of one line of one item. Every item has a row for
+  every period of the chosen range, in the order of `--item` (every item, in
+  the order that `series --help` lists them, without it), then of its lines,
+  then of the periods.
+- `kind` is how the values of a period are combined: `sum` and `count`, the
+  total and the number of the recorded activities; `pace`, the total time
+  divided by the total distance of the activities with both; `tw`, the mean of
+  the activities weighted by their durations; `max`, the highest value; `day`,
+  the mean of the days with a value; and `obs`, the mean of the records of an
+  item that can have several records a day.
+- `unit` is the unit of `SCHEMA_CATALOG.json`, or the unit of what this app
+  calculates (`activity` for the number of activities, `second_per_metre` for
+  the pace), and is empty for a value that is kept as Garmin gives it.
+- `line` numbers the lines of an item from 1. Only the lines of VO2 Max fill
+  `vo2max_source_series` (`activity_vo2max_daily` or
+  `performance_metrics_daily`) and `sport`, which keep its two series and its
+  sports apart. A name of a sport is written only when it is made of capitals,
+  digits, and `_`; otherwise it is left empty and counted.
+- `period_start` and `period_end` are local dates, `YYYY-MM-DD`, in the
+  timezone of the output; `partial` is `true` for a period that the range cuts.
+- `value` is not rounded, and is empty for a period without a value. A total
+  is `0`, with a `count` of `0`, for a period without a recorded activity
+  between the first and the last activity of the activity types counted: `0`
+  means no record, not that there was no run. Missing values are never filled
+  or made `0`.
+- `count` is the number of activities, days, or records behind the value.
+- At the grain of a day, a row of an `obs` item gives the mean and the number
+  of the records of that day; each record is in the normalized JSON of the
+  output.
+- The command prints `PASS`, the name of the file, the numbers of rows and
+  items, and the period and grain, and then, by item, counts of what the
+  numbers leave out, such as rows without a value or a date: names and counts
+  only, never a value. An output without data in the range gives a file with
+  the header row only.
+- The file holds the values of the output. On macOS and Linux only its owner
+  may read it; on Windows, it takes the permissions of its folder. The command
+  never replaces a file and never writes inside the output.
+- An output of another version stops with `OUTPUT_OTHER_VERSION`, and an
+  output of v1.3, which passes the checks, with `SERIES_OUTPUT_OTHER_VERSION`.
+  The other codes are listed in
+  [Stops and next steps](v2_data_handling.md#stops-and-next-steps).
 
 ## Privacy boundary
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import struct
 import unittest
 from pathlib import Path
 
@@ -108,6 +109,48 @@ QUOTED_LABELS = (
     "help.close",
     "info.explain",
     "quit.button",
+    # v2.1.0 G6a: the colors of the page and the view page (stages G3a
+    # and G3b), which the guides describe from 2.1.0.
+    "theme.label",
+    "theme.auto",
+    "theme.light",
+    "theme.dark",
+    "view.open_output",
+    "view.open_page",
+    "view.to_normalize",
+    "view.output.label",
+    "view.output.open_remembered",
+    "view.output.open_latest",
+    "view.stop.normalize_again",
+    "view.period.label",
+    "view.period.all",
+    "view.period.years10",
+    "view.period.years5",
+    "view.period.years3",
+    "view.period.years1",
+    "view.period.custom",
+    "view.range.from",
+    "view.range.to",
+    "view.period.back",
+    "view.period.next",
+    "view.grain.label",
+    "view.grain.auto",
+    "view.grain.day",
+    "view.grain.week",
+    "view.grain.month",
+    "view.grain.year",
+    "view.types.label",
+    "view.shelf.search_label",
+    "view.shelf.fold",
+    "view.shelf.open",
+    "view.add.button",
+    "view.panel.table",
+    "view.panel.chart",
+    "view.panel.unbig",
+    "view.align",
+    "view.full.enter",
+    "view.full.back",
+    "view.quit",
 )
 
 
@@ -331,11 +374,14 @@ class GuiGuideTest(unittest.TestCase):
                     "stop the GUI first", "request it early", "Nothing else needs to be installed",
                 ),
                 "Start the GUI from an icon": ("**Desktop Folder**", "**Files & Folders**", "OneDrive"),
-                "When something goes wrong": ("double-click the icon again", "10 minutes"),
+                "When something goes wrong": ("double-click the icon again", "60 minutes"),
                 "Stop the GUI": ("seems to stand still", '"GUI stopped."'),
                 "Remove this app": (
                     "`shell:programs`", "`GarminRunningData`", "personal data",
                     "`pip uninstall garmin-running-data-normalizer`",
+                    # v2.1.0 G6a: Windows said once that the folder was in use
+                    # (stage G5d); a wait and Try Again went on.
+                    "wait a little, and choose **Try Again**",
                 ),
             },
             "ja": {
@@ -346,11 +392,12 @@ class GuiGuideTest(unittest.TestCase):
                     "先に GUI を終えて", "先にリクエストして", "ほかに入れるものはありません",
                 ),
                 "アイコンから起動する": ("「デスクトップフォルダ」", "「ファイルとフォルダ」", "OneDrive"),
-                "うまくいかないとき": ("アイコンをもう一度ダブルクリック", "10 分間"),
+                "うまくいかないとき": ("アイコンをもう一度ダブルクリック", "60 分間"),
                 "GUI を終える": ("止まって見えます", "「GUI stopped.」"),
                 "このアプリを片付ける": (
                     "`shell:programs`", "`GarminRunningData`", "個人のデータ",
                     "`pip uninstall garmin-running-data-normalizer`",
+                    "少し待ってから「再試行」を押してください",
                 ),
             },
         }
@@ -444,14 +491,17 @@ class GuiGuideTest(unittest.TestCase):
                 ),
                 "Start the GUI from an icon": ("**Show all filename extensions**", "the icon starts the new version"),
                 "Go back to the GUI that is open": (
-                    "A bookmark does not open the GUI", "one more GUI opens", "10 minutes",
+                    "A bookmark does not open the GUI", "one more GUI opens", "60 minutes",
                     "When no normalization runs, you may instead double-click the icon again", "the command key and C",
                     "right-click to copy it", "stops the GUI of that page only", "puts the tab to sleep",
-                    "The earlier GUI has no page, and stops by itself after 10 minutes when no run is active",
-                    "A GUI whose page you closed stops by itself after 10 minutes when no run is active",
+                    # v2.1.0 G6a: Safari stops asking from a window hidden with
+                    # Command-H (stage G5p).
+                    "or hides its window, as Safari does with Command-H",
+                    "The earlier GUI has no page, and stops by itself after 60 minutes when no run is active",
+                    "A GUI whose page you closed stops by itself after 60 minutes when no run is active",
                 ),
-                "Stop the GUI": ("the control key and C, on macOS too", "When no page is open for 10 minutes"),
-                "When something goes wrong": ("because no page was open for 10 minutes",),
+                "Stop the GUI": ("the control key and C, on macOS too", "When no page is open for 60 minutes"),
+                "When something goes wrong": ("because no page was open for 60 minutes",),
             },
             "ja": {
                 "用意するもの": (
@@ -470,14 +520,14 @@ class GuiGuideTest(unittest.TestCase):
                 ),
                 "アイコンから起動する": ("「すべてのファイル名拡張子を表示」", "アイコンから新しいバージョンが起動します"),
                 "開いている GUI に戻る": (
-                    "ブックマークからは開けません", "GUI がもう 1 つ開きます", "10 分たつと",
+                    "ブックマークからは開けません", "GUI がもう 1 つ開きます", "60 分たつと",
                     "実行中の正規化が無いときは、代わりにアイコンをもう一度ダブルクリック", "command キーと C", "右クリックで写します",
-                    "そのページの GUI だけが終わります", "タブを眠らせた",
-                    "前の GUI は、ページが無いので、実行中でなければ、10 分たつと",
-                    "閉じた GUI は、実行中でなければ、10 分たつと",
+                    "そのページの GUI だけが終わります", "タブを眠らせた", "窓を隠したとき（Safari の ⌘H など）",
+                    "前の GUI は、ページが無いので、実行中でなければ、60 分たつと",
+                    "閉じた GUI は、実行中でなければ、60 分たつと",
                 ),
-                "GUI を終える": ("macOS でも control キーと C", "どのページも開いていないまま 10 分たつと"),
-                "うまくいかないとき": ("どのページも 10 分間開いていなかった",),
+                "GUI を終える": ("macOS でも control キーと C", "どのページも開いていないまま 60 分たつと"),
+                "うまくいかないとき": ("どのページも 60 分間開いていなかった",),
             },
         }
         for language, sections in phrases.items():
@@ -510,6 +560,33 @@ class GuiGuideTest(unittest.TestCase):
                 self.assertTrue(need.split("\n\n", 2)[1].startswith(export))
                 remove = flowing(language, {"en": "Remove this app", "ja": "このアプリを片付ける"}[language])
                 self.assertLess(remove.index(forget), remove.index(stop))
+
+    def test_guides_show_the_view_page_in_a_picture_of_this_repository(self) -> None:
+        # v2.1.0 G6a, from the checker: the picture of the view page of each
+        # guide is a file of this repository, given by a path relative to the
+        # guide, so that the guide that the help panel opens at a tag shows
+        # the picture of the same tag, with words in place of the picture. It
+        # is a PNG of 1470 by 830 pixels, made from synthetic data, without
+        # the chunks that can hold text or a time.
+        for language, path in GUIDES.items():
+            with self.subTest(language=language):
+                pictures = re.findall(r"!\[([^\]]*)\]\(([^)]+)\)", path.read_text(encoding="utf-8"))
+                self.assertEqual(len(pictures), 1)
+                words, link = pictures[0]
+                self.assertEqual(link, f"assets/gui-guide/view-page.{language}.png")
+                self.assertTrue(words.strip())
+                data = (path.parent / link).read_bytes()
+                self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
+                self.assertEqual(struct.unpack(">II", data[16:24]), (1470, 830))
+                self.assertLess(len(data), 1_000_000)
+                kinds = set()
+                place = 8
+                while place < len(data):
+                    size, kind = struct.unpack(">I4s", data[place : place + 8])
+                    kinds.add(kind)
+                    place += 12 + size
+                self.assertEqual(place, len(data))
+                self.assertFalse({b"tEXt", b"iTXt", b"zTXt", b"eXIf", b"tIME"} & kinds)
 
     def test_links_inside_the_guides_lead_to_their_headings(self) -> None:
         # GitHub makes the anchor of a heading from its text in lower case,

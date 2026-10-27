@@ -1,7 +1,7 @@
 # GUI Guide
 
-> **This guide is for v2.0.1.** v1.7.1 and earlier releases do not have the
-> GUI. [What you need](#what-you-need) says how to install v2.0.1. If you keep
+> **This guide is for v2.1.0.** v1.7.1 and earlier releases do not have the
+> GUI. [What you need](#what-you-need) says how to install v2.1.0. If you keep
 > using v1.7.1 or an earlier release, use the command line as described in
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
 
@@ -23,7 +23,7 @@ Everything stays on your computer.
   Garmin may take some time after your request before you can download the
   Export, so request it early. You may also install this app first and read
   **How to use** before you request it.
-- Python 3.11 or later, and this app, v2.0.1, which the steps below
+- Python 3.11 or later, and this app, v2.1.0, which the steps below
   install. Nothing else needs to be installed for the GUI.
 - A web browser on the same computer, in a window of a desktop or laptop
   computer. The page is not made for phones or tablets.
@@ -97,7 +97,7 @@ guide there: the Command Prompt of Windows does not take them.
    macOS, tell us
    ([Tell us when the GUI does not open](#tell-us-when-the-gui-does-not-open)).
 4. Run the line below. It makes the virtual environment `garmin-normalizer`
-   in your home folder, installs v2.0.1 in it, makes the icon that starts the
+   in your home folder, installs v2.1.0 in it, makes the icon that starts the
    GUI ([Start the GUI from an icon](#start-the-gui-from-an-icon)), and opens
    the GUI. Each part runs only after the one before it has succeeded. When
    the line makes the icon, macOS may ask whether the Terminal may use the
@@ -108,14 +108,14 @@ guide there: the Command Prompt of Windows does not take them.
    macOS:
 
    ```bash
-   python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.0.1 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
+   python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.1.0 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
    ```
 
    Windows PowerShell, in any version (version 5.1 has no `&&`, so that the
    parts are joined with `if ($?)`, one inside the other):
 
    ```powershell
-   py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.0.1; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
+   py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.1.0; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
    ```
 
    - When the line succeeds, the terminal shows three lines at its end, and
@@ -194,7 +194,7 @@ fill in the form. Without the GUI, fill in its fields in this way:
 - **Package version**: the line that `--version` shows
   ([Update to a new version](#update-to-a-new-version)); when the line
   stopped before this app was installed, the version that you were
-  installing, 2.0.1.
+  installing, 2.1.0.
 - **Sanitized reproduction**: the line that you ran. The line of this
   guide holds no name, so you may paste it as it is.
 - **Exit code**: write that you do not know it, when you do not.
@@ -223,7 +223,7 @@ Do not paste the address of the GUI either: it holds the key of the launch.
 ### Update to a new version
 
 The page shows the version of this app at its bottom, for example
-Version 2.0.1, and this command shows it in a new window of the terminal,
+Version 2.1.0, and this command shows it in a new window of the terminal,
 not the one where the GUI runs:
 
 macOS:
@@ -307,6 +307,9 @@ With `--no-browser`, it only prints the address, for you to open.
   choice is kept for that browser tab.
 - The bar at the bottom of the page, with **Language** and **Quit**, stays at
   the bottom of the window while you scroll the page.
+- In the bar at the bottom, **Appearance** chooses the colors of the page
+  ([Appearance](#appearance)), and **Open the view page** opens the view page
+  ([The view page (from 2.1.0)](#the-view-page-from-210)).
 
 The page has four boxes, numbered in the order in which you set them:
 1 **This export**, 2 **Snapshots**, 3 **Output**, and 4 **Normalize**. The
@@ -426,7 +429,7 @@ above that makes the icon again (the line of this guide makes it too):
   - When no normalization runs, you may instead double-click the icon again,
     which is easier. A new GUI opens: use its page; it does not show what the
     earlier GUI does, so choose again from box 1. The earlier GUI has no page,
-    and stops by itself after 10 minutes when no run is active.
+    and stops by itself after 60 minutes when no run is active.
 - Once the earlier GUI has stopped, its address no longer opens it: start
   the GUI again with the icon or with the command.
 - A bookmark does not open the GUI, and neither does the history of the
@@ -437,16 +440,16 @@ above that makes the icon again (the line of this guide makes it too):
   normalization that runs if one runs. Stop the GUI that you do not use with
   **Quit** on its page (answer its question with **Quit this app**). **Quit**
   on a page stops the GUI of that page only. A
-  GUI whose page you closed stops by itself after 10 minutes when no run is
+  GUI whose page you closed stops by itself after 60 minutes when no run is
   active. While the earlier GUI still normalizes, the new GUI may say that the
   Snapshot Store has a lock file (`SNAPSHOT_STORE_LOCKED`): do not tick the box
   and press **Remove the lock file** until that normalization has ended. Quit
   the new GUI then, and go back to the earlier one with its address.
 - While a page is open, it keeps telling the GUI that it is there, so that the
   GUI does not stop, even when you do nothing. It can stop when the browser
-  puts the tab to sleep, as a browser may do with a tab that you do not use.
-  When no page is open for 10 minutes and no run is active, the GUI stops by
-  itself. Closing the terminal window stops it too.
+  puts the tab to sleep, as a browser may do with a tab that you do not use,
+  or hides its window, as Safari does with Command-H. When no page is open
+  for 60 minutes and no run is active, the GUI stops by itself. Closing the terminal window stops it too.
   When the GUI stops, the terminal shows "GUI stopped." (when the icon started
   it on Windows, its window closes by itself).
 - When the page says that this app is not responding, the GUI may have
@@ -690,7 +693,8 @@ macOS, in File Explorer on Windows, and with the file manager that
 default application for `.md` files. Start with `START_HERE.md`; it explains
 the output, what was left out, and the warnings.
 **Use the normalized data with AI** opens the part of the help panel about
-using the output with an AI.
+using the output with an AI. **View this output** opens the output in the
+view page, in the next tab ([The view page (from 2.1.0)](#the-view-page-from-210)).
 
 After a run, the page proposes a new name for the next one, and a line under
 **Run normalization** says what pressing it again does: "Pressing it again
@@ -701,6 +705,274 @@ timezone; with the same input and settings, it only makes another output
 with the same content. When the run imported, the line adds "The same export
 is not imported twice.": this export stays in the store once, and the next
 normalization uses it too.
+
+## The view page (from 2.1.0)
+
+The view page shows the numbers of a normalized output as charts on one time
+axis. It opens in the tab next to the normalization page. The chart of one item
+is called a panel, and the panels stand one under the other. The page shows
+only outputs that this version of the app made, and sends no numbers anywhere.
+It does not tell how the items that it shows relate (which one causes another),
+or what to do: it is a page to look at with your own eyes.
+
+![The view page, with three panels (distance, resting heart rate, and VO2 Max) and the overview under them (synthetic data made for the example)](assets/gui-guide/view-page.en.png)
+
+### Open the view page
+
+- After a normalization, **View this output** under **Next** in the fourth box
+  opens that output in the next tab. When the view page is open already, its
+  tab comes to the front, and it shows this output instead.
+- **Open the view page** in the bar at the bottom of the normalization page
+  opens it too. Then:
+  1. The view page opens, with no output open yet.
+  2. Where the panels will be, a button offers the latest output: the output
+     normalized in this launch or, without one, the newest one in the list of
+     earlier outputs. It is **Open with the items shown last time** when items
+     were shown before, and **Open the latest output** otherwise. It shows
+     next to **Output to view** at the top as well.
+  3. Press it to open that output. When there is no output yet, the page shows
+     **Go to the normalization page** instead: normalize first.
+- The first time, the page shows three panels: distance, resting heart rate,
+  and VO2 Max (an item without data is left out). The view page only reads an
+  output, and never changes it.
+- **Go to the normalization page** at the top of the view page goes back to
+  the tab of the normalization page. When either page is open already, its tab
+  comes to the front, and no new tab opens.
+- Choose the output in **Output to view** at the top: it lists the outputs of
+  this launch and the earlier outputs. For another one,
+  **Choose another output…** opens a window to choose a folder: choose the
+  folder of the normalized output itself (the folder that
+  **Name of the new folder** in the third box names), not the folder that holds
+  it, such as `GarminRunningData`, which a red box says cannot be opened.
+- An output that another version of this app made cannot be opened, although
+  the list may show it: a red box says why, and what to do. Normalize the
+  export again with this version, and open the new output.
+  **Normalize again on the normalization page** in the red box goes to the
+  normalization page. An output that imported the export into the Snapshots
+  is normalized again with **Normalize the existing Snapshots again** in the
+  first box; for an output normalized without Snapshots, normalize the original
+  export again. After you update to a new version, the numbers of an earlier
+  version's output can be seen once its export is normalized again.
+
+### Period, grouping, and activity types
+
+**Period** and **Group by** at the top apply to every panel.
+**Activity types counted** applies to the training and running-form items, not
+to the Body (daily) items or the Garmin estimates. Each time the view page
+opens, the period is **All time**, and the grouping **Auto**.
+
+- Period: **All time**, **Last 10 years**, **5 years**, **3 years**,
+  **1 year**, and **Custom range…**. The last 10, 5, 3, or 1 years end on the
+  last day of the output, not today. The last day of the output is the last day
+  with an activity or a daily record, which is not always the day of the last
+  activity. Records dated after today are left out (the panel counts them in
+  **About this panel**), so that it is never after today.
+- **Custom range…** takes the first and the last day, in **From** and **To**,
+  limited to the days of the output. Next to the period, ‹
+  (**Previous period of the same length**) and ›
+  (**Next period of the same length**) move any period back or forward,
+  keeping its length; the period moved becomes a custom range. They cannot be
+  pressed at the first or the last day of the output.
+- Group by: **Auto**, **Day**, **Week**, **Month**, and **Year**. The time that
+  one bar or point of a chart stands for is called a step here; weeks start on
+  Monday. **Auto** groups by month when the period is longer than three years,
+  by week when it is longer than one year, and by day otherwise, and shows the
+  step in use, as "Auto (Month)". The last 3 years are exactly three years,
+  and the last year exactly one year, so that:
+
+| Period | The step of **Auto** |
+|---|---|
+| **Last 10 years** and **5 years** | Month |
+| **3 years** | Week |
+| **1 year** | Day |
+| **All time** and **Custom range…** | By the length of the period (the rule above) |
+
+To see the last three years by month, press **Month**. At the start and the end
+of the period, a step with fewer days is marked "(partial)" and drawn lighter
+(for example, the month of the last day of the output).
+
+- Activity types counted: at first, every running type in the output (such as
+  running, trail running, treadmill running, and track running). Press the
+  field of **Activity types counted** to open the list of the types in the
+  output, and tick a type to add it, or untick it to leave it out. The types
+  change the training and running-form panels, and the bars of the item shelf.
+
+### The item shelf and the panels
+
+- The item shelf at the left lists 38 items in four groups: Training (per
+  activity), Running form (FIT), Body (daily), and Garmin estimates. The
+  running-form items, such as vertical oscillation and ground contact time,
+  come from the files that the watch records for each activity (FIT files).
+  The bar to the right of an item's name shows the months in which the item
+  has data; it is not a bar of a chart. **Find an item** finds an item by its
+  name.
+- The items that you tick stand as panels at the right, from the top. Six can
+  be shown: with six, the other items cannot be ticked, so remove one first to
+  add another. "3/6" next to the heading of the shelf is the number of items
+  shown, and the number that can be shown.
+- ‹ (named **Fold the item shelf** for a screen reader) folds the shelf.
+  **Open the item shelf** on the narrow strip opens it again, and **Add items**
+  above the panels chooses items while it is folded.
+- The second line of a panel sums it up: the number of steps with records (for
+  example, "Months with records: 37"), and the lowest, the highest, and the
+  latest value, with their steps. The highest month, for example, is found
+  there. The last three years by month can show 37 months with records, not
+  36: the first and the last month are both partial months of the period.
+- At the top right of a panel are one step and its values: the step at the
+  vertical line, which shows when you point at a chart with the mouse, or
+  click a chart and press ← or →; otherwise, the last step. As the line moves,
+  every panel shows its value of the same step at its top right.
+- The buttons of a panel are at the right of its heading (in a panel whose
+  heading takes two lines, at the left of its second line). A button with a
+  symbol shows only the symbol; the names below, such as "Enlarge Distance",
+  are what a screen reader reads.
+  - **Show as a table**: the numbers of the panel as a table, newest first.
+    Its headings do not sort it; the highest value is in the second line of
+    the panel. **Show as a chart** goes back.
+  - ⤢ ("Enlarge Distance", for example): enlarges the panel; the others become
+    narrow panels on the same time axis. On the enlarged panel, ⤢ becomes
+    **Show all panels again**, which returns to the panels as they were.
+  - ↑ ("Move Distance up") and ↓ ("Move Distance down"): change the order of
+    the panels.
+  - × ("Remove Distance"): removes the panel, as unticking the item on the
+    shelf does.
+  - **About this panel**: what the panel leaves out, with counts (for example,
+    activities without a value, or records dated after today).
+- With two or more panels of the same unit, tick
+  **Use the same scale for panels with the same unit**, above the panels at
+  the right (left of **Full screen**), to give them one scale. It is not ticked
+  at first; untick it to go back.
+
+How the numbers are made (the label next to the name of a panel says how its
+values are made):
+
+- Distance, time, count, training load, and total ascent are totals of the
+  recorded activities. The time is the duration that Garmin records for the
+  activity (`duration` in the Export), which is neither the whole time with the
+  pauses nor the moving time alone. The count is the number of activities.
+- Only a total is 0 for a step without a record, between the first and the
+  last activity of the types counted, drawn as a light point; before the first
+  and after the last, it is empty, without a point. 0 means that nothing was
+  recorded, which does not always mean that there was no run.
+- The average pace is the total time divided by the total distance. The
+  average heart rate, the cadence, the power, and the running-form items are
+  means of the activities weighted by their durations (both calculated by this
+  app). The maximum heart rate is the highest value of the step. A step
+  without a record has none of these.
+- A Body (daily) item is the mean of the days with a value. A day without a
+  value is never filled with 0 or with the value of an earlier day.
+- An item with two or more records a day, such as VO2 Max, shows every record
+  as a point by day, and the mean of the records by week, month, or year.
+- The race time predictions are Garmin's predictions, not records of runs.
+
+### The overview
+
+- The overview under the panels shows the whole time of the output by month,
+  and frames the period shown. Its item is that of the first panel, or of the
+  panel enlarged.
+- Drag across the overview (move the mouse with its button held down) to see
+  the period that you drag over. While you drag, the frame follows, and the
+  dates of that period show at the top left of the overview. When you let go,
+  the period becomes **Custom range…**. A drag shorter than a week changes
+  nothing.
+- Near an edge of the frame, where the pointer becomes ↔, drag to move that
+  edge only. The other edge stays.
+- Escape during a drag cancels it.
+- To go back to the period before, press its button at the top, such as
+  **3 years**.
+
+### Full screen
+
+- **Full screen** above the panels shows the charts and the overview alone:
+  on the whole screen when the browser can show the page in its full screen,
+  otherwise in the whole window. A line at the top names the output, the
+  period, and the activity types.
+- **Back (Esc)** or Escape returns to the page. In the browser's full screen,
+  Escape ends the browser's full screen, and the page returns to its panels as
+  well; the help panel of **Help** at the top right, if it was open, stays
+  open.
+- Full screen is not remembered: the next time, the page opens as usual.
+
+### What is remembered for the next time
+
+This is for the next time that you open the view page, in this launch or in a
+later one.
+
+- Remembered: the items shown and their order (six at most; the same for every
+  output), whether the item shelf is open, and the appearance (when **Light**
+  or **Dark** is chosen).
+- Not remembered: the output shown, the period, the grouping, the activity
+  types, the same scale, a panel enlarged, a table shown, and full screen. As
+  the output shown is not remembered, the page opened from the bar at the
+  bottom offers the latest output with the button of
+  [Open the view page](#open-the-view-page).
+- **Forget the remembered settings…** in the bar at the bottom of the
+  normalization page forgets all of these, and also the Snapshot Store, the
+  folder for the output, and the list of earlier outputs: the next launch goes
+  as a first one ([Later launches](#later-launches)).
+
+### Appearance
+
+**Appearance** in the bar at the bottom of the normalization page and of the
+view page chooses **Match this computer**, **Light**, or **Dark**. Both pages
+use the same, and the next launch uses the last one chosen.
+**Match this computer** uses the light or dark setting of the computer, as the
+browser reports it; "(now …)" next to it says which one is in use. Some
+browsers put their own setting of the colors first, so that it can differ from
+the setting of the computer.
+
+### Write the same numbers to a CSV file (command line)
+
+The `series` command writes the numbers of the view page to a CSV file. Run it
+in a new window of the terminal (the Terminal on macOS, PowerShell on Windows),
+not in the one where the GUI runs. For example, the distance and the resting
+heart rate of the last 3 years, by month:
+
+macOS:
+
+```bash
+~/garmin-normalizer/bin/python -m garmin_running_data_normalizer series --run-output "/path/to/output" --output "/path/to/new-file.csv" --item dist --item rhr --period 3y --grain month
+```
+
+Windows PowerShell:
+
+```powershell
+& "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer series --run-output "C:\path\to\output" --output "C:\path\to\new-file.csv" --item dist --item rhr --period 3y --grain month
+```
+
+- `--run-output` is the folder of a normalized output;
+  **Show the output folder** in the fourth box shows where it is. `--output` is the new CSV
+  file. Put your own places in place of the `/path/to/…` of the example. The
+  command writes nothing and stops when a file of that name is there already,
+  or when the file would be inside the output.
+- `--period 3y` is **3 years**, and `--grain month` is **Month**, of the view
+  page; without `--period`, the period is **All time**, and without `--grain`,
+  the grouping is **Auto**. The names of the items (`dist`, `rhr`, and so on)
+  and every value are listed by this line (on Windows, run `series --help` in
+  the way of the example above):
+
+```bash
+~/garmin-normalizer/bin/python -m garmin_running_data_normalizer series --help
+```
+
+- What the numbers leave out, such as records without a value, is not in the
+  CSV file: the terminal shows it, as counts only, in lines that start with
+  `about`. When you give the CSV file to another app or to an AI, give these
+  lines with it.
+- The CSV file holds your personal data, as the output does. On macOS and
+  Linux, the other accounts of the computer cannot read it; on Windows, it
+  takes the permissions of its folder. Before you give it to someone, take the
+  same care as with the output.
+
+### Quit from the view page
+
+**Quit the app…** at the bottom of the view page quits the app, as **Quit** on
+the normalization page does. Its question, **Quit this app?**, shows at the
+left end of the bar at the bottom (**Quit the app…** is at the right end).
+**Quit this app** quits it, and the other page says that the app has stopped;
+**Keep using it**, or Escape, keeps the app. While a normalization runs, the
+page says that the app cannot quit. Afterwards, you may close the tabs; to use
+the app again, start it from the icon or with the command.
 
 ## Later launches
 
@@ -725,9 +997,10 @@ From the second launch on, the GUI uses the settings that it remembered.
   Snapshot Store, which an output does not record.
 
 The GUI remembers the places of the Snapshot Store, of the folder for the
-output, and of the outputs that runs made (the latest 10), and whether
-**Show tips** is on. Only the names of the places are kept, never what is in
-them, and never the place of an export; the name of the output, the timezone,
+output, and of the outputs that runs made (the latest 10), whether
+**Show tips** is on, the appearance (when **Light** or **Dark** is chosen),
+and the items and the item shelf of the view page. Of the places, only their
+names are kept, never what is in them, and never the place of an export; the name of the output, the timezone,
 the language, and the way to normalize are not remembered. The places are
 remembered when a run makes its output, so that a place opened by mistake
 does not come back. The file is `gui-settings.json` in the folder
@@ -743,6 +1016,8 @@ the default folder `GarminRunningData` for the output.
 
 **Forget the remembered settings…** in the bar at the bottom asks first, and
 then removes the file of the settings only, never while a run is active. It
+also forgets the appearance, and the items and the item shelf of the view
+page. It
 can be pressed only while there are remembered settings. The
 store and the outputs stay, and the next launch goes as a first launch; a
 store that is not in the default place must then be opened again. When the
@@ -906,7 +1181,7 @@ started shows in every tab, and another run cannot start until it ends
 
 If the page says that this app is not responding, the GUI may have stopped, for
 example because the terminal window was closed, or because no page was open for
-10 minutes. When the icon started it, double-click the icon again; when you
+60 minutes. When the icon started it, double-click the icon again; when you
 started it in the terminal, start it again with the same command; then open
 the new address. Each launch has a new address and key.
 
@@ -923,6 +1198,8 @@ That is as it should be.
   and how to start it again, and you may close the tab. The outputs that
   you made stay as they are; after Quit, the buttons of the page no longer
   open them, so open them in Finder or File Explorer.
+- **Quit the app…** at the bottom of the view page quits the app as well
+  ([Quit from the view page](#quit-from-the-view-page)).
 - You may instead press `Ctrl+C` in the terminal (the control key and C, on
   macOS too). When the icon started the GUI, its window is the terminal.
 - Either way, when the GUI stops, the terminal shows "GUI stopped."; you
@@ -938,7 +1215,7 @@ That is as it should be.
   0 after **Quit**, or after `Ctrl+C` when no run is active, and with 130
   when `Ctrl+C` cancels a run. 130 is the code of a cancelled run, not an
   error of this app.
-- When no page is open for 10 minutes and no run is active, the GUI stops by
+- When no page is open for 60 minutes and no run is active, the GUI stops by
   itself. Closing the browser tab does not stop it at once.
 
 ## Remove this app
@@ -947,8 +1224,8 @@ When you no longer use this app, clean up in this order. An update does not
 need it.
 
 1. To remove what the GUI remembers too, choose
-   **Forget the remembered settings…** in the bar at the bottom of the page
-   before you stop the GUI. The place of its file is in
+   **Forget the remembered settings…** in the bar at the bottom of the
+   normalization page before you stop the GUI. The place of its file is in
    [Later launches](#later-launches). When you changed the places of the
    Snapshot Store or the outputs, write down the places that boxes 2 and 3
    show before you forget them.
@@ -967,6 +1244,11 @@ need it.
 - The Exports that you downloaded, the ZIP files and the folders extracted
   from them: they hold your personal data. Keep them while you still use
   them.
+- The CSV files that `series` wrote, if you made any: they hold your
+  personal data. Keep them while you still use them.
+
+On Windows, when the folder `garmin-normalizer` cannot be moved because it
+is in use, wait a little, and choose **Try Again**.
 
 When you installed this app in another way,
 `pip uninstall garmin-running-data-normalizer` removes it. That does not
@@ -986,8 +1268,10 @@ it. To remove Python too, do as the documents of python.org say, for
   gives GitHub only the values that the page shows you first.
 - The External-safe Pack and the Support Bundle are made for sharing, but
   review them before you do. The names of your Snapshots are never in them.
-- The remembered settings hold the names of places only, stay on this
-  computer, and are never in the Support Bundle. On a computer that others
+- The view page only reads an output, and sends no numbers anywhere. The CSV
+  file of `series` holds values of the output.
+- The remembered settings hold the names of places, and of the items of the
+  view page, stay on this computer, and are never in the Support Bundle. On a computer that others
   use, remove them with **Forget the remembered settings…**.
 
 See [Security and Privacy Boundary](security_and_privacy_boundary.md).
@@ -1011,6 +1295,9 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
 - The help panel stands beside the page; it is not a dialog. Opening it, or
   one of its parts, moves the focus to its heading, and Escape inside it
   closes it.
+- On the view page, click a chart and press ← or → to move the vertical
+  line: each panel shows its value at its top right. **Show as a table**
+  shows the numbers of a panel as a table.
 
 ## The GUI and the command line
 
@@ -1060,6 +1347,13 @@ garmin-running-data-normalizer doctor --input /path/to/export
 garmin-running-data-normalizer validate-handoff --input /path/to/output
 garmin-running-data-normalizer doctor --run-output /path/to/output
 garmin-running-data-normalizer support-bundle --run-output /path/to/output --output /path/to/support-bundle.zip
+```
+
+The view page shows the numbers that this command writes to a CSV file
+([Write the same numbers to a CSV file (command line)](#write-the-same-numbers-to-a-csv-file-command-line)):
+
+```bash
+garmin-running-data-normalizer series --run-output /path/to/output --output /path/to/new-file.csv
 ```
 
 The command line takes every place as an argument and has no default place.

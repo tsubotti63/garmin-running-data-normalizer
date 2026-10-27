@@ -1,7 +1,7 @@
 # AI Analysis Quick Start
 
 This guide explains how to begin a bounded descriptive analysis from current
-stable v2.0.1 output, from the CLI or the local GUI. The default path is local or
+stable v2.1.0 output, from the CLI or the local GUI. The default path is local or
 otherwise trusted analysis. The product never uploads data automatically.
 
 “AI-ready” means the handoff includes data-contract context. It does not
@@ -41,6 +41,12 @@ and, for activities with an explicit FIT link, FIT running dynamics and total
 ascent and descent in `fit_*` columns that are empty without a link. Detailed
 normalized, audit, QA, and manifest files remain personal local output and
 should be added only when required.
+
+Starting with v2.1.0, `series` writes the numbers of an output by day, week,
+month, or year to a new CSV file, as the view page of the GUI shows them; see
+[Optionally write the numbers to a CSV file](getting_started_from_garmin_export.md#8-optionally-write-the-numbers-to-a-csv-file).
+Give the lines that it prints with the file: they count what the numbers leave
+out. The file holds the values of the output, so treat it as the output.
 
 ## 3. Ask one descriptive question
 

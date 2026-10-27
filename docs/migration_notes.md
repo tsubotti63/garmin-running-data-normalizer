@@ -1,5 +1,36 @@
 # Migration Notes
 
+## v2.0.1 to v2.1.0
+
+v2.1.0 does not require data migration. Existing Snapshot Stores load and
+verify as before, with the same Snapshot lifecycle contract, policy registry,
+and store format. The processing and the outputs are those of v2.0.1, apart
+from `product_version` `2.1.0` and the digests that include it.
+
+- Update as [Update to a new version](gui_guide.md#update-to-a-new-version)
+  of the GUI Guide says: stop the GUI first, on macOS as on Windows, and run
+  the line of the guide of v2.1.0, which installs into the same virtual
+  environment and makes the icon again. The Snapshot Store, the outputs, and
+  the settings that the GUI remembers stay as they are.
+- The view page opens only outputs made by this version. `validate-handoff`,
+  `doctor --run-output`, `support-bundle`, and `series` of v2.1.0, and the view
+  page, stop for an output of v2.0.1 with `OUTPUT_OTHER_VERSION` and name the
+  version that made it; for an output of v1.3, which passes the checks,
+  `series` and the view page stop with `SERIES_OUTPUT_OTHER_VERSION`. The GUI
+  shows the change since an earlier output only for an output of the same
+  version. The files of an earlier output stay as they are and can still be
+  read; to look at its numbers, normalize its Export again with v2.1.0 into a
+  new folder.
+- The settings file of the GUI keeps format 1. v2.1.0 adds the colors, and the
+  items and the item shelf of the view page, to it. v2.0.1 leaves out the keys
+  that it does not know whenever it writes the file, as after a run: after
+  that, v2.1.0 has forgotten the colors and the items of the view page.
+- The CLI adds the `series` command; the other commands and options are
+  unchanged. The GUI waits an hour, instead of 10 minutes, before it stops by
+  itself; scripts that run the `gui` command are not affected.
+
+See the [v2.1.0 Release Notes](release_notes/v2.1.0.md).
+
 ## v2.0.0 to v2.0.1
 
 v2.0.1 does not require data migration. Existing Snapshot Stores load and

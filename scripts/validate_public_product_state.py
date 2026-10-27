@@ -40,7 +40,7 @@ CURRENT_DOCUMENTS = (
     "docs/migration_notes.md",
 )
 CURRENT_RELEASE_NOTES_TEMPLATE = "docs/release_notes/v{version}.md"
-CURRENT_STABLE_VERSION = "2.0.1"
+CURRENT_STABLE_VERSION = "2.1.0"
 # Where an implementation candidate is published, as the output contract
 # says it.
 CANDIDATE_PUBLICATION_PLACES = ("not published", "TestPyPI only")

@@ -2,9 +2,8 @@
 
 - Status: design revised on 2026-10-11; implemented in v2.0.0, whose `gui`
   command opens the GUI. The view page and the colors of the page are added
-  for v2.1.0, which is not released yet; the sections marked v2.1.0 describe
-  them.
-- Applies to: stable v2.0.1
+  in v2.1.0; the sections marked v2.1.0 describe them.
+- Applies to: stable v2.1.0
 - Authority: maintainer design record agreed by the Human maintainer on
   2026-10-10 and revised by the Human maintainer's decisions of 2026-10-11.
   Product contracts, tests, and the stable release remain the behavior

@@ -123,6 +123,9 @@ class SeriesFileTest(SeriesTestCase):
 
     def test_the_columns_are_those_of_the_contract(self) -> None:
         self.assertEqual(",".join(SERIES_COLUMNS), HEADER)
+        # v2.1.0 G6a: the output contract gives the same header row.
+        contract = Path(__file__).resolve().parents[1] / "docs/output_contract.md"
+        self.assertIn(f"`{HEADER}`", contract.read_text(encoding="utf-8"))
         target, _lines = self.series("--item", "dist")
         self.assertEqual(target.read_text(encoding="utf-8").splitlines()[0], HEADER)
 

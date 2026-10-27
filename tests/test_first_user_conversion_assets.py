@@ -144,7 +144,7 @@ def test_readme_uses_stable_absolute_asset_urls() -> None:
             "https://github.com/tsubotti63/garmin-running-data-normalizer/"
             f"blob/main/docs/assets/first-user-conversion/{name}"
         ) == 1
-    assert "Current stable release: **v2.0.1**" in readme
+    assert "Current stable release: **v2.1.0**" in readme
     assert "Current stable release: **v1.3.1**" not in readme
     assert "## Start here" in readme
     assert "### Who this is for" in readme
@@ -171,7 +171,7 @@ def test_japanese_readme_remains_a_short_noncanonical_summary() -> None:
     assert len(readme) < 5_000
     # The current stable release is named, and the one before it is not
     # left as the current one (stage E2b).
-    assert "現行の安定版は **v2.0.1** です。" in readme
+    assert "現行の安定版は **v2.1.0** です。" in readme
     assert "v1.7.1" not in readme
     assert "v1.3.1" not in readme
     assert "|---" not in readme

@@ -1,7 +1,7 @@
 # Frequently Asked Questions
 
 These short answers apply to the current stable Garmin Running Data Normalizer
-`v2.0.1` release and route to the current product authorities. Version `2.0.1`
+`v2.1.0` release and route to the current product authorities. Version `2.1.0`
 is available from the latest GitHub Release and Production PyPI.
 
 ## Getting started
@@ -27,7 +27,8 @@ synthetic data.
 Starting with v2.0.0, `garmin-running-data-normalizer gui` opens a local GUI
 in a browser on the same computer: a page served on `127.0.0.1` with a key for
 each launch. It normalizes an Export ZIP file or folder, with Snapshots by
-default. See the [GUI guide](gui_guide.md) ([日本語](gui_guide.ja.md)).
+default. Starting with v2.1.0, its view page shows the numbers of an output
+as charts. See the [GUI guide](gui_guide.md) ([日本語](gui_guide.ja.md)).
 
 ### Do the GUI and the CLI give the same output?
 
@@ -37,20 +38,32 @@ settings, it writes the same output with the same warnings. The
 match each way of normalizing, and the few ways in which the page differs from
 them, such as the times that it records for an imported Export.
 
+### Can I see my numbers as charts?
+
+Yes, starting with v2.1.0. After a run, **View this output** in box 4 of the
+GUI opens the view page in the next tab. It shows the items that you choose,
+such as distance, resting heart rate, and VO2 Max, in panels on one time axis,
+by day, week, month, or year, for an output of this version. It reads the
+output and changes nothing, and it does not say what causes what, or what to
+do. The `series` command writes the same numbers to a CSV file. See
+[The view page (from 2.1.0)](gui_guide.md#the-view-page-from-210) in the GUI
+Guide and [Optionally write the numbers to a CSV file](getting_started_from_garmin_export.md#8-optionally-write-the-numbers-to-a-csv-file).
+
 ### Which version is stable?
 
-`v2.0.1` is the current stable release. It fixes small things of the page of
-the GUI and answers what a reading of the GUI Guide asked. It keeps the local
+`v2.1.0` is the current stable release. It adds a page that shows the numbers
+of an output side by side on one time axis, the `series` command that writes
+the same numbers to a CSV file, and the colors of the page. It keeps the local
 GUI and the data handling of v2.0.0, which finishes a run that has problems in
 the data and reports what it left out or kept, with the approved Sleep
 contract, the one-shot workflow, optional Snapshot Accumulation, the Windows
 timezone-data hotfix, and the additive Wellness/Metrics datasets documented
 for v1.3. It is published on
-[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.0.1)
-and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/2.0.1/).
-See the [v2.0.1 Release Notes](release_notes/v2.0.1.md), the
+[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.1.0)
+and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/2.1.0/).
+See the [v2.1.0 Release Notes](release_notes/v2.1.0.md), the
 [v2.0.0 Release Notes](release_notes/v2.0.0.md), and the
-[Migration Notes](migration_notes.md#v200-to-v201).
+[Migration Notes](migration_notes.md#v201-to-v210).
 
 ### Can I use it without typing commands?
 
@@ -255,7 +268,7 @@ Public-safe Windows reports are welcome through
 ### Was the v1.2.0 Windows timezone-data issue resolved?
 
 Yes. v1.2.1 introduced the conditional Windows `tzdata` dependency, which
-v2.0.1 retains. The current release also provides the bounded
+v2.1.0 retains. The current release also provides the bounded
 `TIMEZONE_DATA_UNAVAILABLE` diagnostic if the configured IANA timezone data is
 still unavailable in a damaged or incomplete environment. Confirm the
 environment with:
@@ -266,9 +279,9 @@ python -c "from zoneinfo import ZoneInfo; print(ZoneInfo('Asia/Tokyo'))"
 
 If you pass `--timezone`, check that name instead of `Asia/Tokyo`.
 
-For a normal v2.0.1 Production PyPI installation, no separate
+For a normal v2.1.0 Production PyPI installation, no separate
 `pip install tzdata` step is expected. If the check still fails, reinstall
-v2.0.1 in a new environment and include only sanitized environment details in a
+v2.1.0 in a new environment and include only sanitized environment details in a
 support report.
 
 ### Does the product include running dynamics?
