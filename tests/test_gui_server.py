@@ -289,6 +289,8 @@ class GuiApiRequestTest(GuiServerTestCase):
                     "output_parent": None,
                     "hints": None,
                     "theme": None,
+                    "view_items": None,
+                    "view_shelf": None,
                     "notice": None,
                     "present": False,
                 },
@@ -1201,11 +1203,20 @@ class GuiRunApiTest(GuiServerTestCase):
             self.call("/api/support-bundle", earlier),
             (200, {"path": str(self.parent / "older-support-bundle.zip"), "member_count": 6, "human_review_required": True}),
         )
-        # A list given since makes the numbers of this one refused.
-        self.assertEqual(self.call("/api/outputs", {})[1]["list"], 2)
+        # The same list given again, as to the other tab, keeps its mark, so
+        # that the numbers of this one still name the same outputs (stage
+        # G3b: the view page is always another tab).
+        self.assertEqual(self.call("/api/outputs", {})[1]["list"], 1)
+        self.assertEqual(self.call("/api/check-output", earlier), (200, outputs.check_output(older)))
+        # A list that changed since makes the numbers of this one refused.
+        latest = self.parent / "latest"
+        shutil.copytree(older, latest)
+        self.assertIsNone(gui_settings.remember_run_at(places.settings_file(), latest, None))
+        answer = self.call("/api/outputs", {})[1]
+        self.assertEqual((answer["list"], [entry["name"] for entry in answer["outputs"]]), (2, ["latest", "newer", "older"]))
         self.assertEqual(self.call("/api/check-output", earlier), (409, {"error": "OUTPUT_LIST_CHANGED"}))
         for payload in (
-            {"output": "earlier", "index": 2, "list": 2},
+            {"output": "earlier", "index": 3, "list": 2},
             {"output": "earlier", "index": "0", "list": 2},
             {"output": "earlier", "index": True, "list": 2},
             {"output": "earlier", "index": 0, "list": None},

@@ -77,7 +77,9 @@ class Row:
 class ViewData:
     """The rows of one output that the view page reads, by file, sorted by
     their dates, and the rows that it left out: without a date, and after
-    ``today``. The first and last days are those of all the rows kept."""
+    ``today``. The first and last days are those of all the rows kept;
+    ``partial`` marks an output normalized with part of the input left out
+    (exit code 3), which the view page says (stage G3b)."""
 
     version: str
     timezone: str
@@ -87,6 +89,7 @@ class ViewData:
     after_today: dict[str, int]
     first_day: int | None
     last_day: int | None
+    partial: bool = False
 
 
 def load_view_data(
@@ -101,7 +104,7 @@ def load_view_data(
     timezone unless given. A check that fails raises ``OutputActionError``."""
     output = Path(output)
     kept = _plain_bytes(output / MANIFEST, MAX_MANIFEST_BYTES)
-    _handoff, report, legacy = checked_output(output)
+    handoff, report, legacy = checked_output(output)
     version = report.get("product_version")
     if legacy or version != __version__:
         named = version if isinstance(version, str) and VERSION_FORM.fullmatch(version) else None
@@ -122,7 +125,7 @@ def load_view_data(
     sizes = [entries[dataset.path][0] for dataset in DATASETS]
     if any(size > max_file_bytes for size in sizes) or sum(sizes) > max_total_bytes:
         raise OutputActionError("OUTPUT_NOT_AVAILABLE")
-    day_today = (_today(timezone) if today is None else today).toordinal()
+    day_today = (local_today(timezone) if today is None else today).toordinal()
     rows: dict[str, tuple[Row, ...]] = {}
     no_date: dict[str, int] = {}
     after_today: dict[str, int] = {}
@@ -141,6 +144,7 @@ def load_view_data(
         after_today=after_today,
         first_day=min(days) if days else None,
         last_day=max(days) if days else None,
+        partial=handoff.get("run_status") == "PARTIAL_SUCCESS",
     )
 
 
@@ -215,7 +219,10 @@ def _checked_bytes(output: Path, relative: str, size: int, digest: str) -> bytes
     return data
 
 
-def _today(timezone: str) -> date:
+def local_today(timezone: str) -> date:
+    """The date of this computer in ``timezone``: the rows after it are left
+    out, and the view page reads an output again when it changes (stage
+    G3b)."""
     try:
         zone = require_timezone_data(timezone)
     except TimezoneDataUnavailableError as exc:
@@ -312,9 +319,11 @@ def _rows(dataset: Dataset, records: list[dict[str, Any]], today: int) -> tuple[
 
 
 __all__ = [
+    "MANIFEST",
     "MAX_FILE_BYTES",
     "MAX_TOTAL_BYTES",
     "Row",
     "ViewData",
     "load_view_data",
+    "local_today",
 ]
