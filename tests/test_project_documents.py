@@ -34,6 +34,28 @@ def test_the_project_documents_do_not_call_the_gui_planned() -> None:
     )
 
 
+def test_the_project_documents_name_the_view_page_that_does_not_interpret() -> None:
+    # Stage G4 of v2.1.0: the boundary and the charter, whose text the Human
+    # maintainer decides, name the view page and the series command, which
+    # show the numbers of an output without interpreting them; principle 5 of
+    # the design puts the view page in the next tab (decision 20261026-11).
+    boundary = flowing("docs/project/project_boundary.md")
+    # The item of the autonomous scope, apart from the sentence of the
+    # external systems, which names the view page as well.
+    assert (
+        "- The view page of v2.1.0, described in [v2.0.0 GUI Design](../gui_design.md#the-view-page-v210): "
+        "a second page of the same local GUI"
+    ) in boundary
+    assert "shows its numbers as charts and tables, without interpreting them" in boundary
+    assert "the `series` command of the CLI" in boundary
+    assert "The view page of v2.1.0 is served in the same way and sends nothing either." in boundary
+    charter = flowing("docs/project/project_charter.md")
+    assert "From v2.1.0, the GUI also has a view page in the next tab" in charter
+    assert "on the same machine and without interpreting them" in charter
+    design = flowing("docs/gui_design.md")
+    assert "Since v2.1.0, the view page is a second page in the next tab" in design
+
+
 def test_a_release_candidate_sends_its_readers_to_the_stable_release() -> None:
     # v2.0.1 F4: while the source is a release candidate, the README names it
     # as a test version on TestPyPI, after the stable release and how to

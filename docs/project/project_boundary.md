@@ -13,6 +13,12 @@
   on the loopback address for a browser on the same machine, running the same
   processing as the CLI and opening the operating system's own file dialog on
   request.
+- The view page of v2.1.0, described in
+  [v2.0.0 GUI Design](../gui_design.md#the-view-page-v210): a second page of
+  the same local GUI that reads an output made by this version on the same
+  machine and shows its numbers as charts and tables, without interpreting
+  them, and the `series` command of the CLI, which writes the same numbers to
+  a CSV file that the person chooses.
 - Project documentation, runtime assets, tests, sanitization QA, and Git-ignored
   review evidence.
 
@@ -35,7 +41,8 @@ history.
 The implementation performs no outbound network access. The GUI of v2.0.0
 listens only on the loopback address `127.0.0.1` so that a browser on the same
 machine can reach it; it sends nothing to other hosts and loads no external
-resources. Open-Meteo is deferred.
+resources. The view page of v2.1.0 is served in the same way and sends
+nothing either. Open-Meteo is deferred.
 
 ## Rollback
 

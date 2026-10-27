@@ -28,7 +28,11 @@ The command-line interface is the stable interface. Since v2.0.0, a local GUI
 is a second entry point to the same processing, including Snapshots and ZIP
 input: a page served on the loopback address for a browser on the same
 machine, not a hosted service. See [v2.0.0 GUI Design](../gui_design.md) and
-the [GUI Guide](../gui_guide.md).
+the [GUI Guide](../gui_guide.md). From v2.1.0, the GUI also has a view page in
+the next tab, which shows the numbers of an output that this version made, on
+the same machine and without interpreting them; the `series` command of the
+CLI writes the same numbers to a CSV file. See
+[The view page](../gui_design.md#the-view-page-v210).
 
 ## Human-owned decisions
 
