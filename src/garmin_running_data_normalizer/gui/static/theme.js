@@ -6,7 +6,9 @@
 // The choice is this tab's, or else the one that the launch put after the key
 // in the fragment of the address, which the browser never sends; the values
 // there are separated by "&", and read as app.mjs reads the key. The script
-// writes nothing but the data-theme attribute of the root element.
+// writes the data-theme attribute of the root element, and keeps a choice
+// from the address in this tab's sessionStorage, since a reload has no
+// fragment; nothing else.
 (() => {
   const STORAGE = "theme";
   const CHOICES = ["auto", "light", "dark"];
