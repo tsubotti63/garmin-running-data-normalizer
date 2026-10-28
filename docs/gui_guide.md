@@ -905,8 +905,9 @@ or what to do: it is a page to look at with your own eyes.
 
 **Period** and **Group by** at the top apply to every panel.
 **Activity types counted** applies to the training and running-form items, not
-to the Body (daily) items or the Garmin estimates. Each time the view page
-opens, the period is **All time**, and the grouping **Auto**.
+to the Body (daily) items or the Garmin estimates. At first, the period is
+**All time**, and the grouping **Auto**; those chosen last stay for the next
+time ([What is remembered for the next time](#what-is-remembered-for-the-next-time)).
 
 - Period: **All time**, **Last 10 years**, **5 years**, **3 years**,
   **1 year**, and **Custom range…**. The last 10, 5, 3, or 1 years end on the
@@ -1056,14 +1057,20 @@ This is for the next time that you open the view page, in this launch or in a
 later one.
 
 - Remembered: the items shown and their order (six at most; the same for every
-  output), whether the item shelf is open, and the appearance (when **Light**
-  or **Dark** is chosen). When another output has no value for an item shown,
-  the second line of its panel says "There is no value in this period."
-- Not remembered: the output shown, the period, the grouping, the activity
-  types, the same scale, a panel enlarged, a table shown, and full screen. As
-  the output shown is not remembered, the page opened from the bar at the
-  bottom offers the latest output with the button of
-  [Open the view page](#open-the-view-page).
+  output), whether the item shelf is open, the appearance (when **Light**
+  or **Dark** is chosen), the period, the grouping, the activity types
+  counted, and the layouts (those saved, and the one used last). When another
+  output has no value for an item shown, the second line of its panel says
+  "There is no value in this period."
+- When another output opens, a period such as **1 year** stays as it is. A
+  period chosen with **Custom range…** shrinks to the days of the output when
+  it overlaps them in part, and becomes **All time** when it does not overlap
+  them at all. The activity types counted are those remembered that the
+  output has; when it has none of them, every running type in the output.
+- Not remembered: the output shown, the same scale, a panel enlarged, a table
+  shown, and full screen. As the output shown is not remembered, the page
+  opened from the bar at the bottom offers the latest output with the button
+  of [Open the view page](#open-the-view-page).
 - **Forget the remembered settings…** in the bar at the bottom of the
   normalization page forgets all of these, and also the Snapshot Store, the
   folder for the output, and the list of earlier outputs: the next launch goes
@@ -1179,7 +1186,9 @@ The GUI remembers only these:
   remembered when a run makes its output, so that a place opened by mistake
   does not come back.
 - Whether **Show tips** is on, the appearance (when **Light** or **Dark** is
-  chosen), and the items and the item shelf of the view page.
+  chosen), and, of the view page, the items, the item shelf, the period, the
+  grouping, the activity types counted, and the layouts (those saved, and the
+  one used last).
 - The timezone of the last run that made its output. At later launches, box 3
   is set with it (**(as last time)**).
 
@@ -1466,9 +1475,11 @@ it. To remove Python too, do as the documents of python.org say, for
   review them before you do. The names of your Snapshots are never in them.
 - The view page only reads an output, and sends no numbers anywhere. The CSV
   file of `series` holds values of the output.
-- The remembered settings hold the names of places, and of the items of the
-  view page, stay on this computer, and are never in the Support Bundle. On a computer that others
-  use, remove them with **Forget the remembered settings…**.
+- The remembered settings hold the names of places, of the items of the view
+  page, and of the layouts you saved, the days of a period chosen with
+  **Custom range…**, the activity types counted, and the timezone. They stay
+  on this computer, and are never in the Support Bundle. On a computer that
+  others use, remove them with **Forget the remembered settings…**.
 
 See [Security and Privacy Boundary](security_and_privacy_boundary.md).
 

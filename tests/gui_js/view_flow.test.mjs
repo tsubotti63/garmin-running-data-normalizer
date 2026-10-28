@@ -166,6 +166,19 @@ test("after the other tab forgot the settings, the page remembers none of them",
   const settings = { launch: "later", store: "/x", hints: false, theme: "dark", view_items: ["dist"], view_shelf: "closed", present: true };
   const forgotten = view.settingsAfterForget(settings);
   assert.deepEqual(forgotten, { launch: "later", store: "/x", present: false });
+  // The layouts, the period, the grouping, the activity types, and the
+  // timezone are gone too (stage K2 of v2.2.0).
+  const later = {
+    ...settings,
+    view_layouts: [{ id: "mine-1", name: "Made up", items: ["dist"] }],
+    view_layouts_hidden: ["race"],
+    view_layout: "mine-1",
+    view_period: { from: "2024-01-01", to: "2024-12-31" },
+    view_grain: "week",
+    view_types: ["running"],
+    timezone: "Asia/Tokyo",
+  };
+  assert.deepEqual(view.settingsAfterForget(later), { launch: "later", store: "/x", present: false });
   assert.equal(view.itemsRemembered(forgotten), false);
   assert.equal(view.shelfOpen(forgotten), true);
   assert.equal(view.viewHintsShown(forgotten), true);
@@ -515,4 +528,133 @@ test("the items are listed in the words of the language", () => {
   assert.equal(words(view.itemListMessage(view.FIRST_KEYS, name, "ja"), "ja"), "距離、安静時心拍数、VO2 Max");
   const english = (key) => translate(catalogs, "en", `view.item.${key}`);
   assert.equal(words(view.itemListMessage(view.FIRST_KEYS, english, "en"), "en"), "Distance, Resting heart rate, and VO2 Max");
+});
+
+// --- Layouts (stage K2 of v2.2.0) -------------------------------------------
+
+const BUILT_INS = [
+  { id: "run", items: ["dist", "pace", "hr"] },
+  { id: "sleep_hr", items: ["sleep", "sscore", "hrv", "rhr"] },
+  { id: "volume", items: ["dist", "time", "count", "asc"] },
+  { id: "form", items: ["cad", "sl", "vo", "gct"] },
+  { id: "load", items: ["load", "acute", "chronic", "acwr"] },
+  { id: "estimates", items: ["vo2", "phalf", "pfull", "endu"] },
+];
+const MINE = [
+  { id: "u-00000001", name: "朝ラン", items: ["dist", "hr"] },
+  { id: "u-00000002", name: "週末", items: ["time", "pace"] },
+];
+
+test("the cards of the layouts: the built-in ones not hidden in their order, then the person's", () => {
+  const cards = view.layoutCards({ builtIns: BUILT_INS, mine: MINE, hidden: ["load", "run"], current: "u-00000002", items: ["time", "pace"], coverage: null });
+  assert.deepEqual(cards.map((card) => card.id), ["sleep_hr", "volume", "form", "estimates", "u-00000001", "u-00000002"]);
+  assert.deepEqual(cards.map((card) => card.builtIn), [true, true, true, true, false, false]);
+  assert.equal(cards[0].nameKey, "view.layout.sleep_hr");
+  assert.equal(cards[4].name, "朝ラン");
+  assert.deepEqual(cards.map((card) => card.current), [false, false, false, false, false, true]);
+  // An id that the page has no name for is left out; the person's names are text.
+  const odd = view.layoutCards({ builtIns: [{ id: "wellness", items: ["sleep"] }, ...BUILT_INS], mine: [{ id: "u-00000003", name: "<b>x</b>", items: ["dist"] }], hidden: [], current: null, items: [], coverage: null });
+  assert.equal(odd[0].id, "run");
+  assert.equal(odd.at(-1).name, "<b>x</b>");
+});
+
+test("a card is changed when the items shown are others or in another order, also when the page opens again", () => {
+  assert.equal(view.layoutChanged(["dist", "pace", "hr"], ["dist", "pace", "hr"]), false);
+  assert.equal(view.layoutChanged(["dist", "pace", "hr"], ["dist", "hr", "pace"]), true);
+  assert.equal(view.layoutChanged(["dist", "pace", "hr"], ["dist", "pace"]), true);
+  assert.equal(view.layoutChanged(["dist"], ["dist", "rhr"]), true);
+  // The items remembered at the next opening count as those shown.
+  const cards = view.layoutCards({ builtIns: BUILT_INS, mine: [], hidden: [], current: "run", items: ["dist", "pace"], coverage: null });
+  assert.deepEqual(cards.filter((card) => card.changed).map((card) => card.id), ["run"]);
+  for (const language of ["en", "ja"]) {
+    assert.match(words(view.layoutNotes(cards[0])[0], language), language === "ja" ? /変えた/ : /changed/i);
+  }
+});
+
+test("a card counts its items with a value in the output only when some have none", () => {
+  const coverage = { vo2: { months: ["2024-01"] }, phalf: { months: ["2024-02"] }, pfull: { months: ["2024-02"] }, endu: { months: [] }, dist: { months: ["2024-01"] }, pace: { months: ["2024-01"] }, hr: { months: ["2024-01"] } };
+  const cards = view.layoutCards({ builtIns: BUILT_INS, mine: [], hidden: [], current: null, items: [], coverage });
+  const estimates = cards.find((card) => card.id === "estimates");
+  assert.deepEqual([estimates.valued, estimates.total], [3, 4]);
+  assert.equal(words(view.layoutNotes(estimates)[0], "ja"), "値のある項目 3/4");
+  assert.equal(words(view.layoutNotes(estimates)[0], "en"), "Items with values 3/4");
+  // All with a value: nothing is said; an item missing in the bars counts as none.
+  assert.equal(cards.find((card) => card.id === "run").valued, null);
+  assert.equal(cards.find((card) => card.id === "form").valued, 0);
+  assert.deepEqual(view.layoutNotes(cards.find((card) => card.id === "run")), []);
+});
+
+test("a remembered period opens as it was, a range of days only when it meets the output", () => {
+  for (const choice of ["all", "10y", "5y", "3y", "1y"]) {
+    assert.deepEqual(view.periodToOpen(choice, "2011-04-01", "2026-10-21"), { choice, range: null });
+  }
+  for (const odd of ["custom", "2y", null, 7, { from: "2024-01-01" }, { from: "2024-02-01", to: "2024-01-01" }, { from: "20240101", to: "20241231" }]) {
+    assert.equal(view.periodToOpen(odd, "2011-04-01", "2026-10-21"), null);
+  }
+  // A range that meets the output in part is sent as it is: the server cuts it.
+  assert.deepEqual(view.periodToOpen({ from: "2010-01-01", to: "2011-12-31" }, "2011-04-01", "2026-10-21"), { choice: "custom", range: { from: "2010-01-01", to: "2011-12-31" } });
+  assert.deepEqual(view.periodToOpen({ from: "2024-02-29", to: "2024-02-29" }, "2024-02-29", "2026-10-21"), { choice: "custom", range: { from: "2024-02-29", to: "2024-02-29" } });
+  // A range that does not meet it at all: all the output.
+  assert.deepEqual(view.periodToOpen({ from: "2008-01-01", to: "2011-03-31" }, "2011-04-01", "2026-10-21"), { choice: "all", range: null });
+  assert.deepEqual(view.periodToOpen({ from: "2024-03-01", to: "2024-03-31" }, "2020-01-01", "2024-02-29"), { choice: "all", range: null });
+});
+
+test("remembered activity types keep those of the output; none counted stays none, no name there is the first ones", () => {
+  const types = [{ name: "running", running: true }, { name: "trail_running", running: true }, { name: "road_biking", running: false }];
+  assert.deepEqual(view.typesToOpen(["road_biking", "running", "swimming"], types), ["running", "road_biking"]);
+  assert.deepEqual(view.typesToOpen([], types), []);
+  assert.equal(view.typesToOpen(["swimming"], types), null);
+  assert.equal(view.typesToOpen(null, types), null);
+  assert.equal(view.typesToOpen(undefined, types), null);
+  assert.equal(view.grainToOpen("week"), "week");
+  assert.equal(view.grainToOpen("hour"), "auto");
+});
+
+test("the remembered view is written once the person stops changing it, and at once when the app quits", async () => {
+  const sent = [];
+  const timers = [];
+  const clock = {
+    setTimer: (fire, wait) => { timers.push({ fire, wait, live: true }); return timers.length - 1; },
+    clearTimer: (id) => { timers[id].live = false; },
+  };
+  const sender = view.laterSender((value) => { sent.push(value); }, 800, clock);
+  sender.push({ grain: "week" });
+  sender.push({ grain: "month" });
+  sender.push({ grain: "year" });
+  assert.equal(timers.filter((timer) => timer.live).length, 1);
+  assert.equal(timers.at(-1).wait, 800);
+  assert.deepEqual(sent, []);
+  // The time passes: the timer runs out once.
+  timers.at(-1).live = false;
+  await timers.at(-1).fire();
+  assert.deepEqual(sent, [{ grain: "year" }]);
+  // Changed and quit at once: what waits is written before the app stops.
+  sender.push({ layout: "run" });
+  assert.equal(sender.waiting(), true);
+  await sender.flush();
+  assert.deepEqual(sent, [{ grain: "year" }, { layout: "run" }]);
+  assert.equal(timers.filter((timer) => timer.live).length, 0);
+  // Nothing waits: a flush sends nothing.
+  await sender.flush();
+  assert.equal(sent.length, 2);
+  // The page hides: what waits is taken to be sent apart, and not sent here.
+  sender.push({ period: "1y" });
+  assert.deepEqual(sender.take(), { period: "1y" });
+  assert.equal(sender.waiting(), false);
+  assert.equal(sender.take(), null);
+  assert.equal(timers.filter((timer) => timer.live).length, 0);
+  assert.equal(sent.length, 2);
+});
+
+test("a dragged layout goes after each other one whose middle is above the pointer", () => {
+  // Three other rows, 40 pixels high, from 100.
+  const middles = [120, 160, 200];
+  assert.equal(view.dropPlace(middles, 90), 0);
+  assert.equal(view.dropPlace(middles, 119), 0);
+  assert.equal(view.dropPlace(middles, 121), 1);
+  assert.equal(view.dropPlace(middles, 199), 2);
+  assert.equal(view.dropPlace(middles, 260), 3);
+  // At a middle, it stays before that row.
+  assert.equal(view.dropPlace(middles, 160), 1);
+  assert.equal(view.dropPlace([], 50), 0);
 });

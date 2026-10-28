@@ -381,6 +381,26 @@ class GuiMessageCoverageTest(unittest.TestCase):
         # Exactly the codes that can occur: none without a message, none stale.
         self.assertEqual(sorted(codes), sorted(flow_table("STOP_KEYS")))
 
+    def test_every_code_of_a_change_of_the_layouts_has_words_where_it_was_asked(self) -> None:
+        # v2.2.0 K2: a change of the layouts that the server refuses says why
+        # in one line where it was asked; the page knows each code of
+        # gui/layouts.py, and says for any other code that the layouts could
+        # not be changed.
+        codes = codes_in("gui/layouts.py", r'\n(LAYOUTS?_[A-Z_]+) = "\1"')
+        self.assertEqual(sorted(codes), ["LAYOUTS_FULL", "LAYOUT_NAME_INVALID", "LAYOUT_NAME_TAKEN", "LAYOUT_NOT_FOUND"])
+        script = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        table = re.search(r"const LAYOUT_PROBLEM_KEYS = \{(.*?)\n\};", script, re.DOTALL)
+        assert table is not None
+        keys = dict(re.findall(r'^\s+(\w+): "([^"]+)",$', table.group(1), re.MULTILINE))
+        self.assertEqual(sorted(keys), sorted(codes))
+        self.assertIn('state.layoutProblem = LAYOUT_PROBLEM_KEYS[error.code] ?? "view.layouts.error.other";', script)
+        for language in LANGUAGES:
+            messages = load_catalog(language)
+            for key in [*keys.values(), "view.layouts.error.other"]:
+                with self.subTest(language=language, key=key):
+                    self.assertTrue(key.startswith("view.layouts.error."))
+                    self.assertTrue(messages.get(key, "").strip())
+
     def test_every_error_message_has_a_next_step(self) -> None:
         whats = flow_table("STOP_KEYS")
         next_steps = flow_table("STOP_NEXT_KEYS")

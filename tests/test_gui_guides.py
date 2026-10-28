@@ -691,6 +691,46 @@ class GuiGuideTest(unittest.TestCase):
                     self.assertIn(phrase, reads)
             self.assertNotIn(before[language], reads)
 
+    def test_guides_say_what_the_view_page_remembers_from_2_2_0(self) -> None:
+        # v2.2.0 K2: the view page remembers the period, the grouping, the
+        # activity types counted, and the layouts, and the guides say how they
+        # apply to another output; the lines that said that they were not
+        # remembered are gone (the checker's opinion 3 of K1), and the names
+        # of the layouts saved, the days of a custom range (which can be days
+        # of the person's life), the types, and the timezone are among what
+        # the settings hold (the checker's K2-3).
+        phrases = {
+            "en": (
+                "At first, the period is **All time**, and the grouping **Auto**; those chosen last stay for the next time",
+                "or **Dark** is chosen), the period, the grouping, the activity types counted, and the layouts (those saved, and the one used last).",
+                "A period chosen with **Custom range…** shrinks to the days of the output when it overlaps them in part, and becomes **All time** when it does not overlap them at all.",
+                "The activity types counted are those remembered that the output has; when it has none of them, every running type in the output.",
+                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, and full screen.",
+                "of the items of the view page, and of the layouts you saved, the days of a period chosen with **Custom range…**, the activity types counted, and the timezone. They stay on this computer",
+            ),
+            "ja": (
+                "期間とまとめ方は、はじめは「全期間」と「自動」です。選んだものは覚えていて、次に開いたときもそのままです",
+                "画面の色（「ライト」か「ダーク」を選んだとき）、期間、まとめ方、数える種目、表示の型（保存した型と、最後に使った型）。",
+                "「範囲を選ぶ…」で選んだ期間は、その出力の日の範囲と一部だけ重なるときは重なる所に縮まり、まったく重ならないときは「全期間」になります。",
+                "数える種目は、覚えた種目のうち、その出力にある種目です。1 つも無いときは、その出力のランニングの種目すべてです。",
+                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面。",
+                "保存した表示の型の名前、「範囲を選ぶ…」で選んだ期間の日付、数える種目、タイムゾーンが入ります。",
+            ),
+        }
+        before = {
+            "en": ("Each time the view page opens, the period is **All time**", "Not remembered: the output shown, the period"),
+            "ja": ("見るページを開くたびに、期間は「全期間」", "覚えないもの：見ていた出力、期間"),
+        }
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            for phrase in phrases[language]:
+                with self.subTest(language=language, phrase=phrase):
+                    self.assertIn(phrase, reads)
+            for phrase in before[language]:
+                with self.subTest(language=language, before=phrase):
+                    self.assertNotIn(phrase, reads)
+
     def test_readme_puts_the_gui_first(self) -> None:
         # v2.1.0 H1 (the whole flow): the README gives the GUI right after who
         # it is for, with links to the whole flow and the ways to use it of

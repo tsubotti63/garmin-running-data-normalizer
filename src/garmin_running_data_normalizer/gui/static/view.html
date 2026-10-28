@@ -90,6 +90,31 @@
   <p id="filters-hint" class="hint filters-hint" data-i18n="view.hint.filters" hidden></p>
   <div id="view-body" class="view-body">
     <aside id="shelf" class="shelf" aria-labelledby="shelf-heading">
+      <section id="layouts" class="layouts" aria-labelledby="layouts-heading">
+        <div class="layouts-head">
+          <h2 id="layouts-heading" data-i18n="view.layouts.heading"></h2>
+          <span class="spacer"></span>
+          <button type="button" id="layouts-manage" class="small" aria-expanded="false" aria-controls="layouts-pop" data-i18n="view.layouts.manage" disabled></button>
+        </div>
+        <div id="layout-cards" class="layout-cards"></div>
+        <div class="layouts-actions">
+          <button type="button" id="layout-save-as" class="small" aria-expanded="false" aria-controls="layout-save" data-i18n="view.layouts.save_as" disabled></button>
+          <button type="button" id="layout-overwrite" class="small" data-i18n="view.layouts.overwrite" hidden></button>
+        </div>
+        <div id="layout-save" class="layout-save" hidden>
+          <label for="layout-name" data-i18n="view.layouts.name_label"></label>
+          <div class="layout-save-row">
+            <input id="layout-name" type="text" maxlength="60" autocomplete="off" spellcheck="false" aria-describedby="layout-problem">
+            <button type="button" id="layout-save-button" class="primary small" data-i18n="view.layouts.save"></button>
+            <button type="button" id="layout-save-cancel" class="small" data-i18n="view.layouts.cancel"></button>
+          </div>
+        </div>
+        <p id="layout-problem" class="layout-problem" role="status" aria-live="polite"></p>
+        <div id="layouts-pop" class="pop layouts-pop" role="dialog" aria-labelledby="layouts-pop-title" hidden>
+          <div class="pop-head"><span id="layouts-pop-title" class="pop-title" data-i18n="view.layouts.manage"></span><button type="button" id="layouts-pop-close" class="small" data-i18n="view.layouts.close"></button></div>
+          <div id="layouts-pop-body"></div>
+        </div>
+      </section>
       <div class="shelf-head">
         <h2 id="shelf-heading" data-i18n="view.shelf.heading"></h2>
         <span id="shelf-count" class="note"></span>
@@ -113,6 +138,11 @@
     <div id="shelf-rail" class="rail" hidden>
       <button type="button" id="shelf-open" class="rail-button" aria-expanded="false" aria-controls="shelf" data-i18n-label="view.shelf.open"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rail-text" data-i18n="view.shelf.rail" aria-hidden="true"></span></button>
       <span id="rail-count" class="rail-count"></span>
+      <button type="button" id="rail-layouts" class="rail-button" aria-expanded="false" aria-controls="rail-layouts-pop"><span class="rail-text" data-i18n="view.layouts.rail"></span></button>
+      <div id="rail-layouts-pop" class="pop rail-layouts-pop" role="dialog" aria-labelledby="rail-layouts-title" hidden>
+        <div class="pop-head"><span id="rail-layouts-title" class="pop-title" data-i18n="view.layouts.heading"></span><button type="button" id="rail-layouts-close" class="small" data-i18n="view.layouts.close"></button></div>
+        <div id="rail-layout-cards" class="layout-cards"></div>
+      </div>
     </div>
     <section id="stage" class="stage" aria-labelledby="stage-heading">
       <h2 id="stage-heading" class="visually-hidden" data-i18n="view.stage.heading"></h2>

@@ -229,6 +229,30 @@ class ChangeLayoutsTest(unittest.TestCase):
         self.assertEqual(change_layouts(current, {"op": "move", "id": ids[0], "direction": "up"})["layouts"], current["layouts"])
         self.assertEqual(change_layouts(current, {"op": "move", "id": ids[2], "direction": "down"})["layouts"], current["layouts"])
         self.assert_refused(current, {"op": "move", "id": ids[0], "direction": "left"}, "REQUEST_INVALID")
+        # Stage K2: a drag gives the place that the layout goes to, and the
+        # others keep their order.
+        for layout_id, place, after in (
+            (ids[0], 2, [ids[1], ids[2], ids[0]]),
+            (ids[2], 0, [ids[2], ids[0], ids[1]]),
+            (ids[1], 1, ids),
+            (ids[0], 1, [ids[1], ids[0], ids[2]]),
+        ):
+            with self.subTest(layout_id=layout_id, place=place):
+                dragged = change_layouts({**current, "current": ids[1]}, {"op": "move", "id": layout_id, "to": place})
+                self.assertEqual(([entry["id"] for entry in dragged["layouts"]], dragged["current"]), (after, ids[1]))
+        for change in (
+            {"to": -1},
+            {"to": 3},
+            {"to": True},
+            {"to": "1"},
+            {"to": 1.0},
+            {"to": None},
+            {"to": 1, "direction": "up"},
+            {"direction": "up", "to": None},
+            {},
+        ):
+            with self.subTest(change=change):
+                self.assert_refused(current, {"op": "move", "id": ids[0], **change}, "REQUEST_INVALID")
         removed = change_layouts(current, {"op": "remove", "id": ids[2]})
         self.assertEqual(([entry["id"] for entry in removed["layouts"]], removed["current"]), (ids[:2], None))
         kept = change_layouts({**current, "current": ids[0]}, {"op": "remove", "id": ids[1]})

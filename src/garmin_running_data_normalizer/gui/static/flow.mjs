@@ -1385,8 +1385,76 @@ export function normalizePageAddress(href, key, theme) {
 // the app; nothing else goes on it.
 export const QUIT_CHANNEL = "quit";
 
+// A message of the quit channel: one name, set to true.
+function quitMessage(data, name) {
+  return data !== null && typeof data === "object" && Object.keys(data).length === 1 && data[name] === true;
+}
+
 export function stoppedMessage(data) {
-  return data !== null && typeof data === "object" && Object.keys(data).length === 1 && data.stopped === true;
+  return quitMessage(data, "stopped");
+}
+
+// Before the normalization page quits the app, the view page writes what
+// waits to be remembered (stage K2 of v2.2.0): the page asks on the quit
+// channel ({ flush: true }), and the view page answers ({ flushed: true })
+// once the writing ended, however it ended. The page waits FLUSH_WAIT_MS at
+// most, as no view page may be open to answer.
+export const FLUSH_WAIT_MS = 500;
+
+export function flushAsked(data) {
+  return quitMessage(data, "flush");
+}
+
+export function flushedMessage(data) {
+  return quitMessage(data, "flushed");
+}
+
+// Ask on the channel, and wait for the answer: true when it came, false when
+// the wait ended first or there is no channel. The timer functions are given,
+// so that the tests move the time.
+export function askFlush(channel, wait = FLUSH_WAIT_MS, { setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+  if (channel === null) {
+    return Promise.resolve(false);
+  }
+  return new Promise((resolve) => {
+    let timer = null;
+    const finish = (answered) => {
+      clearTimer(timer);
+      channel.removeEventListener("message", heard);
+      resolve(answered);
+    };
+    const heard = (event) => {
+      if (flushedMessage(event.data)) {
+        finish(true);
+      }
+    };
+    channel.addEventListener("message", heard);
+    timer = setTimer(() => finish(false), wait);
+    channel.postMessage({ flush: true });
+  });
+}
+
+// The view page heard a message of the channel: an ask is answered once the
+// writing ended. It tells whether the message was an ask.
+export function answerFlush(data, write, channel) {
+  if (!flushAsked(data)) {
+    return false;
+  }
+  Promise.resolve()
+    .then(write)
+    .catch(() => {})
+    .then(() => channel?.postMessage({ flushed: true }));
+  return true;
+}
+
+// The app is quit once what waits is written, however the writing ended.
+export async function quitAfterWriting(write, shutdown) {
+  try {
+    await write();
+  } catch {
+    // What could not be written is given up: the settings keep what they had.
+  }
+  return shutdown();
 }
 
 // Send one value at a time (stage G3a): of the values given while one is

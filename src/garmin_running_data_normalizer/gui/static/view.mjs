@@ -11,9 +11,11 @@ import { ApiError, addressValue, callWithKey, readLaunchKey, readStorage, writeS
 import {
   FINISHED_STATES,
   QUIT_CHANNEL,
+  answerFlush,
   connectionMessages,
   lastName,
   normalizePageAddress,
+  quitAfterWriting,
   sendLatest,
   settingsMessages,
   stoppedMessage,
@@ -33,6 +35,7 @@ import {
   brushedRange,
   dateText,
   grainKey,
+  grainToOpen,
   groupKey,
   itemKey,
   itemListMessage,
@@ -40,6 +43,10 @@ import {
   itemsRemembered,
   itemsToOpen,
   kindKey,
+  laterSender,
+  dropPlace,
+  layoutCards,
+  layoutNotes,
   lineNames,
   lineStyles,
   monthIndex,
@@ -48,6 +55,7 @@ import {
   panelNotes,
   periodMessage,
   periodRequest,
+  periodToOpen,
   rangeProblem,
   readout,
   rememberedItems,
@@ -70,6 +78,7 @@ import {
   typeMessage,
   typesRequest,
   typesSummary,
+  typesToOpen,
   unitKey,
   viewBar,
   viewHintsShown,
@@ -113,6 +122,17 @@ const HELP_LINK_KEYS = {
 };
 // The keys that move the cross line, by how many periods.
 const CROSS_KEYS = { ArrowLeft: -1, ArrowRight: 1, PageUp: -12, PageDown: 12 };
+// The view is remembered once the person stops changing it for this long
+// (stage K2 of v2.2.0).
+const REMEMBER_WAIT_MS = 800;
+// What the page says of a change of the layouts that the server could not
+// make, by its code; any other code says that it could not be made.
+const LAYOUT_PROBLEM_KEYS = {
+  LAYOUT_NAME_INVALID: "view.layouts.error.name_invalid",
+  LAYOUT_NAME_TAKEN: "view.layouts.error.name_taken",
+  LAYOUTS_FULL: "view.layouts.error.full",
+  LAYOUT_NOT_FOUND: "view.layouts.error.not_found",
+};
 
 const byId = (id) => document.getElementById(id);
 const ui = {
@@ -156,6 +176,22 @@ const ui = {
   rail: byId("shelf-rail"),
   shelfOpen: byId("shelf-open"),
   railCount: byId("rail-count"),
+  layoutCards: byId("layout-cards"),
+  layoutsManage: byId("layouts-manage"),
+  layoutSaveAs: byId("layout-save-as"),
+  layoutOverwrite: byId("layout-overwrite"),
+  layoutSave: byId("layout-save"),
+  layoutName: byId("layout-name"),
+  layoutSaveButton: byId("layout-save-button"),
+  layoutSaveCancel: byId("layout-save-cancel"),
+  layoutProblem: byId("layout-problem"),
+  layoutsPop: byId("layouts-pop"),
+  layoutsPopBody: byId("layouts-pop-body"),
+  layoutsPopClose: byId("layouts-pop-close"),
+  railLayouts: byId("rail-layouts"),
+  railLayoutsPop: byId("rail-layouts-pop"),
+  railLayoutsClose: byId("rail-layouts-close"),
+  railLayoutCards: byId("rail-layout-cards"),
   partNote: byId("part-note"),
   partText: byId("part-text"),
   emptyBox: byId("empty-box"),
@@ -279,6 +315,21 @@ const state = {
   cursor: null,
   // Graphs only, which the person chooses for a while; not remembered.
   full: false,
+  // The layouts (stage K2 of v2.2.0): the built-in ones of the output that is
+  // open, the person's, the built-in ones hidden, and the one used last.
+  layouts: { builtIns: [], mine: [], hidden: [], current: null },
+  // The field of the name of a new layout, a change of the layouts that could
+  // not be made, the window of managing them (with a removal asked or a name
+  // being changed), and the window of the cards on the folded shelf.
+  layoutSaving: false,
+  layoutProblem: null,
+  layoutsOpen: false,
+  layoutAsk: null,
+  layoutRenaming: null,
+  railLayoutsOpen: false,
+  // The activity types that the person chose (null: those counted at first),
+  // which an output that opens counts where it has them (stage K2).
+  wantedTypes: null,
 };
 
 // The numbers of the panels; the count of the answers tells the drawing that
@@ -470,6 +521,8 @@ function connectionFailure(error) {
 
 // The app stopped, from this page or from the other tab (stage G3b).
 function markStopped() {
+  // What waits to be remembered is not written: the server stopped.
+  viewLater.take();
   state.stopped = true;
   state.connected = false;
   state.quitAsked = false;
@@ -479,6 +532,11 @@ function markStopped() {
 
 // The other tab quit the app: this page says that it stopped.
 function quitHeard(event) {
+  // The normalization page quits the app: what waits to be remembered is
+  // written first, and the page says when it is (stage K2 of v2.2.0).
+  if (answerFlush(event.data, rememberNow, quitChannel)) {
+    return;
+  }
   if (stoppedMessage(event.data)) {
     markStopped();
     render();
@@ -527,9 +585,12 @@ function themeHeard(event) {
   const heard = themeMessage(event.data);
   if (heard?.forgotten === true) {
     writeStorage(THEME_STORAGE, "auto");
-    // The page keeps what it shows; what it remembered is gone.
+    // The page keeps what it shows; what it remembered is gone, with the
+    // layouts of the person (stage K2 of v2.2.0).
     state.settings = settingsAfterForget(state.settings);
     state.forgotten = true;
+    viewLater.take();
+    takeLayouts([], [], null);
     render();
   } else if (heard !== null) {
     applyTheme(heard.theme);
@@ -548,20 +609,39 @@ async function changeHints() {
   render();
 }
 
-// The items and the shelf are remembered, by their names only, whenever they
-// change (stage G3b); one request at a time, so that the last one stays.
-const rememberView = sendLatest(async (value) => {
-  try {
-    state.settingsNotice = noticeOf(await callApi("/api/settings/view", value));
-  } catch (error) {
-    connectionFailure(error);
-  }
-  render();
-});
+// The items and the shelf are remembered, by their names only (stage G3b),
+// and from v2.2.0 (stage K2) the layout used last, the period, the grouping,
+// and the activity types: once the person stops changing them for a moment,
+// one request after the other, so that the last one stays.
+let viewWriting = Promise.resolve();
+function writeView(value) {
+  viewWriting = viewWriting.then(async () => {
+    try {
+      state.settingsNotice = noticeOf(await callApi("/api/settings/view", value));
+    } catch (error) {
+      connectionFailure(error);
+    }
+    render();
+  });
+  return viewWriting;
+}
+const viewLater = laterSender(writeView, REMEMBER_WAIT_MS);
 
-// The items and the shelf are remembered when an output opens and when the
-// person changes them; after the other tab forgot the settings, only a change
-// of the person writes them again.
+// The values of the view that the settings remember.
+function viewValues() {
+  return {
+    items: [...state.items],
+    shelf: state.shelf,
+    layout: state.layouts.current,
+    period: periodRequest(state.period, state.range),
+    grain: state.grain,
+    types: state.wantedTypes,
+  };
+}
+
+// The view is remembered when an output opens and when the person changes
+// it; after the other tab forgot the settings, only a change of the person
+// writes it again.
 function rememberItems(byPerson = false) {
   if (byPerson) {
     state.forgotten = false;
@@ -569,7 +649,24 @@ function rememberItems(byPerson = false) {
   if (state.forgotten || !state.items.length) {
     return;
   }
-  rememberView({ items: [...state.items], shelf: state.shelf });
+  viewLater.push(viewValues());
+}
+
+// What waits to be remembered is written at once, before the app quits from
+// either page (stage K2 of v2.2.0); the promise ends when every write ended,
+// that one and one sent before it.
+function rememberNow() {
+  viewLater.flush();
+  return viewWriting;
+}
+
+// When the page hides or closes, what waits goes in a request that outlives
+// the page.
+function rememberOnHide() {
+  const value = viewLater.take();
+  if (value !== null && state.launchKey) {
+    callWithKey(state.launchKey, "/api/settings/view", value, { keepalive: true }).catch(() => {});
+  }
 }
 
 function changeLanguage(language) {
@@ -693,7 +790,10 @@ async function openOutput(target, focus = false) {
     state.view = answer;
     state.target = target;
     state.opening = null;
-    state.counted = defaultTypes(answer.types);
+    // The activity types and the period as the person chose them last, where
+    // this output has them, and its built-in layouts (stage K2 of v2.2.0).
+    state.counted = typesToOpen(state.wantedTypes, answer.types) ?? defaultTypes(answer.types);
+    state.layouts.builtIns = Array.isArray(answer.layouts) ? answer.layouts : [];
     state.coverage = answer.coverage;
     state.coverageSeq += 1;
     setAnswer(null);
@@ -702,10 +802,11 @@ async function openOutput(target, focus = false) {
     state.tables = new Set();
     state.notesOpen = null;
     state.cursor = null;
-    if (state.period === "custom") {
-      state.period = "all";
-      state.range = null;
-    }
+    const period = periodToOpen(periodRequest(state.period, state.range), answer.first_day, answer.last_day) ?? { choice: "all", range: null };
+    state.period = period.choice;
+    state.range = period.range;
+    ui.rangeFrom.value = state.range?.from ?? "";
+    ui.rangeTo.value = state.range?.to ?? "";
     rememberItems();
     render();
     // A button that opened it is hidden now.
@@ -930,12 +1031,14 @@ function setPeriod(choiceName) {
     ui.rangeTo.value = state.range?.to ?? "";
     ui.rangeFrom.focus();
     if (state.range !== null) {
+      rememberItems(true);
       requestSeries();
     }
     return;
   }
   state.period = choiceName;
   state.cursor = null;
+  rememberItems(true);
   requestSeries();
 }
 
@@ -947,6 +1050,7 @@ function shiftPeriod(direction) {
     ui.rangeFrom.value = range.from;
     ui.rangeTo.value = range.to;
     state.cursor = null;
+    rememberItems(true);
     requestSeries();
   }
 }
@@ -958,6 +1062,7 @@ function rangeTyped() {
     state.period = "custom";
     state.range = { from: ui.rangeFrom.value, to: ui.rangeTo.value };
     state.cursor = null;
+    rememberItems(true);
     requestSeries();
   }
 }
@@ -965,11 +1070,14 @@ function rangeTyped() {
 function setGrain(grain) {
   state.grain = grain;
   state.cursor = null;
+  rememberItems(true);
   requestSeries();
 }
 
 function changeTypes(name) {
   state.counted = toggledTypes(state.counted, name, state.view?.types);
+  state.wantedTypes = typesRequest(state.counted, state.view?.types);
+  rememberItems(true);
   requestSeries();
 }
 
@@ -992,6 +1100,370 @@ function changeItems(items, refresh = true) {
     render();
     requestOverview();
   }
+}
+
+// --- Layouts (stage K2 of v2.2.0) -------------------------------------------
+
+function currentCards() {
+  return layoutCards({ ...state.layouts, items: state.items, coverage: state.coverage });
+}
+
+// A card chosen: the panels become its items, in its order (those that this
+// output knows), and it is the layout used last.
+function chooseLayout(id) {
+  const card = currentCards().find((entry) => entry.id === id);
+  if (card === undefined || state.view === null) {
+    return;
+  }
+  const known = itemsByKey(state.view.items);
+  state.layouts.current = id;
+  state.layoutProblem = null;
+  changeItems(card.items.filter((key) => known.has(key)));
+}
+
+// The layouts as the server answers them now; a view that waits to be
+// remembered takes the layout used last as it is now.
+function takeLayouts(mine, hidden, current) {
+  state.layouts.mine = Array.isArray(mine) ? mine : [];
+  state.layouts.hidden = Array.isArray(hidden) ? hidden : [];
+  state.layouts.current = typeof current === "string" ? current : null;
+  if (viewLater.waiting()) {
+    viewLater.push(viewValues());
+  }
+}
+
+// The layouts as the settings hold them now, when another tab changed them.
+async function readLayouts() {
+  try {
+    const status = await callApi("/api/status");
+    const settings = status.settings ?? {};
+    takeLayouts(settings.view_layouts, settings.view_layouts_hidden, settings.view_layout);
+  } catch (error) {
+    connectionFailure(error);
+  }
+}
+
+// One change of the layouts on the server (add, rename, overwrite, move,
+// remove, hide, show, reset); a change that cannot be made says why, where
+// it was asked.
+async function changeLayouts(change, done = null) {
+  state.layoutProblem = null;
+  try {
+    const answer = await callApi("/api/settings/layouts", change);
+    takeLayouts(answer.layouts, answer.hidden, answer.layout);
+    state.settingsNotice = noticeOf(answer);
+    done?.();
+  } catch (error) {
+    if (!connectionFailure(error)) {
+      if (error.code === "LAYOUT_NOT_FOUND") {
+        await readLayouts();
+      }
+      state.layoutProblem = LAYOUT_PROBLEM_KEYS[error.code] ?? "view.layouts.error.other";
+    }
+  }
+  render();
+}
+
+function openLayoutSave(open) {
+  state.layoutSaving = open;
+  state.layoutProblem = null;
+  render();
+  if (open) {
+    ui.layoutName.value = "";
+    ui.layoutName.focus();
+  } else {
+    ui.layoutSaveAs.focus();
+  }
+}
+
+function saveLayout() {
+  changeLayouts({ op: "add", name: ui.layoutName.value, items: [...state.items] }, () => {
+    state.layoutSaving = false;
+    ui.layoutSaveAs.focus();
+  });
+}
+
+function overwriteLayout() {
+  if (state.layouts.current !== null) {
+    changeLayouts({ op: "overwrite", id: state.layouts.current, items: [...state.items] });
+  }
+}
+
+// The window of managing the layouts: its first button takes the focus, and
+// its opener takes it back when it closes.
+function openLayouts(open) {
+  state.layoutsOpen = open;
+  state.layoutAsk = null;
+  state.layoutRenaming = null;
+  state.layoutProblem = null;
+  render();
+  if (open) {
+    ui.layoutsPopBody.querySelector("button:not([disabled]), input")?.focus();
+  } else {
+    ui.layoutsManage.focus();
+  }
+}
+
+// The cards on the folded shelf, in a window of their own.
+function openRailLayouts(open) {
+  state.railLayoutsOpen = open;
+  render();
+  if (open) {
+    (ui.railLayoutCards.querySelector('[aria-pressed="true"]') ?? ui.railLayoutCards.querySelector("button"))?.focus();
+  } else {
+    ui.railLayouts.focus();
+  }
+}
+
+// The buttons of the window of managing the layouts. A removal is asked
+// first, with keeping the layout as the button that has the focus.
+function layoutsAction(event) {
+  const button = event.target.closest("button[data-op]");
+  if (button === null) {
+    return;
+  }
+  const { op, id } = button.dataset;
+  if (op === "rename") {
+    state.layoutRenaming = id;
+    state.layoutAsk = null;
+    render();
+    ui.layoutsPopBody.querySelector("input")?.focus();
+  } else if (op === "rename-save") {
+    const field = ui.layoutsPopBody.querySelector("input");
+    changeLayouts({ op: "rename", id, name: field?.value ?? "" }, () => {
+      state.layoutRenaming = null;
+    });
+  } else if (op === "rename-cancel") {
+    state.layoutRenaming = null;
+    render();
+  } else if (op === "up" || op === "down") {
+    changeLayouts({ op: "move", id, direction: op });
+  } else if (op === "overwrite") {
+    changeLayouts({ op: "overwrite", id, items: [...state.items] });
+  } else if (op === "remove") {
+    state.layoutAsk = id;
+    state.layoutRenaming = null;
+    render();
+    ui.layoutsPopBody.querySelector('[data-op="keep"]')?.focus();
+  } else if (op === "keep") {
+    state.layoutAsk = null;
+    render();
+  } else if (op === "remove-yes") {
+    changeLayouts({ op: "remove", id }, () => {
+      state.layoutAsk = null;
+    });
+  } else if (op === "hide" || op === "show") {
+    changeLayouts({ op, id });
+  } else if (op === "reset") {
+    changeLayouts({ op: "reset" });
+  }
+}
+
+// A card: the name of the layout (a built-in one in the words of the page, the
+// person's as text), and under it "(changed)" and the items with a value.
+function layoutButton(card, viewing) {
+  const button = element("button", "layout-card");
+  button.type = "button";
+  button.dataset.layout = card.id;
+  button.setAttribute("aria-pressed", String(card.current));
+  button.disabled = !viewing;
+  button.append(element("span", "layout-name", card.builtIn ? t(card.nameKey) : card.name));
+  for (const note of layoutNotes(card)) {
+    button.append(element("span", "layout-note", describe(note)));
+  }
+  return button;
+}
+
+function renderCards(container, cards, viewing) {
+  const signature = JSON.stringify([viewing, cards, state.language]);
+  if (container.dataset.signature === signature) {
+    return;
+  }
+  const focused = container.contains(document.activeElement) ? (document.activeElement.dataset.layout ?? null) : null;
+  container.replaceChildren(...cards.map((card) => layoutButton(card, viewing)));
+  container.dataset.signature = signature;
+  if (focused !== null) {
+    [...container.querySelectorAll("[data-layout]")].find((node) => node.dataset.layout === focused)?.focus();
+  }
+}
+
+function opButton(op, id, key, disabled = false) {
+  const button = element("button", "small", t(key));
+  button.type = "button";
+  button.dataset.op = op;
+  if (id !== null) {
+    button.dataset.id = id;
+  }
+  button.disabled = disabled;
+  return button;
+}
+
+// The window of managing: the person's layouts (rename, up, down, remove),
+// then the built-in ones (hide or show), and showing them all again.
+function renderLayoutsPop(viewing) {
+  const signature = JSON.stringify([viewing, state.layouts, state.layoutAsk, state.layoutRenaming, state.language]);
+  if (ui.layoutsPopBody.dataset.signature === signature) {
+    return;
+  }
+  const active = document.activeElement;
+  const focused = ui.layoutsPopBody.contains(active) ? { op: active.dataset.op ?? null, id: active.dataset.id ?? null } : null;
+  const nodes = [element("p", "layouts-group", t("view.layouts.mine"))];
+  const mine = state.layouts.mine;
+  // A layout is not dragged while one is renamed or a removal is asked.
+  const busy = state.layoutAsk !== null || state.layoutRenaming !== null;
+  if (!mine.length) {
+    nodes.push(element("p", "note", t("view.layouts.none_mine")));
+  }
+  mine.forEach((layout, index) => {
+    const row = element("div", "layouts-row mine");
+    if (state.layoutRenaming === layout.id) {
+      const field = element("input");
+      field.type = "text";
+      field.value = layout.name;
+      field.maxLength = 60;
+      field.setAttribute("aria-label", t("view.layouts.name_label"));
+      row.append(field, opButton("rename-save", layout.id, "view.layouts.save"), opButton("rename-cancel", layout.id, "view.layouts.cancel"));
+    } else {
+      // The grip: a drag, or the arrow keys, move the layout.
+      const grip = element("button", "layout-grip", "⋮⋮");
+      grip.type = "button";
+      grip.dataset.op = "grip";
+      grip.dataset.id = layout.id;
+      grip.disabled = !viewing || busy || mine.length < 2;
+      grip.setAttribute("aria-label", t("view.layouts.grip", { name: layout.name }));
+      const buttons = element("div", "layouts-buttons");
+      buttons.append(
+        opButton("rename", layout.id, "view.layouts.rename", !viewing),
+        opButton("up", layout.id, "view.layouts.up", !viewing || index === 0),
+        opButton("down", layout.id, "view.layouts.down", !viewing || index === mine.length - 1),
+        opButton("overwrite", layout.id, "view.layouts.overwrite", !viewing || !state.items.length),
+        opButton("remove", layout.id, "view.layouts.remove", !viewing),
+      );
+      row.append(grip, element("span", "layout-name", layout.name), buttons);
+    }
+    nodes.push(row);
+    if (state.layoutAsk === layout.id) {
+      const ask = element("div", "layouts-ask");
+      ask.append(element("p", "", t("view.layouts.remove_ask", { name: layout.name })), opButton("keep", layout.id, "view.layouts.keep"), opButton("remove-yes", layout.id, "view.layouts.remove"));
+      nodes.push(ask);
+    }
+  });
+  nodes.push(element("p", "layouts-group", t("view.layouts.built_in")));
+  for (const card of layoutCards({ builtIns: state.layouts.builtIns, mine: [], hidden: [], current: null, items: [], coverage: null })) {
+    const hidden = state.layouts.hidden.includes(card.id);
+    const row = element("div", "layouts-row");
+    row.append(element("span", "layout-name", t(card.nameKey)), opButton(hidden ? "show" : "hide", card.id, hidden ? "view.layouts.show" : "view.layouts.hide", !viewing));
+    nodes.push(row);
+  }
+  nodes.push(opButton("reset", null, "view.layouts.show_all", !viewing || !state.layouts.hidden.length));
+  ui.layoutsPopBody.replaceChildren(...nodes);
+  ui.layoutsPopBody.dataset.signature = signature;
+  if (focused !== null) {
+    const enabled = [...ui.layoutsPopBody.querySelectorAll("button[data-op]")].filter((node) => !node.disabled);
+    const again =
+      enabled.find((node) => node.dataset.op === focused.op && (node.dataset.id ?? null) === focused.id) ??
+      enabled.find((node) => focused.id !== null && node.dataset.id === focused.id);
+    (again ?? ui.layoutsPopBody.querySelector("button:not([disabled]), input"))?.focus();
+  }
+}
+
+// A drag of the grip of a layout moves its row among the others as the
+// pointer moves, and the place goes to the server once, when the grip is let
+// go. Escape, or a pointer that the browser takes back, puts the row back.
+// The body of the window holds the pointer, so that a row moves freely.
+let layoutDrag = null;
+
+function layoutGripDown(event) {
+  const grip = event.target.closest('button[data-op="grip"]');
+  if (grip === null || grip.disabled || event.button !== 0 || layoutDrag !== null) {
+    return;
+  }
+  event.preventDefault();
+  const row = grip.closest(".layouts-row");
+  const from = [...ui.layoutsPopBody.querySelectorAll(".layouts-row.mine")].indexOf(row);
+  layoutDrag = { id: grip.dataset.id, row, from, to: from, pointer: event.pointerId };
+  ui.layoutsPopBody.setPointerCapture(event.pointerId);
+  row.classList.add("dragging");
+  grip.focus();
+}
+
+function layoutGripMove(event) {
+  if (layoutDrag === null || event.pointerId !== layoutDrag.pointer) {
+    return;
+  }
+  const others = [...ui.layoutsPopBody.querySelectorAll(".layouts-row.mine")].filter((row) => row !== layoutDrag.row);
+  const middles = others.map((row) => {
+    const box = row.getBoundingClientRect();
+    return box.top + box.height / 2;
+  });
+  const to = dropPlace(middles, event.clientY);
+  if (to !== layoutDrag.to && others.length) {
+    layoutDrag.to = to;
+    if (to < others.length) {
+      others[to].before(layoutDrag.row);
+    } else {
+      others[others.length - 1].after(layoutDrag.row);
+    }
+    // A row that moves loses the focus: its grip takes it again, for Escape.
+    layoutDrag.row.querySelector(".layout-grip")?.focus();
+  }
+}
+
+// The drag ends: the rows are drawn again from the layouts, as the server
+// answers them.
+function endLayoutDrag() {
+  const ended = layoutDrag;
+  layoutDrag = null;
+  if (ended !== null) {
+    ended.row.classList.remove("dragging");
+    if (ui.layoutsPopBody.hasPointerCapture(ended.pointer)) {
+      ui.layoutsPopBody.releasePointerCapture(ended.pointer);
+    }
+    delete ui.layoutsPopBody.dataset.signature;
+  }
+  return ended;
+}
+
+function layoutGripUp(event) {
+  if (layoutDrag === null || event.pointerId !== layoutDrag.pointer) {
+    return;
+  }
+  const { id, from, to } = endLayoutDrag();
+  if (to !== from) {
+    changeLayouts({ op: "move", id, to });
+  } else {
+    render();
+  }
+}
+
+function cancelLayoutDrag() {
+  if (endLayoutDrag() !== null) {
+    render();
+  }
+}
+
+// The layouts above the item shelf, their buttons, and their windows.
+function renderLayouts(live) {
+  const viewing = live && state.view !== null && state.opening === null;
+  const cards = currentCards();
+  renderCards(ui.layoutCards, cards, viewing);
+  renderCards(ui.railLayoutCards, cards, viewing);
+  const current = cards.find((card) => card.current) ?? null;
+  ui.layoutsManage.disabled = !viewing;
+  ui.layoutsManage.setAttribute("aria-expanded", String(state.layoutsOpen));
+  ui.layoutSaveAs.disabled = !viewing || !state.items.length;
+  ui.layoutSaveAs.setAttribute("aria-expanded", String(state.layoutSaving));
+  ui.layoutOverwrite.hidden = !(viewing && current !== null && !current.builtIn && current.changed);
+  ui.layoutSave.hidden = !state.layoutSaving;
+  ui.layoutSaveButton.disabled = !viewing;
+  setText(ui.layoutProblem, state.layoutProblem === null ? "" : t(state.layoutProblem));
+  ui.layoutsPop.hidden = !state.layoutsOpen;
+  if (state.layoutsOpen) {
+    renderLayoutsPop(viewing);
+  }
+  ui.railLayouts.disabled = !viewing;
+  ui.railLayouts.setAttribute("aria-expanded", String(state.railLayoutsOpen));
+  ui.railLayoutsPop.hidden = !state.railLayoutsOpen;
 }
 
 // --- Drawing --------------------------------------------------------------
@@ -1721,6 +2193,7 @@ function overviewUp(event) {
   ui.rangeFrom.value = state.range.from;
   ui.rangeTo.value = state.range.to;
   state.cursor = null;
+  rememberItems(true);
   requestSeries();
 }
 
@@ -2221,6 +2694,7 @@ function render() {
   renderBar();
   renderFilters(live);
   renderShelf(live);
+  renderLayouts(live);
   renderStage(live);
   renderFooter(live);
   renderHelp();
@@ -2307,7 +2781,7 @@ async function quit() {
   state.connectionKey = "status.quitting";
   render();
   try {
-    await callApi("/api/shutdown");
+    await quitAfterWriting(rememberNow, () => callApi("/api/shutdown"));
     markStopped();
     quitChannel?.postMessage({ stopped: true });
   } catch (error) {
@@ -2431,6 +2905,66 @@ function connect() {
   for (const button of ui.periodButtons) {
     button.addEventListener("click", () => setPeriod(button.dataset.period));
   }
+  ui.layoutCards.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-layout]");
+    if (card !== null) {
+      chooseLayout(card.dataset.layout);
+    }
+  });
+  ui.railLayoutCards.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-layout]");
+    if (card !== null) {
+      chooseLayout(card.dataset.layout);
+      openRailLayouts(false);
+    }
+  });
+  ui.layoutSaveAs.addEventListener("click", () => openLayoutSave(!state.layoutSaving));
+  ui.layoutSaveButton.addEventListener("click", saveLayout);
+  ui.layoutSaveCancel.addEventListener("click", () => openLayoutSave(false));
+  ui.layoutName.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      saveLayout();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      openLayoutSave(false);
+    }
+  });
+  ui.layoutOverwrite.addEventListener("click", overwriteLayout);
+  ui.layoutsManage.addEventListener("click", () => openLayouts(!state.layoutsOpen));
+  ui.layoutsPopClose.addEventListener("click", () => openLayouts(false));
+  ui.layoutsPopBody.addEventListener("click", layoutsAction);
+  ui.layoutsPopBody.addEventListener("pointerdown", layoutGripDown);
+  ui.layoutsPopBody.addEventListener("pointermove", layoutGripMove);
+  ui.layoutsPopBody.addEventListener("pointerup", layoutGripUp);
+  ui.layoutsPopBody.addEventListener("pointercancel", cancelLayoutDrag);
+  ui.layoutsPopBody.addEventListener("lostpointercapture", cancelLayoutDrag);
+  ui.layoutsPop.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      // Escape puts a dragged row back first, and then closes the window.
+      if (layoutDrag !== null) {
+        cancelLayoutDrag();
+      } else {
+        openLayouts(false);
+      }
+    } else if (event.key === "Enter" && event.target.matches("input")) {
+      event.preventDefault();
+      ui.layoutsPopBody.querySelector('[data-op="rename-save"]')?.click();
+    } else if ((event.key === "ArrowUp" || event.key === "ArrowDown") && event.target.matches('button[data-op="grip"]') && layoutDrag === null) {
+      event.preventDefault();
+      changeLayouts({ op: "move", id: event.target.dataset.id, direction: event.key === "ArrowUp" ? "up" : "down" });
+    }
+  });
+  ui.railLayouts.addEventListener("click", () => openRailLayouts(!state.railLayoutsOpen));
+  ui.railLayoutsClose.addEventListener("click", () => openRailLayouts(false));
+  ui.railLayoutsPop.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      openRailLayouts(false);
+    }
+  });
+  window.addEventListener("pagehide", rememberOnHide);
   ui.periodBack.addEventListener("click", () => shiftPeriod(-1));
   ui.periodNext.addEventListener("click", () => shiftPeriod(1));
   ui.rangeFrom.addEventListener("change", rangeTyped);
@@ -2609,6 +3143,17 @@ async function start() {
     state.settings = status.settings !== null && typeof status.settings === "object" ? status.settings : {};
     state.hints = viewHintsShown(state.settings);
     state.shelf = shelfOpen(state.settings) ? "open" : "closed";
+    // The layouts and the view as the settings remember them (stage K2 of
+    // v2.2.0); an output that opens takes the period and the types where it
+    // has them.
+    takeLayouts(state.settings.view_layouts, state.settings.view_layouts_hidden, state.settings.view_layout);
+    const period = periodToOpen(state.settings.view_period, null, null);
+    if (period !== null) {
+      state.period = period.choice;
+      state.range = period.range;
+    }
+    state.grain = grainToOpen(state.settings.view_grain);
+    state.wantedTypes = Array.isArray(state.settings.view_types) ? [...state.settings.view_types] : null;
     const notice = settingsMessages(state.settings.notice).length ? state.settings.notice : null;
     state.settingsNotice = notice === null ? null : { code: notice, writing: false };
     // The colors that the settings remember win over this tab's (stage G3a).

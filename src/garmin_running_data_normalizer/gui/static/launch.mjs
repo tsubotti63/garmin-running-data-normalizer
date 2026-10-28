@@ -60,8 +60,9 @@ export function addressValue(name) {
 // A request of the API: a POST of JSON with the key, never from the cache and
 // without the cookies of the browser. An answer other than 200 throws an
 // ApiError with the code of the server; a page without the key throws one as
-// the server would refuse it.
-export async function callWithKey(key, path, payload = {}) {
+// the server would refuse it. A request kept alive goes on after the page is
+// hidden or closed (stage K2 of v2.2.0: the view that waits to be remembered).
+export async function callWithKey(key, path, payload = {}, { keepalive = false } = {}) {
   if (!key) {
     throw new ApiError(403, null);
   }
@@ -71,6 +72,7 @@ export async function callWithKey(key, path, payload = {}) {
     body: JSON.stringify(payload),
     cache: "no-store",
     credentials: "omit",
+    ...(keepalive ? { keepalive: true } : {}),
   });
   let body = null;
   try {

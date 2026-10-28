@@ -18,6 +18,7 @@ import {
   againNote,
   apartReport,
   announcement,
+  askFlush,
   boxStates,
   boxSummary,
   boxesSetBySettings,
@@ -77,6 +78,7 @@ import {
   resultDetails,
   resultRows,
   resultTotal,
+  quitAfterWriting,
   runSummary,
   sameContentNoted,
   sendLatest,
@@ -2425,7 +2427,8 @@ function keepApp() {
 }
 
 // While the server stops, the bar says so and nothing works (v2.0.1 F2);
-// a lost connection is told as any lost connection.
+// a lost connection is told as any lost connection. The view page writes
+// what waits to be remembered first (stage K2 of v2.2.0).
 async function quit() {
   state.quitAsked = false;
   state.quitKey = null;
@@ -2433,7 +2436,7 @@ async function quit() {
   state.connectionKey = "status.quitting";
   render();
   try {
-    await callApi("/api/shutdown");
+    await quitAfterWriting(() => askFlush(quitChannel), () => callApi("/api/shutdown"));
     state.connected = false;
     stopHeartbeat();
     stopPolling();
