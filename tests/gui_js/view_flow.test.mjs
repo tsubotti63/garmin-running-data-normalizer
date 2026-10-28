@@ -177,6 +177,9 @@ test("after the other tab forgot the settings, the page remembers none of them",
     view_grain: "week",
     view_types: ["running"],
     timezone: "Asia/Tokyo",
+    // And how one item is compared by year (stage L1).
+    view_compare_mode: "overlay",
+    view_compare_month: 5,
   };
   assert.deepEqual(view.settingsAfterForget(later), { launch: "later", store: "/x", present: false });
   assert.equal(view.itemsRemembered(forgotten), false);
@@ -657,4 +660,302 @@ test("a dragged layout goes after each other one whose middle is above the point
   // At a middle, it stays before that row.
   assert.equal(view.dropPlace(middles, 160), 1);
   assert.equal(view.dropPlace([], 50), 0);
+});
+
+// --- Comparing one item by year (stage L1 of v2.2.0) ----------------------
+
+test("the years of an output are offered newest first, four at first and six at most", () => {
+  const years = view.compareYears("2019-04-01", "2026-10-21");
+  assert.deepEqual(years.map((entry) => entry.year), [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019]);
+  assert.deepEqual(years[0], { year: 2026, start: "2026-01-01", end: "2026-10-21" });
+  assert.deepEqual(years.at(-1), { year: 2019, start: "2019-04-01", end: "2019-12-31" });
+  assert.deepEqual(view.firstCompareYears(years), [2026, 2025, 2024, 2023]);
+  assert.deepEqual(view.compareYears("2026-01-05", "2026-02-01").map((entry) => entry.year), [2026]);
+  for (const [first, last] of [[null, "2026-01-01"], ["2026-02-01", "2026-01-01"], ["2026-1-1", "2026-02-01"]]) {
+    assert.deepEqual(view.compareYears(first, last), []);
+  }
+  // A year added keeps the newest first; six at most, and one at least.
+  assert.deepEqual(view.toggledYears([2026, 2024], 2025), [2026, 2025, 2024]);
+  assert.deepEqual(view.toggledYears([2026, 2025, 2024, 2023, 2022, 2021], 2020), [2026, 2025, 2024, 2023, 2022, 2021]);
+  assert.deepEqual(view.toggledYears([2026, 2025], 2025), [2026]);
+  assert.deepEqual(view.toggledYears([2026], 2026), [2026]);
+});
+
+test("a year asks for its days, or those of one month, and its value as one period", () => {
+  assert.deepEqual(view.compareRange(2024, null), { from: "2024-01-01", to: "2024-12-31" });
+  assert.deepEqual(view.compareRange(2024, 2), { from: "2024-02-01", to: "2024-02-29" });
+  assert.deepEqual(view.compareRange(2025, 2), { from: "2025-02-01", to: "2025-02-28" });
+  assert.deepEqual(view.compareRange(2025, 12), { from: "2025-12-01", to: "2025-12-31" });
+  // The value of the year or of the month comes from a grouping of the
+  // server, never from a new way to count (the review of the plan by Codex).
+  assert.equal(view.compareValueGrain(null), "year");
+  assert.equal(view.compareValueGrain(5), "month");
+  assert.deepEqual(view.compareGrains(null), ["day", "week", "month"]);
+  assert.deepEqual(view.compareGrains(5), ["day", "week"]);
+  assert.equal(view.firstCompareGrain("rows", null), "month");
+  assert.equal(view.firstCompareGrain("overlay", 5), "day");
+  assert.equal(view.firstCompareGrain("cumulative", null), "day");
+});
+
+test("the periods of each year have their places on one axis, with their own days", () => {
+  // Weeks from Monday, counted from the week of 1 January.
+  const weeks = [
+    { start: "2024-01-01", end: "2024-01-07", partial: false },
+    { start: "2024-01-08", end: "2024-01-14", partial: false },
+    { start: "2024-12-30", end: "2024-12-31", partial: true },
+  ];
+  assert.deepEqual(view.compareSlots(weeks, "week", 2024, null).map((slot) => [slot.start, slot.partial, slot.from]), [
+    [0, false, "2024-01-01"],
+    [1, false, "2024-01-08"],
+    [52, true, "2024-12-30"],
+  ]);
+  // A year whose 1 January is a Sunday has 54 weeks: 2012 and 2040.
+  assert.equal(view.compareSpan("week", null, [2012]), 53);
+  assert.equal(view.compareSpan("week", null, [2040]), 53);
+  assert.equal(view.compareSpan("week", null, [2023, 2025]), 52);
+  // Days by their month and day, on a leap year: 1 March has one place.
+  const march = (year) => view.compareSlots([{ start: `${year}-03-01`, end: `${year}-03-01` }], "day", year, null)[0].start;
+  assert.equal(march(2024), march(2025));
+  assert.equal(view.compareSlots([{ start: "2024-02-29", end: "2024-02-29" }], "day", 2024, null)[0].start, 59);
+  assert.equal(march(2025), 60);
+  assert.equal(view.compareSpan("day", null, [2025]), 365);
+  // Months by their numbers; in one month, days by their days.
+  assert.equal(view.compareSlots([{ start: "2025-07-01", end: "2025-07-31" }], "month", 2025, null)[0].start, 6);
+  assert.equal(view.compareSlots([{ start: "2025-05-17", end: "2025-05-17" }], "day", 2025, 5)[0].start, 16);
+  assert.equal(view.compareSpan("day", 5, [2025]), 30);
+  assert.equal(view.compareSpan("month", null, [2025]), 11);
+  // A short month has its own days only, never those of the next month: 29
+  // February where a leap year is chosen.
+  assert.equal(view.compareSpan("day", 2, [2025, 2023]), 27);
+  assert.equal(view.compareSpan("day", 2, [2025, 2024]), 28);
+  assert.equal(view.compareSpan("day", 4, [2025]), 29);
+  assert.equal(view.compareSpan("day", 2, []), 28);
+});
+
+test("a running total goes on after a period without a value, and ends at the value of the year", () => {
+  assert.deepEqual(view.runningTotal([null, 5, 0, 3]), [null, 5, 5, 8]);
+  // A period without a value breaks the line, and the total goes on from what
+  // it was (the checker's L1-2); nothing after the last value.
+  assert.deepEqual(view.runningTotal([80, null, 60, null]), [80, null, 140, null]);
+  assert.deepEqual(view.runningTotal([]), []);
+  assert.deepEqual(view.runningTotal(null), []);
+  // The end of the running total is the value of the year that the server
+  // gives, within the error of the fractions.
+  const days = [1.1, 2.2, null, 3.3, 0, 4.4];
+  const end = view.runningTotal(days).filter(Number.isFinite).at(-1);
+  assert.ok(Math.abs(end - 11.0) < 1e-9);
+  // Only a total can be a running total; another item compares in rows.
+  assert.equal(view.compareModeFor({ kind: "sum" }, "cumulative"), "cumulative");
+  assert.equal(view.compareModeFor({ kind: "count" }, "cumulative"), "cumulative");
+  assert.equal(view.compareModeFor({ kind: "day" }, "cumulative"), "rows");
+  assert.equal(view.compareModeFor({ kind: "pace" }, "overlay"), "overlay");
+  assert.equal(view.compareModeFor({ kind: "sum" }, "bars"), "rows");
+});
+
+test("the years have the steps of one color, the newest the darkest", () => {
+  assert.deepEqual([...view.yearSteps([2023, 2026, 2024])], [[2026, 6], [2024, 5], [2023, 4]]);
+  assert.equal(view.yearSteps([2026, 2025, 2024, 2023, 2022, 2021]).get(2021), 1);
+});
+
+test("a year is cut where its answer starts after the range or ends before it", () => {
+  const range = view.compareRange(2026, null);
+  assert.deepEqual(view.compareCut(range, { start: "2026-01-01", end: "2026-10-21" }), { from: null, to: "2026-10-21" });
+  assert.deepEqual(view.compareCut(view.compareRange(2019, null), { start: "2019-04-01", end: "2019-12-31" }), { from: "2019-04-01", to: null });
+  assert.deepEqual(view.compareCut(range, { start: "2026-01-01", end: "2026-12-31" }), { from: null, to: null });
+  assert.deepEqual(view.compareCut(range, { start: null, end: null }), { from: null, to: null });
+});
+
+test("an item of several series compares one of them, that of the newest source at first", () => {
+  const line = (source, sport) => ({ series: { vo2max_source_series: source, sport }, values: [] });
+  const panel = { lines: [line("activity", "RUNNING"), line("activity", "CYCLING"), line("performance_metrics_daily", "CYCLING"), line("performance_metrics_daily", "RUNNING")] };
+  assert.equal(view.compareSeries(panel).length, 4);
+  assert.equal(view.firstCompareSeries(panel), view.seriesKey(line("performance_metrics_daily", "RUNNING")));
+  // A year without that series has no line of it; another series is never used.
+  const year = { lines: [line("activity", "RUNNING")] };
+  assert.equal(view.compareLine(year, view.firstCompareSeries(panel)), null);
+  assert.equal(view.compareLine(year, view.seriesKey(line("activity", "RUNNING"))), year.lines[0]);
+  // An item of one line has nothing to choose.
+  const one = { lines: [{ series: null, values: [1] }] };
+  assert.deepEqual(view.compareSeries(one), []);
+  assert.equal(view.firstCompareSeries(one), null);
+  assert.equal(view.compareLine(one, null), one.lines[0]);
+});
+
+test("the value of a year is named as the labels of the panels name it", () => {
+  assert.deepEqual(view.compareValueMessage({ kind: "sum" }, null, "ja"), { key: "view.compare.value.sum", params: {}, keyParams: { period: { key: "view.compare.whole_year", params: {}, keyParams: {} } } });
+  const may = view.compareValueMessage({ kind: "day" }, 5, "ja");
+  assert.equal(may.key, "view.compare.value.day");
+  assert.deepEqual(may.keyParams.period, { text: "5月" });
+  assert.equal(view.compareValueMessage({ kind: "obs" }, 5, "en").keyParams.period.text, "May");
+});
+
+test("the way and the month of a comparison come back from the settings when they are of their forms", () => {
+  assert.deepEqual(view.compareToOpen({ view_compare_mode: "cumulative", view_compare_month: 5 }), { mode: "cumulative", month: 5 });
+  assert.deepEqual(view.compareToOpen({}), { mode: "rows", month: null });
+  assert.deepEqual(view.compareToOpen(null), { mode: "rows", month: null });
+  for (const [mode, month] of [["bars", 0], [3, 13], [null, true], ["overlay", 5.5], ["rows", "5"]]) {
+    const back = view.compareToOpen({ view_compare_mode: mode, view_compare_month: month });
+    assert.equal(back.mode, mode === "overlay" ? "overlay" : "rows");
+    assert.equal(back.month, null);
+  }
+});
+
+// The answers of a comparison, as the server gives them: the whole output by
+// year (or by month), and one answer for each year.
+const answerOf = (periods, lines) => ({
+  start: periods[0]?.start ?? null,
+  end: periods.at(-1)?.end ?? null,
+  periods,
+  panels: [{ item: "dist", kind: "sum", lines }],
+});
+const lineOf = (values, counts = values.map((value) => (value ? 1 : 0)), extra = {}) => ({ series: null, values, counts, ...extra });
+
+test("the value of a year, or of a month, is its period in the answer of the whole output", () => {
+  const whole = answerOf(
+    [
+      { start: "2025-04-01", end: "2025-12-31", partial: true },
+      { start: "2026-01-01", end: "2026-10-21", partial: true },
+    ],
+    [lineOf([1200.5, 980.25], [120, 98])],
+  );
+  assert.deepEqual(view.compareValue(whole, 2026, null, null), { value: 980.25, count: 98, partial: true });
+  assert.equal(view.compareValue(whole, 2024, null, null), null);
+  const months = answerOf(
+    [
+      { start: "2025-05-01", end: "2025-05-31", partial: false },
+      { start: "2026-05-01", end: "2026-05-31", partial: false },
+    ],
+    [lineOf([180, null], [18, 0])],
+  );
+  assert.deepEqual(view.compareValue(months, 2025, 5, null), { value: 180, count: 18, partial: false });
+  assert.deepEqual(view.compareValue(months, 2026, 5, null), { value: null, count: 0, partial: false });
+  assert.equal(view.compareValue(months, 2025, 6, null), null);
+  assert.equal(view.compareValue(null, 2025, 5, null), null);
+});
+
+test("the years compared are drawn newest first, with their places, totals, and cuts", () => {
+  const year = (periods, values, extra) => answerOf(periods, [lineOf(values, undefined, extra)]);
+  const answers = new Map([
+    [2025, year([{ start: "2025-01-01", end: "2025-01-31", partial: false }, { start: "2025-02-01", end: "2025-02-28", partial: false }], [10, 5])],
+    [2026, year([{ start: "2026-01-01", end: "2026-01-31", partial: false }, { start: "2026-02-01", end: "2026-02-10", partial: true }], [8, null])],
+  ]);
+  const whole = answerOf(
+    [
+      { start: "2025-01-01", end: "2025-12-31", partial: false },
+      { start: "2026-01-01", end: "2026-02-10", partial: true },
+    ],
+    [lineOf([15, 8])],
+  );
+  const rows = view.compareData({ years: [2025, 2026], month: null, grain: "month", mode: "rows", series: null, answers, whole });
+  assert.deepEqual(rows.map((entry) => [entry.year, entry.step]), [[2026, 6], [2025, 5]]);
+  assert.deepEqual(rows[0].slots.map((slot) => [slot.start, slot.partial]), [[0, false], [1, true]]);
+  assert.deepEqual(rows[0].values, [8, null]);
+  assert.deepEqual(rows[0].cut, { from: null, to: "2026-02-10" });
+  assert.deepEqual(rows[0].whole, { value: 8, count: 1, partial: true });
+  assert.deepEqual(rows[1].cut, { from: null, to: "2025-02-28" });
+  assert.equal(rows[0].outside, false);
+  const running = view.compareData({ years: [2025, 2026], month: null, grain: "month", mode: "cumulative", series: null, answers, whole });
+  assert.deepEqual(running[1].values, [10, 15]);
+  assert.equal(running[1].values.at(-1), running[1].whole.value);
+  // A month that the output does not have in a year: no period, no value.
+  const empty = view.compareData({ years: [2026], month: 7, grain: "day", mode: "rows", series: null, answers: new Map([[2026, answerOf([], [])]]), whole: answerOf([], []) });
+  assert.deepEqual([empty[0].outside, empty[0].values, empty[0].whole], [true, [], null]);
+  // The points of the records of each day stay points, and a running total has none.
+  const points = new Map([[2026, year([{ start: "2026-01-01", end: "2026-01-01", partial: false }], [50], { points: [[0, 50]] })]]);
+  assert.deepEqual(view.compareData({ years: [2026], month: null, grain: "day", mode: "overlay", series: null, answers: points, whole })[0].points, [[0, 50]]);
+  assert.equal(view.compareData({ years: [2026], month: null, grain: "day", mode: "cumulative", series: null, answers: points, whole })[0].points, null);
+});
+
+test("the places of the axis are named and marked as each language writes them", () => {
+  assert.deepEqual(view.compareSlotName(0, "week", null, "ja"), { key: "view.compare.week_number", params: { n: 1 }, keyParams: {} });
+  assert.deepEqual(view.compareSlotName(4, "month", null, "ja"), { text: "5月" });
+  assert.deepEqual(view.compareSlotName(59, "day", null, "ja"), { text: "2月29日" });
+  assert.deepEqual(view.compareSlotName(59, "day", null, "en"), { text: "February 29" });
+  assert.deepEqual(view.compareSlotName(16, "day", 5, "ja"), { text: "5月17日" });
+  // The first day of each month over a year; every seventh day over a month,
+  // within its days.
+  assert.deepEqual(view.compareTicks("month", null, 2026, "ja").map((tick) => tick.at), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+  assert.deepEqual(view.compareTicks("day", null, 2026, "en").slice(1, 3), [{ at: 31, text: "Feb" }, { at: 60, text: "Mar" }]);
+  // 1 January 2026 was a Thursday: three days into the week of its Monday.
+  assert.ok(Math.abs(view.compareTicks("week", null, 2026, "ja")[0].at - 3 / 7) < 1e-9);
+  assert.deepEqual(view.compareTicks("day", 2, 2026, "ja").map((tick) => [tick.at, tick.text]), [[0, "2/1"], [7, "2/8"], [14, "2/15"], [21, "2/22"]]);
+  assert.equal(view.compareTicks("day", 2, 2024, "ja").length, 5);
+});
+
+test("a year cut by the output says until or from which day", () => {
+  assert.deepEqual(view.compareNote({ from: null, to: "2026-10-21" }, "ja"), { key: "view.compare.until", params: { date: "10月21日" }, keyParams: {} });
+  assert.deepEqual(view.compareNote({ from: null, to: "2026-10-21" }, "ja", true).params, { date: "10/21" });
+  assert.deepEqual(view.compareNote({ from: "2019-04-01", to: null }, "en"), { key: "view.compare.since", params: { date: "April 1" }, keyParams: {} });
+  assert.equal(view.compareNote({ from: "2026-04-01", to: "2026-10-21" }, "ja").key, "view.compare.between");
+  assert.equal(view.compareNote({ from: null, to: null }, "ja"), null);
+});
+
+test("the readings and the table of a comparison say each year's own period, its value, and what it lacks", () => {
+  const item = { key: "dist", kind: "sum", group: "act" };
+  const answers = new Map([
+    [2025, answerOf([{ start: "2025-01-01", end: "2025-01-05", partial: true }, { start: "2025-01-06", end: "2025-01-12", partial: false }], [lineOf([12000, null], [2, 1])])],
+    [2026, answerOf([{ start: "2026-01-01", end: "2026-01-04", partial: true }], [lineOf([8000], [1])])],
+  ]);
+  const whole = answerOf(
+    [
+      { start: "2025-01-01", end: "2025-12-31", partial: false },
+      { start: "2026-01-01", end: "2026-01-04", partial: true },
+    ],
+    [lineOf([20000, 8000], [3, 1])],
+  );
+  const data = view.compareData({ years: [2025, 2026], month: null, grain: "week", mode: "overlay", series: null, answers, whole });
+  const readings = view.compareReadings(item, data, 1, "week", "overlay", "ja");
+  // 2026 has no second week yet: outside the output; 2025's has no value.
+  assert.deepEqual(readings.map((reading) => [reading.year, reading.period, reading.missing?.key ?? null]), [
+    [2026, null, "view.compare.outside"],
+    [2025, { text: "1/6–1/12" }, "view.compare.no_value"],
+  ]);
+  const first = view.compareReadings(item, data, 0, "week", "overlay", "ja");
+  assert.deepEqual(first[0].period, { key: "view.period.partial", params: {}, keyParams: { period: { text: "1/1–1/4" } } });
+  assert.equal(first[0].value.params.value, "8.0");
+  assert.equal(first[0].count.key, "view.count.activities");
+  const running = view.compareData({ years: [2025, 2026], month: null, grain: "week", mode: "cumulative", series: null, answers, whole });
+  assert.equal(view.compareReadings(item, running, 0, "week", "cumulative", "ja")[1].count, null);
+  // The table: the periods in rows, the value and the count of each year.
+  const table = view.compareTable(item, data, "week", null, 2, "ja");
+  assert.deepEqual(table.heads.map((head) => head.key), ["view.compare.period", "view.compare.year", "view.table.activities", "view.compare.year", "view.table.activities"]);
+  assert.equal(table.rows.length, 3);
+  assert.deepEqual(table.rows[0].cells.map((cell) => [cell.value?.params.value ?? null, cell.count, cell.partial, cell.outside]), [
+    ["8.0", "1", true, false],
+    ["12.0", "2", true, false],
+  ]);
+  assert.deepEqual(table.rows[1].cells.map((cell) => [cell.value, cell.outside]), [[null, true], [null, false]]);
+  assert.deepEqual(table.rows[2].cells.map((cell) => cell.outside), [true, true]);
+  assert.equal(table.last.period.key, "view.compare.value.sum");
+  assert.deepEqual(table.last.cells.map((cell) => [cell.value.params.value, cell.partial]), [["8.0", true], ["20.0", false]]);
+  assert.equal(table.counts, true);
+  // A running total has no counts: that of a period beside a total of all
+  // the periods before it would mislead.
+  const totals = view.compareTable(item, running, "week", null, 2, "ja", "cumulative");
+  assert.equal(totals.counts, false);
+  assert.deepEqual(totals.heads.map((head) => head.key), ["view.compare.period", "view.compare.year", "view.compare.year"]);
+  assert.deepEqual(totals.rows[0].cells.map((cell) => cell.count), [null, null]);
+  assert.deepEqual(totals.last.cells.map((cell) => cell.count), [null, null]);
+});
+
+test("the lines of VO2 Max are offered by the names of their legend", () => {
+  const line = (source, sport, first, last) => ({ series: { vo2max_source_series: source, sport }, values: [1], counts: [1], first_day: first, last_day: last });
+  const panel = { lines: [line("activity", "RUNNING", "2020-01-01", "2022-01-09"), line("performance_metrics_daily", "RUNNING", "2022-01-12", "2026-10-21")] };
+  const choices = view.compareSeriesChoices(panel, "ja");
+  assert.deepEqual(choices.map((choice) => choice.key), panel.lines.map((entry) => view.seriesKey(entry)));
+  assert.deepEqual(choices.map((choice) => choice.name.key), ["view.line.until", "view.line.from"]);
+  assert.deepEqual(view.compareSeriesChoices({ lines: [lineOf([1])] }, "ja"), []);
+});
+
+test("a stop of a comparison is that of the panels, with the grouping as the next step of an answer too large", () => {
+  const large = view.compareStopBox("VIEW_ANSWER_TOO_LARGE", null, "2.2.0", null);
+  const panels = view.stopBox("VIEW_ANSWER_TOO_LARGE", null, "2.2.0");
+  assert.deepEqual(large.heading, panels.heading);
+  assert.deepEqual(large.code, panels.code);
+  assert.deepEqual(large.lines.find((line) => line.key === "next.label").keyParams, { step: "view.compare.too_large_next" });
+  assert.equal(large.lines.length, panels.lines.length);
+  // Over one month, the grouping Month is not used: week only (the checker's L1-3).
+  const may = view.compareStopBox("VIEW_ANSWER_TOO_LARGE", null, "2.2.0", 5);
+  assert.deepEqual(may.lines.find((line) => line.key === "next.label").keyParams, { step: "view.compare.too_large_next_month" });
+  assert.deepEqual(view.compareStopBox("OUTPUT_CHANGED", null, "2.2.0", 5), view.stopBox("OUTPUT_CHANGED", null, "2.2.0"));
 });

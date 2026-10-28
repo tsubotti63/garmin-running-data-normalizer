@@ -37,6 +37,15 @@
   --axis: #b9c0cb;
   --cross: #7a8290;
   --zero: #7a8290;
+  /* The years compared on the view page (stage L1 of v2.2.0): one hue in six
+     steps, the oldest year lightest on light and darkest on dark, each 3:1 or
+     more on the surface. */
+  --y1: #887fff;
+  --y2: #7667f1;
+  --y3: #6452da;
+  --y4: #543cc4;
+  --y5: #4425ae;
+  --y6: #360198;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
     "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo UI", "Noto Sans CJK JP", sans-serif;
   font-size: 14px;
@@ -83,6 +92,12 @@
     --axis: #4a505a;
     --cross: #9aa1ad;
     --zero: #7b8494;
+    --y1: #7364cf;
+    --y2: #8678e6;
+    --y3: #9a8dfc;
+    --y4: #aea7ff;
+    --y5: #c4c1fe;
+    --y6: #dbdafe;
   }
 }
 
@@ -116,6 +131,12 @@
   --axis: #4a505a;
   --cross: #9aa1ad;
   --zero: #7b8494;
+  --y1: #7364cf;
+  --y2: #8678e6;
+  --y3: #9a8dfc;
+  --y4: #aea7ff;
+  --y5: #c4c1fe;
+  --y6: #dbdafe;
 }
 
 [hidden] {

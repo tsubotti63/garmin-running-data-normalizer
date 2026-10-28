@@ -24,10 +24,31 @@ import {
   themeNowKey,
 } from "./flow.mjs";
 import {
+  COMPARE_MODES,
   FIRST_KEYS,
   GROUPS,
+  MAX_COMPARE_YEARS,
   MAX_PANELS,
   clockOf,
+  compareData,
+  compareGrains,
+  compareModeFor,
+  compareNote,
+  compareRange,
+  compareReadings,
+  compareSeriesChoices,
+  compareSlotName,
+  compareSpan,
+  compareStopBox,
+  compareTable,
+  compareTicks,
+  compareToOpen,
+  compareValueGrain,
+  compareValueMessage,
+  compareYears,
+  firstCompareGrain,
+  firstCompareSeries,
+  firstCompareYears,
   coverageRuns,
   defaultTypes,
   draggedRange,
@@ -74,12 +95,14 @@ import {
   timeTickText,
   toggledItems,
   toggledTypes,
+  toggledYears,
   totalItem,
   typeMessage,
   typesRequest,
   typesSummary,
   typesToOpen,
   unitKey,
+  valueMessage,
   viewBar,
   viewHintsShown,
 } from "./view_flow.mjs";
@@ -88,6 +111,7 @@ import {
   PLOT_RIGHT,
   extent,
   isoDate,
+  labelPlaces,
   nearestPeriod,
   overviewShapes,
   panelShapes,
@@ -164,6 +188,7 @@ const ui = {
   typesList: byId("types-list"),
   typesClose: byId("types-close"),
   filtersHint: byId("filters-hint"),
+  compareOff: byId("compare-off"),
   body: byId("view-body"),
   shelf: byId("shelf"),
   shelfCount: byId("shelf-count"),
@@ -220,6 +245,31 @@ const ui = {
   pickerGroups: byId("picker-groups"),
   loading: byId("loading"),
   align: byId("align-scales"),
+  compare: byId("compare"),
+  compareBefore: byId("compare-before"),
+  compareItem: byId("compare-item"),
+  compareAfter: byId("compare-after"),
+  compareModes: [...document.querySelectorAll("[data-compare-mode]")],
+  compareAbout: byId("compare-about"),
+  compareAboutText: byId("compare-about-text"),
+  compareMonth: byId("compare-month"),
+  compareSeriesField: byId("compare-series-field"),
+  compareSeries: byId("compare-series"),
+  compareTable: byId("compare-table"),
+  compareTableChart: byId("compare-table-chart"),
+  compareTableTable: byId("compare-table-table"),
+  compareBack: byId("compare-back"),
+  compareYears: byId("compare-years"),
+  compareLoading: byId("compare-loading"),
+  compareStop: byId("compare-stop"),
+  compareStopHeading: byId("compare-stop-heading"),
+  compareStopLines: byId("compare-stop-lines"),
+  compareStopCode: byId("compare-stop-code"),
+  compareStack: byId("compare-stack"),
+  comparePanels: byId("compare-panels"),
+  compareAxis: byId("compare-axis"),
+  compareAnnouncer: byId("compare-announcer"),
+  compareNote: byId("compare-note"),
   seriesStop: byId("series-stop"),
   seriesStopHeading: byId("series-stop-heading"),
   seriesStopLines: byId("series-stop-lines"),
@@ -330,6 +380,23 @@ const state = {
   // The activity types that the person chose (null: those counted at first),
   // which an output that opens counts where it has them (stage K2).
   wantedTypes: null,
+  // Comparing one item by year (stage L1 of v2.2.0): its item, the years
+  // chosen, the grouping, the series of an item of several lines, whether it
+  // shows a table, whether the words of running totals are open, and the
+  // place of the cross line; null while the panels show. It is apart from
+  // the panels, the period, and the grouping, which it never changes, and it
+  // is not remembered.
+  compare: null,
+  // How it compares and in which month (null: the whole year), which the
+  // settings remember.
+  compareMode: "rows",
+  compareMonth: null,
+  // The answers of the last generation of its requests, the count of the
+  // generations, whether one is on its way, and a stop.
+  compareAnswer: null,
+  compareSeq: 0,
+  compareLoading: false,
+  compareStop: null,
 };
 
 // The numbers of the panels; the count of the answers tells the drawing that
@@ -636,6 +703,8 @@ function viewValues() {
     period: periodRequest(state.period, state.range),
     grain: state.grain,
     types: state.wantedTypes,
+    compare_mode: state.compareMode,
+    compare_month: state.compareMonth,
   };
 }
 
@@ -772,6 +841,7 @@ const OUTPUT_STOPS = [
 
 async function openOutput(target, focus = false) {
   const seq = ++state.openSeq;
+  state.compareSeq += 1;
   const current = state.view === null ? null : state.items;
   state.opening = target.name;
   state.openingTarget = target;
@@ -807,6 +877,15 @@ async function openOutput(target, focus = false) {
     state.range = period.range;
     ui.rangeFrom.value = state.range?.from ?? "";
     ui.rangeTo.value = state.range?.to ?? "";
+    if (state.compare !== null) {
+      if (itemsByKey(answer.items).has(state.compare.key) && compareYears(answer.first_day, answer.last_day).length) {
+        Object.assign(state.compare, { years: firstCompareYears(compareYears(answer.first_day, answer.last_day)), series: null, cursor: null });
+      } else {
+        state.compare = null;
+      }
+      state.compareAnswer = null;
+      state.compareStop = null;
+    }
     rememberItems();
     render();
     // A button that opened it is hidden now.
@@ -814,6 +893,7 @@ async function openOutput(target, focus = false) {
       ui.outputSelect.focus();
     }
     requestSeries();
+    requestCompare();
   } catch (error) {
     if (seq !== state.openSeq) {
       return;
@@ -822,6 +902,7 @@ async function openOutput(target, focus = false) {
     if (!connectionFailure(error)) {
       state.view = null;
       setAnswer(null);
+      state.compare = null;
       // The field keeps the output that could not be opened.
       state.target = error.code === "OUTPUT_LIST_CHANGED" ? null : target;
       state.stop = { code: error.code, detail: error.detail };
@@ -960,6 +1041,7 @@ async function requestSeries(again = true) {
     } else if (OUTPUT_STOPS.includes(error.code)) {
       state.view = null;
       setAnswer(null);
+      state.compare = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.seriesStop = { code: error.code, detail: error.detail };
@@ -975,11 +1057,19 @@ async function requestSeries(again = true) {
 // Open the output that is shown again, for a new ticket, and keep what the
 // panels show.
 async function reopen() {
+  const seq = state.openSeq;
   try {
     const answer = await callApi("/api/view/open", targetPayload(state.target));
+    // Another output opened meanwhile: its answer stays.
+    if (seq !== state.openSeq) {
+      return false;
+    }
     state.view = answer;
     return true;
   } catch (error) {
+    if (seq !== state.openSeq) {
+      return false;
+    }
     if (!connectionFailure(error)) {
       state.view = null;
       setAnswer(null);
@@ -1068,6 +1158,15 @@ function rangeTyped() {
 }
 
 function setGrain(grain) {
+  if (comparing()) {
+    // A grouping of the comparison, apart from that of the panels.
+    if (compareGrains(state.compareMonth).includes(grain) && grain !== state.compare.grain) {
+      state.compare.grain = grain;
+      state.compare.cursor = null;
+      requestCompare();
+    }
+    return;
+  }
   state.grain = grain;
   state.cursor = null;
   rememberItems(true);
@@ -1079,6 +1178,7 @@ function changeTypes(name) {
   state.wantedTypes = typesRequest(state.counted, state.view?.types);
   rememberItems(true);
   requestSeries();
+  requestCompare();
 }
 
 function changeItems(items, refresh = true) {
@@ -1444,7 +1544,8 @@ function cancelLayoutDrag() {
 
 // The layouts above the item shelf, their buttons, and their windows.
 function renderLayouts(live) {
-  const viewing = live && state.view !== null && state.opening === null;
+  // A layout holds panels, which are not shown while comparing years.
+  const viewing = live && state.view !== null && state.opening === null && !comparing();
   const cards = currentCards();
   renderCards(ui.layoutCards, cards, viewing);
   renderCards(ui.railLayoutCards, cards, viewing);
@@ -1543,6 +1644,10 @@ function buildPanel({ key, item, panel }, index, count, periods, grain) {
     tableButton.setAttribute("aria-pressed", String(table));
     tools.append(tableButton);
   }
+  const compareButton = textButton(t("view.compare.button"), "compare", key);
+  compareButton.setAttribute("aria-label", t("view.compare.title", { name }));
+  compareButton.disabled = !compareYears(state.view?.first_day, state.view?.last_day).length;
+  tools.append(compareButton);
   if (mode === "big") {
     tools.append(textButton(t("view.panel.unbig"), "unbig", key));
   } else {
@@ -1717,51 +1822,8 @@ function drawChart(entry) {
     plot.replaceChildren(svg, element("span", "panel-empty", t("view.summary.none")));
     return;
   }
-  const step = shapes.ticks.length > 1 ? Math.abs(shapes.ticks[1].value - shapes.ticks[0].value) : 1;
-  for (const tick of shapes.ticks) {
-    svg.append(svgElement("line", { class: "chart-grid", x1: PLOT_LEFT, x2: width - PLOT_RIGHT, y1: tick.y.toFixed(1), y2: tick.y.toFixed(1) }));
-    const label = svgElement("text", { class: "chart-tick", x: PLOT_LEFT - 8, y: (tick.y + 4).toFixed(1), "text-anchor": "end" });
-    label.textContent = tickText(key, tick.value, step, state.language);
-    svg.append(label);
-  }
-  if (shapes.base !== null) {
-    svg.append(svgElement("line", { class: "chart-base", x1: PLOT_LEFT, x2: width - PLOT_RIGHT, y1: shapes.base.toFixed(1), y2: shapes.base.toFixed(1) }));
-  }
-  shapes.lines.forEach((shape, number) => {
-    const color = `c${styles[number].color}`;
-    const dash = styles[number].dash;
-    if (shape.bars !== null) {
-      if (shape.bars.full) {
-        svg.append(svgElement("path", { class: `chart-bar ${color}`, d: shape.bars.full }));
-      }
-      if (shape.bars.partial) {
-        svg.append(svgElement("path", { class: `chart-bar ${color} partial`, d: shape.bars.partial }));
-      }
-    }
-    if (shape.line) {
-      svg.append(svgElement("path", { class: `chart-line ${color}`, d: shape.line, "stroke-dasharray": dash }));
-    }
-    const dots = (path, size) => {
-      if (!path) {
-        return;
-      }
-      // A hollow point needs room for its hole.
-      const radius = dash !== null ? Math.max(size, 2.4) : size;
-      if (radius >= 4) {
-        svg.append(svgElement("path", { class: "chart-ring", d: path, "stroke-width": 2 * radius + 4 }));
-      }
-      svg.append(svgElement("path", { class: `chart-dots ${color}`, d: path, "stroke-width": 2 * radius }));
-      if (dash !== null) {
-        svg.append(svgElement("path", { class: "chart-hole", d: path, "stroke-width": Math.max(1, 2 * radius - 3) }));
-      }
-    };
-    dots(shape.alone, shape.aloneRadius ?? 4);
-    dots(shape.markers, 4);
-    dots(shape.points, shape.pointRadius);
-    if (shape.zero) {
-      svg.append(svgElement("path", { class: "chart-zero", d: shape.zero }));
-    }
-  });
+  appendScale(svg, key, shapes, width - PLOT_RIGHT);
+  shapes.lines.forEach((shape, number) => appendMarks(svg, shape, `c${styles[number].color}`, styles[number].dash));
   const cross = svgElement("g", { class: "cross" });
   cross.setAttribute("display", "none");
   const crossLine = svgElement("line", { class: "chart-cross", y1: shapes.top, y2: shapes.top + shapes.plotHeight });
@@ -1774,6 +1836,59 @@ function drawChart(entry) {
   svg.append(cross);
   plot.replaceChildren(svg);
   Object.assign(entry, { cross, crossLine, crossDots });
+}
+
+// The ticks of the values of a chart, with its grid up to ``right``, and the
+// baseline of a total.
+function appendScale(svg, key, shapes, right) {
+  const step = shapes.ticks.length > 1 ? Math.abs(shapes.ticks[1].value - shapes.ticks[0].value) : 1;
+  for (const tick of shapes.ticks) {
+    svg.append(svgElement("line", { class: "chart-grid", x1: PLOT_LEFT, x2: right, y1: tick.y.toFixed(1), y2: tick.y.toFixed(1) }));
+    const label = svgElement("text", { class: "chart-tick", x: PLOT_LEFT - 8, y: (tick.y + 4).toFixed(1), "text-anchor": "end" });
+    label.textContent = tickText(key, tick.value, step, state.language);
+    svg.append(label);
+  }
+  if (shapes.base !== null) {
+    svg.append(svgElement("line", { class: "chart-base", x1: PLOT_LEFT, x2: right, y1: shapes.base.toFixed(1), y2: shapes.base.toFixed(1) }));
+  }
+}
+
+// The marks of one line of a chart in its color and its dash: its bars (those
+// of the periods cut lighter, and with an edge where they are ``outlined``),
+// its line (wider for the ``newest`` year compared), its points, and its dots
+// of 0.
+function appendMarks(svg, shape, color, dash, { outlined = false, newest = false } = {}) {
+  if (shape.bars !== null) {
+    if (shape.bars.full) {
+      svg.append(svgElement("path", { class: `chart-bar ${color}`, d: shape.bars.full }));
+    }
+    if (shape.bars.partial) {
+      svg.append(svgElement("path", { class: `chart-bar ${color} partial${outlined ? " outlined" : ""}`, d: shape.bars.partial }));
+    }
+  }
+  if (shape.line) {
+    svg.append(svgElement("path", { class: `chart-line ${color}${newest ? " newest" : ""}`, d: shape.line, "stroke-dasharray": dash }));
+  }
+  const dots = (path, size) => {
+    if (!path) {
+      return;
+    }
+    // A hollow point needs room for its hole.
+    const radius = dash !== null ? Math.max(size, 2.4) : size;
+    if (radius >= 4) {
+      svg.append(svgElement("path", { class: "chart-ring", d: path, "stroke-width": 2 * radius + 4 }));
+    }
+    svg.append(svgElement("path", { class: `chart-dots ${color}`, d: path, "stroke-width": 2 * radius }));
+    if (dash !== null) {
+      svg.append(svgElement("path", { class: "chart-hole", d: path, "stroke-width": Math.max(1, 2 * radius - 3) }));
+    }
+  };
+  dots(shape.alone, shape.aloneRadius ?? 4);
+  dots(shape.markers, 4);
+  dots(shape.points, shape.pointRadius);
+  if (shape.zero) {
+    svg.append(svgElement("path", { class: "chart-zero", d: shape.zero }));
+  }
 }
 
 // Draw the charts whose plots changed size since they were drawn, the time
@@ -1991,6 +2106,9 @@ function scheduleRedraw() {
     }
     if (!ui.overview.hidden) {
       renderOverview();
+    }
+    if (!ui.compare.hidden && !ui.compareStack.hidden && state.compareAnswer !== null) {
+      renderCompareBody();
     }
   });
 }
@@ -2217,6 +2335,804 @@ function redrawOverview() {
   renderOverview(true);
 }
 
+// --- Comparing one item by year (stage L1 of v2.2.0) -----------------------
+
+// What a comparison draws now (its item, its years, its axis), and its plots
+// as they are drawn: for each, its years, its chart, and its readings, which
+// the cross line moves.
+let compareContext = null;
+let compared = [];
+let comparedSignature = null;
+
+function comparing() {
+  return state.compare !== null && state.view !== null;
+}
+
+function compareItem() {
+  return itemsByKey(state.view?.items).get(state.compare?.key) ?? null;
+}
+
+// How the item is compared: the way remembered, or one row per year for an
+// item that does not add up (the way remembered stays as it is).
+function compareModeNow() {
+  return compareModeFor(compareItem(), state.compareMode);
+}
+
+function yearText(year) {
+  return t("view.compare.year", { year: String(year) });
+}
+
+// The comparison of one item, from its panel: the newest years of the output
+// and the first grouping of the way and the month. The panels, the period,
+// and the grouping of the page stay as they are, for the way back.
+function enterCompare(key) {
+  const item = itemsByKey(state.view?.items).get(key);
+  if (state.view === null || item === undefined || !compareYears(state.view.first_day, state.view.last_day).length) {
+    return;
+  }
+  state.compare = {
+    key,
+    years: firstCompareYears(compareYears(state.view.first_day, state.view.last_day)),
+    grain: firstCompareGrain(compareModeFor(item, state.compareMode), state.compareMonth),
+    series: null,
+    table: false,
+    about: false,
+    cursor: null,
+    cursorAxis: null,
+  };
+  state.compareAnswer = null;
+  state.compareStop = null;
+  state.typesOpen = false;
+  state.pickerOpen = false;
+  state.notesOpen = null;
+  state.layoutsOpen = false;
+  state.layoutSaving = false;
+  state.railLayoutsOpen = false;
+  render();
+  ui.compareItem.focus();
+  requestCompare();
+}
+
+// Back to the panels as they were; answers on their way are dropped.
+function leaveCompare() {
+  const key = state.compare?.key ?? null;
+  state.compare = null;
+  state.compareAnswer = null;
+  state.compareStop = null;
+  state.compareLoading = false;
+  state.compareSeq += 1;
+  render();
+  (ui.panels.querySelector(`button[data-action="compare"][data-key="${key}"]`) ?? ui.panels.querySelector('button[data-action="compare"]') ?? ui.outputSelect).focus();
+}
+
+// Ask for the numbers of a comparison as one generation: the value of every
+// year (or month) of the output, which also names the lines of an item of
+// several, and the periods of each year chosen. Answers of an older
+// generation are dropped when they come, and a stop of one of them stops the
+// generation; a ticket that the server no longer keeps opens the output
+// again, once.
+async function requestCompare(again = true) {
+  const compare = state.compare;
+  if (compare === null || state.view === null) {
+    return;
+  }
+  const seq = ++state.compareSeq;
+  const { key, grain } = compare;
+  const month = state.compareMonth;
+  const years = [...compare.years];
+  state.compareLoading = true;
+  render();
+  try {
+    const [whole, ...answers] = await Promise.all([
+      callApi("/api/view/series", seriesPayload([key], "all", compareValueGrain(month))),
+      ...years.map((year) => callApi("/api/view/series", seriesPayload([key], compareRange(year, month), grain))),
+    ]);
+    if (seq !== state.compareSeq) {
+      return;
+    }
+    const panel = whole.panels?.[0] ?? null;
+    if (!compareSeriesChoices(panel, state.language).some((choice) => choice.key === compare.series)) {
+      compare.series = firstCompareSeries(panel);
+    }
+    state.compareAnswer = { seq, key, month, grain, years, whole, answers: new Map(years.map((year, index) => [year, answers[index]])) };
+    state.compareStop = null;
+  } catch (error) {
+    if (seq !== state.compareSeq) {
+      return;
+    }
+    if (connectionFailure(error)) {
+      // The bar says so.
+    } else if (error.code === "VIEW_NOT_OPEN" && again && state.target !== null) {
+      if (await reopen()) {
+        if (seq !== state.compareSeq) {
+          return;
+        }
+        state.compareLoading = false;
+        requestCompare(false);
+        return;
+      }
+    } else if (OUTPUT_STOPS.includes(error.code)) {
+      state.view = null;
+      setAnswer(null);
+      state.compare = null;
+      state.stop = { code: error.code, detail: error.detail };
+    } else {
+      state.compareStop = { code: error.code, detail: error.detail };
+    }
+  }
+  if (seq === state.compareSeq) {
+    state.compareLoading = false;
+  }
+  render();
+}
+
+// Another item: its own lines, and the first grouping where the way changes
+// with it (a running total of an item that does not add up).
+function chooseCompareItem() {
+  const key = ui.compareItem.value;
+  if (!comparing() || key === state.compare.key || !itemsByKey(state.view.items).has(key)) {
+    return;
+  }
+  const before = compareModeNow();
+  Object.assign(state.compare, { key, series: null, about: false });
+  const mode = compareModeNow();
+  if (mode !== before) {
+    state.compare.grain = firstCompareGrain(mode, state.compareMonth);
+    state.compare.cursor = null;
+  }
+  requestCompare();
+}
+
+// A way chosen, which is remembered: new numbers only where its first
+// grouping is another.
+function chooseCompareMode(mode) {
+  if (!comparing() || !COMPARE_MODES.includes(mode) || compareModeFor(compareItem(), mode) !== mode) {
+    return;
+  }
+  state.compareMode = mode;
+  rememberItems(true);
+  const grain = firstCompareGrain(mode, state.compareMonth);
+  if (grain === state.compare.grain) {
+    render();
+    return;
+  }
+  state.compare.grain = grain;
+  state.compare.cursor = null;
+  requestCompare();
+}
+
+// A month chosen (or the whole year), which is remembered, with the first
+// grouping of the way over it.
+function chooseCompareMonth() {
+  if (!comparing()) {
+    return;
+  }
+  const month = Number(ui.compareMonth.value);
+  state.compareMonth = Number.isInteger(month) && month >= 1 && month <= 12 ? month : null;
+  state.compare.grain = firstCompareGrain(compareModeNow(), state.compareMonth);
+  state.compare.cursor = null;
+  rememberItems(true);
+  requestCompare();
+}
+
+function toggleCompareYear(year) {
+  if (!comparing()) {
+    return;
+  }
+  const years = toggledYears(state.compare.years, year);
+  if (years !== state.compare.years) {
+    state.compare.years = years;
+    requestCompare();
+  }
+}
+
+// The bar of the comparison, its stop, and the years.
+function renderCompare(live) {
+  const viewing = live && state.view !== null && state.opening === null;
+  const compare = viewing && comparing() ? state.compare : null;
+  ui.compare.hidden = compare === null;
+  if (compare === null) {
+    compareContext = null;
+    compared = [];
+    comparedSignature = null;
+    return;
+  }
+  const item = compareItem();
+  const total = item !== null && totalItem(item);
+  const mode = compareModeNow();
+  // The title, with the list of the items where each language names it.
+  const [before = "", after = ""] = t("view.compare.title", { name: "\u0001" }).split("\u0001");
+  setText(ui.compareBefore, before);
+  setText(ui.compareAfter, after);
+  renderCompareItems();
+  for (const button of ui.compareModes) {
+    button.disabled = button.dataset.compareMode === "cumulative" && !total;
+    button.setAttribute("aria-pressed", String(button.dataset.compareMode === mode));
+  }
+  ui.compareAbout.hidden = total;
+  ui.compareAbout.setAttribute("aria-expanded", String(compare.about && !ui.compareAbout.hidden));
+  ui.compareAboutText.hidden = !compare.about || ui.compareAbout.hidden;
+  renderCompareMonths();
+  renderCompareSeries();
+  ui.compareTable.setAttribute("aria-pressed", String(compare.table));
+  ui.compareTableChart.hidden = !compare.table;
+  ui.compareTableTable.hidden = compare.table;
+  renderCompareYears();
+  setText(ui.compareLoading, state.compareLoading ? t("view.loading") : "");
+  ui.compareStop.hidden = state.compareStop === null;
+  if (!ui.compareStop.hidden) {
+    renderStop(ui.compareStop, null, ui.compareStopLines, ui.compareStopCode, compareStopBox(state.compareStop.code, state.compareStop.detail, state.productVersion, state.compareMonth));
+  }
+  const ready = state.compareAnswer !== null && state.compareAnswer.key === compare.key && state.compareStop === null;
+  ui.compareStack.hidden = !ready;
+  ui.compareStack.classList.toggle("waiting", state.compareLoading);
+  ui.compareNote.hidden = !ready || !compare.table;
+  if (ready) {
+    renderCompareBody();
+  } else {
+    compareContext = null;
+    compared = [];
+    comparedSignature = null;
+  }
+}
+
+// The items of the output in the list of the bar, by the groups of the shelf.
+function renderCompareItems() {
+  const items = state.view?.items ?? [];
+  const signature = JSON.stringify([state.view?.view ?? null, items.map((item) => item.key), state.language]);
+  if (ui.compareItem.dataset.signature !== signature) {
+    const groups = GROUPS.map((group) => {
+      const node = element("optgroup");
+      node.label = t(groupKey(group));
+      for (const item of items.filter((entry) => entry.group === group)) {
+        const option = element("option", "", itemName(item.key));
+        option.value = item.key;
+        node.append(option);
+      }
+      return node;
+    }).filter((node) => node.children.length > 0);
+    ui.compareItem.replaceChildren(...groups);
+    ui.compareItem.dataset.signature = signature;
+  }
+  ui.compareItem.value = state.compare.key;
+}
+
+function renderCompareMonths() {
+  if (ui.compareMonth.dataset.signature !== state.language) {
+    const whole = element("option", "", t("view.compare.month_all"));
+    whole.value = "";
+    const months = Array.from({ length: 12 }, (_none, index) => {
+      const option = element("option", "", describe(compareSlotName(index, "month", null, state.language)));
+      option.value = String(index + 1);
+      return option;
+    });
+    ui.compareMonth.replaceChildren(whole, ...months);
+    ui.compareMonth.dataset.signature = state.language;
+  }
+  ui.compareMonth.value = state.compareMonth === null ? "" : String(state.compareMonth);
+}
+
+// The lines of an item of several (VO2 Max), one of which is compared, by the
+// names of the legend of its panel; no list for an item of one line.
+function renderCompareSeries() {
+  const answer = state.compareAnswer;
+  const panel = answer !== null && answer.key === state.compare.key ? (answer.whole.panels?.[0] ?? null) : null;
+  const choices = compareSeriesChoices(panel, state.language);
+  ui.compareSeriesField.hidden = choices.length < 2;
+  const signature = JSON.stringify([choices.map((choice) => choice.key), state.language]);
+  if (ui.compareSeries.dataset.signature !== signature) {
+    ui.compareSeries.replaceChildren(
+      ...choices.map((choice) => {
+        const option = element("option", "", describe(choice.name));
+        option.value = choice.key;
+        return option;
+      }),
+    );
+    ui.compareSeries.dataset.signature = signature;
+  }
+  if (choices.some((choice) => choice.key === state.compare.series)) {
+    ui.compareSeries.value = state.compare.series;
+  }
+}
+
+// The years of the output, a pressed button each that is chosen: one at
+// least, and up to six.
+function renderCompareYears() {
+  const years = compareYears(state.view.first_day, state.view.last_day).map((entry) => entry.year);
+  const chosen = state.compare.years;
+  const signature = JSON.stringify([years, chosen]);
+  if (ui.compareYears.dataset.signature === signature) {
+    return;
+  }
+  const focused = ui.compareYears.contains(document.activeElement) ? document.activeElement.dataset.year : null;
+  ui.compareYears.replaceChildren(
+    ...years.map((year) => {
+      const button = element("button", "", String(year));
+      button.type = "button";
+      button.dataset.year = String(year);
+      const on = chosen.includes(year);
+      button.setAttribute("aria-pressed", String(on));
+      button.disabled = on ? chosen.length <= 1 : chosen.length >= MAX_COMPARE_YEARS;
+      return button;
+    }),
+  );
+  ui.compareYears.dataset.signature = signature;
+  if (focused) {
+    ui.compareYears.querySelector(`button[data-year="${focused}"]`)?.focus();
+  }
+}
+
+// A short piece of a line in the color of a year.
+function yearSwatch(step) {
+  const swatch = svgElement("svg", { viewBox: "0 0 22 8", "aria-hidden": "true", focusable: "false" });
+  swatch.append(svgElement("line", { x1: 2, x2: 20, y1: 4, y2: 4, class: `key-line y${step}` }));
+  return swatch;
+}
+
+// What a comparison says of its values: the label of its panel.
+function compareKindText(context) {
+  return context.mode === "cumulative" ? t("view.compare.mode.cumulative") : t(kindKey(context.item, context.grain));
+}
+
+// The years drawn: in rows, on one panel, or in a table, from the answers of
+// the last generation; the way, the series, and the table change the drawing
+// only.
+function renderCompareBody(force = false) {
+  const answer = state.compareAnswer;
+  const compare = state.compare;
+  const mode = compareModeNow();
+  const signature = JSON.stringify([answer.seq, mode, compare.series, compare.table, state.language]);
+  if (!force && signature === comparedSignature) {
+    renderCompareCharts();
+    return;
+  }
+  const focused = ui.comparePanels.contains(document.activeElement) ? (document.activeElement.dataset.plot ?? null) : null;
+  plotWatcher?.disconnect();
+  const item = compareItem();
+  const data = compareData({ years: answer.years, month: answer.month, grain: answer.grain, mode, series: compare.series, answers: answer.answers, whole: answer.whole });
+  const span = compareSpan(answer.grain, answer.month, answer.years);
+  const lines = data.map((entry) => ({
+    values: entry.values.map((value) => (Number.isFinite(value) ? shown(compare.key, value) : null)),
+    points: entry.points === null ? undefined : entry.points.map(([index, value]) => [index, shown(compare.key, value)]),
+  }));
+  compareContext = {
+    key: compare.key,
+    item,
+    data,
+    lines,
+    span,
+    grain: answer.grain,
+    month: answer.month,
+    mode,
+    total: totalItem(item),
+    // One scale for every year.
+    shared: extent(lines),
+    slots: Array.from({ length: span + 1 }, (_none, slot) => ({ start: slot, end: slot })),
+  };
+  // The cross line stays where it was on the same axis; on another (a new
+  // grouping or month, also while its numbers are on their way), it starts at
+  // the last period of the newest year.
+  const axis = JSON.stringify([answer.grain, answer.month]);
+  if (compare.cursor === null || compare.cursorAxis !== axis || compare.cursor > span) {
+    const newest = data[0];
+    compare.cursor = newest && newest.slots.length ? newest.slots[newest.slots.length - 1].start : span;
+    compare.cursorAxis = axis;
+  }
+  const name = itemName(compare.key);
+  if (compare.table) {
+    compared = [];
+    ui.comparePanels.replaceChildren(buildCompareTable(compareContext, name));
+  } else {
+    compared = mode === "rows" ? data.map((entry, index) => buildCompareRow(compareContext, entry, lines[index], name)) : [buildCompareOne(compareContext, name)];
+    ui.comparePanels.replaceChildren(...compared.map((entry) => entry.section));
+  }
+  ui.compareAxis.hidden = compare.table;
+  ui.compareAxis.replaceChildren();
+  delete ui.compareAxis.dataset.width;
+  renderCompareCharts();
+  moveCompareCross(compare.cursor, false);
+  for (const entry of compared) {
+    plotWatcher?.observe(entry.plot);
+  }
+  comparedSignature = signature;
+  if (focused !== null) {
+    ui.comparePanels.querySelector(`.plot[data-plot="${focused}"]`)?.focus({ preventScroll: true });
+  }
+}
+
+// A row of a year: its name, the days that the output cuts, its value (of
+// the year or of the month) as the server counts it, its reading, and its
+// chart.
+function buildCompareRow(context, entry, line, name) {
+  const section = element("section", "panel-view compare-row");
+  const headingId = `compare-year-${entry.year}`;
+  section.setAttribute("aria-labelledby", headingId);
+  const head = element("div", "panel-head");
+  const heading = element("h4", "panel-name compare-year", yearText(entry.year));
+  heading.id = headingId;
+  head.append(heading);
+  const note = compareNote(entry.cut, state.language);
+  if (note !== null) {
+    head.append(element("span", "panel-unit", describe(note)));
+  }
+  const whole = element("span", "compare-whole", `${describe(compareValueMessage(context.item, context.month, state.language))} `);
+  const value = entry.whole === null ? "—" : entry.whole.value === null ? t("view.no_value") : describe(valueMessage(context.key, entry.whole.value, state.language));
+  whole.append(element("strong", "", value));
+  head.append(whole);
+  const read = element("span", "panel-read");
+  read.setAttribute("aria-hidden", "true");
+  head.append(read);
+  section.append(head);
+  const body = element("div", "panel-chart");
+  const plot = element("div", "plot");
+  plot.tabIndex = 0;
+  plot.setAttribute("role", "img");
+  plot.dataset.plot = String(entry.year);
+  plot.setAttribute("aria-label", t("view.compare.row_label", { year: yearText(entry.year), name }));
+  body.append(plot);
+  section.append(body);
+  return { section, kind: "row", plot, read, frame: null, data: [entry], lines: [line], size: null, shapes: null, scale: null, cross: null, right: PLOT_RIGHT };
+}
+
+// The years on one panel: a line each in its color, with its name at its end.
+function buildCompareOne(context, name) {
+  const section = element("section", "panel-view compare-one");
+  section.setAttribute("aria-labelledby", "compare-one-name");
+  const head = element("div", "panel-head");
+  const heading = element("h4", "panel-name", name);
+  heading.id = "compare-one-name";
+  head.append(heading, element("span", "panel-unit", t(unitKey(context.key))), element("span", "panel-kind", compareKindText(context)));
+  const keys = element("span", "panel-keys");
+  for (const entry of context.data) {
+    const key = element("span", "key");
+    key.append(yearSwatch(entry.step), yearText(entry.year));
+    keys.append(key);
+  }
+  head.append(keys);
+  section.append(head);
+  const body = element("div", "panel-chart");
+  const plot = element("div", "plot");
+  plot.tabIndex = 0;
+  plot.setAttribute("role", "img");
+  plot.dataset.plot = "one";
+  plot.setAttribute(
+    "aria-label",
+    t("view.compare.chart_label", { name, years: context.data.map((entry) => yearText(entry.year)).join(t("view.spoken_separator")) }),
+  );
+  const frame = element("div", "compare-read");
+  frame.setAttribute("aria-hidden", "true");
+  frame.hidden = true;
+  body.append(plot, frame);
+  section.append(body);
+  return { section, kind: "one", plot, read: null, frame, data: context.data, lines: context.lines, size: null, shapes: null, scale: null, cross: null, right: PLOT_RIGHT };
+}
+
+// The table of a comparison: the periods in rows, the years in columns, and
+// the value of each year (or month) in the last row.
+function buildCompareTable(context, name) {
+  const section = element("section", "panel-view compare-table table");
+  section.setAttribute("aria-labelledby", "compare-table-name");
+  const head = element("div", "panel-head");
+  const heading = element("h4", "panel-name", name);
+  heading.id = "compare-table-name";
+  const kind = compareKindText(context);
+  head.append(heading, element("span", "panel-unit", t(unitKey(context.key))), element("span", "panel-kind", kind));
+  section.append(head);
+  const wrap = element("div", "panel-table");
+  wrap.tabIndex = 0;
+  wrap.setAttribute("role", "region");
+  wrap.setAttribute("aria-label", t("view.compare.table_label", { name }));
+  const table = element("table", "t");
+  const caption = element("caption", "visually-hidden", t("view.compare.table_caption", { name, kind }));
+  const { heads, rows, last, counts } = compareTable(context.item, context.data, context.grain, context.month, context.span, state.language, context.mode);
+  const headRow = element("tr");
+  heads.forEach((entry, index) => {
+    const cell = element("th", index === 0 ? "" : "n", describe(entry));
+    cell.scope = "col";
+    headRow.append(cell);
+  });
+  const thead = element("thead");
+  thead.append(headRow);
+  const tbody = element("tbody");
+  const line = (row, className = "") => {
+    const tr = element("tr", className);
+    const period = element("th", "", describe(row.period));
+    period.scope = "row";
+    tr.append(period);
+    for (const cell of row.cells) {
+      const text = cell.outside ? "—" : cell.value === null ? t("view.no_value") : `${describe(cell.value)}${cell.partial ? "*" : ""}`;
+      tr.append(element("td", cell.value === null ? "n empty" : "n", text));
+      if (counts) {
+        tr.append(element("td", "n", cell.count ?? ""));
+      }
+    }
+    return tr;
+  };
+  tbody.append(...rows.map((row) => line(row)), line(last, "whole"));
+  table.append(caption, thead, tbody);
+  wrap.append(table);
+  section.append(wrap);
+  return section;
+}
+
+// The name at the end of a year's line: the year, its running total for that
+// way, and the day that the output cuts it; null for a year without a value.
+function endLabel(context, entry) {
+  let last = -1;
+  entry.values.forEach((value, index) => {
+    if (Number.isFinite(value)) {
+      last = index;
+    }
+  });
+  if (last < 0) {
+    return null;
+  }
+  let text = String(entry.year);
+  if (context.mode === "cumulative") {
+    text = t("view.compare.end_value", { text, value: describe(valueMessage(context.key, entry.values[last], state.language)) });
+  }
+  const note = compareNote(entry.cut, state.language, true);
+  return { index: last, text: note === null ? text : t("view.compare.end_note", { text, note: describe(note) }) };
+}
+
+// Draw the chart of a plot of a comparison at its size: a year in a row, in
+// the color of the panels, with the bars cut by the output edged; or the years
+// on one panel, older under newer, their names at the right in the room that
+// they take.
+function drawComparePlot(entry, context) {
+  const plot = entry.plot;
+  const width = plot.clientWidth;
+  const height = plot.clientHeight;
+  entry.size = `${width} ${height}`;
+  entry.shapes = null;
+  entry.cross = null;
+  if (width < 60 || height < 24) {
+    plot.replaceChildren();
+    return;
+  }
+  const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, "aria-hidden": "true", focusable: "false" });
+  plot.replaceChildren(svg);
+  const one = entry.kind === "one";
+  const labels = one ? entry.data.map((year) => endLabel(context, year)) : [];
+  let room = 0;
+  for (const label of labels) {
+    if (label !== null) {
+      const node = svgElement("text", { class: "compare-label newest" });
+      node.textContent = label.text;
+      svg.append(node);
+      room = Math.max(room, node.getComputedTextLength());
+      node.remove();
+    }
+  }
+  entry.right = one ? Math.max(PLOT_RIGHT, Math.min(Math.round(width * 0.4), Math.ceil(room) + 16)) : PLOT_RIGHT;
+  const inner = width - (entry.right - PLOT_RIGHT);
+  const shapes = entry.data.map((year, index) =>
+    panelShapes({
+      lines: [entry.lines[index]],
+      periods: year.slots,
+      start: 0,
+      end: context.span,
+      width: inner,
+      height,
+      total: context.total,
+      clock: clockOf(context.key),
+      shared: context.shared,
+      lineOnly: one,
+      running: context.mode === "cumulative",
+    }),
+  );
+  const first = shapes[0];
+  if (first === undefined) {
+    plot.replaceChildren();
+    return;
+  }
+  entry.scale = first.scale;
+  if (first.empty) {
+    const empty = !one && entry.data[0].outside ? t("view.compare.outside") : t("view.summary.none");
+    plot.replaceChildren(svg, element("span", "panel-empty", empty));
+    return;
+  }
+  appendScale(svg, context.key, first, width - entry.right);
+  // The older years first, so that the newest is on top.
+  for (let index = entry.data.length - 1; index >= 0; index -= 1) {
+    const color = one ? `y${entry.data[index].step}` : "c1";
+    appendMarks(svg, shapes[index].lines[0], color, null, { outlined: !one, newest: one && index === 0 });
+  }
+  if (one) {
+    const ends = labels.map((label, index) => (label === null ? null : { x: periodMiddle(first.scale, entry.data[index].slots[label.index]), y: shapes[index].y(entry.lines[index].values[label.index]) }));
+    const shownEnds = ends.flatMap((end, index) => (end === null ? [] : [{ ...end, index }]));
+    const places = labelPlaces(shownEnds.map((end) => end.y), 13, first.top + first.plotHeight);
+    shownEnds.forEach((end, at) => {
+      const text = svgElement("text", { class: `compare-label${end.index === 0 ? " newest" : ""}`, x: (end.x + 7).toFixed(1), y: (places[at] + 4).toFixed(1) });
+      text.textContent = labels[end.index].text;
+      svg.append(text);
+    });
+  }
+  const cross = svgElement("g", { class: "cross" });
+  cross.setAttribute("display", "none");
+  const crossLine = svgElement("line", { class: "chart-cross", y1: first.top, y2: first.top + first.plotHeight });
+  cross.append(crossLine);
+  const crossDots = entry.data.map((year) => {
+    const dot = svgElement("circle", { class: `chart-cross-dot ${one ? `y${year.step}` : "c1"}`, r: 4.5 });
+    cross.append(dot);
+    return dot;
+  });
+  svg.append(cross);
+  Object.assign(entry, { shapes, cross, crossLine, crossDots });
+}
+
+// Draw the plots whose size changed, the axis at the width of the plots, and
+// the cross line again.
+function renderCompareCharts() {
+  const context = compareContext;
+  if (context === null) {
+    return;
+  }
+  let changed = false;
+  for (const entry of compared) {
+    if (entry.size !== `${entry.plot.clientWidth} ${entry.plot.clientHeight}`) {
+      drawComparePlot(entry, context);
+      changed = true;
+    }
+  }
+  const first = compared[0];
+  if (first !== undefined) {
+    const width = first.plot.clientWidth;
+    const size = `${width} ${first.right}`;
+    if (changed || ui.compareAxis.dataset.width !== size) {
+      drawCompareAxis(context, width, first.right);
+      ui.compareAxis.dataset.width = size;
+    }
+  }
+  if (changed) {
+    moveCompareCross(state.compare.cursor, false);
+  }
+}
+
+// The axis under the years: the months of a year, or days of the month.
+function drawCompareAxis(context, width, right) {
+  ui.compareAxis.replaceChildren();
+  if (width < 60) {
+    return;
+  }
+  const height = ui.compareAxis.clientHeight || 24;
+  const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, width, "aria-hidden": "true", focusable: "false" });
+  const scale = timeScale(0, context.span, PLOT_LEFT, width - right);
+  const newest = Math.max(...context.data.map((entry) => entry.year));
+  for (const tick of compareTicks(context.grain, context.month, newest, state.language)) {
+    const x = scale.x(tick.at);
+    svg.append(svgElement("line", { class: "axis-tick", x1: x.toFixed(1), x2: x.toFixed(1), y1: 0, y2: 5 }));
+    const label = svgElement("text", { class: "axis-text", x: (x + 3).toFixed(1), y: 16 });
+    label.textContent = tick.text;
+    svg.append(label);
+  }
+  ui.compareAxis.append(svg);
+}
+
+// Move the cross line of the comparison to one place of its axis: the
+// reading of each row, or the box of the readings of the panel, follows, and
+// the values are said when the keyboard moved it.
+function moveCompareCross(slot, speak) {
+  const context = compareContext;
+  if (context === null || slot === null || state.compare === null) {
+    return;
+  }
+  const at = Math.max(0, Math.min(context.span, slot));
+  state.compare.cursor = at;
+  const readings = compareReadings(context.item, context.data, at, context.grain, context.mode, state.language);
+  for (const entry of compared) {
+    let x = null;
+    if (entry.cross !== null && entry.shapes !== null) {
+      x = periodMiddle(entry.scale, { start: at, end: at });
+      entry.cross.setAttribute("display", "inline");
+      entry.crossLine.setAttribute("x1", x.toFixed(1));
+      entry.crossLine.setAttribute("x2", x.toFixed(1));
+      entry.crossDots.forEach((dot, index) => {
+        const place = entry.data[index].slots.findIndex((period) => period.start === at);
+        const value = place < 0 ? null : entry.lines[index].values[place];
+        if (Number.isFinite(value)) {
+          dot.setAttribute("cx", x.toFixed(1));
+          dot.setAttribute("cy", entry.shapes[index].y(value).toFixed(1));
+          dot.setAttribute("display", "inline");
+        } else {
+          dot.setAttribute("display", "none");
+        }
+      });
+    }
+    if (entry.kind === "row") {
+      renderCompareRead(entry, context, at);
+    } else if (x !== null) {
+      renderCompareFrame(entry, readings, x);
+    }
+  }
+  if (speak) {
+    const values = readings
+      .map((reading) =>
+        reading.period === null
+          ? t("view.spoken_line", { line: yearText(reading.year), value: describe(reading.missing) })
+          : t("view.compare.spoken_year", { year: yearText(reading.year), period: describe(reading.period), value: describe(reading.value ?? reading.missing) }),
+      )
+      .join(t("view.spoken_separator"));
+    setText(ui.compareAnnouncer, t("view.spoken", { period: describe(compareSlotName(at, context.grain, context.month, state.language)), values }));
+  }
+}
+
+// The reading of a row of a year, at the top right as on a panel: its own
+// period with its value and its count.
+function renderCompareRead(entry, context, at) {
+  const year = entry.data[0];
+  const place = year.slots.findIndex((period) => period.start === at);
+  const nodes = [];
+  if (place < 0) {
+    nodes.push(describe(compareSlotName(at, context.grain, context.month, state.language)), element("span", "no-value", t("view.compare.outside")));
+  } else {
+    const reading = readout(context.item, { lines: [{ values: year.values, counts: year.counts }] }, year.periods, place, context.grain, state.language);
+    nodes.push(describe(reading.period));
+    if (reading.values.length) {
+      nodes.push(element("strong", "", describe(reading.values[0].value)));
+      if (reading.values[0].count !== null) {
+        nodes.push(describe(reading.values[0].count));
+      }
+    } else {
+      nodes.push(element("span", "no-value", t("view.no_value")));
+    }
+  }
+  entry.read.replaceChildren(...nodes);
+}
+
+// The box of the readings of the years on one panel, beside the cross line:
+// at its right where there is room, and at its left otherwise.
+function renderCompareFrame(entry, readings, x) {
+  const table = element("table");
+  for (const reading of readings) {
+    const row = element("tr");
+    const swatch = element("td");
+    swatch.append(yearSwatch(reading.step));
+    row.append(swatch, element("td", "", yearText(reading.year)), element("td", "", reading.period === null ? "" : describe(reading.period)));
+    if (reading.value !== null) {
+      row.append(element("td", "v", reading.count === null ? describe(reading.value) : `${describe(reading.value)} ${describe(reading.count)}`));
+    } else {
+      row.append(element("td", "none", describe(reading.missing)));
+    }
+    table.append(row);
+  }
+  entry.frame.replaceChildren(table);
+  entry.frame.hidden = false;
+  const room = entry.plot.clientWidth - entry.right;
+  const width = entry.frame.offsetWidth;
+  const left = x + 14 + width <= room ? x + 14 : Math.max(PLOT_LEFT, x - 14 - width);
+  entry.frame.style.left = `${Math.round(left)}px`;
+}
+
+function comparePointer(event) {
+  const plot = event.target.closest(".plot");
+  const entry = compared.find((candidate) => candidate.plot === plot);
+  if (!entry || entry.shapes === null || compareContext === null) {
+    return;
+  }
+  const box = plot.getBoundingClientRect();
+  const slot = nearestPeriod(compareContext.slots, entry.scale, event.clientX - box.left);
+  if (slot !== null && slot !== state.compare.cursor) {
+    moveCompareCross(slot, false);
+  }
+}
+
+function compareKey(event) {
+  if (compareContext === null) {
+    return;
+  }
+  if (Object.hasOwn(CROSS_KEYS, event.key)) {
+    moveCompareCross((state.compare.cursor ?? 0) + CROSS_KEYS[event.key], true);
+  } else if (event.key === "Home") {
+    moveCompareCross(0, true);
+  } else if (event.key === "End") {
+    moveCompareCross(compareContext.span, true);
+  } else {
+    return;
+  }
+  event.preventDefault();
+}
+
 // --- The rest of the page -------------------------------------------------
 
 function replaceLines(container, messages) {
@@ -2323,10 +3239,13 @@ function renderFilters(live) {
   ui.openLatest.disabled = !live;
   ui.chooseOutput.disabled = !live || state.choosing;
   const answer = state.answer;
+  const apart = viewing && comparing();
   for (const button of ui.periodButtons) {
-    button.disabled = !viewing;
+    button.disabled = !viewing || apart;
     button.setAttribute("aria-pressed", String(viewing && state.period === button.dataset.period));
   }
+  ui.rangeFrom.disabled = apart;
+  ui.rangeTo.disabled = apart;
   ui.rangeRow.hidden = !viewing || state.period !== "custom";
   if (viewing) {
     for (const field of [ui.rangeFrom, ui.rangeTo]) {
@@ -2334,11 +3253,12 @@ function renderFilters(live) {
       field.max = state.view.last_day ?? "";
     }
   }
-  ui.periodBack.disabled = !viewing || shiftedRange(answer?.start, answer?.end, -1, state.view?.first_day, state.view?.last_day) === null;
-  ui.periodNext.disabled = !viewing || shiftedRange(answer?.start, answer?.end, 1, state.view?.first_day, state.view?.last_day) === null;
+  ui.periodBack.disabled = !viewing || apart || shiftedRange(answer?.start, answer?.end, -1, state.view?.first_day, state.view?.last_day) === null;
+  ui.periodNext.disabled = !viewing || apart || shiftedRange(answer?.start, answer?.end, 1, state.view?.first_day, state.view?.last_day) === null;
+  const grains = apart ? compareGrains(state.compareMonth) : null;
   for (const button of ui.grainButtons) {
-    button.disabled = !viewing;
-    button.setAttribute("aria-pressed", String(viewing && state.grain === button.dataset.grain));
+    button.disabled = !viewing || (grains !== null && !grains.includes(button.dataset.grain));
+    button.setAttribute("aria-pressed", String(viewing && (grains === null ? state.grain : state.compare.grain) === button.dataset.grain));
   }
   const auto = viewing ? autoGrainOf(answer?.start, answer?.end) : null;
   setText(ui.grainAutoNow, auto === null ? "" : t("view.grain.auto_now", { grain: t(grainKey(auto)) }));
@@ -2350,7 +3270,8 @@ function renderFilters(live) {
   if (!ui.typesPop.hidden) {
     renderTypes(types);
   }
-  ui.filtersHint.hidden = !state.hints || !viewing;
+  ui.filtersHint.hidden = !state.hints || !viewing || apart;
+  ui.compareOff.hidden = !apart;
 }
 
 function renderTypes(types) {
@@ -2398,7 +3319,8 @@ function coverageBar(months, firstMonth, lastMonth) {
 }
 
 function renderShelf(live) {
-  const viewing = live && state.view !== null && state.opening === null;
+  // While comparing years, the item is chosen in the bar of the comparison.
+  const viewing = live && state.view !== null && state.opening === null && !comparing();
   const open = state.shelf === "open";
   ui.body.classList.toggle("folded", !open);
   ui.shelf.hidden = !open;
@@ -2479,7 +3401,10 @@ function renderShelf(live) {
 function renderPicker(viewing) {
   const folded = state.shelf === "closed";
   ui.addWrap.hidden = !folded || !viewing;
-  ui.addItems.disabled = !viewing || state.items.length >= MAX_PANELS;
+  ui.addItems.disabled = !viewing || comparing() || state.items.length >= MAX_PANELS;
+  if (comparing()) {
+    state.pickerOpen = false;
+  }
   ui.addItems.setAttribute("aria-expanded", String(state.pickerOpen));
   ui.picker.hidden = !state.pickerOpen || ui.addWrap.hidden;
   if (ui.picker.hidden) {
@@ -2562,7 +3487,7 @@ function renderStage(live) {
         action: "normalize",
       };
     }
-  } else if (viewing && !state.items.length) {
+  } else if (viewing && !state.items.length && !comparing()) {
     empty = {
       heading: t("view.empty.items_heading"),
       text: t(state.shelf === "open" ? "view.empty.items_shelf" : "view.empty.items_add", { button: t("view.add.button") }),
@@ -2590,16 +3515,16 @@ function renderStage(live) {
     ui.stopNormalize.disabled = !live;
     ui.stopOther.disabled = !live || state.choosing;
   }
-  ui.caveat.hidden = !viewing;
+  ui.caveat.hidden = !viewing || comparing();
   renderPicker(viewing);
   setText(ui.loading, state.loading && viewing ? t("view.loading") : "");
   ui.align.disabled = !viewing;
   ui.align.checked = state.align;
-  ui.seriesStop.hidden = !viewing || state.seriesStop === null;
+  ui.seriesStop.hidden = !viewing || state.seriesStop === null || comparing();
   if (!ui.seriesStop.hidden) {
     renderStop(ui.seriesStop, null, ui.seriesStopLines, ui.seriesStopCode, stopBox(state.seriesStop.code, state.seriesStop.detail, state.productVersion));
   }
-  const showPanels = viewing && state.items.length > 0 && state.answer !== null && state.seriesStop === null;
+  const showPanels = viewing && state.items.length > 0 && state.answer !== null && state.seriesStop === null && !comparing();
   // Graphs only, while there are panels; a stop shows the whole page again,
   // and the focus goes from the button that hides to what shows instead.
   let refocus = false;
@@ -2696,6 +3621,7 @@ function render() {
   renderShelf(live);
   renderLayouts(live);
   renderStage(live);
+  renderCompare(live);
   renderFooter(live);
   renderHelp();
 }
@@ -2853,6 +3779,9 @@ function panelAction(event) {
       return;
     case "notes":
       toggleNotes(key);
+      return;
+    case "compare":
+      enterCompare(key);
       return;
     case "help":
       openHelp(key);
@@ -3056,6 +3985,40 @@ function connect() {
     state.align = ui.align.checked;
     render();
   });
+  ui.compareItem.addEventListener("change", chooseCompareItem);
+  for (const button of ui.compareModes) {
+    button.addEventListener("click", () => chooseCompareMode(button.dataset.compareMode));
+  }
+  ui.compareAbout.addEventListener("click", () => {
+    state.compare.about = !state.compare.about;
+    render();
+  });
+  ui.compareMonth.addEventListener("change", chooseCompareMonth);
+  ui.compareSeries.addEventListener("change", () => {
+    state.compare.series = ui.compareSeries.value;
+    render();
+  });
+  ui.compareTable.addEventListener("click", () => {
+    state.compare.table = !state.compare.table;
+    render();
+  });
+  ui.compareBack.addEventListener("click", leaveCompare);
+  ui.compareYears.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-year]");
+    if (button !== null) {
+      toggleCompareYear(Number(button.dataset.year));
+    }
+  });
+  ui.comparePanels.addEventListener("keydown", (event) => {
+    if (event.target.classList?.contains("plot")) {
+      compareKey(event);
+    }
+  });
+  ui.comparePanels.addEventListener("pointermove", (event) => {
+    if (event.target.closest?.(".plot")) {
+      comparePointer(event);
+    }
+  });
   ui.panels.addEventListener("click", panelAction);
   ui.panels.addEventListener("keydown", (event) => {
     if (event.target.classList?.contains("plot")) {
@@ -3109,7 +4072,9 @@ function connect() {
   // The panels follow the window, and each chart its plot, whose head can
   // take one line more or less.
   if (typeof ResizeObserver === "function") {
-    new ResizeObserver(scheduleRedraw).observe(ui.panels);
+    const watcher = new ResizeObserver(scheduleRedraw);
+    watcher.observe(ui.panels);
+    watcher.observe(ui.comparePanels);
     plotWatcher = new ResizeObserver(scheduleRedraw);
   } else {
     window.addEventListener("resize", scheduleRedraw);
@@ -3153,6 +4118,9 @@ async function start() {
       state.range = period.range;
     }
     state.grain = grainToOpen(state.settings.view_grain);
+    const compare = compareToOpen(state.settings);
+    state.compareMode = compare.mode;
+    state.compareMonth = compare.month;
     state.wantedTypes = Array.isArray(state.settings.view_types) ? [...state.settings.view_types] : null;
     const notice = settingsMessages(state.settings.notice).length ? state.settings.notice : null;
     state.settingsNotice = notice === null ? null : { code: notice, writing: false };

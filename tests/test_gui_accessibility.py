@@ -71,6 +71,14 @@ CHART_PAIRS = (
     ("d2", "surface"),
     ("zero", "surface"),
     ("cross", "surface"),
+    # The six steps of the years compared (stage L1 of v2.2.0, the checker's
+    # L0-1): each a line that carries meaning.
+    ("y1", "surface"),
+    ("y2", "surface"),
+    ("y3", "surface"),
+    ("y4", "surface"),
+    ("y5", "surface"),
+    ("y6", "surface"),
 )
 
 
@@ -656,7 +664,8 @@ class GuiViewPageStructureTest(unittest.TestCase):
     def test_every_field_has_a_label(self) -> None:
         labelled = {element.get("for") for element in self.elements if element.tag == "label"}
         fields = [element for element in self.elements if element.tag in {"input", "select", "textarea"}]
-        self.assertEqual(len(fields), 11)
+        # From v2.2.0 L1, the item, the month, and the line of a comparison.
+        self.assertEqual(len(fields), 14)
         for field in fields:
             with self.subTest(field=field.get("id")):
                 self.assertTrue(field.get("id") in labelled or field.get("aria-label") or field.get("aria-labelledby"))
@@ -789,12 +798,24 @@ class GuiViewPageStructureTest(unittest.TestCase):
             "moveCross((state.answer?.periods.length ?? 1) - 1, true);",
         ])
         self.assertIn("moveCross(index, false);", self.script)
+        # And that of the years compared (stage L1 of v2.2.0).
+        compared = by_id(self.elements, "compare-announcer")
+        self.assertEqual(compared.get("aria-live"), "polite")
+        self.assertIn("visually-hidden", str(compared.get("class")).split())
+        self.assertEqual(self.script.count("setText(ui.compareAnnouncer,"), 1)
+        speaking = [line.strip() for line in self.script.splitlines() if "moveCompareCross(" in line and ", true)" in line]
+        self.assertEqual(speaking, [
+            "moveCompareCross((state.compare.cursor ?? 0) + CROSS_KEYS[event.key], true);",
+            "moveCompareCross(0, true);",
+            "moveCompareCross(compareContext.span, true);",
+        ])
 
     def test_focus_targets_after_actions_can_take_focus(self) -> None:
         for identifier in (
             "empty-heading",
             "stop-heading",
             "series-stop-heading",
+            "compare-stop-heading",
             "help-heading",
             "help-zero-heading",
             "help-calculated-heading",
@@ -822,7 +843,11 @@ class GuiViewPageStructureTest(unittest.TestCase):
                 self.assertIn("hidden", by_id(self.elements, region).attributes)
         # The choices of the period and the grouping are pressed buttons in a
         # group named by its words.
-        for group, label, attribute in (("period-choices", "period-label", "data-period"), ("grain-choices", "grain-label", "data-grain")):
+        for group, label, attribute in (
+            ("period-choices", "period-label", "data-period"),
+            ("grain-choices", "grain-label", "data-grain"),
+            ("compare-modes", "compare-show-label", "data-compare-mode"),
+        ):
             with self.subTest(group=group):
                 element = by_id(self.elements, group)
                 self.assertEqual((element.get("role"), element.get("aria-labelledby")), ("group", label))
@@ -832,6 +857,106 @@ class GuiViewPageStructureTest(unittest.TestCase):
                     self.assertEqual((member.tag, member.get("aria-pressed")), ("button", "false"))
                     self.assertTrue(member.get(attribute))
         self.assertEqual(by_id(self.elements, "types-button").get("aria-labelledby"), "types-label types-summary")
+
+    def test_years_are_compared_apart_from_the_panels(self) -> None:
+        # v2.2.0 L1, in the page and its script, which no test runs: each panel
+        # has a button that names its item; the comparison is a section named
+        # by its heading, with the item in it, three ways in a group, the years
+        # as pressed buttons (up to six, said under them), the words of running
+        # totals that open under their button, its own stop, and the words of
+        # what is not used, under the filters.
+        section = by_id(self.elements, "compare")
+        self.assertEqual((section.tag, section.get("aria-labelledby")), ("section", "compare-title"))
+        self.assertIn("hidden", section.attributes)
+        self.assertEqual(by_id(self.elements, "compare-title").tag, "h3")
+        self.assertIs(by_id(self.elements, "compare-item").parent, by_id(self.elements, "compare-title"))
+        self.assertEqual(by_id(self.elements, "compare-stop-heading").tag, "h4")
+        years = by_id(self.elements, "compare-years")
+        self.assertEqual((years.get("role"), years.get("aria-labelledby"), years.get("aria-describedby")), ("group", "compare-years-label", "compare-up-to"))
+        about = by_id(self.elements, "compare-about")
+        self.assertEqual((about.get("aria-expanded"), about.get("aria-controls")), ("false", "compare-about-text"))
+        self.assertIn("hidden", by_id(self.elements, "compare-about-text").attributes)
+        off = by_id(self.elements, "compare-off")
+        self.assertEqual(off.get("data-i18n"), "view.compare.off")
+        self.assertIn("hidden", off.attributes)
+        self.assertEqual(by_id(self.elements, "compare-back").get("data-i18n"), "view.panel.unbig")
+        for line in (
+            'const compareButton = textButton(t("view.compare.button"), "compare", key);',
+            'compareButton.setAttribute("aria-label", t("view.compare.title", { name }));',
+            'const heading = element("h4", "panel-name compare-year", yearText(entry.year));',
+            'button.setAttribute("aria-pressed", String(on));',
+            "button.disabled = on ? chosen.length <= 1 : chosen.length >= MAX_COMPARE_YEARS;",
+            'plot.setAttribute("aria-label", t("view.compare.row_label", { year: yearText(entry.year), name }));',
+            'wrap.setAttribute("aria-label", t("view.compare.table_label", { name }));',
+            'const caption = element("caption", "visually-hidden", t("view.compare.table_caption", { name, kind }));',
+            'frame.setAttribute("aria-hidden", "true");',
+            "ui.compareItem.focus();",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+
+    def test_a_comparison_never_changes_the_panels_and_drops_old_answers(self) -> None:
+        # v2.2.0 L1 (plan v2, 5 and 6): the numbers of a comparison are one
+        # generation, whose older answers are dropped when they come, and
+        # whose stop shows under its bar; the period, the grouping, and the
+        # panels of the page are never written while comparing, and the way
+        # back shows them as they were; the shelf, the layouts, the period,
+        # its range, and the groupings Auto and Year are not used.
+        request = re.search(r"async function requestCompare\(again = true\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert request is not None
+        body = request.group(1)
+        self.assertIn("const seq = ++state.compareSeq;", body)
+        self.assertEqual(body.count("if (seq !== state.compareSeq) {\n      return;\n    }"), 2)
+        self.assertIn("if (seq !== state.compareSeq) {\n          return;\n        }", body)
+        self.assertIn("state.compareStop = { code: error.code, detail: error.detail };", body)
+        # Its stop says what a comparison can change (view_flow.mjs, which the
+        # node tests check).
+        self.assertIn("compareStopBox(state.compareStop.code, state.compareStop.detail, state.productVersion, state.compareMonth)", self.script)
+        self.assertNotRegex(body, r"state\.(grain|period|range|items|answer) =")
+        grain = re.search(r"function setGrain\(grain\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert grain is not None
+        self.assertLess(grain.group(1).index("    return;\n  }"), grain.group(1).index("state.grain = grain;"))
+        leave = re.search(r"function leaveCompare\(\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert leave is not None
+        self.assertIn("state.compareSeq += 1;", leave.group(1))
+        self.assertNotRegex(leave.group(1), r"state\.(grain|period|range|items) =")
+        for line in (
+            "state.compareSeq += 1;\n  const current",
+            "const apart = viewing && comparing();",
+            "button.disabled = !viewing || apart;",
+            "ui.rangeFrom.disabled = apart;",
+            "ui.rangeTo.disabled = apart;",
+            "ui.periodBack.disabled = !viewing || apart ||",
+            "button.disabled = !viewing || (grains !== null && !grains.includes(button.dataset.grain));",
+            "ui.compareOff.hidden = !apart;",
+            "const viewing = live && state.view !== null && state.opening === null && !comparing();",
+            "ui.addItems.disabled = !viewing || comparing() || state.items.length >= MAX_PANELS;",
+            "const showPanels = viewing && state.items.length > 0 && state.answer !== null && state.seriesStop === null && !comparing();",
+            "ui.caveat.hidden = !viewing || comparing();",
+            "compare_mode: state.compareMode,",
+            "compare_month: state.compareMonth,",
+            "const compare = compareToOpen(state.settings);",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+        self.assertEqual(self.script.count("const viewing = live && state.view !== null && state.opening === null && !comparing();"), 2)
+        # A ticket opened again for an output that is no longer the one chosen
+        # is dropped (the review by Codex); an output without days has no
+        # years to compare.
+        again = re.search(r"async function reopen\(\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert again is not None
+        self.assertIn("const seq = state.openSeq;", again.group(1))
+        self.assertEqual(again.group(1).count("if (seq !== state.openSeq) {\n      return false;\n    }"), 2)
+        self.assertLess(again.group(1).index("if (seq !== state.openSeq)"), again.group(1).index("state.view = answer;"))
+        for line in (
+            "compareButton.disabled = !compareYears(state.view?.first_day, state.view?.last_day).length;",
+            "if (state.view === null || item === undefined || !compareYears(state.view.first_day, state.view.last_day).length) {",
+            "if (itemsByKey(answer.items).has(state.compare.key) && compareYears(answer.first_day, answer.last_day).length) {",
+            # What the keyboard says names each year's own period.
+            ': t("view.compare.spoken_year", { year: yearText(reading.year), period: describe(reading.period), value: describe(reading.value ?? reading.missing) }),',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
 
     def test_quitting_asks_first_in_the_bar(self) -> None:
         # As on the normalization page, with words that say what it quits:
@@ -1045,6 +1170,11 @@ class GuiStyleTest(unittest.TestCase):
             r"\.chart-zero,[^{]*\{\s*stroke: GrayText;",
             r"\.chart-cross,[^{]*\{\s*stroke: Highlight;",
             r"\.overview-handle\.on \{\s*fill: Highlight;",
+            # Stage L1 of v2.2.0: the years in the color of the text, the older
+            # ones dashed, and a cut bar hollow with an edge.
+            r"\.chart-line\.y6,[^{]*\{\s*stroke: CanvasText;",
+            r"\.chart-line\.y5,\s*\.key-line\.y5 \{\s*stroke-dasharray: 8 3;",
+            r"\.chart-bar\.partial\.outlined \{\s*fill: Canvas;\s*stroke: CanvasText;",
         ):
             with self.subTest(rule=rule):
                 self.assertRegex(block, rule)

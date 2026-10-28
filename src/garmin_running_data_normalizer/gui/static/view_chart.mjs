@@ -295,13 +295,37 @@ export function linePath(values, periods, scale, y, { breakAtZero = false } = {}
   return { path, alone };
 }
 
+// The places of the labels at the ends of the lines of the years compared
+// (stage L1 of v2.2.0), from the ends of the lines (their y): each at the
+// end of its line, moved down where it would meet the one above it, and up
+// again where the lowest would leave the plot at ``bottom``.
+export function labelPlaces(ends, gap, bottom) {
+  const order = ends.map((end, index) => ({ end, index })).sort((a, b) => a.end - b.end || a.index - b.index);
+  const placed = new Array(ends.length);
+  let last = -Infinity;
+  for (const { end, index } of order) {
+    placed[index] = Math.max(end, last + gap);
+    last = placed[index];
+  }
+  let limit = bottom;
+  for (let at = order.length - 1; at >= 0; at -= 1) {
+    const index = order[at].index;
+    placed[index] = Math.min(placed[index], limit);
+    limit = placed[index] - gap;
+  }
+  return placed;
+}
+
 // The marks of one panel: the ticks of its values, the baseline of a total,
 // and for each line its bars or its line, its points that stand alone, the
 // markers of a short line, the points of the records of each day, and the
 // dots of 0. ``lines`` hold the values as the page shows them (in km, in
 // minutes, and so on); ``total`` draws from 0; ``clock`` gives the steps of
-// a clock; ``shared`` is the scale that the panel shares, if any.
-export function panelShapes({ lines, periods, start, end, width, height, total = false, clock = null, shared = null }) {
+// a clock; ``shared`` is the scale that the panel shares, if any. From stage
+// L1 of v2.2.0, the years compared: ``lineOnly`` draws a total as a line
+// (the years laid over one another), and ``running`` a running total, a line
+// from 0 that a period of 0 does not break and that has no dots of 0.
+export function panelShapes({ lines, periods, start, end, width, height, total = false, clock = null, shared = null, lineOnly = false, running = false }) {
   const scale = timeScale(start, end, PLOT_LEFT, width - PLOT_RIGHT);
   const top = PLOT_TOP;
   const plotHeight = Math.max(1, height - PLOT_TOP - PLOT_BOTTOM);
@@ -309,13 +333,16 @@ export function panelShapes({ lines, periods, start, end, width, height, total =
   if (range === null) {
     return { scale, empty: true, ticks: [], lines: [], base: null, y: () => top + plotHeight };
   }
-  const scaleOfValues = valueScale(range[0], range[1], { fromZero: total, count: tickCount(plotHeight), clock });
+  const fromZero = total || running;
+  const scaleOfValues = valueScale(range[0], range[1], { fromZero, count: tickCount(plotHeight), clock });
   const y = (value) => top + plotHeight - ((value - scaleOfValues.lo) / (scaleOfValues.hi - scaleOfValues.lo)) * plotHeight;
   const ticks = thinTicks(scaleOfValues.ticks, y)
     .map((value) => ({ value, y: y(value) }))
     .filter((tick) => tick.y >= top - 1 && tick.y <= top + plotHeight + 1);
-  const base = total ? y(Math.max(scaleOfValues.lo, 0)) : null;
-  const bars = total && periods.length <= MAX_BARS;
+  const base = fromZero ? y(Math.max(scaleOfValues.lo, 0)) : null;
+  // The periods of 0 of a total: a dot each, where its line breaks.
+  const zeros = total && !running;
+  const bars = zeros && !lineOnly && periods.length <= MAX_BARS;
   const big = periods.length > MAX_MARKERS;
   const shapes = lines.map((line) => {
     const shape = { bars: null, line: null, alone: "", markers: "", points: "", pointRadius: 0, zero: "" };
@@ -329,19 +356,19 @@ export function panelShapes({ lines, periods, start, end, width, height, total =
     if (bars) {
       shape.bars = barPaths(line.values, periods, scale, y, base);
     } else {
-      const drawn = linePath(line.values, periods, scale, y, { breakAtZero: total });
+      const drawn = linePath(line.values, periods, scale, y, { breakAtZero: zeros });
       shape.line = drawn.path;
       shape.alone = dotsPath(drawn.alone);
       shape.aloneRadius = big ? DOT_RADIUS + 0.4 : MARKER_RADIUS;
       if (periods.length <= MAX_LINE_MARKERS && plotHeight >= 70) {
         shape.markers = dotsPath(
           line.values.flatMap((value, index) =>
-            Number.isFinite(value) && !(total && value === 0) ? [[periodMiddle(scale, periods[index]), y(value)]] : [],
+            Number.isFinite(value) && !(zeros && value === 0) ? [[periodMiddle(scale, periods[index]), y(value)]] : [],
           ),
         );
       }
     }
-    if (total) {
+    if (zeros) {
       shape.zero = zeroPath(line.values, periods, scale, base);
     }
     return shape;

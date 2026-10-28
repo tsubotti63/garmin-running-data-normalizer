@@ -323,6 +323,17 @@ button.small {
   border-radius: 0;
 }
 
+/* While comparing years (stage L1 of v2.2.0), what is not used, under the
+   filters: in words, not on hover. */
+.compare-off {
+  margin: 0;
+  padding: 4px 20px 6px;
+  border-bottom: 1px solid var(--line);
+  background: var(--group);
+  color: var(--sub);
+  font-size: 0.84rem;
+}
+
 /* The shelf at the left and the panels at the right. */
 .view-main {
   display: flex;
@@ -1147,6 +1158,181 @@ button.small {
   color: var(--muted);
 }
 
+/* Comparing one item by year (stage L1 of v2.2.0): the bar of its choices
+   above the years, in rows or on one panel, over one axis of the year (or of
+   the month), as the sample v4 of stage L0 has it. */
+.compare {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.compare-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.compare-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  color: var(--sub);
+  font-size: 0.84rem;
+}
+
+.compare-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.compare-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.compare-bar select {
+  width: auto;
+  min-width: 0;
+  max-width: 22em;
+  padding: 2px 8px;
+  font-size: 0.86rem;
+  field-sizing: content;
+}
+
+.compare-bar .info-button {
+  margin: 0;
+}
+
+.compare-about-text {
+  margin-top: 0;
+}
+
+.compare-years button {
+  padding: 3px 7px;
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-years button[aria-pressed="true"]::before {
+  content: "\2713\00a0";
+  content: "\2713\00a0" / "";
+}
+
+.compare-stack .panel-view.compare-row {
+  flex: 1 0 70px;
+  min-height: 70px;
+}
+
+.compare-stack .panel-view.compare-row .panel-head {
+  flex: none;
+  flex-wrap: nowrap;
+  height: 24px;
+  padding-top: 3px;
+  overflow: hidden;
+}
+
+.compare-stack .panel-view.compare-one {
+  flex: 1 0 200px;
+  min-height: 200px;
+}
+
+.compare-stack .panel-view.compare-table {
+  flex: 1 0 240px;
+  min-height: 240px;
+}
+
+.panel-head .compare-year {
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+.compare-whole {
+  color: var(--sub);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.compare-whole strong {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-line.newest {
+  stroke-width: 2.6;
+}
+
+.compare-label {
+  fill: var(--sub);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-label.newest {
+  fill: var(--text);
+  font-weight: 600;
+}
+
+/* The values of the years at the cross line, beside it, over the plot. */
+.compare-read {
+  position: absolute;
+  top: 4px;
+  z-index: 2;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--sub);
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+
+.compare-read table {
+  border-collapse: collapse;
+}
+
+.compare-read td {
+  padding: 1px 6px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-read td.v {
+  color: var(--text);
+  font-weight: 600;
+  text-align: right;
+}
+
+.compare-read td.none {
+  color: var(--muted);
+}
+
+.compare-read svg {
+  width: 16px;
+  height: 8px;
+}
+
+.panel-table .t tr.whole th,
+.panel-table .t tr.whole td {
+  border-top: 2px solid var(--line);
+  font-weight: 600;
+}
+
+.compare-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .time-axis {
   position: relative;
   flex: none;
@@ -1242,6 +1428,13 @@ button.small {
   fill-opacity: 0.38;
 }
 
+/* A period cut by the output in a row of a year: its light bar has an edge
+   of the color of the bars, which keeps 3:1 on the surface. */
+.chart-bar.partial.outlined {
+  stroke: var(--d1);
+  stroke-width: 1.5;
+}
+
 .chart-line {
   fill: none;
   stroke-width: 2;
@@ -1259,6 +1452,67 @@ button.small {
 .chart-dots.c2,
 .key-line.c2 {
   stroke: var(--d2);
+}
+
+/* The years compared (stage L1 of v2.2.0), the newest the 6th step. */
+.chart-line.y1,
+.chart-dots.y1,
+.key-line.y1 {
+  stroke: var(--y1);
+}
+
+.chart-cross-dot.y1 {
+  fill: var(--y1);
+}
+
+.chart-line.y2,
+.chart-dots.y2,
+.key-line.y2 {
+  stroke: var(--y2);
+}
+
+.chart-cross-dot.y2 {
+  fill: var(--y2);
+}
+
+.chart-line.y3,
+.chart-dots.y3,
+.key-line.y3 {
+  stroke: var(--y3);
+}
+
+.chart-cross-dot.y3 {
+  fill: var(--y3);
+}
+
+.chart-line.y4,
+.chart-dots.y4,
+.key-line.y4 {
+  stroke: var(--y4);
+}
+
+.chart-cross-dot.y4 {
+  fill: var(--y4);
+}
+
+.chart-line.y5,
+.chart-dots.y5,
+.key-line.y5 {
+  stroke: var(--y5);
+}
+
+.chart-cross-dot.y5 {
+  fill: var(--y5);
+}
+
+.chart-line.y6,
+.chart-dots.y6,
+.key-line.y6 {
+  stroke: var(--y6);
+}
+
+.chart-cross-dot.y6 {
+  fill: var(--y6);
 }
 
 .chart-dots,
@@ -1384,6 +1638,71 @@ button.small {
   .chart-bar.partial {
     fill: GrayText;
     fill-opacity: 1;
+  }
+
+  .chart-bar.partial.outlined {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+
+  .chart-line.y1,
+  .chart-dots.y1,
+  .key-line.y1,
+  .chart-line.y2,
+  .chart-dots.y2,
+  .key-line.y2,
+  .chart-line.y3,
+  .chart-dots.y3,
+  .key-line.y3,
+  .chart-line.y4,
+  .chart-dots.y4,
+  .key-line.y4,
+  .chart-line.y5,
+  .chart-dots.y5,
+  .key-line.y5,
+  .chart-line.y6,
+  .chart-dots.y6,
+  .key-line.y6 {
+    stroke: CanvasText;
+  }
+
+  .chart-line.y5,
+  .key-line.y5 {
+    stroke-dasharray: 8 3;
+  }
+
+  .chart-line.y4,
+  .key-line.y4 {
+    stroke-dasharray: 4 3;
+  }
+
+  .chart-line.y3,
+  .key-line.y3 {
+    stroke-dasharray: 2 3;
+  }
+
+  .chart-line.y2,
+  .key-line.y2 {
+    stroke-dasharray: 8 3 2 3;
+  }
+
+  .chart-line.y1,
+  .key-line.y1 {
+    stroke-dasharray: 1 4;
+  }
+
+  .chart-cross-dot.y1,
+  .chart-cross-dot.y2,
+  .chart-cross-dot.y3,
+  .chart-cross-dot.y4,
+  .chart-cross-dot.y5,
+  .chart-cross-dot.y6 {
+    fill: Highlight;
+  }
+
+  .compare-label,
+  .compare-label.newest {
+    fill: CanvasText;
   }
 
   .chart-zero,

@@ -197,3 +197,35 @@ test("the overview draws the whole output and frames the period shown", () => {
   const line = chart.overviewShapes({ values: [1, null, 3], periods: periods.slice(0, 3), width: 300, height: 44, start: periods[0].start, end: periods[2].end });
   assert.equal((line.marks.match(/M/g) ?? []).length, 2);
 });
+
+test("years laid over one another are lines, and a running total is a line from 0 that 0 does not break", () => {
+  // Stage L1 of v2.2.0: the places of the shared axis of a comparison.
+  const slots = Array.from({ length: 12 }, (_value, index) => ({ start: index, end: index, partial: false }));
+  const base = { periods: slots, start: 0, end: 11, width: 1000, height: 160, total: true };
+  const values = [100, 0, 50, 0, 0, 80, 90, 0, 70, 60, 50, 40];
+  // A total laid over the other years: a line, broken at 0, with its dots.
+  const over = chart.panelShapes({ ...base, lineOnly: true, lines: [{ values }] });
+  assert.equal(over.lines[0].bars, null);
+  assert.equal((over.lines[0].line.match(/M/g) ?? []).length, 4);
+  assert.ok(over.lines[0].zero);
+  assert.equal(over.ticks[0].value, 0);
+  // A running total: one line from 0, never broken at 0, without dots of 0.
+  const running = chart.panelShapes({ ...base, running: true, lines: [{ values: [0, 0, 5, 5, null, 9] }], periods: slots.slice(0, 6), end: 5 });
+  assert.equal(running.lines[0].bars, null);
+  assert.equal(running.lines[0].zero, "");
+  assert.equal((running.lines[0].line.match(/M/g) ?? []).length, 2);
+  assert.ok(running.base !== null);
+  assert.equal(running.ticks[0].value, 0);
+  // The marks of 2.1.0 stay: bars for a total of twelve periods.
+  assert.ok(chart.panelShapes({ ...base, lines: [{ values }] }).lines[0].bars.full);
+});
+
+test("the names at the ends of the lines move apart and stay in the plot", () => {
+  // Each at the end of its line where there is room.
+  assert.deepEqual(chart.labelPlaces([10, 50, 90], 13, 200), [10, 50, 90]);
+  // Two that meet: the lower moves down; the order of the lines stays.
+  assert.deepEqual(chart.labelPlaces([50, 45, 100], 13, 200), [58, 45, 100]);
+  // At the bottom of the plot, they move up again.
+  assert.deepEqual(chart.labelPlaces([195, 198, 199], 13, 200), [174, 187, 200]);
+  assert.deepEqual(chart.labelPlaces([], 13, 200), []);
+});
