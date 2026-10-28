@@ -392,6 +392,20 @@ by month.
 
 More: [Period, grouping, and activity types](#period-grouping-and-activity-types)
 
+### Compare May of every year
+
+When: you want to compare the distance of May, year by year.
+
+1. [Open the view page](#open-the-view-page).
+2. Press **Compare years** in the heading of the Distance panel.
+3. Choose **One row per year** in **Show as**, and **May** in **Month**. The
+   Mays of the years are in rows, a row a year.
+4. For the numbers, press **Show as a table**.
+
+![Compare years with May chosen in Month: four rows from 2026 to 2023, each with the distance of the days of May as bars and the total of May in its heading (synthetic data made for the example)](assets/gui-guide/view-compare-may.en.png)
+
+More: [Compare years](#compare-years-from-220)
+
 ### Give the numbers to an AI as a CSV file
 
 When: you want to give the numbers of the view page to a spreadsheet app or an
@@ -1108,6 +1122,72 @@ values are made):
   ends the browser's full screen, and cancels the drag as well.
 - Full screen is not remembered: the next time, the page opens as usual.
 
+### Compare years (from 2.2.0)
+
+- Each panel has **Compare years** in its heading. It compares the item of
+  that panel year by year. **Show all panels again** goes back; the panels,
+  the period, and the grouping are as they were before. An output without
+  days has no years to compare, and the button is grayed.
+- The bar above the panels has the choices:
+  - **Item**: the list in the title, to compare another item.
+  - **Show as**: **One row per year** (a row a year, with one scale for all
+    the rows), **Overlay** (a line a year on one panel, with the year at the
+    end of each line), or **Running total** (see below). At first, **One row
+    per year**.
+  - **Month**: **Whole year**, or one month of each year, from January to
+    December.
+  - **Line**: only for an item of several lines, such as VO2 Max, by the
+    names of the key of its panel. At first, a line of the newest source (on
+    running, where it has one).
+  - **Show as a table**: the periods in rows and the years in columns; the
+    last row has the value of the year (or of the month). * marks a period
+    that the output cuts, and — a period that the year does not have.
+  - **Years**: the years of the output. At first the newest four, and
+    **Up to 6 years**.
+
+![Compare years as it opens: the distance in one row per year, four rows from 2026 to 2023 with bars by month and the total of each year, the bar of the item, the way, the month, and the years above, and the line of what is not used under the filters (synthetic data made for the example)](assets/gui-guide/view-compare-rows.en.png)
+
+![Compare years with Overlay: the lines of four years of the distance on one panel, the year at the end of each line, and the box of the values of October beside the cross line (synthetic data made for the example)](assets/gui-guide/view-compare-overlay.en.png)
+
+- The grouping is chosen in **Group by**: **Day**, **Week**, or **Month**
+  (**Day** or **Week** with one month chosen). At first **Month**; **Day** for
+  a running total and with one month chosen.
+- How the periods are placed:
+  - A week is placed by its order from the week of 1 January (with one month
+    chosen, of the first day of that month), the weeks running from Monday;
+    a year may have 54. The first and the last week of a year (or of the
+    month) hold only its days (partial), so that their values can differ
+    from those of the same weeks on the panels.
+  - A day is placed by its month and its day; 29 February has a value only
+    in a leap year.
+  - With one month chosen, the days go to the last day of that month in the
+    years chosen.
+- The value beside each year, such as "Total of the year", is counted as on
+  the panels. Where the output starts or ends within a year (or within the
+  month chosen), its value is partial, and its heading says so, for example
+  "(to October 21)".
+- **Running total** is for Distance, Time, Activities, Training load, and
+  Total ascent only. A period without a record (0) adds nothing, and a period
+  without a value breaks the line; the total goes on from what it was, so
+  that the running total at the end of a year is its "Total of the year".
+  Its table has no counts. For any other item, **Running total** is grayed,
+  and **About running totals** says why.
+- While comparing, the period, ‹ ›, the days of a custom range, the item
+  shelf, the layouts, and the groupings **Auto** and **Year** (and **Month**
+  with one month chosen) are not used, and are grayed; a line under the
+  filters says so. The overview is not shown. **Activity types counted**
+  still applies: a change of it also applies to the panels after the way
+  back, and is remembered.
+- Readings: with **One row per year**, at the top right of each row; with
+  **Overlay** and **Running total**, in a box beside the cross line: each
+  year's own period (for a week, its days in that year) and its value. Select
+  a chart and press ← or → to move by one period, Page Up or Page Down by 12,
+  and Home or End to an end; the periods and the values of the years are
+  then read aloud.
+- A stop shows under the bar, in the words of a stop of the panels. Where
+  there are too many numbers, group by **Week** or **Month** (by **Week** with
+  one month chosen).
+
 ### What is remembered for the next time
 
 This is for the next time that you open the view page, in this launch or in a
@@ -1116,8 +1196,9 @@ later one.
 - Remembered: the items shown and their order (six at most; the same for every
   output), whether the item shelf is open, and the appearance (when **Light**
   or **Dark** is chosen); from 2.2.0, also the period, the grouping, the
-  activity types counted, and the layouts (those saved, and the one used
-  last). When another output has no value for an item shown, the second line
+  activity types counted, the layouts (those saved, and the one used
+  last), and the way and the month of [Compare years](#compare-years-from-220).
+  When another output has no value for an item shown, the second line
   of its panel says "There is no value in this period."
 - When another output opens (from 2.2.0), a period such as **1 year** stays
   as it is. A period chosen with **Custom range…** shrinks to the days of the
@@ -1126,7 +1207,7 @@ later one.
   that the output has; when it has none of them, every running type in the
   output.
 - Not remembered: the output shown, the same scale, a panel enlarged, a table
-  shown, and full screen. As the output shown is not remembered, the page
+  shown, full screen, and whether years were compared, with the years chosen. As the output shown is not remembered, the page
   opened from the bar at the bottom offers the latest output with the button
   of [Open the view page](#open-the-view-page).
 - **Forget the remembered settings…** in the bar at the bottom of the
@@ -1564,6 +1645,9 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
 - On the view page, click a chart and press ← or → to move the vertical
   line: each panel shows its value at its top right. **Show as a table**
   shows the numbers of a panel as a table.
+- When comparing years (from 2.2.0), moving the line with ← → and the other
+  keys reads out the period and the value of each year
+  ([Compare years](#compare-years-from-220)).
 
 ## The GUI and the command line
 
