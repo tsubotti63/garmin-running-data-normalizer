@@ -174,8 +174,9 @@ def change_layouts(state: dict[str, Any], change: Any) -> dict[str, Any]:
     change cannot be made.
 
     - add (name, items): a new layout last, which becomes the one used last.
-    - rename (id, name), overwrite (id, items), move (id, direction "up" or
-      "down"), remove (id): a layout of the person.
+    - rename (id, name), overwrite (id, items), move (id, and direction "up"
+      or "down", or the place "to" of a drag, 0 for the first, from stage K2),
+      remove (id): a layout of the person.
     - hide, show (id): a built-in layout (hiding the one used last forgets
       that it was used); reset shows them all."""
     if not isinstance(change, dict) or change.get("op") not in LAYOUT_OPERATIONS:
@@ -226,12 +227,17 @@ def change_layouts(state: dict[str, Any], change: Any) -> dict[str, Any]:
         current = layouts[index]["id"]
     elif operation == "move":
         index = index_of()
-        direction = change.get("direction")
-        if direction not in ("up", "down"):
+        direction, place = change.get("direction"), change.get("to")
+        if direction in ("up", "down") and "to" not in change:
+            other = index - 1 if direction == "up" else index + 1
+            if 0 <= other < len(layouts):
+                layouts[index], layouts[other] = layouts[other], layouts[index]
+        elif "direction" not in change and type(place) is int and 0 <= place < len(layouts):
+            # A drag: the layout goes to that place, and the others keep
+            # their order.
+            layouts.insert(place, layouts.pop(index))
+        else:
             raise LayoutChangeError(REQUEST_INVALID)
-        other = index - 1 if direction == "up" else index + 1
-        if 0 <= other < len(layouts):
-            layouts[index], layouts[other] = layouts[other], layouts[index]
     elif operation == "remove":
         index = index_of()
         if layouts.pop(index)["id"] == current:

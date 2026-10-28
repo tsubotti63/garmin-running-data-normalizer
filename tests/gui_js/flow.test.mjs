@@ -1839,6 +1839,178 @@ test("another tab tells only that the app was quit (stage G3b)", () => {
   }
 });
 
+// A quit channel between two pages, and timers that the test moves.
+function fakeChannel() {
+  const heard = new Set();
+  return {
+    posted: [],
+    addEventListener(type, listener) {
+      assert.equal(type, "message");
+      heard.add(listener);
+    },
+    removeEventListener(type, listener) {
+      assert.equal(type, "message");
+      heard.delete(listener);
+    },
+    postMessage(data) {
+      this.posted.push(data);
+    },
+    hear(data) {
+      for (const listener of [...heard]) {
+        listener({ data });
+      }
+    },
+    get listeners() {
+      return heard.size;
+    },
+  };
+}
+
+function fakeTimers() {
+  const due = new Map();
+  let next = 0;
+  return {
+    setTimer(callback, wait) {
+      next += 1;
+      due.set(next, { callback, wait });
+      return next;
+    },
+    clearTimer(id) {
+      due.delete(id);
+    },
+    waits() {
+      return [...due.values()].map((entry) => entry.wait);
+    },
+    runAll() {
+      for (const [id, entry] of [...due]) {
+        due.delete(id);
+        entry.callback();
+      }
+    },
+  };
+}
+
+test("the normalization page asks the view page to write before it quits (stage K2 of v2.2.0)", async () => {
+  assert.equal(flow.FLUSH_WAIT_MS, 500);
+  assert.equal(flow.flushAsked({ flush: true }), true);
+  assert.equal(flow.flushedMessage({ flushed: true }), true);
+  for (const data of [null, undefined, "flush", true, [], {}, { flush: false }, { flush: "true" }, { flush: true, key: "k" }, { flushed: true }, { stopped: true }]) {
+    assert.equal(flow.flushAsked(data), false, JSON.stringify(data));
+  }
+  for (const data of [null, {}, { flushed: false }, { flushed: 1 }, { flushed: true, flush: true }, { flush: true }, { stopped: true }]) {
+    assert.equal(flow.flushedMessage(data), false, JSON.stringify(data));
+  }
+  // An ask and an answer are not the message that the app stopped.
+  assert.equal(flow.stoppedMessage({ flush: true }), false);
+  assert.equal(flow.stoppedMessage({ flushed: true }), false);
+
+  // The view page answers: the wait ends at once, and the page stops listening.
+  const channel = fakeChannel();
+  const timers = fakeTimers();
+  const asked = flow.askFlush(channel, flow.FLUSH_WAIT_MS, timers);
+  assert.deepEqual(channel.posted, [{ flush: true }]);
+  assert.deepEqual(timers.waits(), [500]);
+  channel.hear({ stopped: true });
+  channel.hear({ flush: true });
+  assert.equal(channel.listeners, 1);
+  channel.hear({ flushed: true });
+  assert.equal(await asked, true);
+  assert.equal(channel.listeners, 0);
+  assert.deepEqual(timers.waits(), []);
+
+  // No view page answers: the wait ends after 0.5 seconds.
+  const silent = fakeChannel();
+  const later = fakeTimers();
+  const waited = flow.askFlush(silent, flow.FLUSH_WAIT_MS, later);
+  assert.deepEqual(later.waits(), [500]);
+  later.runAll();
+  assert.equal(await waited, false);
+  assert.equal(silent.listeners, 0);
+  // An answer that comes too late changes nothing.
+  silent.hear({ flushed: true });
+  assert.deepEqual(later.waits(), []);
+
+  // A browser without the channel does not wait.
+  assert.equal(await flow.askFlush(null, flow.FLUSH_WAIT_MS, fakeTimers()), false);
+});
+
+test("the view page writes what waits, then answers the ask (stage K2 of v2.2.0)", async () => {
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  const channel = fakeChannel();
+  const order = [];
+  let finish;
+  const write = () => {
+    order.push("write");
+    return new Promise((resolve) => {
+      finish = () => {
+        order.push("written");
+        resolve();
+      };
+    });
+  };
+  assert.equal(flow.answerFlush({ flush: true }, write, channel), true);
+  await settle();
+  assert.deepEqual(order, ["write"]);
+  assert.deepEqual(channel.posted, []);
+  finish();
+  await settle();
+  assert.deepEqual(order, ["write", "written"]);
+  assert.deepEqual(channel.posted, [{ flushed: true }]);
+  // A writing that failed is answered too: the other page stops waiting.
+  const failed = fakeChannel();
+  assert.equal(flow.answerFlush({ flush: true }, () => Promise.reject(new Error("lost")), failed), true);
+  await settle();
+  assert.deepEqual(failed.posted, [{ flushed: true }]);
+  // Other messages are not asks, and nothing is written for them.
+  const quiet = fakeChannel();
+  for (const data of [{ stopped: true }, { flushed: true }, {}, null]) {
+    assert.equal(flow.answerFlush(data, () => order.push("again"), quiet), false);
+  }
+  await settle();
+  assert.deepEqual(quiet.posted, []);
+  assert.deepEqual(order, ["write", "written"]);
+});
+
+test("the app is quit once what waits is written (stage K2 of v2.2.0)", async () => {
+  const order = [];
+  let finish;
+  const write = () => {
+    order.push("write");
+    return new Promise((resolve) => {
+      finish = () => {
+        order.push("written");
+        resolve();
+      };
+    });
+  };
+  const quitting = flow.quitAfterWriting(write, async () => {
+    order.push("shutdown");
+    return "stopped";
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(order, ["write"]);
+  finish();
+  assert.equal(await quitting, "stopped");
+  assert.deepEqual(order, ["write", "written", "shutdown"]);
+  // A writing that failed does not keep the app from quitting.
+  const stops = [];
+  await flow.quitAfterWriting(
+    () => Promise.reject(new Error("lost")),
+    async () => stops.push("shutdown"),
+  );
+  assert.deepEqual(stops, ["shutdown"]);
+  // A shutdown that fails tells its own failure.
+  await assert.rejects(
+    flow.quitAfterWriting(
+      async () => {},
+      async () => {
+        throw new Error("RUN_ACTIVE");
+      },
+    ),
+    /RUN_ACTIVE/,
+  );
+});
+
 test("of the values given while one is sent, only the last goes after it", async () => {
   const sent = [];
   const answers = [];

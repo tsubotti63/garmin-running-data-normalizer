@@ -458,11 +458,24 @@ export function itemsRemembered(settings) {
 }
 
 // What the page keeps of the settings after the other tab forgot them: no
-// items, no shelf, no tips, and no colors, as the file has none now. The
-// page keeps showing what it shows.
+// items, no shelf, no tips, no colors, no layouts, and no period, grouping,
+// activity types, or timezone (stage K2 of v2.2.0), as the file has none now.
+// The page keeps showing what it shows.
 export function settingsAfterForget(settings) {
   const kept = { ...(settings ?? {}) };
-  for (const name of ["view_items", "view_shelf", "hints", "theme"]) {
+  for (const name of [
+    "view_items",
+    "view_shelf",
+    "hints",
+    "theme",
+    "view_layouts",
+    "view_layouts_hidden",
+    "view_layout",
+    "view_period",
+    "view_grain",
+    "view_types",
+    "timezone",
+  ]) {
     delete kept[name];
   }
   return { ...kept, present: false };
@@ -1103,4 +1116,157 @@ export function itemListMessage(keys, name, language) {
   const names = keys.map((key) => name(key));
   const list = new Intl.ListFormat(language, { style: "long", type: "conjunction" });
   return plain(list.format(names));
+}
+
+// --- Layouts (stage K2 of v2.2.0) -------------------------------------------
+
+// Whether the items shown are other than those of a layout: other items, or
+// the same ones in another order.
+export function layoutChanged(layoutItems, items) {
+  const first = Array.isArray(layoutItems) ? layoutItems : [];
+  const second = Array.isArray(items) ? items : [];
+  return first.length !== second.length || first.some((key, index) => key !== second[index]);
+}
+
+// The cards of the layouts above the item shelf: the built-in layouts that
+// are not hidden, in their order, then the person's in the order that they
+// keep. Each says whether it is the one used last, whether the items shown
+// are other than its own since, and how many of its items have a value in
+// the output (from the bars of the item shelf), when not all of them do.
+export function layoutCards({ builtIns, mine, hidden, current, items, coverage }) {
+  const hiddenIds = new Set(Array.isArray(hidden) ? hidden : []);
+  const valued = (keys) => (coverage ? keys.filter((key) => (coverage[key]?.months ?? []).length > 0).length : null);
+  const card = (layout, builtIn) => {
+    const keys = Array.isArray(layout.items) ? [...layout.items] : [];
+    const isCurrent = layout.id === current;
+    const count = valued(keys);
+    return {
+      id: layout.id,
+      builtIn,
+      nameKey: builtIn ? LAYOUT_NAME_KEYS[layout.id] : null,
+      name: builtIn ? null : String(layout.name ?? ""),
+      items: keys,
+      current: isCurrent,
+      changed: isCurrent && layoutChanged(keys, items),
+      valued: count !== null && count < keys.length ? count : null,
+      total: keys.length,
+    };
+  };
+  const cards = [];
+  for (const layout of Array.isArray(builtIns) ? builtIns : []) {
+    if (Object.hasOwn(LAYOUT_NAME_KEYS, layout?.id) && !hiddenIds.has(layout.id)) {
+      cards.push(card(layout, true));
+    }
+  }
+  for (const layout of Array.isArray(mine) ? mine : []) {
+    if (typeof layout?.id === "string") {
+      cards.push(card(layout, false));
+    }
+  }
+  return cards;
+}
+
+// The words under the name of a card: "(changed)" and the items with a value.
+export function layoutNotes(card) {
+  const notes = [];
+  if (card.changed) {
+    notes.push(message("view.layouts.changed"));
+  }
+  if (card.valued !== null) {
+    notes.push(message("view.layouts.valued", { n: card.valued, m: card.total }));
+  }
+  return notes;
+}
+
+// The place of a layout dragged among the others: after each of them whose
+// middle is above the pointer, so that the place does not jump back and forth
+// at a border.
+export function dropPlace(middles, y) {
+  return middles.filter((middle) => middle < y).length;
+}
+
+// The period that a remembered one asks of an output that opens: a period of
+// the last years as it is; a range of days as it is when it meets the days
+// of the output (the server cuts it to them, as it does now), and all the
+// output when it does not; otherwise none.
+export function periodToOpen(period, firstDay, lastDay) {
+  if (typeof period === "string") {
+    return PERIODS.includes(period) && period !== "custom" ? { choice: period, range: null } : null;
+  }
+  const from = period?.from;
+  const to = period?.to;
+  const day = /^\d{4}-\d{2}-\d{2}$/;
+  if (typeof from !== "string" || typeof to !== "string" || !day.test(from) || !day.test(to) || from > to) {
+    return null;
+  }
+  if (firstDay && lastDay && (to < firstDay || from > lastDay)) {
+    return { choice: "all", range: null };
+  }
+  return { choice: "custom", range: { from, to } };
+}
+
+// The activity types that a remembered choice counts in an output that
+// opens: those of the output, in the order of the output; no types ([]) as
+// it is; and null (the types counted at first) when none of the names is
+// there or nothing is remembered.
+export function typesToOpen(remembered, types) {
+  if (!Array.isArray(remembered)) {
+    return null;
+  }
+  if (!remembered.length) {
+    return [];
+  }
+  const names = (Array.isArray(types) ? types : []).map((entry) => entry.name);
+  const kept = names.filter((name) => remembered.includes(name));
+  return kept.length ? kept : null;
+}
+
+// The grouping that a remembered one gives: one of the grain choices, or auto.
+export function grainToOpen(grain) {
+  return GRAINS.includes(grain) ? grain : "auto";
+}
+
+// A sender that waits for the person to stop changing: the last value is
+// sent once, after the wait without another change; a flush sends what
+// waits at once (when the app quits) and tells when it is sent, and a take
+// gives what waits without sending it (when the page hides, to send it in a
+// request that outlives the page). The timer functions are given, so that
+// the tests move the time.
+export function laterSender(send, wait, { setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+  let pending = null;
+  let timer = null;
+  const fire = () => {
+    timer = null;
+    const value = pending;
+    pending = null;
+    return value === null ? Promise.resolve() : Promise.resolve(send(value));
+  };
+  return {
+    push(value) {
+      pending = value;
+      if (timer !== null) {
+        clearTimer(timer);
+      }
+      timer = setTimer(fire, wait);
+    },
+    flush() {
+      if (timer !== null) {
+        clearTimer(timer);
+        timer = null;
+      }
+      return fire();
+    },
+    take() {
+      if (timer !== null) {
+        clearTimer(timer);
+        timer = null;
+      }
+      const value = pending;
+      pending = null;
+      return value;
+    },
+    waiting() {
+      return pending !== null;
+    },
+  };
 }

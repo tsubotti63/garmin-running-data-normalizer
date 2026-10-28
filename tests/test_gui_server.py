@@ -714,7 +714,16 @@ class GuiPageScriptTest(unittest.TestCase):
         opened = re.search(r"async function openOutput\(target, focus = false\) \{(.*?)\n\}", source, re.DOTALL)
         assert opened is not None
         self.assertIn("rememberItems();", opened.group(1))
-        self.assertEqual(source.count("rememberItems(true);"), 3)
+        # From v2.2.0 (stage K2), the period, the grouping, the activity
+        # types, and a drag of the overview are changes of the person too: the
+        # items (also by a layout) and the shelf (2), the period (two in
+        # setPeriod), and these.
+        self.assertEqual(source.count("rememberItems(true);"), 10)
+        for name in ("changeItems", "setPeriod", "shiftPeriod", "rangeTyped", "setGrain", "changeTypes", "overviewUp"):
+            with self.subTest(name=name):
+                body = re.search(rf"\nfunction {name}\([^)]*\) \{{(.*?)\n\}}", source, re.DOTALL)
+                assert body is not None
+                self.assertIn("rememberItems(true);", body.group(1))
 
 
 class GuiServerLifecycleTest(GuiServerTestCase):

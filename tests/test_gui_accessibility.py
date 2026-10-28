@@ -428,6 +428,11 @@ class GuiPageStructureTest(unittest.TestCase):
         assert stop is not None
         self.assertIn('state.connectionKey = "status.quitting";', stop.group(1))
         self.assertIn("state.quitting = false;", stop.group(1).split("finally")[1])
+        # v2.2.0 K2: before the server stops, the view page is asked to write
+        # what waits to be remembered, and the page waits for it (flow.mjs,
+        # which the node tests check).
+        self.assertIn('await quitAfterWriting(() => askFlush(quitChannel), () => callApi("/api/shutdown"));', stop.group(1))
+        self.assertNotIn('await callApi("/api/shutdown");', stop.group(1))
         opened = re.search(r'if \(target === "start_here"\) \{\s*output\.startHereOpened = true;', script)
         self.assertIsNotNone(opened)
 
@@ -651,7 +656,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
     def test_every_field_has_a_label(self) -> None:
         labelled = {element.get("for") for element in self.elements if element.tag == "label"}
         fields = [element for element in self.elements if element.tag in {"input", "select", "textarea"}]
-        self.assertEqual(len(fields), 10)
+        self.assertEqual(len(fields), 11)
         for field in fields:
             with self.subTest(field=field.get("id")):
                 self.assertTrue(field.get("id") in labelled or field.get("aria-label") or field.get("aria-labelledby"))
@@ -686,6 +691,71 @@ class GuiViewPageStructureTest(unittest.TestCase):
         ):
             with self.subTest(icon=identifier):
                 self.assertEqual(by_id(self.elements, identifier).get("data-i18n-label"), key)
+
+    def test_the_view_is_written_before_the_app_quits_and_when_the_page_hides(self) -> None:
+        # v2.2.0 K2, in the page script, which no test runs: the view is
+        # written 0.8 seconds after the last change (laterSender, which the
+        # node tests check), at once before this page quits the app and when
+        # the normalization page asks before it does, and in a keepalive
+        # request when the page hides; once the app stopped, what waits is
+        # not written.
+        for line in (
+            "const REMEMBER_WAIT_MS = 800;",
+            "const viewLater = laterSender(writeView, REMEMBER_WAIT_MS);",
+            'window.addEventListener("pagehide", rememberOnHide);',
+            'callWithKey(state.launchKey, "/api/settings/view", value, { keepalive: true })',
+            "if (answerFlush(event.data, rememberNow, quitChannel)) {",
+            # What the page takes of the settings when it starts, and of an
+            # output that opens (view_flow.mjs, which the node tests check),
+            # and the types as the person chose them.
+            "takeLayouts(state.settings.view_layouts, state.settings.view_layouts_hidden, state.settings.view_layout);",
+            "const period = periodToOpen(state.settings.view_period, null, null);",
+            "state.grain = grainToOpen(state.settings.view_grain);",
+            "state.wantedTypes = Array.isArray(state.settings.view_types) ? [...state.settings.view_types] : null;",
+            "state.counted = typesToOpen(state.wantedTypes, answer.types) ?? defaultTypes(answer.types);",
+            'const period = periodToOpen(periodRequest(state.period, state.range), answer.first_day, answer.last_day) ?? { choice: "all", range: null };',
+            "state.wantedTypes = typesRequest(state.counted, state.view?.types);",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+        now = re.search(r"function rememberNow\(\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert now is not None
+        self.assertEqual([line.strip() for line in now.group(1).strip().splitlines()], ["viewLater.flush();", "return viewWriting;"])
+        stopped = re.search(r"function markStopped\(\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert stopped is not None
+        self.assertIn("viewLater.take();", stopped.group(1))
+        stop = re.search(r"async function quit\(\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert stop is not None
+        self.assertIn('await quitAfterWriting(rememberNow, () => callApi("/api/shutdown"));', stop.group(1))
+
+    def test_the_layouts_are_chosen_changed_and_moved_from_the_page(self) -> None:
+        # v2.2.0 K2, in the page script, which no test runs: a card shows its
+        # items that the output knows, in its order; a removal is asked with
+        # keeping the layout as the button that has the focus; a layout that
+        # another tab removed reads the layouts again; a drag of a grip is one
+        # change with its place, and the arrow keys on a grip move it by one;
+        # Escape puts a dragged row back before it closes the window.
+        for line in (
+            "changeItems(card.items.filter((key) => known.has(key)));",
+            "ui.layoutsPopBody.querySelector('[data-op=\"keep\"]')?.focus();",
+            'if (error.code === "LAYOUT_NOT_FOUND") {\n        await readLayouts();',
+            'ui.layoutsPopBody.addEventListener("pointerdown", layoutGripDown);',
+            'ui.layoutsPopBody.addEventListener("pointermove", layoutGripMove);',
+            'ui.layoutsPopBody.addEventListener("pointerup", layoutGripUp);',
+            'ui.layoutsPopBody.addEventListener("pointercancel", cancelLayoutDrag);',
+            'ui.layoutsPopBody.addEventListener("lostpointercapture", cancelLayoutDrag);',
+            "ui.layoutsPopBody.setPointerCapture(event.pointerId);",
+            'changeLayouts({ op: "move", id, to });',
+            'changeLayouts({ op: "move", id: event.target.dataset.id, direction: event.key === "ArrowUp" ? "up" : "down" });',
+            "const to = dropPlace(middles, event.clientY);",
+            'layoutDrag.row.querySelector(".layout-grip")?.focus();',
+            "if (layoutDrag !== null) {\n        cancelLayoutDrag();\n      } else {\n        openLayouts(false);",
+            'grip.setAttribute("aria-label", t("view.layouts.grip", { name: layout.name }));',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+        # A name of the person is text, never markup.
+        self.assertIn('button.append(element("span", "layout-name", card.builtIn ? t(card.nameKey) : card.name));', self.script)
 
     def test_headings_do_not_skip_levels(self) -> None:
         levels = [int(element.tag[1]) for element in self.elements if re.fullmatch(r"h[1-6]", element.tag)]

@@ -124,6 +124,10 @@ test("a request is a POST of JSON with the key, never cached and without cookies
   // Without a payload, the body is an empty object.
   await callWithKey("abc", "/api/heartbeat");
   assert.equal(requests[1][1].body, "{}");
+  // A request kept alive says so; the others do not (stage K2 of v2.2.0).
+  await callWithKey("abc", "/api/settings/view", { items: ["dist"], shelf: "open" }, { keepalive: true });
+  assert.equal(requests[2][1].keepalive, true);
+  assert.equal(Object.hasOwn(requests[1][1], "keepalive"), false);
 });
 
 test("without a key, nothing is sent and the page reads it as refused", async () => {

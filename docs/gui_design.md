@@ -801,7 +801,8 @@ Reading an output:
   by day over 15 years take about 2 MiB). A ticket that the server no longer
   keeps is `VIEW_NOT_OPEN`, and the page opens the output again once. Reading
   an output writes nothing, not even a temporary file; the settings keep the
-  items and the shelf as the person changes them.
+  items and the shelf, and from v2.2.0 the view and the layouts, as the person
+  changes them.
 
 Items and numbers:
 
@@ -882,7 +883,40 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
 - The settings remember the items shown and whether the shelf is open
   (`view_items` and `view_shelf`), by the names of the items only; names that
   this version does not know, names given twice, and those after the sixth
-  are left out. Nothing is remembered for each output.
+  are left out. From v2.2.0 (stage K2) they also remember the period, the
+  grouping, the activity types counted, and the layout used last. Nothing is
+  remembered for each output: the same values apply to every output. The
+  page writes them 0.8 seconds after the last change (a change within that
+  time waits again), at once before it quits the app, and, when the page
+  hides, in a request that outlives it (`keepalive`). Before the
+  normalization page quits the app, it asks the view page on the quit channel
+  to write what waits (`{ flush: true }`) and waits for its answer
+  (`{ flushed: true }`) for 0.5 seconds at most; a value not written by then
+  is given up, and the settings keep what they had. Once the app stopped,
+  nothing more is written. After the other tab forgot the settings, only a
+  change of the person writes them again.
+- When an output opens (stage K2), a period such as the last year stays as it
+  is. A range goes to the server as it is, which limits it to the days of the
+  output as before; a range that does not overlap them at all opens all the
+  time. The activity types counted are those remembered that the output has,
+  and its running types, as at first, when it has none of them.
+- The layouts (stage K2) are cards above the item shelf, in two columns: the
+  built-in layouts not hidden, in their order, then those of the person, in
+  theirs. A card shows its name (a name of the person as text), "(changed)"
+  once the panels are other items or in another order, and "Items with values
+  n/m" when the output has no value at all for some of its items (counted
+  over the whole output, not the period). Choosing a card shows its items, in
+  its order, and remembers it as the one used last. "Save the panels as a
+  layout…" names a new layout, which becomes the one used last; "Overwrite the
+  layout" puts the panels into a changed layout of the person; "Manage
+  layouts…" opens a small window that renames, moves, overwrites, and removes
+  the person's layouts (a removal asks first, with "Keep it" as the default
+  button), and hides or shows the built-in ones. A layout moves by Up and
+  Down, by the arrow keys on its grip, or by a drag of the grip, which sends
+  one change with the place of the layout (`to`). A change that the server
+  refuses says why in one line where it was asked, and a layout that another
+  tab removed reads the layouts again. On the folded shelf, "Layouts" opens
+  the cards in a small window.
 
 ## Data handling in 2.0.0
 
