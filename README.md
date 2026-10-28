@@ -39,7 +39,7 @@ and human- and machine-readable analysis context.
 4. Press **View this output**: the view page shows the numbers of the output
    as charts on one time axis.
 
-[![The view page of the GUI: distance, resting heart rate, and VO2 Max on one time axis, with the overview below (synthetic data made for the example)](https://raw.githubusercontent.com/tsubotti63/garmin-running-data-normalizer/main/docs/assets/gui-guide/view-page.en.png)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/gui-guide/view-page.en.png)
+[![The view page of the GUI: distance, resting heart rate, and VO2 Max on one time axis, with the overview below and the cards of the layouts above the item shelf (synthetic data made for the example)](https://raw.githubusercontent.com/tsubotti63/garmin-running-data-normalizer/main/docs/assets/gui-guide/view-page.en.png)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/gui-guide/view-page.en.png)
 
 [How it goes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#how-it-goes) and [Ways to use it](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#ways-to-use-it)
 in the GUI Guide give the steps of each case, such as adding a new Export

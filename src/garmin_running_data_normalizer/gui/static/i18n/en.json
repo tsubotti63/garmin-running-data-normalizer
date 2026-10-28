@@ -760,6 +760,8 @@
   "view.group.body": "Body (daily)",
   "view.group.est": "Garmin estimates",
   "view.group.fit": "Running form (FIT)",
+  "view.help.layouts": "Layouts",
+  "view.help.layouts_text": "Press a card above the shelf, and its items become the panels, in its order. “Save the panels as a layout…” keeps the panels shown as a layout of your own, and “Manage layouts…” renames, moves, and removes your layouts and hides built-in ones. The period, grouping, and activity types are not part of a layout; they are remembered apart.",
   "view.help.big": "Seeing the graphs larger",
   "view.help.big_text": "⤢ on a panel enlarges it. The other panels become low strips that keep the same time axis. “Show all panels again” goes back. “Full screen” above the panels shows the graphs and the overview alone, filling the screen; Esc or “Back” goes back.",
   "view.help.calculated": "Values that this app calculates",

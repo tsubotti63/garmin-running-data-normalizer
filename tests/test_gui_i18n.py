@@ -274,6 +274,9 @@ class GuiCatalogTest(unittest.TestCase):
             for key, named in (
                 ("view.help.shelf_text", "view.add.button"),
                 ("view.help.big_text", "view.panel.unbig"),
+                # v2.2.0 K3: the help of the layouts names their two buttons.
+                ("view.help.layouts_text", "view.layouts.save_as"),
+                ("view.help.layouts_text", "view.layouts.manage"),
                 ("view.shelf.bars_types", "view.types.label"),
             ):
                 with self.subTest(language=language, key=key):
