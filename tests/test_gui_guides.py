@@ -205,11 +205,14 @@ class GuiGuideTest(unittest.TestCase):
                 "how.single_note": "Box 2: Snapshots",
                 "run.again_note": "Box 4: Normalize",
                 "run.again_same_export": "Box 4: Normalize",
+                # v2.1.0 H1: a remembered item that another output does not have.
+                "view.summary.none": "The view page (from 2.1.0)",
             },
             "ja": {
                 "how.single_note": "2 の箱：スナップショット",
                 "run.again_note": "4 の箱：正規化",
                 "run.again_same_export": "4 の箱：正規化",
+                "view.summary.none": "見るページ（2.1.0 から）",
             },
         }
         for language, keys in sections.items():
@@ -549,44 +552,148 @@ class GuiGuideTest(unittest.TestCase):
                     self.assertIn(line, flowing(language, WHAT_YOU_NEED[language]))
         # The Export comes first among what you need, since Garmin takes time
         # to make it; and the remembered settings are forgotten before the
-        # GUI stops, since only the page forgets them.
-        for language, export, forget, stop in (
-            ("en", "- A Garmin Account Data Export", "**Forget the remembered settings…**", "2. Stop the GUI"),
-            ("ja", "- Garmin のエクスポート", "「覚えた設定を消す…」", "2. GUI を終えます"),
+        # GUI stops, since only the page forgets them. v2.1.0 H1: the places
+        # are written down before the settings are forgotten, since the page
+        # no longer shows them then (the reading of G6a).
+        for language, export, write, forget, stop in (
+            ("en", "- A Garmin Account Data Export", "1. When you changed the places",
+             "**Forget the remembered settings…**", "3. Stop the GUI"),
+            ("ja", "- Garmin のエクスポート", "1. 保管場所や出力を作る場所を変えていたときは",
+             "「覚えた設定を消す…」", "3. GUI を終えます"),
         ):
             with self.subTest(language=language):
                 text = GUIDES[language].read_text(encoding="utf-8")
                 need = section(text, WHAT_YOU_NEED[language])
                 self.assertTrue(need.split("\n\n", 2)[1].startswith(export))
                 remove = flowing(language, {"en": "Remove this app", "ja": "このアプリを片付ける"}[language])
+                self.assertLess(remove.index(write), remove.index(forget))
                 self.assertLess(remove.index(forget), remove.index(stop))
 
-    def test_guides_show_the_view_page_in_a_picture_of_this_repository(self) -> None:
-        # v2.1.0 G6a, from the checker: the picture of the view page of each
-        # guide is a file of this repository, given by a path relative to the
-        # guide, so that the guide that the help panel opens at a tag shows
-        # the picture of the same tag, with words in place of the picture. It
-        # is a PNG of 1470 by 830 pixels, made from synthetic data, without
-        # the chunks that can hold text or a time.
+    def test_guides_show_pictures_of_this_repository(self) -> None:
+        # v2.1.0 G6a, from the checker: the pictures of each guide are files
+        # of this repository, given by paths relative to the guide, so that
+        # the guide that the help panel opens at a tag shows the pictures of
+        # the same tag, with words in place of each picture. They are PNGs
+        # made from synthetic data, without the chunks that can hold text or a
+        # time. v2.1.0 H1: the whole flow and the ways to use it add four
+        # pictures; the two guides give the same pictures in the same order,
+        # each guide those of its own language, with the words in its
+        # language.
+        names = ("normalized-page", "next-steps", "second-launch", "view-last-year", "view-page")
+        sizes = {"next-steps": (315, 213)}
+        japanese = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
         for language, path in GUIDES.items():
             with self.subTest(language=language):
                 pictures = re.findall(r"!\[([^\]]*)\]\(([^)]+)\)", path.read_text(encoding="utf-8"))
-                self.assertEqual(len(pictures), 1)
-                words, link = pictures[0]
-                self.assertEqual(link, f"assets/gui-guide/view-page.{language}.png")
-                self.assertTrue(words.strip())
-                data = (path.parent / link).read_bytes()
-                self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
-                self.assertEqual(struct.unpack(">II", data[16:24]), (1470, 830))
-                self.assertLess(len(data), 1_000_000)
-                kinds = set()
-                place = 8
-                while place < len(data):
-                    size, kind = struct.unpack(">I4s", data[place : place + 8])
-                    kinds.add(kind)
-                    place += 12 + size
-                self.assertEqual(place, len(data))
-                self.assertFalse({b"tEXt", b"iTXt", b"zTXt", b"eXIf", b"tIME"} & kinds)
+                self.assertEqual([link for _words, link in pictures], [f"assets/gui-guide/{name}.{language}.png" for name in names])
+                for (words, link), name in zip(pictures, names):
+                    with self.subTest(language=language, picture=name):
+                        self.assertTrue(words.strip())
+                        self.assertEqual(bool(japanese.search(words)), language == "ja")
+                        data = (path.parent / link).read_bytes()
+                        self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
+                        self.assertEqual(struct.unpack(">II", data[16:24]), sizes.get(name, (1470, 830)))
+                        self.assertLess(len(data), 1_000_000)
+                        kinds = set()
+                        place = 8
+                        while place < len(data):
+                            size, kind = struct.unpack(">I4s", data[place : place + 8])
+                            kinds.add(kind)
+                            place += 12 + size
+                        self.assertEqual(place, len(data))
+                        self.assertFalse({b"tEXt", b"iTXt", b"zTXt", b"eXIf", b"tIME"} & kinds)
+
+    def test_guides_give_the_whole_flow_and_the_ways_to_use_it(self) -> None:
+        # v2.1.0 H1, as the Human maintainer chose on 2026-10-28 (the ways to
+        # use it at the center, the whole flow at the top): the whole flow
+        # comes before what you need, in four steps that each lead to a
+        # section; the ways to use it come after what you need, the same six
+        # scenes in both guides, each with links to the sections that give
+        # the details, and the first two start the GUI by a link, not by its
+        # steps (the checker).
+        parts = {
+            "en": ("How it goes", "Ways to use it", "More: [", "(#start-the-gui)"),
+            "ja": ("全体の流れ", "場面ごとの使い方", "くわしくは：[", "(#gui-を起動する)"),
+        }
+        scenes = {}
+        for language, path in GUIDES.items():
+            flow, ways, more, start = parts[language]
+            text = path.read_text(encoding="utf-8")
+            need = f"\n## {WHAT_YOU_NEED[language]}\n"
+            with self.subTest(language=language):
+                self.assertLess(text.index(f"\n## {flow}\n"), text.index(need))
+                self.assertLess(text.index(need), text.index(f"\n## {ways}\n"))
+                steps = re.findall(r"^(\d)\. \[[^\]]+\]\(#[^)]+\)", section(text, flow), re.M)
+                self.assertEqual(steps, ["1", "2", "3", "4"])
+                scenes[language] = re.split(r"^### ", section(text, ways), flags=re.M)[1:]
+                for number, scene in enumerate(scenes[language], 1):
+                    with self.subTest(language=language, scene=number):
+                        self.assertIn(more, scene)
+                        if number <= 2:
+                            first = re.search(r"^1\. (.*)$", scene, re.M).group(1)
+                            self.assertIn(start, first)
+                        reads = " ".join(scene.split()) if language == "en" else re.sub(r"\n *", "", scene)
+                        for phrase in self.READING_OF_H1[language].get(number, ()):
+                            self.assertIn(phrase, reads)
+                        if number == 6:
+                            care = {"en": "personal data", "ja": "個人のデータ"}[language]
+                            self.assertLess(reads.index(care), reads.index("`about`"))
+        self.assertEqual(len(scenes["en"]), 6)
+        self.assertEqual(len(scenes["ja"]), 6)
+
+    # From the two new AI sessions that read the sections of H1: the first
+    # two scenes name the timezone, which is not remembered and is Asia/Tokyo
+    # by default, so that box 3 set by itself keeps it at a later launch; the
+    # scenes that do not import say that the way to normalize is not
+    # remembered; and the CSV file is given only after the care for the
+    # personal data in it (checked in the test above).
+    READING_OF_H1 = {
+        "en": {
+            1: ("**Timezone for local dates and times** (`Asia/Tokyo` by default)",),
+            2: ("The timezone is not remembered",),
+            3: ("The way to normalize is not remembered",),
+            4: ("choose **Normalize this export only (no import)** in box 2 again",),
+        },
+        "ja": {
+            1: ("「日時に使うタイムゾーン」を確かめてから（既定は `Asia/Tokyo`）",),
+            2: ("タイムゾーンは覚えません",),
+            3: ("正規化のしかたは覚えません",),
+            4: ("2 の箱で「今回のエクスポートだけで正規化する（取り込まない）」をもう一度選びます",),
+        },
+    }
+
+    def test_readme_puts_the_gui_first(self) -> None:
+        # v2.1.0 H1 (the whole flow): the README gives the GUI right after who
+        # it is for, with links to the whole flow and the ways to use it of
+        # the guide; the changes of each release come after the non-goals,
+        # under the same headings, and Start here says where they are; the
+        # story of the author stays under why this project (the checker).
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        order = (
+            "### Who this is for\n", "### Use it with the GUI\n", "### What you get\n", "### Try it\n",
+            "(#what-v210-adds)", "## Why this project\n", "### Built from a runner's own workflow\n",
+            "## Install\n", "## Non-goals\n", "## What v2.1.0 adds\n", "## What v1.3.0 adds\n",
+            "### Evidence-backed observation contracts\n", "## Community\n",
+        )
+        places = [readme.index(part) for part in order]
+        self.assertEqual(places, sorted(places))
+        for link in ("gui_guide.md#how-it-goes", "gui_guide.md#ways-to-use-it"):
+            self.assertIn(link, readme)
+        japanese = (ROOT / "README.ja.md").read_text(encoding="utf-8")
+        for link in ("(docs/gui_guide.ja.md#全体の流れ)", "(docs/gui_guide.ja.md#場面ごとの使い方)"):
+            self.assertIn(link, japanese)
+        # The partial guard of H1 found that the order alone did not hold
+        # these: Start here says where the changes of each release are, and
+        # the steps of the GUI begin with the request of the Export, which
+        # takes time.
+        self.assertIn(
+            "What each release added and changed is in [What v2.1.0 adds](#what-v210-adds)",
+            section(readme, "Start here"),
+        )
+        steps = readme[readme.index("### Use it with the GUI\n") : readme.index("### What you get\n")]
+        self.assertTrue(re.search(r"^1\. (.*)$", steps, re.M).group(1).startswith("Request your Account Data Export from Garmin"))
+        steps = section(japanese, "GUI で使う")
+        self.assertTrue(re.search(r"^1\. (.*)$", steps, re.M).group(1).startswith("Garmin にエクスポートをリクエストし"))
 
     def test_links_inside_the_guides_lead_to_their_headings(self) -> None:
         # GitHub makes the anchor of a heading from its text in lower case,
@@ -667,7 +774,8 @@ class GuiGuideTest(unittest.TestCase):
                 ),
                 "Stop the GUI": ("130 is the code of a cancelled run, not an error of this app",),
                 "Remove this app": (
-                    "This app does not need Python itself to be removed",
+                    # v2.1.0 H1: in other words, after the reading of H1.
+                    "You do not need to remove Python itself for this app",
                     f"[macOS]({mac_doc})", f"[Windows]({windows_doc})",
                 ),
             },
@@ -791,7 +899,7 @@ class GuiGuideTest(unittest.TestCase):
                     "a line that starts with `ERROR [RUN_CANCELLED`",
                 ),
                 "Remove this app": (
-                    "write down the places that boxes 2 and 3 show before you forget them",
+                    "write down the places that boxes 2 and 3 show: once the remembered settings are forgotten",
                     "The Exports that you downloaded",
                 ),
                 "If something is wrong": (
@@ -860,7 +968,7 @@ class GuiGuideTest(unittest.TestCase):
                     "`ERROR [RUN_CANCELLED` で始まる行が出ます",
                 ),
                 "このアプリを片付ける": (
-                    "2 と 3 の箱に出ている場所を書き留めておきます",
+                    "2 と 3 の箱に出ている場所を書き留めます（覚えた設定を消すと、画面に出なくなるためです）",
                     "ダウンロードしたエクスポートの ZIP",
                 ),
                 "困ったとき": (

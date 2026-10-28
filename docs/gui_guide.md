@@ -14,6 +14,27 @@ it can also normalize one Export alone. It uses the same processing as the
 command line: for the same input and options, it writes the same output.
 Everything stays on your computer.
 
+## How it goes
+
+A first normalization takes these four steps. The sections that the links
+lead to give each step in full.
+
+1. [Request the Export](#what-you-need): request it from Garmin, and download
+   its ZIP file once Garmin has it ready.
+2. [Install this app](#install-python-and-this-app): install Python if
+   needed, and paste one line into a terminal. The line installs this app,
+   makes an icon that starts the GUI, and opens the GUI.
+3. [Normalize in the four boxes](#normalize-for-the-first-time): choose the
+   ZIP file in box 1, set boxes 2 and 3, and press **Run normalization** in
+   box 4.
+4. [Look on the view page](#the-view-page-from-210): **View this output** in
+   box 4 opens it in another tab.
+
+![The normalization page after a run: boxes 1 to 4 are all green, and box 4 shows Normalized and Next (synthetic data made for the example)](assets/gui-guide/normalized-page.en.png)
+
+Adding a new Export later, and the other cases, are in
+[Ways to use it](#ways-to-use-it).
+
 ## What you need
 
 - A Garmin Account Data Export: the ZIP file downloaded from Garmin, or the
@@ -266,6 +287,125 @@ at the earlier version, but a run that you start there runs with the new
 version, so that the versions are mixed. When this happens, stop every GUI
 that is open, and then run the same line again.
 
+## Ways to use it
+
+The steps of six common cases. The sections that the links lead to give the
+details of each box. A Snapshot is a copy of one Export, which this app keeps
+in a Snapshot Store, so that the Exports that you import are normalized
+together ([Box 2](#box-2-snapshots)).
+
+### Normalize for the first time
+
+When: you downloaded the Export ZIP file from Garmin, and use this app for the
+first time.
+
+1. [Start the GUI](#start-the-gui). Right after you install this app, the
+   line that installed it has opened the GUI already.
+2. In box 1, press **Choose ZIP file…**, and choose the ZIP file that you
+   downloaded, without extracting it. When the browser extracted it already,
+   choose that folder with **Choose extracted folder…**. Box 1 turns green
+   once the check is done.
+3. In box 2, press **Use these settings**. In box 3, check
+   **Timezone for local dates and times** (`Asia/Tokyo` by default), and
+   press **Use these settings**.
+4. In box 4, press **Run normalization**. When it says **Normalized**,
+   **View this output** under **Next** opens the view page, and
+   **Open START_HERE.md** opens the file that explains the output.
+
+![Next in box 4: the buttons Show the output folder, Open START_HERE.md, View this output, and Use the normalized data with AI (synthetic data made for the example)](assets/gui-guide/next-steps.en.png)
+
+More: [Box 1](#box-1-this-export), [Box 2](#box-2-snapshots), [Box 3](#box-3-output), [Box 4](#box-4-normalize)
+
+### Add a new Export (later launches)
+
+When: some months later, you downloaded a new Export.
+
+1. [Start the GUI](#start-the-gui). Boxes 2 and 3 show the Snapshot Store and
+   the folder for the output of the last time.
+2. In box 1, choose the new ZIP file. Once it is checked, boxes 2 and 3 are
+   set by themselves when the remembered places are found
+   ([Later launches](#later-launches)). Set a box that waits with
+   **Use these settings**.
+3. The timezone is not remembered: when yours is not `Asia/Tokyo`, choose it
+   again in box 3, and press **Use these settings** there.
+4. In box 4, press **Run normalization**. A new folder holds an output that
+   includes what earlier Exports held. The outputs before stay as they are.
+
+![The normalization page at a later launch: box 2 shows the Snapshot imported before, and box 3 the folder for the output of the last time (synthetic data made for the example)](assets/gui-guide/second-launch.en.png)
+
+More: [Later launches](#later-launches), [Box 2](#box-2-snapshots)
+
+### Try a normalization without importing
+
+When: you want to try this Export alone, without importing it into the
+Snapshots.
+
+1. [Start the GUI](#start-the-gui), and choose the Export in box 1.
+2. Under **How to normalize** in box 2, choose
+   **Normalize this export only (no import)**, and press
+   **Use these settings**. The Snapshot Store is not used.
+3. In box 3, press **Use these settings**, and in box 4,
+   **Run normalization**.
+
+The way to normalize is not remembered: at the next launch, box 2 is back to
+importing.
+
+More: [Box 2](#box-2-snapshots)
+
+### Normalize again after an update
+
+When: you update this app to a new version. The view page opens only the
+outputs made by the version in use, even after a small update, so the earlier
+outputs do not open there. They stay as they are.
+
+1. [Update to the new version](#update-to-a-new-version), and then
+   [start the GUI](#start-the-gui).
+2. If you imported your Exports into the Snapshots, press
+   **Normalize the existing Snapshots again** at the bottom of box 1, without
+   choosing an Export. If you did not, choose the original Export in box 1,
+   and choose **Normalize this export only (no import)** in box 2 again: the
+   way to normalize is not remembered.
+3. Set boxes 2 and 3 with **Use these settings** if they wait.
+4. In box 4, press **Run normalization**. A new folder holds the output of
+   the new version, which **View this output** opens.
+
+More: [Box 1](#box-1-this-export), [Open the view page](#open-the-view-page)
+
+### See the past year by month on the view page
+
+When: you want to see the distance or the resting heart rate of the past year,
+by month.
+
+1. [Open the view page](#open-the-view-page).
+2. Press **1 year** under **Period**, and **Month** under **Group by**, at the
+   top. They apply to every panel.
+3. To see the year before, press ‹ next to the period.
+
+![The view page with the period 1 year and the grouping Month: the panels of distance, resting heart rate, and VO2 Max (synthetic data made for the example)](assets/gui-guide/view-last-year.en.png)
+
+More: [Period, grouping, and activity types](#period-grouping-and-activity-types)
+
+### Give the numbers to an AI as a CSV file
+
+When: you want to give the numbers of the view page to a spreadsheet app or an
+AI.
+
+1. In a new window of the terminal, not the one where the GUI runs, run the
+   line of `series` that
+   [Write the same numbers to a CSV file (command line)](#write-the-same-numbers-to-a-csv-file-command-line)
+   gives, with your own places.
+2. The CSV file holds your personal data. Before you give it, check who gets
+   it and what is in it.
+3. Give the CSV file with the lines that start with `about`, which the
+   terminal shows: they count what the numbers leave out, such as records
+   without a value.
+
+To use the output itself with an AI, start from
+**Use the normalized data with AI** under **Next** in box 4.
+[Box 3](#box-3-output) can also make a summary that can be given to an AI.
+
+More: [Write the same numbers to a CSV file (command line)](#write-the-same-numbers-to-a-csv-file-command-line)
+
 ## Start the GUI
 
 When the line in [What you need](#what-you-need) installed this app, it is in
@@ -469,9 +609,9 @@ above that makes the icon again (the line of this guide makes it too):
 2. The page checks what you chose right away, as the `doctor --input`
    command does. It shows first, in red, what keeps a run from starting;
    then, in yellow, notes that do not, such as files that cannot be read and
-   are left out; and then, in green, that the export can be normalized, with
-   the numbers of Activities and FIT files. A large export can take a while
-   to check. Which kinds of data the export holds is known only after a run:
+   are left out; and then, in green, that the Export can be normalized, with
+   the numbers of Activities and FIT files. A large Export can take a while
+   to check. Which kinds of data the Export holds is known only after a run:
    **Results by data family** shows them.
 3. For an extracted folder, check that the extraction finished, and tick
    **I checked that the ZIP file was extracted completely and that nothing is missing**.
@@ -497,7 +637,7 @@ box also asks for two values of the import:
   digit, and no Japanese.
 - **Download time**: filled in from the time of the ZIP file, or for an
   extracted folder from its newest file, which is near the time when the
-  export was made; the line under it says which. It is in the local time of
+  Export was made; the line under it says which. It is in the local time of
   this computer, such as `2030-01-01 02:00`. The Snapshots are in the order of
   these times, so change it only when its place among the other Snapshots is
   not the real one.
@@ -508,23 +648,23 @@ they show again, with the reason, while the name or the time keeps a run from
 starting.
 
 When the store holds Snapshots, **Normalize the existing Snapshots again** at
-the foot of the box normalizes them again without an export, for example
+the foot of the box normalizes them again without an Export, for example
 with a new version of this app or with other settings of the output. The box
-then takes no export; **Choose an export instead** goes back.
+then takes no Export; **Choose an export instead** goes back.
 
 ## Box 2: Snapshots
 
-A Snapshot is a copy of one export, and the Snapshot Store is the folder that
+A Snapshot is a copy of one Export, and the Snapshot Store is the folder that
 keeps the Snapshots. Every normalization with the Snapshots uses all the
 Snapshots in the store together, so that the output includes what earlier
-exports held; none can be left out.
+Exports held; none can be left out.
 
 **How to normalize** has two choices:
 
 - **Import into the Snapshots and normalize them together (recommended)**:
-  copies this export into the store, then normalizes it together with the
+  copies this Export into the store, then normalizes it together with the
   existing Snapshots.
-- **Normalize this export only (no import)**: normalizes this export alone,
+- **Normalize this export only (no import)**: normalizes this Export alone,
   without the store. The parts of the store turn gray, and the box says "This
   way does not use the store: only this export is normalized, and it is not
   imported into the Snapshots." This way makes no store.
@@ -543,7 +683,7 @@ normalize.
 - **Choose where to create it…** chooses the folder in which a new store is
   made, as its folder `snapshots`, or the chosen folder itself when it is
   named `snapshots`; a store that is there already is opened instead. Nothing
-  is made until a run imports an export into it.
+  is made until a run imports an Export into it.
 - Once a store is open, **Open another store…** and **Create a new store…** do
   the same, and **Check the Snapshots** checks the store as the
   `snapshot verify` command does.
@@ -554,9 +694,9 @@ Drive, OneDrive, or the Documents and the Desktop of a Mac, is marked in
 yellow.
 
 The list of the Snapshots shows all of them as the run will use them, in the
-order of the times of their exports, with the number of files of each. The
-export that the run will import stands in its place as **To import now**, and
-after the run as **Imported now**; the others are **Imported**. If the export
+order of the times of their Exports, with the number of files of each. The
+Export that the run will import stands in its place as **To import now**, and
+after the run as **Imported now**; the others are **Imported**. If the Export
 has the same content as a Snapshot in the store, the import finds that out and
 adds no new Snapshot, and the result says which Snapshot it is.
 
@@ -638,7 +778,7 @@ active at a time.
 - The box shows the current step and its number, and the elapsed time;
   **Steps** shows the time of each step. While FIT files are read, a bar
   shows how many have been read; files with the same content are read once.
-  If nothing changes for 30 seconds, a note says so. Large exports can take
+  If nothing changes for 30 seconds, a note says so. Large Exports can take
   a while, and you can keep waiting.
 - Keep the terminal open. If you close the tab or the window of the browser,
   the run goes on; open the same address again to see it. While the computer
@@ -665,17 +805,17 @@ code.
 | `PARTIAL_SUCCESS` | 3 | **Normalized with part of the input left out**, such as files that could not be read or rows without a required value; the output can be used |
 | Stopped | 2 | **Could not normalize**: no output folder was created; the box with the problem says why and what to do next |
 
-When the run imported, the box also says where the export came in the order
-of the Snapshots, or that the store held the same export already, so that no
+When the run imported, the box also says where the Export came in the order
+of the Snapshots, or that the store held the same Export already, so that no
 Snapshot was added. A run that stops after its import keeps the import: when
-you press **Run normalization** again, the same export is normalized without
+you press **Run normalization** again, the same Export is normalized without
 a new Snapshot.
 
 **Results by data family** lists each kind of data with its record count, its
 status, and its warnings, then the warnings that belong to no kind, and the
 total of the warnings. Yellow rows are warnings. Of the families shown as
 **Not in the export**, Gear, Personal records, and FIT files add a warning; the
-daily records, such as Sleep, HRV, and VO2 max, are often not in an export, so
+daily records, such as Sleep, HRV, and VO2 max, are often not in an Export, so
 they add none.
 
 **Output check** runs by itself after the run, under **Steps**, with the same
@@ -703,7 +843,7 @@ made stays as it is." The name field is **Name of the new folder** in the
 third box. Press it again when you have changed a setting, such as the
 timezone; with the same input and settings, it only makes another output
 with the same content. When the run imported, the line adds "The same export
-is not imported twice.": this export stays in the store once, and the next
+is not imported twice.": this Export stays in the store once, and the next
 normalization uses it too.
 
 ## The view page (from 2.1.0)
@@ -746,13 +886,13 @@ or what to do: it is a page to look at with your own eyes.
   it, such as `GarminRunningData`, which a red box says cannot be opened.
 - An output that another version of this app made cannot be opened, although
   the list may show it: a red box says why, and what to do. Normalize the
-  export again with this version, and open the new output.
+  Export again with this version, and open the new output.
   **Normalize again on the normalization page** in the red box goes to the
-  normalization page. An output that imported the export into the Snapshots
+  normalization page. An output that imported the Export into the Snapshots
   is normalized again with **Normalize the existing Snapshots again** in the
   first box; for an output normalized without Snapshots, normalize the original
-  export again. After you update to a new version, the numbers of an earlier
-  version's output can be seen once its export is normalized again.
+  Export again. After you update to a new version, the numbers of an earlier
+  version's output can be seen once its Export is normalized again.
 
 ### Period, grouping, and activity types
 
@@ -853,7 +993,9 @@ values are made):
 - Only a total is 0 for a step without a record, between the first and the
   last activity of the types counted, drawn as a light point; before the first
   and after the last, it is empty, without a point. 0 means that nothing was
-  recorded, which does not always mean that there was no run.
+  recorded, which does not always mean that there was no run. The point of a
+  0 is a hollow dot on the base line, which is not the lighter bar of a
+  partial step.
 - The average pace is the total time divided by the total distance. The
   average heart rate, the cadence, the power, and the running-form items are
   means of the activities weighted by their durations (both calculated by this
@@ -877,7 +1019,10 @@ values are made):
   nothing.
 - Near an edge of the frame, where the pointer becomes ↔, drag to move that
   edge only. The other edge stays.
-- Escape during a drag cancels it.
+- Inside the frame, away from its edges, a drag does not move the frame: it
+  makes a new period from the day where it starts. To move a period and keep
+  its length, use ‹ and › next to the period.
+- Escape during a drag cancels it, and the period stays.
 - To go back to the period before, press its button at the top, such as
   **3 years**.
 
@@ -887,10 +1032,15 @@ values are made):
   on the whole screen when the browser can show the page in its full screen,
   otherwise in the whole window. A line at the top names the output, the
   period, and the activity types.
+- In full screen too, a drag across the overview changes the period (the
+  buttons of the period at the top do not show).
 - **Back (Esc)** or Escape returns to the page. In the browser's full screen,
   Escape ends the browser's full screen, and the page returns to its panels as
   well; the help panel of **Help** at the top right, if it was open, stays
   open.
+- Escape during a drag across the overview only cancels the drag, and the
+  page stays in full screen. In the browser's full screen, the first Escape
+  ends the browser's full screen, and cancels the drag as well.
 - Full screen is not remembered: the next time, the page opens as usual.
 
 ### What is remembered for the next time
@@ -900,7 +1050,8 @@ later one.
 
 - Remembered: the items shown and their order (six at most; the same for every
   output), whether the item shelf is open, and the appearance (when **Light**
-  or **Dark** is chosen).
+  or **Dark** is chosen). When another output has no value for an item shown,
+  the second line of its panel says "There is no value in this period."
 - Not remembered: the output shown, the period, the grouping, the activity
   types, the same scale, a panel enlarged, a table shown, and full screen. As
   the output shown is not remembered, the page opened from the bar at the
@@ -978,41 +1129,70 @@ the app again, start it from the icon or with the command.
 
 From the second launch on, the GUI uses the settings that it remembered.
 
-- Once the first box has checked the export, the second box is set by
-  itself if the store that the GUI remembered opens without a problem, and
-  then the third box if the folder for the output that it remembered is
-  there or is the default place: the boxes are set in their order. Their
-  summaries end with "(as last time)". If you change a box, for example by
-  opening another store, press **Use these settings** in it again before the
-  run. Without a remembered store, the second box asks to be set as on a
-  first launch, so that no store is made unseen.
-- **Show tips** is off, until you switch it; the GUI remembers your choice.
+- Once the first box has checked the Export, the second and the third box
+  are set by themselves, in their order.
+  - The second box is set if the Snapshot Store that the GUI remembered opens
+    without a problem.
+  - The third box is set if the folder for the output that the GUI
+    remembered is there, or is the default place.
+  - The summary of a box set this way ends with "(as last time)".
+  - If you change a box, for example by opening another store, press
+    **Use these settings** in it again before the run.
+  - Without a remembered store, the second box asks to be set as on a first
+    launch, so that no store is made unseen.
+- **Show tips**, at the top right of the page, is on at the first launch and
+  off at later launches, until you switch it; the GUI remembers your choice.
 - Before you normalize, **Results by data family** shows the counts of the
   output before. After the run, the column **Since the output before** shows
   the change of each kind of data, and the fourth box says how many
   activities more or fewer there are. The change shows only when both
-  outputs were normalized the same way (Snapshots, or this export alone), by
+  outputs were normalized the same way (Snapshots, or this Export alone), by
   the same version of this app, and with the same timezone; otherwise a line
-  says what differs. It is the change when both were normalized from the same
-  Snapshot Store, which an output does not record.
+  says what differs.
+- An output does not record its Snapshot Store: after you change the store,
+  the change compares the outputs of the two stores as they are.
 
-The GUI remembers the places of the Snapshot Store, of the folder for the
-output, and of the outputs that runs made (the latest 10), whether
-**Show tips** is on, the appearance (when **Light** or **Dark** is chosen),
-and the items and the item shelf of the view page. Of the places, only their
-names are kept, never what is in them, and never the place of an export; the name of the output, the timezone,
-the language, and the way to normalize are not remembered. The places are
-remembered when a run makes its output, so that a place opened by mistake
-does not come back. The file is `gui-settings.json` in the folder
-`garmin-running-data-normalizer` of this app: in `Library/Application Support`
-in your home folder on a Mac, in `LOCALAPPDATA` on Windows, and in
-`XDG_STATE_HOME`, or `.local/state` in your home folder, on Linux.
+The outputs go by three names:
+
+- The list of earlier outputs: the outputs that runs made, which the GUI
+  remembers (the latest 10, newest first), without the output of the last
+  run of this launch, which is offered on its own. **Output to view** of the
+  view page, among others, offers them.
+- The output before: the newest output of that list that can be read. The
+  normalization page shows the change since this one.
+- The latest output: the output that the view page offers to open, which is
+  the one normalized in this launch, or, without one, the newest one of the
+  list of earlier outputs.
+
+The GUI remembers only these:
+
+- Places: the Snapshot Store, the folder for the output, and the list of
+  earlier outputs (the outputs that runs made, the latest 10). Only the
+  places of the folders are kept, never what is in them. The places are
+  remembered when a run makes its output, so that a place opened by mistake
+  does not come back.
+- Whether **Show tips** is on, the appearance (when **Light** or **Dark** is
+  chosen), and the items and the item shelf of the view page.
+
+The place of an Export, **Name of the new folder** in box 3, the timezone,
+the language, and the way to normalize are not remembered.
+
+The file is `gui-settings.json` in the folder of the settings of this app,
+`garmin-running-data-normalizer`:
+
+- On a Mac, in `Library/Application Support` in your home folder. To open
+  it, open the **Go** menu of the Finder and hold down the Option key:
+  **Library** shows.
+- On Windows, in `LOCALAPPDATA`. Type `%LOCALAPPDATA%` in the address bar of
+  File Explorer to open it.
+- On Linux, in `XDG_STATE_HOME`, or `.local/state` in your home folder.
 
 When a remembered place is not found, for example because it was moved or
 its external disk is disconnected, its box turns red. The second box offers
 **Open another store…**, **Look again**, and **Create a new store…**, and the
-third box **Choose…** and **Look again**. Neither place is made again, except
-the default folder `GarminRunningData` for the output.
+third box **Choose…** and **Look again**. Neither place is made again. Only
+when the folder for the output is the default `GarminRunningData`, it is made,
+if it is not there, when you normalize.
 
 **Forget the remembered settings…** in the bar at the bottom asks first, and
 then removes the file of the settings only, never while a run is active. It
@@ -1094,7 +1274,7 @@ documents of that release.
 **Help** at the top right opens the help panel at the right of the window. It
 pushes the page aside instead of covering it, and has five parts:
 
-- **How to use**: how to get the export from Garmin, and the four boxes;
+- **How to use**: how to get the Export from Garmin, and the four boxes;
   press a step to light up its box. Its last step, **Read the result**,
   shows **Done** once **Open START_HERE.md**, under **Next** in the fourth
   box, has opened the file; opening it in another way does not mark it. It
@@ -1135,7 +1315,7 @@ page says it in words too.
 When the page cannot go on, the box with the problem turns red and says what
 happened, what to do next, and a code, and the line **Next:** points at that
 box. A run that stops creates no output folder. Quote the code when you ask
-for help. Do not attach your export or output. The table follows the boxes,
+for help. Do not attach your Export or output. The table follows the boxes,
 from the first to the fourth, and then **If something is wrong**.
 
 | Code | What happened | What to do |
@@ -1167,7 +1347,7 @@ For other codes, follow the next step on the page. If it does not solve the
 problem, see [Report a problem on GitHub](#report-a-problem-on-github).
 
 A mix of Exports is told where it is: a mix in the input in the first box,
-and in the second box an export of another account than the Snapshots of the
+and in the second box an Export of another account than the Snapshots of the
 store, or a store that holds the Exports of more than one account, each with a
 next step of its own.
 
@@ -1220,41 +1400,48 @@ That is as it should be.
 
 ## Remove this app
 
-When you no longer use this app, clean up in this order. An update does not
-need it.
+When you no longer use this app, clean up in this order. To update to a new
+version, you do not need to remove anything.
 
-1. To remove what the GUI remembers too, choose
+1. When you changed the places of the Snapshot Store or the folder for the
+   output, write down the places that boxes 2 and 3 show: once the
+   remembered settings are forgotten, the page no longer shows them.
+2. To remove what the GUI remembers too, choose
    **Forget the remembered settings…** in the bar at the bottom of the
-   normalization page before you stop the GUI. The place of its file is in
-   [Later launches](#later-launches). When you changed the places of the
-   Snapshot Store or the outputs, write down the places that boxes 2 and 3
-   show before you forget them.
-2. Stop the GUI ([Stop the GUI](#stop-the-gui)).
-3. Move these to the Trash (the Recycle Bin on Windows):
-
-- The folder `garmin-normalizer` in your home folder: the virtual environment
-  that the line in [What you need](#what-you-need) made. This app is in it.
-- The icon: on macOS, **Garmin Running Data Normalizer** on the desktop; on
-  Windows, the shortcuts **Garmin Running Data Normalizer** on the desktop
-  and in the Start menu. The one in the Start menu is in the folder that
-  opens when you type `shell:programs` in the address bar of File Explorer.
-- The Snapshot Store and the outputs, by default in `GarminRunningData` in
-  your home folder: they hold your personal data and the copies of your
-  Exports. Keep them while you still use them.
-- The Exports that you downloaded, the ZIP files and the folders extracted
-  from them: they hold your personal data. Keep them while you still use
-  them.
-- The CSV files that `series` wrote, if you made any: they hold your
-  personal data. Keep them while you still use them.
+   normalization page before you stop the GUI. The Snapshot Store and the
+   outputs stay.
+3. Stop the GUI ([Stop the GUI](#stop-the-gui)).
+4. Move these to the Trash (the Recycle Bin on Windows):
+   - The folder `garmin-normalizer` in your home folder: the virtual
+     environment that the line in
+     [Install Python and this app](#install-python-and-this-app) made. This
+     app is in it. It is not `GarminRunningData`, which holds your personal
+     data (step 5). When you installed this app in another way, there is no
+     such folder: `pip uninstall garmin-running-data-normalizer` removes this
+     app instead.
+   - The icon, if one was made: on macOS, **Garmin Running Data Normalizer**
+     on the desktop; on Windows, the shortcuts
+     **Garmin Running Data Normalizer** on the desktop and in the Start menu.
+     The one in the Start menu is in the folder that opens when you type
+     `shell:programs` in the address bar of File Explorer. On Linux, no icon
+     is made.
+   - The folder of the settings, `garmin-running-data-normalizer`, if it is
+     still there; its place is in [Later launches](#later-launches). Step 2
+     usually removes this folder too; without step 2, the file of the
+     settings is in it.
+5. Move these to the Trash only when you no longer use them. They hold your
+   personal data; keep them while you still use them.
+   - The Snapshot Store, which holds the copies of your Exports, and the
+     outputs: by default in `GarminRunningData` in your home folder, and in
+     the places that you wrote down in step 1.
+   - The Exports that you downloaded, the ZIP files and the folders extracted
+     from them.
+   - The CSV files that `series` wrote, if you made any.
 
 On Windows, when the folder `garmin-normalizer` cannot be moved because it
 is in use, wait a little, and choose **Try Again**.
 
-When you installed this app in another way,
-`pip uninstall garmin-running-data-normalizer` removes it. That does not
-remove the icon.
-
-This app does not need Python itself to be removed, and other apps may use
+You do not need to remove Python itself for this app, and other apps may use
 it. To remove Python too, do as the documents of python.org say, for
 [macOS](https://docs.python.org/3/using/mac.html) and for [Windows](https://docs.python.org/3/using/windows.html).
 
@@ -1301,14 +1488,14 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
 
 ## The GUI and the command line
 
-The GUI runs the same processing as the command line. For this export only,
+The GUI runs the same processing as the command line. For this Export only,
 it is the same as this command:
 
 ```bash
 garmin-running-data-normalizer run-all --input /path/to/export --output /path/to/new-output --timezone Asia/Tokyo
 ```
 
-To import the export into the Snapshots and normalize them together:
+To import the Export into the Snapshots and normalize them together:
 
 ```bash
 garmin-running-data-normalizer snapshot register --store /path/to/store --input /path/to/export --label 2030-01-01 --requested-at 2030-01-01T02:00:00+00:00 --downloaded-at 2030-01-01T02:00:00+00:00 --observed-at 2030-01-01T02:00:00+00:00 --confirm-complete
@@ -1318,15 +1505,15 @@ garmin-running-data-normalizer snapshot run-all --store /path/to/store --output 
 Normalizing the existing Snapshots again runs the second command alone. With
 the summary for an AI, each run adds `--external-safe-pack`.
 
-The page gives the download time as all three times of the export,
+The page gives the download time as all three times of the Export,
 `--requested-at`, `--downloaded-at`, and `--observed-at`. The command line
 takes each of them, so one store can hold Snapshots that the command line
-imported with the time when the export was requested from Garmin, and
+imported with the time when the Export was requested from Garmin, and
 Snapshots that the page imported with the time of the download. The
 Snapshots are in the order of their times of `--observed-at`, which are the
 download times for those that the page imported. The page also checks the
-name of the Snapshot before it reads the export, and stops for a name that
-the store has; the command line reads the export first, and an export that
+name of the Snapshot before it reads the Export, and stops for a name that
+the store has; the command line reads the Export first, and an Export that
 the store holds already adds no Snapshot, under any name.
 
 A store that the page made can be used with the command line as it is,
@@ -1339,7 +1526,7 @@ garmin-running-data-normalizer snapshot verify --store /path/to/store
 garmin-running-data-normalizer snapshot unlock --store /path/to/store --confirm-no-other-command
 ```
 
-The check of the export, the output check, and the Support Bundle are these
+The check of the Export, the output check, and the Support Bundle are these
 commands:
 
 ```bash
