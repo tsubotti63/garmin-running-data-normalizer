@@ -25,6 +25,26 @@ and human- and machine-readable analysis context.
   GUI, which runs in your browser.
 - You want reproducible outputs that can be reviewed before analysis.
 
+### Use it with the GUI
+
+1. Request your Account Data Export from Garmin, and download its ZIP file
+   once Garmin has it ready
+   ([What you need](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#what-you-need)).
+2. Paste the line in
+   [What you need](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#what-you-need)
+   of the GUI Guide into a terminal, once. It installs this app, makes an icon
+   that starts the GUI, and opens the GUI in your browser.
+3. Choose the Export ZIP file that you downloaded from Garmin, and normalize
+   it in the four boxes of the page.
+4. Press **View this output**: the view page shows the numbers of the output
+   as charts on one time axis.
+
+[![The view page of the GUI: distance, resting heart rate, and VO2 Max on one time axis, with the overview below (synthetic data made for the example)](https://raw.githubusercontent.com/tsubotti63/garmin-running-data-normalizer/main/docs/assets/gui-guide/view-page.en.png)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/gui-guide/view-page.en.png)
+
+[How it goes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#how-it-goes) and [Ways to use it](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#ways-to-use-it)
+in the GUI Guide give the steps of each case, such as adding a new Export
+later or normalizing again after an update.
+
 ### What you get
 
 - **17 stable normalized datasets** with documented grains and stable keys.
@@ -36,19 +56,6 @@ and human- and machine-readable analysis context.
 [![Synthetic / fictional product flow: Garmin Account Export to deterministic Run-All, 17 stable datasets, QA, audit, provenance, reusable analysis context, bounded descriptive analysis, and Human review](https://raw.githubusercontent.com/tsubotti63/garmin-running-data-normalizer/main/docs/assets/first-user-conversion/product-flow.svg)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/product-flow.svg)
 
 Select the image to inspect the full-size accessible SVG.
-
-### Use it with the GUI
-
-1. Paste the line in
-   [What you need](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#what-you-need)
-   of the GUI Guide into a terminal, once. It installs this app, makes an icon
-   that starts the GUI, and opens the GUI in your browser.
-2. Choose the Export ZIP file that you downloaded from Garmin, and normalize
-   it in the four boxes of the page.
-3. Press **View this output**: the view page shows the numbers of the output
-   as charts on one time axis.
-
-[![The view page of the GUI: distance, resting heart rate, and VO2 Max on one time axis, with the overview below (synthetic data made for the example)](https://raw.githubusercontent.com/tsubotti63/garmin-running-data-normalizer/main/docs/assets/gui-guide/view-page.en.png)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/gui-guide/view-page.en.png)
 
 ### Try it
 
@@ -172,6 +179,9 @@ Diagnostics release.
 - [Production PyPI v2.1.0](https://pypi.org/project/garmin-running-data-normalizer/2.1.0/)
 - Project story on Zenn: [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
 
+What each release added and changed is in [What v2.1.0 adds](#what-v210-adds)
+and the sections after it, near the end of this page.
+
 ## Why this project
 
 A Garmin Account Export is useful but is not automatically analysis-ready. It
@@ -207,298 +217,6 @@ Normalize locally
 
 The package does not send the export to a hosted processing service. Public
 reproduction uses only synthetic fixtures.
-
-## What v2.1.0 adds
-
-The v2.1.0 release adds a way to look at the numbers of an output. The
-processing, the outputs, the Snapshot Store, and the `0 / 0 / 3 / 2` Product
-exit mapping are those of v2.0.1.
-
-- **The view page.** **View this output** in box 4 after a run, or **Open
-  the view page** in the bar at the bottom of the page, opens it in the next
-  tab. It shows the items that you choose, such as distance, resting heart
-  rate, and VO2 Max, in panels on one time axis, by day, week, month, or year,
-  for a period such as the last three years, with an overview below the
-  panels to choose the range, a full screen of the charts, and a table for
-  each panel. It reads the output and changes nothing. It does not say what
-  causes what, or what to do.
-- **`series`.** The command writes the numbers that the view page shows to a
-  CSV file, for a spreadsheet or another tool.
-- **The colors of the page.** **Appearance** in the bar at the bottom chooses
-  **Match this computer**, **Light**, or **Dark** for both pages. The GUI
-  remembers the choice, and the items of the view page.
-- The GUI stops by itself when none of its pages has been open for an hour
-  (10 minutes before), unless a run is going on.
-- Outputs record `2.1.0`. The view page opens only outputs made by this
-  version. `validate-handoff`, `doctor --run-output`, `support-bundle`, and
-  `series` of v2.1.0 stop for an output of v2.0.1 with `OUTPUT_OTHER_VERSION`,
-  as each version does for the outputs of other versions. To look at the
-  numbers of an earlier output, normalize its Export again with v2.1.0 into a
-  new folder.
-
-See the
-[v2.1.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.1.0.md),
-the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md#v201-to-v210), and
-[The view page (from 2.1.0)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#the-view-page-from-210)
-in the GUI Guide.
-
-## What v2.0.1 changes
-
-The v2.0.1 release fixes small things of the page of the GUI and of the GUI
-Guide. The processing, the outputs, the command line, the Snapshot Store, and
-the `0 / 0 / 3 / 2` Product exit mapping are those of v2.0.0.
-
-- **Quit** asks first, in the bar at the bottom of the page. While the app
-  stops, the bar says so; then the page says that the app has stopped and how
-  to start it again. The language and the help stay usable.
-- The bar at the bottom of the page stays on the screen while the page
-  scrolls.
-- After a run, a line under **Run normalization** says what pressing it again
-  does. When this Export alone is normalized, the Snapshot box no longer says
-  that a Snapshot Store will be made. The help marks **Read the result** as
-  done once `START_HERE.md` is opened from the page. The hint of the box that
-  runs and the help of the timezone are clearer.
-- The GUI Guide gives the installation in numbered steps, how to report a GUI
-  that does not open, and what to do when the icon could not be made, and says
-  more about updating, going back to an open GUI, stopping, and removing this
-  app.
-- Outputs record `2.0.1`. `validate-handoff`, `doctor --run-output`, and
-  `support-bundle` of v2.0.1 stop for an output of v2.0.0 with
-  `OUTPUT_OTHER_VERSION`, as each version does for the outputs of other
-  versions, and the GUI shows the change since an earlier output only for an
-  output of the same version. Check an output of v2.0.0 with v2.0.0, or rerun
-  Run-All into a new folder.
-
-See the
-[v2.0.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.0.1.md)
-and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md#v200-to-v201).
-
-## What v2.0.0 changes
-
-The v2.0.0 release adds a local GUI and changes how problems in the data are
-handled. The CLI stays, with the same commands and options apart from two new
-ones, and the Product exit mapping stays `0 / 0 / 3 / 2`.
-
-- `garmin-running-data-normalizer gui` opens a page in the browser of the same
-  computer. It listens on `127.0.0.1` only, takes the key of its own launch,
-  and sends nothing to the network. One page with four numbered boxes chooses
-  the Export, the Snapshot Store, and the output, and normalizes, in English
-  or Japanese. On macOS and Windows, `gui --create-shortcut` makes an icon
-  that starts the GUI. See the
-  [GUI Guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md).
-- The Export can be the downloaded ZIP file as it is, in the CLI and in the
-  GUI.
-- Runs no longer stop on problems in the data. A file or row that cannot be
-  used is left out with a warning (exit 3), values that disagree are kept
-  empty and marked, with every value in the audit records, and no value is
-  dropped or chosen silently. Runs still stop for safety, for a folder that is
-  not an Export, and for an input that mixes Exports or accounts.
-- The GUI uses Snapshots by default: each Export is kept as a Snapshot, and
-  all Snapshots are normalized together. Normalizing this Export only is also
-  possible. Existing Snapshot Stores need no migration.
-- Outputs gain fields (247, from 224) and four audit records, and
-  `validate-handoff`, `doctor --run-output`, and `support-bundle` refuse an
-  output of v1.7.1. Rerun Run-All into a new folder.
-
-See the
-[v2.0.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.0.0.md)
-and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md#v171-to-v200).
-
-## What v1.7.1 changes
-
-The v1.7.1 release fixes Snapshot Run-All without changing the 17 normalized
-datasets, stable keys, or the `0 / 0 / 3 / 2` Product exit contract.
-
-- `snapshot run-all` now normalizes the Hill Score, Endurance Score, and
-  VO2Max rows that `snapshot build-input` merges. From v1.3.0 through v1.7.0,
-  those three datasets were always empty in `snapshot run-all` output, with no
-  warning.
-- One-shot `run-all` output from the same Export is unchanged apart from
-  `product_version`.
-- Existing Snapshot Stores need no migration. Rerun `snapshot run-all` to
-  obtain the missing rows.
-- The package also contains internal changes toward v2.0.0 that add no
-  user-facing feature, including an internal GUI package that is in
-  development and has no command. v2.0.0 makes it the `gui` command.
-
-See the
-[v1.7.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.7.1.md)
-and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
-
-## What v1.7.0 changes
-
-The v1.7.0 release adds FIT running dynamics without changing the 17
-normalized datasets, stable keys, or the `0 / 0 / 3 / 2` Product exit
-contract.
-
-- `fit_sessions` and `fit_laps` gain six running-dynamics averages read from
-  the FIT session and lap messages: `avg_vertical_oscillation_mm`,
-  `avg_stance_time_ms`, `avg_stance_time_percent`,
-  `avg_stance_time_balance_percent`, `avg_vertical_ratio_percent`, and
-  `avg_step_length_mm`.
-- Units follow the FIT profile and are part of each field name. The stance
-  time balance is kept as recorded and is not converted to a left or right
-  side.
-- `fit_sessions` always contains the six fields (`null` when the FIT file does
-  not record them); `fit_laps` contains them when the FIT lap message defines
-  them.
-- `analysis/activities.csv` appends ten columns after `lap_count`: elapsed and
-  moving time, and, for activities with an explicit FIT link, `fit_*` columns
-  with the linked FIT session's running dynamics and total ascent and descent.
-  The existing columns keep their positions.
-- The External-safe Pack and the Support Bundle do not include the new values,
-  and running-dynamics values in the Garmin activity list are not read.
-
-Rerun Run-All after upgrading. See the
-[v1.7.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.7.0.md)
-and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
-
-## What v1.6.0 changes
-
-The v1.6.0 release lets you choose the timezone for local dates and times
-without changing the 17 normalized datasets, stable keys, or the
-`0 / 0 / 3 / 2` Product exit contract.
-
-- `run-all`, `snapshot run-all`, and `normalize-activities` accept
-  `--timezone` with an exact IANA timezone name, such as `America/New_York`.
-  The default remains `Asia/Tokyo`, so normalized values do not change unless
-  you use the option.
-- `doctor --input --timezone` checks that timezone's data.
-- The timezone used is recorded as `local_timezone` in `run_manifest.json`,
-  `run_summary.json`, and `ANALYSIS_CONTEXT.json`, and is stated in
-  `START_HERE.md` and `ANALYSIS_HANDOFF.md`. It is not added to the
-  External-safe Pack or the Support Bundle.
-- A name that is not an exact IANA timezone name stops with
-  `TIMEZONE_INVALID` (exit 2). Use the Area/Location form, because legacy
-  aliases such as `Japan` are not available on every system.
-
-Rerun Run-All after upgrading. See the
-[v1.6.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.6.0.md)
-and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
-
-## What v1.5.0 changes
-
-The v1.5.0 release hardens Snapshot and output handling without changing the
-17 normalized datasets, stable keys, or the `0 / 0 / 3 / 2` Product exit
-contract.
-
-- New Snapshot Stores and `normalize-activities` output are owner-only on
-  Unix-like systems. Stores created by earlier versions keep their
-  permissions; tighten one with `chmod -R go-rwx <store>`.
-- When Snapshots disagree, `snapshot build-input` and `snapshot run-all` report
-  counts by dataset and conflict type.
-- A lock left by an interrupted `snapshot register` is reported with its
-  recorded process ID and the recovery step.
-- `Thumbs.db` inside a ZIP file is skipped like other operating-system metadata
-  files. Such a ZIP receives a different Snapshot content identity, so do not
-  re-register Exports already registered with an earlier version.
-- Snapshot Sleep keeps every Sleep field that Run-All reads, so
-  `snapshot run-all` reports the same Sleep values as Run-All on the same
-  Export. A store whose Exports differ only in the added fields now stops.
-
-Rerun Run-All after upgrading. See the
-[v1.5.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.5.0.md)
-and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
-
-## What v1.4.1 fixes
-
-The v1.4.1 patch release fixes FIT and metadata-file handling without changing
-the 17 normalized datasets, stable keys, Snapshot semantics, or the
-`0 / 0 / 3 / 2` Product exit contract.
-
-- FIT session `sport` and `sub_sport` use FIT profile names. For example,
-  indoor cycling is `cycling` with `indoor_cycling` rather than
-  `treadmill_running`, and a trail run is `running` with `trail`.
-- FIT-derived HRV is read only from FIT files that pass the same container
-  checks as FIT sessions, including the file CRC.
-- `.DS_Store`, `Thumbs.db`, AppleDouble `._*` files, and `__MACOSX/` are
-  ignored in Export folders and completed outputs, so copies made on macOS no
-  longer fail Run-All or handoff validation.
-
-Rerun Run-All after upgrading. See the
-[v1.4.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.4.1.md)
-and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
-
-## What v1.4.0 adds
-
-The stable v1.4.0 release adds read-only Export evidence and diagnostics
-without changing the 17 normalized datasets, stable keys, Snapshot semantics,
-or the `0 / 0 / 3 / 2` Product exit contract.
-
-- `doctor --input` checks bounded pre-run readiness of an extracted Export, and
-  `doctor --run-output` explains a completed Run-All result without changing
-  it.
-- Every completed Run-All output adds `diagnostics/source_completeness.json`
-  and `diagnostics/run_quality.json`, read-only projections of existing Product
-  evidence.
-- `support-bundle` creates a deterministic, six-member public-safe ZIP for
-  Human review. It never uploads automatically and is not the External-safe
-  Analysis Pack.
-- First-user guidance explains how to read `PASS`, `PASS_WITH_WARNINGS`,
-  `PARTIAL_SUCCESS`, and Fatal outcomes.
-
-Together with the existing `validate-handoff` command (available since
-v1.1.0), these tools check a completed output without repository access. See
-[v1.4 Export Evidence and Diagnostics](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/v1_4_diagnostics.md)
-and the
-[v1.4.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.4.0.md).
-
-## What v1.3.0 adds
-
-The stable v1.3.0 release expands Run-All from the seven existing normalized
-datasets to **17 stable normalized datasets**. It adds Hill Score, Endurance
-Score, Race Prediction, Sleep, UDS, Acute Training Load, Training Readiness,
-VO2Max, HRV reference, and Training History outputs while preserving each
-dataset's reviewed grain and stable key.
-
-- Snapshot Accumulation applies the matching daily-state, immutable-observation,
-  or regenerate policy and retains missing-is-not-delete behavior.
-- In Snapshot-based runs, accepted Endurance and UDS values that differ for one
-  stable key are retained in audit evidence as observed variants. A canonical
-  daily winner is not selected without source-backed authority; same-export
-  malformed/divergent input remains fail-closed.
-- Generated Output Experience documents all 17 datasets and keeps the six
-  existing explicit relationships unchanged.
-- Wellness/Metrics context remains separate from Activity facts. Same-day
-  comparison is contextual, not a direct relationship or causal claim.
-- Lactate Threshold stays candidate/audit-only, and Health Status stays
-  deferred; neither is promoted to the stable dataset registry.
-- The v1.2.1 CLI, existing dataset IDs and stable keys, exit codes, imports,
-  privacy boundary, and explicit relationship contracts remain unchanged.
-
-See [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md),
-[Dataset Relationships](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/dataset_relationships.md),
-and [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md).
-
-### Evidence-backed observation contracts
-
-The v1.3.0 contract documents **17 datasets**, **212 fields**, and **6 explicit
-relationships**. Five Wellness and Performance datasets use source-backed
-observation grains so multiple source observations are not collapsed by an
-unsupported latest-wins rule. A bounded private aggregate check found **0
-divergent Stable Grain keys** across those five datasets; exact key composition,
-private records, identifiers, paths, and validation artifacts remain private.
-Source-backed grain is a Product contract, not a Garmin-official semantic
-guarantee.
-
-The reviewed v1.3.0 release source passed **199 pytest checks**, **170
-unittest checks**, **44/44 deterministic cases**, Ubuntu and Windows CI, and
-build, wheel, sdist, installed-package, and clean-install gates. These results
-apply to the reviewed v1.3.0 release scope and CI configurations; they are not
-updated for later releases and do not imply zero defects or universal platform
-compatibility. The six established relationships
-remain authoritative, while the new Wellness and Performance datasets are
-context-only and do not define direct Activity joins.
-
-Read
-[CS-009: From Daily-Grain Assumptions to Source-Backed Observation Contracts in Garmin Data](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/case_studies/cs-009-from-daily-grain-assumptions-to-source-backed-observation-contracts.md).
-
-Read
-[CS-010: From Real-Data Edge Cases to Evidence-Preserving Snapshot Semantics](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/case_studies/cs-010-from-real-data-edge-cases-to-evidence-preserving-snapshot-semantics.md).
-
-For the v1.3 design walkthrough on Zenn:
-[English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) /
-[日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract).
 
 ### Built from a runner's own workflow
 
@@ -907,6 +625,298 @@ precise boundaries.
 Hosted processing, Garmin account authentication, JMA or Instagram ingestion,
 wellness/coaching interpretation, personal analysis, and non-Garmin data
 platform generalization are outside the project scope.
+
+## What v2.1.0 adds
+
+The v2.1.0 release adds a way to look at the numbers of an output. The
+processing, the outputs, the Snapshot Store, and the `0 / 0 / 3 / 2` Product
+exit mapping are those of v2.0.1.
+
+- **The view page.** **View this output** in box 4 after a run, or **Open
+  the view page** in the bar at the bottom of the page, opens it in the next
+  tab. It shows the items that you choose, such as distance, resting heart
+  rate, and VO2 Max, in panels on one time axis, by day, week, month, or year,
+  for a period such as the last three years, with an overview below the
+  panels to choose the range, a full screen of the charts, and a table for
+  each panel. It reads the output and changes nothing. It does not say what
+  causes what, or what to do.
+- **`series`.** The command writes the numbers that the view page shows to a
+  CSV file, for a spreadsheet or another tool.
+- **The colors of the page.** **Appearance** in the bar at the bottom chooses
+  **Match this computer**, **Light**, or **Dark** for both pages. The GUI
+  remembers the choice, and the items of the view page.
+- The GUI stops by itself when none of its pages has been open for an hour
+  (10 minutes before), unless a run is going on.
+- Outputs record `2.1.0`. The view page opens only outputs made by this
+  version. `validate-handoff`, `doctor --run-output`, `support-bundle`, and
+  `series` of v2.1.0 stop for an output of v2.0.1 with `OUTPUT_OTHER_VERSION`,
+  as each version does for the outputs of other versions. To look at the
+  numbers of an earlier output, normalize its Export again with v2.1.0 into a
+  new folder.
+
+See the
+[v2.1.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.1.0.md),
+the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md#v201-to-v210), and
+[The view page (from 2.1.0)](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#the-view-page-from-210)
+in the GUI Guide.
+
+## What v2.0.1 changes
+
+The v2.0.1 release fixes small things of the page of the GUI and of the GUI
+Guide. The processing, the outputs, the command line, the Snapshot Store, and
+the `0 / 0 / 3 / 2` Product exit mapping are those of v2.0.0.
+
+- **Quit** asks first, in the bar at the bottom of the page. While the app
+  stops, the bar says so; then the page says that the app has stopped and how
+  to start it again. The language and the help stay usable.
+- The bar at the bottom of the page stays on the screen while the page
+  scrolls.
+- After a run, a line under **Run normalization** says what pressing it again
+  does. When this Export alone is normalized, the Snapshot box no longer says
+  that a Snapshot Store will be made. The help marks **Read the result** as
+  done once `START_HERE.md` is opened from the page. The hint of the box that
+  runs and the help of the timezone are clearer.
+- The GUI Guide gives the installation in numbered steps, how to report a GUI
+  that does not open, and what to do when the icon could not be made, and says
+  more about updating, going back to an open GUI, stopping, and removing this
+  app.
+- Outputs record `2.0.1`. `validate-handoff`, `doctor --run-output`, and
+  `support-bundle` of v2.0.1 stop for an output of v2.0.0 with
+  `OUTPUT_OTHER_VERSION`, as each version does for the outputs of other
+  versions, and the GUI shows the change since an earlier output only for an
+  output of the same version. Check an output of v2.0.0 with v2.0.0, or rerun
+  Run-All into a new folder.
+
+See the
+[v2.0.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.0.1.md)
+and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md#v200-to-v201).
+
+## What v2.0.0 changes
+
+The v2.0.0 release adds a local GUI and changes how problems in the data are
+handled. The CLI stays, with the same commands and options apart from two new
+ones, and the Product exit mapping stays `0 / 0 / 3 / 2`.
+
+- `garmin-running-data-normalizer gui` opens a page in the browser of the same
+  computer. It listens on `127.0.0.1` only, takes the key of its own launch,
+  and sends nothing to the network. One page with four numbered boxes chooses
+  the Export, the Snapshot Store, and the output, and normalizes, in English
+  or Japanese. On macOS and Windows, `gui --create-shortcut` makes an icon
+  that starts the GUI. See the
+  [GUI Guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md).
+- The Export can be the downloaded ZIP file as it is, in the CLI and in the
+  GUI.
+- Runs no longer stop on problems in the data. A file or row that cannot be
+  used is left out with a warning (exit 3), values that disagree are kept
+  empty and marked, with every value in the audit records, and no value is
+  dropped or chosen silently. Runs still stop for safety, for a folder that is
+  not an Export, and for an input that mixes Exports or accounts.
+- The GUI uses Snapshots by default: each Export is kept as a Snapshot, and
+  all Snapshots are normalized together. Normalizing this Export only is also
+  possible. Existing Snapshot Stores need no migration.
+- Outputs gain fields (247, from 224) and four audit records, and
+  `validate-handoff`, `doctor --run-output`, and `support-bundle` refuse an
+  output of v1.7.1. Rerun Run-All into a new folder.
+
+See the
+[v2.0.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.0.0.md)
+and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md#v171-to-v200).
+
+## What v1.7.1 changes
+
+The v1.7.1 release fixes Snapshot Run-All without changing the 17 normalized
+datasets, stable keys, or the `0 / 0 / 3 / 2` Product exit contract.
+
+- `snapshot run-all` now normalizes the Hill Score, Endurance Score, and
+  VO2Max rows that `snapshot build-input` merges. From v1.3.0 through v1.7.0,
+  those three datasets were always empty in `snapshot run-all` output, with no
+  warning.
+- One-shot `run-all` output from the same Export is unchanged apart from
+  `product_version`.
+- Existing Snapshot Stores need no migration. Rerun `snapshot run-all` to
+  obtain the missing rows.
+- The package also contains internal changes toward v2.0.0 that add no
+  user-facing feature, including an internal GUI package that is in
+  development and has no command. v2.0.0 makes it the `gui` command.
+
+See the
+[v1.7.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.7.1.md)
+and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
+
+## What v1.7.0 changes
+
+The v1.7.0 release adds FIT running dynamics without changing the 17
+normalized datasets, stable keys, or the `0 / 0 / 3 / 2` Product exit
+contract.
+
+- `fit_sessions` and `fit_laps` gain six running-dynamics averages read from
+  the FIT session and lap messages: `avg_vertical_oscillation_mm`,
+  `avg_stance_time_ms`, `avg_stance_time_percent`,
+  `avg_stance_time_balance_percent`, `avg_vertical_ratio_percent`, and
+  `avg_step_length_mm`.
+- Units follow the FIT profile and are part of each field name. The stance
+  time balance is kept as recorded and is not converted to a left or right
+  side.
+- `fit_sessions` always contains the six fields (`null` when the FIT file does
+  not record them); `fit_laps` contains them when the FIT lap message defines
+  them.
+- `analysis/activities.csv` appends ten columns after `lap_count`: elapsed and
+  moving time, and, for activities with an explicit FIT link, `fit_*` columns
+  with the linked FIT session's running dynamics and total ascent and descent.
+  The existing columns keep their positions.
+- The External-safe Pack and the Support Bundle do not include the new values,
+  and running-dynamics values in the Garmin activity list are not read.
+
+Rerun Run-All after upgrading. See the
+[v1.7.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.7.0.md)
+and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
+
+## What v1.6.0 changes
+
+The v1.6.0 release lets you choose the timezone for local dates and times
+without changing the 17 normalized datasets, stable keys, or the
+`0 / 0 / 3 / 2` Product exit contract.
+
+- `run-all`, `snapshot run-all`, and `normalize-activities` accept
+  `--timezone` with an exact IANA timezone name, such as `America/New_York`.
+  The default remains `Asia/Tokyo`, so normalized values do not change unless
+  you use the option.
+- `doctor --input --timezone` checks that timezone's data.
+- The timezone used is recorded as `local_timezone` in `run_manifest.json`,
+  `run_summary.json`, and `ANALYSIS_CONTEXT.json`, and is stated in
+  `START_HERE.md` and `ANALYSIS_HANDOFF.md`. It is not added to the
+  External-safe Pack or the Support Bundle.
+- A name that is not an exact IANA timezone name stops with
+  `TIMEZONE_INVALID` (exit 2). Use the Area/Location form, because legacy
+  aliases such as `Japan` are not available on every system.
+
+Rerun Run-All after upgrading. See the
+[v1.6.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.6.0.md)
+and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
+
+## What v1.5.0 changes
+
+The v1.5.0 release hardens Snapshot and output handling without changing the
+17 normalized datasets, stable keys, or the `0 / 0 / 3 / 2` Product exit
+contract.
+
+- New Snapshot Stores and `normalize-activities` output are owner-only on
+  Unix-like systems. Stores created by earlier versions keep their
+  permissions; tighten one with `chmod -R go-rwx <store>`.
+- When Snapshots disagree, `snapshot build-input` and `snapshot run-all` report
+  counts by dataset and conflict type.
+- A lock left by an interrupted `snapshot register` is reported with its
+  recorded process ID and the recovery step.
+- `Thumbs.db` inside a ZIP file is skipped like other operating-system metadata
+  files. Such a ZIP receives a different Snapshot content identity, so do not
+  re-register Exports already registered with an earlier version.
+- Snapshot Sleep keeps every Sleep field that Run-All reads, so
+  `snapshot run-all` reports the same Sleep values as Run-All on the same
+  Export. A store whose Exports differ only in the added fields now stops.
+
+Rerun Run-All after upgrading. See the
+[v1.5.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.5.0.md)
+and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
+
+## What v1.4.1 fixes
+
+The v1.4.1 patch release fixes FIT and metadata-file handling without changing
+the 17 normalized datasets, stable keys, Snapshot semantics, or the
+`0 / 0 / 3 / 2` Product exit contract.
+
+- FIT session `sport` and `sub_sport` use FIT profile names. For example,
+  indoor cycling is `cycling` with `indoor_cycling` rather than
+  `treadmill_running`, and a trail run is `running` with `trail`.
+- FIT-derived HRV is read only from FIT files that pass the same container
+  checks as FIT sessions, including the file CRC.
+- `.DS_Store`, `Thumbs.db`, AppleDouble `._*` files, and `__MACOSX/` are
+  ignored in Export folders and completed outputs, so copies made on macOS no
+  longer fail Run-All or handoff validation.
+
+Rerun Run-All after upgrading. See the
+[v1.4.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.4.1.md)
+and the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md).
+
+## What v1.4.0 adds
+
+The stable v1.4.0 release adds read-only Export evidence and diagnostics
+without changing the 17 normalized datasets, stable keys, Snapshot semantics,
+or the `0 / 0 / 3 / 2` Product exit contract.
+
+- `doctor --input` checks bounded pre-run readiness of an extracted Export, and
+  `doctor --run-output` explains a completed Run-All result without changing
+  it.
+- Every completed Run-All output adds `diagnostics/source_completeness.json`
+  and `diagnostics/run_quality.json`, read-only projections of existing Product
+  evidence.
+- `support-bundle` creates a deterministic, six-member public-safe ZIP for
+  Human review. It never uploads automatically and is not the External-safe
+  Analysis Pack.
+- First-user guidance explains how to read `PASS`, `PASS_WITH_WARNINGS`,
+  `PARTIAL_SUCCESS`, and Fatal outcomes.
+
+Together with the existing `validate-handoff` command (available since
+v1.1.0), these tools check a completed output without repository access. See
+[v1.4 Export Evidence and Diagnostics](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/v1_4_diagnostics.md)
+and the
+[v1.4.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v1.4.0.md).
+
+## What v1.3.0 adds
+
+The stable v1.3.0 release expands Run-All from the seven existing normalized
+datasets to **17 stable normalized datasets**. It adds Hill Score, Endurance
+Score, Race Prediction, Sleep, UDS, Acute Training Load, Training Readiness,
+VO2Max, HRV reference, and Training History outputs while preserving each
+dataset's reviewed grain and stable key.
+
+- Snapshot Accumulation applies the matching daily-state, immutable-observation,
+  or regenerate policy and retains missing-is-not-delete behavior.
+- In Snapshot-based runs, accepted Endurance and UDS values that differ for one
+  stable key are retained in audit evidence as observed variants. A canonical
+  daily winner is not selected without source-backed authority; same-export
+  malformed/divergent input remains fail-closed.
+- Generated Output Experience documents all 17 datasets and keeps the six
+  existing explicit relationships unchanged.
+- Wellness/Metrics context remains separate from Activity facts. Same-day
+  comparison is contextual, not a direct relationship or causal claim.
+- Lactate Threshold stays candidate/audit-only, and Health Status stays
+  deferred; neither is promoted to the stable dataset registry.
+- The v1.2.1 CLI, existing dataset IDs and stable keys, exit codes, imports,
+  privacy boundary, and explicit relationship contracts remain unchanged.
+
+See [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md),
+[Dataset Relationships](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/dataset_relationships.md),
+and [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md).
+
+### Evidence-backed observation contracts
+
+The v1.3.0 contract documents **17 datasets**, **212 fields**, and **6 explicit
+relationships**. Five Wellness and Performance datasets use source-backed
+observation grains so multiple source observations are not collapsed by an
+unsupported latest-wins rule. A bounded private aggregate check found **0
+divergent Stable Grain keys** across those five datasets; exact key composition,
+private records, identifiers, paths, and validation artifacts remain private.
+Source-backed grain is a Product contract, not a Garmin-official semantic
+guarantee.
+
+The reviewed v1.3.0 release source passed **199 pytest checks**, **170
+unittest checks**, **44/44 deterministic cases**, Ubuntu and Windows CI, and
+build, wheel, sdist, installed-package, and clean-install gates. These results
+apply to the reviewed v1.3.0 release scope and CI configurations; they are not
+updated for later releases and do not imply zero defects or universal platform
+compatibility. The six established relationships
+remain authoritative, while the new Wellness and Performance datasets are
+context-only and do not define direct Activity joins.
+
+Read
+[CS-009: From Daily-Grain Assumptions to Source-Backed Observation Contracts in Garmin Data](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/case_studies/cs-009-from-daily-grain-assumptions-to-source-backed-observation-contracts.md).
+
+Read
+[CS-010: From Real-Data Edge Cases to Evidence-Preserving Snapshot Semantics](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/case_studies/cs-010-from-real-data-edge-cases-to-evidence-preserving-snapshot-semantics.md).
+
+For the v1.3 design walkthrough on Zenn:
+[English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) /
+[日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract).
 
 ## Community
 
