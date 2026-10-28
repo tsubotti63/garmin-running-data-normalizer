@@ -56,7 +56,7 @@ from ..view.series import MAX_PANELS, MAX_TYPES, type_name_ok
 from . import places
 from .layouts import BUILT_IN_IDS, kept_hidden, kept_layouts
 from .layouts import change_layouts as _changed_layouts
-from .views import grain_ok, period_choice
+from .views import compare_mode_ok, compare_month_ok, grain_ok, period_choice
 
 SETTINGS_FORMAT = "garmin-running-data-normalizer-gui-settings-v2"
 _FORMAT_PREFIX = "garmin-running-data-normalizer-gui-settings-v"
@@ -153,8 +153,9 @@ def _view_values(data: dict[str, Any]) -> dict[str, Any]:
     """The values of the view page that v2.2.0 added (stage K1), each left out
     alone when it is of another form: the layouts of the person (one at a
     time), the built-in layouts hidden, the layout used last (a built-in one or
-    one of the person's), the period, the grouping, and the activity types
-    (only a choice that is kept whole: types_kept)."""
+    one of the person's), the period, the grouping, the activity types (only a
+    choice that is kept whole: types_kept), and how one item is compared by
+    year and in which month (stage L1)."""
     values: dict[str, Any] = {}
     layouts = kept_layouts(data.get("view_layouts"))
     if layouts is not None:
@@ -173,6 +174,10 @@ def _view_values(data: dict[str, Any]) -> dict[str, Any]:
     types = types_kept(data.get("view_types"))
     if types is not None:
         values["view_types"] = types
+    if compare_mode_ok(data.get("view_compare_mode")):
+        values["view_compare_mode"] = data["view_compare_mode"]
+    if compare_month_ok(data.get("view_compare_month")):
+        values["view_compare_month"] = data["view_compare_month"]
     return values
 
 
@@ -409,7 +414,15 @@ def remember_theme_at(path: Path, theme: str | None, makeable: tuple[Path, ...] 
 
 # The values of the view page that a request may give with its items, and
 # their keys in the file (stage K1 of v2.2.0).
-VIEW_KEYS = {"layout": "view_layout", "period": "view_period", "grain": "view_grain", "types": "view_types"}
+VIEW_KEYS = {
+    "layout": "view_layout",
+    "period": "view_period",
+    "grain": "view_grain",
+    "types": "view_types",
+    # How one item is compared by year, and in which month (stage L1).
+    "compare_mode": "view_compare_mode",
+    "compare_month": "view_compare_month",
+}
 
 
 def remember_view_at(
@@ -487,6 +500,8 @@ def launch_answer(values: dict[str, Any], notice: str | None, *, present: bool) 
         "view_period": values.get("view_period"),
         "view_grain": values.get("view_grain"),
         "view_types": values.get("view_types"),
+        "view_compare_mode": values.get("view_compare_mode"),
+        "view_compare_month": values.get("view_compare_month"),
         "timezone": values.get("timezone"),
         "notice": notice,
         "present": present,

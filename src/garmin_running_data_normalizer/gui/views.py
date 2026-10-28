@@ -197,6 +197,22 @@ def grain_ok(grain: Any) -> bool:
     return isinstance(grain, str) and grain in ("auto", *GRAINS)
 
 
+# How the view page compares one item by year (stage L1 of v2.2.0): the
+# years in rows, laid over one another, or added up from the first day.
+COMPARE_MODES = ("rows", "overlay", "cumulative")
+
+
+def compare_mode_ok(mode: Any) -> bool:
+    """Whether a request names a way to compare by year: one of COMPARE_MODES."""
+    return isinstance(mode, str) and mode in COMPARE_MODES
+
+
+def compare_month_ok(month: Any) -> bool:
+    """Whether a request names a month to compare by year: 1 to 12, an integer
+    (never a truth value); none is the whole year."""
+    return type(month) is int and 1 <= month <= 12
+
+
 def types_ok(types: Any) -> bool:
     """Whether a request names the activity types that it counts: a list of
     names, each once, as 2.1.0 took them; the limit of the size of a request
@@ -207,10 +223,13 @@ def types_ok(types: Any) -> bool:
 
 __all__ = [
     "MAX_VIEWS",
+    "COMPARE_MODES",
     "PERIODS",
     "ViewNotOpenError",
     "ViewRequestError",
     "Views",
+    "compare_mode_ok",
+    "compare_month_ok",
     "grain_ok",
     "item_answer",
     "item_table",

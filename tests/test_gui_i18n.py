@@ -284,6 +284,14 @@ class GuiCatalogTest(unittest.TestCase):
             with self.subTest(language=language, key="view.note.partial"):
                 mark = catalog["view.period.partial"].replace("{period}", "").strip()
                 self.assertIn(quote.format(mark), catalog["view.note.partial"])
+            # v2.2.0 L1: what is not used while comparing years, and where the
+            # item is chosen; and the items that a running total is for.
+            for named in ("view.period.label", "view.shelf.heading", "view.layouts.heading", "view.grain.auto", "view.grain.year", "view.grain.month", "view.compare.item"):
+                with self.subTest(language=language, key="view.compare.off", named=named):
+                    self.assertIn(quote.format(catalog[named]), catalog["view.compare.off"])
+            for item in ("dist", "time", "count", "load", "asc"):
+                with self.subTest(language=language, key="view.compare.cumulative_only", item=item):
+                    self.assertIn(catalog[f"view.item.{item}"], catalog["view.compare.cumulative_only"])
             # The other words are put in their places by the page itself.
             for key, name in (
                 ("view.empty.first_text", "{other}"),

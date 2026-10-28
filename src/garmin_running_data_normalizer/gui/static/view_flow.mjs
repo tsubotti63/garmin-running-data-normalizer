@@ -344,6 +344,8 @@ function dateFormat(language, kind) {
       tick_month_year: { year: "numeric", month: "short" },
       tick_month: { month: "short" },
       tick_day: { month: "numeric", day: "numeric" },
+      month_name: { month: "long" },
+      month_day: { month: "long", day: "numeric" },
     }[kind];
     dateFormats.set(name, new Intl.DateTimeFormat(language, { ...options, timeZone: "UTC" }));
   }
@@ -475,6 +477,8 @@ export function settingsAfterForget(settings) {
     "view_grain",
     "view_types",
     "timezone",
+    "view_compare_mode",
+    "view_compare_month",
   ]) {
     delete kept[name];
   }
@@ -1269,4 +1273,434 @@ export function laterSender(send, wait, { setTimer = setTimeout, clearTimer = cl
       return pending !== null;
     },
   };
+}
+
+// --- Comparing one item by year (stage L1 of v2.2.0) ----------------------
+
+// The ways to compare: the years in rows, laid over one another, or added up
+// from the first day of the year (or of the month).
+export const COMPARE_MODES = ["rows", "overlay", "cumulative"];
+export const MAX_COMPARE_YEARS = 6;
+export const FIRST_COMPARE_YEARS = 4;
+// A leap year, so that 29 February has its place on the axis of the days.
+const LEAP_BASE = 2024;
+
+const two = (n) => String(n).padStart(2, "0");
+const dayCount = (iso) => Math.round(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) / 86400000);
+const lastOfMonth = (year, month) => new Date(Date.UTC(year, month, 0)).getUTCDate();
+// The Monday of the week of a day, as a count of days (1 January 1970 was a
+// Thursday).
+const mondayOf = (iso) => {
+  const day = dayCount(iso);
+  return day - ((((day + 3) % 7) + 7) % 7);
+};
+
+// The years of an output, newest first, each with its days in the output.
+export function compareYears(firstDay, lastDay) {
+  const day = /^\d{4}-\d{2}-\d{2}$/;
+  if (typeof firstDay !== "string" || typeof lastDay !== "string" || !day.test(firstDay) || !day.test(lastDay) || firstDay > lastDay) {
+    return [];
+  }
+  const years = [];
+  for (let year = Number(lastDay.slice(0, 4)); year >= Number(firstDay.slice(0, 4)); year -= 1) {
+    years.push({
+      year,
+      start: year === Number(firstDay.slice(0, 4)) ? firstDay : `${year}-01-01`,
+      end: year === Number(lastDay.slice(0, 4)) ? lastDay : `${year}-12-31`,
+    });
+  }
+  return years;
+}
+
+// The years chosen at first: the newest ones, up to FIRST_COMPARE_YEARS.
+export function firstCompareYears(years) {
+  return years.slice(0, FIRST_COMPARE_YEARS).map((entry) => entry.year);
+}
+
+// A year added or taken away: newest first, one at least, six at most.
+export function toggledYears(chosen, year) {
+  if (chosen.includes(year)) {
+    return chosen.length > 1 ? chosen.filter((entry) => entry !== year) : chosen;
+  }
+  return chosen.length >= MAX_COMPARE_YEARS ? chosen : [...chosen, year].sort((a, b) => b - a);
+}
+
+// The days that a year asks for: the whole year, or one month of it.
+export function compareRange(year, month) {
+  if (month) {
+    return { from: `${year}-${two(month)}-01`, to: `${year}-${two(month)}-${two(lastOfMonth(year, month))}` };
+  }
+  return { from: `${year}-01-01`, to: `${year}-12-31` };
+}
+
+// The grouping that gives the value of the whole year, or of the month, as
+// one period of the server (never a new way to count).
+export function compareValueGrain(month) {
+  return month ? "month" : "year";
+}
+
+// The groupings of a comparison, and the one at first: by month over a year,
+// by day over a month; a running total goes by day.
+export function compareGrains(month) {
+  return month ? ["day", "week"] : ["day", "week", "month"];
+}
+
+export function firstCompareGrain(mode, month) {
+  return mode === "cumulative" || month ? "day" : "month";
+}
+
+// Where each period of a year is on the shared axis: a week by its order from
+// the week of the first day (Monday weeks, so that a year may have 54), a day
+// by its month and day (on a leap year), a month by its number; in one month,
+// a day by its day. The days of the period stay with it, for its readings.
+export function compareSlots(periods, grain, year, month) {
+  const first = compareRange(year, month).from;
+  const monday = mondayOf;
+  return (Array.isArray(periods) ? periods : []).map((period) => {
+    let slot;
+    if (grain === "day") {
+      slot = month ? Number(period.start.slice(8, 10)) - 1 : dayCount(`${LEAP_BASE}${period.start.slice(4)}`) - dayCount(`${LEAP_BASE}-01-01`);
+    } else if (grain === "month") {
+      slot = month ? 0 : Number(period.start.slice(5, 7)) - 1;
+    } else {
+      slot = (monday(period.start) - monday(first)) / 7;
+    }
+    return { start: slot, end: slot, partial: period.partial === true, from: period.start, to: period.end };
+  });
+}
+
+// The last place on the shared axis of the years chosen.
+export function compareSpan(grain, month, years) {
+  if (grain === "day") {
+    if (!month) {
+      return 365;
+    }
+    return Math.max(...(years.length ? years : [LEAP_BASE]).map((year) => lastOfMonth(year, month))) - 1;
+  }
+  if (grain === "month") {
+    return month ? 0 : 11;
+  }
+  return Math.max(0, ...years.map((year) => {
+    const range = compareRange(year, month);
+    return (mondayOf(range.to) - mondayOf(range.from)) / 7;
+  }));
+}
+
+// A running total of the values of a year: a period without a record (0)
+// adds nothing and keeps the line; a period without a value (null) breaks the
+// line there, and the total goes on from what it was after it (the checker's
+// L1-2); before the first value and after the last, there is none.
+export function runningTotal(values) {
+  let total = 0;
+  return (Array.isArray(values) ? values : []).map((value) => {
+    if (!Number.isFinite(value)) {
+      return null;
+    }
+    total += value;
+    return total;
+  });
+}
+
+// The way of a comparison for an item: a running total only of a total.
+export function compareModeFor(item, mode) {
+  if (!COMPARE_MODES.includes(mode)) {
+    return "rows";
+  }
+  return mode === "cumulative" && !isTotal(item ?? {}) ? "rows" : mode;
+}
+
+// The step of the color of each year chosen, 1 to 6: the newest the 6th.
+export function yearSteps(years) {
+  const sorted = [...years].sort((a, b) => b - a);
+  return new Map(sorted.map((year, index) => [year, MAX_COMPARE_YEARS - index]));
+}
+
+// Whether the answer of a year is cut by the days of the output: the days
+// that it starts after the range asked for, and that it ends before it, by the
+// periods of the answer (never by the first and last days of the output).
+export function compareCut(range, answer) {
+  const start = typeof answer?.start === "string" ? answer.start : null;
+  const end = typeof answer?.end === "string" ? answer.end : null;
+  return {
+    from: start !== null && start > range.from ? start : null,
+    to: end !== null && end < range.to ? end : null,
+  };
+}
+
+// The series of an item with several lines (VO2 Max: the source and the
+// sport), by a key of their names; "" for an item of one line.
+export function seriesKey(line) {
+  const series = seriesOf(line);
+  return series === null ? "" : JSON.stringify([String(series.vo2max_source_series ?? ""), String(series.sport ?? "")]);
+}
+
+// The series that a comparison can choose, in the order of the lines of a
+// panel of the whole output; none for an item of one line.
+export function compareSeries(panel) {
+  const lines = Array.isArray(panel?.lines) ? panel.lines : [];
+  if (lines.length < 2) {
+    return [];
+  }
+  return lines.map((line, index) => ({ key: seriesKey(line), index }));
+}
+
+// The series chosen at first: that of the newest source, running if it has
+// it; null for an item of one line.
+export function firstCompareSeries(panel) {
+  const lines = Array.isArray(panel?.lines) ? panel.lines : [];
+  if (lines.length < 2) {
+    return null;
+  }
+  const newest = String(seriesOf(lines[lines.length - 1])?.vo2max_source_series ?? "");
+  const running = lines.find((line) => String(seriesOf(line)?.vo2max_source_series ?? "") === newest && String(seriesOf(line)?.sport ?? "") === "RUNNING");
+  return seriesKey(running ?? lines[lines.length - 1]);
+}
+
+// The line of a year's panel for the series chosen: the only line of an item
+// of one line, and none when the year has no line of that series.
+export function compareLine(panel, key) {
+  const lines = Array.isArray(panel?.lines) ? panel.lines : [];
+  if (key === null || key === undefined) {
+    return lines[0] ?? null;
+  }
+  return lines.find((line) => seriesKey(line) === key) ?? null;
+}
+
+// The words of the value of a year (or of a month), by the kind of the item,
+// as the labels of the panels of 2.1.0 say them.
+const COMPARE_VALUE_KEYS = {
+  sum: "view.compare.value.sum",
+  count: "view.compare.value.count",
+  pace: "view.compare.value.pace",
+  tw: "view.compare.value.tw",
+  max: "view.compare.value.max",
+  day: "view.compare.value.day",
+  obs: "view.compare.value.obs",
+};
+
+export function compareValueMessage(item, month, language) {
+  const key = Object.hasOwn(COMPARE_VALUE_KEYS, item?.kind) ? COMPARE_VALUE_KEYS[item.kind] : COMPARE_VALUE_KEYS.day;
+  const period = month
+    ? plain(new Intl.DateTimeFormat(language, { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(LEAP_BASE, month - 1, 1))))
+    : message("view.compare.whole_year");
+  return message(key, {}, { period });
+}
+
+// The box of a stop of a comparison: that of the panels, but for an answer
+// too large, its next step is the grouping, as the period is not used while
+// comparing: week or month over a year, and week over one month, where month
+// is not used (the checker's L1-3).
+export function compareStopBox(code, detail, current, month = null) {
+  const box = stopBox(code, detail, current);
+  if (code !== "VIEW_ANSWER_TOO_LARGE") {
+    return box;
+  }
+  const step = month ? "view.compare.too_large_next_month" : "view.compare.too_large_next";
+  return { ...box, lines: box.lines.map((line) => (line.key === "next.label" ? message("next.label", {}, { step }) : line)) };
+}
+
+// The way and the month of a comparison as the settings remember them: one
+// row per year and the whole year where they remember none, or another form.
+export function compareToOpen(settings) {
+  const mode = settings?.view_compare_mode;
+  const month = settings?.view_compare_month;
+  return {
+    mode: COMPARE_MODES.includes(mode) ? mode : "rows",
+    month: Number.isInteger(month) && month >= 1 && month <= 12 ? month : null,
+  };
+}
+
+// The value of a year (or of a month of it) in the answer of the whole output
+// grouped by year (or by month): the value of the series chosen, its count,
+// and whether the output cuts it; null where the output has none of it.
+export function compareValue(answer, year, month, series) {
+  const periods = Array.isArray(answer?.periods) ? answer.periods : [];
+  const prefix = month ? `${year}-${two(month)}-` : `${year}-`;
+  const index = periods.findIndex((period) => typeof period?.start === "string" && period.start.startsWith(prefix));
+  if (index < 0) {
+    return null;
+  }
+  const line = compareLine(answer.panels?.[0], series);
+  const value = line?.values?.[index];
+  const count = line?.counts?.[index];
+  return {
+    value: Number.isFinite(value) ? value : null,
+    count: Number.isInteger(count) ? count : 0,
+    partial: periods[index].partial === true,
+  };
+}
+
+// The years of a comparison as they are drawn, newest first: the step of the
+// color of each, the periods of its answer and their places on the shared
+// axis, the values of the series chosen (a running total for that way), its
+// counts and the points of its records, the days that the output cuts, and
+// the value of the year (or of the month).
+export function compareData({ years, month, grain, mode, series, answers, whole }) {
+  const steps = yearSteps(years);
+  return [...years].sort((a, b) => b - a).map((year) => {
+    const answer = answers?.get(year) ?? null;
+    const periods = Array.isArray(answer?.periods) ? answer.periods : [];
+    const line = compareLine(answer?.panels?.[0], series);
+    const values = periods.map((_period, index) => (Number.isFinite(line?.values?.[index]) ? line.values[index] : null));
+    const range = compareRange(year, month);
+    return {
+      year,
+      step: steps.get(year),
+      range,
+      periods,
+      slots: compareSlots(periods, grain, year, month),
+      values: mode === "cumulative" ? runningTotal(values) : values,
+      counts: periods.map((_period, index) => (Number.isInteger(line?.counts?.[index]) ? line.counts[index] : 0)),
+      points: mode !== "cumulative" && Array.isArray(line?.points) ? line.points : null,
+      cut: compareCut(range, answer),
+      whole: compareValue(whole, year, month, series),
+      outside: periods.length === 0,
+    };
+  });
+}
+
+// The series that a comparison offers, by the names of the legend of 2.1.0.
+export function compareSeriesChoices(panel, language) {
+  const names = lineNames(panel, language);
+  return compareSeries(panel).map((entry) => ({ key: entry.key, name: names[entry.index] }));
+}
+
+// The name of a place on the shared axis, for the rows of the table and for
+// what the keyboard says: a month, a day by its month and day, or a week by
+// its order in the year (or in the month).
+export function compareSlotName(slot, grain, month, language) {
+  if (grain === "week") {
+    return message("view.compare.week_number", { n: slot + 1 });
+  }
+  if (grain === "month") {
+    return plain(dateFormat(language, "month_name").format(new Date(Date.UTC(LEAP_BASE, (month || slot + 1) - 1, 1))));
+  }
+  const day = month ? new Date(Date.UTC(LEAP_BASE, month - 1, slot + 1)) : new Date(Date.UTC(LEAP_BASE, 0, slot + 1));
+  return plain(dateFormat(language, "month_day").format(day));
+}
+
+// Where the axis under the years compared is marked, as places on it: the
+// first day of each month over a year, and every seventh day from the first
+// over a month; by week, the day in its week among the weeks of ``year``.
+export function compareTicks(grain, month, year, language) {
+  const days = month
+    ? [1, 8, 15, 22, 29].filter((day) => day <= lastOfMonth(year, month)).map((day) => `${year}-${two(month)}-${two(day)}`)
+    : Array.from({ length: 12 }, (_none, index) => `${year}-${two(index + 1)}-01`);
+  const first = compareRange(year, month).from;
+  return days.map((iso) => {
+    let at;
+    if (grain === "week") {
+      at = (dayCount(iso) - mondayOf(first)) / 7;
+    } else if (grain === "day") {
+      at = month ? Number(iso.slice(8, 10)) - 1 : dayCount(`${LEAP_BASE}${iso.slice(4)}`) - dayCount(`${LEAP_BASE}-01-01`);
+    } else {
+      at = Number(iso.slice(5, 7)) - 1;
+    }
+    return { at, text: dateFormat(language, month ? "tick_day" : "tick_month").format(utcDate(iso)) };
+  });
+}
+
+// What the heading of a year (long) or the end of its line (short) says of
+// the days that the output cuts: until its last day, from its first, or both.
+export function compareNote(cut, language, short = false) {
+  const text = (iso) => dateFormat(language, short ? "tick_day" : "month_day").format(utcDate(iso));
+  if (cut?.from && cut?.to) {
+    return message("view.compare.between", { from: text(cut.from), to: text(cut.to) });
+  }
+  if (cut?.to) {
+    return message("view.compare.until", { date: text(cut.to) });
+  }
+  if (cut?.from) {
+    return message("view.compare.since", { date: text(cut.from) });
+  }
+  return null;
+}
+
+// A period of a year in the box of the readings, short: its days for a week,
+// its name for a month, its day for a day, marked when it is cut.
+function compareWhen(period, grain, language) {
+  const short = (iso) => dateFormat(language, "tick_day").format(utcDate(iso));
+  let name;
+  if (grain === "week") {
+    name = plain(`${short(period.start)}\u2013${short(period.end)}`);
+  } else if (grain === "month") {
+    name = plain(dateFormat(language, "month_name").format(utcDate(period.start)));
+  } else {
+    name = plain(short(period.start));
+  }
+  return period.partial ? message("view.period.partial", {}, { period: name }) : name;
+}
+
+// What the box of the readings says at a place of the shared axis, a line a
+// year (newest first): its own period there and its value (the running total
+// for that way) with its count, that it has no value there (where its line
+// breaks), or that the output has no such period of it.
+export function compareReadings(item, data, slot, grain, mode, language) {
+  return data.map((entry) => {
+    const index = entry.slots.findIndex((place) => place.start === slot);
+    if (index < 0) {
+      return { year: entry.year, step: entry.step, period: null, value: null, count: null, missing: message("view.compare.outside") };
+    }
+    const value = entry.values[index];
+    const has = Number.isFinite(value);
+    return {
+      year: entry.year,
+      step: entry.step,
+      period: compareWhen(entry.periods[index], grain, language),
+      value: has ? valueMessage(item.key, value, language) : null,
+      count: has && mode !== "cumulative" ? countMessage(item, entry.counts[index], grain, language) : null,
+      missing: has ? null : message("view.compare.no_value"),
+    };
+  });
+}
+
+// The table of a comparison: a row for each place of the shared axis, from
+// the first, with the value and the count of each year (newest first); a
+// period without a value says so, and a place that the year does not have
+// (outside the output, or a week or a day that the year lacks) is outside;
+// the last row holds the value of the year (or of the month). A running
+// total has no counts, as in its readings.
+export function compareTable(item, data, grain, month, span, language, mode = "rows") {
+  const counts = mode !== "cumulative";
+  const heads = [message("view.compare.period")];
+  for (const entry of data) {
+    heads.push(message("view.compare.year", { year: String(entry.year) }));
+    if (counts) {
+      heads.push(message(countHeadKey(item)));
+    }
+  }
+  const outside = { value: null, count: null, outside: true, partial: false };
+  const rows = [];
+  for (let slot = 0; slot <= span; slot += 1) {
+    rows.push({
+      period: compareSlotName(slot, grain, month, language),
+      cells: data.map((entry) => {
+        const index = entry.slots.findIndex((place) => place.start === slot);
+        if (index < 0) {
+          return outside;
+        }
+        const value = entry.values[index];
+        return {
+          value: Number.isFinite(value) ? valueMessage(item.key, value, language) : null,
+          count: counts ? countText(entry.counts[index], language) : null,
+          outside: false,
+          partial: entry.periods[index].partial === true,
+        };
+      }),
+    });
+  }
+  const last = {
+    period: compareValueMessage(item, month, language),
+    cells: data.map((entry) =>
+      entry.whole === null
+        ? outside
+        : {
+            value: entry.whole.value === null ? null : valueMessage(item.key, entry.whole.value, language),
+            count: counts ? countText(entry.whole.count, language) : null,
+            outside: false,
+            partial: entry.whole.partial,
+          },
+    ),
+  };
+  return { heads, rows, last, counts };
 }

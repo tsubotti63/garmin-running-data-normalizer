@@ -88,6 +88,7 @@
     </div>
   </div>
   <p id="filters-hint" class="hint filters-hint" data-i18n="view.hint.filters" hidden></p>
+  <p id="compare-off" class="compare-off" data-i18n="view.compare.off" hidden></p>
   <div id="view-body" class="view-body">
     <aside id="shelf" class="shelf" aria-labelledby="shelf-heading">
       <section id="layouts" class="layouts" aria-labelledby="layouts-heading">
@@ -192,6 +193,54 @@
         </span>
         <button type="button" id="full-enter" class="small full-enter"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="view.full.enter"></span></button>
       </div>
+      <section id="compare" class="compare" aria-labelledby="compare-title" hidden>
+        <div class="compare-bar">
+          <div class="compare-line">
+            <label for="compare-item" class="visually-hidden" data-i18n="view.compare.item"></label>
+            <h3 id="compare-title" class="compare-title"><span id="compare-before"></span><select id="compare-item"></select><span id="compare-after"></span></h3>
+            <span class="compare-field">
+              <span id="compare-show-label" data-i18n="view.compare.show"></span>
+              <span id="compare-modes" class="segmented" role="group" aria-labelledby="compare-show-label">
+                <button type="button" data-compare-mode="rows" aria-pressed="false" data-i18n="view.compare.mode.rows"></button>
+                <button type="button" data-compare-mode="overlay" aria-pressed="false" data-i18n="view.compare.mode.overlay"></button>
+                <button type="button" data-compare-mode="cumulative" aria-pressed="false" data-i18n="view.compare.mode.cumulative"></button>
+              </span>
+            </span>
+            <button type="button" id="compare-about" class="info-button" aria-expanded="false" aria-controls="compare-about-text" data-i18n="view.compare.cumulative_about" hidden></button>
+            <span class="compare-field">
+              <label for="compare-month" data-i18n="view.compare.month"></label>
+              <select id="compare-month"></select>
+            </span>
+            <span id="compare-series-field" class="compare-field" hidden>
+              <label for="compare-series" data-i18n="view.compare.series"></label>
+              <select id="compare-series"></select>
+            </span>
+            <button type="button" id="compare-table" class="small" aria-pressed="false"><span id="compare-table-chart" data-i18n="view.panel.chart" hidden></span><span id="compare-table-table" data-i18n="view.panel.table"></span></button>
+            <span class="spacer"></span>
+            <button type="button" id="compare-back" class="small" data-i18n="view.panel.unbig"></button>
+          </div>
+          <div id="compare-about-text" class="info-text compare-about-text" hidden>
+            <p data-i18n="view.compare.cumulative_only"></p>
+          </div>
+          <div class="compare-line">
+            <span id="compare-years-label" data-i18n="view.compare.years"></span>
+            <span id="compare-years" class="segmented compare-years" role="group" aria-labelledby="compare-years-label" aria-describedby="compare-up-to"></span>
+            <span id="compare-up-to" class="note" data-i18n="view.compare.up_to"></span>
+            <p id="compare-loading" class="loading" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+        <div id="compare-stop" class="errbox view-stop" hidden>
+          <h4 id="compare-stop-heading" tabindex="-1" data-i18n="view.stop.series_heading"></h4>
+          <div id="compare-stop-lines" class="messages"></div>
+          <p id="compare-stop-code" class="stop-code"></p>
+        </div>
+        <div id="compare-stack" class="stack compare-stack">
+          <div id="compare-panels" class="panels"></div>
+          <div id="compare-axis" class="time-axis" aria-hidden="true"></div>
+          <p id="compare-announcer" class="visually-hidden" aria-live="polite"></p>
+        </div>
+        <p id="compare-note" class="compare-note" data-i18n="view.compare.partial_note" hidden></p>
+      </section>
       <div id="series-stop" class="errbox view-stop" hidden>
         <h3 id="series-stop-heading" tabindex="-1" data-i18n="view.stop.series_heading"></h3>
         <div id="series-stop-lines" class="messages"></div>

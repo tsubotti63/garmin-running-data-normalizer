@@ -62,7 +62,18 @@ from .settings import (
     remember_view,
 )
 from .stores import check_store, download_time, open_store, store_place, unlock_store
-from .views import ViewNotOpenError, ViewRequestError, Views, grain_ok, item_table, period_choice, series_request, types_ok
+from .views import (
+    ViewNotOpenError,
+    ViewRequestError,
+    Views,
+    compare_mode_ok,
+    compare_month_ok,
+    grain_ok,
+    item_table,
+    period_choice,
+    series_request,
+    types_ok,
+)
 from ..view.items import ITEMS_BY_KEY
 from ..view.series import MAX_ANSWER_BYTES, MAX_PANELS, activity_types, coverage, default_items, view_answer
 
@@ -740,7 +751,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         # v2.2.0 (stage K1), when the page gives them, the layout used last
         # (None for none), the period, the grouping, and the activity types
         # (None for those counted at first), by the rules of a request of the
-        # numbers.
+        # numbers; and from stage L1, how one item is compared by year and in
+        # which month (None for rows and for the whole year).
         items, shelf = payload.get("items"), payload.get("shelf")
         if (
             not isinstance(items, list)
@@ -768,6 +780,11 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             if payload["types"] is not None and not types_ok(payload["types"]):
                 raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
             view["types"] = payload["types"]
+        for name, ok in (("compare_mode", compare_mode_ok), ("compare_month", compare_month_ok)):
+            if name in payload:
+                if payload[name] is not None and not ok(payload[name]):
+                    raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+                view[name] = payload[name]
         notice = remember_view(items, shelf, view)
         return {"remembered": notice is None, "notice": notice}
 

@@ -306,6 +306,8 @@ class GuiApiRequestTest(GuiServerTestCase):
                     "view_period": None,
                     "view_grain": None,
                     "view_types": None,
+                    "view_compare_mode": None,
+                    "view_compare_month": None,
                     "timezone": None,
                     "notice": None,
                     "present": False,
@@ -717,9 +719,10 @@ class GuiPageScriptTest(unittest.TestCase):
         # From v2.2.0 (stage K2), the period, the grouping, the activity
         # types, and a drag of the overview are changes of the person too: the
         # items (also by a layout) and the shelf (2), the period (two in
-        # setPeriod), and these.
-        self.assertEqual(source.count("rememberItems(true);"), 10)
-        for name in ("changeItems", "setPeriod", "shiftPeriod", "rangeTyped", "setGrain", "changeTypes", "overviewUp"):
+        # setPeriod), and these; and from stage L1 the way and the month of a
+        # comparison by year.
+        self.assertEqual(source.count("rememberItems(true);"), 12)
+        for name in ("changeItems", "setPeriod", "shiftPeriod", "rangeTyped", "setGrain", "changeTypes", "overviewUp", "chooseCompareMode", "chooseCompareMonth"):
             with self.subTest(name=name):
                 body = re.search(rf"\nfunction {name}\([^)]*\) \{{(.*?)\n\}}", source, re.DOTALL)
                 assert body is not None

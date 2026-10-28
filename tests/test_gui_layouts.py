@@ -462,6 +462,32 @@ class SettingsOfVersion220Test(unittest.TestCase):
         self.assertIsNone(remember_run_at(self.path, output, None, "America/New_York"))
         self.assertEqual(read_settings(self.path)[0]["timezone"], "America/New_York")
 
+    def test_how_an_item_is_compared_by_year_is_kept_alone(self) -> None:
+        # Stage L1 of v2.2.0: the way to compare one item by year, and the
+        # month (1 to 12; none is the whole year), each left out alone when it
+        # is of another form, and given to the page when it starts.
+        for mode, month in (("rows", 5), ("overlay", 1), ("cumulative", 12)):
+            with self.subTest(mode=mode, month=month):
+                self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_compare_mode": mode, "view_compare_month": month})
+                values = read_settings(self.path)[0]
+                self.assertEqual((values["view_compare_mode"], values["view_compare_month"]), (mode, month))
+                answer = launch_answer(values, None, present=True)
+                self.assertEqual((answer["view_compare_mode"], answer["view_compare_month"]), (mode, month))
+        for mode, month in (("bars", 0), ("", 13), (None, True), (3, "5"), (["rows"], 5.0), ("Rows", -1)):
+            with self.subTest(mode=mode, month=month):
+                self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_compare_mode": mode, "view_compare_month": month})
+                values = read_settings(self.path)[0]
+                self.assertEqual(values, {"store": self.store})
+                answer = launch_answer(values, None, present=True)
+                self.assertEqual((answer["view_compare_mode"], answer["view_compare_month"]), (None, None))
+        # The page writes them with the rest of the view; None takes them away.
+        self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"compare_mode": "overlay", "compare_month": 5}))
+        values = read_settings(self.path)[0]
+        self.assertEqual((values["view_compare_mode"], values["view_compare_month"], values["store"]), ("overlay", 5, self.store))
+        self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"compare_month": None}))
+        values = read_settings(self.path)[0]
+        self.assertEqual((values["view_compare_mode"], values.get("view_compare_month")), ("overlay", None))
+
     def test_the_view_page_changes_only_the_values_that_it_gives(self) -> None:
         self.assertIsNone(write_settings(self.path, {"store": self.store, **self.view_values()}))
         self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"grain": "month", "period": "5y"}))
@@ -640,6 +666,26 @@ class LayoutsApiTest(GuiServerTestCase):
             with self.subTest(extra=extra):
                 self.assertEqual(self.post("/api/settings/view", {**base, **extra}), (422, {"error": "REQUEST_INVALID"}))
         self.assertFalse(places.settings_file().exists())
+
+    def test_the_view_page_remembers_how_it_compares_by_year(self) -> None:
+        # Stage L1 of v2.2.0: the way and the month, with the rest of the
+        # view; None takes them away, and values of another form are refused.
+        path = places.settings_file()
+        base = {"items": ["dist"], "shelf": "open"}
+        self.assertEqual(
+            self.post("/api/settings/view", {**base, "compare_mode": "cumulative", "compare_month": 5}),
+            (200, {"remembered": True, "notice": None}),
+        )
+        values = read_settings(path)[0]
+        self.assertEqual((values["view_compare_mode"], values["view_compare_month"]), ("cumulative", 5))
+        settings_answer = self.post("/api/status")[1]["settings"]
+        self.assertEqual((settings_answer["view_compare_mode"], settings_answer["view_compare_month"]), ("cumulative", 5))
+        self.assertEqual(self.post("/api/settings/view", {**base, "compare_mode": None, "compare_month": None})[0], 200)
+        values = read_settings(path)[0]
+        self.assertEqual((values.get("view_compare_mode"), values.get("view_compare_month")), (None, None))
+        for extra in ({"compare_mode": "bars"}, {"compare_mode": 3}, {"compare_month": 0}, {"compare_month": 13}, {"compare_month": True}, {"compare_month": "5"}, {"compare_month": 5.0}):
+            with self.subTest(extra=extra):
+                self.assertEqual(self.post("/api/settings/view", {**base, **extra}), (422, {"error": "REQUEST_INVALID"}))
 
     def test_a_choice_of_types_that_cannot_be_kept_whole_is_not_remembered(self) -> None:
         # The page may count types that the settings cannot keep (the checker,
