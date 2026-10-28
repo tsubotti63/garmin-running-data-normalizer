@@ -21,6 +21,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import IO, Any
 
+from ..common.time import MAX_TIMEZONE_LENGTH
 from ..diagnostics.contracts import SAFE_WARNING_CODES
 from ..intake.source import place_can_be_shown
 from ..output_location import (
@@ -58,7 +59,6 @@ WORKER_MODULE = "garmin_running_data_normalizer.gui.run_worker"
 CANCEL_GRACE_SECONDS = 10.0
 KILL_GRACE_SECONDS = 5.0
 MAX_MESSAGE_BYTES = 64 * 1024
-MAX_TIMEZONE_LENGTH = 64
 # The stages of every run: those of a Snapshot run, then those of Run-All
 # (stage B4b-1).
 RUN_STAGES = (*SNAPSHOT_PROGRESS_STAGES, *PROGRESS_STAGES)
@@ -447,10 +447,11 @@ def _check_new_store(store: Path) -> None:
 
 
 def _remember(run: _Run) -> str | None:
-    """Remember the places of a run that made its output (stage B4c); the end
-    of a run never waits on its settings."""
+    """Remember the places of a run that made its output (stage B4c), and its
+    timezone (stage K1 of v2.2.0); the end of a run never waits on its
+    settings."""
     try:
-        return remember_run(run.output, run.used_store)
+        return remember_run(run.output, run.used_store, run.timezone)
     except Exception:
         return SETTINGS_NOT_WRITTEN
 

@@ -32,6 +32,7 @@ from datetime import date, timedelta
 from functools import cached_property
 from typing import Any
 
+from ..common.names import unsafe_character
 from ..common.sport import sport_group
 from .data import Row, ViewData
 from .items import (
@@ -60,6 +61,11 @@ MAX_ANSWER_BYTES = 4 * 1024 * 1024
 LAST_YEARS = {"10y": 10, "5y": 5, "3y": 3, "1y": 1}
 # The type of an activity without activity_type.
 NO_TYPE = ""
+# The activity types that the settings remember (stage K1 of v2.2.0): a choice
+# of up to 64 names, each of up to 128 characters without a control or
+# direction character. A request of the numbers takes any names, as 2.1.0 did.
+MAX_TYPES = 64
+MAX_TYPE_LENGTH = 128
 
 
 @dataclass(frozen=True)
@@ -175,6 +181,13 @@ def activity_types(data: ViewData) -> list[dict[str, Any]]:
 
 def _is_running(name: str) -> bool:
     return name != NO_TYPE and sport_group(name) == "running"
+
+
+def type_name_ok(name: Any) -> bool:
+    """Whether the settings may keep ``name`` among the activity types that
+    they remember: NO_TYPE or a name of up to MAX_TYPE_LENGTH characters
+    without a control or direction character."""
+    return isinstance(name, str) and len(name) <= MAX_TYPE_LENGTH and not unsafe_character(name)
 
 
 def default_types(data: ViewData) -> frozenset[str]:
@@ -446,6 +459,8 @@ __all__ = [
     "LAST_YEARS",
     "MAX_ANSWER_BYTES",
     "MAX_PANELS",
+    "MAX_TYPES",
+    "MAX_TYPE_LENGTH",
     "NO_TYPE",
     "Periods",
     "activity_types",
@@ -455,5 +470,6 @@ __all__ = [
     "default_types",
     "item_series",
     "period_bounds",
+    "type_name_ok",
     "view_answer",
 ]

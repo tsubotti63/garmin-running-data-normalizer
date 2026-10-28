@@ -161,31 +161,48 @@ def series_request(payload: dict[str, Any]) -> tuple[list[str], str | tuple[date
         or len(set(items)) != len(items)
     ):
         raise ViewRequestError("items")
-    period = payload.get("period", "all")
-    chosen: str | tuple[date, date]
-    if isinstance(period, str) and period in PERIODS:
-        chosen = period
-    elif isinstance(period, dict) and set(period) == {"from", "to"}:
-        start, end = period["from"], period["to"]
-        try:
-            if not (isinstance(start, str) and isinstance(end, str) and DATE_FORM.fullmatch(start) and DATE_FORM.fullmatch(end)):
-                raise ValueError(start)
-            chosen = (date.fromisoformat(start), date.fromisoformat(end))
-        except ValueError as exc:
-            raise ViewRequestError("period") from exc
-        if chosen[0] > chosen[1]:
-            raise ViewRequestError("period")
-    else:
+    chosen = period_choice(payload.get("period", "all"))
+    if chosen is None:
         raise ViewRequestError("period")
     grain = payload.get("grain", "auto")
-    if not isinstance(grain, str) or grain not in ("auto", *GRAINS):
+    if not grain_ok(grain):
         raise ViewRequestError("grain")
     types = payload.get("types")
-    if types is not None and (
-        not isinstance(types, list) or any(not isinstance(name, str) for name in types) or len(set(types)) != len(types)
-    ):
+    if types is not None and not types_ok(types):
         raise ViewRequestError("types")
     return list(items), chosen, grain, types
+
+
+def period_choice(period: Any) -> str | tuple[date, date] | None:
+    """The period that a request names: one of PERIODS, or a range of two
+    dates, the first not after the second; None when it is of another form.
+    The settings take the period that they remember by the same rule (stage
+    K1 of v2.2.0)."""
+    if isinstance(period, str) and period in PERIODS:
+        return period
+    if isinstance(period, dict) and set(period) == {"from", "to"}:
+        start, end = period["from"], period["to"]
+        if not (isinstance(start, str) and isinstance(end, str) and DATE_FORM.fullmatch(start) and DATE_FORM.fullmatch(end)):
+            return None
+        try:
+            chosen = (date.fromisoformat(start), date.fromisoformat(end))
+        except ValueError:
+            return None
+        return chosen if chosen[0] <= chosen[1] else None
+    return None
+
+
+def grain_ok(grain: Any) -> bool:
+    """Whether a request names a grouping: "auto" or one of GRAINS."""
+    return isinstance(grain, str) and grain in ("auto", *GRAINS)
+
+
+def types_ok(types: Any) -> bool:
+    """Whether a request names the activity types that it counts: a list of
+    names, each once, as 2.1.0 took them; the limit of the size of a request
+    bounds them. The settings keep a choice only when they can keep the whole
+    of it (settings.types_kept, stage K1 of v2.2.0)."""
+    return isinstance(types, list) and all(isinstance(name, str) for name in types) and len(set(types)) == len(types)
 
 
 __all__ = [
@@ -194,8 +211,11 @@ __all__ = [
     "ViewNotOpenError",
     "ViewRequestError",
     "Views",
+    "grain_ok",
     "item_answer",
     "item_table",
     "output_stamp",
+    "period_choice",
     "series_request",
+    "types_ok",
 ]

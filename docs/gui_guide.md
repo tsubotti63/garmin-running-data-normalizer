@@ -279,6 +279,12 @@ have:
 3. The Snapshot Store, the outputs, and the settings that the GUI remembers
    are outside the virtual environment, and stay as they are.
 
+When you go back from 2.2.0 to an earlier version, such as 2.1.0, it does not
+use the settings that 2.2.0 remembered, and starts as a first launch; it does
+not write over their file. **Forget the remembered settings…** of the earlier
+version forgets what 2.2.0 remembered too, such as the timezone and what the
+view page remembered.
+
 When you run the line while the GUI is open, the earlier GUI keeps running,
 and one more GUI opens. On Windows, a line in English that starts with
 "Unable to copy" also shows on the way: it says that the Python in use could
@@ -326,8 +332,9 @@ When: some months later, you downloaded a new Export.
    set by themselves when the remembered places are found
    ([Later launches](#later-launches)). Set a box that waits with
    **Use these settings**.
-3. The timezone is not remembered: when yours is not `Asia/Tokyo`, choose it
-   again in box 3, and press **Use these settings** there.
+3. The timezone of the last run that made an output is remembered: check it
+   in the summary of box 3. To change it, choose another in box 3, and press
+   **Use these settings** there.
 4. In box 4, press **Run normalization**. A new folder holds an output that
    includes what earlier Exports held. The outputs before stay as they are.
 
@@ -1173,9 +1180,11 @@ The GUI remembers only these:
   does not come back.
 - Whether **Show tips** is on, the appearance (when **Light** or **Dark** is
   chosen), and the items and the item shelf of the view page.
+- The timezone of the last run that made its output. At later launches, box 3
+  is set with it (**(as last time)**).
 
-The place of an Export, **Name of the new folder** in box 3, the timezone,
-the language, and the way to normalize are not remembered.
+The place of an Export, **Name of the new folder** in box 3, the language,
+and the way to normalize are not remembered.
 
 The file is `gui-settings.json` in the folder of the settings of this app,
 `garmin-running-data-normalizer`:

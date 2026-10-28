@@ -1277,7 +1277,21 @@ export function launchSettings(status) {
     notice: lookup(SETTINGS_KEYS, settings?.notice, null) === null ? null : settings.notice,
     // Whether there is a file of the settings to forget (stage C1).
     present: settings?.present === true,
+    // The timezone of the last run that made its output (stage K1 of
+    // v2.2.0), which the third box takes in place of the default.
+    timezone: text(settings?.timezone),
   };
+}
+
+// The timezone of box 3 when the page starts (stage K1 of v2.2.0): the one of
+// the last run that made its output, in place of the default, unless the
+// field holds another one already.
+export function launchTimezone(current, settings, defaultTimezone) {
+  const remembered = settings?.timezone;
+  if (typeof remembered === "string" && remembered !== "" && (current === "" || current === defaultTimezone)) {
+    return remembered;
+  }
+  return current;
 }
 
 // Whether there is a file of the settings to forget after a run ended (stage
