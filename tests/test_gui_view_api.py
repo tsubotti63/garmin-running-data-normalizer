@@ -23,6 +23,7 @@ from unittest.mock import patch
 # other order meets a circular import when this file runs on its own.
 from garmin_running_data_normalizer import __version__, diagnostics  # noqa: F401
 from garmin_running_data_normalizer.gui import server as gui_server
+from garmin_running_data_normalizer.gui.layouts import built_in_answer
 from garmin_running_data_normalizer.gui.views import (
     MAX_VIEWS,
     ViewRequestError,
@@ -36,7 +37,7 @@ from garmin_running_data_normalizer.run_all import RUN_ALL_VERSION, run_all
 from garmin_running_data_normalizer.view import data as view_data
 from garmin_running_data_normalizer.view.data import load_view_data
 from garmin_running_data_normalizer.view.items import ITEMS
-from garmin_running_data_normalizer.view.series import activity_types, coverage, default_items, view_answer
+from garmin_running_data_normalizer.view.series import MAX_TYPE_LENGTH, MAX_TYPES, activity_types, coverage, default_items, view_answer
 from tests.test_gui_server import GuiServerTestCase
 from tests.v1_3_outputs import as_release, as_v1_3
 from tests.view_export import write_view_export
@@ -94,7 +95,7 @@ class ViewApiTest(GuiServerTestCase):
         data = load_view_data(output)
         self.assertEqual(
             set(answer),
-            {"view", "name", "version", "partial", "first_day", "last_day", "items", "types", "first_items", "coverage"},
+            {"view", "name", "version", "partial", "first_day", "last_day", "items", "types", "first_items", "layouts", "coverage"},
         )
         self.assertRegex(answer["view"], r"^[A-Za-z0-9_-]{16,}$")
         self.assertEqual(
@@ -112,6 +113,8 @@ class ViewApiTest(GuiServerTestCase):
         self.assertEqual([entry["key"] for entry in answer["items"]], [item.key for item in ITEMS])
         self.assertEqual(answer["types"], as_json(activity_types(data)))
         self.assertEqual(answer["first_items"], default_items(data))
+        # The built-in layouts, by their ids and items (stage K1 of v2.2.0).
+        self.assertEqual(answer["layouts"], built_in_answer())
         self.assertEqual(answer["coverage"], as_json(coverage(data)))
         # No place reaches the page, not even a part of one.
         text = json.dumps(answer)
@@ -175,6 +178,24 @@ class ViewApiTest(GuiServerTestCase):
         ):
             with self.subTest(change=change):
                 self.assertEqual(self.call("/api/view/series", {**good, **change}), (422, {"error": "REQUEST_INVALID"}))
+
+    def test_every_type_of_an_output_is_counted_whatever_their_number(self) -> None:
+        # An output may have more activity types, or other names, than the
+        # settings keep; the numbers take them all, as 2.1.0 did (stage K1 of
+        # v2.2.0, the checker).
+        output = made_output()
+        ticket = self.open(output)
+        data = load_view_data(output)
+        extra = [f"type {number}" for number in range(MAX_TYPES + 1)] + ["a\u202eb", "x" * (MAX_TYPE_LENGTH + 1)]
+        many = activity_types(data) + [{"name": name, "count": 1, "running": False} for name in extra]
+        names = [entry["name"] for entry in many]
+        payload = {"view": ticket, "items": ["dist"], "period": "all", "grain": "auto", "types": names}
+        with patch.object(gui_server, "activity_types", return_value=many):
+            status, answer = self.call("/api/view/series", payload)
+        self.assertEqual(status, 200, answer)
+        expected = view_answer(data, ["dist"], "all", "auto", names)
+        expected["coverage"] = coverage(data, names)
+        self.assertEqual(answer, as_json(expected))
 
     def test_a_ticket_that_the_server_does_not_keep_is_refused(self) -> None:
         payload = {"view": "not-a-ticket-of-this-server", "items": ["dist"], "period": "all", "grain": "auto", "types": None}

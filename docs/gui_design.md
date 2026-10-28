@@ -157,8 +157,8 @@ run that made its output (also one whose cancellation came after it), the
 outputs that runs made (the latest ten, for the check of an earlier output in
 stage B5), and whether the tips show, as the person last switched them. Only
 the names of places are kept, never what is in them, and never the place of an
-Export; the output name, the timezone, the language, and the way to normalize
-are not remembered. Places are remembered when a run makes its output, not
+Export; the output name, the language, and the way to normalize are not
+remembered (from v2.2.0 the timezone is; see below). Places are remembered when a run makes its output, not
 when they are chosen, so that a place opened by mistake does not come back.
 The file is `gui-settings.json` in this app's folder
 `garmin-running-data-normalizer`, in the place that the system keeps for each
@@ -190,6 +190,39 @@ a run that ends while the person switches the tips or the colors keeps both
 (a fix of 2.0.x); two GUIs of two processes that write at the same moment can
 still keep only one of the two values, and the other keeps the value that it
 had before.
+
+From v2.2.0 (stage K1) the file is of format 2. It also remembers the timezone
+of the last run that made its output (`timezone`), which box 3 takes at the
+next launch in place of the default, so that a later launch decides box 3 by
+itself with that timezone ("(as last time)"); only a name that the CLI takes
+for `--timezone` is kept. For the view page it remembers the layouts of the
+person (`view_layouts`: an id that the server gives, a name of 1 to 30
+characters, and one to six items; up to 20), the built-in layouts hidden
+(`view_layouts_hidden`), the layout used last (`view_layout`), the period and
+the grouping (`view_period` and `view_grain`, by the rules of a request of the
+numbers), and the activity types counted (`view_types`) when the whole choice
+can be kept: up to 64 names of up to 128 characters, each once, without a
+control or direction character. A request of the numbers takes any choice of
+the types of the output, as 2.1.0 did; a choice that the settings cannot keep
+whole is not remembered, and the one before is forgotten, so that the next
+opening counts the types counted at first, never other types than those
+chosen. A value of another form of one of these keys is left out alone, and
+of the layouts, the one layout. A name of a layout is kept in NFC without the
+spaces around it, without a control character, a separator of lines or
+paragraphs, or a character that changes the direction of the text; two names
+are compared in NFKC and casefold, and a name of the person cannot be that of
+a built-in layout in either language or of another of the person's layouts.
+The layouts change one at a time under the lock of the server: the page sends
+one change (add, rename, overwrite, move, remove, hide, show, or reset), and
+the server reads the file, changes it, and writes it, so that two tabs keep
+both changes. A layout removed or hidden is no longer the one used last.
+Settings whose file would be over 64 KiB are not written (a fix of 2.1.0,
+which wrote such a file and then could not read it): the file before stays,
+and the page is told that they were not remembered. 2.1.0 and 2.0.x take a
+file of format 2 as one of a newer version: they do not use it and never write
+over it, and start as a first launch, so that what 2.2.0 remembers is not lost
+by going back; their "Forget the remembered settings…" removes it, with the
+layouts.
 
 The Snapshot Store (stage B4a): the second box shows the place of the store
 and its Snapshots, in the order of the times of their Exports, with the
@@ -419,7 +452,10 @@ Local Snapshot Store and new output folders
   its numbers in its own process (`/api/view/open` and `/api/view/series`),
   and remembers the colors and the items of the view page
   (`/api/settings/theme` and `/api/settings/view`); see
-  [The view page](#the-view-page-v210).
+  [The view page](#the-view-page-v210). From v2.2.0 `/api/settings/view` also
+  takes the layout used last, the period, the grouping, and the activity
+  types, `/api/settings/layouts` changes the layouts one change at a time, and
+  `/api/view/open` gives the built-in layouts by their ids and items.
 - Runs (`run-all`, `snapshot register`, and `snapshot run-all`) run in a child
   process started from an argument list (`sys.executable`, `-P`, `-m`, an
   internal GUI module, and the same arguments that the CLI takes, with absolute
@@ -1090,7 +1126,10 @@ Processing:
   B4c), stay on this computer, and are never part of the Support Bundle;
   "Forget the remembered settings…" removes them, as on a shared computer.
   From v2.1.0 they also hold the colors of the page, and the names of the
-  items that the view page showed and whether its shelf was open.
+  items that the view page showed and whether its shelf was open. From v2.2.0
+  they also hold the timezone of the last run that made its output, the
+  layouts that the person named, and the period, the grouping, and the
+  activity types of the view page.
 - The view page (v2.1.0) writes nothing in an output. The server keeps what
   it read in memory only, under a ticket that holds no place.
 - A Snapshot Store or a folder for the output in a folder that a cloud may
@@ -1250,6 +1289,11 @@ alone, and reduced motion.
   out, and drops them when it writes the file again, so that going back to
   2.0.x and then to 2.1.0 forgets the colors and the items and the shelf of
   the view page.
+- v2.2.0 writes the settings file in format 2, with the timezone and the keys
+  of the layouts and the view (above). 2.1.0 and 2.0.x do not use a file of
+  format 2 and never write over it: going back starts as a first launch, and
+  their "Forget the remembered settings…" removes the file with the layouts.
+  2.2.0 reads format 1 and writes it again as format 2 with its keys.
 - The view page reads outputs of the installed version only; the checks of
   earlier outputs stay as above.
 

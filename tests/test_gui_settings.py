@@ -52,6 +52,8 @@ APP = places.SETTINGS_FOLDER_NAME
 NAME = places.SETTINGS_FILE_NAME
 POSIX_MODES = unittest.skipIf(os.name == "nt", "Windows keeps no POSIX modes")
 TIMEOUT_SECONDS = 10.0
+# A format newer than this version's: format 2 is that of v2.2.0 (stage K1).
+NEWER_FORMAT = "garmin-running-data-normalizer-gui-settings-v3"
 
 
 class SettingsPlaceTest(unittest.TestCase):
@@ -213,7 +215,7 @@ class SettingsFileTest(unittest.TestCase):
 
     def test_a_file_of_a_newer_version_is_neither_used_nor_written_over(self) -> None:
         self.path.parent.mkdir()
-        newer = json.dumps({"format": "garmin-running-data-normalizer-gui-settings-v2", "store": 7}).encode()
+        newer = json.dumps({"format": NEWER_FORMAT, "store": 7}).encode()
         self.path.write_bytes(newer)
         self.assertEqual(read_settings(self.path), ({}, SETTINGS_NEWER))
         self.assertEqual(remember_hints_at(self.path, True), SETTINGS_NEWER)
@@ -327,7 +329,7 @@ class SettingsFileTest(unittest.TestCase):
         values = read_settings(self.path)[0]
         self.assertEqual((values["view_items"], values["view_shelf"]), ([], "open"))
         # A file of a newer version is not written over.
-        newer = json.dumps({"format": "garmin-running-data-normalizer-gui-settings-v2"}).encode()
+        newer = json.dumps({"format": NEWER_FORMAT}).encode()
         self.path.write_bytes(newer)
         self.assertEqual(remember_view_at(self.path, ["dist"], "open"), SETTINGS_NEWER)
         self.assertEqual(self.path.read_bytes(), newer)
@@ -438,6 +440,13 @@ class SettingsFileTest(unittest.TestCase):
                 "theme": None,
                 "view_items": None,
                 "view_shelf": None,
+                "view_layouts": [],
+                "view_layouts_hidden": [],
+                "view_layout": None,
+                "view_period": None,
+                "view_grain": None,
+                "view_types": None,
+                "timezone": None,
                 "notice": None,
                 "present": False,
             },
@@ -473,6 +482,13 @@ class SettingsApiTest(GuiServerTestCase):
                     "theme": None,
                     "view_items": None,
                     "view_shelf": None,
+                    "view_layouts": [],
+                    "view_layouts_hidden": [],
+                    "view_layout": None,
+                    "view_period": None,
+                    "view_grain": None,
+                    "view_types": None,
+                    "timezone": None,
                     "notice": None,
                     "present": True,
                 },
@@ -513,7 +529,7 @@ class SettingsApiTest(GuiServerTestCase):
                 self.post("/api/settings/theme", {"theme": "dark"}),
                 (200, {"remembered": False, "notice": SETTINGS_NOT_WRITTEN}),
             )
-        newer = json.dumps({"format": "garmin-running-data-normalizer-gui-settings-v2"}).encode()
+        newer = json.dumps({"format": NEWER_FORMAT}).encode()
         path.write_bytes(newer)
         self.assertEqual(
             self.post("/api/settings/theme", {"theme": "dark"}),
@@ -616,9 +632,10 @@ class RunRemembersTest(unittest.TestCase):
         manager.start(request(SYNTHETIC_EXPORT, self.parent, "o1"))
         status = self.end(manager)
         self.assertEqual((status["state"], status["settings_notice"]), ("finished", None))
+        # From v2.2.0 the timezone of the run too (stage K1).
         self.assertEqual(
             read_settings(self.path)[0],
-            {"output_parent": str(self.parent), "recent_outputs": [str(self.parent / "o1")]},
+            {"output_parent": str(self.parent), "recent_outputs": [str(self.parent / "o1")], "timezone": "Asia/Tokyo"},
         )
 
     def test_the_store_of_a_snapshot_run_is_remembered_with_an_output_that_a_late_cancellation_left(self) -> None:

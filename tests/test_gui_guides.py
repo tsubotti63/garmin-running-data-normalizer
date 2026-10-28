@@ -642,25 +642,54 @@ class GuiGuideTest(unittest.TestCase):
         self.assertEqual(len(scenes["ja"]), 6)
 
     # From the two new AI sessions that read the sections of H1: the first
-    # two scenes name the timezone, which is not remembered and is Asia/Tokyo
-    # by default, so that box 3 set by itself keeps it at a later launch; the
+    # two scenes name the timezone, which is Asia/Tokyo by default and, from
+    # v2.2.0 (stage K1), that of the last run that made an output, which box 3
+    # set by itself keeps at a later launch; the
     # scenes that do not import say that the way to normalize is not
     # remembered; and the CSV file is given only after the care for the
     # personal data in it (checked in the test above).
     READING_OF_H1 = {
         "en": {
             1: ("**Timezone for local dates and times** (`Asia/Tokyo` by default)",),
-            2: ("The timezone is not remembered",),
+            2: ("The timezone of the last run that made an output is remembered",),
             3: ("The way to normalize is not remembered",),
             4: ("choose **Normalize this export only (no import)** in box 2 again",),
         },
         "ja": {
             1: ("「日時に使うタイムゾーン」を確かめてから（既定は `Asia/Tokyo`）",),
-            2: ("タイムゾーンは覚えません",),
+            2: ("タイムゾーンは、前に出力を作った正規化のものを覚えています",),
             3: ("正規化のしかたは覚えません",),
             4: ("2 の箱で「今回のエクスポートだけで正規化する（取り込まない）」をもう一度選びます",),
         },
     }
+
+    def test_guides_say_what_2_2_0_remembers_and_what_going_back_does(self) -> None:
+        # v2.2.0 K1: the timezone of the last run that made an output is
+        # remembered, and a later launch sets box 3 with it; an earlier
+        # version does not use the settings of 2.2.0 and starts as a first
+        # launch, and its forgetting forgets them too (the checker).
+        phrases = {
+            "en": (
+                "The timezone of the last run that made its output. At later launches, box 3 is set with it (**(as last time)**).",
+                "The place of an Export, **Name of the new folder** in box 3, the language, and the way to normalize are not remembered.",
+                "it does not use the settings that 2.2.0 remembered, and starts as a first launch; it does not write over their file.",
+                "**Forget the remembered settings…** of the earlier version forgets what 2.2.0 remembered too",
+            ),
+            "ja": (
+                "前に出力を作った正規化のタイムゾーン。2 回目からは、3 の箱がこのタイムゾーンで決まります（「（前回のまま）」）。",
+                "エクスポートの場所、3 の箱の「新しく作るフォルダーの名前」、言語、正規化のしかたは覚えません。",
+                "2.2.0 が覚えた設定は使われず、初めての起動として始まります。設定のファイルは書き換えません。",
+                "「覚えた設定を消す…」を押すと、2.2.0 が覚えたもの（タイムゾーンや、見るページで覚えたものなど）も消えます。",
+            ),
+        }
+        before = {"en": "The timezone is not remembered", "ja": "タイムゾーンは覚えません"}
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            for phrase in phrases[language]:
+                with self.subTest(language=language, phrase=phrase):
+                    self.assertIn(phrase, reads)
+            self.assertNotIn(before[language], reads)
 
     def test_readme_puts_the_gui_first(self) -> None:
         # v2.1.0 H1 (the whole flow): the README gives the GUI right after who

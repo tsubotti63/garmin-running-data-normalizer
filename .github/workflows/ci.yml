@@ -47,6 +47,7 @@ jobs:
           /tmp/garmin-normalizer-wheel/bin/python -c "import importlib.metadata as m; import garmin_running_data_normalizer as p; assert m.version('garmin-running-data-normalizer') == p.__version__"
           /tmp/garmin-normalizer-wheel/bin/garmin-running-data-normalizer --version
           /tmp/garmin-normalizer-wheel/bin/python -c "from garmin_running_data_normalizer.gui.server import load_static_files; assert all(body for body, _ in load_static_files().values())"
+          /tmp/garmin-normalizer-wheel/bin/python -c "from garmin_running_data_normalizer.gui.layouts import built_in_name_keys; assert len(built_in_name_keys()) == 12"
       - name: Verify isolated source distribution installation
         run: |
           python -m venv /tmp/garmin-normalizer-sdist
@@ -55,6 +56,7 @@ jobs:
           /tmp/garmin-normalizer-sdist/bin/python -c "import importlib.metadata as m; import garmin_running_data_normalizer as p; assert m.version('garmin-running-data-normalizer') == p.__version__"
           /tmp/garmin-normalizer-sdist/bin/garmin-running-data-normalizer --version
           /tmp/garmin-normalizer-sdist/bin/python -c "from garmin_running_data_normalizer.gui.server import load_static_files; assert all(body for body, _ in load_static_files().values())"
+          /tmp/garmin-normalizer-sdist/bin/python -c "from garmin_running_data_normalizer.gui.layouts import built_in_name_keys; assert len(built_in_name_keys()) == 12"
   test-python-3-15:
     runs-on: ubuntu-latest
     steps:
@@ -86,6 +88,7 @@ jobs:
           /tmp/garmin-normalizer-wheel/bin/python -c "import importlib.metadata as m; import garmin_running_data_normalizer as p; assert m.version('garmin-running-data-normalizer') == p.__version__"
           /tmp/garmin-normalizer-wheel/bin/garmin-running-data-normalizer --version
           /tmp/garmin-normalizer-wheel/bin/python -c "from garmin_running_data_normalizer.gui.server import load_static_files; assert all(body for body, _ in load_static_files().values())"
+          /tmp/garmin-normalizer-wheel/bin/python -c "from garmin_running_data_normalizer.gui.layouts import built_in_name_keys; assert len(built_in_name_keys()) == 12"
   macos-python-3-15:
     runs-on: macos-latest
     steps:
@@ -118,6 +121,7 @@ jobs:
           /tmp/garmin-normalizer-wheel/bin/python -c "import importlib.metadata as m; import garmin_running_data_normalizer as p; assert m.version('garmin-running-data-normalizer') == p.__version__"
           /tmp/garmin-normalizer-wheel/bin/garmin-running-data-normalizer --version
           /tmp/garmin-normalizer-wheel/bin/python -c "from garmin_running_data_normalizer.gui.server import load_static_files; assert all(body for body, _ in load_static_files().values())"
+          /tmp/garmin-normalizer-wheel/bin/python -c "from garmin_running_data_normalizer.gui.layouts import built_in_name_keys; assert len(built_in_name_keys()) == 12"
   windows-runtime:
     runs-on: windows-latest
     steps:
@@ -274,6 +278,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "isolated wheel version check failed with exit code $LASTEXITCODE" }
           .\.wheel-venv\Scripts\python.exe -c "from garmin_running_data_normalizer.gui.server import load_static_files; assert all(body for body, _ in load_static_files().values())"
           if ($LASTEXITCODE -ne 0) { throw "isolated wheel GUI static file check failed with exit code $LASTEXITCODE" }
+          .\.wheel-venv\Scripts\python.exe -c "from garmin_running_data_normalizer.gui.layouts import built_in_name_keys; assert len(built_in_name_keys()) == 12"
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel layout names check failed with exit code $LASTEXITCODE" }
           # The folder for the outputs must exist; no command makes it (stage A5a).
           $null = New-Item -ItemType Directory -Force -Path .\workspace
           .\.wheel-venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-wheel-run-all
@@ -309,6 +315,9 @@ jobs:
       - name: Verify Windows server of the view page
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_view_api.py -q
+      - name: Verify Windows layouts and remembered view settings
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_layouts.py -q
   windows-python-3-15:
     runs-on: windows-latest
     steps:
@@ -358,6 +367,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "isolated wheel version check failed with exit code $LASTEXITCODE" }
           .\.wheel-venv\Scripts\python.exe -c "from garmin_running_data_normalizer.gui.server import load_static_files; assert all(body for body, _ in load_static_files().values())"
           if ($LASTEXITCODE -ne 0) { throw "isolated wheel GUI static file check failed with exit code $LASTEXITCODE" }
+          .\.wheel-venv\Scripts\python.exe -c "from garmin_running_data_normalizer.gui.layouts import built_in_name_keys; assert len(built_in_name_keys()) == 12"
+          if ($LASTEXITCODE -ne 0) { throw "isolated wheel layout names check failed with exit code $LASTEXITCODE" }
           # The folder for the outputs must exist; no command makes it (stage A5a).
           $null = New-Item -ItemType Directory -Force -Path .\workspace
           .\.wheel-venv\Scripts\python.exe -m garmin_running_data_normalizer run-all --input .\examples\synthetic\garmin_export --output .\workspace\windows-py315-run-all
@@ -371,3 +382,6 @@ jobs:
       - name: Verify Windows server of the view page with Python 3.15
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_view_api.py -q
+      - name: Verify Windows layouts and remembered view settings with Python 3.15
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_layouts.py -q

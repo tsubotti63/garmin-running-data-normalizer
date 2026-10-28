@@ -1719,12 +1719,13 @@ test("the settings of an earlier launch: a later launch needs a place, and the t
     theme: "auto",
     notice: null,
     present: false,
+    timezone: null,
   });
   assert.deepEqual(
     flow.launchSettings({
       settings: { launch: "later", store: "/path/to/store", output_parent: "/path/to", hints: false, notice: "SETTINGS_INVALID" },
     }),
-    { launch: "later", store: "/path/to/store", outputParent: "/path/to", hints: false, theme: "auto", notice: "SETTINGS_INVALID", present: false },
+    { launch: "later", store: "/path/to/store", outputParent: "/path/to", hints: false, theme: "auto", notice: "SETTINGS_INVALID", present: false, timezone: null },
   );
   // A later launch without a place, and values of another form, are not taken.
   assert.equal(flow.launchSettings({ settings: { launch: "later", store: null, output_parent: "" } }).launch, "first");
@@ -1732,7 +1733,7 @@ test("the settings of an earlier launch: a later launch needs a place, and the t
     flow.launchSettings({
       settings: { launch: "later", store: 3, output_parent: "/path/to", hints: "no", notice: "/path/to/private" },
     }),
-    { launch: "later", store: null, outputParent: "/path/to", hints: null, theme: "auto", notice: null, present: false },
+    { launch: "later", store: null, outputParent: "/path/to", hints: null, theme: "auto", notice: null, present: false, timezone: null },
   );
   // The tips: as the person last switched them, otherwise on at a first
   // launch and off at a later one (the mockup v10).
@@ -1740,6 +1741,23 @@ test("the settings of an earlier launch: a later launch needs a place, and the t
   assert.equal(flow.hintsShown({ launch: "later", hints: null }), false);
   assert.equal(flow.hintsShown({ launch: "later", hints: true }), true);
   assert.equal(flow.hintsShown({ launch: "first", hints: false }), false);
+});
+
+// The timezone of the last run that made its output (stage K1 of v2.2.0):
+// the server keeps only a name that the CLI takes; the page takes a text.
+test("the settings give the third box the timezone of the last run that made its output", () => {
+  assert.equal(flow.launchSettings({ settings: { timezone: "Europe/London" } }).timezone, "Europe/London");
+  for (const timezone of [null, undefined, "", 1, true, ["Asia/Tokyo"], { name: "Asia/Tokyo" }]) {
+    assert.equal(flow.launchSettings({ settings: { timezone } }).timezone, null, String(timezone));
+  }
+  // Box 3 takes it in place of the default, but not in place of one that
+  // the field holds already.
+  const remembered = { timezone: "Europe/London" };
+  assert.equal(flow.launchTimezone("Asia/Tokyo", remembered, "Asia/Tokyo"), "Europe/London");
+  assert.equal(flow.launchTimezone("", remembered, "Asia/Tokyo"), "Europe/London");
+  assert.equal(flow.launchTimezone("America/New_York", remembered, "Asia/Tokyo"), "America/New_York");
+  assert.equal(flow.launchTimezone("Asia/Tokyo", { timezone: null }, "Asia/Tokyo"), "Asia/Tokyo");
+  assert.equal(flow.launchTimezone("Asia/Tokyo", {}, "Asia/Tokyo"), "Asia/Tokyo");
 });
 
 // The colors of the page (stage G3a).

@@ -27,6 +27,16 @@ value, and writes it whole under one lock, so that a run that ends while the
 person switches the tips or the colors keeps both. The lock holds for the
 threads of one server only; two GUIs that write at the same moment can still
 keep only one of the two values.
+
+From v2.2.0 (stage K1) the file is of format 2, which an earlier version does
+not use and never writes over, so that going back to 2.1.0 keeps what 2.2.0
+remembers; format 1 is still read, and written as format 2. The settings also
+remember the layouts of the view page (the person's layouts, the built-in
+layouts hidden, and the one used last; gui/layouts.py), its period, grouping,
+and activity types, and the timezone of the last run that made its output. A
+value of another form of these keys is left out alone, and of the layouts,
+the one layout. Settings whose file would be over 64 KiB are not written: the
+file before stays, and the page is told that they were not remembered.
 """
 from __future__ import annotations
 
@@ -40,13 +50,19 @@ from typing import Any
 
 from ..common.json_depth import check_json_depth
 from ..common.private_files import PRIVATE_DIRECTORY_MODE, PRIVATE_FILE_MODE
+from ..common.time import MAX_TIMEZONE_LENGTH, TimezoneDataUnavailableError, TimezoneNameInvalidError, resolve_timezone_name
 from ..view.items import ITEMS_BY_KEY
-from ..view.series import MAX_PANELS
+from ..view.series import MAX_PANELS, MAX_TYPES, type_name_ok
 from . import places
+from .layouts import BUILT_IN_IDS, kept_hidden, kept_layouts
+from .layouts import change_layouts as _changed_layouts
+from .views import grain_ok, period_choice
 
-SETTINGS_FORMAT = "garmin-running-data-normalizer-gui-settings-v1"
+SETTINGS_FORMAT = "garmin-running-data-normalizer-gui-settings-v2"
 _FORMAT_PREFIX = "garmin-running-data-normalizer-gui-settings-v"
-_FORMAT_VERSION = 1
+_FORMAT_VERSION = 2
+# The formats that this version reads: format 1 of 2.0.x and 2.1.0 too.
+_READ_VERSIONS = (1, 2)
 MAX_SETTINGS_BYTES = 64 * 1024
 MAX_RECENT_OUTPUTS = 10
 MAX_PLACE_LENGTH = 4096
@@ -126,7 +142,67 @@ def _known(data: Any) -> dict[str, Any] | None:
         values["view_items"] = list(dict.fromkeys(names))[:MAX_PANELS]
     if data.get("view_shelf") in SHELF_STATES:
         values["view_shelf"] = data["view_shelf"]
+    values.update(_view_values(data))
+    timezone = timezone_kept(data.get("timezone"))
+    if timezone is not None:
+        values["timezone"] = timezone
     return values
+
+
+def _view_values(data: dict[str, Any]) -> dict[str, Any]:
+    """The values of the view page that v2.2.0 added (stage K1), each left out
+    alone when it is of another form: the layouts of the person (one at a
+    time), the built-in layouts hidden, the layout used last (a built-in one or
+    one of the person's), the period, the grouping, and the activity types
+    (only a choice that is kept whole: types_kept)."""
+    values: dict[str, Any] = {}
+    layouts = kept_layouts(data.get("view_layouts"))
+    if layouts is not None:
+        values["view_layouts"] = layouts
+    hidden = kept_hidden(data.get("view_layouts_hidden"))
+    if hidden is not None:
+        values["view_layouts_hidden"] = hidden
+    current = data.get("view_layout")
+    if isinstance(current, str) and (current in BUILT_IN_IDS or any(layout["id"] == current for layout in layouts or [])):
+        values["view_layout"] = current
+    period = data.get("view_period")
+    if period_choice(period) is not None:
+        values["view_period"] = period if isinstance(period, str) else {"from": period["from"], "to": period["to"]}
+    if grain_ok(data.get("view_grain")):
+        values["view_grain"] = data["view_grain"]
+    types = types_kept(data.get("view_types"))
+    if types is not None:
+        values["view_types"] = types
+    return values
+
+
+def types_kept(value: Any) -> list[str] | None:
+    """The activity types counted that the settings keep: the whole choice,
+    or None when it cannot be kept whole (more than MAX_TYPES names, a name
+    given twice, or a name that type_name_ok does not take). Such a choice is
+    not remembered, so that the next opening counts the types counted at
+    first, never other types than those chosen; no types counted ([]) is a
+    choice of its own."""
+    if (
+        not isinstance(value, list)
+        or len(value) > MAX_TYPES
+        or any(not type_name_ok(name) for name in value)
+        or len(set(value)) != len(value)
+    ):
+        return None
+    return list(value)
+
+
+def timezone_kept(value: Any) -> str | None:
+    """A timezone that the settings keep: a name of up to MAX_TIMEZONE_LENGTH
+    characters that the CLI takes for --timezone (resolve_timezone_name), so
+    that the third box never takes a name that a run would refuse."""
+    if not isinstance(value, str) or not 0 < len(value) <= MAX_TIMEZONE_LENGTH:
+        return None
+    try:
+        return resolve_timezone_name(value)
+    except (TimezoneNameInvalidError, TimezoneDataUnavailableError):
+        return None
 
 
 def _read_all(descriptor: int) -> bytes | None:
@@ -177,7 +253,7 @@ def read_settings(path: Path) -> tuple[dict[str, Any], str | None]:
     version = _version(data.get("format")) if isinstance(data, dict) else None
     if version is not None and version > _FORMAT_VERSION:
         return {}, SETTINGS_NEWER
-    values = _known(data) if version == _FORMAT_VERSION else None
+    values = _known(data) if version in _READ_VERSIONS else None
     return ({}, SETTINGS_INVALID) if values is None else (values, None)
 
 
@@ -207,6 +283,11 @@ def write_settings(path: Path, values: dict[str, Any], makeable: tuple[Path, ...
     content = (
         json.dumps({"format": SETTINGS_FORMAT, **known}, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
     ).encode("utf-8")
+    # A file over the limit would not be read again, and every setting in it
+    # would be lost (stage K1 of v2.2.0): it is not written, and the file
+    # before stays.
+    if len(content) > MAX_SETTINGS_BYTES:
+        return SETTINGS_NOT_WRITTEN
     folder = path.parent
     temporary = folder / f".{path.name}.{os.getpid()}.{secrets.token_hex(4)}.tmp"
     written = False
@@ -277,12 +358,19 @@ def remove_settings(path: Path) -> str | None:
         return None
 
 
-def remember_run_at(path: Path, output: Path, store: Path | None, makeable: tuple[Path, ...] = ()) -> str | None:
+def remember_run_at(
+    path: Path,
+    output: Path,
+    store: Path | None,
+    timezone: str | None = None,
+    makeable: tuple[Path, ...] = (),
+) -> str | None:
     """Remember the places of a run that made its output: the folder for the
     output, the output first in the latest ones, and the store of a Snapshot
-    run (a run of this Export alone keeps the store that was remembered).
-    None when they are written, or a code: SETTINGS_NEWER leaves the file of
-    a newer version as it is."""
+    run (a run of this Export alone keeps the store that was remembered); and
+    from v2.2.0 the timezone of the run (stage K1), which the third box takes
+    at the next launch. None when they are written, or a code: SETTINGS_NEWER
+    leaves the file of a newer version as it is."""
     with _CHANGE_LOCK:
         current, notice = read_settings(path)
         if notice == SETTINGS_NEWER:
@@ -292,6 +380,8 @@ def remember_run_at(path: Path, output: Path, store: Path | None, makeable: tupl
         values = {**current, "output_parent": str(output.parent), "recent_outputs": recent[:MAX_RECENT_OUTPUTS]}
         if store is not None:
             values["store"] = str(store)
+        if timezone_kept(timezone) is not None:
+            values["timezone"] = timezone
         return write_settings(path, values, makeable)
 
 
@@ -317,16 +407,61 @@ def remember_theme_at(path: Path, theme: str | None, makeable: tuple[Path, ...] 
         return write_settings(path, values, makeable)
 
 
+# The values of the view page that a request may give with its items, and
+# their keys in the file (stage K1 of v2.2.0).
+VIEW_KEYS = {"layout": "view_layout", "period": "view_period", "grain": "view_grain", "types": "view_types"}
+
+
 def remember_view_at(
-    path: Path, items: list[str], shelf: str, makeable: tuple[Path, ...] = ()
+    path: Path,
+    items: list[str],
+    shelf: str,
+    view: dict[str, Any] | None = None,
+    makeable: tuple[Path, ...] = (),
 ) -> str | None:
     """Remember the items that the view page shows and whether its item shelf
-    is open (stage G3b), by the names of the items only."""
+    is open (stage G3b), by the names of the items only; and from v2.2.0 the
+    values of ``view`` that are given (VIEW_KEYS): None takes a value away (no
+    layout used last, or the activity types counted at first), and a value not
+    given stays as it is."""
     with _CHANGE_LOCK:
         current, notice = read_settings(path)
         if notice == SETTINGS_NEWER:
             return SETTINGS_NEWER
-        return write_settings(path, {**current, "view_items": list(items), "view_shelf": shelf}, makeable)
+        values = {**current, "view_items": list(items), "view_shelf": shelf}
+        for name, value in (view or {}).items():
+            key = VIEW_KEYS[name]
+            if value is None:
+                values.pop(key, None)
+            else:
+                values[key] = value
+        return write_settings(path, values, makeable)
+
+
+def change_layouts_at(
+    path: Path, change: Any, makeable: tuple[Path, ...] = ()
+) -> tuple[dict[str, Any], str | None]:
+    """Change the layouts of the person once (stage K1 of v2.2.0): read the
+    file, change, and write it under one lock. The layouts after the change
+    and None when they are written; otherwise the layouts as they were, and a
+    code (SETTINGS_NEWER or SETTINGS_NOT_WRITTEN). A change that cannot be made
+    raises layouts.LayoutChangeError, and nothing is written."""
+    with _CHANGE_LOCK:
+        current, notice = read_settings(path)
+        before = {
+            "layouts": current.get("view_layouts", []),
+            "hidden": current.get("view_layouts_hidden", []),
+            "current": current.get("view_layout"),
+        }
+        if notice == SETTINGS_NEWER:
+            return before, SETTINGS_NEWER
+        after = _changed_layouts(before, change)
+        values = {**current, "view_layouts": after["layouts"], "view_layouts_hidden": after["hidden"]}
+        values.pop("view_layout", None)
+        if after["current"] is not None:
+            values["view_layout"] = after["current"]
+        notice = write_settings(path, values, makeable)
+        return (after, None) if notice is None else (before, notice)
 
 
 def launch_answer(values: dict[str, Any], notice: str | None, *, present: bool) -> dict[str, Any]:
@@ -345,6 +480,14 @@ def launch_answer(values: dict[str, Any], notice: str | None, *, present: bool) 
         "theme": values.get("theme"),
         "view_items": values.get("view_items"),
         "view_shelf": values.get("view_shelf"),
+        # The layouts and the view that v2.2.0 remembers (stage K1).
+        "view_layouts": values.get("view_layouts", []),
+        "view_layouts_hidden": values.get("view_layouts_hidden", []),
+        "view_layout": values.get("view_layout"),
+        "view_period": values.get("view_period"),
+        "view_grain": values.get("view_grain"),
+        "view_types": values.get("view_types"),
+        "timezone": values.get("timezone"),
         "notice": notice,
         "present": present,
     }
@@ -376,9 +519,9 @@ def recent_outputs() -> list[str]:
     return list(values.get("recent_outputs", []))
 
 
-def remember_run(output: Path, store: Path | None) -> str | None:
+def remember_run(output: Path, store: Path | None, timezone: str | None = None) -> str | None:
     path, makeable = _target()
-    return remember_run_at(path, output, store, makeable)
+    return remember_run_at(path, output, store, timezone, makeable)
 
 
 def remember_hints(on: bool) -> str | None:
@@ -391,9 +534,14 @@ def remember_theme(theme: str | None) -> str | None:
     return remember_theme_at(path, theme, makeable)
 
 
-def remember_view(items: list[str], shelf: str) -> str | None:
+def remember_view(items: list[str], shelf: str, view: dict[str, Any] | None = None) -> str | None:
     path, makeable = _target()
-    return remember_view_at(path, items, shelf, makeable)
+    return remember_view_at(path, items, shelf, view, makeable)
+
+
+def change_layouts(change: Any) -> tuple[dict[str, Any], str | None]:
+    path, makeable = _target()
+    return change_layouts_at(path, change, makeable)
 
 
 def forget_settings() -> tuple[str | None, bool]:
@@ -415,6 +563,9 @@ __all__ = [
     "SETTINGS_NOT_WRITTEN",
     "SHELF_STATES",
     "THEMES",
+    "VIEW_KEYS",
+    "change_layouts",
+    "change_layouts_at",
     "forget_settings",
     "launch_answer",
     "launch_settings",
@@ -431,5 +582,7 @@ __all__ = [
     "remember_view_at",
     "remove_settings",
     "settings_present",
+    "timezone_kept",
+    "types_kept",
     "write_settings",
 ]

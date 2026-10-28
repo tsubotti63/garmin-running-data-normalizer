@@ -51,6 +51,7 @@ import {
   importProblem,
   lastName,
   launchSettings,
+  launchTimezone,
   localTimeIso,
   lockAge,
   lockOffered,
@@ -3011,6 +3012,9 @@ async function start() {
     // remembered, which set the second and third boxes by themselves, and
     // the tips.
     const settings = launchSettings(status);
+    // The timezone of the last run that made its output (stage K1 of
+    // v2.2.0), in place of the default, unless the person typed one.
+    ui.timezone.value = launchTimezone(ui.timezone.value, settings, status.default_timezone);
     state.launch = settings.launch;
     state.remembered = { store: settings.store, outputParent: settings.outputParent };
     state.settingsPresent = settings.present;

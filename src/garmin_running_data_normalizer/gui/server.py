@@ -49,9 +49,11 @@ from .runs import (
     absolute_path,
     output_name_problem,
 )
+from .layouts import BUILT_IN_IDS, USER_LAYOUT_ID, LayoutChangeError, built_in_answer
 from .settings import (
     SHELF_STATES,
     THEMES,
+    change_layouts,
     forget_settings,
     launch_settings,
     recent_outputs,
@@ -60,7 +62,7 @@ from .settings import (
     remember_view,
 )
 from .stores import check_store, download_time, open_store, store_place, unlock_store
-from .views import ViewNotOpenError, ViewRequestError, Views, item_table, series_request
+from .views import ViewNotOpenError, ViewRequestError, Views, grain_ok, item_table, period_choice, series_request, types_ok
 from ..view.items import ITEMS_BY_KEY
 from ..view.series import MAX_ANSWER_BYTES, MAX_PANELS, activity_types, coverage, default_items, view_answer
 
@@ -155,6 +157,7 @@ API_ROUTES = {
     "/api/settings/hints": "_api_settings_hints",
     "/api/settings/theme": "_api_settings_theme",
     "/api/settings/view": "_api_settings_view",
+    "/api/settings/layouts": "_api_settings_layouts",
     "/api/settings/forget": "_api_settings_forget",
     # The view page (stage G3b): an output opened, and its numbers.
     "/api/view/open": "_api_view_open",
@@ -733,7 +736,11 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
 
     def _api_settings_view(self, payload: dict[str, Any]) -> dict[str, Any]:
         # The items that the view page shows and whether its item shelf is
-        # open, which its next opening shows again (stage G3b).
+        # open, which its next opening shows again (stage G3b); and from
+        # v2.2.0 (stage K1), when the page gives them, the layout used last
+        # (None for none), the period, the grouping, and the activity types
+        # (None for those counted at first), by the rules of a request of the
+        # numbers.
         items, shelf = payload.get("items"), payload.get("shelf")
         if (
             not isinstance(items, list)
@@ -743,8 +750,42 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             or shelf not in SHELF_STATES
         ):
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
-        notice = remember_view(items, shelf)
+        view: dict[str, Any] = {}
+        if "layout" in payload:
+            layout = payload["layout"]
+            if layout is not None and not (isinstance(layout, str) and (layout in BUILT_IN_IDS or USER_LAYOUT_ID.fullmatch(layout))):
+                raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+            view["layout"] = layout
+        if "period" in payload:
+            if period_choice(payload["period"]) is None:
+                raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+            view["period"] = payload["period"]
+        if "grain" in payload:
+            if not grain_ok(payload["grain"]):
+                raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+            view["grain"] = payload["grain"]
+        if "types" in payload:
+            if payload["types"] is not None and not types_ok(payload["types"]):
+                raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+            view["types"] = payload["types"]
+        notice = remember_view(items, shelf, view)
         return {"remembered": notice is None, "notice": notice}
+
+    def _api_settings_layouts(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # One change of the layouts of the view page (stage K1 of v2.2.0):
+        # the layouts after it, or as they were when it was not written; a
+        # change that cannot be made answers its code.
+        try:
+            layouts, notice = change_layouts(payload)
+        except LayoutChangeError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+        return {
+            "remembered": notice is None,
+            "notice": notice,
+            "layouts": layouts["layouts"],
+            "hidden": layouts["hidden"],
+            "layout": layouts["current"],
+        }
 
     def _api_view_open(self, payload: dict[str, Any]) -> dict[str, Any]:
         # The view page opens an output as an action of the fourth box
@@ -768,6 +809,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             "items": item_table(),
             "types": activity_types(data),
             "first_items": default_items(data),
+            # The built-in layouts (stage K1 of v2.2.0).
+            "layouts": built_in_answer(),
             "coverage": coverage(data),
         }
 

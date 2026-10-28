@@ -18,6 +18,17 @@ export const SHELF_STATES = ["open", "closed"];
 // The items of the first time that the page opens an output (FIRST_ITEMS of
 // view/items.py), for the words before an output is open.
 export const FIRST_KEYS = ["dist", "rhr", "vo2"];
+// The names of the built-in layouts (BUILT_IN_LAYOUTS of gui/layouts.py, stage
+// K1 of v2.2.0), which the server reads from the same catalogs to keep the
+// names of the person's layouts apart from them.
+export const LAYOUT_NAME_KEYS = {
+  run: "view.layout.run",
+  sleep_hr: "view.layout.sleep_hr",
+  volume: "view.layout.volume",
+  form: "view.layout.form",
+  load: "view.layout.load",
+  estimates: "view.layout.estimates",
+};
 
 const GRAIN_KEYS = {
   day: "view.grain.day",

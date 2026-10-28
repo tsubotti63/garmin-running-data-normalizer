@@ -8,6 +8,9 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
 
 DEFAULT_TIMEZONE = "Asia/Tokyo"
+# The longest timezone name that the GUI takes from its page and keeps in its
+# settings (stage B3b; stage K1 of v2.2.0).
+MAX_TIMEZONE_LENGTH = 64
 TIMEZONE_DATA_ERROR_CODE = "TIMEZONE_DATA_UNAVAILABLE"
 TIMEZONE_INVALID_ERROR_CODE = "TIMEZONE_INVALID"
 # "Factory" is the IANA placeholder for an unset local time, not a location.
