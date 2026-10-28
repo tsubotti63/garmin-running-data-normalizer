@@ -277,6 +277,14 @@ class GuiCatalogTest(unittest.TestCase):
                 # v2.2.0 K3: the help of the layouts names their two buttons.
                 ("view.help.layouts_text", "view.layouts.save_as"),
                 ("view.help.layouts_text", "view.layouts.manage"),
+                # v2.2.0 L2: the help of comparing years names its button, its
+                # ways, the month, and the way back.
+                ("view.help.compare_text", "view.compare.button"),
+                ("view.help.compare_text", "view.compare.mode.rows"),
+                ("view.help.compare_text", "view.compare.mode.overlay"),
+                ("view.help.compare_text", "view.compare.mode.cumulative"),
+                ("view.help.compare_text", "view.compare.month"),
+                ("view.help.compare_text", "view.panel.unbig"),
                 ("view.shelf.bars_types", "view.types.label"),
             ):
                 with self.subTest(language=language, key=key):

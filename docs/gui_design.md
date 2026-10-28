@@ -200,9 +200,11 @@ person (`view_layouts`: an id that the server gives, a name of 1 to 30
 characters, and one to six items; up to 20), the built-in layouts hidden
 (`view_layouts_hidden`), the layout used last (`view_layout`), the period and
 the grouping (`view_period` and `view_grain`, by the rules of a request of the
-numbers), and the activity types counted (`view_types`) when the whole choice
+numbers), the activity types counted (`view_types`) when the whole choice
 can be kept: up to 64 names of up to 128 characters, each once, without a
-control or direction character. A request of the numbers takes any choice of
+control or direction character, and from stage L1 how one item is compared by
+year (`view_compare_mode`: rows, overlay, or cumulative) and in which month
+(`view_compare_month`: 1 to 12, an integer; none for the whole year). A request of the numbers takes any choice of
 the types of the output, as 2.1.0 did; a choice that the settings cannot keep
 whole is not remembered, and the one before is forgotten, so that the next
 opening counts the types counted at first, never other types than those
@@ -453,8 +455,9 @@ Local Snapshot Store and new output folders
   and remembers the colors and the items of the view page
   (`/api/settings/theme` and `/api/settings/view`); see
   [The view page](#the-view-page-v210). From v2.2.0 `/api/settings/view` also
-  takes the layout used last, the period, the grouping, and the activity
-  types, `/api/settings/layouts` changes the layouts one change at a time, and
+  takes the layout used last, the period, the grouping, the activity types,
+  and how one item is compared by year and in which month,
+  `/api/settings/layouts` changes the layouts one change at a time, and
   `/api/view/open` gives the built-in layouts by their ids and items.
 - Runs (`run-all`, `snapshot register`, and `snapshot run-all`) run in a child
   process started from an argument list (`sys.executable`, `-P`, `-m`, an
@@ -918,6 +921,26 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   tab removed reads the layouts again. On the folded shelf, "Layouts" opens
   the cards in a small window. The help panel of the view page gives the
   layouts in one item, after the item shelf (stage K3).
+- Comparing one item by year (stage L1): each panel has "Compare years" (not
+  for an output without days). The comparison shows one item of the output
+  by year, in rows, laid over one another, or as a running total (totals and
+  counts only), over the whole year or one month of each year, the newest
+  four years at first and six at most; an item of several lines (VO2 Max)
+  compares one of them. The periods of each year have their places on one
+  axis: a week by its order from the week of 1 January, or of the first day
+  of the month chosen (Monday weeks, up to 54), a day by its month and day on a leap year, a month by its number, and
+  over one month the days of its longest month among the years chosen. The
+  value of a year (or a month) is a period of the server: the page asks for
+  the whole output grouped by year (or by month), and for each year by the
+  grouping chosen, as one generation whose older answers are dropped and
+  whose stop shows under its bar. A running total is added on the page from
+  the values of the server, goes on after a period without a value, and has
+  no counts. While comparing, the panels, the period, and the grouping of the
+  page are kept for the way back; the period, its range, the shelf, the
+  layouts, and the groupings Auto and Year (and Month over one month) are
+  grayed, with a line under the filters that says so, and the overview is
+  not shown. The settings remember the way and the month. The help panel
+  gives it in one item, after the layouts (stage L2).
 
 ## Data handling in 2.0.0
 

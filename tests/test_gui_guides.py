@@ -603,8 +603,21 @@ class GuiGuideTest(unittest.TestCase):
         # each guide those of its own language, with the words in its
         # language.
         # v2.2.0 K3: the view page shows the layouts above the item shelf, in
-        # two pictures more, cut to the layouts and to their window.
-        names = ("normalized-page", "next-steps", "second-launch", "view-last-year", "view-page", "view-layouts", "view-layouts-manage")
+        # two pictures more, cut to the layouts and to their window. L2: May of
+        # every year in its scene, and the years in rows and laid over one
+        # another in the section of comparing years.
+        names = (
+            "normalized-page",
+            "next-steps",
+            "second-launch",
+            "view-last-year",
+            "view-compare-may",
+            "view-page",
+            "view-layouts",
+            "view-layouts-manage",
+            "view-compare-rows",
+            "view-compare-overlay",
+        )
         sizes = {"next-steps": (315, 213), "view-layouts": (371, 193), "view-layouts-manage": (440, 438)}
         japanese = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
         for language, path in GUIDES.items():
@@ -635,7 +648,8 @@ class GuiGuideTest(unittest.TestCase):
         # section; the ways to use it come after what you need, the same six
         # scenes in both guides, each with links to the sections that give
         # the details, and the first two start the GUI by a link, not by its
-        # steps (the checker).
+        # steps (the checker). From v2.2.0 (stage L2), a seventh scene compares
+        # May of every year, after the past year on the view page.
         parts = {
             "en": ("How it goes", "Ways to use it", "More: [", "(#start-the-gui)"),
             "ja": ("全体の流れ", "場面ごとの使い方", "くわしくは：[", "(#gui-を起動する)"),
@@ -660,11 +674,15 @@ class GuiGuideTest(unittest.TestCase):
                         reads = " ".join(scene.split()) if language == "en" else re.sub(r"\n *", "", scene)
                         for phrase in self.READING_OF_H1[language].get(number, ()):
                             self.assertIn(phrase, reads)
-                        if number == 6:
+                        if scene.startswith(("Give the numbers to an AI", "数字を CSV にして")):
                             care = {"en": "personal data", "ja": "個人のデータ"}[language]
                             self.assertLess(reads.index(care), reads.index("`about`"))
-        self.assertEqual(len(scenes["en"]), 6)
-        self.assertEqual(len(scenes["ja"]), 6)
+        self.assertEqual(len(scenes["en"]), 7)
+        self.assertEqual(len(scenes["ja"]), 7)
+        for language, title in (("en", "Compare May of every year"), ("ja", "毎年の 5 月をくらべる")):
+            with self.subTest(language=language, scene="compare"):
+                self.assertTrue(scenes[language][5].startswith(title))
+                self.assertTrue(scenes[language][6].startswith(("Give the numbers to an AI", "数字を CSV にして")))
 
     # From the two new AI sessions that read the sections of H1: the first
     # two scenes name the timezone, which is Asia/Tokyo by default and, from
@@ -725,27 +743,29 @@ class GuiGuideTest(unittest.TestCase):
         # of the person's life), the types, and the timezone are among what
         # the settings hold (the checker's K2-3). From K3, each of them says
         # that it is from 2.2.0, as the guides are those of the release that
-        # is published (a finding of the review of the diff by Codex).
+        # is published (a finding of the review of the diff by Codex). From L2,
+        # the way and the month of a comparison by year are remembered too, and
+        # whether years were compared and the years chosen are not.
         phrases = {
             "en": (
                 "At first, the period is **All time**, and the grouping **Auto**; from 2.2.0, those chosen last stay for the next time",
-                "or **Dark** is chosen); from 2.2.0, also the period, the grouping, the activity types counted, and the layouts (those saved, and the one used last).",
+                "or **Dark** is chosen); from 2.2.0, also the period, the grouping, the activity types counted, the layouts (those saved, and the one used last), and the way and the month of [Compare years](#compare-years-from-220).",
                 "When another output opens (from 2.2.0), a period such as **1 year** stays as it is.",
                 "A period chosen with **Custom range…** shrinks to the days of the output when it overlaps them in part, and becomes **All time** when it does not overlap them at all.",
                 "The activity types counted are those remembered that the output has; when it has none of them, every running type in the output.",
-                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, and full screen.",
+                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, full screen, and whether years were compared, with the years chosen.",
                 "the names of places and of the items of the view page, and from 2.2.0 also the names of the layouts you saved, the days of a period chosen with **Custom range…**, the activity types counted, and the timezone. They stay on this computer",
             ),
             "ja": (
                 "期間とまとめ方は、はじめは「全期間」と「自動」です。2.2.0 からは、選んだものを覚えていて、次に開いたときもそのままです",
-                "画面の色（「ライト」か「ダーク」を選んだとき）。2.2.0 からは、期間、まとめ方、数える種目、表示の型（保存した型と、最後に使った型）も覚えます。",
+                "画面の色（「ライト」か「ダーク」を選んだとき）。2.2.0 からは、期間、まとめ方、数える種目、表示の型（保存した型と、最後に使った型）、[年でくらべる](#年でくらべる220-から)の見せ方と月も覚えます。",
                 "ほかの出力を開いたとき（2.2.0 から）：「1 年」などの期間は、そのままです。",
                 # The words of the button of an enlarged panel changed in 2.2.0 (the
                 # checker's K3-2); the English words are those of 2.1.0.
                 "⤢ の所が「段を並べて見る」（2.1.0 では「元に戻す」）になり、",
                 "「範囲を選ぶ…」で選んだ期間は、その出力の日の範囲と一部だけ重なるときは重なる所に縮まり、まったく重ならないときは「全期間」になります。",
                 "数える種目は、覚えた種目のうち、その出力にある種目です。1 つも無いときは、その出力のランニングの種目すべてです。",
-                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面。",
+                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年。",
                 "2.2.0 からは、保存した表示の型の名前、「範囲を選ぶ…」で選んだ期間の日付、数える種目、タイムゾーンも入ります。",
             ),
         }
@@ -820,6 +840,113 @@ class GuiGuideTest(unittest.TestCase):
                     else:
                         line = f"「{messages[f'view.layout.{layout}']}」：" + "".join(f"「{messages[f'view.item.{key}']}」" for key in keys)
                     self.assertIn(line, reads)
+
+    def test_guides_give_the_comparison_of_years(self) -> None:
+        # v2.2.0 L2: the section of comparing years comes after full screen
+        # and before what is remembered, and gives the rules of the page (stage
+        # L1): the places of weeks, days, and one month on one axis, the value
+        # of a year counted as on the panels and partial at both ends of the
+        # output (the checker's opinion 2 of L1), a running total of the five
+        # totals and counts that goes on after a period without a value, what
+        # is not used while comparing and the activity types that still apply
+        # (the checker's opinion 1 of L1), the keys of the cross line as the
+        # page takes them, and the next step of a stop; it quotes the words of
+        # the page as the catalogs write them.
+        catalogs = {language: catalog(language) for language in GUIDES}
+        heading = {"en": "Compare years (from 2.2.0)", "ja": "年でくらべる（2.2.0 から）"}
+        before = {"en": "Full screen", "ja": "全画面で見る"}
+        after = {"en": "What is remembered for the next time", "ja": "次に開いたときに覚えるもの"}
+        phrases = {
+            "en": (
+                "a year may have 54",
+                # With one month chosen, the weeks count from its first day,
+                # and a value is partial only where the output cuts it (the
+                # review of the diff by Codex).
+                "A week is placed by its order from the week of 1 January (with one month chosen, of the first day of that month)",
+                "Where the output starts or ends within a year (or within the month chosen), its value is partial",
+                "29 February has a value only in a leap year.",
+                "With one month chosen, the days go to the last day of that month in the years chosen.",
+                "A period without a record (0) adds nothing, and a period without a value breaks the line; the total goes on from what it was, so that the running total at the end of a year is its",
+                "Its table has no counts.",
+                "**Activity types counted** still applies: a change of it also applies to the panels after the way back, and is remembered.",
+                "press ← or → to move by one period, Page Up or Page Down by 12, and Home or End to an end",
+                "group by **Week** or **Month** (by **Week** with one month chosen).",
+            ),
+            "ja": (
+                "54 週まである年もあります",
+                "週は、月曜からの週を、1 月 1 日（月を選んだときは、その月の 1 日）の週から数えた順番でそろえます。",
+                "出力がその年（月を選んだときはその月）の途中で始まるか終わるときは、途中の値で",
+                "2 月 29 日は、うるう年にだけ値があります。",
+                "月を選んだときの日は、選んだ年のその月の日数までです。",
+                "記録の無い区切り（0）はそのまま足し、値の無い区切りでは線が切れます。合計はそれまでから続くので、年の終わりの累積は、その年の",
+                "表には件数の列がありません。",
+                "「数える種目」は使えます。変えると、戻ったあとの段にも効き、次に開いたときにも覚えています。",
+                "← → キーで 1 つずつ、Page Up と Page Down で 12 ずつ、Home と End で端へ動かすと",
+                "まとめ方を「週」か「月」に（月を選んだときは「週」に）してください。",
+            ),
+        }
+        quoted = (
+            "view.compare.button",
+            "view.panel.unbig",
+            "view.compare.item",
+            "view.compare.show",
+            "view.compare.mode.rows",
+            "view.compare.mode.overlay",
+            "view.compare.mode.cumulative",
+            "view.compare.month",
+            "view.compare.month_all",
+            "view.compare.series",
+            "view.panel.table",
+            "view.compare.years",
+            "view.compare.up_to",
+            "view.compare.cumulative_about",
+        )
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            with self.subTest(language=language, part="order"):
+                self.assertLess(text.index(f"\n### {before[language]}\n"), text.index(f"\n### {heading[language]}\n"))
+                self.assertLess(text.index(f"\n### {heading[language]}\n"), text.index(f"\n### {after[language]}\n"))
+            start = text.index(f"\n### {heading[language]}\n")
+            part = text[start : text.index("\n### ", start + 1)]
+            part_reads = " ".join(part.split()) if language == "en" else re.sub(r"\n *", "", part)
+            for phrase in phrases[language]:
+                with self.subTest(language=language, phrase=phrase):
+                    self.assertIn(phrase, part_reads)
+            messages = catalogs[language]
+            mark = "**{}**" if language == "en" else "「{}」"
+            for key in quoted:
+                with self.subTest(language=language, words=key):
+                    self.assertIn(mark.format(messages[key]), part_reads)
+            # The partial year, in the words of the heading of a row.
+            date = "October 21" if language == "en" else "10月21日"
+            with self.subTest(language=language, part="partial year"):
+                self.assertIn(messages["view.compare.until"].format(date=date), part_reads)
+            # Every word quoted in the section is a word of the page: a word of
+            # the catalogs, the value of a year as a row says it, or the day
+            # that the output cuts it (a case of the partial guard).
+            words = set(messages.values())
+            words |= {messages[key].format(period=messages["view.compare.whole_year"]) for key in messages if key.startswith("view.compare.value.")}
+            words.add(messages["view.compare.until"].format(date=date))
+            pattern = r"\*\*([^*]+)\*\*|\"([^\"]+)\"" if language == "en" else r"「([^」]+)」()"
+            for word in (bold or plain for bold, plain in re.findall(pattern, part_reads)):
+                with self.subTest(language=language, quoted=word):
+                    self.assertIn(word, words)
+            # The scene of May of every year leads to the section.
+            with self.subTest(language=language, part="scene"):
+                title = "\n### Compare May of every year\n" if language == "en" else "\n### 毎年の 5 月をくらべる\n"
+                begin = text.index(title)
+                scene = text[begin : text.index("\n### ", begin + 1)]
+                link = "(#compare-years-from-220)" if language == "en" else "(#年でくらべる220-から)"
+                self.assertIn(link, scene)
+                # The way chosen last is remembered: the scene chooses one row
+                # per year (a finding of the review of the diff by Codex).
+                self.assertIn(mark.format(messages["view.compare.mode.rows"]), scene)
+        # The keys of the cross line, as the page takes them.
+        script = (ROOT / "src/garmin_running_data_normalizer/gui/static/view.mjs").read_text(encoding="utf-8")
+        self.assertIn("const CROSS_KEYS = { ArrowLeft: -1, ArrowRight: 1, PageUp: -12, PageDown: 12 };", script)
+        self.assertIn('} else if (event.key === "Home") {\n    moveCompareCross(0, true);', script)
+        self.assertIn('} else if (event.key === "End") {\n    moveCompareCross(compareContext.span, true);', script)
 
     def test_readme_puts_the_gui_first(self) -> None:
         # v2.1.0 H1 (the whole flow): the README gives the GUI right after who
