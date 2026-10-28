@@ -916,7 +916,8 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   one change with the place of the layout (`to`). A change that the server
   refuses says why in one line where it was asked, and a layout that another
   tab removed reads the layouts again. On the folded shelf, "Layouts" opens
-  the cards in a small window.
+  the cards in a small window. The help panel of the view page gives the
+  layouts in one item, after the item shelf (stage K3).
 
 ## Data handling in 2.0.0
 

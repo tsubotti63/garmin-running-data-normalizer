@@ -332,8 +332,8 @@ When: some months later, you downloaded a new Export.
    set by themselves when the remembered places are found
    ([Later launches](#later-launches)). Set a box that waits with
    **Use these settings**.
-3. The timezone of the last run that made an output is remembered: check it
-   in the summary of box 3. To change it, choose another in box 3, and press
+3. The timezone of the last run that made an output is remembered (from
+   2.2.0): check it in the summary of box 3. To change it, choose another in box 3, and press
    **Use these settings** there.
 4. In box 4, press **Run normalization**. A new folder holds an output that
    includes what earlier Exports held. The outputs before stay as they are.
@@ -388,7 +388,7 @@ by month.
    top. They apply to every panel.
 3. To see the year before, press ‹ next to the period.
 
-![The view page with the period 1 year and the grouping Month: the panels of distance, resting heart rate, and VO2 Max (synthetic data made for the example)](assets/gui-guide/view-last-year.en.png)
+![The view page with the period 1 year and the grouping Month: the panels of distance, resting heart rate, and VO2 Max, and the cards of the layouts above the item shelf (synthetic data made for the example)](assets/gui-guide/view-last-year.en.png)
 
 More: [Period, grouping, and activity types](#period-grouping-and-activity-types)
 
@@ -862,7 +862,7 @@ only outputs that this version of the app made, and sends no numbers anywhere.
 It does not tell how the items that it shows relate (which one causes another),
 or what to do: it is a page to look at with your own eyes.
 
-![The view page, with three panels (distance, resting heart rate, and VO2 Max) and the overview under them (synthetic data made for the example)](assets/gui-guide/view-page.en.png)
+![The view page, with three panels (distance, resting heart rate, and VO2 Max) and the overview under them, and the cards of the layouts above the item shelf (synthetic data made for the example)](assets/gui-guide/view-page.en.png)
 
 ### Open the view page
 
@@ -906,8 +906,8 @@ or what to do: it is a page to look at with your own eyes.
 **Period** and **Group by** at the top apply to every panel.
 **Activity types counted** applies to the training and running-form items, not
 to the Body (daily) items or the Garmin estimates. At first, the period is
-**All time**, and the grouping **Auto**; those chosen last stay for the next
-time ([What is remembered for the next time](#what-is-remembered-for-the-next-time)).
+**All time**, and the grouping **Auto**; from 2.2.0, those chosen last stay for
+the next time ([What is remembered for the next time](#what-is-remembered-for-the-next-time)).
 
 - Period: **All time**, **Last 10 years**, **5 years**, **3 years**,
   **1 year**, and **Custom range…**. The last 10, 5, 3, or 1 years end on the
@@ -944,6 +944,63 @@ of the period, a step with fewer days is marked "(partial)" and drawn lighter
   field of **Activity types counted** to open the list of the types in the
   output, and tick a type to add it, or untick it to leave it out. The types
   change the training and running-form panels, and the bars of the item shelf.
+
+### Layouts (from 2.2.0)
+
+A layout is a set of items to show as panels, in their order (six at most).
+The cards of the layouts are in two columns above the item shelf. Press a
+card, and its items become the panels, in its order. The period, the
+grouping, and the activity types are not part of a layout: they are
+remembered apart ([What is remembered for the next time](#what-is-remembered-for-the-next-time)).
+
+![The layouts above the item shelf of the view page: the cards of the six built-in layouts in two columns, with the card of Running chosen (synthetic data made for the example)](assets/gui-guide/view-layouts.en.png)
+
+- There are six built-in layouts:
+  - **Running**: **Distance**, **Average pace**, and **Average heart rate**
+  - **Sleep and heart rate**: **Sleep time**, **Sleep score**,
+    **HRV (reference value)**, and **Resting heart rate**
+  - **Running volume**: **Distance**, **Time**, **Activities**, and
+    **Total ascent**
+  - **Running form**: **Cadence**, **Stride length**,
+    **Vertical oscillation**, and **Ground contact time**
+  - **Load**: **Training load**, **Acute load**, **Chronic load**, and
+    **Load ratio**
+  - **Garmin estimates**: **VO2 Max**, **Race prediction half marathon**,
+    **Race prediction marathon**, and **Endurance score**
+- The card of the layout in use is filled, with ✓ before its name. Once you
+  add, remove, or move a panel after that, "(changed)" shows under its name.
+- An item without a value in the output is a panel too (its second line
+  says "There is no value in this period."). When an item of a layout has
+  no value anywhere in the output, the card says so, as "Items with values
+  2/4" (counted over the whole output, not the period chosen).
+- **Save the panels as a layout…** names the panels shown as a layout of
+  your own. A name has 1 to 30 characters, without line breaks or invisible
+  characters, and the names of the built-in layouts cannot be used, in
+  English or in Japanese. You can keep up to 20 layouts. When one cannot be
+  saved, one line says why, where you asked.
+- **Overwrite the layout** shows only when you changed the panels of a
+  layout of your own, and puts the panels shown into it. A built-in layout
+  cannot be overwritten: save it as a new layout.
+- **Manage layouts…** opens a small window:
+  - Your layouts: **Rename**, **Up**, **Down**, **Overwrite the layout**,
+    and **Remove**. Here, **Overwrite the layout** puts the panels shown
+    into that layout, also when it is not the one in use. A drag of the grip
+    (⋮⋮) at the left moves a layout too, and so do ↑ and ↓ on the grip.
+    Escape during a drag puts it back. **Remove** asks first, with
+    **Keep it** chosen.
+  - The built-in layouts: **Hide** and **Show**. A hidden layout has no
+    card, and **Show all built-in layouts** shows them all again.
+  - **Close** or Escape closes the window. A click outside it does not close
+    it, as with the window of **Activity types counted**.
+
+![The window of Manage layouts: two layouts of your own, each with its grip and Rename, Up, Down, Overwrite the layout, and Remove, and under them the six built-in layouts with Hide (synthetic data made for the example)](assets/gui-guide/view-layouts-manage.en.png)
+
+- When the item shelf is folded, **Layouts** in the narrow column at the
+  left opens the cards in a small window, to choose one at once.
+- The names of the layouts are in the settings on this computer
+  ([Privacy](#privacy)). Changes of the layouts in two tabs are kept one by
+  one; a change of a layout that another tab removed says so, and the
+  layouts are read again.
 
 ### The item shelf and the panels
 
@@ -1057,16 +1114,17 @@ This is for the next time that you open the view page, in this launch or in a
 later one.
 
 - Remembered: the items shown and their order (six at most; the same for every
-  output), whether the item shelf is open, the appearance (when **Light**
-  or **Dark** is chosen), the period, the grouping, the activity types
-  counted, and the layouts (those saved, and the one used last). When another
-  output has no value for an item shown, the second line of its panel says
-  "There is no value in this period."
-- When another output opens, a period such as **1 year** stays as it is. A
-  period chosen with **Custom range…** shrinks to the days of the output when
-  it overlaps them in part, and becomes **All time** when it does not overlap
-  them at all. The activity types counted are those remembered that the
-  output has; when it has none of them, every running type in the output.
+  output), whether the item shelf is open, and the appearance (when **Light**
+  or **Dark** is chosen); from 2.2.0, also the period, the grouping, the
+  activity types counted, and the layouts (those saved, and the one used
+  last). When another output has no value for an item shown, the second line
+  of its panel says "There is no value in this period."
+- When another output opens (from 2.2.0), a period such as **1 year** stays
+  as it is. A period chosen with **Custom range…** shrinks to the days of the
+  output when it overlaps them in part, and becomes **All time** when it does
+  not overlap them at all. The activity types counted are those remembered
+  that the output has; when it has none of them, every running type in the
+  output.
 - Not remembered: the output shown, the same scale, a panel enlarged, a table
   shown, and full screen. As the output shown is not remembered, the page
   opened from the bar at the bottom offers the latest output with the button
@@ -1186,11 +1244,11 @@ The GUI remembers only these:
   remembered when a run makes its output, so that a place opened by mistake
   does not come back.
 - Whether **Show tips** is on, the appearance (when **Light** or **Dark** is
-  chosen), and, of the view page, the items, the item shelf, the period, the
-  grouping, the activity types counted, and the layouts (those saved, and the
-  one used last).
-- The timezone of the last run that made its output. At later launches, box 3
-  is set with it (**(as last time)**).
+  chosen), and the items and the item shelf of the view page; from 2.2.0, also
+  its period, grouping, activity types counted, and layouts (those saved, and
+  the one used last).
+- The timezone of the last run that made its output (from 2.2.0). At later
+  launches, box 3 is set with it (**(as last time)**).
 
 The place of an Export, **Name of the new folder** in box 3, the language,
 and the way to normalize are not remembered.
@@ -1475,11 +1533,12 @@ it. To remove Python too, do as the documents of python.org say, for
   review them before you do. The names of your Snapshots are never in them.
 - The view page only reads an output, and sends no numbers anywhere. The CSV
   file of `series` holds values of the output.
-- The remembered settings hold the names of places, of the items of the view
-  page, and of the layouts you saved, the days of a period chosen with
-  **Custom range…**, the activity types counted, and the timezone. They stay
-  on this computer, and are never in the Support Bundle. On a computer that
-  others use, remove them with **Forget the remembered settings…**.
+- The remembered settings hold the names of places and of the items of the
+  view page, and from 2.2.0 also the names of the layouts you saved, the days
+  of a period chosen with **Custom range…**, the activity types counted, and
+  the timezone. They stay on this computer, and are never in the Support
+  Bundle. On a computer that others use, remove them with
+  **Forget the remembered settings…**.
 
 See [Security and Privacy Boundary](security_and_privacy_boundary.md).
 

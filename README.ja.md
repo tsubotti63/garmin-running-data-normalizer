@@ -31,7 +31,7 @@ v2.0.1 と同じです。
 [全体の流れ](docs/gui_guide.ja.md#全体の流れ)と[場面ごとの使い方](docs/gui_guide.ja.md#場面ごとの使い方)に
 あります。
 
-![見るページ。距離・安静時心拍数・VO2 Max の段と全体図（見本のために作ったデータ）](docs/assets/gui-guide/view-page.ja.png)
+![見るページ。距離・安静時心拍数・VO2 Max の段と全体図、項目の棚の上の表示の型の札（見本のために作ったデータ）](docs/assets/gui-guide/view-page.ja.png)
 
 ## 何をするOSSか
 

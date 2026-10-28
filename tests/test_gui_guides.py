@@ -6,6 +6,8 @@ import struct
 import unittest
 from pathlib import Path
 
+from garmin_running_data_normalizer.gui.layouts import BUILT_IN_LAYOUTS
+
 # The guides of main are read by the users of the stable release, through the
 # README, so they name and install the release that is published, which the
 # product state knows, also while the source is a release candidate, whose
@@ -151,6 +153,27 @@ QUOTED_LABELS = (
     "view.full.enter",
     "view.full.back",
     "view.quit",
+    # v2.2.0 K3: the layouts, their buttons, and the six built-in layouts.
+    "view.layouts.heading",
+    "view.layouts.save_as",
+    "view.layouts.overwrite",
+    "view.layouts.manage",
+    "view.layouts.rename",
+    "view.layouts.up",
+    "view.layouts.down",
+    "view.layouts.remove",
+    "view.layouts.keep",
+    "view.layouts.hide",
+    "view.layouts.show",
+    "view.layouts.show_all",
+    "view.layouts.close",
+    "view.layouts.rail",
+    "view.layout.run",
+    "view.layout.sleep_hr",
+    "view.layout.volume",
+    "view.layout.form",
+    "view.layout.load",
+    "view.layout.estimates",
 )
 
 
@@ -579,8 +602,10 @@ class GuiGuideTest(unittest.TestCase):
         # pictures; the two guides give the same pictures in the same order,
         # each guide those of its own language, with the words in its
         # language.
-        names = ("normalized-page", "next-steps", "second-launch", "view-last-year", "view-page")
-        sizes = {"next-steps": (315, 213)}
+        # v2.2.0 K3: the view page shows the layouts above the item shelf, in
+        # two pictures more, cut to the layouts and to their window.
+        names = ("normalized-page", "next-steps", "second-launch", "view-last-year", "view-page", "view-layouts", "view-layouts-manage")
+        sizes = {"next-steps": (315, 213), "view-layouts": (371, 193), "view-layouts-manage": (440, 438)}
         japanese = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
         for language, path in GUIDES.items():
             with self.subTest(language=language):
@@ -670,13 +695,13 @@ class GuiGuideTest(unittest.TestCase):
         # launch, and its forgetting forgets them too (the checker).
         phrases = {
             "en": (
-                "The timezone of the last run that made its output. At later launches, box 3 is set with it (**(as last time)**).",
+                "The timezone of the last run that made its output (from 2.2.0). At later launches, box 3 is set with it (**(as last time)**).",
                 "The place of an Export, **Name of the new folder** in box 3, the language, and the way to normalize are not remembered.",
                 "it does not use the settings that 2.2.0 remembered, and starts as a first launch; it does not write over their file.",
                 "**Forget the remembered settings…** of the earlier version forgets what 2.2.0 remembered too",
             ),
             "ja": (
-                "前に出力を作った正規化のタイムゾーン。2 回目からは、3 の箱がこのタイムゾーンで決まります（「（前回のまま）」）。",
+                "前に出力を作った正規化のタイムゾーン（2.2.0 から）。2 回目からは、3 の箱がこのタイムゾーンで決まります（「（前回のまま）」）。",
                 "エクスポートの場所、3 の箱の「新しく作るフォルダーの名前」、言語、正規化のしかたは覚えません。",
                 "2.2.0 が覚えた設定は使われず、初めての起動として始まります。設定のファイルは書き換えません。",
                 "「覚えた設定を消す…」を押すと、2.2.0 が覚えたもの（タイムゾーンや、見るページで覚えたものなど）も消えます。",
@@ -698,23 +723,30 @@ class GuiGuideTest(unittest.TestCase):
         # remembered are gone (the checker's opinion 3 of K1), and the names
         # of the layouts saved, the days of a custom range (which can be days
         # of the person's life), the types, and the timezone are among what
-        # the settings hold (the checker's K2-3).
+        # the settings hold (the checker's K2-3). From K3, each of them says
+        # that it is from 2.2.0, as the guides are those of the release that
+        # is published (a finding of the review of the diff by Codex).
         phrases = {
             "en": (
-                "At first, the period is **All time**, and the grouping **Auto**; those chosen last stay for the next time",
-                "or **Dark** is chosen), the period, the grouping, the activity types counted, and the layouts (those saved, and the one used last).",
+                "At first, the period is **All time**, and the grouping **Auto**; from 2.2.0, those chosen last stay for the next time",
+                "or **Dark** is chosen); from 2.2.0, also the period, the grouping, the activity types counted, and the layouts (those saved, and the one used last).",
+                "When another output opens (from 2.2.0), a period such as **1 year** stays as it is.",
                 "A period chosen with **Custom range…** shrinks to the days of the output when it overlaps them in part, and becomes **All time** when it does not overlap them at all.",
                 "The activity types counted are those remembered that the output has; when it has none of them, every running type in the output.",
                 "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, and full screen.",
-                "of the items of the view page, and of the layouts you saved, the days of a period chosen with **Custom range…**, the activity types counted, and the timezone. They stay on this computer",
+                "the names of places and of the items of the view page, and from 2.2.0 also the names of the layouts you saved, the days of a period chosen with **Custom range…**, the activity types counted, and the timezone. They stay on this computer",
             ),
             "ja": (
-                "期間とまとめ方は、はじめは「全期間」と「自動」です。選んだものは覚えていて、次に開いたときもそのままです",
-                "画面の色（「ライト」か「ダーク」を選んだとき）、期間、まとめ方、数える種目、表示の型（保存した型と、最後に使った型）。",
+                "期間とまとめ方は、はじめは「全期間」と「自動」です。2.2.0 からは、選んだものを覚えていて、次に開いたときもそのままです",
+                "画面の色（「ライト」か「ダーク」を選んだとき）。2.2.0 からは、期間、まとめ方、数える種目、表示の型（保存した型と、最後に使った型）も覚えます。",
+                "ほかの出力を開いたとき（2.2.0 から）：「1 年」などの期間は、そのままです。",
+                # The words of the button of an enlarged panel changed in 2.2.0 (the
+                # checker's K3-2); the English words are those of 2.1.0.
+                "⤢ の所が「段を並べて見る」（2.1.0 では「元に戻す」）になり、",
                 "「範囲を選ぶ…」で選んだ期間は、その出力の日の範囲と一部だけ重なるときは重なる所に縮まり、まったく重ならないときは「全期間」になります。",
                 "数える種目は、覚えた種目のうち、その出力にある種目です。1 つも無いときは、その出力のランニングの種目すべてです。",
                 "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面。",
-                "保存した表示の型の名前、「範囲を選ぶ…」で選んだ期間の日付、数える種目、タイムゾーンが入ります。",
+                "2.2.0 からは、保存した表示の型の名前、「範囲を選ぶ…」で選んだ期間の日付、数える種目、タイムゾーンも入ります。",
             ),
         }
         before = {
@@ -730,6 +762,64 @@ class GuiGuideTest(unittest.TestCase):
             for phrase in before[language]:
                 with self.subTest(language=language, before=phrase):
                     self.assertNotIn(phrase, reads)
+
+    def test_guides_give_the_layouts_of_the_view_page(self) -> None:
+        # v2.2.0 K3: the section of the layouts comes before the item shelf
+        # and gives the rules of the page: the items of each built-in layout
+        # in the words of the shelf, an item without a value stays a panel
+        # (the checker's K3-1), the rules of a name and the number of
+        # layouts, the grip and its keys, the question before a removal, and
+        # that a click outside the window does not close it (the checker's
+        # opinion 2 of K2).
+        catalogs = {language: catalog(language) for language in GUIDES}
+        heading = {"en": "Layouts (from 2.2.0)", "ja": "表示の型（2.2.0 から）"}
+        shelf = {"en": "The item shelf and the panels", "ja": "項目の棚と段"}
+        phrases = {
+            "en": (
+                "The period, the grouping, and the activity types are not part of a layout",
+                "An item without a value in the output is a panel too",
+                "A name has 1 to 30 characters, without line breaks or invisible characters",
+                "You can keep up to 20 layouts.",
+                "A drag of the grip (⋮⋮) at the left moves a layout too, and so do ↑ and ↓ on the grip. Escape during a drag puts it back.",
+                "**Remove** asks first, with **Keep it** chosen.",
+                "A click outside it does not close it",
+                "Here, **Overwrite the layout** puts the panels shown into that layout, also when it is not the one in use.",
+            ),
+            "ja": (
+                "期間・まとめ方・数える種目は、型に入りません",
+                "その出力に値の無い項目も、段として出ます",
+                "名前は 1〜30 字で、改行や見えない文字は使えません。",
+                "自分の型は 20 までです。",
+                "左のつまみ（⋮⋮）をなぞっても並べ替えられ、つまみを選んで ↑ ↓ キーでも動かせます。",
+                "選ばれているのは「消さない」です。",
+                "枠の外を押しても閉じません",
+                "ここの「型を上書き」は、使っている型でなくても、いまの段でその型を書き換えます。",
+            ),
+        }
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            with self.subTest(language=language, part="order"):
+                self.assertLess(text.index(f"\n### {heading[language]}\n"), text.index(f"\n### {shelf[language]}\n"))
+            for phrase in phrases[language]:
+                with self.subTest(language=language, phrase=phrase):
+                    self.assertIn(phrase, reads)
+            # The words under the name of a card, as the page writes them
+            # (a finding of the review of the diff by Codex).
+            messages = catalogs[language]
+            mark = '"{}"' if language == "en" else "「{}」"
+            for words in (messages["view.layouts.changed"], messages["view.layouts.valued"].format(n=2, m=4)):
+                with self.subTest(language=language, words=words):
+                    self.assertIn(mark.format(words), reads)
+            # Each built-in layout with its items, in the words of the page.
+            for layout, keys in BUILT_IN_LAYOUTS:
+                with self.subTest(language=language, layout=layout):
+                    if language == "en":
+                        names = [f"**{messages[f'view.item.{key}']}**" for key in keys]
+                        line = f"**{messages[f'view.layout.{layout}']}**: " + ", ".join(names[:-1]) + ", and " + names[-1]
+                    else:
+                        line = f"「{messages[f'view.layout.{layout}']}」：" + "".join(f"「{messages[f'view.item.{key}']}」" for key in keys)
+                    self.assertIn(line, reads)
 
     def test_readme_puts_the_gui_first(self) -> None:
         # v2.1.0 H1 (the whole flow): the README gives the GUI right after who
