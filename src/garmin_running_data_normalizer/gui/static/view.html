@@ -90,6 +90,7 @@
   <p id="filters-hint" class="hint filters-hint" data-i18n="view.hint.filters" hidden></p>
   <p id="compare-off" class="compare-off" data-i18n="view.compare.off" hidden></p>
   <p id="compare-off-race" class="compare-off" data-i18n="view.compare.off_race" hidden></p>
+  <p id="compare-off-calendar" class="compare-off" data-i18n="view.compare.off_calendar" hidden></p>
   <div id="view-body" class="view-body">
     <aside id="shelf" class="shelf" aria-labelledby="shelf-heading">
       <section id="layouts" class="layouts" aria-labelledby="layouts-heading">
@@ -239,9 +240,11 @@
                 <button type="button" data-compare-mode="rows" aria-pressed="false"><span id="compare-rows-year" data-i18n="view.compare.mode.rows"></span><span id="compare-rows-race" data-i18n="view.compare.mode.rows_race" hidden></span></button>
                 <button type="button" data-compare-mode="overlay" aria-pressed="false" data-i18n="view.compare.mode.overlay"></button>
                 <button type="button" data-compare-mode="cumulative" aria-pressed="false" data-i18n="view.compare.mode.cumulative"></button>
+                <button type="button" data-compare-mode="calendar" aria-pressed="false" data-i18n="view.compare.mode.calendar"></button>
               </span>
             </span>
             <button type="button" id="compare-about" class="info-button" aria-expanded="false" aria-controls="compare-about-text" data-i18n="view.compare.cumulative_about" hidden></button>
+            <button type="button" id="compare-calendar-about" class="info-button" aria-expanded="false" aria-controls="compare-calendar-about-text" data-i18n="view.compare.calendar_about" hidden></button>
             <span id="compare-month-field" class="compare-field">
               <label for="compare-month" data-i18n="view.compare.month"></label>
               <select id="compare-month"></select>
@@ -254,12 +257,15 @@
               <label for="compare-series" data-i18n="view.compare.series"></label>
               <select id="compare-series"></select>
             </span>
-            <button type="button" id="compare-table" class="small" aria-pressed="false"><span id="compare-table-chart" data-i18n="view.panel.chart" hidden></span><span id="compare-table-table" data-i18n="view.panel.table"></span></button>
+            <button type="button" id="compare-table" class="small" aria-pressed="false"><span id="compare-table-chart" data-i18n="view.panel.chart" hidden></span><span id="compare-table-calendar" data-i18n="view.compare.table_calendar" hidden></span><span id="compare-table-table" data-i18n="view.panel.table"></span></button>
             <span class="spacer"></span>
             <button type="button" id="compare-back" class="small" data-i18n="view.panel.unbig"></button>
           </div>
           <div id="compare-about-text" class="info-text compare-about-text" hidden>
             <p data-i18n="view.compare.cumulative_only"></p>
+          </div>
+          <div id="compare-calendar-about-text" class="info-text compare-about-text" hidden>
+            <p data-i18n="view.compare.calendar_only"></p>
           </div>
           <div class="compare-line">
             <span id="compare-years-label" data-i18n="view.compare.years"></span>
@@ -277,6 +283,7 @@
           <p id="compare-stop-code" class="stop-code"></p>
         </div>
         <div id="compare-stack" class="stack compare-stack">
+          <div id="compare-legend" class="calendar-legend" hidden></div>
           <div id="compare-panels" class="panels"></div>
           <div id="compare-axis" class="time-axis" aria-hidden="true"></div>
           <p id="compare-announcer" class="visually-hidden" aria-live="polite"></p>

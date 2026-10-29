@@ -44,6 +44,25 @@ import {
   raceValueMessage,
   racesKept,
   toggledRaces,
+  calendarAnswer,
+  calendarAt,
+  calendarCell,
+  calendarDay,
+  calendarItem,
+  calendarLegend,
+  calendarMove,
+  calendarPlace,
+  calendarReading,
+  calendarStep,
+  calendarValues,
+  calendarWeekdays,
+  calendarWeeks,
+  calendarZeroDays,
+  calendarZeroNote,
+  compareAsksAgain,
+  compareMonthFor,
+  daySlot,
+  slotDay,
   FIRST_KEYS,
   MARKS_LOCKED,
   MARKS_NOTICE_KEYS,
@@ -151,6 +170,7 @@ import {
   PLOT_LEFT,
   PLOT_RIGHT,
   PLOT_TOP,
+  calendarScale,
   extent,
   isoDate,
   labelPlaces,
@@ -242,6 +262,7 @@ const ui = {
   filtersHint: byId("filters-hint"),
   compareOff: byId("compare-off"),
   compareOffRace: byId("compare-off-race"),
+  compareOffCalendar: byId("compare-off-calendar"),
   body: byId("view-body"),
   shelf: byId("shelf"),
   shelfCount: byId("shelf-count"),
@@ -327,6 +348,8 @@ const ui = {
   compareRowsRace: byId("compare-rows-race"),
   compareAbout: byId("compare-about"),
   compareAboutText: byId("compare-about-text"),
+  compareCalendarAbout: byId("compare-calendar-about"),
+  compareCalendarAboutText: byId("compare-calendar-about-text"),
   compareMonth: byId("compare-month"),
   compareMonthField: byId("compare-month-field"),
   compareWeeksField: byId("compare-weeks-field"),
@@ -336,6 +359,7 @@ const ui = {
   compareTable: byId("compare-table"),
   compareTableChart: byId("compare-table-chart"),
   compareTableTable: byId("compare-table-table"),
+  compareTableCalendar: byId("compare-table-calendar"),
   compareBack: byId("compare-back"),
   compareYears: byId("compare-years"),
   compareYearsLabel: byId("compare-years-label"),
@@ -349,6 +373,7 @@ const ui = {
   compareStopLines: byId("compare-stop-lines"),
   compareStopCode: byId("compare-stop-code"),
   compareStack: byId("compare-stack"),
+  compareLegend: byId("compare-legend"),
   comparePanels: byId("compare-panels"),
   compareAxis: byId("compare-axis"),
   compareAnnouncer: byId("compare-announcer"),
@@ -1297,7 +1322,7 @@ function rangeTyped() {
 function setGrain(grain) {
   if (comparing()) {
     // A grouping of the comparison, apart from that of the panels.
-    if (compareGrainsFor(compareByNow(), state.compareMonth).includes(grain) && grain !== state.compare.grain) {
+    if (compareGrainsFor(compareByNow(), compareMonthNow(), compareModeNow()).includes(grain) && grain !== state.compare.grain) {
       state.compare.grain = grain;
       state.compare.cursor = null;
       requestCompare();
@@ -3318,9 +3343,23 @@ function compareItem() {
 }
 
 // How the item is compared: the way remembered, or one row per year for an
-// item that does not add up (the way remembered stays as it is).
+// item that does not add up (the way remembered stays as it is); a calendar
+// compares years only, so that by race day it is one row per race (stage N1
+// of v2.2.0; a running total by race day stays as it is).
+function compareModeOf(item) {
+  const mode = compareModeFor(item, state.compareMode);
+  return mode === "calendar" && compareByNow() === "race" ? "rows" : mode;
+}
+
 function compareModeNow() {
-  return compareModeFor(compareItem(), state.compareMode);
+  return compareModeOf(compareItem());
+}
+
+// The month that the comparison uses now: none for a calendar, which shows
+// whole years; the month remembered stays as it is (Codex's review of the
+// plan of N1).
+function compareMonthNow() {
+  return compareMonthFor(compareModeNow(), state.compareMonth);
 }
 
 // The races that a comparison offers: the race marks whose longest span
@@ -3340,8 +3379,8 @@ function compareByNow() {
 // where the grouping is not one that it takes; otherwise as it is.
 function settleCompareGrain(before) {
   const by = compareByNow();
-  if (by !== before || !compareGrainsFor(by, state.compareMonth).includes(state.compare.grain)) {
-    state.compare.grain = compareGrainFor(by, compareModeNow(), state.compareMonth);
+  if (by !== before || !compareGrainsFor(by, compareMonthNow(), compareModeNow()).includes(state.compare.grain)) {
+    state.compare.grain = compareGrainFor(by, compareModeNow(), compareMonthNow());
     state.compare.cursor = null;
   }
 }
@@ -3354,15 +3393,17 @@ function enterCompare(key) {
   if (state.view === null || item === undefined || !compareYears(state.view.first_day, state.view.last_day).length) {
     return;
   }
+  const mode = compareModeOf(item);
   state.compare = {
     key,
     years: firstCompareYears(compareYears(state.view.first_day, state.view.last_day)),
     // The races chosen, newest first (stage M2 of v2.2.0).
     races: firstCompareRaces(raceChoices()),
-    grain: compareGrainFor(compareByNow(), compareModeFor(item, state.compareMode), state.compareMonth),
+    grain: compareGrainFor(compareByNow(), mode, compareMonthFor(mode, state.compareMonth)),
     series: null,
     table: false,
     about: false,
+    calendarAbout: false,
     cursor: null,
     cursorAxis: null,
   };
@@ -3413,7 +3454,7 @@ async function requestCompare(again = true) {
   const races = by === "race" ? choices.filter((race) => compare.races.includes(race.id)) : [];
   const weeks = state.compareWeeks;
   const { key, grain } = compare;
-  const month = state.compareMonth;
+  const month = compareMonthNow();
   const years = [...compare.years];
   const payloads =
     by === "race"
@@ -3491,26 +3532,30 @@ function chooseCompareItem() {
     return;
   }
   const before = compareModeNow();
-  Object.assign(state.compare, { key, series: null, about: false });
+  Object.assign(state.compare, { key, series: null, about: false, calendarAbout: false });
   const mode = compareModeNow();
   if (mode !== before) {
-    state.compare.grain = compareGrainFor(compareByNow(), mode, state.compareMonth);
+    state.compare.grain = compareGrainFor(compareByNow(), mode, compareMonthNow());
     state.compare.cursor = null;
   }
   requestCompare();
 }
 
 // A way chosen, which is remembered: new numbers only where its first
-// grouping is another.
+// grouping, or the month that it uses (none for a calendar), is another.
 function chooseCompareMode(mode) {
   if (!comparing() || !COMPARE_MODES.includes(mode) || compareModeFor(compareItem(), mode) !== mode) {
     return;
   }
+  if (mode === "calendar" && compareByNow() === "race") {
+    return;
+  }
+  const month = compareMonthNow();
   state.compareMode = mode;
   rememberItems(true);
   // By race day, by week whatever the way (Codex's review of the plan of M2).
-  const grain = compareGrainFor(compareByNow(), mode, state.compareMonth);
-  if (grain === state.compare.grain) {
+  const grain = compareGrainFor(compareByNow(), compareModeNow(), compareMonthNow());
+  if (!compareAsksAgain({ grain: state.compare.grain, month }, { grain, month: compareMonthNow() })) {
     render();
     return;
   }
@@ -3527,7 +3572,7 @@ function chooseCompareMonth() {
   }
   const month = Number(ui.compareMonth.value);
   state.compareMonth = Number.isInteger(month) && month >= 1 && month <= 12 ? month : null;
-  state.compare.grain = compareGrainFor(compareByNow(), compareModeNow(), state.compareMonth);
+  state.compare.grain = compareGrainFor(compareByNow(), compareModeNow(), compareMonthNow());
   state.compare.cursor = null;
   rememberItems(true);
   requestCompare();
@@ -3619,22 +3664,31 @@ function renderCompare(live) {
   // One row per race, by race day.
   ui.compareRowsYear.hidden = race;
   ui.compareRowsRace.hidden = !race;
+  // A calendar of an item of one value a day, by year (stage N1 of v2.2.0).
+  const calendar = item !== null && calendarItem(item);
   for (const button of ui.compareModes) {
-    button.disabled = button.dataset.compareMode === "cumulative" && !total;
-    button.setAttribute("aria-pressed", String(button.dataset.compareMode === mode));
+    const way = button.dataset.compareMode;
+    button.disabled = (way === "cumulative" && !total) || (way === "calendar" && (!calendar || race));
+    button.setAttribute("aria-pressed", String(way === mode));
   }
   ui.compareAbout.hidden = total;
   ui.compareAbout.setAttribute("aria-expanded", String(compare.about && !ui.compareAbout.hidden));
   ui.compareAboutText.hidden = !compare.about || ui.compareAbout.hidden;
+  ui.compareCalendarAbout.hidden = calendar;
+  ui.compareCalendarAbout.setAttribute("aria-expanded", String(compare.calendarAbout && !ui.compareCalendarAbout.hidden));
+  ui.compareCalendarAboutText.hidden = !compare.calendarAbout || ui.compareCalendarAbout.hidden;
   // By race day, its weeks in the place of the month, and its races in the
   // place of the years.
   ui.compareMonthField.hidden = race;
   ui.compareWeeksField.hidden = !race;
   renderCompareMonths();
+  // A calendar shows whole years; the month remembered stays as it is.
+  ui.compareMonth.disabled = mode === "calendar";
   renderCompareWeeks();
   renderCompareSeries();
   ui.compareTable.setAttribute("aria-pressed", String(compare.table));
-  ui.compareTableChart.hidden = !compare.table;
+  ui.compareTableChart.hidden = !compare.table || mode === "calendar";
+  ui.compareTableCalendar.hidden = !compare.table || mode !== "calendar";
   ui.compareTableTable.hidden = compare.table;
   for (const node of [ui.compareYearsLabel, ui.compareYears, ui.compareUpTo]) {
     node.hidden = race;
@@ -3650,12 +3704,14 @@ function renderCompare(live) {
   setText(ui.compareLoading, state.compareLoading ? t("view.loading") : "");
   ui.compareStop.hidden = state.compareStop === null;
   if (!ui.compareStop.hidden) {
-    renderStop(ui.compareStop, null, ui.compareStopLines, ui.compareStopCode, compareStopBox(state.compareStop.code, state.compareStop.detail, state.productVersion, state.compareMonth));
+    renderStop(ui.compareStop, null, ui.compareStopLines, ui.compareStopCode, compareStopBox(state.compareStop.code, state.compareStop.detail, state.productVersion, compareMonthNow()));
   }
-  const ready = state.compareAnswer !== null && state.compareAnswer.key === compare.key && state.compareStop === null;
+  // A calendar only from an answer of whole years by day (stage N1 of v2.2.0).
+  const ready = state.compareAnswer !== null && state.compareAnswer.key === compare.key && state.compareStop === null && (mode !== "calendar" || calendarAnswer(state.compareAnswer));
   ui.compareStack.hidden = !ready;
   ui.compareStack.classList.toggle("waiting", state.compareLoading);
   ui.compareNote.hidden = !ready || !compare.table;
+  ui.compareLegend.hidden = !ready || compare.table || mode !== "calendar";
   if (ready) {
     renderCompareBody();
   } else {
@@ -3866,24 +3922,35 @@ function renderCompareBody(force = false) {
     compare.cursorAxis = axis;
   }
   const name = itemName(compare.key);
+  // A calendar: a strip a year, in the steps of one scale for every year, and
+  // its legend above them (stage N1 of v2.2.0).
+  const calendar = mode === "calendar";
+  compareContext.calendar = calendar ? calendarSteps(compareContext) : null;
+  renderCalendarLegend(compareContext);
   if (compare.table) {
     compared = [];
     ui.comparePanels.replaceChildren(buildCompareTable(compareContext, name));
   } else {
-    compared = mode === "rows" ? data.map((entry, index) => buildCompareRow(compareContext, entry, lines[index], name)) : [buildCompareOne(compareContext, name)];
+    if (calendar) {
+      compared = data.map((entry, index) => buildCompareCalendar(compareContext, entry, lines[index], name));
+    } else {
+      compared = mode === "rows" ? data.map((entry, index) => buildCompareRow(compareContext, entry, lines[index], name)) : [buildCompareOne(compareContext, name)];
+    }
     ui.comparePanels.replaceChildren(...compared.map((entry) => entry.section));
   }
-  ui.compareAxis.hidden = compare.table;
+  ui.compareAxis.hidden = compare.table || calendar;
   ui.compareAxis.replaceChildren();
   delete ui.compareAxis.dataset.width;
   renderCompareCharts();
   moveCompareCross(compare.cursor, false);
   for (const entry of compared) {
-    plotWatcher?.observe(entry.plot);
+    if (entry.kind !== "calendar") {
+      plotWatcher?.observe(entry.plot);
+    }
   }
   comparedSignature = signature;
   if (focused !== null) {
-    ui.comparePanels.querySelector(`.plot[data-plot="${focused}"]`)?.focus({ preventScroll: true });
+    ui.comparePanels.querySelector(`[data-plot="${focused}"]`)?.focus({ preventScroll: true });
   }
 }
 
@@ -4149,13 +4216,19 @@ function renderCompareCharts() {
   }
   let changed = false;
   for (const entry of compared) {
-    if (entry.size !== `${entry.plot.clientWidth} ${entry.plot.clientHeight}`) {
+    if (entry.kind === "calendar") {
+      // A strip of a calendar in its own size (stage N1 of v2.2.0).
+      if (entry.size !== calendarSize(context)) {
+        drawCompareCalendar(entry, context);
+        changed = true;
+      }
+    } else if (entry.size !== `${entry.plot.clientWidth} ${entry.plot.clientHeight}`) {
       drawComparePlot(entry, context);
       changed = true;
     }
   }
   const first = compared[0];
-  if (first !== undefined) {
+  if (first !== undefined && first.kind !== "calendar") {
     const width = first.plot.clientWidth;
     const size = `${width} ${first.right}`;
     if (changed || ui.compareAxis.dataset.width !== size) {
@@ -4196,7 +4269,7 @@ function drawCompareAxis(context, width, right) {
 // Move the cross line of the comparison to one place of its axis: the
 // reading of each row, or the box of the readings of the panel, follows, and
 // the values are said when the keyboard moved it.
-function moveCompareCross(slot, speak) {
+function moveCompareCross(slot, speak, year = null) {
   const context = compareContext;
   if (context === null || slot === null || state.compare === null) {
     return;
@@ -4205,6 +4278,12 @@ function moveCompareCross(slot, speak) {
   state.compare.cursor = at;
   const readings = compareReadings(context.item, context.data, at, context.grain, context.mode, state.language);
   for (const entry of compared) {
+    // A calendar frames the day in each strip (stage N1 of v2.2.0), and says
+    // the day of the strip of ``year``.
+    if (entry.kind === "calendar") {
+      renderCalendarCursor(entry, context, at, speak && entry.data[0].year === year);
+      continue;
+    }
     let x = null;
     if (entry.cross !== null && entry.shapes !== null) {
       x = periodMiddle(entry.scale, { start: at, end: at });
@@ -4229,7 +4308,9 @@ function moveCompareCross(slot, speak) {
       renderCompareFrame(entry, readings, x);
     }
   }
-  if (speak) {
+  if (speak && context.mode === "calendar") {
+    speakCalendar(context, at, year);
+  } else if (speak) {
     const values = readings
       .map((reading) =>
         reading.period === null
@@ -4316,6 +4397,274 @@ function compareKey(event) {
     return;
   }
   event.preventDefault();
+}
+
+// --- The calendar of comparing years (stage N1 of v2.2.0) ------------------
+
+// The room of a strip of a calendar: the names of the days of the week at its
+// left, of the months above it, its side (view.css .calendar-side) with the
+// margins of the strip, and what a strip takes besides its squares (the
+// names of the months, the padding of its row, and its line).
+const CALENDAR_LEFT = 30;
+const CALENDAR_TOP = 16;
+const CALENDAR_SIDE = 160 + 24;
+const CALENDAR_ROW = CALENDAR_TOP + 2 + 3 + 1;
+// The room kept for a scroll bar of the comparison, so that its strips stay
+// in it when one shows (and its size does not change their squares).
+const CALENDAR_BAR = 16;
+
+// The steps of the colors of a calendar: one scale over the values of the
+// days of every year drawn (as shown, in km or minutes), from 0 for a total,
+// without its days without a recorded activity, which are outlines; and how
+// many of those days there are, for the note of the legend.
+function calendarSteps(context) {
+  const values = calendarValues(context.item, context.data, context.lines);
+  return { ticks: calendarScale(values, { fromZero: context.total, clock: clockOf(context.key) }), zeroDays: calendarZeroDays(context.item, context.data) };
+}
+
+// A key of the legend: a square in a step, or the outline of a day without a
+// recorded activity, and its words.
+function calendarSwatch(kind, words) {
+  const key = element("span", "calendar-key");
+  const svg = svgElement("svg", { viewBox: "0 0 12 12", "aria-hidden": "true", focusable: "false" });
+  svg.append(
+    svgElement(
+      "rect",
+      kind === "zero" ? { class: "calendar-cell zero", x: 0.75, y: 0.75, width: 10.5, height: 10.5, rx: 2 } : { class: `calendar-cell ${kind}`, x: 0, y: 0, width: 12, height: 12, rx: 2 },
+    ),
+  );
+  key.append(svg, words);
+  return key;
+}
+
+// The legend of a calendar above its strips: what a day's value is, the
+// outline of a day without a recorded activity (of a total), the steps in the
+// words of the ticks of its scale, the rule of their edges with where the
+// values are read, and the days without a record.
+function renderCalendarLegend(context) {
+  const steps = context?.calendar ?? null;
+  if (steps === null) {
+    ui.compareLegend.replaceChildren();
+    return;
+  }
+  const unit = unitKey(context.key);
+  const nodes = [element("span", "", unit ? t("view.compare.calendar_legend_unit", { unit: t(unit) }) : t("view.compare.calendar_legend"))];
+  if (context.total) {
+    nodes.push(calendarSwatch("zero", t("view.compare.calendar_zero_key")));
+  }
+  if (steps.ticks !== null) {
+    for (const entry of calendarLegend(context.item, steps.ticks, state.language)) {
+      nodes.push(calendarSwatch(`s${entry.step}`, describe(entry.words)));
+    }
+  }
+  nodes.push(element("p", "calendar-note", t("view.compare.calendar_note")));
+  if (context.total && steps.zeroDays > 0) {
+    nodes.push(element("p", "calendar-note", describe(calendarZeroNote(steps.zeroDays, state.language))));
+  }
+  ui.compareLegend.replaceChildren(...nodes);
+}
+
+// A strip of a year: at its left its name, the days that the output cuts,
+// its value as the server counts it, and the reading of the day chosen; its
+// days drawn in its own size (not a .plot, which fills its panel).
+function buildCompareCalendar(context, entry, line, name) {
+  const section = element("section", "panel-view compare-calendar");
+  const headingId = `compare-year-${entry.id}`;
+  section.setAttribute("aria-labelledby", headingId);
+  const side = element("div", "calendar-side");
+  const heading = element("h4", "panel-name compare-year");
+  heading.append(...compareName(entry));
+  heading.id = headingId;
+  side.append(heading);
+  const note = compareNote(entry.cut, state.language);
+  if (note !== null) {
+    side.append(element("span", "panel-unit", describe(note)));
+  }
+  const whole = element("span", "compare-whole", `${describe(compareValueMessage(context.item, null, state.language))} `);
+  const value = entry.whole === null ? "—" : entry.whole.value === null ? t("view.no_value") : describe(valueMessage(context.key, entry.whole.value, state.language));
+  whole.append(element("strong", "", value));
+  side.append(whole);
+  const read = element("span", "panel-read calendar-read");
+  read.setAttribute("aria-hidden", "true");
+  side.append(read);
+  const strip = element("div", "calendar");
+  strip.tabIndex = 0;
+  strip.setAttribute("role", "img");
+  strip.dataset.plot = entry.id;
+  strip.setAttribute("aria-label", t("view.compare.calendar_label", { year: describe(entry.label), name }));
+  section.append(side, strip);
+  return { section, kind: "calendar", plot: strip, read, frame: null, data: [entry], lines: [line], size: null, shapes: null, scale: null, cross: null, right: PLOT_RIGHT, pitch: null, cursor: null };
+}
+
+// The size of the squares: as the years chosen fit the room of the
+// comparison, from 11 to 16 px apart; on a small screen, the strips scroll.
+// The room is taken with its scroll bar, so that one showing does not change
+// it.
+function calendarPitch(count) {
+  const box = ui.comparePanels.getBoundingClientRect();
+  const byWidth = Math.floor((box.width - CALENDAR_BAR - CALENDAR_SIDE - CALENDAR_LEFT - 4) / 54);
+  const byHeight = Math.floor((box.height / Math.max(1, count) - CALENDAR_ROW) / 7);
+  return Math.max(11, Math.min(16, byWidth, byHeight));
+}
+
+function calendarSize(context) {
+  const box = ui.comparePanels.getBoundingClientRect();
+  return `${Math.round(box.width)} ${Math.round(box.height)} ${context.data.length}`;
+}
+
+// The strip of a year: the names of the months above the weeks where they
+// start, the days of the week at the left (every other one on small squares),
+// each day of the output in the step of its value or as an outline (nothing
+// for a day without a value), and the frame of the day chosen.
+function drawCompareCalendar(entry, context) {
+  const year = entry.data[0];
+  const pitch = calendarPitch(context.data.length);
+  const width = CALENDAR_LEFT + calendarWeeks(year.year) * pitch + 4;
+  const height = CALENDAR_TOP + 7 * pitch + 2;
+  const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, width, height, "aria-hidden": "true", focusable: "false" });
+  for (const tick of compareTicks("day", null, year.year, state.language)) {
+    const day = slotDay(tick.at, year.year);
+    if (day !== null) {
+      const label = svgElement("text", { class: "calendar-name", x: CALENDAR_LEFT + calendarPlace(day).week * pitch, y: 11 });
+      label.textContent = tick.text;
+      svg.append(label);
+    }
+  }
+  calendarWeekdays(state.language).forEach((name, row) => {
+    if (pitch >= 12 || row % 2 === 0) {
+      const label = svgElement("text", { class: "calendar-name", x: 2, y: (CALENDAR_TOP + row * pitch + pitch * 0.75).toFixed(1) });
+      label.textContent = name;
+      svg.append(label);
+    }
+  });
+  year.periods.forEach((period, index) => {
+    const cell = calendarCell(context.item, year.values[index], year.counts[index]);
+    if (cell === null) {
+      return;
+    }
+    const place = calendarPlace(period.start);
+    const x = CALENDAR_LEFT + place.week * pitch;
+    const y = CALENDAR_TOP + place.day * pitch;
+    svg.append(
+      svgElement(
+        "rect",
+        cell === "zero"
+          ? { class: "calendar-cell zero", x: (x + 1.25).toFixed(2), y: (y + 1.25).toFixed(2), width: pitch - 4, height: pitch - 4, rx: 2 }
+          : { class: `calendar-cell s${calendarStep(context.calendar.ticks, entry.lines[0].values[index])}`, x: x + 0.5, y: y + 0.5, width: pitch - 2.5, height: pitch - 2.5, rx: 2 },
+      ),
+    );
+  });
+  entry.cursor = svgElement("rect", { class: "calendar-cursor", width: pitch - 1, height: pitch - 1, rx: 3, display: "none" });
+  svg.append(entry.cursor);
+  entry.pitch = pitch;
+  entry.plot.replaceChildren(svg);
+  entry.size = calendarSize(context);
+}
+
+// The day chosen in a strip: the same day of the year as in the others (28
+// February for 29 February of a common year, and the nearest day of the
+// output where it does not reach it), framed, with its reading at the left.
+function renderCalendarCursor(entry, context, at, reveal = false) {
+  const day = calendarDay(at, entry.data[0].year, state.view.first_day, state.view.last_day);
+  if (entry.cursor !== null && entry.pitch !== null) {
+    if (day === null) {
+      entry.cursor.setAttribute("display", "none");
+    } else {
+      const place = calendarPlace(day);
+      entry.cursor.setAttribute("x", (CALENDAR_LEFT + place.week * entry.pitch - 0.5).toFixed(1));
+      entry.cursor.setAttribute("y", (CALENDAR_TOP + place.day * entry.pitch - 0.5).toFixed(1));
+      entry.cursor.setAttribute("display", "inline");
+      // The day that the keys or a click chose stays in view where the
+      // strips scroll (Codex's review of the diff of N1).
+      if (reveal) {
+        entry.cursor.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
+    }
+  }
+  const nodes = [];
+  if (day === null) {
+    nodes.push(element("span", "no-value", t("view.compare.outside")));
+  } else {
+    const reading = calendarReading(context.item, entry.data[0], day, state.language);
+    nodes.push(describe(reading.day));
+    if (reading.value !== null) {
+      nodes.push(element("strong", "", describe(reading.value)));
+      if (reading.count !== null) {
+        nodes.push(describe(reading.count));
+      }
+    } else {
+      nodes.push(element("span", "no-value", describe(reading.missing)));
+    }
+  }
+  entry.read.replaceChildren(...nodes);
+}
+
+// What the keyboard (and a click) says: the day chosen in the strip of the
+// year, its day of the week, and its value with its count.
+function speakCalendar(context, at, year) {
+  const entry = compared.find((candidate) => candidate.kind === "calendar" && candidate.data[0].year === year) ?? compared.find((candidate) => candidate.kind === "calendar");
+  const day = entry === undefined ? null : calendarDay(at, entry.data[0].year, state.view.first_day, state.view.last_day);
+  if (day === null) {
+    return;
+  }
+  const reading = calendarReading(context.item, entry.data[0], day, state.language);
+  const value = reading.value === null ? describe(reading.missing) : reading.count === null ? describe(reading.value) : `${describe(reading.value)} ${describe(reading.count)}`;
+  setText(ui.compareAnnouncer, t("view.compare.calendar_spoken", { day: describe(reading.day), value }));
+}
+
+// The day of a strip under the pointer, as a place of the shared axis, by its
+// column and its row; none outside the year or the days of the output.
+function calendarSlotAt(event) {
+  const strip = event.target.closest?.(".calendar");
+  const entry = compared.find((candidate) => candidate.plot === strip);
+  if (!entry || entry.pitch === null || compareContext === null || state.view === null) {
+    return null;
+  }
+  const box = strip.getBoundingClientRect();
+  const day = calendarAt(entry.data[0].year, event.clientX - box.left - CALENDAR_LEFT, event.clientY - box.top - CALENDAR_TOP, entry.pitch);
+  if (day === null || day < state.view.first_day || day > state.view.last_day) {
+    return null;
+  }
+  return { year: entry.data[0].year, slot: daySlot(day) };
+}
+
+function calendarPointer(event) {
+  const at = calendarSlotAt(event);
+  if (at !== null && at.slot !== state.compare.cursor) {
+    moveCompareCross(at.slot, false);
+  }
+}
+
+function calendarClick(event) {
+  const at = calendarSlotAt(event);
+  if (at !== null) {
+    moveCompareCross(at.slot, true, at.year);
+  }
+}
+
+// The keys of a strip: a week to the left and to the right, a day up and
+// down, and the first and last day of its year in the output; they stop at
+// its ends, and the day is said.
+function calendarKeyDown(event) {
+  const entry = compared.find((candidate) => candidate.plot === event.target);
+  if (!entry || compareContext === null || state.view === null) {
+    return;
+  }
+  const year = entry.data[0].year;
+  const slot = calendarMove(state.compare.cursor ?? 0, year, event.key, state.view.first_day, state.view.last_day);
+  if (slot === null) {
+    return;
+  }
+  moveCompareCross(slot, true, year);
+  event.preventDefault();
+}
+
+// A strip that the focus comes to says its day chosen.
+function calendarFocus(event) {
+  const entry = compared.find((candidate) => candidate.plot === event.target);
+  if (entry && compareContext !== null && state.view !== null) {
+    speakCalendar(compareContext, state.compare.cursor, entry.data[0].year);
+  }
 }
 
 // --- The rest of the page -------------------------------------------------
@@ -4440,7 +4789,7 @@ function renderFilters(live) {
   }
   ui.periodBack.disabled = !viewing || apart || shiftedRange(answer?.start, answer?.end, -1, state.view?.first_day, state.view?.last_day) === null;
   ui.periodNext.disabled = !viewing || apart || shiftedRange(answer?.start, answer?.end, 1, state.view?.first_day, state.view?.last_day) === null;
-  const grains = apart ? compareGrainsFor(compareByNow(), state.compareMonth) : null;
+  const grains = apart ? compareGrainsFor(compareByNow(), compareMonthNow(), compareModeNow()) : null;
   for (const button of ui.grainButtons) {
     button.disabled = !viewing || (grains !== null && !grains.includes(button.dataset.grain));
     button.setAttribute("aria-pressed", String(viewing && (grains === null ? state.grain : state.compare.grain) === button.dataset.grain));
@@ -4463,6 +4812,12 @@ function renderFilters(live) {
     ui.compareOff.hidden = true;
   }
   ui.compareOffRace.hidden = !byRace;
+  // As a calendar, its own words too (stage N1 of v2.2.0).
+  const calendar = apart && !byRace && compareModeNow() === "calendar";
+  if (calendar) {
+    ui.compareOff.hidden = true;
+  }
+  ui.compareOffCalendar.hidden = !calendar;
 }
 
 function renderTypes(types) {
@@ -5265,12 +5620,32 @@ function connect() {
   ui.comparePanels.addEventListener("keydown", (event) => {
     if (event.target.classList?.contains("plot")) {
       compareKey(event);
+    } else if (event.target.classList?.contains("calendar")) {
+      calendarKeyDown(event);
     }
   });
   ui.comparePanels.addEventListener("pointermove", (event) => {
     if (event.target.closest?.(".plot")) {
       comparePointer(event);
+    } else if (event.target.closest?.(".calendar")) {
+      calendarPointer(event);
     }
+  });
+  // The strips of a calendar take a click and say the day that the focus
+  // comes to (stage N1 of v2.2.0).
+  ui.comparePanels.addEventListener("click", (event) => {
+    if (event.target.closest?.(".calendar")) {
+      calendarClick(event);
+    }
+  });
+  ui.comparePanels.addEventListener("focusin", (event) => {
+    if (event.target.classList?.contains("calendar")) {
+      calendarFocus(event);
+    }
+  });
+  ui.compareCalendarAbout.addEventListener("click", () => {
+    state.compare.calendarAbout = !state.compare.calendarAbout;
+    render();
   });
   ui.panels.addEventListener("click", panelAction);
   ui.panels.addEventListener("keydown", (event) => {

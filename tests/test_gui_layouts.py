@@ -467,15 +467,16 @@ class SettingsOfVersion220Test(unittest.TestCase):
     def test_how_an_item_is_compared_by_year_is_kept_alone(self) -> None:
         # Stage L1 of v2.2.0: the way to compare one item by year, and the
         # month (1 to 12; none is the whole year), each left out alone when it
-        # is of another form, and given to the page when it starts.
-        for mode, month in (("rows", 5), ("overlay", 1), ("cumulative", 12)):
+        # is of another form, and given to the page when it starts. From stage
+        # N1, the calendar too.
+        for mode, month in (("rows", 5), ("overlay", 1), ("cumulative", 12), ("calendar", 3)):
             with self.subTest(mode=mode, month=month):
                 self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_compare_mode": mode, "view_compare_month": month})
                 values = read_settings(self.path)[0]
                 self.assertEqual((values["view_compare_mode"], values["view_compare_month"]), (mode, month))
                 answer = launch_answer(values, None, present=True)
                 self.assertEqual((answer["view_compare_mode"], answer["view_compare_month"]), (mode, month))
-        for mode, month in (("bars", 0), ("", 13), (None, True), (3, "5"), (["rows"], 5.0), ("Rows", -1)):
+        for mode, month in (("bars", 0), ("", 13), (None, True), (3, "5"), (["rows"], 5.0), ("Rows", -1), ("Calendar", 0), ("calendars", 13)):
             with self.subTest(mode=mode, month=month):
                 self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_compare_mode": mode, "view_compare_month": month})
                 values = read_settings(self.path)[0]

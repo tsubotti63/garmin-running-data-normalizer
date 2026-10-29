@@ -1522,6 +1522,139 @@ button.small {
   min-height: 240px;
 }
 
+/* The calendar of comparing years (stage N1 of v2.2.0): a strip a year, in
+   its own size (not a .plot, which fills its panel), the weeks across and
+   the days of the week down; each day in the step of its value, in the
+   colors of the years, a day of a total without a recorded activity an
+   outline (var(--sub): 6.36 : 1 and 7.5 : 1 against the surface). */
+.compare-stack .panel-view.compare-calendar {
+  flex: none;
+  flex-direction: row;
+  align-items: flex-start;
+  min-height: 0;
+  padding: 2px 0 1px;
+}
+
+/* The name of the year, the days that the output cuts, its value, and the
+   reading of the day chosen, at the left of its strip, so that a strip needs
+   no row of its own for them (the sample of N0). The width is CALENDAR_SIDE
+   of view.mjs. */
+.calendar-side {
+  display: flex;
+  flex: 0 0 160px;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 12px 0 0 12px;
+  color: var(--sub);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.calendar-side .panel-name {
+  margin: 0 0 2px;
+}
+
+.calendar-side .compare-whole strong {
+  color: var(--text);
+}
+
+.calendar-side .calendar-read {
+  margin-left: 0;
+  white-space: normal;
+  font-size: 0.78rem;
+}
+
+.calendar-side .calendar-read strong {
+  white-space: nowrap;
+}
+
+.calendar {
+  position: relative;
+  align-self: flex-start;
+  margin: 0 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.calendar svg {
+  display: block;
+  overflow: visible;
+  /* The strip takes the pointer itself, as a .plot does. */
+  pointer-events: none;
+}
+
+.calendar-cell.s1 {
+  fill: var(--y1);
+}
+
+.calendar-cell.s2 {
+  fill: var(--y2);
+}
+
+.calendar-cell.s3 {
+  fill: var(--y3);
+}
+
+.calendar-cell.s4 {
+  fill: var(--y4);
+}
+
+.calendar-cell.s5 {
+  fill: var(--y5);
+}
+
+.calendar-cell.s6 {
+  fill: var(--y6);
+}
+
+.calendar-cell.zero {
+  fill: none;
+  stroke: var(--sub);
+  stroke-width: 1.5;
+}
+
+.calendar-cursor {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+.calendar-name {
+  fill: var(--sub);
+  font-size: 11px;
+}
+
+.calendar-legend {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 6px 12px 4px;
+  border-bottom: 1px solid var(--line);
+  color: var(--sub);
+  font-size: 0.8rem;
+}
+
+.calendar-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-key svg {
+  width: 12px;
+  height: 12px;
+  overflow: visible;
+}
+
+.calendar-legend .calendar-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .panel-head .compare-year {
   font-size: 0.92rem;
   white-space: nowrap;
@@ -2104,5 +2237,45 @@ button.small {
 
   .overview-dim {
     fill: Canvas;
+  }
+
+  /* The steps of a calendar in one color, told apart by their opacity; the
+     values are in its readings and its table, which its note names (stage N1
+     of v2.2.0). */
+  .calendar-cell.s1,
+  .calendar-cell.s2,
+  .calendar-cell.s3,
+  .calendar-cell.s4,
+  .calendar-cell.s5,
+  .calendar-cell.s6 {
+    fill: CanvasText;
+  }
+
+  .calendar-cell.s1 {
+    fill-opacity: 0.15;
+  }
+
+  .calendar-cell.s2 {
+    fill-opacity: 0.3;
+  }
+
+  .calendar-cell.s3 {
+    fill-opacity: 0.45;
+  }
+
+  .calendar-cell.s4 {
+    fill-opacity: 0.6;
+  }
+
+  .calendar-cell.s5 {
+    fill-opacity: 0.8;
+  }
+
+  .calendar-cell.zero {
+    stroke: CanvasText;
+  }
+
+  .calendar-cursor {
+    stroke: Highlight;
   }
 }
