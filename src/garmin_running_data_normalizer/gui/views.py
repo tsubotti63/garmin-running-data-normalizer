@@ -31,7 +31,7 @@ from typing import Any
 
 from ..output_check import OutputActionError
 from ..view.data import MANIFEST, ViewData, load_view_data, local_today
-from ..view.items import DATASETS, ITEMS, ITEMS_BY_KEY, Item
+from ..view.items import ACTIVITIES, DATASETS, ITEMS, ITEMS_BY_KEY, Item
 from ..view.series import GRAINS, LAST_YEARS, MAX_PANELS, RANGE_GRAIN, coverage
 
 MAX_VIEWS = 4
@@ -206,6 +206,23 @@ def series_request(payload: dict[str, Any]) -> tuple[list[str], str | tuple[date
     return list(items), chosen, grain, types
 
 
+def list_request(payload: dict[str, Any]) -> tuple[str, tuple[date, date], list[str] | None]:
+    """The item, the days, and the activity types of a request for the list
+    of the activities of one period of a panel (stage M3 of v2.2.0): an item
+    of the activities; the days of the period, as a range of two dates; and
+    the names of the activity types, or None for the running ones."""
+    key = payload.get("item")
+    if not isinstance(key, str) or key not in ITEMS_BY_KEY or ITEMS_BY_KEY[key].dataset != ACTIVITIES:
+        raise ViewRequestError("item")
+    chosen = period_choice(payload.get("period"))
+    if not isinstance(chosen, tuple):
+        raise ViewRequestError("period")
+    types = payload.get("types")
+    if types is not None and not types_ok(types):
+        raise ViewRequestError("types")
+    return key, chosen, types
+
+
 def period_choice(period: Any) -> str | tuple[date, date] | None:
     """The period that a request names: one of PERIODS, or a range of two
     dates, the first not after the second; None when it is of another form.
@@ -288,6 +305,7 @@ __all__ = [
     "grain_ok",
     "item_answer",
     "item_table",
+    "list_request",
     "output_stamp",
     "period_choice",
     "series_request",

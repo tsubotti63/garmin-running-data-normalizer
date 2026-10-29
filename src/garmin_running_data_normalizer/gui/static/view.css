@@ -1244,6 +1244,10 @@ button.small {
   width: 100%;
   height: 100%;
   overflow: visible;
+  /* The chart takes the pointer itself: a drawing made again between the
+     press and the release of a click (when its reading takes another line)
+     does not lose the click (stage M3 of v2.2.0). */
+  pointer-events: none;
 }
 
 .panel-empty {
@@ -1284,6 +1288,118 @@ button.small {
 
 .panel-table .t td.empty {
   color: var(--muted);
+}
+
+/* The list of the activities of one period of a panel (stage M3 of v2.2.0),
+   under its panel, as the sample of stage M0 has it: it keeps its height,
+   and its table scrolls inside, under heads that stay and order it. A chart
+   that opens it takes the pointer of a link, and draws the frame of the
+   period of the list behind its values. */
+.activity-list {
+  flex: 0 0 auto;
+  padding-bottom: 4px;
+  border-top: 2px solid var(--accent);
+  border-bottom: 1px solid var(--line);
+}
+
+.activity-list:last-child {
+  border-bottom: 0;
+}
+
+.activity-list .panel-tools {
+  margin-left: auto;
+}
+
+.list-table {
+  max-height: 190px;
+  margin: 4px 12px 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.list-table .t {
+  margin-top: 0;
+  font-size: 0.84rem;
+}
+
+.list-table .t th,
+.list-table .t td {
+  padding: 3px 8px;
+}
+
+.list-table .t thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  vertical-align: bottom;
+  white-space: normal;
+}
+
+.list-table .t thead th[aria-sort] {
+  color: var(--text);
+}
+
+.list-table .t tbody th {
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+.list-table .t td {
+  white-space: nowrap;
+}
+
+.list-table .t td.empty,
+.list-table .t th.empty {
+  color: var(--muted);
+}
+
+.list-sort {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: inherit;
+  /* A head breaks between its words only ("Cadence" broke in two in
+     English at 1366x650); a table too narrow scrolls sideways. */
+  overflow-wrap: normal;
+  cursor: pointer;
+}
+
+.list-arrow {
+  margin-left: 3px;
+}
+
+.list-note {
+  margin: 4px 12px 0;
+  color: var(--sub);
+  font-size: 0.86rem;
+}
+
+.list-note p {
+  margin: 0;
+}
+
+.list-value {
+  margin: 4px 12px 2px;
+  color: var(--sub);
+  font-size: 0.84rem;
+}
+
+.list-value strong {
+  color: var(--text);
+}
+
+.plot.listable {
+  cursor: pointer;
+}
+
+.list-frame {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 1.5;
 }
 
 /* Comparing one item by year (stage L1 of v2.2.0): the bar of its choices
@@ -1821,6 +1937,12 @@ button.small {
    periods of 0 and the periods cut by the period, the color of gray text; the
    dashes of the sports stay. */
 @media (forced-colors: active) {
+  /* The frame of the period of the list keeps its edge (stage M3). */
+  .list-frame {
+    fill: none;
+    stroke: Highlight;
+  }
+
   .chart-bar.c1,
   .coverage-run,
   .overview-marks {

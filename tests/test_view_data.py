@@ -25,7 +25,7 @@ from garmin_running_data_normalizer.output_check import OutputActionError
 from garmin_running_data_normalizer.run_all import ACTIVITIES_CSV_FIT_SESSION_COLUMNS, run_all
 from garmin_running_data_normalizer.view import data as data_module
 from garmin_running_data_normalizer.view.data import load_view_data
-from garmin_running_data_normalizer.view.items import ACTIVITIES, DATASETS, ITEMS
+from garmin_running_data_normalizer.view.items import ACTIVITIES, DATASETS, ITEMS, dataset_fields
 from garmin_running_data_normalizer.view.series import activity_types, coverage, item_series, period_bounds
 from tests.test_gui_runs import SYNTHETIC_EXPORT
 from tests.test_local_timezone import EVENING_IN_NEW_YORK, NEW_YORK, activity_row, write_export
@@ -123,6 +123,38 @@ class ViewOutputTest(unittest.TestCase):
         )
         # An activity at 21:00 UTC is on the next day in Tokyo.
         self.assertEqual(max(days), "2025-07-01")
+
+    def test_each_activity_keeps_its_local_date_and_time_as_written(self) -> None:
+        # Stage M3 of v2.2.0: the list of the activities of a period shows the
+        # date and time of each activity as the output writes it.
+        written = sorted((row["activity_date_local"], row["activity_datetime_local"]) for row in self.activities if row["activity_datetime_local"])
+        kept = sorted(
+            (date.fromordinal(row.day).isoformat(), row.marks["datetime"]) for row in self.data.rows[ACTIVITIES] if row.marks["datetime"] is not None
+        )
+        self.assertTrue(kept)
+        self.assertEqual(kept, [pair for pair in written if pair[0] <= TODAY.isoformat()])
+        for day, moment in kept:
+            self.assertTrue(moment.startswith(day), (day, moment))
+
+    def test_an_activity_without_the_column_of_its_date_and_time_has_none(self) -> None:
+        # The column is not needed: a file without it is read, and its
+        # activities have no date and time.
+        dataset = next(entry for entry in DATASETS if entry.name == ACTIVITIES)
+        names = sorted({"activity_date_local", "activity_type", "disagreeing_fields", *dataset_fields(ACTIVITIES)})
+        cells = {"activity_date_local": "2024-01-05", "activity_type": "running"}
+        # An empty cell of the column is no date and time either.
+        for header, moment, expected in (
+            (names, "2024-01-05T06:30:00+09:00", None),
+            ([*names, "activity_datetime_local"], "2024-01-05T06:30:00+09:00", "2024-01-05T06:30:00+09:00"),
+            ([*names, "activity_datetime_local"], "", None),
+        ):
+            with self.subTest(columns=len(header), moment=moment):
+                values = {**cells, "activity_datetime_local": moment}
+                text = ",".join(header) + "\n" + ",".join(values.get(name, "") for name in header) + "\n"
+                records = data_module._activity_records(text.encode("utf-8"))
+                rows, no_date, after_today = data_module._rows(dataset, records, date(2030, 1, 1).toordinal())
+                self.assertEqual((len(rows), no_date, after_today), (1, 0, 0))
+                self.assertEqual(rows[0].marks["datetime"], expected)
 
     def test_the_activity_types_and_the_running_types(self) -> None:
         counts: dict[str, int] = defaultdict(int)

@@ -302,6 +302,12 @@ def _rows(dataset: Dataset, records: list[dict[str, Any]], today: int) -> tuple[
         marks: dict[str, Any] = {}
         if dataset.name == ACTIVITIES:
             marks["type"] = record.get("activity_type") or ""
+            # The local date and time of the activity as the output writes
+            # it, for the list of the activities of a period (stage M3 of
+            # v2.2.0). The column is not needed: an output without it opens,
+            # and its activities have none.
+            moment = record.get("activity_datetime_local")
+            marks["datetime"] = moment if isinstance(moment, str) and moment else None
         if dataset.name == "sleep_daily":
             status = record.get("sleep_normalization_status")
             marks["used"] = status == SLEEP_USED_STATUS and record.get(SLEEP_USED_FLAG) is True

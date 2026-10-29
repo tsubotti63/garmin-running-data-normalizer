@@ -324,6 +324,8 @@ class GuiCatalogTest(unittest.TestCase):
                 ("view.empty.items_add", "{button}"),
                 ("view.partial.text", "{table}"),
                 ("view.stop.other_version_next", "{button}"),
+                # v2.2.0 M3: the finer grouping that lists a period.
+                ("view.list.limit", "{grain}"),
             ):
                 with self.subTest(language=language, key=key):
                     self.assertIn(quote.format(name), catalog[key])

@@ -64,6 +64,12 @@ MAX_PANELS = 6
 MAX_ANSWER_BYTES = 4 * 1024 * 1024
 # The periods that end on the last day of the output, by their years.
 LAST_YEARS = {"10y": 10, "5y": 5, "3y": 3, "1y": 1}
+# The list of the activities of one period of a panel (stage M3 of v2.2.0):
+# up to this many rows; a period of more says how many, without them. Its
+# columns are the values of these items, as the panels count them, and of
+# the item of the panel when it is none of them.
+MAX_LIST_ROWS = 500
+LIST_ITEMS = ("dist", "time", "pace", "hr", "mx", "cad", "asc")
 # The type of an activity without activity_type.
 NO_TYPE = ""
 # The activity types that the settings remember (stage K1 of v2.2.0): a choice
@@ -463,16 +469,68 @@ def view_answer(
     }
 
 
+def activity_list(
+    data: ViewData,
+    key: str,
+    period: tuple[date, date],
+    types: Collection[str] | None = None,
+) -> dict[str, Any]:
+    """The activities of one period of the panel of an item of the activities
+    (stage M3 of v2.2.0): those of the activity types counted in the days of
+    ``period``, cut to the output, chosen as the panel chooses them, with the
+    value of the panel there and the count of the activities that have it. A
+    period of more than MAX_LIST_ROWS activities gives their number only."""
+    if key not in ITEMS_BY_KEY or ITEMS_BY_KEY[key].dataset != ACTIVITIES:
+        raise ValueError(f"not an item of the activities: {key}")
+    periods = period_bounds(data, period, RANGE_GRAIN)
+    if periods is None:
+        return {"start": None, "end": None, "total": 0, "rows": [], "limit": MAX_LIST_ROWS, "value": None}
+    chosen = [row for row in _activity_rows(data, types) if periods.index(row.day) is not None]
+    [line] = item_series(data, key, periods, types)["lines"]
+    columns = LIST_ITEMS if key in LIST_ITEMS or ITEMS_BY_KEY[key].kind == COUNT else (*LIST_ITEMS, key)
+    rows = None
+    if len(chosen) <= MAX_LIST_ROWS:
+        rows = [
+            {
+                "day": date.fromordinal(row.day).isoformat(),
+                "datetime": row.marks.get("datetime"),
+                "type": row.marks["type"],
+                "values": {name: _list_value(ITEMS_BY_KEY[name], row) for name in columns},
+            }
+            for row in chosen
+        ]
+    return {
+        "start": date.fromordinal(periods.start).isoformat(),
+        "end": date.fromordinal(periods.end).isoformat(),
+        "total": len(chosen),
+        "rows": rows,
+        "limit": MAX_LIST_ROWS,
+        "value": {"value": line["values"][0], "count": line["counts"][0]},
+    }
+
+
+def _list_value(item: Item, row: Row) -> float | None:
+    """The value of an activity in a column of the list, as the panel of
+    ``item`` counts it: the pace by its time over its distance."""
+    if item.kind == PACE:
+        distance, duration = row.values[DISTANCE], row.values[DURATION]
+        return duration / distance if _positive(distance) and _positive(duration) else None
+    return row.values[item.field]
+
+
 __all__ = [
     "GRAINS",
     "LAST_YEARS",
+    "LIST_ITEMS",
     "MAX_ANSWER_BYTES",
+    "MAX_LIST_ROWS",
     "MAX_PANELS",
     "MAX_TYPES",
     "MAX_TYPE_LENGTH",
     "NO_TYPE",
     "Periods",
     "RANGE_GRAIN",
+    "activity_list",
     "activity_types",
     "auto_grain",
     "coverage",

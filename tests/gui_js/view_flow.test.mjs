@@ -79,6 +79,15 @@ test("values are written in the units of the page, in each language", () => {
   assert.equal(view.clockMinutes(0), "0:00");
   assert.equal(view.clockSeconds(59.6), "1:00");
   assert.equal(view.clockSeconds(3600), "1:00:00");
+  // A clock below 0 keeps its sign (Codex's review of the diff of M3); one
+  // that rounds to 0 has none.
+  assert.equal(view.clockSeconds(-60), "-1:00");
+  assert.equal(view.clockSeconds(-3723), "-1:02:03");
+  assert.equal(view.clockSeconds(-0.4), "0:00");
+  assert.equal(view.clockMinutes(-65), "-1:05");
+  assert.equal(view.clockMinutes(-0.3), "0:00");
+  assert.equal(view.clockMinutes(59.6), "1:00");
+  assert.equal(words(view.valueMessage("time", -3900, "ja"), "ja"), "-1:05");
   // The units beside the names, and the values as the scale shows them.
   assert.equal(translate(catalogs, "ja", view.unitKey("pace")), "分:秒/km");
   assert.equal(translate(catalogs, "en", view.unitKey("bal")), "%, FIT value as is");
@@ -1255,4 +1264,179 @@ test("a comparison by race day follows the marks, the weeks, and the way, step b
   assert.equal(view.compareByFor("race", races), "year");
   // No marks at all.
   assert.equal(view.compareByFor("race", view.compareRaces([], FIRST_DAY, LAST_DAY)), "year");
+});
+
+// --- The list of the activities of a period (stage M3 of v2.2.0) ----------
+
+test("the panels of the activities open the list of a period, when they are charts with values and no numbers are on their way", () => {
+  const open = (key, change = {}) => view.listOpens({ item: item(key), mode: "normal", table: false, empty: false, loading: false, ...change });
+  for (const key of ["dist", "pace", "hr", "asc", "gct"]) {
+    assert.equal(open(key), true, key);
+  }
+  for (const key of ["rhr", "steps", "sleep", "vo2", "p5k"]) {
+    assert.equal(open(key), false, key);
+  }
+  assert.equal(open("dist", { mode: "big" }), true);
+  for (const change of [{ mode: "mini" }, { table: true }, { empty: true }, { loading: true }]) {
+    assert.equal(open("dist", change), false, JSON.stringify(change));
+  }
+  assert.equal(view.listOpens({ item: undefined, mode: "normal", table: false, empty: false, loading: false }), false);
+});
+
+test("the list stays for the words, the scales, and the cross line, and closes for any other change", () => {
+  const list = { key: "dist", index: 3 };
+  for (const change of ["language", "align", "cursor"]) {
+    assert.equal(view.listAfter(list, change), list, change);
+  }
+  for (const change of ["numbers", "items", "marks", "table", "big", "full", "compare", "anything else"]) {
+    assert.equal(view.listAfter(list, change), null, change);
+  }
+  assert.equal(view.listAfter(null, "language"), null);
+});
+
+test("a head orders the list up, and down when it is pressed again", () => {
+  const first = { column: "when", descending: false };
+  assert.deepEqual(view.listSorted(first, "when"), { column: "when", descending: true });
+  assert.deepEqual(view.listSorted({ column: "when", descending: true }, "when"), { column: "when", descending: false });
+  assert.deepEqual(view.listSorted({ column: "when", descending: true }, "dist"), { column: "dist", descending: false });
+});
+
+test("the list has the columns of the server, and the item of its panel where it is none of them", () => {
+  const fixed = ["when", "type", "dist", "time", "pace", "hr", "mx", "cad", "asc"];
+  assert.deepEqual(view.LIST_ITEMS, fixed.slice(2));
+  for (const key of [...fixed.slice(2), "count"]) {
+    assert.deepEqual(view.listColumns(key), fixed, key);
+  }
+  for (const key of ["pow", "load", "gct", "sl"]) {
+    assert.deepEqual(view.listColumns(key), [...fixed, key], key);
+  }
+  assert.equal(view.MAX_LIST_ROWS, 500);
+});
+
+test("the heads of the list name their columns with their short units, in both languages", () => {
+  const heads = (language) => view.listColumns("gct").map((column) => words(view.listHead(column), language));
+  assert.deepEqual(heads("ja"), ["日時", "種目", "距離 km", "時間", "平均ペース /km", "平均心拍 bpm", "最大心拍 bpm", "ピッチ", "総上昇量 m", "接地時間（GCT） ms"]);
+  assert.deepEqual(heads("en"), [
+    "Date and time",
+    "Type",
+    "Distance (km)",
+    "Time",
+    "Average pace (/km)",
+    "Average heart rate (bpm)",
+    "Maximum heart rate (bpm)",
+    "Cadence",
+    "Total ascent (m)",
+    "Ground contact time (ms)",
+  ]);
+});
+
+test("the values of a row are written without their units, the time of an activity to the second", () => {
+  const cases = [
+    ["dist", 10234.5, "10.2"],
+    ["dist", 1234567, "1,234.6"],
+    ["time", 45 * 60 + 23, "45:23"],
+    ["time", 3600 + 2 * 60 + 3, "1:02:03"],
+    ["pace", 0.3125, "5:13"],
+    ["hr", 151.6, "152"],
+    ["mx", 176, "176"],
+    ["cad", 171.44, "171.4"],
+    ["asc", 123.4, "123"],
+    ["gct", 245.4, "245"],
+    ["vo", 87, "8.7"],
+    ["sl", 1123, "1.12"],
+  ];
+  for (const [key, value, text] of cases) {
+    for (const language of ["ja", "en"]) {
+      assert.equal(view.listValueText(key, value, language), text, `${key} ${language}`);
+    }
+  }
+  for (const value of [null, undefined, Number.NaN]) {
+    assert.equal(view.listValueText("dist", value, "ja"), null);
+  }
+  // A time below 0, which the output may hold, is written as it is.
+  assert.equal(view.listValueText("time", -60, "ja"), "-1:00");
+});
+
+test("the date and time of an activity are written as the output has them, in the form of the language", () => {
+  assert.equal(words(view.listWhen("2026-09-14T06:30:00+09:00", "ja"), "ja"), "9/14（月）6:30");
+  assert.equal(words(view.listWhen("2026-09-14T06:30:00+09:00", "en"), "en"), "Mon 9/14 6:30");
+  // The time of the day as it is: the offset is not taken off.
+  assert.equal(words(view.listWhen("2026-09-14T23:05:12.500000-04:00", "ja"), "ja"), "9/14（月）23:05");
+  assert.equal(words(view.listWhen("2026-09-15T00:10:00Z", "en"), "en"), "Tue 9/15 0:10");
+  // Another form is written as it is; none is none.
+  assert.deepEqual(view.listWhen("the morning", "ja"), view.plain("the morning"));
+  for (const moment of [null, undefined, "", 7]) {
+    assert.equal(view.listWhen(moment, "ja"), null);
+  }
+});
+
+test("the list is ordered by the date and time as they show, of any timezone, and by the day where a time cannot be read", () => {
+  const row = (datetime, day, extra = {}) => ({ datetime, day, type: "running", values: {}, ...extra });
+  // The checker's example (M3-1): 07:00+09:00 is later on the screen than
+  // 06:30+08:00, though earlier as an instant.
+  const tokyo = row("2026-09-14T07:00:00+09:00", "2026-09-14");
+  const manila = row("2026-09-14T06:30:00+08:00", "2026-09-14");
+  const night = row("2026-09-13T22:00:00+09:00", "2026-09-13");
+  const unread = row("the morning", "2026-09-14");
+  const none = row(null, "2026-09-15");
+  const rows = [tokyo, manila, night, unread, none];
+  const name = (type) => type;
+  assert.deepEqual(view.sortedListRows(rows, { column: "when", descending: false }, name, "ja"), [night, unread, manila, tokyo, none]);
+  assert.deepEqual(view.sortedListRows(rows, { column: "when", descending: true }, name, "ja"), [none, tokyo, manila, unread, night]);
+  assert.equal(view.listMomentKey(manila), "2026-09-14T06:30:00");
+  assert.equal(view.listMomentKey(unread), "2026-09-14");
+  // The same date and time: the order of the server, either way.
+  const twin = row("2026-09-14T07:00:00+08:00", "2026-09-14");
+  assert.deepEqual(view.sortedListRows([twin, tokyo], { column: "when", descending: false }, name, "ja"), [twin, tokyo]);
+  assert.deepEqual(view.sortedListRows([twin, tokyo], { column: "when", descending: true }, name, "ja"), [twin, tokyo]);
+});
+
+test("a column orders the list by its values, rows without one last either way, and the same values by their date and time", () => {
+  const row = (datetime, dist, type = "running") => ({ datetime, day: datetime.slice(0, 10), type, values: { dist } });
+  const a = row("2026-09-14T07:00:00+09:00", 5000);
+  const b = row("2026-09-15T07:00:00+09:00", null);
+  const c = row("2026-09-16T07:00:00+09:00", 12000);
+  const d = row("2026-09-13T07:00:00+09:00", 5000);
+  const e = row("2026-09-17T07:00:00+09:00", 0);
+  const rows = [a, b, c, d, e];
+  const name = (type) => type;
+  assert.deepEqual(view.sortedListRows(rows, { column: "dist", descending: false }, name, "ja"), [e, d, a, c, b]);
+  assert.deepEqual(view.sortedListRows(rows, { column: "dist", descending: true }, name, "ja"), [c, d, a, e, b]);
+  // The type by its name as the page writes it.
+  const trail = row("2026-09-18T07:00:00+09:00", 9000, "trail_running");
+  const bike = row("2026-09-12T07:00:00+09:00", 30000, "road_biking");
+  const named = (type) => words(view.typeMessage(type), "en");
+  assert.deepEqual(view.sortedListRows([trail, a, bike], { column: "type", descending: false }, named, "en"), [bike, a, trail]);
+  assert.deepEqual(view.sortedListRows([trail, a, bike], { column: "type", descending: true }, named, "en"), [trail, a, bike]);
+  // In Japanese, by the names of the page, not by the keys of Garmin.
+  const japanese = (type) => words(view.typeMessage(type), "ja");
+  const names = view.sortedListRows([trail, a, bike], { column: "type", descending: false }, japanese, "ja").map((entry) => japanese(entry.type));
+  assert.deepEqual(names, [...names].sort((x, y) => x.localeCompare(y, "ja")));
+  assert.notDeepEqual(names.map((name) => [trail, a, bike].find((entry) => japanese(entry.type) === name).type), ["road_biking", "running", "trail_running"]);
+  // The rows themselves are not changed.
+  assert.deepEqual(rows, [a, b, c, d, e]);
+});
+
+test("the list says its period, its panel, the value of the panel, and its limit, in both languages", () => {
+  const week = { start: "2026-09-14", end: "2026-09-20", partial: false };
+  const month = { start: "2026-10-01", end: "2026-10-29", partial: true };
+  assert.equal(words(view.listTitle(week, "week", "ja"), "ja"), "2026年9月14日の週の練習");
+  assert.equal(words(view.listTitle(week, "week", "en"), "en"), "Activities: Week of September 14, 2026");
+  assert.equal(words(view.listTitle(month, "month", "ja"), "ja"), "2026年10月（途中）の練習");
+  assert.equal(words(view.listTitle(month, "month", "en"), "en"), "Activities: October 2026 (partial)");
+  assert.equal(words(view.listFrom("dist", 5, "ja"), "ja"), "距離の段から・5 件");
+  assert.equal(words(view.listFrom("dist", 1234, "en"), "en"), "From the Distance panel · activities: 1,234");
+  const line = view.listValueLine("dist", { value: 45400, count: 5 }, "ja");
+  assert.deepEqual(line.strong, ["value"]);
+  assert.equal(words(line, "ja"), "段の値：45.4 km（この値に数えた 5 件）");
+  assert.equal(words(view.listValueLine("pace", { value: 0.3125, count: 4 }, "en"), "en"), "Value of the panel: 5:13 /km (activities counted: 4)");
+  assert.equal(words(view.listValueLine("hr", { value: null, count: 0 }, "ja"), "ja"), "段の値：値なし（この値に数えた 0 件）");
+  assert.equal(
+    words(view.listLimitMessage(812, 500, "month", "ja"), "ja"),
+    "この区切りには 812 件あります。一覧は 500 件までです。まとめ方を「週」にすると、一覧で見られます。",
+  );
+  assert.equal(words(view.listLimitMessage(1812, 500, "year", "en"), "en"), "This period has 1,812 activities. The list shows up to 500. Group by “Month” to list them.");
+  assert.equal(words(view.listLimitMessage(612, 500, "week", "ja"), "ja"), "この区切りには 612 件あります。一覧は 500 件までです。まとめ方を「日」にすると、一覧で見られます。");
+  assert.equal(words(view.listLimitMessage(501, 500, "day", "ja"), "ja"), "この日には 501 件あります。一覧は 500 件までです。");
+  assert.equal(words(view.listLimitMessage(501, 500, "day", "en"), "en"), "This day has 501 activities. The list shows up to 500.");
 });
