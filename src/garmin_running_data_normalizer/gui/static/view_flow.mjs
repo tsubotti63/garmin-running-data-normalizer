@@ -461,8 +461,9 @@ export function itemsRemembered(settings) {
 
 // What the page keeps of the settings after the other tab forgot them: no
 // items, no shelf, no tips, no colors, no layouts, and no period, grouping,
-// activity types, or timezone (stage K2 of v2.2.0), as the file has none now.
-// The page keeps showing what it shows.
+// activity types, or timezone (stage K2 of v2.2.0), and no marks (stage M1),
+// as the files have none now. The page keeps showing what it shows, but the
+// marks, which are gone.
 export function settingsAfterForget(settings) {
   const kept = { ...(settings ?? {}) };
   for (const name of [
@@ -479,6 +480,9 @@ export function settingsAfterForget(settings) {
     "timezone",
     "view_compare_mode",
     "view_compare_month",
+    "view_marks_shown",
+    "view_marks",
+    "marks_notice",
   ]) {
     delete kept[name];
   }
@@ -1703,4 +1707,100 @@ export function compareTable(item, data, grain, month, span, language, mode = "r
     ),
   };
   return { heads, rows, last, counts };
+}
+
+
+// --- The marks of the person (stage M1 of v2.2.0) --------------------------
+
+export const MARK_KINDS = ["race", "injury", "shoes", "other"];
+// The marks that the server keeps at most (gui/marks.py, MAX_MARKS).
+export const MAX_MARKS = 200;
+// The first day of a mark: the page counts its days with Date.UTC, which reads
+// a year below 100 as one of the 1900s (gui/marks.py, FIRST_MARK_DAY).
+export const FIRST_MARK_DAY = "1900-01-01";
+// How many marks the label of the top chart names; it counts the rest.
+export const SPOKEN_MARKS = 10;
+// A file of the marks that is not used is never written over: the page does
+// not change the marks while it is so.
+export const MARKS_LOCKED = ["MARKS_UNREADABLE", "MARKS_NEWER"];
+export const MARKS_NOTICE_KEYS = {
+  MARKS_UNREADABLE: "view.marks.notice.unreadable",
+  MARKS_NEWER: "view.marks.notice.newer",
+  MARKS_NOT_WRITTEN: "view.marks.notice.not_written",
+};
+// What the window of the marks says of a change that cannot be made.
+export const MARK_PROBLEM_KEYS = {
+  MARK_NAME_INVALID: "view.marks.error.name",
+  MARK_DAY_INVALID: "view.marks.error.day",
+  MARK_NOT_FOUND: "view.marks.error.not_found",
+  MARKS_FULL: "view.marks.error.full",
+};
+
+const MARK_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+function markOk(mark) {
+  return (
+    mark !== null &&
+    typeof mark === "object" &&
+    typeof mark.id === "string" &&
+    MARK_KINDS.includes(mark.kind) &&
+    typeof mark.name === "string" &&
+    typeof mark.day === "string" &&
+    (mark.end === null || typeof mark.end === "string")
+  );
+}
+
+// The marks of a list that the server gave, in its order (that of their
+// days); anything else is no mark.
+export function marksTaken(value) {
+  return Array.isArray(value) ? value.filter(markOk) : [];
+}
+
+// What the page knows of the marks when it starts: the marks, whether they
+// show (at first they do), and what to tell of their file.
+export function marksToOpen(settings) {
+  const notice = settings?.marks_notice;
+  return {
+    marks: marksTaken(settings?.view_marks),
+    shown: settings?.view_marks_shown !== false,
+    notice: typeof notice === "string" && Object.hasOwn(MARKS_NOTICE_KEYS, notice) ? notice : null,
+  };
+}
+
+// Whether a day typed is one that a mark can have, as the server checks it:
+// a date of the calendar, from FIRST_MARK_DAY.
+export function markDayOk(value) {
+  if (typeof value !== "string" || !MARK_DAY.test(value) || value < FIRST_MARK_DAY) {
+    return false;
+  }
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+// The problem of the days typed for a mark, or null: the last day of a span
+// is not before its first, and with no last day the mark is of one day.
+export function markDaysProblem(day, end) {
+  if (!markDayOk(day) || (end !== "" && end !== null && (!markDayOk(end) || end < day))) {
+    return "view.marks.error.day";
+  }
+  return null;
+}
+
+// The marks whose days meet the days from ``start`` to ``end`` (ISO dates).
+export function marksWithin(marks, start, end) {
+  return marks.filter((mark) => mark.day <= end && (mark.end ?? mark.day) >= start);
+}
+
+// What the label of the top chart says of the marks of its days: how many,
+// the first SPOKEN_MARKS by name and day, and how many more; the labels of
+// the other charts say how many only.
+export function spokenMarks(marks) {
+  return { count: marks.length, named: marks.slice(0, SPOKEN_MARKS), more: Math.max(0, marks.length - SPOKEN_MARKS) };
+}
+
+// The days of a mark as the language writes them: its day, and the last day
+// of a span.
+export function markDays(mark, language) {
+  return { day: dateText(mark.day, language), end: mark.end ? dateText(mark.end, language) : null };
 }

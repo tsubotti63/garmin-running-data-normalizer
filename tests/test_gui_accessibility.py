@@ -664,8 +664,10 @@ class GuiViewPageStructureTest(unittest.TestCase):
     def test_every_field_has_a_label(self) -> None:
         labelled = {element.get("for") for element in self.elements if element.tag == "label"}
         fields = [element for element in self.elements if element.tag in {"input", "select", "textarea"}]
-        # From v2.2.0 L1, the item, the month, and the line of a comparison.
-        self.assertEqual(len(fields), 14)
+        # From v2.2.0 L1, the item, the month, and the line of a comparison;
+        # from M1, whether the marks show, and the date, the last day, the
+        # kind, and the name of a mark.
+        self.assertEqual(len(fields), 19)
         for field in fields:
             with self.subTest(field=field.get("id")):
                 self.assertTrue(field.get("id") in labelled or field.get("aria-label") or field.get("aria-labelledby"))

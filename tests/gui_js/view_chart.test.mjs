@@ -229,3 +229,102 @@ test("the names at the ends of the lines move apart and stay in the plot", () =>
   assert.deepEqual(chart.labelPlaces([195, 198, 199], 13, 200), [174, 187, 200]);
   assert.deepEqual(chart.labelPlaces([], 13, 200), []);
 });
+
+// v2.2.0 M1: the marks of the person on a chart.
+const mark = (id, dayOf, end = null, kind = "race", name = `Made-up ${id}`) => ({ id, kind, name, day: dayOf, end });
+
+test("a mark of one day is a line in the middle of its day, and a span a band of its days", () => {
+  const start = day("2030-03-01");
+  const end = day("2030-03-31");
+  const scale = chart.timeScale(start, end, 58, 558);
+  const shapes = chart.markShapes(
+    [mark("a", "2030-03-10"), mark("b", "2030-03-20", "2030-03-22", "injury"), mark("c", "2030-04-01"), mark("d", "2030-02-28")],
+    start,
+    end,
+    58,
+    558,
+  );
+  assert.deepEqual(shapes.map((shape) => shape.mark.id), ["a", "b"]);
+  // The middle of the day, where the value of a day is drawn.
+  assert.equal(shapes[0].x, scale.x(day("2030-03-10") + 0.5));
+  assert.equal(shapes[0].band, null);
+  // From the start of its first day to the end of its last.
+  assert.equal(shapes[1].x, scale.x(day("2030-03-20")));
+  const width = scale.x(day("2030-03-23")) - scale.x(day("2030-03-20"));
+  assert.deepEqual(shapes[1].band, { from: shapes[1].x, width, end: scale.x(day("2030-03-23")), starts: true, ends: true });
+});
+
+test("a span that goes on beyond the days shown is cut, without its edge there", () => {
+  const start = day("2030-03-01");
+  const end = day("2030-03-31");
+  const scale = chart.timeScale(start, end, 0, 310);
+  const [before, after, around] = chart.markShapes(
+    [mark("a", "2030-02-20", "2030-03-05", "injury"), mark("b", "2030-03-28", "2030-04-10", "other"), mark("c", "2030-01-01", "2030-12-31", "shoes")],
+    start,
+    end,
+    0,
+    310,
+  );
+  assert.deepEqual([before.x, before.band.starts, before.band.ends], [0, false, true]);
+  assert.equal(before.band.width, scale.x(day("2030-03-06")));
+  assert.equal(before.band.end, scale.x(day("2030-03-06")));
+  assert.deepEqual([after.band.starts, after.band.ends], [true, false]);
+  assert.equal(after.band.end, 310);
+  assert.deepEqual([around.x, around.band.width, around.band.starts, around.band.ends], [0, 310, false, false]);
+  // A band stays visible when its days are narrow, 2 px wide, but its last
+  // edge stays at the end of its last day (the review by Codex).
+  const long = chart.timeScale(start, end + 3650, 0, 100);
+  const [narrow] = chart.markShapes([mark("e", "2030-03-02", "2030-03-03")], start, end + 3650, 0, 100);
+  assert.equal(narrow.band.width, 2);
+  assert.equal(narrow.band.end, long.x(day("2030-03-04")));
+  assert.ok(narrow.band.end < narrow.x + 2);
+  // A narrow band at the right end stays inside the chart.
+  const [last] = chart.markShapes([mark("f", "2030-03-30", "2030-03-31")], start - 3650, end, 0, 100);
+  assert.ok(last.band.from + last.band.width <= 100);
+  assert.equal(last.band.from, 98);
+});
+
+test("names that would meet show how many marks they are, and the others keep their names", () => {
+  const measure = (text) => text.length * 6;
+  const crowded = (n) => `${n} marks`;
+  const shapes = [
+    { mark: mark("a", "2030-01-01", null, "race", "Spring"), x: 100 },
+    { mark: mark("b", "2030-01-02", null, "shoes", "Shoes"), x: 110 },
+    { mark: mark("c", "2030-01-03", null, "other", "Camp"), x: 300 },
+  ];
+  const labels = chart.markLabels(shapes, measure, crowded, 58, 600);
+  assert.deepEqual(labels.map((label) => [label.x, label.text, label.marks.map((one) => one.id)]), [
+    [104, "2 marks", ["a", "b"]],
+    [304, "Camp", ["c"]],
+  ]);
+  // The names join from the left: a name after a group is compared with the
+  // words of the group ("2 marks"), not with the names in it, so that three
+  // names that meet one after another are not all joined.
+  const chain = chart.markLabels(
+    [
+      { mark: mark("a", "2030-01-01", null, "race", "A long one"), x: 96 },
+      { mark: mark("b", "2030-01-02", null, "race", "Bbbbb"), x: 146 },
+      { mark: mark("c", "2030-01-03", null, "race", "C"), x: 172 },
+    ],
+    measure,
+    crowded,
+    58,
+    600,
+  );
+  assert.deepEqual(chain.map((label) => [label.x, label.text]), [[100, "2 marks"], [176, "C"]]);
+  // Two marks of one day never part, whatever the period.
+  const sameDay = chart.markLabels([{ mark: mark("a", "2030-01-01"), x: 200 }, { mark: mark("b", "2030-01-01"), x: 200 }], measure, crowded, 58, 600);
+  assert.deepEqual(sameDay.map((label) => label.text), ["2 marks"]);
+  // A name past the right end ends there, and joins the one before when they meet then.
+  const right = chart.markLabels([{ mark: mark("a", "2030-01-01", null, "race", "A first name"), x: 500 }, { mark: mark("b", "2030-01-02", null, "race", "A long name"), x: 590 }], measure, crowded, 58, 600);
+  assert.deepEqual(right.map((label) => [label.x, label.text]), [[504, "2 marks"]]);
+  const apart = chart.markLabels([{ mark: mark("a", "2030-01-01", null, "race", "A"), x: 500 }, { mark: mark("b", "2030-01-02", null, "race", "A long name"), x: 590 }], measure, crowded, 58, 600);
+  assert.deepEqual(apart.map((label) => [label.x, label.text]), [[504, "A"], [534, "A long name"]]);
+  const alone = chart.markLabels([{ mark: mark("a", "2030-01-01", null, "race", "A long name"), x: 590 }], measure, crowded, 58, 600);
+  assert.deepEqual(alone.map((label) => [label.x, label.text]), [[600 - 66, "A long name"]]);
+  assert.deepEqual(chart.markLabels([], measure, crowded, 58, 600), []);
+  // A name longer than the chart is cut, by characters, with "…" (the review
+  // by Codex).
+  const narrow = chart.markLabels([{ mark: mark("a", "2030-01-01", null, "race", "\u{1F3C3}".repeat(20)), x: 10 }], (text) => Array.from(text).length * 6, crowded, 0, 60);
+  assert.deepEqual(narrow.map((label) => [label.x, label.text]), [[0, `${"\u{1F3C3}".repeat(9)}…`]]);
+});

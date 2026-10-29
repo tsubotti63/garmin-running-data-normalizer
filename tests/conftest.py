@@ -2,9 +2,10 @@
 folder of the test, never in the place of the person who runs the tests.
 
 The GUI keeps the settings of an earlier launch in one file, which only
-``places.settings_file`` names. Each test gets that function replaced with a
-place in its own temporary folder, and the run ends with an error when the
-real place changed while the tests ran.
+``places.settings_file`` names, and from v2.2.0 (stage M1) the marks of the
+view page in another file next to it. Each test gets that function replaced
+with a place in its own temporary folder, and the run ends with an error
+when the real places changed while the tests ran.
 """
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from garmin_running_data_normalizer.gui import places
-from garmin_running_data_normalizer.gui.places import SETTINGS_FILE_NAME, SETTINGS_FOLDER_NAME
+from garmin_running_data_normalizer.gui.places import MARKS_FILE_NAME, SETTINGS_FILE_NAME, SETTINGS_FOLDER_NAME
 
 
 def _looked_at(path: Path) -> tuple[int, int, int] | None:
@@ -29,9 +30,10 @@ def _looked_at(path: Path) -> tuple[int, int, int] | None:
 @pytest.fixture(autouse=True, scope="session")
 def _real_settings_stay() -> Iterator[None]:
     real = places.settings_file()
-    before = (_looked_at(real.parent), _looked_at(real))
+    marks = real.with_name(MARKS_FILE_NAME)
+    before = (_looked_at(real.parent), _looked_at(real), _looked_at(marks))
     yield
-    after = (_looked_at(real.parent), _looked_at(real))
+    after = (_looked_at(real.parent), _looked_at(real), _looked_at(marks))
     assert after == before, "a test changed the settings of the GUI of the person who runs the tests"
 
 

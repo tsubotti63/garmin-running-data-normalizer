@@ -26,6 +26,17 @@ import {
 import {
   COMPARE_MODES,
   FIRST_KEYS,
+  MARKS_LOCKED,
+  MARKS_NOTICE_KEYS,
+  MARK_KINDS,
+  MARK_PROBLEM_KEYS,
+  MAX_MARKS,
+  markDays,
+  markDaysProblem,
+  marksTaken,
+  marksToOpen,
+  marksWithin,
+  spokenMarks,
   GROUPS,
   MAX_COMPARE_YEARS,
   MAX_PANELS,
@@ -107,11 +118,15 @@ import {
   viewHintsShown,
 } from "./view_flow.mjs";
 import {
+  PLOT_BOTTOM,
   PLOT_LEFT,
   PLOT_RIGHT,
+  PLOT_TOP,
   extent,
   isoDate,
   labelPlaces,
+  markLabels,
+  markShapes,
   nearestPeriod,
   overviewShapes,
   panelShapes,
@@ -156,6 +171,14 @@ const LAYOUT_PROBLEM_KEYS = {
   LAYOUT_NAME_TAKEN: "view.layouts.error.name_taken",
   LAYOUTS_FULL: "view.layouts.error.full",
   LAYOUT_NOT_FOUND: "view.layouts.error.not_found",
+};
+
+// The words of the kinds of the marks (stage M1 of v2.2.0).
+const MARK_KIND_KEYS = {
+  race: "view.marks.kind.race",
+  injury: "view.marks.kind.injury",
+  shoes: "view.marks.kind.shoes",
+  other: "view.marks.kind.other",
 };
 
 const byId = (id) => document.getElementById(id);
@@ -236,6 +259,23 @@ const ui = {
   fullBar: byId("full-bar"),
   fullText: byId("full-text"),
   fullBack: byId("full-back"),
+  // The marks (stage M1 of v2.2.0).
+  marksShown: byId("marks-shown"),
+  marksOpen: byId("marks-open"),
+  marksPop: byId("marks-pop"),
+  marksPopTitle: byId("marks-pop-title"),
+  marksPopClose: byId("marks-pop-close"),
+  marksLegend: byId("marks-legend"),
+  marksNotice: byId("marks-notice"),
+  marksList: byId("marks-list"),
+  markFormHeading: byId("mark-form-heading"),
+  markDay: byId("mark-day"),
+  markEnd: byId("mark-end"),
+  markKind: byId("mark-kind"),
+  markName: byId("mark-name"),
+  markSave: byId("mark-save"),
+  markCancel: byId("mark-cancel"),
+  markProblem: byId("mark-problem"),
   addWrap: byId("add-wrap"),
   addItems: byId("add-items"),
   picker: byId("picker"),
@@ -397,6 +437,23 @@ const state = {
   compareSeq: 0,
   compareLoading: false,
   compareStop: null,
+  // The marks of the person (stage M1 of v2.2.0): as the server keeps them,
+  // a count that changes with them (which draws the panels again), whether
+  // they show, and what to tell of their file; a change that waits for its
+  // answer; and the window of the marks, with the mark that it changes (its
+  // id), the mark asked to be removed, and what was wrong with a change.
+  marks: [],
+  marksSeq: 0,
+  // Forgetting in the other tab makes a new generation: an answer asked
+  // before it is dropped.
+  marksGen: 0,
+  marksShown: true,
+  marksNotice: null,
+  marksWaiting: false,
+  marksOpen: false,
+  markEditing: null,
+  markAsk: null,
+  markProblem: null,
 };
 
 // The numbers of the panels; the count of the answers tells the drawing that
@@ -410,6 +467,9 @@ function setAnswer(answer) {
 // readings, which the cross line moves.
 let drawn = [];
 let drawnSignature = null;
+// The key of the panel whose chart names the marks: the top chart that is not
+// a low strip, or the top chart (stage M1 of v2.2.0).
+let namedKey = null;
 // The scales that panels of the same unit share.
 let drawnShared = new Map();
 let redrawFrame = null;
@@ -658,6 +718,13 @@ function themeHeard(event) {
     state.forgotten = true;
     viewLater.take();
     takeLayouts([], [], null);
+    // The marks are gone with their file (stage M1 of v2.2.0).
+    state.marksGen += 1;
+    takeMarks([]);
+    state.marksShown = true;
+    state.marksNotice = null;
+    state.markEditing = null;
+    state.markAsk = null;
     render();
   } else if (heard !== null) {
     applyTheme(heard.theme);
@@ -705,6 +772,7 @@ function viewValues() {
     types: state.wantedTypes,
     compare_mode: state.compareMode,
     compare_month: state.compareMonth,
+    marks_shown: state.marksShown,
   };
 }
 
@@ -1232,6 +1300,338 @@ function takeLayouts(mine, hidden, current) {
   }
 }
 
+// --- The marks of the person (stage M1 of v2.2.0) --------------------------
+
+// The marks as the server keeps them; the panels are drawn again when they
+// changed.
+function takeMarks(marks) {
+  const taken = marksTaken(marks);
+  if (JSON.stringify(taken) !== JSON.stringify(state.marks)) {
+    state.marks = taken;
+    state.marksSeq += 1;
+  }
+}
+
+// A file of the marks that is not used is never written over: the page does
+// not change the marks then.
+function marksLocked() {
+  return MARKS_LOCKED.includes(state.marksNotice);
+}
+
+// The marks as the server reads them now, as another tab may have changed
+// them; whether they show is the person's choice on this page, and stays.
+async function readMarks() {
+  const gen = state.marksGen;
+  try {
+    const status = await callApi("/api/status");
+    if (gen !== state.marksGen) {
+      return;
+    }
+    const read = marksToOpen(status.settings ?? {});
+    takeMarks(read.marks);
+    state.marksNotice = read.notice;
+  } catch (error) {
+    connectionFailure(error);
+  }
+}
+
+// One change of the marks on the server (add, change, remove), one at a time:
+// a change asked while another waits for its answer is not sent, and the
+// controls stay as they are, so that the focus stays where it was. The marks
+// of the answer are those that the server keeps, and a change that cannot be
+// made says why in the window, with the focus on the field that it is about.
+// A mark that another tab removed reads the marks again.
+async function changeMarks(change, done = null) {
+  if (state.marksWaiting || marksLocked()) {
+    return;
+  }
+  state.marksWaiting = true;
+  state.markProblem = null;
+  const gen = state.marksGen;
+  let field = null;
+  try {
+    const answer = await callApi("/api/settings/marks", change);
+    // The other tab forgot the marks meanwhile: this answer is of before.
+    if (gen !== state.marksGen) {
+      state.marksWaiting = false;
+      render();
+      return;
+    }
+    state.marksNotice = typeof answer.notice === "string" && Object.hasOwn(MARKS_NOTICE_KEYS, answer.notice) ? answer.notice : null;
+    if (Array.isArray(answer.marks)) {
+      takeMarks(answer.marks);
+    } else if (marksLocked()) {
+      // The file is not used now: no mark shows, as at a launch.
+      takeMarks([]);
+    }
+    if (answer.remembered === true) {
+      done?.();
+    }
+  } catch (error) {
+    if (!connectionFailure(error)) {
+      if (error.code === "MARK_NOT_FOUND") {
+        await readMarks();
+        state.markAsk = null;
+        if (!state.marks.some((mark) => mark.id === state.markEditing)) {
+          editMark(null, false);
+        }
+      }
+      state.markProblem = MARK_PROBLEM_KEYS[error.code] ?? "view.marks.error.other";
+      field = { MARK_NAME_INVALID: ui.markName, MARK_DAY_INVALID: ui.markDay }[error.code] ?? null;
+    }
+  }
+  state.marksWaiting = false;
+  render();
+  field?.focus();
+}
+
+// The window of the marks: it reads the marks again as it opens, its first
+// field takes the focus, and its opener takes it back when it closes.
+async function openMarks(open) {
+  state.marksOpen = open;
+  state.markAsk = null;
+  state.markProblem = null;
+  editMark(null, false);
+  render();
+  if (open) {
+    focusMarkForm();
+    await readMarks();
+    render();
+  } else {
+    ui.marksOpen.focus();
+  }
+}
+
+// The first field of the form takes the focus, or the button that closes the
+// window while the form cannot be used (200 marks, or a file not used).
+function focusMarkForm() {
+  (ui.markDay.disabled ? ui.marksPopClose : ui.markDay).focus();
+}
+
+// The values of the fields of the form, as they were sent.
+function markFields() {
+  return [ui.markDay.value, ui.markEnd.value, ui.markKind.value, ui.markName.value, state.markEditing];
+}
+
+// The form of the window adds a mark, or changes the mark ``id`` with its
+// values in the fields.
+function editMark(id, focus = true) {
+  const mark = state.marks.find((one) => one.id === id) ?? null;
+  state.markEditing = mark === null ? null : mark.id;
+  state.markProblem = null;
+  ui.markDay.value = mark?.day ?? "";
+  ui.markEnd.value = mark?.end ?? "";
+  ui.markKind.value = mark?.kind ?? MARK_KINDS[0];
+  ui.markName.value = mark?.name ?? "";
+  if (focus) {
+    render();
+    focusMarkForm();
+  }
+}
+
+function saveMark() {
+  if (state.marksWaiting || marksLocked()) {
+    return;
+  }
+  const day = ui.markDay.value;
+  const end = ui.markEnd.value;
+  const problem = markDaysProblem(day, end);
+  if (problem !== null) {
+    state.markProblem = problem;
+    render();
+    ui.markDay.focus();
+    return;
+  }
+  // No last day: a mark of one day.
+  const values = { kind: ui.markKind.value, name: ui.markName.value, day, ...(end === "" ? {} : { end }) };
+  const editing = state.markEditing;
+  const sent = JSON.stringify(markFields());
+  changeMarks(editing === null ? { op: "add", ...values } : { op: "change", id: editing, ...values }, () => {
+    // What was typed after the change was sent stays.
+    if (JSON.stringify(markFields()) === sent) {
+      editMark(null, false);
+    }
+    render();
+    focusMarkForm();
+  });
+}
+
+// The buttons of the list of the marks: change, remove (asked first, with
+// "Keep it" chosen), and the answer to the question.
+function marksAction(event) {
+  const button = event.target.closest("button[data-op]");
+  if (button === null || button.disabled) {
+    return;
+  }
+  const id = button.dataset.id;
+  if (button.dataset.op === "change") {
+    state.markAsk = null;
+    editMark(id);
+  } else if (button.dataset.op === "remove") {
+    state.markAsk = id;
+    state.markProblem = null;
+    render();
+    ui.marksList.querySelector('[data-op="keep"]')?.focus();
+  } else if (button.dataset.op === "keep") {
+    state.markAsk = null;
+    render();
+    ui.marksList.querySelector(`[data-op="remove"][data-id="${CSS.escape(id)}"]`)?.focus();
+  } else if (button.dataset.op === "remove-yes") {
+    changeMarks({ op: "remove", id }, () => {
+      state.markAsk = null;
+      if (state.markEditing === id) {
+        editMark(null, false);
+      }
+      render();
+      focusMarkForm();
+    });
+  }
+}
+
+// The window of the marks stays inside the window of the browser, and
+// scrolls; it is measured again when the browser's window changes size.
+function fitMarksWindow() {
+  if (!ui.marksPop.hidden) {
+    ui.marksPop.style.maxHeight = `${Math.max(240, Math.floor(window.innerHeight - ui.marksPop.getBoundingClientRect().top - 12))}px`;
+  }
+}
+
+// Whether the marks show is a change of the person, remembered with the view.
+function changeMarksShown() {
+  state.marksShown = ui.marksShown.checked;
+  render();
+  rememberItems(true);
+}
+
+// A small picture of the line of a kind of mark, or of the band of a span.
+function markSwatch(kind, span) {
+  const swatch = svgElement("svg", { viewBox: "0 0 22 12", width: 22, height: 12, "aria-hidden": "true", focusable: "false" });
+  if (span) {
+    swatch.append(svgElement("rect", { class: "day-band", x: 3, y: 1, width: 16, height: 10 }));
+    for (const x of [3, 19]) {
+      swatch.append(svgElement("line", { class: `day-mark ${kind}`, x1: x, x2: x, y1: 0, y2: 12 }));
+    }
+  } else {
+    swatch.append(svgElement("line", { class: `day-mark ${kind}`, x1: 11, x2: 11, y1: 0, y2: 12 }));
+  }
+  return swatch;
+}
+
+// The row of the panels holds the switch and the button of the marks; the
+// window says what the panels show, lists the marks (newest first), and adds
+// or changes one.
+function renderMarks(viewing, live) {
+  const locked = marksLocked();
+  ui.marksShown.checked = state.marksShown;
+  ui.marksShown.disabled = !viewing || !state.marks.length;
+  ui.marksOpen.disabled = !viewing;
+  ui.marksOpen.setAttribute("aria-expanded", String(state.marksOpen && viewing));
+  ui.marksPop.hidden = !state.marksOpen || !viewing;
+  if (ui.marksPop.hidden) {
+    return;
+  }
+  fitMarksWindow();
+  setText(ui.marksPopTitle, t("view.marks.title", { n: formatNumber(state.marks.length) }));
+  if (ui.marksLegend.dataset.signature !== state.language) {
+    const parts = [element("span", "", t("view.marks.legend"))];
+    for (const kind of MARK_KINDS) {
+      const part = element("span");
+      part.append(markSwatch(kind, false), t(MARK_KIND_KEYS[kind]));
+      parts.push(part);
+    }
+    const span = element("span");
+    span.append(markSwatch("other", true), t("view.marks.span"));
+    parts.push(span);
+    ui.marksLegend.replaceChildren(...parts);
+    ui.marksLegend.dataset.signature = state.language;
+  }
+  // What to tell of the file of the marks shows in the window too: why it
+  // changes nothing while the file is not used, and a change not written.
+  setText(ui.marksNotice, state.marksNotice === null ? "" : t(MARKS_NOTICE_KEYS[state.marksNotice]));
+  renderMarksList(live, locked);
+  if (ui.markKind.dataset.signature !== state.language) {
+    const chosen = ui.markKind.value || MARK_KINDS[0];
+    ui.markKind.replaceChildren(
+      ...MARK_KINDS.map((kind) => {
+        const option = element("option", "", t(MARK_KIND_KEYS[kind]));
+        option.value = kind;
+        return option;
+      }),
+    );
+    ui.markKind.value = chosen;
+    ui.markKind.dataset.signature = state.language;
+  }
+  const editing = state.marks.find((one) => one.id === state.markEditing) ?? null;
+  setText(ui.markFormHeading, editing === null ? t("view.marks.add_heading") : t("view.marks.change_heading", { name: editing.name }));
+  setText(ui.markSave, t(editing === null ? "view.marks.add" : "view.marks.save"));
+  ui.markCancel.hidden = editing === null;
+  const full = editing === null && state.marks.length >= MAX_MARKS;
+  const off = !live || locked || full;
+  for (const field of [ui.markDay, ui.markEnd, ui.markKind, ui.markName, ui.markSave]) {
+    field.disabled = off;
+  }
+  ui.markCancel.disabled = !live;
+  setText(ui.markProblem, state.markProblem !== null ? t(state.markProblem) : full && !locked ? t("view.marks.error.full") : "");
+}
+
+function renderMarksList(live, locked) {
+  const signature = JSON.stringify([state.language, state.marks, state.markAsk, live, locked]);
+  if (ui.marksList.dataset.signature === signature) {
+    return;
+  }
+  const active = document.activeElement;
+  const focused = ui.marksList.contains(active) ? { op: active.dataset.op ?? null, id: active.dataset.id ?? null } : null;
+  const off = !live || locked;
+  const rows = [];
+  if (!state.marks.length) {
+    rows.push(element("p", "marks-none", t("view.marks.none")));
+  }
+  for (const mark of [...state.marks].reverse()) {
+    const row = element("div", "marks-item");
+    const days = markDays(mark, state.language);
+    const when = days.end === null ? days.day : t("view.marks.when_span", days);
+    const name = element("span", "marks-name", mark.name);
+    name.id = `mark-name-${mark.id}`;
+    const change = opButton("change", mark.id, "view.marks.change", off);
+    const remove = opButton("remove", mark.id, "view.marks.remove", off);
+    for (const button of [change, remove]) {
+      button.setAttribute("aria-describedby", name.id);
+    }
+    row.append(markSwatch(mark.kind, mark.end !== null), element("span", "marks-when", when), element("span", "marks-kind", t(MARK_KIND_KEYS[mark.kind])), name, change, remove);
+    if (state.markAsk === mark.id) {
+      // The question names the group of its two buttons, and each of them.
+      const ask = element("div", "marks-ask");
+      const question = element("p", "", t("view.marks.remove_ask", { name: mark.name, day: when }));
+      question.id = `mark-ask-${mark.id}`;
+      ask.setAttribute("role", "group");
+      ask.setAttribute("aria-labelledby", question.id);
+      const keep = opButton("keep", mark.id, "view.marks.keep", off);
+      const yes = opButton("remove-yes", mark.id, "view.marks.remove", off);
+      for (const button of [keep, yes]) {
+        button.setAttribute("aria-describedby", question.id);
+      }
+      ask.append(question, keep, yes);
+      row.append(ask);
+    }
+    rows.push(row);
+  }
+  ui.marksList.replaceChildren(...rows);
+  ui.marksList.dataset.signature = signature;
+  // The focus goes back to the same button, or to the removal of the same
+  // mark when its question closed, or to the form when the mark is gone.
+  if (focused !== null) {
+    const buttons = [...ui.marksList.querySelectorAll("button[data-op]")];
+    const again =
+      buttons.find((node) => node.dataset.op === focused.op && node.dataset.id === focused.id) ??
+      buttons.find((node) => node.dataset.op === "remove" && node.dataset.id === focused.id);
+    if (again !== undefined) {
+      again.focus();
+    } else {
+      focusMarkForm();
+    }
+  }
+}
+
 // The layouts as the settings hold them now, when another tab changed them.
 async function readLayouts() {
   try {
@@ -1609,7 +2009,7 @@ function showsPoints(panel) {
   return panel.lines.some((line) => Array.isArray(line.points));
 }
 
-function buildPanel({ key, item, panel }, index, count, periods, grain) {
+function buildPanel({ key, item, panel }, index, count, periods, grain, marksText = "") {
   const mode = panelMode(key);
   const table = state.tables.has(key) && mode !== "mini";
   const name = itemName(key);
@@ -1704,14 +2104,13 @@ function buildPanel({ key, item, panel }, index, count, periods, grain) {
     plot.tabIndex = 0;
     plot.setAttribute("role", "img");
     plot.dataset.key = key;
-    plot.setAttribute(
-      "aria-label",
-      t("view.chart.label", {
-        name,
-        start: describe(periodMessage(periods[0], grain, state.language, { mark: false })),
-        end: describe(periodMessage(periods[periods.length - 1], grain, state.language, { mark: false })),
-      }),
-    );
+    const label = t("view.chart.label", {
+      name,
+      start: describe(periodMessage(periods[0], grain, state.language, { mark: false })),
+      end: describe(periodMessage(periods[periods.length - 1], grain, state.language, { mark: false })),
+    });
+    // What the chart says of the marks of its days (stage M1 of v2.2.0).
+    plot.setAttribute("aria-label", marksText === "" ? label : `${label}${state.language === "ja" ? "" : " "}${marksText}`);
     body.append(plot);
   }
   section.append(body);
@@ -1818,12 +2217,21 @@ function drawChart(entry) {
   const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, "aria-hidden": "true", focusable: "false" });
   entry.shapes = shapes;
   entry.lines = lines;
+  // The marks of the person: their bands behind the values, their lines in
+  // front, on every chart, also one without values (stage M1 of v2.2.0).
+  const dayMarks = state.marksShown ? markShapes(state.marks, periods[0].start, periods[periods.length - 1].end, PLOT_LEFT, width - PLOT_RIGHT) : [];
+  appendMarkBands(svg, dayMarks, height);
   if (shapes.empty) {
+    appendMarkLines(svg, dayMarks, height);
     plot.replaceChildren(svg, element("span", "panel-empty", t("view.summary.none")));
+    if (key === namedKey) {
+      appendMarkNames(svg, dayMarks, width);
+    }
     return;
   }
   appendScale(svg, key, shapes, width - PLOT_RIGHT);
   shapes.lines.forEach((shape, number) => appendMarks(svg, shape, `c${styles[number].color}`, styles[number].dash));
+  appendMarkLines(svg, dayMarks, height);
   const cross = svgElement("g", { class: "cross" });
   cross.setAttribute("display", "none");
   const crossLine = svgElement("line", { class: "chart-cross", y1: shapes.top, y2: shapes.top + shapes.plotHeight });
@@ -1835,7 +2243,85 @@ function drawChart(entry) {
   });
   svg.append(cross);
   plot.replaceChildren(svg);
+  if (key === namedKey) {
+    appendMarkNames(svg, dayMarks, width);
+  }
   Object.assign(entry, { cross, crossLine, crossDots });
+}
+
+// The bands of the spans among the marks of a chart (markShapes).
+function appendMarkBands(svg, dayMarks, height) {
+  const bottom = height - PLOT_BOTTOM;
+  for (const { band } of dayMarks) {
+    if (band !== null) {
+      svg.append(svgElement("rect", { class: "day-band", x: band.from.toFixed(1), y: PLOT_TOP, width: band.width.toFixed(1), height: Math.max(1, bottom - PLOT_TOP) }));
+    }
+  }
+}
+
+// The lines of the marks of a chart in the forms of their kinds: one for a
+// mark of one day, and the edges of a span that are its own start and end.
+function appendMarkLines(svg, dayMarks, height) {
+  const bottom = height - PLOT_BOTTOM;
+  const line = (kind, x) => svgElement("line", { class: `day-mark ${kind}`, x1: x.toFixed(1), x2: x.toFixed(1), y1: PLOT_TOP, y2: bottom });
+  for (const { mark, x, band } of dayMarks) {
+    if (band === null) {
+      svg.append(line(mark.kind, x));
+      continue;
+    }
+    if (band.starts) {
+      svg.append(line(mark.kind, x));
+    }
+    if (band.ends) {
+      svg.append(line(mark.kind, band.end));
+    }
+  }
+}
+
+// The names of the marks on the top chart, as markLabels places them: the
+// names that would meet show how many marks they are instead. The chart is in
+// the page, so that the names can be measured.
+function appendMarkNames(svg, dayMarks, width) {
+  if (!dayMarks.length) {
+    return;
+  }
+  const probe = svgElement("text", { class: "day-mark-name" });
+  svg.append(probe);
+  const measure = (text) => {
+    probe.textContent = text;
+    return probe.getComputedTextLength();
+  };
+  const groups = markLabels(dayMarks, measure, (n) => t("view.marks.crowded", { n: formatNumber(n) }), PLOT_LEFT, width - PLOT_RIGHT);
+  probe.remove();
+  for (const group of groups) {
+    const race = group.marks.length === 1 && group.marks[0].kind === "race";
+    const name = svgElement("text", { class: `day-mark-name${race ? " race" : ""}`, x: group.x.toFixed(1), y: PLOT_TOP + 10 });
+    name.textContent = group.text;
+    svg.append(name);
+  }
+}
+
+// What the label of a chart says of the marks of its days: the top chart
+// their number, and the names and days of the first ones; the others their
+// number only.
+function marksSpoken(marks, named) {
+  if (!marks.length) {
+    return "";
+  }
+  const spoken = spokenMarks(marks);
+  if (!named) {
+    return t("view.marks.spoken_count", { n: formatNumber(spoken.count) });
+  }
+  const names = spoken.named.map((mark) => {
+    const days = markDays(mark, state.language);
+    return days.end === null
+      ? t("view.marks.spoken_mark", { name: mark.name, day: days.day })
+      : t("view.marks.spoken_span", { name: mark.name, day: days.day, end: days.end });
+  });
+  if (spoken.more > 0) {
+    names.push(t("view.marks.spoken_more", { n: formatNumber(spoken.more) }));
+  }
+  return t("view.marks.spoken", { n: formatNumber(spoken.count), names: names.join(t("view.spoken_separator")) });
 }
 
 // The ticks of the values of a chart, with its grid up to ``right``, and the
@@ -1955,6 +2441,14 @@ function drawOverview(start, end, chartWidth) {
   const shapes = overviewShapes({ values, periods, width, height, total, start, end });
   const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, "aria-hidden": "true", focusable: "false" });
   svg.append(svgElement("path", { class: `overview-marks${total ? "" : " line"}`, d: shapes.marks }));
+  // The marks of the person over the whole output, a short line at the top
+  // each, whatever the period (stage M1 of v2.2.0).
+  if (state.marksShown) {
+    for (const shape of markShapes(state.marks, shapes.first, shapes.last, 0, width)) {
+      const x = shape.x.toFixed(1);
+      svg.append(svgElement("line", { class: "overview-day-mark", x1: x, x2: x, y1: 0, y2: 10 }));
+    }
+  }
   const first = new Date(shapes.first * 86400000).getUTCFullYear();
   const last = new Date(shapes.last * 86400000).getUTCFullYear();
   const every = Math.max(1, Math.ceil((last - first + 1) / Math.max(1, Math.floor(width / 60))));
@@ -1990,6 +2484,8 @@ function panelsSignature() {
     [...state.tables],
     state.language,
     state.align,
+    state.marksSeq,
+    state.marksShown,
   ]);
 }
 
@@ -2000,7 +2496,7 @@ let overviewSignature = null;
 function renderOverview(force = false) {
   const answer = state.answer;
   const chartWidth = drawn.find((entry) => entry.plot)?.plot.clientWidth ?? 0;
-  const signature = JSON.stringify([state.overview?.signature ?? null, answer?.start ?? null, answer?.end ?? null, chartWidth, ui.overview.clientHeight]);
+  const signature = JSON.stringify([state.overview?.signature ?? null, answer?.start ?? null, answer?.end ?? null, chartWidth, ui.overview.clientHeight, state.marksSeq, state.marksShown]);
   if (!force && signature === overviewSignature) {
     return;
   }
@@ -2033,7 +2529,13 @@ function renderPanels(force = false) {
     return;
   }
   const periods = periodDays(answer.periods);
-  const built = shownList.map((entry) => buildPanel(entry, state.items.indexOf(entry.key), state.items.length, answer.periods, answer.grain));
+  // The top chart names the marks; a panel shown as a table has no chart.
+  const charts = shownList.filter((entry) => !(state.tables.has(entry.key) && panelMode(entry.key) !== "mini"));
+  namedKey = (charts.find((entry) => panelMode(entry.key) !== "mini") ?? charts[0])?.key ?? null;
+  const marksNow = state.marksShown ? marksWithin(state.marks, isoDate(periods[0].start), isoDate(periods[periods.length - 1].end)) : [];
+  const built = shownList.map((entry) =>
+    buildPanel(entry, state.items.indexOf(entry.key), state.items.length, answer.periods, answer.grain, marksSpoken(marksNow, entry.key === namedKey)),
+  );
   ui.panels.replaceChildren(...built.map((entry) => entry.section));
   drawnShared = sharedExtents(
     built.map((entry) => ({
@@ -3517,6 +4019,7 @@ function renderStage(live) {
   }
   ui.caveat.hidden = !viewing || comparing();
   renderPicker(viewing);
+  renderMarks(viewing && !comparing(), live);
   setText(ui.loading, state.loading && viewing ? t("view.loading") : "");
   ui.align.disabled = !viewing;
   ui.align.checked = state.align;
@@ -3593,7 +4096,13 @@ function renderFooter(live) {
   ui.quit.setAttribute("aria-expanded", String(state.quitAsked));
   ui.quitYes.disabled = !live;
   const notice = state.settingsNotice;
-  setText(ui.settingsStatus, notice === null ? "" : settingsMessages(notice.code, notice.writing).map(describe).join(" "));
+  const words = notice === null ? [] : settingsMessages(notice.code, notice.writing).map(describe);
+  // What to tell of the file of the marks, apart from the settings (stage M1
+  // of v2.2.0).
+  if (state.marksNotice !== null) {
+    words.push(t(MARKS_NOTICE_KEYS[state.marksNotice]));
+  }
+  setText(ui.settingsStatus, words.join(" "));
 }
 
 function renderHelp() {
@@ -3885,6 +4394,32 @@ function connect() {
       changeLayouts({ op: "move", id: event.target.dataset.id, direction: event.key === "ArrowUp" ? "up" : "down" });
     }
   });
+  // The marks (stage M1 of v2.2.0): whether they show is remembered with the
+  // view; Escape closes a question first, and then the window; Enter in a
+  // field adds or saves.
+  ui.marksShown.addEventListener("change", changeMarksShown);
+  window.addEventListener("resize", fitMarksWindow);
+  ui.marksOpen.addEventListener("click", () => openMarks(!state.marksOpen));
+  ui.marksPopClose.addEventListener("click", () => openMarks(false));
+  ui.marksList.addEventListener("click", marksAction);
+  ui.markSave.addEventListener("click", saveMark);
+  ui.markCancel.addEventListener("click", () => editMark(null));
+  ui.marksPop.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      if (state.markAsk !== null) {
+        const asked = state.markAsk;
+        state.markAsk = null;
+        render();
+        ui.marksList.querySelector(`[data-op="remove"][data-id="${CSS.escape(asked)}"]`)?.focus();
+      } else {
+        openMarks(false);
+      }
+    } else if (event.key === "Enter" && event.target.matches("input")) {
+      event.preventDefault();
+      saveMark();
+    }
+  });
   ui.railLayouts.addEventListener("click", () => openRailLayouts(!state.railLayoutsOpen));
   ui.railLayoutsClose.addEventListener("click", () => openRailLayouts(false));
   ui.railLayoutsPop.addEventListener("keydown", (event) => {
@@ -4122,6 +4657,10 @@ async function start() {
     state.compareMode = compare.mode;
     state.compareMonth = compare.month;
     state.wantedTypes = Array.isArray(state.settings.view_types) ? [...state.settings.view_types] : null;
+    const marks = marksToOpen(state.settings);
+    takeMarks(marks.marks);
+    state.marksShown = marks.shown;
+    state.marksNotice = marks.notice;
     const notice = settingsMessages(state.settings.notice).length ? state.settings.notice : null;
     state.settingsNotice = notice === null ? null : { code: notice, writing: false };
     // The colors that the settings remember win over this tab's (stage G3a).

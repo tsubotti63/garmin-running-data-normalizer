@@ -283,7 +283,10 @@ When you go back from 2.2.0 to an earlier version, such as 2.1.0, it does not
 use the settings that 2.2.0 remembered, and starts as a first launch; it does
 not write over their file. **Forget the remembered settings…** of the earlier
 version forgets what 2.2.0 remembered too, such as the timezone and what the
-view page remembered.
+view page remembered. The file of the marks of the view page,
+`gui-marks.json`, stays in the folder of the settings:
+**Forget the remembered settings…** of 2.2.0 removes it, and to remove this
+app without going back to 2.2.0, remove that folder.
 
 When you run the line while the GUI is open, the earlier GUI keeps running,
 and one more GUI opens. On Windows, a line in English that starts with
@@ -1330,12 +1333,14 @@ The GUI remembers only these:
   the one used last).
 - The timezone of the last run that made its output (from 2.2.0). At later
   launches, box 3 is set with it (**(as last time)**).
+- The marks of the view page (from 2.2.0), in a file of their own.
 
 The place of an Export, **Name of the new folder** in box 3, the language,
 and the way to normalize are not remembered.
 
 The file is `gui-settings.json` in the folder of the settings of this app,
-`garmin-running-data-normalizer`:
+`garmin-running-data-normalizer`; from 2.2.0, the marks of the view page are
+in `gui-marks.json` in the same folder:
 
 - On a Mac, in `Library/Application Support` in your home folder. To open
   it, open the **Go** menu of the Finder and hold down the Option key:
@@ -1352,9 +1357,12 @@ when the folder for the output is the default `GarminRunningData`, it is made,
 if it is not there, when you normalize.
 
 **Forget the remembered settings…** in the bar at the bottom asks first, and
-then removes the file of the settings only, never while a run is active. It
-also forgets the appearance, and the items and the item shelf of the view
-page. It
+then removes the file of the settings, never while a run is active; from
+2.2.0, it also removes the file of the marks of the view page,
+`gui-marks.json` in the same folder (the marks cannot be brought back). It
+also forgets the appearance, the items and the item shelf of the view page,
+your layouts, the period, the grouping, the activity types counted, how years
+are compared, and the timezone of the last run that made its output. It
 can be pressed only while there are remembered settings. The
 store and the outputs stay, and the next launch goes as a first launch; a
 store that is not in the default place must then be opened again. When the

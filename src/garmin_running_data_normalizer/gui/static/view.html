@@ -188,10 +188,42 @@
         <p id="loading" class="loading" role="status" aria-live="polite"></p>
         <span class="spacer"></span>
         <span class="align-row">
+          <input id="marks-shown" type="checkbox">
+          <label for="marks-shown" data-i18n="view.marks.show"></label>
+        </span>
+        <button type="button" id="marks-open" class="small" aria-expanded="false" aria-controls="marks-pop" data-i18n="view.marks.button"></button>
+        <span class="align-row">
           <input id="align-scales" type="checkbox">
           <label for="align-scales" data-i18n="view.align"></label>
         </span>
         <button type="button" id="full-enter" class="small full-enter"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="view.full.enter"></span></button>
+        <div id="marks-pop" class="pop marks-pop" role="dialog" aria-labelledby="marks-pop-title" hidden>
+          <div class="pop-head"><span id="marks-pop-title" class="pop-title"></span><button type="button" id="marks-pop-close" class="small" data-i18n="help.close"></button></div>
+          <p id="marks-legend" class="marks-legend"></p>
+          <p id="marks-notice" class="marks-notice" role="status" aria-live="polite"></p>
+          <div id="marks-list" class="marks-list"></div>
+          <div id="marks-form" class="marks-form">
+            <p id="mark-form-heading" class="marks-form-heading"></p>
+            <label for="mark-day" data-i18n="view.marks.day"></label>
+            <span class="marks-days">
+              <input id="mark-day" type="date" min="1900-01-01" aria-describedby="mark-problem">
+              <span aria-hidden="true" data-i18n="view.marks.until"></span>
+              <label for="mark-end" class="visually-hidden" data-i18n="view.marks.end"></label>
+              <input id="mark-end" type="date" min="1900-01-01" aria-describedby="mark-end-note mark-problem">
+              <span id="mark-end-note" class="note" data-i18n="view.marks.end_note"></span>
+            </span>
+            <label for="mark-kind" data-i18n="view.marks.kind"></label>
+            <select id="mark-kind"></select>
+            <label for="mark-name" data-i18n="view.marks.name"></label>
+            <span class="marks-name-row">
+              <input id="mark-name" type="text" maxlength="60" autocomplete="off" spellcheck="false" aria-describedby="mark-problem">
+              <button type="button" id="mark-save" class="primary small" data-i18n="view.marks.add"></button>
+              <button type="button" id="mark-cancel" class="small" data-i18n="view.marks.cancel" hidden></button>
+            </span>
+            <p id="mark-problem" class="layout-problem marks-problem" role="status" aria-live="polite"></p>
+          </div>
+          <p class="note marks-store" data-i18n="view.marks.store_note"></p>
+        </div>
       </div>
       <section id="compare" class="compare" aria-labelledby="compare-title" hidden>
         <div class="compare-bar">

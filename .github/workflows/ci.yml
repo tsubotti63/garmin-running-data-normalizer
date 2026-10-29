@@ -318,6 +318,9 @@ jobs:
       - name: Verify Windows layouts and remembered view settings
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_layouts.py -q
+      - name: Verify Windows marks of the view page
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_marks.py -q
   windows-python-3-15:
     runs-on: windows-latest
     steps:
@@ -385,3 +388,6 @@ jobs:
       - name: Verify Windows layouts and remembered view settings with Python 3.15
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_layouts.py -q
+      - name: Verify Windows marks of the view page with Python 3.15
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_marks.py -q

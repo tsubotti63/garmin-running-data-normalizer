@@ -1193,6 +1193,9 @@ const SETTINGS_KEYS = {
   SETTINGS_NEWER: "settings.newer",
   SETTINGS_NOT_WRITTEN: "settings.not_written",
   SETTINGS_NOT_REMOVED: "settings.not_removed",
+  // Forgetting removed the settings, but not the marks of the view page
+  // (stage M1 of v2.2.0).
+  MARKS_NOT_REMOVED: "settings.marks_not_removed",
 };
 // When a run or the tips could not be remembered, the words say so.
 const SETTINGS_WRITE_KEYS = {
@@ -1303,12 +1306,13 @@ export function settingsPresentAfterRun(present, run) {
 
 // What the page tells after forgetting the settings (stage C1): the server
 // says "forgotten" when no file is left, and whether there was one; when a
-// file is left, it could not be removed.
+// file is left, it could not be removed: that of the settings, or from stage
+// M1 of v2.2.0 that of the marks only.
 export function forgetOutcome(answer) {
   if (answer?.forgotten === true) {
     return { key: answer.had_settings === false ? "forget.nothing" : "forget.done", notice: null, present: false };
   }
-  return { key: null, notice: "SETTINGS_NOT_REMOVED", present: true };
+  return { key: null, notice: answer?.notice === "MARKS_NOT_REMOVED" ? "MARKS_NOT_REMOVED" : "SETTINGS_NOT_REMOVED", present: true };
 }
 
 // Whether the tips show (the mockup v10): as the person last switched them,

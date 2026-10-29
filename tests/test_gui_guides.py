@@ -734,6 +734,43 @@ class GuiGuideTest(unittest.TestCase):
                     self.assertIn(phrase, reads)
             self.assertNotIn(before[language], reads)
 
+    def test_guides_say_that_forgetting_removes_the_marks_too(self) -> None:
+        # v2.2.0 M1: forgetting the settings also removes the file of the
+        # marks of the view page, which cannot be brought back, and forgets
+        # what the view page remembers from 2.2.0, as the page's question
+        # says; an earlier version keeps that file (the checker, M0 and M1).
+        phrases = {
+            "en": (
+                "The marks of the view page (from 2.2.0), in a file of their own.",
+                "from 2.2.0, the marks of the view page are in `gui-marks.json` in the same folder",
+                "then removes the file of the settings, never while a run is active; from 2.2.0, it also removes the file of the marks of the view page, `gui-marks.json` in the same folder (the marks cannot be brought back).",
+                "The file of the marks of the view page, `gui-marks.json`, stays in the folder of the settings: **Forget the remembered settings…** of 2.2.0 removes it",
+            ),
+            "ja": (
+                "見るページの印（2.2.0 から）。印だけのファイルに残します。",
+                "2.2.0 からは、見るページの印を、同じフォルダーの `gui-marks.json` に残します。",
+                "先に聞いてから、設定のファイルを消します。2.2.0 からは、同じフォルダーの見るページの印のファイル `gui-marks.json` も消します（印は戻せません）。",
+                "見るページの印のファイル `gui-marks.json` は消えずに、設定のフォルダーに残ります。2.2.0 の「覚えた設定を消す…」で消えます。",
+            ),
+        }
+        # What is forgotten, in the words of the page's question.
+        forgotten = {
+            "en": "It also forgets the appearance, the items and the item shelf of the view page, your layouts, the period, the grouping, the activity types counted, how years are compared, and the timezone of the last run that made its output.",
+            "ja": "画面の色と、見るページで並べた項目と棚の開け閉め、自分の表示の型、期間とまとめ方と数える種目、年でくらべるの見せ方、前に出力を作った正規化のタイムゾーンも忘れます。",
+        }
+        removed = {"en": "The marks of the view page are removed too, and cannot be brought back.", "ja": "見るページの印も消えます（戻せません）。"}
+        gone = {"en": "removes the file of the settings only", "ja": "設定のファイルだけを消します"}
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            for phrase in (*phrases[language], forgotten[language]):
+                with self.subTest(language=language, phrase=phrase):
+                    self.assertIn(phrase, reads)
+            self.assertNotIn(gone[language], reads)
+            words = catalog(language)["forget.text_also"]
+            self.assertIn(forgotten[language], words)
+            self.assertIn(removed[language], words)
+
     def test_guides_say_what_the_view_page_remembers_from_2_2_0(self) -> None:
         # v2.2.0 K2: the view page remembers the period, the grouping, the
         # activity types counted, and the layouts, and the guides say how they
