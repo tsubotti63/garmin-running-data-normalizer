@@ -289,6 +289,14 @@ class GuiCatalogTest(unittest.TestCase):
                 # v2.2.0 M1: a file of the marks that cannot be read is
                 # removed by forgetting the settings.
                 ("view.marks.notice.unreadable", "forget.button"),
+                # v2.2.0 M4: the help of the marks, of comparing by race day,
+                # and of the list of a period names their buttons.
+                ("view.help.marks_text", "view.marks.button"),
+                ("view.help.marks_text", "view.marks.show"),
+                ("view.help.race_text", "view.compare.button"),
+                ("view.help.race_text", "view.compare.by.race"),
+                ("view.help.race_text", "view.compare.weeks"),
+                ("view.help.list_text", "view.list.close"),
             ):
                 with self.subTest(language=language, key=key):
                     self.assertIn(quote.format(catalog[named]), catalog[key])

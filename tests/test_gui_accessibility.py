@@ -1148,8 +1148,12 @@ class GuiViewPageStructureTest(unittest.TestCase):
         panel = by_id(self.elements, "help-panel")
         self.assertEqual((panel.tag, panel.get("role"), panel.get("aria-labelledby")), ("aside", None, "help-heading"))
         sections = [element for element in self.elements if element.get("class") == "help-section"]
-        # From v2.2.0 L2, an item of comparing years.
-        self.assertEqual(len(sections), 10)
+        # From v2.2.0 L2, an item of comparing years; from M4, the items of
+        # comparing by race day, of the marks, and of the list of a period,
+        # after comparing years.
+        self.assertEqual(len(sections), 13)
+        order = [str(section.get("aria-labelledby")) for section in sections]
+        self.assertEqual(order[order.index("help-compare-heading") : order.index("help-compare-heading") + 4], ["help-compare-heading", "help-race-heading", "help-marks-heading", "help-list-heading"])
         for section in sections:
             with self.subTest(section=section.get("aria-labelledby")):
                 self.assertEqual(by_id(self.elements, str(section.get("aria-labelledby"))).tag, "h3")
