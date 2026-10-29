@@ -941,6 +941,68 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   grayed, with a line under the filters that says so, and the overview is
   not shown. The settings remember the way and the month. The help panel
   gives it in one item, after the layouts (stage L2).
+- Marks (stage M1): the person's own events, each a kind (race, injury, shoes,
+  or other), a name of 1 to 30 characters (checked as the name of a layout),
+  and a day or a span of days from 1 January 1900; 200 at most, ordered by
+  their days. They are kept in `gui-marks.json`, next to the settings and
+  under the same lock, written as the settings are (never more than 64 KiB),
+  and never in an output, the support bundle, or the text of a report: the
+  files of the support bundle and the report never read them. A file that
+  cannot be read, or that a newer version wrote, is used for nothing and never
+  written over; a mark that is not of its form is left out alone. "Marks…"
+  adds, changes, and removes them, one change at a time
+  (`/api/settings/marks`), and "Show marks" (remembered with the view) hides
+  them. Every panel draws them in the colors of the text, the kind by the form
+  of the line (a race a full line in the color of the text, shoes a dotted
+  line, another mark a dashed line, an injury a line of dashes and dots; a
+  span a light band whose edges are the line of its kind); the overview draws
+  a short plain line at its top for each, whatever its kind (a span at its
+  first day); the top chart names them, or counts them where their names would
+  meet, and its label says up to 10 of them. Marks never change the numbers.
+  Forgetting the settings removes their file too; 2.1.0, which does not know
+  it, removes only the file of the settings, so that `gui-marks.json` and the
+  folder of the settings stay after "Forget the remembered settings…" of
+  2.1.0.
+- Comparing by race day (stage M2): within the comparison, "Compare [item] by
+  [year | race day]"; race day with two race marks or more whose days from 24
+  weeks before to the race day meet the days of the output (a race after its
+  last day too). Each race asks from the Monday of the week some weeks (8, 12,
+  16 at first, 20, or 24) before its week to its day, so that every race has
+  as many weeks, placed by their order to the week of the race, which ends on
+  the race day: a period cut short (as a year's ends are) where the race is
+  not on a Sunday or the output ends within that week, as the server marks it.
+  The value of the whole span is a period of a grouping that only the requests
+  of the view page take, `range`: the CLI and the settings keep their
+  groupings. The comparison follows the marks: a race removed or changed is
+  asked again or no longer chosen, and with fewer than two races it goes back
+  to the years; the page compares the marks with its last request, so that an
+  answer on its way for the marks before is dropped. The settings remember
+  what it compares by and the weeks; the races chosen are not remembered. The
+  server keeps the bars of the item shelf with an output (up to eight sets of
+  activity types) and up to 64 connections waiting to be taken.
+- The activities of a period (stage M3): a period of a chart of the training
+  or the running form opens, by a click or by Enter or Space, the list of its
+  activities under its panel, one at a time
+  (`/api/view/activities`, under the checks of the numbers: the ticket, the
+  activity types of the output, and the size of the answer). The server
+  chooses the rows with the function that counts the panel (the types
+  counted, the days of the period cut to the output, as one period of
+  `range`), up to 500 (more gives their number only), and gives the value of
+  the panel and the count of the activities that it counted, from the same
+  numbers; the page never counts them again. The columns are those of the
+  output: the local date and time as the output writes them (not needed: an
+  output without the column opens), the type, seven values, and the item of
+  the panel where it is none of them. The page orders the rows by a column
+  (rows without a value last either way; the date and time as they show,
+  before their offset), draws the frame of the period on the chart, and
+  closes the list when what the panels count or show changes, never while
+  numbers are on their way, with the answer of its last request only. The
+  list is never remembered and never written to a file.
+- An output that changes while the view page is open is read again at the
+  next request (and so is any output when the date changes), so that a
+  comparison or a list asked right after a new normalization can come from
+  another reading than the panels beside it; asking again uses the new
+  reading. The guides say this in one place.
 
 ## Data handling in 2.0.0
 
@@ -1188,6 +1250,14 @@ Processing:
   they also hold the timezone of the last run that made its output, the
   layouts that the person named, and the period, the grouping, and the
   activity types of the view page.
+- From v2.2.0 the marks of the view page, the person's own words and events,
+  are kept in a file of their own next to the settings (`gui-marks.json`),
+  never in an output, the Support Bundle, or the text of a report.
+  "Forget the remembered settings…" removes them too; 2.1.0 removes the file
+  of the settings only, so that after going back to it the file of the marks
+  and the folder of the settings stay until 2.2.0 forgets them or the folder
+  is removed. The list of the activities of a period shows the dates and
+  times of the output on the page only.
 - The view page (v2.1.0) writes nothing in an output. The server keeps what
   it read in memory only, under a ticket that holds no place.
 - A Snapshot Store or a folder for the output in a folder that a cloud may

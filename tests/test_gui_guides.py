@@ -4,9 +4,12 @@ import json
 import re
 import struct
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 
 from garmin_running_data_normalizer.gui.layouts import BUILT_IN_LAYOUTS
+from garmin_running_data_normalizer.view.data import ViewData
+from garmin_running_data_normalizer.view.series import period_bounds
 
 # The guides of main are read by the users of the stable release, through the
 # README, so they name and install the release that is published, which the
@@ -605,7 +608,9 @@ class GuiGuideTest(unittest.TestCase):
         # v2.2.0 K3: the view page shows the layouts above the item shelf, in
         # two pictures more, cut to the layouts and to their window. L2: May of
         # every year in its scene, and the years in rows and laid over one
-        # another in the section of comparing years.
+        # another in the section of comparing years. M4: the list of a period
+        # and the marks, after the overview, and comparing by race day, after
+        # the years laid over one another.
         names = (
             "normalized-page",
             "next-steps",
@@ -615,8 +620,11 @@ class GuiGuideTest(unittest.TestCase):
             "view-page",
             "view-layouts",
             "view-layouts-manage",
+            "view-list",
+            "view-marks",
             "view-compare-rows",
             "view-compare-overlay",
+            "view-compare-race",
         )
         sizes = {"next-steps": (315, 213), "view-layouts": (371, 193), "view-layouts-manage": (440, 438)}
         japanese = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
@@ -649,7 +657,8 @@ class GuiGuideTest(unittest.TestCase):
         # scenes in both guides, each with links to the sections that give
         # the details, and the first two start the GUI by a link, not by its
         # steps (the checker). From v2.2.0 (stage L2), a seventh scene compares
-        # May of every year, after the past year on the view page.
+        # May of every year, after the past year on the view page; from M4, an
+        # eighth compares the 16 weeks before races, after it.
         parts = {
             "en": ("How it goes", "Ways to use it", "More: [", "(#start-the-gui)"),
             "ja": ("全体の流れ", "場面ごとの使い方", "くわしくは：[", "(#gui-を起動する)"),
@@ -677,12 +686,20 @@ class GuiGuideTest(unittest.TestCase):
                         if scene.startswith(("Give the numbers to an AI", "数字を CSV にして")):
                             care = {"en": "personal data", "ja": "個人のデータ"}[language]
                             self.assertLess(reads.index(care), reads.index("`about`"))
-        self.assertEqual(len(scenes["en"]), 7)
-        self.assertEqual(len(scenes["ja"]), 7)
-        for language, title in (("en", "Compare May of every year"), ("ja", "毎年の 5 月をくらべる")):
+        self.assertEqual(len(scenes["en"]), 8)
+        self.assertEqual(len(scenes["ja"]), 8)
+        for language, title, race in (
+            ("en", "Compare May of every year", "Compare the 16 weeks before races"),
+            ("ja", "毎年の 5 月をくらべる", "大会の前の 16 週をくらべる"),
+        ):
             with self.subTest(language=language, scene="compare"):
                 self.assertTrue(scenes[language][5].startswith(title))
-                self.assertTrue(scenes[language][6].startswith(("Give the numbers to an AI", "数字を CSV にして")))
+                self.assertTrue(scenes[language][6].startswith(race))
+                self.assertTrue(scenes[language][7].startswith(("Give the numbers to an AI", "数字を CSV にして")))
+        intro = {"en": "The steps of eight common cases.", "ja": "よくある 8 つの場面の手順です。"}
+        for language, path in GUIDES.items():
+            with self.subTest(language=language, part="intro"):
+                self.assertIn(intro[language], path.read_text(encoding="utf-8"))
 
     # From the two new AI sessions that read the sections of H1: the first
     # two scenes name the timezone, which is Asia/Tokyo by default and, from
@@ -753,10 +770,12 @@ class GuiGuideTest(unittest.TestCase):
                 "見るページの印のファイル `gui-marks.json` は消えずに、設定のフォルダーに残ります。2.2.0 の「覚えた設定を消す…」で消えます。",
             ),
         }
-        # What is forgotten, in the words of the page's question.
+        # What is forgotten, in the words of the page's question; from M4,
+        # also the month, what a comparison compares by, the weeks of a span,
+        # and whether marks show (the question of 2.2.0 had left them out).
         forgotten = {
-            "en": "It also forgets the appearance, the items and the item shelf of the view page, your layouts, the period, the grouping, the activity types counted, how years are compared, and the timezone of the last run that made its output.",
-            "ja": "画面の色と、見るページで並べた項目と棚の開け閉め、自分の表示の型、期間とまとめ方と数える種目、年でくらべるの見せ方、前に出力を作った正規化のタイムゾーンも忘れます。",
+            "en": "It also forgets the appearance, the items and the item shelf of the view page, your layouts, the period, the grouping, the activity types counted, how years are compared (the way, the month, by year or race day, and the weeks of a span), whether marks show, and the timezone of the last run that made its output.",
+            "ja": "画面の色と、見るページで並べた項目と棚の開け閉め、自分の表示の型、期間とまとめ方と数える種目、年でくらべるのしかた（見せ方・月・くらべ方・範囲の週の数）、「印を出す」かどうか、前に出力を作った正規化のタイムゾーンも忘れます。",
         }
         removed = {"en": "The marks of the view page are removed too, and cannot be brought back.", "ja": "見るページの印も消えます（戻せません）。"}
         gone = {"en": "removes the file of the settings only", "ja": "設定のファイルだけを消します"}
@@ -782,27 +801,31 @@ class GuiGuideTest(unittest.TestCase):
         # that it is from 2.2.0, as the guides are those of the release that
         # is published (a finding of the review of the diff by Codex). From L2,
         # the way and the month of a comparison by year are remembered too, and
-        # whether years were compared and the years chosen are not.
+        # whether years were compared and the years chosen are not. From M4,
+        # what a comparison compares by and the weeks of a span (stage M2) and
+        # whether marks show (stage M1) are remembered, the marks themselves in
+        # their file, and the races chosen and a list of a period (stage M3)
+        # are not.
         phrases = {
             "en": (
                 "At first, the period is **All time**, and the grouping **Auto**; from 2.2.0, those chosen last stay for the next time",
-                "or **Dark** is chosen); from 2.2.0, also the period, the grouping, the activity types counted, the layouts (those saved, and the one used last), and the way and the month of [Compare years](#compare-years-from-220).",
+                "or **Dark** is chosen); from 2.2.0, also the period, the grouping, the activity types counted, the layouts (those saved, and the one used last), the way and the month of [Compare years](#compare-years-from-220), what it compares by (the years or the race days) and the weeks of a span, and whether **Show marks** is on. The [marks](#marks-from-220) themselves are kept in the file of the marks.",
                 "When another output opens (from 2.2.0), a period such as **1 year** stays as it is.",
                 "A period chosen with **Custom range…** shrinks to the days of the output when it overlaps them in part, and becomes **All time** when it does not overlap them at all.",
                 "The activity types counted are those remembered that the output has; when it has none of them, every running type in the output.",
-                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, full screen, and whether years were compared, with the years chosen.",
+                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, full screen, whether years were compared, with the years or races chosen, and whether a list of activities was open.",
                 "the names of places and of the items of the view page, and from 2.2.0 also the names of the layouts you saved, the days of a period chosen with **Custom range…**, the activity types counted, and the timezone. They stay on this computer",
             ),
             "ja": (
                 "期間とまとめ方は、はじめは「全期間」と「自動」です。2.2.0 からは、選んだものを覚えていて、次に開いたときもそのままです",
-                "画面の色（「ライト」か「ダーク」を選んだとき）。2.2.0 からは、期間、まとめ方、数える種目、表示の型（保存した型と、最後に使った型）、[年でくらべる](#年でくらべる220-から)の見せ方と月も覚えます。",
+                "画面の色（「ライト」か「ダーク」を選んだとき）。2.2.0 からは、期間、まとめ方、数える種目、表示の型（保存した型と、最後に使った型）、[年でくらべる](#年でくらべる220-から)の見せ方と月、くらべ方（年か大会の日か）と範囲の週の数、「印を出す」かどうかも覚えます。[印](#印220-から)そのものは、印のファイルに残ります。",
                 "ほかの出力を開いたとき（2.2.0 から）：「1 年」などの期間は、そのままです。",
                 # The words of the button of an enlarged panel changed in 2.2.0 (the
                 # checker's K3-2); the English words are those of 2.1.0.
                 "⤢ の所が「段を並べて見る」（2.1.0 では「元に戻す」）になり、",
                 "「範囲を選ぶ…」で選んだ期間は、その出力の日の範囲と一部だけ重なるときは重なる所に縮まり、まったく重ならないときは「全期間」になります。",
                 "数える種目は、覚えた種目のうち、その出力にある種目です。1 つも無いときは、その出力のランニングの種目すべてです。",
-                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年。",
+                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、区切りの一覧を開いていたか。",
                 "2.2.0 からは、保存した表示の型の名前、「範囲を選ぶ…」で選んだ期間の日付、数える種目、タイムゾーンも入ります。",
             ),
         }
@@ -963,7 +986,10 @@ class GuiGuideTest(unittest.TestCase):
             # the catalogs, the value of a year as a row says it, or the day
             # that the output cuts it (a case of the partial guard).
             words = set(messages.values())
-            words |= {messages[key].format(period=messages["view.compare.whole_year"]) for key in messages if key.startswith("view.compare.value.")}
+            # The value of a year, and from M4 that of the span of a race as the
+            # heading of its row and the last row of its table say it.
+            periods = (messages["view.compare.whole_year"], messages["view.compare.this_span"], messages["view.compare.race_days"].format(n=16))
+            words |= {messages[key].format(period=period) for key in messages if key.startswith("view.compare.value.") for period in periods}
             words.add(messages["view.compare.until"].format(date=date))
             pattern = r"\*\*([^*]+)\*\*|\"([^\"]+)\"" if language == "en" else r"「([^」]+)」()"
             for word in (bold or plain for bold, plain in re.findall(pattern, part_reads)):
@@ -984,6 +1010,282 @@ class GuiGuideTest(unittest.TestCase):
         self.assertIn("const CROSS_KEYS = { ArrowLeft: -1, ArrowRight: 1, PageUp: -12, PageDown: 12 };", script)
         self.assertIn('} else if (event.key === "Home") {\n    moveCompareCross(0, true);', script)
         self.assertIn('} else if (event.key === "End") {\n    moveCompareCross(compareContext.span, true);', script)
+
+    def test_guides_give_the_list_the_marks_and_the_race_day(self) -> None:
+        # v2.2.0 M4: the list of the activities of a period (stage M3) and the
+        # marks (stage M1) come after the overview and before full screen;
+        # comparing by race day (stage M2) is a part of comparing years; and
+        # what happens when the output changes while one looks (the same
+        # generation of the checker's reviews of M2 and M3) is said once, in
+        # its own section, which the others link to. Each section gives the
+        # rules of the page, quotes its words as the catalogs write them, and
+        # quotes no other word; the lines of the marks are those of view.css
+        # (the checker's M4-1).
+        catalogs = {language: catalog(language) for language in GUIDES}
+        headings = {
+            "en": ("The overview", "The activities of a period (from 2.2.0)", "Marks (from 2.2.0)", "Full screen", "Compare years (from 2.2.0)", "When the output changes while you look (from 2.2.0)", "What is remembered for the next time"),
+            "ja": ("全体図", "区切りのアクティビティの一覧（2.2.0 から）", "印（2.2.0 から）", "全画面で見る", "年でくらべる（2.2.0 から）", "見ている間に出力が変わったとき（2.2.0 から）", "次に開いたときに覚えるもの"),
+        }
+        race = {"en": "\n#### Compare by race day\n", "ja": "\n#### 大会の日でくらべる\n"}
+        phrases = {
+            "en": {
+                1: (
+                    "You can also select the chart, choose a period with ← or →, and press Enter (or Space).",
+                    "A click keeps the chart selected, so that ← and → still move the cross line (the period of the list stays). Enter takes you to the heading of the list.",
+                    "(their timezone is not changed)",
+                    "each press turns the order up or down, and rows without a value go last either way. The date and time are ordered as they show.",
+                    "\"Value of the panel: 108.1 km (activities counted: 11)\"",
+                    "up to 500 a period. For more, it says how many, and the finer grouping that lists them (**Month** for a year, **Week** for a month, **Day** for a week).",
+                    "The list is not remembered and never written to a file.",
+                ),
+                2: (
+                    "a race a full line (in the color of the text), shoes a dotted line, another mark a dashed line, and an injury a line of dashes and dots. A span is a light band whose edges, its first and last day, are the line of its kind.",
+                    "Marks never change the numbers.",
+                    "They are your own words, so they never go into an output, the Support Bundle, or the text of a report on GitHub.",
+                    "the marks do not show and the file is never written over",
+                ),
+                5: (
+                    "Right after you normalize again, or right after the date changes, the values of the years or the races in **Compare years** (also by race day) and the activities of a period can come from another reading than the panels beside them.",
+                ),
+            },
+            "ja": {
+                1: (
+                    "グラフを押して ← → キーで区切りを選び、Enter キー（か Space キー）を押しても開きます。",
+                    "押して開いたときは、グラフが選ばれたままなので、← → キーで十字線を動かせます（一覧の区切りは変わりません）。Enter キーで開いたときは、一覧の見出しへ移ります。",
+                    "（タイムゾーンは直しません）",
+                    "押すたびに上りと下りが入れ替わり、値の無い行はどちらでも最後です。日時は、見えている日付と時刻の順です。",
+                    "「段の値：108.1 km（この値に数えた 11 件）」",
+                    "1 つの区切りで 500 件までで、それより多いときは件数と、細かいまとめ方（年なら「月」、月なら「週」、週なら「日」）を案内します。",
+                    "一覧は覚えず、ファイルにも書きません。",
+                ),
+                2: (
+                    "大会は実線（文字の色）、靴は点線、ほかは破線、けがは一点鎖線です。期間の印は薄い帯で、最初と最後の日のふちが、その種類の線です。",
+                    "印は数字を変えません。",
+                    "自分の言葉なので、出力・問い合わせ用ファイル・GitHub への報告の文には入りません。",
+                    "印を出さず、ファイルも書き換えません",
+                ),
+                5: (
+                    "正規化し直した直後や日付が変わった直後は、年でくらべる（大会の日でくらべるも）の年ごと・大会ごとの値と、区切りのアクティビティの一覧が、並んでいる段と別の読みから作られることがあります。",
+                ),
+            },
+        }
+        race_phrases = {
+            "en": (
+                "It counts back from the Monday of the week of the race, so that every race has as many weeks.",
+                "The grouping is **Week** only, also for a running total.",
+                "The way to compare (by year or by race day) and the weeks of the span are remembered for the next time; the races chosen are not.",
+            ),
+            "ja": (
+                "大会の週の月曜からさかのぼるので、どの大会も週の数がそろいます。",
+                "まとめ方は「週」だけです（累積でも）。",
+                "次に開いたときも、くらべ方（年か大会の日か）と範囲の週の数を覚えています。選んだ大会は覚えません。",
+            ),
+        }
+        quoted = {
+            1: ("view.group.act", "view.group.fit", "view.panel.table", "view.list.close", "view.types.label", "view.align", "view.grain.month", "view.grain.week", "view.grain.day"),
+            2: ("view.marks.button", "view.marks.kind.race", "view.marks.kind.injury", "view.marks.kind.shoes", "view.marks.kind.other", "view.marks.add", "view.marks.end", "view.marks.change", "view.marks.remove", "view.marks.keep", "view.marks.show"),
+        }
+        race_quoted = ("view.compare.by.year", "view.compare.by.race", "view.compare.weeks", "view.compare.mode.rows_race", "view.compare.race_week", "view.marks.kind.race")
+        links = {
+            "en": "(#when-the-output-changes-while-you-look-from-220)",
+            "ja": "(#見ている間に出力が変わったとき220-から)",
+        }
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            messages = catalogs[language]
+            mark = "**{}**" if language == "en" else "「{}」"
+            pattern = r"\*\*([^*]+)\*\*|\"([^\"]+)\"" if language == "en" else r"「([^」]+)」()"
+            places = [text.index(f"\n### {heading}\n") for heading in headings[language]]
+            with self.subTest(language=language, part="order"):
+                self.assertEqual(places, sorted(places))
+                self.assertLess(places[4], text.index(race[language]))
+                self.assertLess(text.index(race[language]), places[5])
+            parts = {}
+            for number in range(len(headings[language]) - 1):
+                part = text[places[number] : places[number + 1]] if number in (1, 2, 5) else ""
+                parts[number] = " ".join(part.split()) if language == "en" else re.sub(r"\n *", "", part)
+            begin = text.index(race[language])
+            race_part = text[begin : places[5]]
+            race_reads = " ".join(race_part.split()) if language == "en" else re.sub(r"\n *", "", race_part)
+            for number, expected in phrases[language].items():
+                for phrase in expected:
+                    with self.subTest(language=language, section=number, phrase=phrase):
+                        self.assertIn(phrase, parts[number])
+            for phrase in race_phrases[language]:
+                with self.subTest(language=language, section="race", phrase=phrase):
+                    self.assertIn(phrase, race_reads)
+            for number, keys in quoted.items():
+                for key in keys:
+                    with self.subTest(language=language, section=number, words=key):
+                        self.assertIn(mark.format(messages[key]), parts[number])
+            for key in race_quoted:
+                with self.subTest(language=language, section="race", words=key):
+                    self.assertIn(mark.format(messages[key]), race_reads)
+            # Every word quoted in the list and the marks is a word of the page,
+            # or the line under the list, a date and time, and the number of
+            # marks that meet as the page writes them.
+            words = set(messages.values())
+            words.add(messages["view.list.value"].format(value="108.1 km", n="11"))
+            words.add(messages["view.list.moment"].format(date="10/2", weekday="Fri" if language == "en" else "金", time="6:30"))
+            words.add(messages["view.marks.crowded"].format(n="3"))
+            # The dash of the list for a value that an activity does not have.
+            words.add("\u2014")
+            for number in (1, 2, 5):
+                for word in (bold or plain for bold, plain in re.findall(pattern, parts[number])):
+                    with self.subTest(language=language, section=number, quoted=word):
+                        self.assertIn(word, words)
+            # What happens when the output changes is said in its own section
+            # only, which the list and comparing years (and by race day) link to.
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            with self.subTest(language=language, part="said once"):
+                self.assertEqual(reads.count(phrases[language][5][0]), 1)
+                self.assertIn(links[language], parts[1])
+                compare = text[places[4] : text.index(race[language])]
+                self.assertIn(links[language], compare)
+            # The scene of the 16 weeks before races leads to the race day and to
+            # the marks; its marks are made up.
+            with self.subTest(language=language, part="scene"):
+                title = "\n### Compare the 16 weeks before races\n" if language == "en" else "\n### 大会の前の 16 週をくらべる\n"
+                start = text.index(title)
+                scene = text[start : text.index("\n### ", start + 1)]
+                self.assertIn("(#compare-by-race-day)" if language == "en" else "(#大会の日でくらべる)", scene)
+                self.assertIn("(#marks-from-220)" if language == "en" else "(#印220-から)", scene)
+                self.assertIn("2026-03-15", scene)
+        # The lines of the marks, as view.css draws them (the checker's M4-1).
+        css = (ROOT / "src/garmin_running_data_normalizer/gui/static/view.css").read_text(encoding="utf-8")
+        for rule in (
+            r"\.day-mark\.race \{\s*stroke: var\(--text\);\s*\}",
+            r"\.day-mark\.shoes \{[^}]*stroke-dasharray: 0\.1 4;[^}]*stroke-linecap: round;",
+            r"\.day-mark\.other \{\s*stroke-dasharray: 6 3;\s*\}",
+            r"\.day-mark\.injury \{\s*stroke-dasharray: 8 3 1\.5 3;\s*\}",
+        ):
+            with self.subTest(rule=rule):
+                self.assertRegex(css, rule)
+
+    def test_guides_give_the_races_and_the_overview_as_the_page_does(self) -> None:
+        # v2.2.0 M4 (Codex's review of the diff of M4): what the guides and the
+        # help say of the races that can be compared, of the week of a race,
+        # and of the marks on the overview is what the page and the server do,
+        # so that a change of either fails here. The races are those whose
+        # longest span meets the days of the output (view_flow.mjs, whose
+        # rules its own tests give); the week of a race on a Sunday inside the
+        # output is a whole week; and the overview draws one short plain line
+        # a mark. The scene of the races chooses the way and the span, which
+        # are remembered, and what the GUI remembers names what forgetting
+        # removes. The line beside race day where it is grayed and the note of
+        # the table of a comparison say what the guides say (the checker's
+        # M4-3).
+        flow = (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8")
+        weeks = [int(n) for n in re.search(r"export const COMPARE_WEEKS = \[([\d, ]+)\];", flow).group(1).split(",")]
+        longest = weeks[-1]
+        for line in (
+            "const LONGEST_WEEKS = COMPARE_WEEKS[COMPARE_WEEKS.length - 1];",
+            "return { from: isoOf(mondayOf(day) - weeks * 7), to: day };",
+            ".filter(({ mark }) => mark.day >= firstDay && raceRange(mark.day, LONGEST_WEEKS).from <= lastDay)",
+        ):
+            with self.subTest(code=line):
+                self.assertIn(line, flow)
+        page = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        start = page.index("\nfunction drawOverview(")
+        overview = page[start : page.index("\nfunction ", start + 1)]
+        self.assertIn('svgElement("line", { class: "overview-day-mark", x1: x, x2: x, y1: 0, y2: 10 })', overview)
+        for drawn in ("appendMarkBands", "appendMarkLines", "day-band", "day-mark "):
+            with self.subTest(overview=drawn):
+                self.assertNotIn(drawn, overview)
+        css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        rules = re.findall(r"([^{}]*overview-day-mark[^{}]*)\{([^}]*)\}", css)
+        self.assertTrue(rules)
+        for selector, body in rules:
+            with self.subTest(rule=selector.strip()):
+                self.assertNotIn("stroke-dasharray", body)
+
+        # The week of a race as the server cuts it: whole for a race on a
+        # Sunday inside the output, cut for a race on another day and where
+        # the output ends within the week.
+        def race_week(race: date, last: date) -> bool:
+            monday = race - timedelta(days=race.weekday())
+            data = ViewData(
+                version="test",
+                timezone="Asia/Tokyo",
+                today=date(2030, 1, 1).toordinal(),
+                rows={},
+                no_date={},
+                after_today={},
+                first_day=date(2025, 6, 2).toordinal(),
+                last_day=last.toordinal(),
+            )
+            first, end, cut = period_bounds(data, (monday - timedelta(weeks=16), race), "week").spans[-1]
+            self.assertEqual((first, end), (monday.toordinal(), min(race, last).toordinal()))
+            return cut
+
+        sunday = date(2026, 3, 15)
+        self.assertEqual(sunday.weekday(), 6)
+        self.assertFalse(race_week(sunday, date(2026, 4, 30)))
+        self.assertTrue(race_week(sunday - timedelta(days=1), date(2026, 4, 30)))
+        self.assertTrue(race_week(sunday, date(2026, 3, 12)))
+        phrases = {
+            "en": (
+                f"[**Race**](#marks-from-220)) whose days from {longest} weeks before to the race day meet the days of the output;",
+                "Where the race is not on a Sunday (or the output ends within that week), it is a period cut short,",
+                "The overview gives each mark only a short line at its top, whatever its kind (a span at its first day).",
+                "The newest races, up to four, are in rows.",
+            ),
+            "ja": (
+                f"大会の日の {longest} 週前から大会の日までのどこかが出力の日にかかるものが 2 つ以上あるときに押せます。",
+                "大会が日曜でないとき（や、出力がその週の途中で終わるとき）は、年の端の週と同じく途中の区切りです",
+                "全体図には、種類にかかわらず、印ごとに上の端の短い線だけが出ます（期間の印は最初の日に）。",
+                "新しい大会が 4 つまで、大会ごとに並びます。",
+            ),
+        }
+        helps = {
+            "en": f"With two race marks or more whose days from {longest} weeks before to the race day meet the days of the output,",
+            "ja": f"大会の日の {longest} 週前から大会の日までが出力の日にかかる大会の印が 2 つ以上あると、",
+        }
+        remembered = {
+            "en": ("how years are compared (the way, the month, by year or race day, and the weeks of a span)", "whether marks show"),
+            "ja": ("年でくらべるのしかた（見せ方・月・くらべ方・範囲の週の数）", "「印を出す」かどうか"),
+        }
+        lists = {"en": ("The GUI remembers only these:", "The place of an Export,"), "ja": ("GUI が覚えるのは、次のものだけです。", "エクスポートの場所、")}
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            messages = catalog(language)
+            for phrase in phrases[language]:
+                with self.subTest(language=language, phrase=phrase):
+                    self.assertEqual(reads.count(phrase), 1)
+            with self.subTest(language=language, part="help"):
+                self.assertTrue(messages["view.help.race_text"].startswith(helps[language]))
+            with self.subTest(language=language, part="race needed"):
+                self.assertTrue(messages["view.compare.race_needed"].startswith(helps[language]))
+            # The note of the table is in the note of the guides as a whole,
+            # not as words that the guides also have elsewhere ("outside the
+            # output"; the partial guard of M4).
+            note = messages["view.compare.partial_note"]
+            if language == "en":
+                parts = re.fullmatch(r"\* (.+); — (.+)\.", note)
+                self.assertIsNotNone(parts)
+                note = "* marks {}, and — {}.".format(*parts.groups())
+            with self.subTest(language=language, part="note"):
+                self.assertIn(note, reads)
+            # The overview is never said to draw the forms of the kinds.
+            with self.subTest(language=language, part="overview"):
+                self.assertNotIn("on every panel and on the overview" if language == "en" else "全部の段と全体図に", reads)
+            # The scene chooses the way to show and the span, in the words of
+            # the page, as they are remembered from before.
+            words = [messages[key] for key in ("view.compare.mode.rows_race", "view.compare.show")]
+            words += [messages["view.compare.weeks_option"].format(n=16), messages["view.compare.weeks"]]
+            choose = (
+                "Choose **{}** in **{}**, and **{}** in **{}**" if language == "en" else "「{1}」で「{0}」を、「{3}」で「{2}」を選びます"
+            ).format(*words)
+            with self.subTest(language=language, part="scene"):
+                self.assertEqual(reads.count(choose), 1)
+            # What the GUI remembers names what forgetting removes.
+            begin = reads.index(lists[language][0])
+            remembers = reads[begin : reads.index(lists[language][1], begin)]
+            for phrase in remembered[language]:
+                with self.subTest(language=language, remembered=phrase):
+                    self.assertIn(phrase, remembers)
+                    self.assertIn(phrase, messages["forget.text_also"])
 
     def test_readme_puts_the_gui_first(self) -> None:
         # v2.1.0 H1 (the whole flow): the README gives the GUI right after who

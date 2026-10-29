@@ -298,7 +298,7 @@ that is open, and then run the same line again.
 
 ## Ways to use it
 
-The steps of six common cases. The sections that the links lead to give the
+The steps of eight common cases. The sections that the links lead to give the
 details of each box. A Snapshot is a copy of one Export, which this app keeps
 in a Snapshot Store, so that the Exports that you import are normalized
 together ([Box 2](#box-2-snapshots)).
@@ -408,6 +408,23 @@ When: you want to compare the distance of May, year by year.
 ![Compare years with May chosen in Month: four rows from 2026 to 2023, each with the distance of the days of May as bars and the total of May in its heading (synthetic data made for the example)](assets/gui-guide/view-compare-may.en.png)
 
 More: [Compare years](#compare-years-from-220)
+
+### Compare the 16 weeks before races
+
+When: you want to compare the distance of the 16 weeks before some races,
+race by race.
+
+1. [Open the view page](#open-the-view-page).
+2. With **Marks…** above the panels, add two race marks or more (for example,
+   the kind **Race**, the name "Spring marathon", and the date 2026-03-15).
+3. Press **Compare years** in the heading of the Distance panel, and then
+   **race day** in the title of the bar.
+4. Choose **One row per race** in **Show as**, and **From 16 weeks before to
+   the race day** in **Span** (the way to show and the span are remembered
+   from before). The newest races, up to four, are in rows.
+5. For the numbers, press **Show as a table**.
+
+More: [Compare by race day](#compare-by-race-day), [Marks](#marks-from-220)
 
 ### Give the numbers to an AI as a CSV file
 
@@ -1108,6 +1125,80 @@ values are made):
 - To go back to the period before, press its button at the top, such as
   **3 years**.
 
+### The activities of a period (from 2.2.0)
+
+- On a panel of **Training (per activity)** or **Running form (FIT)**, press a
+  period of the chart (one week, month, and so on, of the grouping), and the
+  list of the activities of that period opens just under the panel. You can
+  also select the chart, choose a period with ← or →, and press Enter (or
+  Space). One list is open at a time. The panels of body records and of
+  estimates, a panel shown as a table, and a panel without any value open
+  none.
+- A click keeps the chart selected, so that ← and → still move the cross
+  line (the period of the list stays). Enter takes you to the heading of the
+  list. The period of the list has a blue frame on the chart.
+- The columns are **Date and time** and **Type**, then distance, time,
+  average pace, average and maximum heart rate, cadence, and total ascent.
+  The date and time are those of the place, as the output writes them, in a
+  form such as "Fri 10/2 6:30" (their timezone is not changed). A list opened
+  from the panel of power, training load, or the running form has one more
+  column, of that item. A value that an activity does not have is "—".
+- Press the heading of a column to order the list by it; each press turns
+  the order up or down, and rows without a value go last either way. The date
+  and time are ordered as they show.
+- Under the list, a line such as "Value of the panel: 108.1 km (activities
+  counted: 11)" gives the value of the panel for the period and how many
+  activities it counted: the numbers of the reading at the top right of the
+  panel. Some activities in the list, such as one without a heart rate, are
+  not counted in it.
+- The list holds the **Activity types counted** only, up to 500 a period.
+  For more, it says how many, and the finer grouping that lists them
+  (**Month** for a year, **Week** for a month, **Day** for a week).
+- **Close** or Esc closes it, back to the chart. It also closes when the
+  period, the grouping, the activity types, the output, the panels, the marks,
+  **Show as a table**, an enlarged panel, **Full screen**, or **Compare
+  years** change; a change of the language or of **Use the same scale for
+  panels with the same unit** keeps it. The list is not remembered and never
+  written to a file.
+- For a list and panels made from two readings of the output, see
+  [When the output changes while you look](#when-the-output-changes-while-you-look-from-220).
+
+![The activities of a period: October 2026 pressed on the panel of the distance, a list of 11 activities opened just under it, a blue frame on that month of the chart, and "Value of the panel: 108.1 km (activities counted: 11)" under the list (synthetic data made for the example)](assets/gui-guide/view-list.en.png)
+
+### Marks (from 2.2.0)
+
+- Marks are your own events on the calendar, such as races, injuries, or new
+  shoes. **Marks…** above the panels opens their window: choose the kind
+  (**Race**, **Injury**, **Shoes**, or **Other**), give a name of 1 to 30
+  characters and a date, and press **Add**. A mark of a span also has a
+  **Last day**. In the list of the window, each mark has **Change** and
+  **Remove** (it asks first, with **Keep it** as the first button). There can
+  be 200 marks.
+- Marks show as thin vertical lines on every panel, told apart by the form of
+  the line: a race a full line (in the color of the text), shoes a dotted
+  line, another mark a dashed line, and an injury a line of dashes and dots. A
+  span is a light band whose edges, its first and last day, are the line of
+  its kind. The overview gives each mark only a short line at its top,
+  whatever its kind (a span at its first day). Their names are on the top
+  chart (where they would meet, only their number, such as "3 marks"). Clear
+  **Show marks** to hide them; this is remembered.
+- Marks never change the numbers. The top chart tells a screen reader how
+  many marks are in its period, and the names and days of up to 10; the
+  other charts tell how many.
+- Marks of the kind **Race** can be compared in
+  [Compare by race day](#compare-by-race-day).
+- The marks are kept only in `gui-marks.json`, in the folder of the settings
+  of the GUI on this computer ([What is remembered for the next
+  time](#what-is-remembered-for-the-next-time)). They are your own words, so
+  they never go into an output, the Support Bundle, or the text of a report
+  on GitHub.
+- Where the file of the marks cannot be read, or was written by a newer
+  version of this app, the marks do not show and the file is never written
+  over (**Add**, **Change**, and **Remove** are grayed, and the bar at the
+  bottom says why).
+
+![Marks: **Show marks** and **Marks…** above the panels, the lines of the marks on every panel (a race as a full line, an injury as a band), their names on the top chart, and the window of the marks on the right (marks made up for the example)](assets/gui-guide/view-marks.en.png)
+
 ### Full screen
 
 - **Full screen** above the panels shows the charts and the overview alone:
@@ -1144,7 +1235,9 @@ values are made):
     running, where it has one).
   - **Show as a table**: the periods in rows and the years in columns; the
     last row has the value of the year (or of the month). * marks a period
-    that the output cuts, and — a period that the year does not have.
+    cut short (by an end of the output, of the year or month, or by the race
+    day), and — a period that the year does not have (outside the output, or
+    a day such as 29 February that the year lacks).
   - **Years**: the years of the output. At first the newest four, and
     **Up to 6 years**.
 
@@ -1190,6 +1283,53 @@ values are made):
 - A stop shows under the bar, in the words of a stop of the panels. Where
   there are too many numbers, group by **Week** or **Month** (by **Week** with
   one month chosen).
+- For values of the years or races made from another reading of the output
+  than the panels, see
+  [When the output changes while you look](#when-the-output-changes-while-you-look-from-220).
+
+#### Compare by race day
+
+- In the title of the bar, choose **year** or **race day** to compare by.
+  **race day** can be pressed with two race marks or more (marks of the kind
+  [**Race**](#marks-from-220)) whose days from 24 weeks before to the race
+  day meet the days of the output; otherwise it is grayed, and a line beside
+  it says why.
+- The races show as buttons in the place of the years, newest first: the
+  newest four at first, and up to six. A race after the last day of the
+  output can be chosen too: its weeks so far show.
+- **Span**, in the place of the month, goes from 8, 12, 16 (at first), 20, or
+  24 weeks before to the race day. It counts back from the Monday of the week
+  of the race, so that every race has as many weeks. The grouping is **Week**
+  only, also for a running total. The ways to show are those of the years,
+  with **One row per race** at first.
+- **Race week (to the race day)** goes from the Monday of the week of the race
+  to the race day. Where the race is not on a Sunday (or the output ends
+  within that week), it is a period cut short, as the ends of a year are (a
+  light, edged bar, a * in the table, and (partial) in the readings). The
+  heading of a row gives the value of the whole span counted at once, such as
+  "Total of this span"; the last row of the table is the span itself, such as
+  "Total of the days from 16 weeks before to the race day".
+- The button of a race shows the head of its name and its date (for example,
+  Spring marathon 3/15/2026), and tells a screen reader its whole name and its
+  days (for a mark of a span, its first and last day).
+- Where removing or changing marks (also forgetting the settings in the other
+  tab) leaves fewer than two races, the comparison goes back to the years. A
+  race that is gone never shows.
+- The way to compare (by year or by race day) and the weeks of the span are
+  remembered for the next time; the races chosen are not.
+
+![Compare by race day: the distance in one row per race, four races with the bars of their weeks from 16 weeks before to the race day, and the name and the date of each race with "Total of this span" in the heading of its row (marks and data made up for the example)](assets/gui-guide/view-compare-race.en.png)
+
+### When the output changes while you look (from 2.2.0)
+
+- At every request of numbers, the view page checks that the output is as it
+  was, and reads it again where it changed (the same output normalized again).
+  It also reads it again when the date changes (to leave out records after
+  today).
+- Right after you normalize again, or right after the date changes, the
+  values of the years or the races in **Compare years** (also by race day)
+  and the activities of a period can come from another reading than the panels
+  beside them. Compare again, or open the list again, for the new reading.
 
 ### What is remembered for the next time
 
@@ -1200,7 +1340,10 @@ later one.
   output), whether the item shelf is open, and the appearance (when **Light**
   or **Dark** is chosen); from 2.2.0, also the period, the grouping, the
   activity types counted, the layouts (those saved, and the one used
-  last), and the way and the month of [Compare years](#compare-years-from-220).
+  last), the way and the month of [Compare years](#compare-years-from-220),
+  what it compares by (the years or the race days) and the weeks of a span,
+  and whether **Show marks** is on. The [marks](#marks-from-220) themselves are
+  kept in the file of the marks.
   When another output has no value for an item shown, the second line
   of its panel says "There is no value in this period."
 - When another output opens (from 2.2.0), a period such as **1 year** stays
@@ -1210,7 +1353,8 @@ later one.
   that the output has; when it has none of them, every running type in the
   output.
 - Not remembered: the output shown, the same scale, a panel enlarged, a table
-  shown, full screen, and whether years were compared, with the years chosen. As the output shown is not remembered, the page
+  shown, full screen, whether years were compared, with the years or races
+  chosen, and whether a list of activities was open. As the output shown is not remembered, the page
   opened from the bar at the bottom offers the latest output with the button
   of [Open the view page](#open-the-view-page).
 - **Forget the remembered settings…** in the bar at the bottom of the
@@ -1329,8 +1473,9 @@ The GUI remembers only these:
   does not come back.
 - Whether **Show tips** is on, the appearance (when **Light** or **Dark** is
   chosen), and the items and the item shelf of the view page; from 2.2.0, also
-  its period, grouping, activity types counted, and layouts (those saved, and
-  the one used last).
+  its period, grouping, activity types counted, layouts (those saved, and the
+  one used last), how years are compared (the way, the month, by year or race
+  day, and the weeks of a span), and whether marks show.
 - The timezone of the last run that made its output (from 2.2.0). At later
   launches, box 3 is set with it (**(as last time)**).
 - The marks of the view page (from 2.2.0), in a file of their own.
@@ -1362,7 +1507,9 @@ then removes the file of the settings, never while a run is active; from
 `gui-marks.json` in the same folder (the marks cannot be brought back). It
 also forgets the appearance, the items and the item shelf of the view page,
 your layouts, the period, the grouping, the activity types counted, how years
-are compared, and the timezone of the last run that made its output. It
+are compared (the way, the month, by year or race day, and the weeks of a
+span), whether marks show, and the timezone of the last run that made its
+output. It
 can be pressed only while there are remembered settings. The
 store and the outputs stay, and the next launch goes as a first launch; a
 store that is not in the default place must then be opened again. When the
@@ -1628,6 +1775,14 @@ it. To remove Python too, do as the documents of python.org say, for
   the timezone. They stay on this computer, and are never in the Support
   Bundle. On a computer that others use, remove them with
   **Forget the remembered settings…**.
+- The [marks](#marks-from-220) of the view page (from 2.2.0) hold your own
+  words and events, so they are kept only in the file of the marks,
+  `gui-marks.json`, never in an output, the Support Bundle, or the text of a
+  report on GitHub. **Forget the remembered settings…** removes them with the
+  settings.
+- [The activities of a period](#the-activities-of-a-period-from-220) (from
+  2.2.0) show the dates and times of the output on the page only, and are
+  never written to a file.
 
 See [Security and Privacy Boundary](security_and_privacy_boundary.md).
 
@@ -1655,7 +1810,17 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
   shows the numbers of a panel as a table.
 - When comparing years (from 2.2.0), moving the line with ← → and the other
   keys reads out the period and the value of each year
-  ([Compare years](#compare-years-from-220)).
+  ([Compare years](#compare-years-from-220)). When comparing by race day, the
+  button of a race tells its whole name and its days.
+- A chart of a panel of training or of the running form (from 2.2.0) tells
+  that Enter opens the list of the activities of a period. Opened with Enter
+  (or Space), the focus goes to the heading of the list, and how many
+  activities came is read out; the buttons of the headings of the columns
+  order it, and each heading tells the order it sorts by; Esc closes it, back
+  to the chart
+  ([The activities of a period](#the-activities-of-a-period-from-220)).
+- The top chart tells how many marks (from 2.2.0) are in its period, and the
+  names and days of up to 10 ([Marks](#marks-from-220)).
 
 ## The GUI and the command line
 
