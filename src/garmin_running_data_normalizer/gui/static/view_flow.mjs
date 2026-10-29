@@ -346,6 +346,7 @@ function dateFormat(language, kind) {
       tick_day: { month: "numeric", day: "numeric" },
       month_name: { month: "long" },
       month_day: { month: "long", day: "numeric" },
+      numeric_day: { year: "numeric", month: "numeric", day: "numeric" },
     }[kind];
     dateFormats.set(name, new Intl.DateTimeFormat(language, { ...options, timeZone: "UTC" }));
   }
@@ -480,6 +481,8 @@ export function settingsAfterForget(settings) {
     "timezone",
     "view_compare_mode",
     "view_compare_month",
+    "view_compare_by",
+    "view_compare_weeks",
     "view_marks_shown",
     "view_marks",
     "marks_notice",
@@ -1538,7 +1541,9 @@ export function compareValue(answer, year, month, series) {
 // color of each, the periods of its answer and their places on the shared
 // axis, the values of the series chosen (a running total for that way), its
 // counts and the points of its records, the days that the output cuts, and
-// the value of the year (or of the month).
+// the value of the year (or of the month). From stage M2, each has the names
+// that the drawing uses for a year as for a race: its id, its name, and the
+// short one at the end of its line.
 export function compareData({ years, month, grain, mode, series, answers, whole }) {
   const steps = yearSteps(years);
   return [...years].sort((a, b) => b - a).map((year) => {
@@ -1549,6 +1554,9 @@ export function compareData({ years, month, grain, mode, series, answers, whole 
     const range = compareRange(year, month);
     return {
       year,
+      id: String(year),
+      label: message("view.compare.year", { year: String(year) }),
+      short: plain(String(year)),
       step: steps.get(year),
       range,
       periods,
@@ -1641,14 +1649,15 @@ function compareWhen(period, grain, language) {
 // breaks), or that the output has no such period of it.
 export function compareReadings(item, data, slot, grain, mode, language) {
   return data.map((entry) => {
+    const names = { year: entry.year, id: entry.id, label: entry.label, short: entry.short };
     const index = entry.slots.findIndex((place) => place.start === slot);
     if (index < 0) {
-      return { year: entry.year, step: entry.step, period: null, value: null, count: null, missing: message("view.compare.outside") };
+      return { ...names, step: entry.step, period: null, value: null, count: null, missing: message("view.compare.outside") };
     }
     const value = entry.values[index];
     const has = Number.isFinite(value);
     return {
-      year: entry.year,
+      ...names,
       step: entry.step,
       period: compareWhen(entry.periods[index], grain, language),
       value: has ? valueMessage(item.key, value, language) : null,
@@ -1663,12 +1672,13 @@ export function compareReadings(item, data, slot, grain, mode, language) {
 // period without a value says so, and a place that the year does not have
 // (outside the output, or a week or a day that the year lacks) is outside;
 // the last row holds the value of the year (or of the month). A running
-// total has no counts, as in its readings.
-export function compareTable(item, data, grain, month, span, language, mode = "rows") {
+// total has no counts, as in its readings. A comparison by race day gives the
+// names of its places and of its last row (``axis``, stage M2).
+export function compareTable(item, data, grain, month, span, language, mode = "rows", axis = null) {
   const counts = mode !== "cumulative";
   const heads = [message("view.compare.period")];
   for (const entry of data) {
-    heads.push(message("view.compare.year", { year: String(entry.year) }));
+    heads.push(entry.label);
     if (counts) {
       heads.push(message(countHeadKey(item)));
     }
@@ -1677,7 +1687,7 @@ export function compareTable(item, data, grain, month, span, language, mode = "r
   const rows = [];
   for (let slot = 0; slot <= span; slot += 1) {
     rows.push({
-      period: compareSlotName(slot, grain, month, language),
+      period: axis === null ? compareSlotName(slot, grain, month, language) : axis.slotName(slot),
       cells: data.map((entry) => {
         const index = entry.slots.findIndex((place) => place.start === slot);
         if (index < 0) {
@@ -1694,7 +1704,7 @@ export function compareTable(item, data, grain, month, span, language, mode = "r
     });
   }
   const last = {
-    period: compareValueMessage(item, month, language),
+    period: axis === null ? compareValueMessage(item, month, language) : axis.whole,
     cells: data.map((entry) =>
       entry.whole === null
         ? outside
@@ -1707,6 +1717,227 @@ export function compareTable(item, data, grain, month, span, language, mode = "r
     ),
   };
   return { heads, rows, last, counts };
+}
+
+// --- Comparing one item by race day (stage M2 of v2.2.0) -------------------
+
+// What a comparison compares by: the years, or the race marks, each from some
+// weeks before its day to the day; the weeks that it can take, and those at
+// first.
+export const COMPARE_BYS = ["year", "race"];
+export const COMPARE_WEEKS = [8, 12, 16, 20, 24];
+export const FIRST_COMPARE_WEEKS = 16;
+export const MAX_COMPARE_RACES = MAX_COMPARE_YEARS;
+// The grouping of the server that gives the value of the whole span of a race
+// as one period (view/series.py RANGE_GRAIN), for the requests of a
+// comparison only.
+export const RANGE_GRAIN = "range";
+// The races offered are those whose longest span meets the days of the
+// output, so that a change of the weeks keeps them (Codex's review of the
+// plan of M2); a shorter span outside the output is outside, as a year is.
+const LONGEST_WEEKS = COMPARE_WEEKS[COMPARE_WEEKS.length - 1];
+// The room of the name of a race where its whole name has no room (on its
+// button, in the legend, at the end of its line, and in the box of the
+// readings), in columns: a character of Chinese, Japanese, or Korean takes
+// two, as in a font of one width.
+const SHORT_RACE_NAME = 22;
+const WIDE = /[\u1100-\u115f\u2e80-\u303e\u3041-\u33ff\u3400-\u4dbf\u4e00-\u9fff\ua000-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]|[\u{20000}-\u{3fffd}]/u;
+const columns = (character) => (WIDE.test(character) ? 2 : 1);
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const isoOf = (count) => new Date(count * 86400000).toISOString().slice(0, 10);
+
+// What a comparison compares by, and its weeks, as the settings remember
+// them: the years and 16 weeks where they remember none, or another form.
+export function compareByToOpen(settings) {
+  const by = settings?.view_compare_by;
+  const weeks = settings?.view_compare_weeks;
+  return {
+    by: COMPARE_BYS.includes(by) ? by : "year",
+    weeks: COMPARE_WEEKS.includes(weeks) ? weeks : FIRST_COMPARE_WEEKS,
+  };
+}
+
+// The days that a race asks for: from the Monday of the week ``weeks`` weeks
+// before the week of its day, to its day (the first day of a mark of a span:
+// the checker's M2-2), so that every race has as many weeks.
+export function raceRange(day, weeks) {
+  return { from: isoOf(mondayOf(day) - weeks * 7), to: day };
+}
+
+// The race marks that a comparison offers, newest first (of one day, the one
+// added last first): those whose longest span meets the days of the output,
+// a race after its last day too (the weeks before it so far).
+export function compareRaces(marks, firstDay, lastDay) {
+  if (typeof firstDay !== "string" || typeof lastDay !== "string" || !ISO_DAY.test(firstDay) || !ISO_DAY.test(lastDay) || firstDay > lastDay) {
+    return [];
+  }
+  return (Array.isArray(marks) ? marks : [])
+    .map((mark, index) => ({ mark, index }))
+    .filter(({ mark }) => mark?.kind === "race" && typeof mark.day === "string" && ISO_DAY.test(mark.day))
+    .filter(({ mark }) => mark.day >= firstDay && raceRange(mark.day, LONGEST_WEEKS).from <= lastDay)
+    .sort((a, b) => (a.mark.day === b.mark.day ? b.index - a.index : a.mark.day < b.mark.day ? 1 : -1))
+    .map(({ mark }) => mark);
+}
+
+// What a comparison compares by now: the race days only where the person
+// chose them and two races at least are offered; the choice stays as it is.
+export function compareByFor(by, races) {
+  return by === "race" && Array.isArray(races) && races.length >= 2 ? "race" : "year";
+}
+
+// The races chosen at first: the newest ones, up to four.
+export function firstCompareRaces(races) {
+  return races.slice(0, FIRST_COMPARE_YEARS).map((race) => race.id);
+}
+
+// The races chosen that are still offered, in their order; the first ones
+// where none is (a mark changed, removed, or forgotten, or another output).
+export function racesKept(chosen, races) {
+  const kept = races.map((race) => race.id).filter((id) => Array.isArray(chosen) && chosen.includes(id));
+  return kept.length ? kept : firstCompareRaces(races);
+}
+
+// A race added or taken away: in the order of the races, one at least, six
+// at most.
+export function toggledRaces(chosen, id, races) {
+  if (chosen.includes(id)) {
+    return chosen.length > 1 ? chosen.filter((entry) => entry !== id) : chosen;
+  }
+  if (chosen.length >= MAX_COMPARE_RACES || !races.some((race) => race.id === id)) {
+    return chosen;
+  }
+  const next = [...chosen, id];
+  return races.map((race) => race.id).filter((entry) => next.includes(entry));
+}
+
+// The grouping of a comparison, and those that it can take: by week only by
+// race day, also while its way is a running total (Codex's review of the plan
+// of M2); by year, as from stage L1.
+export function compareGrainFor(by, mode, month) {
+  return by === "race" ? "week" : firstCompareGrain(mode, month);
+}
+
+export function compareGrainsFor(by, month) {
+  return by === "race" ? ["week"] : compareGrains(month);
+}
+
+// The value of the whole span of a race in its answer of one period, of the
+// series chosen, and whether the output cuts the span; null outside it.
+export function raceValue(answer, series, cut) {
+  const periods = Array.isArray(answer?.periods) ? answer.periods : [];
+  if (!periods.length) {
+    return null;
+  }
+  const line = compareLine(answer.panels?.[0], series);
+  const value = line?.values?.[0];
+  const count = line?.counts?.[0];
+  return {
+    value: Number.isFinite(value) ? value : null,
+    count: Number.isInteger(count) ? count : 0,
+    partial: cut?.from != null || cut?.to != null,
+  };
+}
+
+// The head of a long name: at most ``size`` columns, the last "…".
+export function shortName(name, size = SHORT_RACE_NAME) {
+  const characters = Array.from(String(name));
+  if (characters.reduce((sum, character) => sum + columns(character), 0) <= size) {
+    return String(name);
+  }
+  const kept = [];
+  let used = 1;
+  for (const character of characters) {
+    if (used + columns(character) > size) {
+      break;
+    }
+    used += columns(character);
+    kept.push(character);
+  }
+  return `${kept.join("")}…`;
+}
+
+// The short name of a race: the head of its name and its day, so that races
+// of one name in one year are told apart (Codex's review of the diff of M2).
+export function raceShort(race, language) {
+  return message("view.compare.race_short", { name: shortName(race.name), date: dateFormat(language, "numeric_day").format(utcDate(race.day)) });
+}
+
+// The races of a comparison as they are drawn, in their order (newest first),
+// in the form of the years (compareData): the step of the color of each, its
+// weeks by their order from the first (0) to the week of the race (``weeks``),
+// the days that the output cuts, and the value of its whole span. A week cut
+// short is marked as the server marks it, the week of the race cut at its day
+// as a week of a year at its ends (the checker's review of M2).
+export function raceData({ races, weeks, mode, series, answers, wholes, language }) {
+  return races.map((race, index) => {
+    const answer = answers?.get(race.id) ?? null;
+    const range = raceRange(race.day, weeks);
+    const cut = compareCut(range, answer);
+    const periods = Array.isArray(answer?.periods) ? answer.periods : [];
+    const line = compareLine(answer?.panels?.[0], series);
+    const values = periods.map((_period, at) => (Number.isFinite(line?.values?.[at]) ? line.values[at] : null));
+    const first = mondayOf(range.from);
+    return {
+      year: Number(race.day.slice(0, 4)),
+      id: race.id,
+      label: message("view.compare.race", { name: race.name, date: dateText(race.day, language) }),
+      short: raceShort(race, language),
+      race,
+      step: MAX_COMPARE_RACES - index,
+      range,
+      periods,
+      slots: periods.map((period) => {
+        const slot = (mondayOf(period.start) - first) / 7;
+        return { start: slot, end: slot, partial: period.partial, from: period.start, to: period.end };
+      }),
+      values: mode === "cumulative" ? runningTotal(values) : values,
+      counts: periods.map((_period, at) => (Number.isInteger(line?.counts?.[at]) ? line.counts[at] : 0)),
+      points: mode !== "cumulative" && Array.isArray(line?.points) ? line.points : null,
+      cut,
+      whole: raceValue(wholes?.get(race.id) ?? null, series, cut),
+      outside: periods.length === 0,
+    };
+  });
+}
+
+// The name of a place of the axis of the races: the weeks before the week of
+// the race, and that week.
+export function raceSlotName(slot, weeks) {
+  return slot >= weeks ? message("view.compare.race_week") : message("view.compare.weeks_before", { n: weeks - slot });
+}
+
+// Where the axis under the races is marked: every fourth week before the
+// race, and the week of the race.
+export function raceTicks(weeks) {
+  const ticks = [];
+  for (let n = weeks; n >= 4; n -= 4) {
+    ticks.push({ at: weeks - n, text: message("view.compare.weeks_before", { n }) });
+  }
+  ticks.push({ at: weeks, text: message("view.compare.race_week") });
+  return ticks;
+}
+
+// The words of the value of the whole span of a race, by the kind of the
+// item: short at the head of its row (this span), and in the last row of the
+// table, the span itself (the checker's M2-1).
+export function raceValueMessage(item, weeks, short = false) {
+  const key = Object.hasOwn(COMPARE_VALUE_KEYS, item?.kind) ? COMPARE_VALUE_KEYS[item.kind] : COMPARE_VALUE_KEYS.day;
+  const period = short ? message("view.compare.this_span") : message("view.compare.race_days", { n: weeks });
+  return message(key, {}, { period });
+}
+
+// What the button of a race shows, its short name, and what the ear hears:
+// its whole name and its days, the last day of a mark of a span too (the
+// checker's M2-2), as the marks are said.
+export function raceChip(race, language) {
+  const days = markDays(race, language);
+  return {
+    short: raceShort(race, language),
+    spoken:
+      days.end === null
+        ? message("view.marks.spoken_mark", { name: race.name, day: days.day })
+        : message("view.marks.spoken_span", { name: race.name, day: days.day, end: days.end }),
+  };
 }
 
 

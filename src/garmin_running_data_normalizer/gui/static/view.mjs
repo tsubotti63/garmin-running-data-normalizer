@@ -25,6 +25,25 @@ import {
 } from "./flow.mjs";
 import {
   COMPARE_MODES,
+  COMPARE_BYS,
+  COMPARE_WEEKS,
+  FIRST_COMPARE_WEEKS,
+  MAX_COMPARE_RACES,
+  RANGE_GRAIN,
+  compareByFor,
+  compareByToOpen,
+  compareGrainFor,
+  compareGrainsFor,
+  compareRaces,
+  firstCompareRaces,
+  raceChip,
+  raceData,
+  raceRange,
+  raceSlotName,
+  raceTicks,
+  raceValueMessage,
+  racesKept,
+  toggledRaces,
   FIRST_KEYS,
   MARKS_LOCKED,
   MARKS_NOTICE_KEYS,
@@ -42,7 +61,6 @@ import {
   MAX_PANELS,
   clockOf,
   compareData,
-  compareGrains,
   compareModeFor,
   compareNote,
   compareRange,
@@ -57,7 +75,6 @@ import {
   compareValueGrain,
   compareValueMessage,
   compareYears,
-  firstCompareGrain,
   firstCompareSeries,
   firstCompareYears,
   coverageRuns,
@@ -212,6 +229,7 @@ const ui = {
   typesClose: byId("types-close"),
   filtersHint: byId("filters-hint"),
   compareOff: byId("compare-off"),
+  compareOffRace: byId("compare-off-race"),
   body: byId("view-body"),
   shelf: byId("shelf"),
   shelfCount: byId("shelf-count"),
@@ -288,11 +306,19 @@ const ui = {
   compare: byId("compare"),
   compareBefore: byId("compare-before"),
   compareItem: byId("compare-item"),
+  compareMiddle: byId("compare-middle"),
+  compareBys: [...document.querySelectorAll("[data-compare-by]")],
+  compareRaceNeeded: byId("compare-race-needed"),
   compareAfter: byId("compare-after"),
   compareModes: [...document.querySelectorAll("[data-compare-mode]")],
+  compareRowsYear: byId("compare-rows-year"),
+  compareRowsRace: byId("compare-rows-race"),
   compareAbout: byId("compare-about"),
   compareAboutText: byId("compare-about-text"),
   compareMonth: byId("compare-month"),
+  compareMonthField: byId("compare-month-field"),
+  compareWeeksField: byId("compare-weeks-field"),
+  compareWeeks: byId("compare-weeks"),
   compareSeriesField: byId("compare-series-field"),
   compareSeries: byId("compare-series"),
   compareTable: byId("compare-table"),
@@ -300,6 +326,11 @@ const ui = {
   compareTableTable: byId("compare-table-table"),
   compareBack: byId("compare-back"),
   compareYears: byId("compare-years"),
+  compareYearsLabel: byId("compare-years-label"),
+  compareUpTo: byId("compare-up-to"),
+  compareRacesLabel: byId("compare-races-label"),
+  compareRaces: byId("compare-races"),
+  compareRacesUpTo: byId("compare-races-up-to"),
   compareLoading: byId("compare-loading"),
   compareStop: byId("compare-stop"),
   compareStopHeading: byId("compare-stop-heading"),
@@ -431,6 +462,11 @@ const state = {
   // settings remember.
   compareMode: "rows",
   compareMonth: null,
+  // What it compares by (the years, or the race days, with the races chosen
+  // in the comparison) and the weeks before a race day, which the settings
+  // remember too (stage M2 of v2.2.0).
+  compareBy: "year",
+  compareWeeks: FIRST_COMPARE_WEEKS,
   // The answers of the last generation of its requests, the count of the
   // generations, whether one is on its way, and a stop.
   compareAnswer: null,
@@ -772,6 +808,8 @@ function viewValues() {
     types: state.wantedTypes,
     compare_mode: state.compareMode,
     compare_month: state.compareMonth,
+    compare_by: state.compareBy,
+    compare_weeks: state.compareWeeks,
     marks_shown: state.marksShown,
   };
 }
@@ -948,6 +986,10 @@ async function openOutput(target, focus = false) {
     if (state.compare !== null) {
       if (itemsByKey(answer.items).has(state.compare.key) && compareYears(answer.first_day, answer.last_day).length) {
         Object.assign(state.compare, { years: firstCompareYears(compareYears(answer.first_day, answer.last_day)), series: null, cursor: null });
+        // The races of this output, newest first, and the grouping of what
+        // it is compared by now (stage M2 of v2.2.0).
+        state.compare.races = firstCompareRaces(raceChoices());
+        settleCompareGrain(state.compareAnswer?.by ?? null);
       } else {
         state.compare = null;
       }
@@ -1228,7 +1270,7 @@ function rangeTyped() {
 function setGrain(grain) {
   if (comparing()) {
     // A grouping of the comparison, apart from that of the panels.
-    if (compareGrains(state.compareMonth).includes(grain) && grain !== state.compare.grain) {
+    if (compareGrainsFor(compareByNow(), state.compareMonth).includes(grain) && grain !== state.compare.grain) {
       state.compare.grain = grain;
       state.compare.cursor = null;
       requestCompare();
@@ -1309,6 +1351,29 @@ function takeMarks(marks) {
   if (JSON.stringify(taken) !== JSON.stringify(state.marks)) {
     state.marks = taken;
     state.marksSeq += 1;
+    followMarks();
+  }
+}
+
+// A comparison follows the marks (Codex's review of the plan of M2): the
+// races chosen that are still offered, by their days and names now, and the
+// years where fewer than two are offered; a new generation of its numbers
+// where it asks for another thing than its last request (also one whose
+// answer is on its way: Codex's review of the diff), so that an answer for
+// the marks before is dropped.
+function followMarks() {
+  if (!comparing()) {
+    return;
+  }
+  const asked = state.compare.asked ?? null;
+  const before = asked?.by ?? null;
+  state.compare.races = racesKept(state.compare.races, raceChoices());
+  const by = compareByNow();
+  const races = by === "race" ? raceChoices().filter((race) => state.compare.races.includes(race.id)) : [];
+  const signature = (askedBy, askedRaces) => JSON.stringify([askedBy, askedRaces.map((race) => [race.id, race.day, race.name])]);
+  if (asked === null || signature(before, asked.races) !== signature(by, races)) {
+    settleCompareGrain(before);
+    requestCompare();
   }
 }
 
@@ -2860,8 +2925,27 @@ function compareModeNow() {
   return compareModeFor(compareItem(), state.compareMode);
 }
 
-function yearText(year) {
-  return t("view.compare.year", { year: String(year) });
+// The races that a comparison offers: the race marks whose longest span
+// meets the days of the output (stage M2 of v2.2.0).
+function raceChoices() {
+  return state.view === null ? [] : compareRaces(state.marks, state.view.first_day, state.view.last_day);
+}
+
+// What the item is compared by now: the race days only with two races
+// offered at least; the choice of the person stays as it is.
+function compareByNow() {
+  return compareByFor(state.compareBy, raceChoices());
+}
+
+// The grouping of a comparison after what it is compared by may have
+// changed (from ``before``): the first one of its way where it changed, or
+// where the grouping is not one that it takes; otherwise as it is.
+function settleCompareGrain(before) {
+  const by = compareByNow();
+  if (by !== before || !compareGrainsFor(by, state.compareMonth).includes(state.compare.grain)) {
+    state.compare.grain = compareGrainFor(by, compareModeNow(), state.compareMonth);
+    state.compare.cursor = null;
+  }
 }
 
 // The comparison of one item, from its panel: the newest years of the output
@@ -2875,7 +2959,9 @@ function enterCompare(key) {
   state.compare = {
     key,
     years: firstCompareYears(compareYears(state.view.first_day, state.view.last_day)),
-    grain: firstCompareGrain(compareModeFor(item, state.compareMode), state.compareMonth),
+    // The races chosen, newest first (stage M2 of v2.2.0).
+    races: firstCompareRaces(raceChoices()),
+    grain: compareGrainFor(compareByNow(), compareModeFor(item, state.compareMode), state.compareMonth),
     series: null,
     table: false,
     about: false,
@@ -2909,25 +2995,41 @@ function leaveCompare() {
 
 // Ask for the numbers of a comparison as one generation: the value of every
 // year (or month) of the output, which also names the lines of an item of
-// several, and the periods of each year chosen. Answers of an older
-// generation are dropped when they come, and a stop of one of them stops the
-// generation; a ticket that the server no longer keeps opens the output
-// again, once.
+// several, and the periods of each year chosen; by race day (stage M2 of
+// v2.2.0), the weeks of each race chosen that is still offered and the value
+// of its whole span. Answers of an older generation are dropped when they
+// come, and a stop of one of them stops the generation; a ticket that the
+// server no longer keeps opens the output again, once.
 async function requestCompare(again = true) {
   const compare = state.compare;
   if (compare === null || state.view === null) {
     return;
   }
   const seq = ++state.compareSeq;
+  const by = compareByNow();
+  const choices = raceChoices();
+  compare.races = racesKept(compare.races, choices);
+  // Its grouping, where what it compares by changed by another way (an
+  // output opened again for a new ticket).
+  settleCompareGrain(by);
+  const races = by === "race" ? choices.filter((race) => compare.races.includes(race.id)) : [];
+  const weeks = state.compareWeeks;
   const { key, grain } = compare;
   const month = state.compareMonth;
   const years = [...compare.years];
+  const payloads =
+    by === "race"
+      ? races.flatMap((race) => [seriesPayload([key], raceRange(race.day, weeks), "week"), seriesPayload([key], raceRange(race.day, weeks), RANGE_GRAIN)])
+      : years.map((year) => seriesPayload([key], compareRange(year, month), grain));
+  // What this generation asks for, which the marks that change are compared
+  // with (followMarks).
+  compare.asked = { by, races: races.map((race) => ({ id: race.id, day: race.day, name: race.name })) };
   state.compareLoading = true;
   render();
   try {
     const [whole, ...answers] = await Promise.all([
-      callApi("/api/view/series", seriesPayload([key], "all", compareValueGrain(month))),
-      ...years.map((year) => callApi("/api/view/series", seriesPayload([key], compareRange(year, month), grain))),
+      callApi("/api/view/series", seriesPayload([key], "all", by === "race" ? "year" : compareValueGrain(month))),
+      ...payloads.map((payload) => callApi("/api/view/series", payload)),
     ]);
     if (seq !== state.compareSeq) {
       return;
@@ -2936,7 +3038,22 @@ async function requestCompare(again = true) {
     if (!compareSeriesChoices(panel, state.language).some((choice) => choice.key === compare.series)) {
       compare.series = firstCompareSeries(panel);
     }
-    state.compareAnswer = { seq, key, month, grain, years, whole, answers: new Map(years.map((year, index) => [year, answers[index]])) };
+    state.compareAnswer =
+      by === "race"
+        ? {
+            seq,
+            key,
+            by,
+            weeks,
+            month: null,
+            grain: "week",
+            years: [],
+            races,
+            whole,
+            answers: new Map(races.map((race, index) => [race.id, answers[2 * index]])),
+            wholes: new Map(races.map((race, index) => [race.id, answers[2 * index + 1]])),
+          }
+        : { seq, key, by, weeks: null, month, grain, years, races: [], whole, answers: new Map(years.map((year, index) => [year, answers[index]])), wholes: null };
     state.compareStop = null;
   } catch (error) {
     if (seq !== state.compareSeq) {
@@ -2979,7 +3096,7 @@ function chooseCompareItem() {
   Object.assign(state.compare, { key, series: null, about: false });
   const mode = compareModeNow();
   if (mode !== before) {
-    state.compare.grain = firstCompareGrain(mode, state.compareMonth);
+    state.compare.grain = compareGrainFor(compareByNow(), mode, state.compareMonth);
     state.compare.cursor = null;
   }
   requestCompare();
@@ -2993,7 +3110,8 @@ function chooseCompareMode(mode) {
   }
   state.compareMode = mode;
   rememberItems(true);
-  const grain = firstCompareGrain(mode, state.compareMonth);
+  // By race day, by week whatever the way (Codex's review of the plan of M2).
+  const grain = compareGrainFor(compareByNow(), mode, state.compareMonth);
   if (grain === state.compare.grain) {
     render();
     return;
@@ -3011,7 +3129,7 @@ function chooseCompareMonth() {
   }
   const month = Number(ui.compareMonth.value);
   state.compareMonth = Number.isInteger(month) && month >= 1 && month <= 12 ? month : null;
-  state.compare.grain = firstCompareGrain(compareModeNow(), state.compareMonth);
+  state.compare.grain = compareGrainFor(compareByNow(), compareModeNow(), state.compareMonth);
   state.compare.cursor = null;
   rememberItems(true);
   requestCompare();
@@ -3024,6 +3142,48 @@ function toggleCompareYear(year) {
   const years = toggledYears(state.compare.years, year);
   if (years !== state.compare.years) {
     state.compare.years = years;
+    requestCompare();
+  }
+}
+
+// What the item is compared by, which is remembered: the race days with two
+// races offered at least, by week; the years with the first grouping of the
+// way (stage M2 of v2.2.0).
+function chooseCompareBy(by) {
+  if (!comparing() || !COMPARE_BYS.includes(by) || (by === "race" && compareByFor(by, raceChoices()) !== "race")) {
+    return;
+  }
+  const before = compareByNow();
+  state.compareBy = by;
+  rememberItems(true);
+  if (compareByNow() === before) {
+    render();
+    return;
+  }
+  state.compare.races = racesKept(state.compare.races, raceChoices());
+  settleCompareGrain(before);
+  requestCompare();
+}
+
+// The weeks before a race day, which are remembered.
+function chooseCompareWeeks() {
+  const weeks = Number(ui.compareWeeks.value);
+  if (!comparing() || !COMPARE_WEEKS.includes(weeks) || weeks === state.compareWeeks) {
+    return;
+  }
+  state.compareWeeks = weeks;
+  state.compare.cursor = null;
+  rememberItems(true);
+  requestCompare();
+}
+
+function toggleCompareRace(id) {
+  if (!comparing()) {
+    return;
+  }
+  const races = toggledRaces(state.compare.races, id, raceChoices());
+  if (races !== state.compare.races) {
+    state.compare.races = races;
     requestCompare();
   }
 }
@@ -3042,11 +3202,25 @@ function renderCompare(live) {
   const item = compareItem();
   const total = item !== null && totalItem(item);
   const mode = compareModeNow();
-  // The title, with the list of the items where each language names it.
-  const [before = "", after = ""] = t("view.compare.title", { name: "\u0001" }).split("\u0001");
+  // The title, with the list of the items and the buttons of what it is
+  // compared by where each language puts them (stage M2 of v2.2.0).
+  const [before = "", rest = ""] = t("view.compare.title_by", { item: "\u0001", by: "\u0002" }).split("\u0001");
+  const [middle = "", after = ""] = rest.split("\u0002");
   setText(ui.compareBefore, before);
+  setText(ui.compareMiddle, middle);
   setText(ui.compareAfter, after);
   renderCompareItems();
+  const by = compareByNow();
+  const race = by === "race";
+  const offered = compareByFor("race", raceChoices()) === "race";
+  for (const button of ui.compareBys) {
+    button.disabled = button.dataset.compareBy === "race" && !offered;
+    button.setAttribute("aria-pressed", String(button.dataset.compareBy === by));
+  }
+  ui.compareRaceNeeded.hidden = offered;
+  // One row per race, by race day.
+  ui.compareRowsYear.hidden = race;
+  ui.compareRowsRace.hidden = !race;
   for (const button of ui.compareModes) {
     button.disabled = button.dataset.compareMode === "cumulative" && !total;
     button.setAttribute("aria-pressed", String(button.dataset.compareMode === mode));
@@ -3054,12 +3228,27 @@ function renderCompare(live) {
   ui.compareAbout.hidden = total;
   ui.compareAbout.setAttribute("aria-expanded", String(compare.about && !ui.compareAbout.hidden));
   ui.compareAboutText.hidden = !compare.about || ui.compareAbout.hidden;
+  // By race day, its weeks in the place of the month, and its races in the
+  // place of the years.
+  ui.compareMonthField.hidden = race;
+  ui.compareWeeksField.hidden = !race;
   renderCompareMonths();
+  renderCompareWeeks();
   renderCompareSeries();
   ui.compareTable.setAttribute("aria-pressed", String(compare.table));
   ui.compareTableChart.hidden = !compare.table;
   ui.compareTableTable.hidden = compare.table;
-  renderCompareYears();
+  for (const node of [ui.compareYearsLabel, ui.compareYears, ui.compareUpTo]) {
+    node.hidden = race;
+  }
+  for (const node of [ui.compareRacesLabel, ui.compareRaces, ui.compareRacesUpTo]) {
+    node.hidden = !race;
+  }
+  if (race) {
+    renderCompareRaces();
+  } else {
+    renderCompareYears();
+  }
   setText(ui.compareLoading, state.compareLoading ? t("view.loading") : "");
   ui.compareStop.hidden = state.compareStop === null;
   if (!ui.compareStop.hidden) {
@@ -3114,6 +3303,21 @@ function renderCompareMonths() {
   ui.compareMonth.value = state.compareMonth === null ? "" : String(state.compareMonth);
 }
 
+// The weeks before a race day, each from its first week to the race day.
+function renderCompareWeeks() {
+  if (ui.compareWeeks.dataset.signature !== state.language) {
+    ui.compareWeeks.replaceChildren(
+      ...COMPARE_WEEKS.map((weeks) => {
+        const option = element("option", "", t("view.compare.weeks_option", { n: weeks }));
+        option.value = String(weeks);
+        return option;
+      }),
+    );
+    ui.compareWeeks.dataset.signature = state.language;
+  }
+  ui.compareWeeks.value = String(state.compareWeeks);
+}
+
 // The lines of an item of several (VO2 Max), one of which is compared, by the
 // names of the legend of its panel; no list for an item of one line.
 function renderCompareSeries() {
@@ -3164,6 +3368,39 @@ function renderCompareYears() {
   }
 }
 
+// The races offered, a pressed button each that is chosen: its short name
+// (the head of its name and its day) to the eye, and its whole name and its
+// days to the ear (Codex's review of the diff of M2). One at least, and up to
+// six (stage M2 of v2.2.0).
+function renderCompareRaces() {
+  const races = raceChoices();
+  const chosen = state.compare.races;
+  const signature = JSON.stringify([races, chosen, state.language]);
+  if (ui.compareRaces.dataset.signature === signature) {
+    return;
+  }
+  const focused = ui.compareRaces.contains(document.activeElement) ? document.activeElement.dataset.race : null;
+  ui.compareRaces.replaceChildren(
+    ...races.map((race) => {
+      const chip = raceChip(race, state.language);
+      const button = element("button");
+      button.type = "button";
+      button.dataset.race = race.id;
+      const shown = element("span", "", describe(chip.short));
+      shown.setAttribute("aria-hidden", "true");
+      button.append(shown, element("span", "visually-hidden", describe(chip.spoken)));
+      const on = chosen.includes(race.id);
+      button.setAttribute("aria-pressed", String(on));
+      button.disabled = on ? chosen.length <= 1 : chosen.length >= MAX_COMPARE_RACES;
+      return button;
+    }),
+  );
+  ui.compareRaces.dataset.signature = signature;
+  if (focused) {
+    ui.compareRaces.querySelector(`button[data-race="${CSS.escape(focused)}"]`)?.focus();
+  }
+}
+
 // A short piece of a line in the color of a year.
 function yearSwatch(step) {
   const swatch = svgElement("svg", { viewBox: "0 0 22 8", "aria-hidden": "true", focusable: "false" });
@@ -3191,8 +3428,12 @@ function renderCompareBody(force = false) {
   const focused = ui.comparePanels.contains(document.activeElement) ? (document.activeElement.dataset.plot ?? null) : null;
   plotWatcher?.disconnect();
   const item = compareItem();
-  const data = compareData({ years: answer.years, month: answer.month, grain: answer.grain, mode, series: compare.series, answers: answer.answers, whole: answer.whole });
-  const span = compareSpan(answer.grain, answer.month, answer.years);
+  // By race day (stage M2 of v2.2.0), the races in the form of the years.
+  const race = answer.by === "race";
+  const data = race
+    ? raceData({ races: answer.races, weeks: answer.weeks, mode, series: compare.series, answers: answer.answers, wholes: answer.wholes, language: state.language })
+    : compareData({ years: answer.years, month: answer.month, grain: answer.grain, mode, series: compare.series, answers: answer.answers, whole: answer.whole });
+  const span = race ? answer.weeks : compareSpan(answer.grain, answer.month, answer.years);
   const lines = data.map((entry) => ({
     values: entry.values.map((value) => (Number.isFinite(value) ? shown(compare.key, value) : null)),
     points: entry.points === null ? undefined : entry.points.map(([index, value]) => [index, shown(compare.key, value)]),
@@ -3207,6 +3448,12 @@ function renderCompareBody(force = false) {
     month: answer.month,
     mode,
     total: totalItem(item),
+    // What it is compared by, the weeks before a race, and the names of the
+    // places of its axis and of its last row: those of the races, or null for
+    // those of the years.
+    by: answer.by,
+    weeks: answer.weeks,
+    names: race ? { slotName: (slot) => raceSlotName(slot, answer.weeks), whole: raceValueMessage(item, answer.weeks) } : null,
     // One scale for every year.
     shared: extent(lines),
     slots: Array.from({ length: span + 1 }, (_none, slot) => ({ start: slot, end: slot })),
@@ -3214,7 +3461,7 @@ function renderCompareBody(force = false) {
   // The cross line stays where it was on the same axis; on another (a new
   // grouping or month, also while its numbers are on their way), it starts at
   // the last period of the newest year.
-  const axis = JSON.stringify([answer.grain, answer.month]);
+  const axis = JSON.stringify([answer.by, answer.grain, answer.month, answer.weeks]);
   if (compare.cursor === null || compare.cursorAxis !== axis || compare.cursor > span) {
     const newest = data[0];
     compare.cursor = newest && newest.slots.length ? newest.slots[newest.slots.length - 1].start : span;
@@ -3242,22 +3489,40 @@ function renderCompareBody(force = false) {
   }
 }
 
-// A row of a year: its name, the days that the output cuts, its value (of
-// the year or of the month) as the server counts it, its reading, and its
-// chart.
+// The name of a place of the axis of a comparison, as its table names it.
+function compareSlotText(context, slot) {
+  return describe(context.names === null ? compareSlotName(slot, context.grain, context.month, state.language) : context.names.slotName(slot));
+}
+
+// The name of a year, or of a race (stage M2 of v2.2.0): its name, cut short
+// to its room, and its day, which always shows, so that races of one name
+// are told apart.
+function compareName(entry) {
+  if (entry.race === undefined) {
+    return [describe(entry.label)];
+  }
+  const [before = "", after = ""] = t("view.compare.race", { name: "\u0001", date: dateText(entry.race.day, state.language) }).split("\u0001");
+  return [before, element("span", "compare-race-name", entry.race.name), after];
+}
+
+// A row of a year (or of a race): its name, the days that the output cuts,
+// its value (of the year, of the month, or of the span of the race) as the
+// server counts it, its reading, and its chart.
 function buildCompareRow(context, entry, line, name) {
   const section = element("section", "panel-view compare-row");
-  const headingId = `compare-year-${entry.year}`;
+  const headingId = `compare-year-${entry.id}`;
   section.setAttribute("aria-labelledby", headingId);
   const head = element("div", "panel-head");
-  const heading = element("h4", "panel-name compare-year", yearText(entry.year));
+  const heading = element("h4", "panel-name compare-year");
+  heading.append(...compareName(entry));
   heading.id = headingId;
   head.append(heading);
   const note = compareNote(entry.cut, state.language);
   if (note !== null) {
     head.append(element("span", "panel-unit", describe(note)));
   }
-  const whole = element("span", "compare-whole", `${describe(compareValueMessage(context.item, context.month, state.language))} `);
+  const words = context.by === "race" ? raceValueMessage(context.item, context.weeks, true) : compareValueMessage(context.item, context.month, state.language);
+  const whole = element("span", "compare-whole", `${describe(words)} `);
   const value = entry.whole === null ? "—" : entry.whole.value === null ? t("view.no_value") : describe(valueMessage(context.key, entry.whole.value, state.language));
   whole.append(element("strong", "", value));
   head.append(whole);
@@ -3269,14 +3534,23 @@ function buildCompareRow(context, entry, line, name) {
   const plot = element("div", "plot");
   plot.tabIndex = 0;
   plot.setAttribute("role", "img");
-  plot.dataset.plot = String(entry.year);
-  plot.setAttribute("aria-label", t("view.compare.row_label", { year: yearText(entry.year), name }));
+  plot.dataset.plot = entry.id;
+  // A race says its span too, which the head of its row calls "this span"
+  // (the checker's review of M2).
+  plot.setAttribute(
+    "aria-label",
+    context.by === "race"
+      ? t("view.compare.race_row_label", { race: describe(entry.label), name, span: t("view.compare.race_days", { n: context.weeks }) })
+      : t("view.compare.row_label", { year: describe(entry.label), name }),
+  );
   body.append(plot);
   section.append(body);
   return { section, kind: "row", plot, read, frame: null, data: [entry], lines: [line], size: null, shapes: null, scale: null, cross: null, right: PLOT_RIGHT };
 }
 
-// The years on one panel: a line each in its color, with its name at its end.
+// The years (or the races) on one panel: a line each in its color, with its
+// name at its end; the legend names a race in short, and its row of the table
+// in full.
 function buildCompareOne(context, name) {
   const section = element("section", "panel-view compare-one");
   section.setAttribute("aria-labelledby", "compare-one-name");
@@ -3287,7 +3561,7 @@ function buildCompareOne(context, name) {
   const keys = element("span", "panel-keys");
   for (const entry of context.data) {
     const key = element("span", "key");
-    key.append(yearSwatch(entry.step), yearText(entry.year));
+    key.append(yearSwatch(entry.step), describe(context.by === "race" ? entry.short : entry.label));
     keys.append(key);
   }
   head.append(keys);
@@ -3297,9 +3571,12 @@ function buildCompareOne(context, name) {
   plot.tabIndex = 0;
   plot.setAttribute("role", "img");
   plot.dataset.plot = "one";
+  const names = context.data.map((entry) => describe(entry.label)).join(t("view.spoken_separator"));
   plot.setAttribute(
     "aria-label",
-    t("view.compare.chart_label", { name, years: context.data.map((entry) => yearText(entry.year)).join(t("view.spoken_separator")) }),
+    context.by === "race"
+      ? t("view.compare.race_chart_label", { name, span: t("view.compare.race_days", { n: context.weeks }), races: names })
+      : t("view.compare.chart_label", { name, years: names }),
   );
   const frame = element("div", "compare-read");
   frame.setAttribute("aria-hidden", "true");
@@ -3323,10 +3600,11 @@ function buildCompareTable(context, name) {
   const wrap = element("div", "panel-table");
   wrap.tabIndex = 0;
   wrap.setAttribute("role", "region");
-  wrap.setAttribute("aria-label", t("view.compare.table_label", { name }));
+  const race = context.by === "race";
+  wrap.setAttribute("aria-label", race ? t("view.compare.race_table_label", { name }) : t("view.compare.table_label", { name }));
   const table = element("table", "t");
-  const caption = element("caption", "visually-hidden", t("view.compare.table_caption", { name, kind }));
-  const { heads, rows, last, counts } = compareTable(context.item, context.data, context.grain, context.month, context.span, state.language, context.mode);
+  const caption = element("caption", "visually-hidden", race ? t("view.compare.race_table_caption", { name, kind }) : t("view.compare.table_caption", { name, kind }));
+  const { heads, rows, last, counts } = compareTable(context.item, context.data, context.grain, context.month, context.span, state.language, context.mode, context.names);
   const headRow = element("tr");
   heads.forEach((entry, index) => {
     const cell = element("th", index === 0 ? "" : "n", describe(entry));
@@ -3357,8 +3635,9 @@ function buildCompareTable(context, name) {
   return section;
 }
 
-// The name at the end of a year's line: the year, its running total for that
-// way, and the day that the output cuts it; null for a year without a value.
+// The name at the end of a year's line: the year (a race in short), its
+// running total for that way, and the day that the output cuts it; null for
+// a year without a value.
 function endLabel(context, entry) {
   let last = -1;
   entry.values.forEach((value, index) => {
@@ -3369,7 +3648,7 @@ function endLabel(context, entry) {
   if (last < 0) {
     return null;
   }
-  let text = String(entry.year);
+  let text = describe(entry.short);
   if (context.mode === "cumulative") {
     text = t("view.compare.end_value", { text, value: describe(valueMessage(context.key, entry.values[last], state.language)) });
   }
@@ -3491,7 +3770,9 @@ function renderCompareCharts() {
   }
 }
 
-// The axis under the years: the months of a year, or days of the month.
+// The axis under the years: the months of a year, or days of the month; under
+// the races, every fourth week before them and their week, whose words end
+// at the right end (stage M2 of v2.2.0).
 function drawCompareAxis(context, width, right) {
   ui.compareAxis.replaceChildren();
   if (width < 60) {
@@ -3500,14 +3781,17 @@ function drawCompareAxis(context, width, right) {
   const height = ui.compareAxis.clientHeight || 24;
   const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, width, "aria-hidden": "true", focusable: "false" });
   const scale = timeScale(0, context.span, PLOT_LEFT, width - right);
+  const race = context.by === "race";
   const newest = Math.max(...context.data.map((entry) => entry.year));
-  for (const tick of compareTicks(context.grain, context.month, newest, state.language)) {
+  const ticks = race ? raceTicks(context.weeks) : compareTicks(context.grain, context.month, newest, state.language);
+  ticks.forEach((tick, index) => {
     const x = scale.x(tick.at);
     svg.append(svgElement("line", { class: "axis-tick", x1: x.toFixed(1), x2: x.toFixed(1), y1: 0, y2: 5 }));
-    const label = svgElement("text", { class: "axis-text", x: (x + 3).toFixed(1), y: 16 });
-    label.textContent = tick.text;
+    const end = race && index === ticks.length - 1;
+    const label = svgElement("text", end ? { class: "axis-text", x: (scale.x(tick.at + 1) - 3).toFixed(1), y: 16, "text-anchor": "end" } : { class: "axis-text", x: (x + 3).toFixed(1), y: 16 });
+    label.textContent = race ? describe(tick.text) : tick.text;
     svg.append(label);
-  }
+  });
   ui.compareAxis.append(svg);
 }
 
@@ -3551,11 +3835,11 @@ function moveCompareCross(slot, speak) {
     const values = readings
       .map((reading) =>
         reading.period === null
-          ? t("view.spoken_line", { line: yearText(reading.year), value: describe(reading.missing) })
-          : t("view.compare.spoken_year", { year: yearText(reading.year), period: describe(reading.period), value: describe(reading.value ?? reading.missing) }),
+          ? t("view.spoken_line", { line: describe(reading.label), value: describe(reading.missing) })
+          : t("view.compare.spoken_year", { year: describe(reading.label), period: describe(reading.period), value: describe(reading.value ?? reading.missing) }),
       )
       .join(t("view.spoken_separator"));
-    setText(ui.compareAnnouncer, t("view.spoken", { period: describe(compareSlotName(at, context.grain, context.month, state.language)), values }));
+    setText(ui.compareAnnouncer, t("view.spoken", { period: compareSlotText(context, at), values }));
   }
 }
 
@@ -3566,7 +3850,7 @@ function renderCompareRead(entry, context, at) {
   const place = year.slots.findIndex((period) => period.start === at);
   const nodes = [];
   if (place < 0) {
-    nodes.push(describe(compareSlotName(at, context.grain, context.month, state.language)), element("span", "no-value", t("view.compare.outside")));
+    nodes.push(compareSlotText(context, at), element("span", "no-value", t("view.compare.outside")));
   } else {
     const reading = readout(context.item, { lines: [{ values: year.values, counts: year.counts }] }, year.periods, place, context.grain, state.language);
     nodes.push(describe(reading.period));
@@ -3583,14 +3867,15 @@ function renderCompareRead(entry, context, at) {
 }
 
 // The box of the readings of the years on one panel, beside the cross line:
-// at its right where there is room, and at its left otherwise.
+// at its right where there is room, and at its left otherwise; a race by its
+// short name (stage M2 of v2.2.0).
 function renderCompareFrame(entry, readings, x) {
   const table = element("table");
   for (const reading of readings) {
     const row = element("tr");
     const swatch = element("td");
     swatch.append(yearSwatch(reading.step));
-    row.append(swatch, element("td", "", yearText(reading.year)), element("td", "", reading.period === null ? "" : describe(reading.period)));
+    row.append(swatch, element("td", "", describe(compareContext?.by === "race" ? reading.short : reading.label)), element("td", "", reading.period === null ? "" : describe(reading.period)));
     if (reading.value !== null) {
       row.append(element("td", "v", reading.count === null ? describe(reading.value) : `${describe(reading.value)} ${describe(reading.count)}`));
     } else {
@@ -3757,7 +4042,7 @@ function renderFilters(live) {
   }
   ui.periodBack.disabled = !viewing || apart || shiftedRange(answer?.start, answer?.end, -1, state.view?.first_day, state.view?.last_day) === null;
   ui.periodNext.disabled = !viewing || apart || shiftedRange(answer?.start, answer?.end, 1, state.view?.first_day, state.view?.last_day) === null;
-  const grains = apart ? compareGrains(state.compareMonth) : null;
+  const grains = apart ? compareGrainsFor(compareByNow(), state.compareMonth) : null;
   for (const button of ui.grainButtons) {
     button.disabled = !viewing || (grains !== null && !grains.includes(button.dataset.grain));
     button.setAttribute("aria-pressed", String(viewing && (grains === null ? state.grain : state.compare.grain) === button.dataset.grain));
@@ -3774,6 +4059,12 @@ function renderFilters(live) {
   }
   ui.filtersHint.hidden = !state.hints || !viewing || apart;
   ui.compareOff.hidden = !apart;
+  // By race day, its own words of what is not used (stage M2 of v2.2.0).
+  const byRace = apart && compareByNow() === "race";
+  if (byRace) {
+    ui.compareOff.hidden = true;
+  }
+  ui.compareOffRace.hidden = !byRace;
 }
 
 function renderTypes(types) {
@@ -4529,6 +4820,16 @@ function connect() {
     render();
   });
   ui.compareMonth.addEventListener("change", chooseCompareMonth);
+  for (const button of ui.compareBys) {
+    button.addEventListener("click", () => chooseCompareBy(button.dataset.compareBy));
+  }
+  ui.compareWeeks.addEventListener("change", chooseCompareWeeks);
+  ui.compareRaces.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-race]");
+    if (button !== null) {
+      toggleCompareRace(button.dataset.race);
+    }
+  });
   ui.compareSeries.addEventListener("change", () => {
     state.compare.series = ui.compareSeries.value;
     render();
@@ -4656,6 +4957,9 @@ async function start() {
     const compare = compareToOpen(state.settings);
     state.compareMode = compare.mode;
     state.compareMonth = compare.month;
+    const by = compareByToOpen(state.settings);
+    state.compareBy = by.by;
+    state.compareWeeks = by.weeks;
     state.wantedTypes = Array.isArray(state.settings.view_types) ? [...state.settings.view_types] : null;
     const marks = marksToOpen(state.settings);
     takeMarks(marks.marks);

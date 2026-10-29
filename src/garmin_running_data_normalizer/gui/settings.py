@@ -69,7 +69,7 @@ from .layouts import BUILT_IN_IDS, kept_hidden, kept_layouts
 from .layouts import change_layouts as _changed_layouts
 from .marks import MARKS_FORMAT, MARKS_FORMAT_PREFIX, MARKS_FORMAT_VERSION, kept_marks
 from .marks import change_marks as _changed_marks
-from .views import compare_mode_ok, compare_month_ok, grain_ok, period_choice
+from .views import compare_by_ok, compare_mode_ok, compare_month_ok, compare_weeks_ok, grain_ok, period_choice
 
 SETTINGS_FORMAT = "garmin-running-data-normalizer-gui-settings-v2"
 _FORMAT_PREFIX = "garmin-running-data-normalizer-gui-settings-v"
@@ -200,6 +200,11 @@ def _view_values(data: dict[str, Any]) -> dict[str, Any]:
         values["view_compare_mode"] = data["view_compare_mode"]
     if compare_month_ok(data.get("view_compare_month")):
         values["view_compare_month"] = data["view_compare_month"]
+    # What one item is compared by, and the weeks before a race (stage M2).
+    if compare_by_ok(data.get("view_compare_by")):
+        values["view_compare_by"] = data["view_compare_by"]
+    if compare_weeks_ok(data.get("view_compare_weeks")):
+        values["view_compare_weeks"] = data["view_compare_weeks"]
     # Whether the marks show (stage M1).
     if isinstance(data.get("view_marks_shown"), bool):
         values["view_marks_shown"] = data["view_marks_shown"]
@@ -512,6 +517,9 @@ VIEW_KEYS = {
     # How one item is compared by year, and in which month (stage L1).
     "compare_mode": "view_compare_mode",
     "compare_month": "view_compare_month",
+    # What one item is compared by, and the weeks before a race (stage M2).
+    "compare_by": "view_compare_by",
+    "compare_weeks": "view_compare_weeks",
     # Whether the marks show (stage M1).
     "marks_shown": "view_marks_shown",
 }
@@ -620,6 +628,8 @@ def launch_answer(
         "view_types": values.get("view_types"),
         "view_compare_mode": values.get("view_compare_mode"),
         "view_compare_month": values.get("view_compare_month"),
+        "view_compare_by": values.get("view_compare_by"),
+        "view_compare_weeks": values.get("view_compare_weeks"),
         "view_marks_shown": values.get("view_marks_shown"),
         "view_marks": list(marks or []),
         "marks_notice": marks_notice,

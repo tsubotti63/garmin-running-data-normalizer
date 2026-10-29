@@ -195,10 +195,99 @@ class PeriodTest(unittest.TestCase):
             period_bounds(data, "2y")
         with self.assertRaises(ValueError):
             period_bounds(data, "all", "fortnight")
+        with self.assertRaises(ValueError):
+            period_bounds(data, "all", "ranges")
         periods = period_bounds(data)
         assert periods is not None
         with self.assertRaises(ValueError):
             item_series(data, "nothing", periods)
+
+
+class RangeTest(unittest.TestCase):
+    """The whole period as one period (stage M2 of v2.2.0): the value of a span
+    that the calendar does not give, such as the weeks before a race."""
+
+    def test_the_whole_range_is_one_period_cut_to_the_output(self) -> None:
+        data = view_data([uds("2024-01-07", steps=10), uds("2024-01-24", steps=20)])
+        # The days of the output, as one period, without the mark of a cut one.
+        self.assertEqual(spans(data, (date(2024, 1, 1), date(2024, 2, 10)), "range"), [("2024-01-07", "2024-01-24", False)])
+        self.assertEqual(spans(data, (date(2024, 1, 9), date(2024, 1, 16)), "range"), [("2024-01-09", "2024-01-16", False)])
+        self.assertEqual(spans(data, "all", "range"), [("2024-01-07", "2024-01-24", False)])
+        periods = period_bounds(data, (date(2024, 1, 9), date(2024, 1, 16)), "range")
+        assert periods is not None
+        self.assertEqual(periods.grain, "range")
+        self.assertIsNone(period_bounds(data, (date(2010, 1, 1), date(2015, 1, 1)), "range"))
+
+    def test_the_whole_range_is_counted_as_its_days_are(self) -> None:
+        data = view_data(
+            [
+                act("2024-03-04", distance_m=10000, duration_sec=3000, avg_hr=150, max_hr=170),
+                act("2024-03-06", distance_m=5000, duration_sec=1800, avg_hr=160, max_hr=180),
+                act("2024-03-13", distance_m=8000, duration_sec=2400, avg_hr=155, max_hr=175),
+                uds("2024-03-05", resting_heart_rate=50),
+                uds("2024-03-12", resting_heart_rate=54),
+            ]
+        )
+        span = (date(2024, 3, 4), date(2024, 3, 17))
+        [total] = panel(data, "dist", span, "range")["lines"]
+        self.assertEqual(total["values"], [23000.0])
+        self.assertEqual(total["counts"], [3])
+        self.assertEqual(sum(value for value in panel(data, "dist", span, "day")["lines"][0]["values"] if value), 23000.0)
+        self.assertAlmostEqual(panel(data, "pace", span, "range")["lines"][0]["values"][0], 7200 / 23000)
+        self.assertAlmostEqual(panel(data, "hr", span, "range")["lines"][0]["values"][0], (150 * 3000 + 160 * 1800 + 155 * 2400) / 7200)
+        self.assertEqual(panel(data, "mx", span, "range")["lines"][0]["values"], [180.0])
+        self.assertEqual(panel(data, "rhr", span, "range")["lines"][0]["values"], [52.0])
+        # The same as by the week, where the two weeks add up.
+        weeks = panel(data, "dist", span, "week")["lines"][0]["values"]
+        self.assertEqual(sum(value for value in weeks if value), 23000.0)
+
+    def test_the_whole_range_counts_each_row_by_its_own_weight_and_value(self) -> None:
+        # Codex's review of the plan of M2: the right values come from the
+        # rows, with distances, times, and records that differ, and with
+        # activities and days without a value; the values and counts of the
+        # weeks cannot give the value of an average.
+        acute = "acute_training_load_daily"
+        data = view_data(
+            [
+                act("2024-03-04", distance_m=12000, duration_sec=4000, avg_hr=150),
+                # Without a heart rate: its distance and time count.
+                act("2024-03-05", distance_m=3000, duration_sec=1200),
+                # Without a distance: no pace, and its heart rate counts by its time.
+                act("2024-03-07", duration_sec=600, avg_hr=120),
+                act("2024-03-14", distance_m=6000, duration_sec=1800, avg_hr=160),
+                uds("2024-03-06", resting_heart_rate=48),
+                uds("2024-03-08"),
+                uds("2024-03-13", resting_heart_rate=50),
+                uds("2024-03-15", resting_heart_rate=55),
+                # Two records on one day: each record counts.
+                (acute, daily(acute, "2024-03-05", time="07:00", daily_training_load_acute=300)),
+                (acute, daily(acute, "2024-03-05", time="19:00", daily_training_load_acute=330)),
+                (acute, daily(acute, "2024-03-12", time="07:00", daily_training_load_acute=390)),
+            ]
+        )
+        span = (date(2024, 3, 4), date(2024, 3, 17))
+        [total] = panel(data, "dist", span, "range")["lines"]
+        self.assertEqual((total["values"], total["counts"]), ([21000.0], [3]))
+        [pace] = panel(data, "pace", span, "range")["lines"]
+        self.assertEqual(pace["counts"], [3])
+        self.assertAlmostEqual(pace["values"][0], (4000 + 1200 + 1800) / (12000 + 3000 + 6000))
+        [hr] = panel(data, "hr", span, "range")["lines"]
+        self.assertEqual(hr["counts"], [3])
+        self.assertAlmostEqual(hr["values"][0], (150 * 4000 + 120 * 600 + 160 * 1800) / (4000 + 600 + 1800))
+        [weeks] = panel(data, "hr", span, "week")["lines"]
+        by_counts = sum(value * count for value, count in zip(weeks["values"], weeks["counts"])) / sum(weeks["counts"])
+        self.assertNotAlmostEqual(by_counts, hr["values"][0])
+        rhr = panel(data, "rhr", span, "range")
+        self.assertEqual((rhr["lines"][0]["values"], rhr["lines"][0]["counts"]), ([51.0], [3]))
+        self.assertEqual(rhr["left_out"]["no_value"], 1)
+        observed = panel(data, "acute", span, "range")
+        self.assertEqual((observed["lines"][0]["values"], observed["lines"][0]["counts"]), ([340.0], [3]))
+        self.assertNotIn("points", observed["lines"][0])
+        self.assertEqual(observed["left_out"]["days_with_several_records"], 1)
+        # A range whose activities have no value is empty; one without
+        # activities, between the first and the last, is 0.
+        self.assertEqual(panel(data, "load", span, "range")["lines"][0]["values"], [None])
+        self.assertEqual(panel(data, "dist", (date(2024, 3, 8), date(2024, 3, 13)), "range")["lines"][0]["values"], [0.0])
 
 
 class TotalTest(unittest.TestCase):

@@ -303,6 +303,21 @@ class GuiCatalogTest(unittest.TestCase):
             for item in ("dist", "time", "count", "load", "asc"):
                 with self.subTest(language=language, key="view.compare.cumulative_only", item=item):
                     self.assertIn(catalog[f"view.item.{item}"], catalog["view.compare.cumulative_only"])
+            # v2.2.0 M2: what is not used while comparing by race day, where
+            # the item is chosen, and the button that two race marks make
+            # usable; the page puts the item before what it compares by.
+            for named in ("view.period.label", "view.shelf.heading", "view.layouts.heading", "view.grain.week", "view.compare.item"):
+                with self.subTest(language=language, key="view.compare.off_race", named=named):
+                    self.assertIn(quote.format(catalog[named]), catalog["view.compare.off_race"])
+            with self.subTest(language=language, key="view.compare.race_needed"):
+                self.assertIn(quote.format(catalog["view.compare.by.race"]), catalog["view.compare.race_needed"])
+            # The mark of a period cut short names the race day too (Codex's
+            # review of the plan of M2, and the checker's review of it).
+            with self.subTest(language=language, key="view.compare.partial_note"):
+                self.assertIn(catalog["view.compare.by.race"], catalog["view.compare.partial_note"])
+            with self.subTest(language=language, key="view.compare.title_by"):
+                title = catalog["view.compare.title_by"]
+                self.assertLess(title.index("{item}"), title.index("{by}"))
             # The other words are put in their places by the page itself.
             for key, name in (
                 ("view.empty.first_text", "{other}"),

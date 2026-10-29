@@ -1355,6 +1355,34 @@ button.small {
   content: "\2713\00a0" / "";
 }
 
+/* What one item is compared by, in its title, and the name of a race cut
+   short to its room at the head of its row, where its day always shows
+   (stage M2 of v2.2.0). */
+.compare-title .compare-bys button {
+  padding: 2px 8px;
+  font-size: 0.86rem;
+}
+
+.compare-race-name {
+  display: inline-block;
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* The places of a comparison in its table stay on one line. */
+.compare-table .t tbody th {
+  white-space: nowrap;
+}
+
+/* The races stay beside their label, and wrap within their group. */
+.compare-line .compare-races {
+  flex: 1 1 24em;
+  min-width: 0;
+}
+
 .compare-stack .panel-view.compare-row {
   flex: 1 0 70px;
   min-height: 70px;

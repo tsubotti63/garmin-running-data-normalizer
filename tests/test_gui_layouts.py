@@ -415,7 +415,9 @@ class SettingsOfVersion220Test(unittest.TestCase):
             with self.subTest(period=period):
                 self.write_raw({"format": SETTINGS_FORMAT, "view_period": period})
                 self.assertEqual(read_settings(self.path)[0].get("view_period"), period if kept else None)
-        for grain in ("auto", "day", "week", "month", "year", "hour", None, 1):
+        # The settings never keep the whole period, which only the requests of
+        # the view page take (stage M2 of v2.2.0).
+        for grain in ("auto", "day", "week", "month", "year", "hour", "range", None, 1):
             with self.subTest(grain=grain):
                 self.write_raw({"format": SETTINGS_FORMAT, "view_grain": grain})
                 expected = grain if grain in ("auto", "day", "week", "month", "year") else None
@@ -487,6 +489,35 @@ class SettingsOfVersion220Test(unittest.TestCase):
         self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"compare_month": None}))
         values = read_settings(self.path)[0]
         self.assertEqual((values["view_compare_mode"], values.get("view_compare_month")), ("overlay", None))
+
+    def test_what_an_item_is_compared_by_is_kept_alone(self) -> None:
+        # Stage M2 of v2.2.0: the years or the race days, and the weeks before
+        # a race day (8, 12, 16, 20, or 24), each left out alone when it is
+        # of another form, and given to the page when it starts.
+        for by, weeks in (("year", 8), ("race", 16), ("race", 24)):
+            with self.subTest(by=by, weeks=weeks):
+                self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_compare_by": by, "view_compare_weeks": weeks})
+                values = read_settings(self.path)[0]
+                self.assertEqual((values["view_compare_by"], values["view_compare_weeks"]), (by, weeks))
+                answer = launch_answer(values, None, present=True)
+                self.assertEqual((answer["view_compare_by"], answer["view_compare_weeks"]), (by, weeks))
+        for by, weeks in (("races", 10), ("", 0), (None, True), (1, "16"), (["race"], 16.0), ("Race", 28)):
+            with self.subTest(by=by, weeks=weeks):
+                self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_compare_by": by, "view_compare_weeks": weeks})
+                values = read_settings(self.path)[0]
+                self.assertEqual(values, {"store": self.store})
+                answer = launch_answer(values, None, present=True)
+                self.assertEqual((answer["view_compare_by"], answer["view_compare_weeks"]), (None, None))
+        # One of the two of another form leaves the other as it is.
+        self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_compare_by": "race", "view_compare_weeks": 10})
+        self.assertEqual(read_settings(self.path)[0], {"store": self.store, "view_compare_by": "race"})
+        # The page writes them with the rest of the view; None takes them away.
+        self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"compare_by": "race", "compare_weeks": 12}))
+        values = read_settings(self.path)[0]
+        self.assertEqual((values["view_compare_by"], values["view_compare_weeks"], values["store"]), ("race", 12, self.store))
+        self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"compare_weeks": None}))
+        values = read_settings(self.path)[0]
+        self.assertEqual((values["view_compare_by"], values.get("view_compare_weeks")), ("race", None))
 
     def test_the_view_page_changes_only_the_values_that_it_gives(self) -> None:
         self.assertIsNone(write_settings(self.path, {"store": self.store, **self.view_values()}))
@@ -660,7 +691,7 @@ class LayoutsApiTest(GuiServerTestCase):
         base = {"items": ["dist"], "shelf": "open"}
         for extra in (
             {"layout": "RUN"}, {"layout": "u-XYZ"}, {"layout": 3}, {"period": "custom"}, {"period": None},
-            {"period": {"from": "2024-12-31", "to": "2024-01-01"}}, {"grain": "hour"}, {"grain": None},
+            {"period": {"from": "2024-12-31", "to": "2024-01-01"}}, {"grain": "hour"}, {"grain": "range"}, {"grain": None},
             {"types": ["running", "running"]}, {"types": "running"}, {"types": [3]},
         ):
             with self.subTest(extra=extra):
@@ -684,6 +715,27 @@ class LayoutsApiTest(GuiServerTestCase):
         values = read_settings(path)[0]
         self.assertEqual((values.get("view_compare_mode"), values.get("view_compare_month")), (None, None))
         for extra in ({"compare_mode": "bars"}, {"compare_mode": 3}, {"compare_month": 0}, {"compare_month": 13}, {"compare_month": True}, {"compare_month": "5"}, {"compare_month": 5.0}):
+            with self.subTest(extra=extra):
+                self.assertEqual(self.post("/api/settings/view", {**base, **extra}), (422, {"error": "REQUEST_INVALID"}))
+
+    def test_the_view_page_remembers_what_it_compares_by(self) -> None:
+        # Stage M2 of v2.2.0: the years or the race days, and the weeks before
+        # a race day, with the rest of the view; None takes them away, and
+        # values of another form are refused.
+        path = places.settings_file()
+        base = {"items": ["dist"], "shelf": "open"}
+        self.assertEqual(
+            self.post("/api/settings/view", {**base, "compare_by": "race", "compare_weeks": 20}),
+            (200, {"remembered": True, "notice": None}),
+        )
+        values = read_settings(path)[0]
+        self.assertEqual((values["view_compare_by"], values["view_compare_weeks"]), ("race", 20))
+        settings_answer = self.post("/api/status")[1]["settings"]
+        self.assertEqual((settings_answer["view_compare_by"], settings_answer["view_compare_weeks"]), ("race", 20))
+        self.assertEqual(self.post("/api/settings/view", {**base, "compare_by": None, "compare_weeks": None})[0], 200)
+        values = read_settings(path)[0]
+        self.assertEqual((values.get("view_compare_by"), values.get("view_compare_weeks")), (None, None))
+        for extra in ({"compare_by": "month"}, {"compare_by": 2}, {"compare_weeks": 10}, {"compare_weeks": 28}, {"compare_weeks": True}, {"compare_weeks": "16"}, {"compare_weeks": 16.0}):
             with self.subTest(extra=extra):
                 self.assertEqual(self.post("/api/settings/view", {**base, **extra}), (422, {"error": "REQUEST_INVALID"}))
 
