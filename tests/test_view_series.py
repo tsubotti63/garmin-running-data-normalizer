@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 from garmin_running_data_normalizer.run_all import ACTIVITIES_CSV_COLUMNS
 from garmin_running_data_normalizer.view.data import Row, ViewData
@@ -17,11 +19,20 @@ from garmin_running_data_normalizer.view.items import (
     FIRST_ITEMS,
     ITEMS,
     ITEMS_BY_KEY,
+    COUNT,
+    MAXIMUM,
+    PACE,
+    SUM,
+    TIME_WEIGHTED,
     dataset_fields,
 )
+from garmin_running_data_normalizer.view import series as series_module
 from garmin_running_data_normalizer.view.series import (
+    LIST_ITEMS,
     MAX_ANSWER_BYTES,
+    MAX_LIST_ROWS,
     MAX_PANELS,
+    activity_list,
     activity_types,
     auto_grain,
     coverage,
@@ -39,9 +50,14 @@ def day(text: str) -> int:
     return date.fromisoformat(text).toordinal()
 
 
-def activity(when: str, kind: str = "running", disagree: tuple[str, ...] = (), **values: float | None) -> Row:
+def activity(
+    when: str, kind: str = "running", disagree: tuple[str, ...] = (), moment: str | None = None, **values: float | None
+) -> Row:
     fields = dataset_fields(ACTIVITIES)
-    return Row(day(when), {name: values.get(name) for name in fields}, frozenset(disagree), {"type": kind})
+    marks: dict[str, Any] = {"type": kind}
+    if moment is not None:
+        marks["datetime"] = moment
+    return Row(day(when), {name: values.get(name) for name in fields}, frozenset(disagree), marks)
 
 
 def daily(
@@ -97,8 +113,10 @@ def uds(when: str, **values: float | None) -> tuple[str, Row]:
     return "uds_daily", daily("uds_daily", when, **values)
 
 
-def act(when: str, kind: str = "running", disagree: tuple[str, ...] = (), **values: float | None) -> tuple[str, Row]:
-    return ACTIVITIES, activity(when, kind, disagree, **values)
+def act(
+    when: str, kind: str = "running", disagree: tuple[str, ...] = (), moment: str | None = None, **values: float | None
+) -> tuple[str, Row]:
+    return ACTIVITIES, activity(when, kind, disagree, moment, **values)
 
 
 def spans(data: ViewData, period: Any = "all", grain: str = "auto") -> list[tuple[str, str, bool]]:
@@ -288,6 +306,132 @@ class RangeTest(unittest.TestCase):
         # activities, between the first and the last, is 0.
         self.assertEqual(panel(data, "load", span, "range")["lines"][0]["values"], [None])
         self.assertEqual(panel(data, "dist", (date(2024, 3, 8), date(2024, 3, 13)), "range")["lines"][0]["values"], [0.0])
+
+
+def value_of(item: Any, rows: list[dict[str, Any]]) -> tuple[float | None, int]:
+    """The value of a panel and its count, made again from the rows of its list."""
+    if item.kind == COUNT:
+        return float(len(rows)), len(rows)
+    values = [row["values"][item.key] for row in rows]
+    times = [row["values"]["time"] for row in rows]
+    if item.kind == PACE:
+        pairs = [(time, distance) for time, distance in zip(times, (row["values"]["dist"] for row in rows)) if time and time > 0 and distance and distance > 0]
+        return (sum(time for time, _ in pairs) / sum(distance for _, distance in pairs) if pairs else None), len(pairs)
+    if item.kind == TIME_WEIGHTED:
+        pairs = [(value, time) for value, time in zip(values, times) if value is not None and time is not None and time > 0]
+        return (sum(value * time for value, time in pairs) / sum(time for _, time in pairs) if pairs else None), len(pairs)
+    present = [value for value in values if value is not None]
+    if item.kind == MAXIMUM:
+        return (max(present) if present else None), len(present)
+    return (sum(present) if present else None), len(present)
+
+
+class ActivityListTest(unittest.TestCase):
+    """The activities of one period of a panel (stage M3 of v2.2.0): chosen as
+    the panel chooses them, with the value of the panel there."""
+
+    def data(self) -> ViewData:
+        return view_data(
+            [
+                # A week of a distance of 0, a time of 0, and a time below 0,
+                # which no pace and no weight by time counts.
+                act("2024-02-27", moment="2024-02-27T06:00:00+09:00", distance_m=0, duration_sec=900, avg_hr=140, max_hr=150),
+                act("2024-02-28", moment="2024-02-28T06:00:00+09:00", distance_m=5000, duration_sec=0, avg_hr=145, max_hr=160),
+                act("2024-02-29", moment="2024-02-29T06:00:00+08:00", distance_m=3000, duration_sec=-60, avg_hr=150),
+                act("2024-03-04", moment="2024-03-04T06:30:00+09:00", distance_m=10000, duration_sec=3000, avg_hr=150, max_hr=170),
+                act("2024-03-04", moment="2024-03-04T18:05:00+09:00", distance_m=4000, duration_sec=1500),
+                act("2024-03-06", "cycling", moment="2024-03-06T07:00:00+09:00", distance_m=30000, duration_sec=4000, avg_hr=120),
+                act("2024-03-07", moment="2024-03-07T06:40:00+09:00", duration_sec=600, avg_hr=125),
+                act("2024-03-12", distance_m=8000, duration_sec=2400, avg_hr=155, max_hr=176, fit_total_ascent_m=40),
+                uds("2024-03-05", resting_heart_rate=50),
+            ]
+        )
+
+    def test_the_rows_of_a_period_give_the_value_of_its_panel(self) -> None:
+        # Codex's review of the plan of M3: the value of the panel and its
+        # count come again from the rows of the list, by the rules of the kind
+        # of each item (the weights, the pace of a positive distance and time,
+        # the maximum), for every week and every item of the activities.
+        data = self.data()
+        weeks = period_bounds(data, "all", "week")
+        assert weeks is not None
+        for first, last, _partial in weeks.spans:
+            span = (date.fromordinal(first), date.fromordinal(last))
+            for item in (entry for entry in ITEMS if entry.dataset == ACTIVITIES):
+                with self.subTest(week=span[0].isoformat(), item=item.key):
+                    answer = activity_list(data, item.key, span)
+                    [line] = panel(data, item.key, span, "range")["lines"]
+                    self.assertEqual(answer["value"], {"value": line["values"][0], "count": line["counts"][0]})
+                    value, count = value_of(item, answer["rows"])
+                    self.assertEqual(count, line["counts"][0])
+                    if count:
+                        self.assertAlmostEqual(value, line["values"][0])
+                    else:
+                        # None counted: 0 between the first and the last
+                        # activity for a total, or no value.
+                        self.assertIn(line["values"][0], (None, 0.0))
+        # The week of 4 March: three running activities, the cycling left out.
+        answer = activity_list(data, "dist", (date(2024, 3, 4), date(2024, 3, 10)))
+        self.assertEqual(answer["total"], 3)
+        self.assertEqual([row["datetime"] for row in answer["rows"]], ["2024-03-04T06:30:00+09:00", "2024-03-04T18:05:00+09:00", "2024-03-07T06:40:00+09:00"])
+        self.assertEqual(answer["rows"][2]["values"], {"dist": None, "time": 600.0, "pace": None, "hr": 125.0, "mx": None, "cad": None, "asc": None})
+        self.assertAlmostEqual(answer["rows"][0]["values"]["pace"], 0.3)
+        self.assertEqual(answer["value"], {"value": 14000.0, "count": 2})
+        # The week of 26 February: no pace of a distance or a time of 0 or
+        # below; the weight by time counts the activity of 900 seconds only.
+        week = activity_list(data, "pace", (date(2024, 2, 26), date(2024, 3, 3)))
+        self.assertEqual([row["values"]["pace"] for row in week["rows"]], [None, None, None])
+        self.assertEqual(week["value"], {"value": None, "count": 0})
+        self.assertEqual(activity_list(data, "hr", (date(2024, 2, 26), date(2024, 3, 3)))["value"], {"value": 140.0, "count": 1})
+        self.assertEqual(activity_list(data, "mx", (date(2024, 2, 26), date(2024, 3, 3)))["value"], {"value": 160.0, "count": 2})
+
+    def test_the_page_opens_the_list_from_the_panels_of_these_items(self) -> None:
+        # The page opens the list from the panels of the training and the
+        # running form (view_flow.mjs listOpens), and writes the columns of
+        # the server up to its limit: the same items, columns, and limit.
+        for item in ITEMS:
+            with self.subTest(item=item.key):
+                self.assertEqual(item.group in ("act", "fit"), item.dataset == ACTIVITIES)
+        script = (Path(series_module.__file__).parent.parent / "gui" / "static" / "view_flow.mjs").read_text(encoding="utf-8")
+        found = re.search(r"export const LIST_ITEMS = \[([^\]]*)\];", script)
+        assert found is not None
+        self.assertEqual(tuple(json.loads(f"[{found.group(1)}]")), LIST_ITEMS)
+        self.assertIn(f"export const MAX_LIST_ROWS = {MAX_LIST_ROWS};", script)
+
+    def test_the_list_counts_the_types_counted(self) -> None:
+        answer = activity_list(self.data(), "dist", (date(2024, 3, 4), date(2024, 3, 10)), ["cycling"])
+        self.assertEqual([(row["type"], row["day"]) for row in answer["rows"]], [("cycling", "2024-03-06")])
+        self.assertEqual(answer["value"], {"value": 30000.0, "count": 1})
+
+    def test_a_period_is_cut_to_the_output_and_has_no_rows_outside_it(self) -> None:
+        data = self.data()
+        answer = activity_list(data, "dist", (date(2024, 3, 11), date(2024, 3, 17)))
+        # The output ends on 12 March: the period ends there too.
+        self.assertEqual((answer["start"], answer["end"], answer["total"]), ("2024-03-11", "2024-03-12", 1))
+        self.assertIsNone(answer["rows"][0]["datetime"])
+        outside = activity_list(data, "dist", (date(2020, 1, 1), date(2020, 1, 31)))
+        self.assertEqual(outside, {"start": None, "end": None, "total": 0, "rows": [], "limit": MAX_LIST_ROWS, "value": None})
+        # A week without activities between the first and the last: none, and 0.
+        empty = view_data([act("2024-01-01", distance_m=1000, duration_sec=300), act("2024-01-20", distance_m=1000, duration_sec=300)])
+        answer = activity_list(empty, "dist", (date(2024, 1, 8), date(2024, 1, 14)))
+        self.assertEqual((answer["total"], answer["rows"], answer["value"]), (0, [], {"value": 0.0, "count": 0}))
+
+    def test_a_period_of_more_rows_than_the_limit_gives_their_number(self) -> None:
+        self.assertEqual(MAX_LIST_ROWS, 500)
+        with patch.object(series_module, "MAX_LIST_ROWS", 2):
+            answer = activity_list(self.data(), "time", (date(2024, 3, 4), date(2024, 3, 10)))
+        self.assertEqual((answer["total"], answer["rows"], answer["limit"]), (3, None, 2))
+        self.assertEqual(answer["value"], {"value": 5100.0, "count": 3})
+        # As many rows as the limit are listed.
+        with patch.object(series_module, "MAX_LIST_ROWS", 3):
+            answer = activity_list(self.data(), "time", (date(2024, 3, 4), date(2024, 3, 10)))
+        self.assertEqual((answer["total"], len(answer["rows"]), answer["limit"]), (3, 3, 3))
+
+    def test_an_item_of_the_days_has_no_list(self) -> None:
+        for key in ("rhr", "vo2", "sleep", "nope"):
+            with self.subTest(key=key):
+                with self.assertRaises(ValueError):
+                    activity_list(self.data(), key, (date(2024, 3, 4), date(2024, 3, 10)))
 
 
 class TotalTest(unittest.TestCase):

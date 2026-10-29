@@ -75,11 +75,12 @@ from .views import (
     grain_ok,
     item_table,
     period_choice,
+    list_request,
     series_request,
     types_ok,
 )
 from ..view.items import ITEMS_BY_KEY
-from ..view.series import MAX_ANSWER_BYTES, MAX_PANELS, activity_types, default_items, view_answer
+from ..view.series import MAX_ANSWER_BYTES, MAX_PANELS, activity_list, activity_types, default_items, view_answer
 
 
 HOST = "127.0.0.1"
@@ -178,6 +179,8 @@ API_ROUTES = {
     # The view page (stage G3b): an output opened, and its numbers.
     "/api/view/open": "_api_view_open",
     "/api/view/series": "_api_view_series",
+    # The activities of one period of a panel (stage M3 of v2.2.0).
+    "/api/view/activities": "_api_view_activities",
 }
 
 
@@ -889,6 +892,32 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
         answer = view_answer(data, items, period, grain, types)
         answer["coverage"] = self.server.views.coverage(ticket, data, types)
+        if len(json_body(answer)) > MAX_ANSWER_BYTES:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
+        return answer
+
+    def _api_view_activities(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The activities of one period of a panel of an item of the
+        # activities (stage M3 of v2.2.0), from what the view page read of the
+        # output, chosen as its numbers are, with the value of the panel there.
+        ticket = payload.get("view")
+        try:
+            if not isinstance(ticket, str):
+                raise ViewRequestError("view")
+            key, period, types = list_request(payload)
+        except ViewRequestError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
+        try:
+            data = self.server.views.data(ticket)
+        except ViewNotOpenError as exc:
+            raise ApiError(HTTPStatus.CONFLICT, "VIEW_NOT_OPEN") from exc
+        except OutputActionError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code, exc.version) from exc
+        except Exception as exc:
+            raise _command_failed() from exc
+        if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+        answer = activity_list(data, key, period, types)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer

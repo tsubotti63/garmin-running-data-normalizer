@@ -133,6 +133,18 @@ import {
   valueMessage,
   viewBar,
   viewHintsShown,
+  listAfter,
+  listColumns,
+  listFrom,
+  listHead,
+  listLimitMessage,
+  listOpens,
+  listSorted,
+  listTitle,
+  listValueLine,
+  listValueText,
+  listWhen,
+  sortedListRows,
 } from "./view_flow.mjs";
 import {
   PLOT_BOTTOM,
@@ -349,6 +361,7 @@ const ui = {
   panels: byId("panels"),
   timeAxis: byId("time-axis"),
   announcer: byId("cross-announcer"),
+  listAnnouncer: byId("list-announcer"),
   overview: byId("overview"),
   overviewLabel: byId("overview-label"),
   overviewPlot: byId("overview-plot"),
@@ -490,6 +503,16 @@ const state = {
   markEditing: null,
   markAsk: null,
   markProblem: null,
+  // The list of the activities of one period of a panel (stage M3 of
+  // v2.2.0): its item, its period (the index in the answer, and the days),
+  // its grouping, the activity types of the answer that drew the panel, its
+  // order, and its answer or stop (none while it is on its way); null while
+  // none is open. It is apart from the cross line, and not remembered.
+  list: null,
+  listSeq: 0,
+  // The activity types sent for the numbers of the panels, which a list asks
+  // for (Codex's review of the plan of M3).
+  answerTypes: null,
 };
 
 // The numbers of the panels; the count of the answers tells the drawing that
@@ -1108,6 +1131,8 @@ function seriesPayload(items, period, grain) {
 // shown. A ticket that the server no longer keeps opens the output again,
 // once.
 async function requestSeries(again = true) {
+  // New numbers close the list of a period (stage M3 of v2.2.0).
+  listChanged("numbers");
   if (state.view === null || !state.items.length) {
     setAnswer(null);
     state.loading = false;
@@ -1119,11 +1144,13 @@ async function requestSeries(again = true) {
   state.loading = true;
   render();
   try {
-    const answer = await callApi("/api/view/series", seriesPayload(state.items, periodRequest(state.period, state.range), state.grain));
+    const payload = seriesPayload(state.items, periodRequest(state.period, state.range), state.grain);
+    const answer = await callApi("/api/view/series", payload);
     if (seq !== state.seriesSeq) {
       return;
     }
     setAnswer(answer);
+    state.answerTypes = payload.types;
     state.stop = null;
     if (answer.coverage) {
       state.coverage = answer.coverage;
@@ -1292,6 +1319,7 @@ function changeTypes(name) {
 }
 
 function changeItems(items, refresh = true) {
+  listChanged("items");
   const removed = state.items.filter((key) => !items.includes(key));
   state.items = items;
   if (removed.includes(state.big)) {
@@ -1351,6 +1379,7 @@ function takeMarks(marks) {
   if (JSON.stringify(taken) !== JSON.stringify(state.marks)) {
     state.marks = taken;
     state.marksSeq += 1;
+    listChanged("marks");
     followMarks();
   }
 }
@@ -1564,6 +1593,7 @@ function fitMarksWindow() {
 // Whether the marks show is a change of the person, remembered with the view.
 function changeMarksShown() {
   state.marksShown = ui.marksShown.checked;
+  listChanged("marks");
   render();
   rememberItems(true);
 }
@@ -2260,6 +2290,7 @@ function drawChart(entry) {
   entry.cross = null;
   if (width < 60 || height < 24) {
     plot.replaceChildren();
+    markListable(entry, false);
     return;
   }
   const { key, item, panel, styles, periods } = entry;
@@ -2282,6 +2313,7 @@ function drawChart(entry) {
   const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, "aria-hidden": "true", focusable: "false" });
   entry.shapes = shapes;
   entry.lines = lines;
+  markListable(entry, listOpens({ item, mode: entry.mode, table: entry.table, empty: shapes.empty, loading: false }));
   // The marks of the person: their bands behind the values, their lines in
   // front, on every chart, also one without values (stage M1 of v2.2.0).
   const dayMarks = state.marksShown ? markShapes(state.marks, periods[0].start, periods[periods.length - 1].end, PLOT_LEFT, width - PLOT_RIGHT) : [];
@@ -2294,6 +2326,7 @@ function drawChart(entry) {
     }
     return;
   }
+  appendListFrame(svg, entry, shapes, height);
   appendScale(svg, key, shapes, width - PLOT_RIGHT);
   shapes.lines.forEach((shape, number) => appendMarks(svg, shape, `c${styles[number].color}`, styles[number].dash));
   appendMarkLines(svg, dayMarks, height);
@@ -2312,6 +2345,33 @@ function drawChart(entry) {
     appendMarkNames(svg, dayMarks, width);
   }
   Object.assign(entry, { cross, crossLine, crossDots });
+}
+
+// A chart of the activities with values opens the list of a period: the
+// pointer says so, and the chart says how by the keyboard (stage M3 of
+// v2.2.0).
+function markListable(entry, opens) {
+  entry.plot.classList.toggle("listable", opens);
+  if (opens) {
+    entry.plot.setAttribute("aria-describedby", "list-hint");
+  } else {
+    entry.plot.removeAttribute("aria-describedby");
+  }
+}
+
+// The frame of the period whose activities the list shows, behind the values
+// of its panel (stage M3 of v2.2.0).
+function appendListFrame(svg, entry, shapes, height) {
+  const list = state.list;
+  const period = list !== null && list.key === entry.key ? entry.periods[list.index] : undefined;
+  if (period === undefined) {
+    return;
+  }
+  const left = shapes.scale.x(period.start);
+  const right = shapes.scale.x(period.end + 1);
+  svg.append(
+    svgElement("rect", { class: "list-frame", x: (left - 1).toFixed(1), y: 1, width: Math.max(3, right - left + 2).toFixed(1), height: Math.max(1, height - 2), rx: 3 }),
+  );
 }
 
 // The bands of the spans among the marks of a chart (markShapes).
@@ -2586,6 +2646,7 @@ function renderPanels(force = false) {
   const shownList = shownPanels();
   plotWatcher?.disconnect();
   if (answer === null || !shownList.length || !answer.periods.length) {
+    closeList();
     ui.panels.replaceChildren();
     ui.timeAxis.replaceChildren();
     delete ui.timeAxis.dataset.width;
@@ -2633,6 +2694,8 @@ function renderPanels(force = false) {
       plotWatcher?.observe(entry.plot);
     }
   }
+  // The list goes with its panel, drawn again (stage M3 of v2.2.0).
+  renderList();
   drawnSignature = panelsSignature();
   restoreFocus(focused);
 }
@@ -2644,11 +2707,19 @@ function focusMark() {
   if (active === null || !ui.panels.contains(active)) {
     return null;
   }
+  // A part of the list, which goes with its panel (stage M3 of v2.2.0).
+  if (listBox?.contains(active)) {
+    return { list: active.dataset.listFocus ?? "title" };
+  }
   return { action: active.dataset.action ?? null, key: active.dataset.key ?? active.closest("[data-key]")?.dataset.key ?? null, plot: active.classList.contains("plot"), table: active.classList.contains("panel-table") };
 }
 
 function restoreFocus(mark) {
   if (mark === null) {
+    return;
+  }
+  if (mark.list !== undefined) {
+    (listBox?.querySelector(`[data-list-focus="${mark.list}"]`) ?? listBox?.querySelector(".list-title"))?.focus({ preventScroll: true });
     return;
   }
   let target = null;
@@ -2755,6 +2826,11 @@ function plotKey(event) {
     moveCross(0, true);
   } else if (event.key === "End") {
     moveCross((state.answer?.periods.length ?? 1) - 1, true);
+  } else if ((event.key === "Enter" || event.key === " ") && event.target.classList.contains("listable")) {
+    // The list of the period of the cross line (stage M3 of v2.2.0).
+    openList(event.target.dataset.key, state.cursor ?? (state.answer?.periods.length ?? 1) - 1, true);
+  } else if (event.key === "Escape" && state.list !== null && event.target.dataset.key === state.list.key) {
+    closeList(true);
   } else {
     return;
   }
@@ -2772,6 +2848,328 @@ function plotPointer(event) {
   if (index !== null && index !== state.cursor) {
     moveCross(index, false);
   }
+}
+
+// A click on a chart of the activities opens the list of the period nearest
+// to it; the focus stays on the chart, whose keys move the cross line still
+// (stage M3 of v2.2.0).
+function plotClick(event, plot) {
+  const entry = drawn.find((candidate) => candidate.plot === plot);
+  if (!entry || entry.shapes === null || entry.shapes.empty || !plot.classList.contains("listable")) {
+    return;
+  }
+  const box = plot.getBoundingClientRect();
+  const index = nearestPeriod(entry.periods, entry.shapes.scale, event.clientX - box.left);
+  if (index !== null) {
+    openList(entry.key, index, false);
+  }
+}
+
+// --- The list of the activities of a period (stage M3 of v2.2.0) ----------
+
+// The list as it shows, under the panel of its item; one at a time.
+let listBox = null;
+
+// A change of the page that closes the list (view_flow.mjs listAfter).
+function listChanged(change) {
+  if (state.list !== null && listAfter(state.list, change) === null) {
+    closeList();
+  }
+}
+
+// Draw a chart again, with the frame of the period of the list or without it,
+// and its cross line.
+function drawAgain(key) {
+  const entry = drawn.find((candidate) => candidate.key === key);
+  if (entry !== undefined && entry.plot !== null) {
+    drawChart(entry);
+  }
+}
+
+// Open the list of a period of a panel: the cross line goes to the period,
+// whose frame the chart draws while the list is open, and moves as before;
+// another period of the same panel keeps the order of the list. The heading
+// of the list comes into view, the chart staying where it can; the focus
+// goes to the heading by the keyboard, and stays on the chart by a pointer.
+function openList(key, index, byKey) {
+  const entry = drawn.find((candidate) => candidate.key === key);
+  const period = state.answer?.periods[index];
+  if (
+    entry === undefined ||
+    period === undefined ||
+    !listOpens({ item: entry.item, mode: entry.mode, table: entry.table, empty: entry.shapes === null || entry.shapes.empty, loading: state.loading })
+  ) {
+    return;
+  }
+  const before = state.list;
+  if (before !== null && before.key === key && before.index === index) {
+    if (byKey) {
+      focusList();
+    }
+    return;
+  }
+  state.list = {
+    key,
+    index,
+    start: period.start,
+    end: period.end,
+    grain: state.answer.grain,
+    types: state.answerTypes,
+    sort: before !== null && before.key === key ? before.sort : { column: "when", descending: false },
+    answer: null,
+    stop: null,
+  };
+  if (before !== null && before.key !== key) {
+    drawAgain(before.key);
+  }
+  drawAgain(key);
+  moveCross(index, false);
+  renderList();
+  listBox?.querySelector(".list-title")?.scrollIntoView({ block: "nearest" });
+  if (byKey) {
+    focusList();
+  }
+  requestList();
+}
+
+function focusList() {
+  listBox?.querySelector(".list-title")?.focus({ preventScroll: true });
+}
+
+// Close the list; an answer on its way is dropped. Closed by the person, the
+// focus goes back to the chart of its panel, and the cross line to its period.
+function closeList(byPerson = false) {
+  const list = state.list;
+  if (list === null) {
+    return;
+  }
+  state.list = null;
+  state.listSeq += 1;
+  listBox?.remove();
+  listBox = null;
+  drawAgain(list.key);
+  moveCross(byPerson ? list.index : state.cursor, false);
+  if (byPerson) {
+    drawn.find((entry) => entry.key === list.key)?.plot?.focus();
+  }
+}
+
+function sortList(column) {
+  if (state.list === null || !Array.isArray(state.list.answer?.rows)) {
+    return;
+  }
+  state.list.sort = listSorted(state.list.sort, column);
+  renderList({ top: true });
+}
+
+// Ask for the activities of the period of the list, for the activity types of
+// the answer that drew its panel; only the answer of its last request is
+// shown. A ticket that the server no longer keeps opens the output again,
+// once, as for the numbers.
+async function requestList(again = true) {
+  const list = state.list;
+  if (list === null || state.view === null) {
+    return;
+  }
+  const seq = ++state.listSeq;
+  try {
+    const answer = await callApi("/api/view/activities", {
+      view: state.view.view,
+      item: list.key,
+      period: { from: list.start, to: list.end },
+      types: list.types,
+    });
+    if (seq !== state.listSeq) {
+      return;
+    }
+    list.answer = answer;
+    // What the list has, said once it is there, with its period, so that
+    // another period of as many activities is said too (Codex's review of
+    // the diff of M3).
+    listSay(list, describe(listFrom(list.key, answer.total, state.language)));
+  } catch (error) {
+    if (seq !== state.listSeq) {
+      return;
+    }
+    if (connectionFailure(error)) {
+      list.stop = { code: null, detail: null };
+      listSay(list, t("view.list.failed"));
+      render();
+    } else if (error.code === "VIEW_NOT_OPEN" && again && state.target !== null && (await reopen())) {
+      if (seq === state.listSeq) {
+        requestList(false);
+      }
+      return;
+    } else if (OUTPUT_STOPS.includes(error.code)) {
+      state.view = null;
+      setAnswer(null);
+      state.compare = null;
+      state.stop = { code: error.code, detail: error.detail };
+      render();
+      return;
+    } else if (seq === state.listSeq) {
+      list.stop = { code: error.code, detail: error.detail };
+      listSay(list, t("view.list.failed"));
+    }
+  }
+  if (seq === state.listSeq) {
+    renderList();
+  }
+}
+
+// Say what a list has, after its heading.
+function listSay(list, text) {
+  setText(ui.listAnnouncer, t("view.list.spoken", { title: describe(listTitle(state.answer.periods[list.index], list.grain, state.language)), text }));
+}
+
+// The list under the panel of its item: its heading, with the panel that it
+// is of, its rows in their order under heads that order them, and the value
+// of the panel under them. It follows the language, and goes with its panel
+// when the panels are drawn again; the focus stays where it was in it.
+function renderList({ top = false } = {}) {
+  const list = state.list;
+  const entry = list === null ? undefined : drawn.find((candidate) => candidate.key === list.key);
+  if (entry === undefined || state.answer === null) {
+    return;
+  }
+  const focused = listBox?.contains(document.activeElement) ? document.activeElement.dataset.listFocus ?? "title" : null;
+  // The table keeps where it was scrolled to, sideways too, so that the head
+  // that was pressed stays in view (Codex's review of the diff of M3); a new
+  // order starts at its top.
+  const before = listBox?.querySelector(".list-table");
+  const scrolled = { top: top ? 0 : before?.scrollTop ?? 0, left: before?.scrollLeft ?? 0 };
+  if (listBox === null) {
+    listBox = element("section", "activity-list");
+    listBox.setAttribute("aria-labelledby", "list-title");
+  }
+  const titleText = describe(listTitle(state.answer.periods[list.index], list.grain, state.language));
+  const head = element("div", "panel-head");
+  const title = element("h3", "panel-name list-title", titleText);
+  title.id = "list-title";
+  title.tabIndex = -1;
+  title.dataset.listFocus = "title";
+  head.append(title);
+  const answer = list.stop === null ? list.answer : null;
+  if (answer !== null) {
+    head.append(element("span", "panel-unit", describe(listFrom(list.key, answer.total, state.language))));
+  }
+  const tools = element("span", "panel-tools");
+  const close = textButton(t("view.list.close"), "list-close", list.key);
+  close.dataset.listFocus = "close";
+  tools.append(close);
+  head.append(tools);
+  const parts = [head];
+  if (list.stop !== null) {
+    parts.push(listStop(list.stop));
+  } else if (answer === null) {
+    parts.push(element("p", "list-note", t("view.loading")));
+  } else if (answer.total === 0) {
+    parts.push(element("p", "list-note", t("view.list.none")));
+  } else if (answer.rows === null) {
+    parts.push(element("p", "list-note", describe(listLimitMessage(answer.total, answer.limit, list.grain, state.language))));
+  } else {
+    parts.push(buildListTable(list, answer.rows, titleText));
+  }
+  if (answer !== null) {
+    const line = element("p", "list-value");
+    line.append(...richNodes(listValueLine(list.key, answer.value, state.language)));
+    if (answer.rows !== null && answer.total > 0) {
+      line.append(" ", element("span", "list-sort-note", t("view.list.sort_note")));
+    }
+    parts.push(line);
+  }
+  listBox.replaceChildren(...parts);
+  if (entry.section.nextElementSibling !== listBox) {
+    entry.section.after(listBox);
+  }
+  const table = listBox.querySelector(".list-table");
+  if (table !== null) {
+    table.scrollTop = scrolled.top;
+    table.scrollLeft = scrolled.left;
+  }
+  if (focused !== null) {
+    (listBox.querySelector(`[data-list-focus="${focused}"]`) ?? title).focus({ preventScroll: true });
+  }
+}
+
+// The table of the list: a head for each column, which orders the rows by
+// it, and the rows in that order, each named by its date and time; a value
+// that an activity does not have shows a dash and says so.
+function buildListTable(list, rows, titleText) {
+  const wrap = element("div", "list-table");
+  wrap.tabIndex = 0;
+  wrap.setAttribute("role", "region");
+  wrap.setAttribute("aria-labelledby", "list-title");
+  const table = element("table", "t");
+  const caption = element("caption", "visually-hidden", titleText);
+  const head = element("thead");
+  const headRow = element("tr");
+  const columns = listColumns(list.key);
+  for (const column of columns) {
+    const cell = element("th", column === "when" || column === "type" ? "" : "n");
+    cell.scope = "col";
+    const button = element("button", "list-sort", describe(listHead(column)));
+    button.type = "button";
+    button.dataset.action = "list-sort";
+    button.dataset.column = column;
+    button.dataset.listFocus = `sort-${column}`;
+    if (list.sort.column === column) {
+      cell.setAttribute("aria-sort", list.sort.descending ? "descending" : "ascending");
+      const arrow = element("span", "list-arrow", list.sort.descending ? "\u25bc" : "\u25b2");
+      arrow.setAttribute("aria-hidden", "true");
+      button.append(arrow);
+    }
+    cell.append(button);
+    headRow.append(cell);
+  }
+  head.append(headRow);
+  const body = element("tbody");
+  const typeName = (name) => describe(typeMessage(name));
+  for (const row of sortedListRows(rows, list.sort, typeName, state.language)) {
+    const line = element("tr");
+    for (const column of columns) {
+      const text =
+        column === "when"
+          ? describe(listWhen(row.datetime, state.language)) || null
+          : column === "type"
+            ? typeName(row.type)
+            : listValueText(column, row.values?.[column], state.language);
+      const cell = element(column === "when" ? "th" : "td", column === "when" || column === "type" ? "" : "n");
+      if (column === "when") {
+        cell.scope = "row";
+      }
+      if (text === null) {
+        cell.classList.add("empty");
+        const dash = element("span", "", "\u2014");
+        dash.setAttribute("aria-hidden", "true");
+        cell.append(dash, element("span", "visually-hidden", t("view.no_value")));
+      } else {
+        cell.textContent = text;
+      }
+      line.append(cell);
+    }
+    body.append(line);
+  }
+  table.append(caption, head, body);
+  wrap.append(table);
+  return wrap;
+}
+
+// What the list says when it could not be read: that it could not, and the
+// words of the code of the server, with the code to quote.
+function listStop(stop) {
+  const box = element("div", "list-note");
+  box.append(element("p", "", t("view.list.failed")));
+  if (stop.code !== null) {
+    const words = stopBox(stop.code, stop.detail, state.productVersion);
+    for (const line of words.lines) {
+      box.append(element("p", "", describe(line)));
+    }
+    if (words.code !== null) {
+      box.append(element("p", "stop-code", describe(words.code)));
+    }
+  }
+  return box;
 }
 
 // --- The overview ---------------------------------------------------------
@@ -4357,6 +4755,8 @@ function renderStage(live) {
       renderOverview();
     }
   } else {
+    // The list goes with the panels (stage M3 of v2.2.0).
+    closeList();
     drawn = [];
     drawnSignature = null;
     overviewSignature = null;
@@ -4446,6 +4846,7 @@ function closeHelp() {
 // fill the screen where the browser allows it, and the window where it does
 // not.
 function enterFull() {
+  listChanged("full");
   state.full = true;
   state.helpOpen = false;
   state.typesOpen = false;
@@ -4467,6 +4868,7 @@ function enterFull() {
 }
 
 function leaveFull() {
+  listChanged("full");
   state.full = false;
   // A drag of the overview ends where it was: in the browser's full screen,
   // the browser takes the first Esc, before the page.
@@ -4535,13 +4937,25 @@ function toggleNotes(key, open = state.notesOpen !== key) {
 }
 
 function panelAction(event) {
+  const plot = event.target.closest(".plot");
+  if (plot !== null && ui.panels.contains(plot)) {
+    plotClick(event, plot);
+    return;
+  }
   const button = event.target.closest("button[data-action]");
   if (button === null || !ui.panels.contains(button)) {
     return;
   }
   const key = button.dataset.key;
   switch (button.dataset.action) {
+    case "list-close":
+      closeList(true);
+      return;
+    case "list-sort":
+      sortList(button.dataset.column);
+      return;
     case "table":
+      listChanged("table");
       if (state.tables.has(key)) {
         state.tables.delete(key);
       } else {
@@ -4549,6 +4963,7 @@ function panelAction(event) {
       }
       break;
     case "big":
+      listChanged("big");
       state.big = key;
       state.notesOpen = null;
       for (const other of [...state.tables]) {
@@ -4561,6 +4976,7 @@ function panelAction(event) {
       ui.panels.querySelector(`button[data-action="unbig"][data-key="${key}"]`)?.focus();
       return;
     case "unbig":
+      listChanged("big");
       state.big = null;
       state.notesOpen = null;
       render();
@@ -4581,6 +4997,7 @@ function panelAction(event) {
       toggleNotes(key);
       return;
     case "compare":
+      listChanged("compare");
       enterCompare(key);
       return;
     case "help":
@@ -4859,6 +5276,11 @@ function connect() {
   ui.panels.addEventListener("keydown", (event) => {
     if (event.target.classList?.contains("plot")) {
       plotKey(event);
+    } else if (event.key === "Escape" && listBox?.contains(event.target)) {
+      // The list closes by Esc, and the focus goes back to its chart (stage
+      // M3 of v2.2.0).
+      event.preventDefault();
+      closeList(true);
     } else if (event.key === "Escape" && state.notesOpen !== null) {
       event.preventDefault();
       const key = state.notesOpen;

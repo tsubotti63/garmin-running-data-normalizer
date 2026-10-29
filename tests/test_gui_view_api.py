@@ -1,6 +1,8 @@
 """The API of the view page (stage G3b): an output opened under a ticket that
 holds no place, and its numbers, which are those of the functions of stage
-G1, read once and again when the output changes.
+G1, read once and again when the output changes; and the list of the
+activities of one period of a panel (stage M3 of v2.2.0), from the same
+reading.
 
 Synthetic data only: one output of about two and a half years, made once and
 copied by the tests that change it. Every test has its own server, and the
@@ -31,6 +33,7 @@ from garmin_running_data_normalizer.gui.views import (
     ViewRequestError,
     Views,
     item_table,
+    list_request,
     output_stamp,
     series_request,
 )
@@ -350,10 +353,104 @@ class ViewApiTest(GuiServerTestCase):
             with self.subTest(ticket=ticket):
                 self.assertEqual(self.call("/api/view/series", {**payload, "view": ticket})[0], 200)
 
+    def test_the_activities_of_a_period_are_those_of_the_view_page(self) -> None:
+        # Stage M3 of v2.2.0: the list of the activities of one period of a
+        # panel is that of the function of the view page, for a week, a
+        # month, a year, and every day of the output (more activities than
+        # the list shows: their number only).
+        output = made_output()
+        ticket = self.open(output)
+        data = load_view_data(output)
+        names = [entry["name"] for entry in activity_types(data)]
+        for key, period, types, total in (
+            ("dist", {"from": "2024-03-04", "to": "2024-03-10"}, None, True),
+            ("pace", {"from": "2024-01-01", "to": "2024-01-31"}, names[:1], True),
+            ("count", {"from": "2023-01-01", "to": "2023-12-31"}, names, True),
+            ("gct", {"from": "2024-05-01", "to": "2024-05-31"}, None, True),
+            ("dist", {"from": "2022-01-01", "to": "2026-12-31"}, names, False),
+        ):
+            with self.subTest(item=key, period=period, types=types):
+                status, answer = self.call("/api/view/activities", {"view": ticket, "item": key, "period": period, "types": types})
+                self.assertEqual(status, 200, answer)
+                chosen = (date.fromisoformat(period["from"]), date.fromisoformat(period["to"]))
+                self.assertEqual(answer, as_json(view_series.activity_list(data, key, chosen, types)))
+                self.assertGreater(answer["total"], 0)
+                self.assertEqual(answer["rows"] is not None, total)
+        # The item of the panel, when it is none of the columns of the list,
+        # is one more column.
+        status, answer = self.call(
+            "/api/view/activities", {"view": ticket, "item": "gct", "period": {"from": "2024-05-01", "to": "2024-05-31"}, "types": None}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(set(answer["rows"][0]["values"]), {*view_series.LIST_ITEMS, "gct"})
+
+    def test_requests_for_the_activities_of_another_form_are_refused(self) -> None:
+        ticket = self.open(made_output())
+        good = {"view": ticket, "item": "dist", "period": {"from": "2024-03-04", "to": "2024-03-10"}, "types": None}
+        for change in (
+            {"view": None},
+            {"view": 3},
+            {"item": None},
+            {"item": ["dist"]},
+            {"item": "nope"},
+            # An item of the days has no activities.
+            {"item": "rhr"},
+            {"period": None},
+            {"period": "all"},
+            {"period": {"from": "2024-03-04"}},
+            {"period": {"from": "2024-03-10", "to": "2024-03-04"}},
+            {"period": {"from": "2024-3-4", "to": "2024-03-10"}},
+            {"types": "running"},
+            {"types": ["running", "running"]},
+            {"types": [1]},
+            {"types": ["no such type"]},
+        ):
+            with self.subTest(change=change):
+                self.assertEqual(self.call("/api/view/activities", {**good, **change}), (422, {"error": "REQUEST_INVALID"}))
+        self.assertEqual(
+            self.call("/api/view/activities", {**good, "view": "not-a-ticket-of-this-server"}), (409, {"error": "VIEW_NOT_OPEN"})
+        )
+        with patch.object(gui_server, "MAX_ANSWER_BYTES", 100):
+            self.assertEqual(self.call("/api/view/activities", good), (422, {"error": "VIEW_ANSWER_TOO_LARGE"}))
+        # An error that no code describes answers as any unexpected error of
+        # the server, without its words.
+        body = json.dumps(good).encode("utf-8")
+        with patch.object(gui_server, "activity_list", side_effect=RuntimeError("unexpected words")):
+            status, _, answer = self.post_api("/api/view/activities", self.api_headers(body), body)
+        self.assertEqual(status, 500)
+        self.assertNotIn(b"unexpected words", answer)
+        self.assertEqual(self.call("/api/view/activities", good)[0], 200)
+
+    def test_the_activities_are_read_as_the_numbers_are(self) -> None:
+        # The list takes the reading of the numbers: no reading of its own
+        # while the output does not change, and the codes of the check of
+        # the output when it does (the same ticket may be read again between
+        # the numbers and the list, as for the numbers of stages L and M2).
+        output = self.copied()
+        loads: list[Path] = []
+
+        def counted(place: Path) -> Any:
+            loads.append(place)
+            return load_view_data(place)
+
+        listed = {"item": "dist", "period": {"from": "2024-03-04", "to": "2024-03-10"}, "types": None}
+        with patch.object(self.server.views, "_load", counted):
+            ticket = self.open(output)
+            self.assertEqual(self.call("/api/view/series", {"view": ticket, "items": ["dist"], "period": "all", "grain": "week", "types": None})[0], 200)
+            first = self.call("/api/view/activities", {**listed, "view": ticket})
+            self.assertEqual(first[0], 200)
+            self.assertEqual(self.call("/api/view/activities", {**listed, "view": ticket}), first)
+            self.assertEqual(len(loads), 1)
+            activities = output / "analysis" / "activities.csv"
+            with activities.open("a", encoding="utf-8") as handle:
+                handle.write("\n")
+            self.assertEqual(self.call("/api/view/activities", {**listed, "view": ticket}), (422, {"error": "HANDOFF_INVALID"}))
+            self.assertEqual(self.call("/api/view/activities", {**listed, "view": ticket}), (409, {"error": "VIEW_NOT_OPEN"}))
+
     def test_the_view_page_needs_the_launch_key(self) -> None:
         body = json.dumps({"output": "chosen", "path": str(made_output())}).encode("utf-8")
         headers = [header for header in self.api_headers(body) if header[0] != gui_server.LAUNCH_KEY_HEADER]
-        for path in ("/api/view/open", "/api/view/series", "/api/settings/view"):
+        for path in ("/api/view/open", "/api/view/series", "/api/view/activities", "/api/settings/view"):
             with self.subTest(path=path):
                 status, _, answer = self.post_api(path, headers, body)
                 self.assertEqual((status, json.loads(answer)), (403, {"error": "FORBIDDEN"}))
@@ -465,6 +562,28 @@ class ViewsTest(unittest.TestCase):
             with self.subTest(payload=payload):
                 with self.assertRaises(ViewRequestError):
                     series_request(payload)
+
+    def test_a_request_for_the_activities_of_a_period_has_its_form(self) -> None:
+        # Stage M3 of v2.2.0: an item of the activities, the days of one
+        # period, and the activity types or None.
+        self.assertEqual(
+            list_request({"item": "pace", "period": {"from": "2024-03-04", "to": "2024-03-10"}, "types": ["running"]}),
+            ("pace", (date(2024, 3, 4), date(2024, 3, 10)), ["running"]),
+        )
+        self.assertEqual(
+            list_request({"item": "pow", "period": {"from": "2024-03-04", "to": "2024-03-04"}}),
+            ("pow", (date(2024, 3, 4), date(2024, 3, 4)), None),
+        )
+        for payload in (
+            {},
+            {"item": "dist"},
+            {"item": "dist", "period": "1y"},
+            {"item": "sleep", "period": {"from": "2024-03-04", "to": "2024-03-10"}},
+            {"item": "dist", "period": {"from": "2024-03-04", "to": "2024-03-10"}, "types": [None]},
+        ):
+            with self.subTest(payload=payload):
+                with self.assertRaises(ViewRequestError):
+                    list_request(payload)
 
 
 if __name__ == "__main__":

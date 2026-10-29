@@ -260,21 +260,24 @@ function twoDigits(value) {
   return String(value).padStart(2, "0");
 }
 
-// Minutes as hours and minutes: 1:05.
+// Minutes as hours and minutes: 1:05; below 0 with its sign, -1:05 (Codex's
+// review of the diff of M3: a time below 0 was written as a long one).
 export function clockMinutes(minutes) {
-  let hours = Math.floor(minutes / 60);
-  let rest = Math.round(minutes - hours * 60);
-  if (rest === 60) {
-    hours += 1;
-    rest = 0;
+  const whole = Math.round(minutes);
+  if (whole < 0) {
+    return `-${clockMinutes(-whole)}`;
   }
-  return `${hours}:${twoDigits(rest)}`;
+  const hours = Math.floor(whole / 60);
+  return `${hours}:${twoDigits(whole - hours * 60)}`;
 }
 
 // Seconds as hours, minutes, and seconds, or minutes and seconds under an
-// hour: 1:02:03, 21:05.
+// hour: 1:02:03, 21:05; below 0 with its sign, -1:00.
 export function clockSeconds(seconds) {
   const whole = Math.round(seconds);
+  if (whole < 0) {
+    return `-${clockSeconds(-whole)}`;
+  }
   const hours = Math.floor(whole / 3600);
   const minutes = Math.floor((whole - hours * 3600) / 60);
   const rest = whole - hours * 3600 - minutes * 60;
@@ -347,6 +350,8 @@ function dateFormat(language, kind) {
       month_name: { month: "long" },
       month_day: { month: "long", day: "numeric" },
       numeric_day: { year: "numeric", month: "numeric", day: "numeric" },
+      list_day: { month: "numeric", day: "numeric" },
+      weekday: { weekday: "short" },
     }[kind];
     dateFormats.set(name, new Intl.DateTimeFormat(language, { ...options, timeZone: "UTC" }));
   }
@@ -2034,4 +2039,174 @@ export function spokenMarks(marks) {
 // of a span.
 export function markDays(mark, language) {
   return { day: dateText(mark.day, language), end: mark.end ? dateText(mark.end, language) : null };
+}
+
+// --- The list of the activities of a period (stage M3 of v2.2.0) ----------
+
+// The columns of the list after the date and time and the activity type, as
+// the server sends them (view/series.py LIST_ITEMS); the item of the panel is
+// one more column when it is none of them (Codex's review of the plan of M3).
+export const LIST_ITEMS = ["dist", "time", "pace", "hr", "mx", "cad", "asc"];
+// The rows of one list at most (view/series.py MAX_LIST_ROWS).
+export const MAX_LIST_ROWS = 500;
+// The finer grouping that lists a period of more activities than that.
+const FINER_GRAINS = { year: "month", month: "week", week: "day" };
+// The short unit of a column, which its head names; the clocks and the values
+// as Garmin gives them have none.
+const LIST_UNIT_KEYS = {
+  km: "view.unit.km",
+  pace: "view.list.unit_pace",
+  bpm: "view.unit.bpm",
+  m: "view.unit.m",
+  cm: "view.unit.cm",
+  ms: "view.unit.ms",
+  pct: "view.unit.pct",
+  pct_fit: "view.unit.pct",
+};
+// The local date and time of an activity as the output writes it
+// (common/time.py): the date, and the time of the day before its offset.
+const LOCAL_MOMENT = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?/;
+// What keeps the list open: the words, the scales, and the cross line, which
+// moves to see another period; any other change of what the panels count or
+// show closes it (the checker's review of the plan of M3).
+const LIST_KEPT = ["language", "align", "cursor"];
+
+// Whether a panel opens the list of the activities of its periods: a panel of
+// an item of the activities (training and running form), drawn as a chart
+// with values, not as a low strip or a table, and not while new numbers are
+// on their way, as its chart is of the answer before (Codex's review of the
+// plan of M3).
+export function listOpens({ item, mode, table, empty, loading }) {
+  return item !== null && item !== undefined && isActivityItem(item) && mode !== "mini" && !table && !empty && !loading;
+}
+
+// The list after a change of the page: kept or closed (null).
+export function listAfter(list, change) {
+  return list !== null && LIST_KEPT.includes(change) ? list : null;
+}
+
+// The order of the list after a head is pressed: the other way for the column
+// of the order, and up for another.
+export function listSorted(sort, column) {
+  return sort.column === column ? { column, descending: !sort.descending } : { column, descending: false };
+}
+
+// The columns of the list of the panel of an item.
+export function listColumns(key) {
+  return ["when", "type", ...LIST_ITEMS, ...(LIST_ITEMS.includes(key) || key === "count" ? [] : [key])];
+}
+
+// The head of a column: its name, with the short unit of its values.
+export function listHead(column) {
+  if (column === "when") {
+    return message("view.list.when");
+  }
+  if (column === "type") {
+    return message("view.list.type");
+  }
+  const unit = LIST_UNIT_KEYS[ITEM_FORMATS[column].unit];
+  return unit === undefined ? message(ITEM_KEYS[column]) : message("view.list.head", {}, { name: ITEM_KEYS[column], unit });
+}
+
+// A value of a row as the list writes it, without the unit that the head of
+// its column names; the time of an activity in hours, minutes, and seconds.
+// Null for none.
+export function listValueText(key, value, language) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  return key === "time" ? clockSeconds(value) : shownText(key, shown(key, value), language);
+}
+
+// The local date and time of an activity as the list writes it: its date and
+// its time of the day as the output has them, in the form of the language
+// (9/14（月）6:30, Mon 9/14 6:30), without changing its timezone; the text as
+// it is in another form; null without one.
+export function listWhen(moment, language) {
+  if (typeof moment !== "string" || moment === "") {
+    return null;
+  }
+  const found = LOCAL_MOMENT.exec(moment);
+  if (found === null) {
+    return plain(moment);
+  }
+  const day = utcDate(found[1]);
+  return message("view.list.moment", {
+    date: dateFormat(language, "list_day").format(day),
+    weekday: dateFormat(language, "weekday").format(day),
+    time: `${Number(found[2])}:${found[3]}`,
+  });
+}
+
+// What the list orders the date and time by: the date and the time of the day
+// as they show, before the offset, so that the times read in their order where
+// activities of other timezones are among them (the checker's review of the
+// decisions of M3); the day of the row where its time cannot be read.
+export function listMomentKey(row) {
+  const found = typeof row.datetime === "string" ? LOCAL_MOMENT.exec(row.datetime) : null;
+  return found === null ? row.day : found[0];
+}
+
+// The rows of the list in the order of a column, up or down: rows without a
+// value last either way, and rows of the same value by their date and time,
+// then in the order of the server. ``typeName`` gives the name of an activity
+// type as the page writes it.
+export function sortedListRows(rows, { column, descending }, typeName, language) {
+  const keyOf = (row) => (column === "when" ? listMomentKey(row) : column === "type" ? typeName(row.type) : row.values?.[column]);
+  const none = (key) => key === null || key === undefined || (typeof key === "number" && !Number.isFinite(key));
+  const compared = (a, b) => {
+    if (typeof a === "number") {
+      return a - b;
+    }
+    if (column === "type") {
+      return a.localeCompare(b, language);
+    }
+    return a < b ? -1 : a > b ? 1 : 0;
+  };
+  const order = rows.map((row, index) => ({ row, index, key: keyOf(row), moment: listMomentKey(row) }));
+  order.sort((a, b) => {
+    const noneA = none(a.key);
+    const noneB = none(b.key);
+    if (noneA !== noneB) {
+      return noneA ? 1 : -1;
+    }
+    if (!noneA) {
+      const by = compared(a.key, b.key);
+      if (by !== 0) {
+        return descending ? -by : by;
+      }
+    }
+    if (column !== "when" && a.moment !== b.moment) {
+      return a.moment < b.moment ? -1 : 1;
+    }
+    return a.index - b.index;
+  });
+  return order.map((entry) => entry.row);
+}
+
+// The heading of the list: its period, as the reading of its panel names it.
+export function listTitle(period, grain, language) {
+  return message("view.list.title", {}, { period: periodMessage(period, grain, language) });
+}
+
+// Which panel the list is of, and how many activities it has.
+export function listFrom(key, total, language) {
+  return message("view.list.from", { n: countText(total, language) }, { name: ITEM_KEYS[key] });
+}
+
+// The line under the list: the value of the panel for the period and how many
+// activities it counted, as the server made them for the panel; the list does
+// not count them again (Codex's review of the plan of M3, and the checker's).
+export function listValueLine(key, value, language) {
+  const shownValue = Number.isFinite(value?.value) ? valueMessage(key, value.value, language) : message("view.no_value");
+  return { ...message("view.list.value", { n: countText(value?.count ?? 0, language) }, { value: shownValue }), strong: ["value"] };
+}
+
+// What the list says of a period of more activities than it shows: how many,
+// and the finer grouping that lists them; of a day, only how many.
+export function listLimitMessage(total, limit, grain, language) {
+  const params = { n: countText(total, language), max: countText(limit, language) };
+  return Object.hasOwn(FINER_GRAINS, grain)
+    ? message("view.list.limit", params, { grain: GRAIN_KEYS[FINER_GRAINS[grain]] })
+    : message("view.list.limit_day", params);
 }

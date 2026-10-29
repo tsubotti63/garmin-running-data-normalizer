@@ -970,6 +970,96 @@ class GuiViewPageStructureTest(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertIn(line, self.script)
 
+    def test_the_list_of_a_period_is_named_and_goes_back_to_its_chart(self) -> None:
+        # Stage M3 of v2.2.0: a chart of the activities with values says by a
+        # hidden description how Enter opens the list of a period; the list
+        # is named by its heading, which takes the focus by the keyboard; its
+        # table has a caption, heads that order it (aria-sort, the arrow
+        # hidden), and rows named by their date and time, a value that an
+        # activity does not have said in words; Esc and its button close it,
+        # and the focus goes back to its chart. A polite region of its own
+        # says what it has, apart from the region of the cross line.
+        hint = by_id(self.elements, "list-hint")
+        self.assertIn("visually-hidden", str(hint.get("class")).split())
+        self.assertEqual(hint.get("data-i18n"), "view.list.hint")
+        announcer = by_id(self.elements, "list-announcer")
+        self.assertEqual(announcer.get("aria-live"), "polite")
+        self.assertIn("visually-hidden", str(announcer.get("class")).split())
+        for line in (
+            'entry.plot.setAttribute("aria-describedby", "list-hint");',
+            'entry.plot.removeAttribute("aria-describedby");',
+            'listBox.setAttribute("aria-labelledby", "list-title");',
+            "title.tabIndex = -1;",
+            'const caption = element("caption", "visually-hidden", titleText);',
+            'wrap.setAttribute("role", "region");\n  wrap.setAttribute("aria-labelledby", "list-title");',
+            'cell.setAttribute("aria-sort", list.sort.descending ? "descending" : "ascending");',
+            'arrow.setAttribute("aria-hidden", "true");',
+            'cell.scope = "row";',
+            'dash.setAttribute("aria-hidden", "true");\n        cell.append(dash, element("span", "visually-hidden", t("view.no_value")));',
+            '} else if (event.key === "Escape" && listBox?.contains(event.target)) {',
+            '} else if (event.key === "Escape" && state.list !== null && event.target.dataset.key === state.list.key) {',
+            '} else if ((event.key === "Enter" || event.key === " ") && event.target.classList.contains("listable")) {',
+            "drawn.find((entry) => entry.key === list.key)?.plot?.focus();",
+            # Its period first, so that another period of as many
+            # activities is said too (Codex's review of the diff).
+            'setText(ui.listAnnouncer, t("view.list.spoken", { title: describe(listTitle(state.answer.periods[list.index], list.grain, state.language)), text }));',
+            "listSay(list, describe(listFrom(list.key, answer.total, state.language)));",
+            # The table keeps where it was scrolled to, sideways too.
+            "table.scrollLeft = scrolled.left;",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+        # The heading takes the focus by the keyboard only: a click keeps it
+        # on the chart, whose arrow keys move the cross line.
+        self.assertIn("openList(event.target.dataset.key, state.cursor ?? (state.answer?.periods.length ?? 1) - 1, true);", self.script)
+        self.assertIn("openList(entry.key, index, false);", self.script)
+        # The chart takes the pointer itself, so that a drawing made again
+        # during a click does not lose it (the real page in English at
+        # 1366x650).
+        view_css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        self.assertRegex(view_css, r"\.plot svg \{[^}]*pointer-events: none;")
+        # A head of a column breaks between its words only.
+        self.assertRegex(view_css, r"\.list-sort \{[^}]*overflow-wrap: normal;")
+
+    def test_the_list_follows_the_panels_and_drops_old_answers(self) -> None:
+        # Stage M3 of v2.2.0 (the checker's review of the plan, and Codex's):
+        # the list closes when what the panels count or show changes, and
+        # stays for the words, the scales, and the cross line
+        # (view_flow.mjs listAfter, which the node tests check); it opens
+        # from a chart of the answer now, not while numbers are on their way,
+        # for the activity types of that answer; only the answer of its last
+        # request is shown; a ticket that the server no longer keeps opens
+        # the output again once; and it goes with its panel when the panels
+        # are drawn again, the focus where it was.
+        for change, count in (("numbers", 1), ("items", 1), ("marks", 2), ("table", 1), ("big", 2), ("compare", 1), ("full", 2)):
+            with self.subTest(change=change):
+                self.assertEqual(self.script.count(f'listChanged("{change}");'), count)
+        series = re.search(r"async function requestSeries\(again = true\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert series is not None
+        self.assertTrue(series.group(1).startswith('\n  // New numbers close the list of a period (stage M3 of v2.2.0).\n  listChanged("numbers");'))
+        self.assertIn("state.answerTypes = payload.types;", series.group(1))
+        request = re.search(r"async function requestList\(again = true\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert request is not None
+        body = request.group(1)
+        self.assertIn("const seq = ++state.listSeq;", body)
+        self.assertIn("types: list.types,", body)
+        self.assertIn('error.code === "VIEW_NOT_OPEN" && again && state.target !== null && (await reopen())', body)
+        self.assertIn("requestList(false);", body)
+        self.assertIn("OUTPUT_STOPS.includes(error.code)", body)
+        self.assertEqual(body.count("if (seq !== state.listSeq) {\n      return;\n    }"), 2)
+        close = re.search(r"function closeList\(byPerson = false\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert close is not None
+        self.assertIn("state.listSeq += 1;", close.group(1))
+        for line in (
+            "!listOpens({ item: entry.item, mode: entry.mode, table: entry.table, empty: entry.shapes === null || entry.shapes.empty, loading: state.loading })",
+            "types: state.answerTypes,",
+            "  // The list goes with its panel, drawn again (stage M3 of v2.2.0).\n  renderList();\n  drawnSignature = panelsSignature();\n  restoreFocus(focused);",
+            "    // The list goes with the panels (stage M3 of v2.2.0).\n    closeList();\n    drawn = [];",
+            "if (listBox?.contains(active)) {\n    return { list: active.dataset.listFocus ?? \"title\" };\n  }",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+
     def test_a_comparison_never_changes_the_panels_and_drops_old_answers(self) -> None:
         # v2.2.0 L1 (plan v2, 5 and 6): the numbers of a comparison are one
         # generation, whose older answers are dropped when they come, and
@@ -1251,6 +1341,9 @@ class GuiStyleTest(unittest.TestCase):
             r"\.chart-line\.y6,[^{]*\{\s*stroke: CanvasText;",
             r"\.chart-line\.y5,\s*\.key-line\.y5 \{\s*stroke-dasharray: 8 3;",
             r"\.chart-bar\.partial\.outlined \{\s*fill: Canvas;\s*stroke: CanvasText;",
+            # Stage M3 of v2.2.0: the frame of the period of the list keeps
+            # its edge.
+            r"\.list-frame \{\s*fill: none;\s*stroke: Highlight;",
         ):
             with self.subTest(rule=rule):
                 self.assertRegex(block, rule)
