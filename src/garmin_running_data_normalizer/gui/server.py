@@ -68,8 +68,10 @@ from .views import (
     ViewNotOpenError,
     ViewRequestError,
     Views,
+    compare_by_ok,
     compare_mode_ok,
     compare_month_ok,
+    compare_weeks_ok,
     grain_ok,
     item_table,
     period_choice,
@@ -77,7 +79,7 @@ from .views import (
     types_ok,
 )
 from ..view.items import ITEMS_BY_KEY
-from ..view.series import MAX_ANSWER_BYTES, MAX_PANELS, activity_types, coverage, default_items, view_answer
+from ..view.series import MAX_ANSWER_BYTES, MAX_PANELS, activity_types, default_items, view_answer
 
 
 HOST = "127.0.0.1"
@@ -278,6 +280,13 @@ class GuiServer(ThreadingHTTPServer):
     """Serve one GUI launch on 127.0.0.1 with a port chosen by the operating system."""
 
     daemon_threads = True
+    # The connections that wait for the server to take them (the checker's
+    # M2-5 of v2.2.0): the browser keeps six open to it, and a comparison by
+    # race day asks for up to 13 numbers at once. While the server is late to
+    # take them, under a heavy load, a full queue makes the operating system
+    # refuse the next one (macOS resets it), which the page takes for a
+    # stopped app; Python's default is 5.
+    request_queue_size = 64
 
     def __init__(
         self,
@@ -784,7 +793,12 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             if payload["types"] is not None and not types_ok(payload["types"]):
                 raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
             view["types"] = payload["types"]
-        for name, ok in (("compare_mode", compare_mode_ok), ("compare_month", compare_month_ok)):
+        for name, ok in (
+            ("compare_mode", compare_mode_ok),
+            ("compare_month", compare_month_ok),
+            ("compare_by", compare_by_ok),
+            ("compare_weeks", compare_weeks_ok),
+        ):
             if name in payload:
                 if payload[name] is not None and not ok(payload[name]):
                     raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
@@ -835,6 +849,9 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code, exc.version) from exc
         except Exception as exc:
             raise _command_failed() from exc
+        # The bars of the item shelf, kept with the output for the requests
+        # of its numbers (stage M2 of v2.2.0).
+        shelf = self.server.views.coverage(ticket, data)
         return {
             "view": ticket,
             "name": output.name,
@@ -844,10 +861,10 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             "last_day": _iso(data.last_day),
             "items": item_table(),
             "types": activity_types(data),
-            "first_items": default_items(data),
+            "first_items": default_items(data, shelf),
             # The built-in layouts (stage K1 of v2.2.0).
             "layouts": built_in_answer(),
-            "coverage": coverage(data),
+            "coverage": shelf,
         }
 
     def _api_view_series(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -871,7 +888,7 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
         answer = view_answer(data, items, period, grain, types)
-        answer["coverage"] = coverage(data, types)
+        answer["coverage"] = self.server.views.coverage(ticket, data, types)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer

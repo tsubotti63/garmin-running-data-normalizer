@@ -180,6 +180,9 @@ test("after the other tab forgot the settings, the page remembers none of them",
     // And how one item is compared by year (stage L1).
     view_compare_mode: "overlay",
     view_compare_month: 5,
+    // And what it is compared by, and the weeks before a race (stage M2).
+    view_compare_by: "race",
+    view_compare_weeks: 12,
     // And the marks, whether they show, and what to tell of their file
     // (stage M1).
     view_marks: [{ id: "m-0000000a", kind: "race", name: "Made up", day: "2030-04-14", end: null }],
@@ -1031,4 +1034,225 @@ test("every kind of mark, problem, and notice has words in both languages", () =
       assert.ok(messages[`view.marks.kind.${kind}`]?.trim(), `${language} ${kind}`);
     }
   }
+});
+
+// --- Comparing one item by race day (stage M2 of v2.2.0) -------------------
+
+// Made-up race marks, in the order of the server (by their days): the output
+// of these tests runs from Monday 5 June 2023 to Friday 8 November 2024.
+const FIRST_DAY = "2023-06-05";
+const LAST_DAY = "2024-11-08";
+const RACE_MARKS = [
+  madeUp("m-f", "2023-05-01", null, "race", "Before the output"),
+  madeUp("m-d", "2023-07-02", null, "race", "Early summer race"),
+  madeUp("m-g", "2024-03-01", null, "injury", "Made-up injury"),
+  madeUp("m-a", "2024-04-10", null, "race", "Spring race"),
+  madeUp("m-h", "2024-04-10", null, "race", "Spring race"),
+  madeUp("m-c", "2024-04-13", "2024-04-14", "race", "Two-day race"),
+  madeUp("m-b", "2024-11-10", null, "race", "Autumn race"),
+  madeUp("m-e", "2025-06-01", null, "race", "Far after the output"),
+];
+
+test("what a comparison is compared by, and its weeks, come back from the settings when they are of their forms", () => {
+  assert.deepEqual(view.compareByToOpen({}), { by: "year", weeks: 16 });
+  assert.deepEqual(view.compareByToOpen(null), { by: "year", weeks: 16 });
+  assert.deepEqual(view.compareByToOpen({ view_compare_by: "race", view_compare_weeks: 24 }), { by: "race", weeks: 24 });
+  for (const [by, weeks] of [["Race", 10], ["races", "16"], [1, true], [null, 16.5], ["", 28]]) {
+    assert.deepEqual(view.compareByToOpen({ view_compare_by: by, view_compare_weeks: weeks }), { by: "year", weeks: 16 });
+  }
+  assert.deepEqual(view.COMPARE_WEEKS, [8, 12, 16, 20, 24]);
+  assert.equal(view.FIRST_COMPARE_WEEKS, 16);
+  assert.equal(view.MAX_COMPARE_RACES, 6);
+});
+
+test("a race asks from the Monday of the week some weeks before its week to its day", () => {
+  // Wednesday 10 April 2024: its week starts on Monday the 8th.
+  assert.deepEqual(view.raceRange("2024-04-10", 16), { from: "2023-12-18", to: "2024-04-10" });
+  // A race on a Sunday has its whole week.
+  assert.deepEqual(view.raceRange("2024-04-14", 16), { from: "2023-12-18", to: "2024-04-14" });
+  assert.deepEqual(view.raceRange("2024-04-13", 8), { from: "2024-02-12", to: "2024-04-13" });
+  // Every race has as many weeks: the weeks before, and its own.
+  assert.equal(view.raceRange("2024-04-10", 24).from, "2023-10-23");
+});
+
+test("the races offered are those whose longest span meets the output, newest first", () => {
+  const races = view.compareRaces(RACE_MARKS, FIRST_DAY, LAST_DAY);
+  // A race after the last day of the output is offered (its weeks so far);
+  // of two on one day, the one added last comes first; a mark of a span
+  // counts by its first day; no other kind, and none whose span misses.
+  assert.deepEqual(races.map((race) => race.id), ["m-b", "m-c", "m-h", "m-a", "m-d"]);
+  assert.deepEqual(view.compareRaces(RACE_MARKS, null, LAST_DAY), []);
+  assert.deepEqual(view.compareRaces(RACE_MARKS, LAST_DAY, FIRST_DAY), []);
+  assert.deepEqual(view.compareRaces("nope", FIRST_DAY, LAST_DAY), []);
+  // By the longest span, 24 weeks: Sunday 6 April 2025 is offered (its 16
+  // weeks start after the output), 4 May 2025 is not.
+  assert.deepEqual(view.compareRaces([madeUp("m-l", "2025-04-06"), madeUp("m-m", "2025-05-04")], FIRST_DAY, LAST_DAY).map((race) => race.id), ["m-l"]);
+  // The race days can be chosen with two races offered at least; what the
+  // person chose stays as it is.
+  assert.equal(view.compareByFor("race", races), "race");
+  assert.equal(view.compareByFor("race", races.slice(0, 1)), "year");
+  assert.equal(view.compareByFor("year", races), "year");
+  assert.equal(view.compareByFor("race", null), "year");
+});
+
+test("the races chosen are four at first, one at least, six at most, in their order", () => {
+  const races = view.compareRaces(RACE_MARKS, FIRST_DAY, LAST_DAY);
+  assert.deepEqual(view.firstCompareRaces(races), ["m-b", "m-c", "m-h", "m-a"]);
+  assert.deepEqual(view.toggledRaces(["m-b", "m-a"], "m-c", races), ["m-b", "m-c", "m-a"]);
+  assert.deepEqual(view.toggledRaces(["m-b", "m-a"], "m-a", races), ["m-b"]);
+  assert.deepEqual(view.toggledRaces(["m-b"], "m-b", races), ["m-b"]);
+  assert.deepEqual(view.toggledRaces(["m-b"], "m-e", races), ["m-b"]);
+  const many = Array.from({ length: 8 }, (_none, number) => madeUp(`m-${number}`, `2024-0${number + 1}-07`));
+  const offered = view.compareRaces(many, "2023-06-05", "2024-11-08");
+  const six = offered.slice(0, 6).map((race) => race.id);
+  assert.deepEqual(view.toggledRaces(six, offered[6].id, offered), six);
+  // The races kept when the marks or the output change: those still offered,
+  // or the first ones.
+  assert.deepEqual(view.racesKept(["m-a", "m-x", "m-b"], races), ["m-b", "m-a"]);
+  assert.deepEqual(view.racesKept(["m-x"], races), ["m-b", "m-c", "m-h", "m-a"]);
+  assert.deepEqual(view.racesKept(null, races), ["m-b", "m-c", "m-h", "m-a"]);
+});
+
+test("a comparison by race day goes by week, whatever its way", () => {
+  for (const mode of view.COMPARE_MODES) {
+    assert.equal(view.compareGrainFor("race", mode, 5), "week");
+  }
+  assert.deepEqual(view.compareGrainsFor("race", null), ["week"]);
+  // By year, as from stage L1.
+  assert.equal(view.compareGrainFor("year", "cumulative", null), "day");
+  assert.equal(view.compareGrainFor("year", "rows", null), "month");
+  assert.deepEqual(view.compareGrainsFor("year", 5), ["day", "week"]);
+});
+
+test("the weeks of a race are placed by their order, and marked where they are cut short", () => {
+  const races = [RACE_MARKS[6], RACE_MARKS[3], madeUp("m-s", "2023-06-18", null, "race", "A race from the first days"), madeUp("m-o", "2022-01-09")];
+  const week = (start, end, partial = false) => ({ start, end, partial });
+  const answers = new Map([
+    // Wednesday 10 April: the server cuts the week of the race at its day.
+    ["m-a", answerOf([week("2024-03-25", "2024-03-31"), week("2024-04-01", "2024-04-07"), week("2024-04-08", "2024-04-10", true)], [lineOf([20000, null, 42195], [2, 0, 1])])],
+    // Sunday 10 November, after the output, which ends on a Friday.
+    ["m-b", answerOf([week("2024-10-21", "2024-10-27"), week("2024-10-28", "2024-11-03"), week("2024-11-04", "2024-11-08", true)], [lineOf([30000, 25000, 8000])])],
+    // The output starts on Wednesday 7 June 2023.
+    ["m-s", answerOf([week("2023-06-07", "2023-06-11", true), week("2023-06-12", "2023-06-18")], [lineOf([5000, 21000])])],
+    ["m-o", answerOf([], [])],
+  ]);
+  const whole = (start, end, value, count) => answerOf([{ start, end, partial: false }], [lineOf([value], [count])]);
+  const wholes = new Map([
+    ["m-a", whole("2024-03-25", "2024-04-10", 62195, 3)],
+    ["m-b", whole("2024-10-21", "2024-11-08", 63000, 3)],
+    ["m-s", whole("2023-06-07", "2023-06-18", 26000, 2)],
+    ["m-o", answerOf([], [])],
+  ]);
+  const data = view.raceData({ races, weeks: 2, mode: "rows", series: null, answers, wholes, language: "ja" });
+  assert.deepEqual(data.map((entry) => [entry.id, entry.step]), [["m-b", 6], ["m-a", 5], ["m-s", 4], ["m-o", 3]]);
+  assert.deepEqual(data.map((entry) => words(entry.label)), ["Autumn race（2024年11月10日）", "Spring race（2024年4月10日）", "A race from the first days（2023年6月18日）", "Made-up m-o（2022年1月9日）"]);
+  // The short name: the head of the name, and its day (Codex's review of the
+  // diff of M2).
+  assert.deepEqual(data.map((entry) => words(entry.short)), ["Autumn race 2024/11/10", "Spring race 2024/4/10", "A race from the first… 2023/6/18", "Made-up m-o 2022/1/9"]);
+  // The week of the race, cut at its day, is marked as a week of a year cut
+  // at its ends (the checker's review of M2); the span is not cut.
+  assert.deepEqual(data[1].slots.map((slot) => [slot.start, slot.partial]), [[0, false], [1, false], [2, true]]);
+  assert.deepEqual(data[1].cut, { from: null, to: null });
+  assert.deepEqual(data[1].whole, { value: 62195, count: 3, partial: false });
+  assert.deepEqual(data[1].values, [20000, null, 42195]);
+  // The output ends on a Friday before the race: that week is cut, and so is
+  // the whole span.
+  assert.deepEqual(data[0].slots.map((slot) => [slot.start, slot.partial]), [[0, false], [1, false], [2, true]]);
+  assert.deepEqual(data[0].cut, { from: null, to: "2024-11-08" });
+  assert.equal(data[0].whole.partial, true);
+  // The output starts on a Wednesday: the first week that it has is cut, and
+  // the week before it is outside.
+  assert.deepEqual(data[2].slots.map((slot) => [slot.start, slot.partial, slot.from]), [[1, true, "2023-06-07"], [2, false, "2023-06-12"]]);
+  assert.equal(data[2].whole.partial, true);
+  // A race whose span the output does not have.
+  assert.deepEqual([data[3].outside, data[3].whole, data[3].values], [true, null, []]);
+  // A running total of the weeks; the last is the whole span where nothing is missing.
+  const running = view.raceData({ races, weeks: 2, mode: "cumulative", series: null, answers, wholes, language: "ja" });
+  assert.deepEqual(running[0].values, [30000, 55000, 63000]);
+  assert.equal(running[0].values.at(-1), running[0].whole.value);
+  assert.deepEqual(running[1].values, [20000, null, 62195]);
+  // The axis and the table: the weeks before, the week of the race, and the
+  // value of the span itself (the checker's M2-1).
+  const item = { key: "dist", kind: "sum", group: "act" };
+  const axis = { slotName: (slot) => view.raceSlotName(slot, 2), whole: view.raceValueMessage(item, 2) };
+  const table = view.compareTable(item, data, "week", null, 2, "ja", "rows", axis);
+  assert.deepEqual(table.heads.filter((_head, index) => index % 2 === 1).map((head) => words(head)), data.map((entry) => words(entry.label)));
+  assert.deepEqual(table.rows.map((row) => words(row.period)), ["2 週前", "1 週前", "大会の週（大会の日まで）"]);
+  assert.deepEqual(table.rows[0].cells.map((cell) => [cell.outside, cell.partial]), [[false, false], [false, false], [true, false], [true, false]]);
+  assert.deepEqual(table.rows[1].cells.map((cell) => [cell.outside, cell.partial]), [[false, false], [false, false], [false, true], [true, false]]);
+  assert.deepEqual(table.rows[2].cells.map((cell) => cell.partial), [true, true, false, false]);
+  assert.equal(words(table.last.period), "2 週前から大会の日までの合計");
+  assert.deepEqual(table.last.cells.map((cell) => [cell.outside, cell.partial]), [[false, true], [false, false], [false, true], [true, false]]);
+  assert.equal(words(table.last.period, "en"), "Total of the days from 2 weeks before to the race day");
+  // The readings name each race by its short name.
+  const readings = view.compareReadings(item, data, 2, "week", "rows", "ja");
+  assert.deepEqual(readings.map((reading) => [reading.id, words(reading.short), reading.missing?.key ?? null]), [
+    ["m-b", "Autumn race 2024/11/10", null],
+    ["m-a", "Spring race 2024/4/10", null],
+    ["m-s", "A race from the first… 2023/6/18", null],
+    ["m-o", "Made-up m-o 2022/1/9", "view.compare.outside"],
+  ]);
+});
+
+test("the axis of the races and the value of a span are named in both languages", () => {
+  assert.deepEqual(view.raceTicks(16).map((tick) => [tick.at, words(tick.text)]), [[0, "16 週前"], [4, "12 週前"], [8, "8 週前"], [12, "4 週前"], [16, "大会の週（大会の日まで）"]]);
+  assert.deepEqual(view.raceTicks(8).map((tick) => [tick.at, words(tick.text, "en")]), [[0, "8 weeks before"], [4, "4 weeks before"], [8, "Race week (to the race day)"]]);
+  assert.equal(words(view.raceSlotName(15, 16)), "1 週前");
+  const kinds = { sum: "合計", count: "数", pace: "時間の合計 ÷ 距離の合計", tw: "時間で重みをつけた平均", max: "最大", day: "値のある日の平均", obs: "記録の平均" };
+  for (const [kind, text] of Object.entries(kinds)) {
+    assert.equal(words(view.raceValueMessage({ kind }, 16, true)), `この範囲の${text}`);
+    assert.equal(words(view.raceValueMessage({ kind }, 16)), `16 週前から大会の日までの${text}`);
+  }
+  assert.equal(words(view.raceValueMessage({ kind: "sum" }, 16, true), "en"), "Total of this span");
+  // The name of a race in short, and its button.
+  // By columns: a character of Japanese takes two.
+  assert.equal(view.shortName("1234567890123456789012"), "1234567890123456789012");
+  assert.equal(view.shortName("12345678901234567890123"), "123456789012345678901…");
+  assert.equal(view.shortName("𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡𝟘𝟙𝟚𝟛"), "𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡𝟘𝟙…");
+  assert.equal(view.shortName("一二三四五六七八九十一"), "一二三四五六七八九十一");
+  assert.equal(view.shortName("一二三四五六七八九十一二"), "一二三四五六七八九十…");
+  assert.equal(view.shortName("𠀋𠀋𠀋𠀋𠀋𠀋𠀋𠀋𠀋𠀋𠀋𠀋"), "𠀋𠀋𠀋𠀋𠀋𠀋𠀋𠀋𠀋𠀋…");
+  // The short name has the day: two races of one name in one year are told
+  // apart (Codex's review of the diff of M2).
+  assert.equal(words(view.raceShort(madeUp("m-y", "2026-03-15", null, "race", "春のマラソン 2026"), "ja")), "春のマラソン 2026 2026/3/15");
+  assert.equal(words(view.raceShort(madeUp("m-y", "2026-03-15", null, "race", "Winter marathon 2026"), "en"), "en"), "Winter marathon 2026 3/15/2026");
+  assert.equal(words(view.raceShort(madeUp("m-y", "2026-03-15", null, "race", "とても長い名前の市民マラソン 2026"), "ja")), "とても長い名前の市民… 2026/3/15");
+  assert.notEqual(
+    words(view.raceShort(madeUp("m-1", "2025-02-23", null, "race", "市民マラソン"), "ja")),
+    words(view.raceShort(madeUp("m-2", "2025-11-23", null, "race", "市民マラソン"), "ja")),
+  );
+  // The button: the short name to the eye, the whole name and the days to
+  // the ear, both days of a span.
+  const chip = view.raceChip(RACE_MARKS[5], "ja");
+  assert.deepEqual([words(chip.short), words(chip.spoken)], ["Two-day race 2024/4/13", "Two-day race、2024年4月13日から2024年4月14日まで"]);
+  const one = view.raceChip(madeUp("m-l", "2024-04-10", null, "race", "とても長い名前の地方の市民マラソン大会"), "en");
+  assert.deepEqual([words(one.short, "en"), words(one.spoken, "en")], ["とても長い名前の地方… 4/10/2024", "とても長い名前の地方の市民マラソン大会, April 10, 2024"]);
+});
+
+test("a comparison by race day follows the marks, the weeks, and the way, step by step", () => {
+  // The person chose the race days; the races offered and the four chosen.
+  let races = view.compareRaces(RACE_MARKS, FIRST_DAY, LAST_DAY);
+  let chosen = view.firstCompareRaces(races);
+  assert.equal(view.compareByFor("race", races), "race");
+  // A race chosen is removed while its answer is on its way: it is no longer
+  // chosen, and the others stay.
+  const removed = RACE_MARKS.filter((mark) => mark.id !== "m-c");
+  races = view.compareRaces(removed, FIRST_DAY, LAST_DAY);
+  chosen = view.racesKept(chosen, races);
+  assert.deepEqual(chosen, ["m-b", "m-h", "m-a"]);
+  // Another race day: the race stays chosen, by its new day.
+  const moved = removed.map((mark) => (mark.id === "m-a" ? { ...mark, day: "2024-05-12" } : mark));
+  races = view.compareRaces(moved, FIRST_DAY, LAST_DAY);
+  assert.deepEqual(view.racesKept(chosen, races), ["m-b", "m-a", "m-h"]);
+  // A change of the weeks offers the same races (by the longest span); a
+  // race whose shorter span misses the output is outside (its answer).
+  assert.deepEqual(view.compareRaces(moved, "2024-03-25", LAST_DAY).map((race) => race.id), ["m-b", "m-a", "m-h"]);
+  // A running total keeps the weeks.
+  assert.equal(view.compareGrainFor("race", "cumulative", null), "week");
+  // One race offered (the other tab forgot the settings, and one was added
+  // again): back to the years; the choice of the person stays.
+  races = view.compareRaces([RACE_MARKS[6]], FIRST_DAY, LAST_DAY);
+  assert.equal(view.compareByFor("race", races), "year");
+  // No marks at all.
+  assert.equal(view.compareByFor("race", view.compareRaces([], FIRST_DAY, LAST_DAY)), "year");
 });

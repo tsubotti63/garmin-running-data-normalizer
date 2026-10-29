@@ -355,7 +355,9 @@ class SeriesRefusalTest(SeriesTestCase):
                 with self.subTest(code=code, options=option):
                     self.assert_stop(code, (*self.args, *option), self.root)
                     self.assert_nothing_written()
-        for option in (("--period", "2y"), ("--grain", "fortnight"), ("--type", "running", "--all-types")):
+        # The whole period as one period is a grouping of the requests of the
+        # view page only, never of the CLI (stage M2 of v2.2.0).
+        for option in (("--period", "2y"), ("--grain", "fortnight"), ("--grain", "range"), ("--type", "running", "--all-types")):
             with self.subTest(options=option):
                 with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
                     runner.main([str(arg) for arg in (*self.args, *option)])

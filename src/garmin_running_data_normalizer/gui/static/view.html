@@ -89,6 +89,7 @@
   </div>
   <p id="filters-hint" class="hint filters-hint" data-i18n="view.hint.filters" hidden></p>
   <p id="compare-off" class="compare-off" data-i18n="view.compare.off" hidden></p>
+  <p id="compare-off-race" class="compare-off" data-i18n="view.compare.off_race" hidden></p>
   <div id="view-body" class="view-body">
     <aside id="shelf" class="shelf" aria-labelledby="shelf-heading">
       <section id="layouts" class="layouts" aria-labelledby="layouts-heading">
@@ -229,19 +230,25 @@
         <div class="compare-bar">
           <div class="compare-line">
             <label for="compare-item" class="visually-hidden" data-i18n="view.compare.item"></label>
-            <h3 id="compare-title" class="compare-title"><span id="compare-before"></span><select id="compare-item"></select><span id="compare-after"></span></h3>
+            <h3 id="compare-title" class="compare-title"><span id="compare-before"></span><select id="compare-item"></select><span id="compare-middle"></span><span id="compare-bys" class="segmented compare-bys" role="group" aria-labelledby="compare-by-label"><button type="button" data-compare-by="year" aria-pressed="false" data-i18n="view.compare.by.year"></button><button type="button" data-compare-by="race" aria-pressed="false" aria-describedby="compare-race-needed" data-i18n="view.compare.by.race"></button></span><span id="compare-after"></span></h3>
+            <span id="compare-by-label" class="visually-hidden" data-i18n="view.compare.by"></span>
+            <span id="compare-race-needed" class="note" data-i18n="view.compare.race_needed" hidden></span>
             <span class="compare-field">
               <span id="compare-show-label" data-i18n="view.compare.show"></span>
               <span id="compare-modes" class="segmented" role="group" aria-labelledby="compare-show-label">
-                <button type="button" data-compare-mode="rows" aria-pressed="false" data-i18n="view.compare.mode.rows"></button>
+                <button type="button" data-compare-mode="rows" aria-pressed="false"><span id="compare-rows-year" data-i18n="view.compare.mode.rows"></span><span id="compare-rows-race" data-i18n="view.compare.mode.rows_race" hidden></span></button>
                 <button type="button" data-compare-mode="overlay" aria-pressed="false" data-i18n="view.compare.mode.overlay"></button>
                 <button type="button" data-compare-mode="cumulative" aria-pressed="false" data-i18n="view.compare.mode.cumulative"></button>
               </span>
             </span>
             <button type="button" id="compare-about" class="info-button" aria-expanded="false" aria-controls="compare-about-text" data-i18n="view.compare.cumulative_about" hidden></button>
-            <span class="compare-field">
+            <span id="compare-month-field" class="compare-field">
               <label for="compare-month" data-i18n="view.compare.month"></label>
               <select id="compare-month"></select>
+            </span>
+            <span id="compare-weeks-field" class="compare-field" hidden>
+              <label for="compare-weeks" data-i18n="view.compare.weeks"></label>
+              <select id="compare-weeks"></select>
             </span>
             <span id="compare-series-field" class="compare-field" hidden>
               <label for="compare-series" data-i18n="view.compare.series"></label>
@@ -256,8 +263,11 @@
           </div>
           <div class="compare-line">
             <span id="compare-years-label" data-i18n="view.compare.years"></span>
+            <span id="compare-races-label" data-i18n="view.compare.races" hidden></span>
             <span id="compare-years" class="segmented compare-years" role="group" aria-labelledby="compare-years-label" aria-describedby="compare-up-to"></span>
+            <span id="compare-races" class="segmented compare-years compare-races" role="group" aria-labelledby="compare-races-label" aria-describedby="compare-races-up-to" hidden></span>
             <span id="compare-up-to" class="note" data-i18n="view.compare.up_to"></span>
+            <span id="compare-races-up-to" class="note" data-i18n="view.compare.races_up_to" hidden></span>
             <p id="compare-loading" class="loading" role="status" aria-live="polite"></p>
           </div>
         </div>

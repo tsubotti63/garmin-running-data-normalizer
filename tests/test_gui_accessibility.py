@@ -666,8 +666,8 @@ class GuiViewPageStructureTest(unittest.TestCase):
         fields = [element for element in self.elements if element.tag in {"input", "select", "textarea"}]
         # From v2.2.0 L1, the item, the month, and the line of a comparison;
         # from M1, whether the marks show, and the date, the last day, the
-        # kind, and the name of a mark.
-        self.assertEqual(len(fields), 19)
+        # kind, and the name of a mark; from M2, the weeks before a race day.
+        self.assertEqual(len(fields), 20)
         for field in fields:
             with self.subTest(field=field.get("id")):
                 self.assertTrue(field.get("id") in labelled or field.get("aria-label") or field.get("aria-labelledby"))
@@ -849,6 +849,8 @@ class GuiViewPageStructureTest(unittest.TestCase):
             ("period-choices", "period-label", "data-period"),
             ("grain-choices", "grain-label", "data-grain"),
             ("compare-modes", "compare-show-label", "data-compare-mode"),
+            # What one item is compared by (stage M2 of v2.2.0).
+            ("compare-bys", "compare-by-label", "data-compare-by"),
         ):
             with self.subTest(group=group):
                 element = by_id(self.elements, group)
@@ -885,14 +887,85 @@ class GuiViewPageStructureTest(unittest.TestCase):
         for line in (
             'const compareButton = textButton(t("view.compare.button"), "compare", key);',
             'compareButton.setAttribute("aria-label", t("view.compare.title", { name }));',
-            'const heading = element("h4", "panel-name compare-year", yearText(entry.year));',
+            # From stage M2, a year or a race by its name.
+            'const heading = element("h4", "panel-name compare-year");',
+            "heading.append(...compareName(entry));",
             'button.setAttribute("aria-pressed", String(on));',
             "button.disabled = on ? chosen.length <= 1 : chosen.length >= MAX_COMPARE_YEARS;",
-            'plot.setAttribute("aria-label", t("view.compare.row_label", { year: yearText(entry.year), name }));',
-            'wrap.setAttribute("aria-label", t("view.compare.table_label", { name }));',
-            'const caption = element("caption", "visually-hidden", t("view.compare.table_caption", { name, kind }));',
+            ': t("view.compare.row_label", { year: describe(entry.label), name }),',
+            # From stage M2, a race says its span too.
+            '? t("view.compare.race_row_label", { race: describe(entry.label), name, span: t("view.compare.race_days", { n: context.weeks }) })',
+            'wrap.setAttribute("aria-label", race ? t("view.compare.race_table_label", { name }) : t("view.compare.table_label", { name }));',
+            'const caption = element("caption", "visually-hidden", race ? t("view.compare.race_table_caption", { name, kind }) : t("view.compare.table_caption", { name, kind }));',
             'frame.setAttribute("aria-hidden", "true");',
             "ui.compareItem.focus();",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+
+    def test_a_comparison_by_race_day_has_its_own_parts_and_follows_the_marks(self) -> None:
+        # v2.2.0 M2, in the page and its script, which no test runs: what it
+        # compares by is a group of two pressed buttons in its title, the race
+        # day greyed with its reason said in words beside it; the weeks in the
+        # place of the month, with a label; the races as pressed buttons, up
+        # to six, said under them; and its own words of what is not used. The
+        # script asks for each race by week and by its whole span, follows the
+        # marks, and remembers what it compares by and the weeks.
+        title = by_id(self.elements, "compare-title")
+        bys = by_id(self.elements, "compare-bys")
+        self.assertIs(bys.parent, title)
+        race = next(element for element in self.elements if element.get("data-compare-by") == "race")
+        self.assertEqual(race.get("aria-describedby"), "compare-race-needed")
+        needed = by_id(self.elements, "compare-race-needed")
+        self.assertEqual(needed.get("data-i18n"), "view.compare.race_needed")
+        self.assertIn("hidden", needed.attributes)
+        self.assertIn("visually-hidden", str(by_id(self.elements, "compare-by-label").get("class")).split())
+        weeks = by_id(self.elements, "compare-weeks-field")
+        self.assertIn("hidden", weeks.attributes)
+        self.assertIs(by_id(self.elements, "compare-weeks").parent, weeks)
+        races = by_id(self.elements, "compare-races")
+        self.assertEqual((races.get("role"), races.get("aria-labelledby"), races.get("aria-describedby")), ("group", "compare-races-label", "compare-races-up-to"))
+        for hidden in ("compare-races", "compare-races-label", "compare-races-up-to", "compare-off-race"):
+            with self.subTest(hidden=hidden):
+                self.assertIn("hidden", by_id(self.elements, hidden).attributes)
+        self.assertEqual(by_id(self.elements, "compare-off-race").get("data-i18n"), "view.compare.off_race")
+        rows = by_id(self.elements, "compare-rows-race")
+        self.assertEqual((rows.get("data-i18n"), rows.parent.get("data-compare-mode")), ("view.compare.mode.rows_race", "rows"))
+        self.assertIn("hidden", rows.attributes)
+        for line in (
+            # The race day only with two races offered, and its reason.
+            'button.disabled = button.dataset.compareBy === "race" && !offered;',
+            "ui.compareRaceNeeded.hidden = offered;",
+            'if (!comparing() || !COMPARE_BYS.includes(by) || (by === "race" && compareByFor(by, raceChoices()) !== "race")) {',
+            # Each race by week and by its whole span, in one generation.
+            '? races.flatMap((race) => [seriesPayload([key], raceRange(race.day, weeks), "week"), seriesPayload([key], raceRange(race.day, weeks), RANGE_GRAIN)])',
+            "compare.races = racesKept(compare.races, choices);",
+            # The races chosen, up to six, one at least.
+            "button.disabled = on ? chosen.length <= 1 : chosen.length >= MAX_COMPARE_RACES;",
+            # The short name to the eye, the whole name and the days to the
+            # ear (Codex's review of the diff of M2).
+            'shown.setAttribute("aria-hidden", "true");',
+            'button.append(shown, element("span", "visually-hidden", describe(chip.spoken)));',
+            # The marks that change follow into the comparison; another
+            # output takes its races and its grouping.
+            "    followMarks();\n",
+            # Against the last request, also one whose answer is on its way
+            # (Codex's review of the diff of M2).
+            "  const asked = state.compare.asked ?? null;\n  const before = asked?.by ?? null;",
+            "  compare.asked = { by, races: races.map((race) => ({ id: race.id, day: race.day, name: race.name })) };",
+            "state.compare.races = firstCompareRaces(raceChoices());\n        settleCompareGrain(state.compareAnswer?.by ?? null);",
+            # The grouping of a race day, whatever the way.
+            "const grain = compareGrainFor(compareByNow(), mode, state.compareMonth);",
+            "const grains = apart ? compareGrainsFor(compareByNow(), state.compareMonth) : null;",
+            "ui.compareOffRace.hidden = !byRace;",
+            # One row per race, by race day; a grouping that does not fit
+            # what it compares by is set again at every request.
+            "ui.compareRowsRace.hidden = !race;",
+            "  compare.races = racesKept(compare.races, choices);\n  // Its grouping, where what it compares by changed by another way (an\n  // output opened again for a new ticket).\n  settleCompareGrain(by);",
+            # Remembered with the rest of the view.
+            "compare_by: state.compareBy,",
+            "compare_weeks: state.compareWeeks,",
+            "const by = compareByToOpen(state.settings);",
         ):
             with self.subTest(line=line):
                 self.assertIn(line, self.script)
@@ -955,7 +1028,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
             "if (state.view === null || item === undefined || !compareYears(state.view.first_day, state.view.last_day).length) {",
             "if (itemsByKey(answer.items).has(state.compare.key) && compareYears(answer.first_day, answer.last_day).length) {",
             # What the keyboard says names each year's own period.
-            ': t("view.compare.spoken_year", { year: yearText(reading.year), period: describe(reading.period), value: describe(reading.value ?? reading.missing) }),',
+            ': t("view.compare.spoken_year", { year: describe(reading.label), period: describe(reading.period), value: describe(reading.value ?? reading.missing) }),',
         ):
             with self.subTest(line=line):
                 self.assertIn(line, self.script)

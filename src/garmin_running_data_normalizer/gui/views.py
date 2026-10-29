@@ -11,7 +11,9 @@ checked and read again; the contents of the files (their sha256) are checked
 when an output is opened and when it is read again, not at every request.
 
 Nothing is written: no file of settings and no temporary file. At most four
-outputs are kept; the one used longest ago leaves first.
+outputs are kept; the one used longest ago leaves first. With each output,
+the bars of its item shelf are kept by the activity types of the requests,
+at most eight, until the output is read again (stage M2 of v2.2.0).
 """
 
 from __future__ import annotations
@@ -21,8 +23,8 @@ import re
 import secrets
 import threading
 from collections import OrderedDict
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Collection
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -30,9 +32,10 @@ from typing import Any
 from ..output_check import OutputActionError
 from ..view.data import MANIFEST, ViewData, load_view_data, local_today
 from ..view.items import DATASETS, ITEMS, ITEMS_BY_KEY, Item
-from ..view.series import GRAINS, LAST_YEARS, MAX_PANELS
+from ..view.series import GRAINS, LAST_YEARS, MAX_PANELS, RANGE_GRAIN, coverage
 
 MAX_VIEWS = 4
+MAX_SHELVES = 8
 PERIODS = ("all", *LAST_YEARS)
 DATE_FORM = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -69,6 +72,11 @@ class _View:
     stamp: Stamp
     data: ViewData
     lock: threading.Lock
+    # The bars of the item shelf of ``data`` by the activity types (stage M2
+    # of v2.2.0): every answer carries them, and they are made from every
+    # row of the output, while a comparison by race day asks up to 13 times
+    # in a row.
+    shelves: OrderedDict[frozenset[str] | None, dict[str, dict[str, Any]]] = field(default_factory=OrderedDict)
 
 
 class Views:
@@ -126,7 +134,30 @@ class Views:
                     if self._views.get(ticket) is view:
                         del self._views[ticket]
                 raise
+            view.shelves = OrderedDict()
             return view.data
+
+    def coverage(self, ticket: str, data: ViewData, types: Collection[str] | None = None) -> dict[str, dict[str, Any]]:
+        """The bars of the item shelf of ``data`` for ``types`` (``coverage``),
+        made once while the output of ``ticket`` holds ``data``; for a ticket
+        that is gone, or an output read again meanwhile, they are made and
+        not kept."""
+        with self._lock:
+            view = self._views.get(ticket)
+        if view is None:
+            return coverage(data, types)
+        key = None if types is None else frozenset(types)
+        with view.lock:
+            if view.data is not data:
+                return coverage(data, types)
+            shelf = view.shelves.get(key)
+            if shelf is None:
+                shelf = view.shelves[key] = coverage(data, types)
+                while len(view.shelves) > MAX_SHELVES:
+                    view.shelves.popitem(last=False)
+            else:
+                view.shelves.move_to_end(key)
+            return shelf
 
 
 def item_answer(item: Item) -> dict[str, Any]:
@@ -151,8 +182,10 @@ def item_table() -> list[dict[str, Any]]:
 def series_request(payload: dict[str, Any]) -> tuple[list[str], str | tuple[date, date], str, list[str] | None]:
     """The items, the period, the grouping, and the activity types of a
     request for numbers: one to six items that this version knows, each once;
-    a period of PERIODS, or a range of two dates; a grouping of GRAINS or
-    auto; and the names of the activity types, or None for the running ones."""
+    a period of PERIODS, or a range of two dates; a grouping of GRAINS, auto,
+    or from stage M2 of v2.2.0 the whole period (RANGE_GRAIN, which the
+    settings do not keep); and the names of the activity types, or None for
+    the running ones."""
     items = payload.get("items")
     if (
         not isinstance(items, list)
@@ -165,7 +198,7 @@ def series_request(payload: dict[str, Any]) -> tuple[list[str], str | tuple[date
     if chosen is None:
         raise ViewRequestError("period")
     grain = payload.get("grain", "auto")
-    if not grain_ok(grain):
+    if not (grain_ok(grain) or grain == RANGE_GRAIN):
         raise ViewRequestError("grain")
     types = payload.get("types")
     if types is not None and not types_ok(types):
@@ -213,6 +246,23 @@ def compare_month_ok(month: Any) -> bool:
     return type(month) is int and 1 <= month <= 12
 
 
+# What the view page compares one item by (stage M2 of v2.2.0): the years, or
+# the race marks, each from some weeks before its day to the day.
+COMPARE_BYS = ("year", "race")
+COMPARE_WEEKS = (8, 12, 16, 20, 24)
+
+
+def compare_by_ok(by: Any) -> bool:
+    """Whether a request names what to compare by: one of COMPARE_BYS."""
+    return isinstance(by, str) and by in COMPARE_BYS
+
+
+def compare_weeks_ok(weeks: Any) -> bool:
+    """Whether a request names the weeks before a race day to compare: one of
+    COMPARE_WEEKS, an integer (never a truth value)."""
+    return type(weeks) is int and weeks in COMPARE_WEEKS
+
+
 def types_ok(types: Any) -> bool:
     """Whether a request names the activity types that it counts: a list of
     names, each once, as 2.1.0 took them; the limit of the size of a request
@@ -222,14 +272,19 @@ def types_ok(types: Any) -> bool:
 
 
 __all__ = [
+    "MAX_SHELVES",
     "MAX_VIEWS",
+    "COMPARE_BYS",
     "COMPARE_MODES",
+    "COMPARE_WEEKS",
     "PERIODS",
     "ViewNotOpenError",
     "ViewRequestError",
     "Views",
+    "compare_by_ok",
     "compare_mode_ok",
     "compare_month_ok",
+    "compare_weeks_ok",
     "grain_ok",
     "item_answer",
     "item_table",

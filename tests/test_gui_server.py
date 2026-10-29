@@ -252,6 +252,41 @@ class GuiServerListeningTest(GuiServerTestCase):
             with self.assertRaises(OSError):
                 other.bind((HOST, self.port))
 
+    def test_a_burst_of_connections_waits_while_the_server_is_late(self) -> None:
+        # The checker's M2-5 of v2.2.0: a comparison by race day asks for up
+        # to 13 numbers at once. While the server was late to take the
+        # connections (a heavy load), the queue of 5 that Python gives was
+        # full, and macOS refused one of six connections at once, which the
+        # page took for a stopped app.
+        self.assertEqual(self.server.request_queue_size, 64)
+        real = self.server.get_request
+
+        def late() -> Any:
+            time.sleep(0.05)
+            return real()
+
+        self.server.get_request = late
+        answers: list[Any] = []
+
+        def one() -> None:
+            connection = http.client.HTTPConnection(HOST, self.port, timeout=30)
+            try:
+                connection.request("GET", "/")
+                response = connection.getresponse()
+                response.read()
+                answers.append(response.status)
+            except OSError as exc:
+                answers.append(type(exc).__name__)
+            finally:
+                connection.close()
+
+        threads = [threading.Thread(target=one) for _ in range(13)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(30)
+        self.assertEqual(answers, [200] * 13)
+
     def test_non_loopback_connections_fail_during_these_tests(self) -> None:
         with self.assertRaises(ConnectionRefusedError):
             socket.create_connection(("192.0.2.1", 9), timeout=1)
@@ -308,6 +343,8 @@ class GuiApiRequestTest(GuiServerTestCase):
                     "view_types": None,
                     "view_compare_mode": None,
                     "view_compare_month": None,
+                    "view_compare_by": None,
+                    "view_compare_weeks": None,
                     "view_marks_shown": None,
                     "view_marks": [],
                     "marks_notice": None,
@@ -725,8 +762,9 @@ class GuiPageScriptTest(unittest.TestCase):
         # types, and a drag of the overview are changes of the person too: the
         # items (also by a layout) and the shelf (2), the period (two in
         # setPeriod), and these; from stage L1 the way and the month of a
-        # comparison by year; and from stage M1 whether the marks show.
-        self.assertEqual(source.count("rememberItems(true);"), 13)
+        # comparison by year; from stage M1 whether the marks show; and from
+        # stage M2 what a comparison compares by and its weeks.
+        self.assertEqual(source.count("rememberItems(true);"), 15)
         for name in ("changeItems", "setPeriod", "shiftPeriod", "rangeTyped", "setGrain", "changeTypes", "overviewUp", "chooseCompareMode", "chooseCompareMonth", "changeMarksShown"):
             with self.subTest(name=name):
                 body = re.search(rf"\nfunction {name}\([^)]*\) \{{(.*?)\n\}}", source, re.DOTALL)

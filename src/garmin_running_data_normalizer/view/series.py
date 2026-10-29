@@ -53,6 +53,11 @@ from .items import (
 )
 
 GRAINS = ("day", "week", "month", "year")
+# The whole period as one period (stage M2 of v2.2.0): the value of a span
+# that the calendar does not give, such as the weeks before a race. Only the
+# requests of the view page take it (gui/views.py); the CLI and the settings
+# keep GRAINS.
+RANGE_GRAIN = "range"
 # A page shows up to six panels, and its answer of six panels at the grain of
 # a day over 15 years stays within this size (a test of stage G1).
 MAX_PANELS = 6
@@ -132,8 +137,10 @@ def period_bounds(
     """The periods of ``period``: "all", one of LAST_YEARS, which count back
     from the last day of the output, or a range of two dates, which is cut to
     the days of the output. None when the output has no rows, or the range is
-    outside them."""
-    if grain != "auto" and grain not in GRAINS:
+    outside them. With RANGE_GRAIN, the period is one period, without the
+    mark of a cut one: it is the span asked for, and the page tells where the
+    output cuts it."""
+    if grain != "auto" and grain not in GRAINS and grain != RANGE_GRAIN:
         raise ValueError(f"unknown grouping: {grain}")
     if isinstance(period, tuple) and period[0] > period[1]:
         raise ValueError("the range ends before it starts")
@@ -153,6 +160,8 @@ def period_bounds(
         raise ValueError(f"unknown period: {period}")
     if grain == "auto":
         grain = auto_grain(start, end)
+    if grain == RANGE_GRAIN:
+        return Periods(start, end, grain, ((start, end, False),))
     spans = []
     day = date.fromordinal(start)
     while day.toordinal() <= end:
@@ -424,10 +433,10 @@ def coverage(data: ViewData, types: Collection[str] | None = None) -> dict[str, 
     return answer
 
 
-def default_items(data: ViewData) -> list[str]:
+def default_items(data: ViewData, shelf: dict[str, dict[str, Any]] | None = None) -> list[str]:
     """The items of the first time, without those that the output has no
-    value of."""
-    shelf = coverage(data)
+    value of; ``shelf`` is ``coverage(data)`` when the caller has it."""
+    shelf = coverage(data) if shelf is None else shelf
     return [key for key in FIRST_ITEMS if shelf[key]["months"]]
 
 
@@ -463,6 +472,7 @@ __all__ = [
     "MAX_TYPE_LENGTH",
     "NO_TYPE",
     "Periods",
+    "RANGE_GRAIN",
     "activity_types",
     "auto_grain",
     "coverage",

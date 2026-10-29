@@ -23,8 +23,10 @@ from unittest.mock import patch
 # other order meets a circular import when this file runs on its own.
 from garmin_running_data_normalizer import __version__, diagnostics  # noqa: F401
 from garmin_running_data_normalizer.gui import server as gui_server
+from garmin_running_data_normalizer.gui import views as gui_views
 from garmin_running_data_normalizer.gui.layouts import built_in_answer
 from garmin_running_data_normalizer.gui.views import (
+    MAX_SHELVES,
     MAX_VIEWS,
     ViewRequestError,
     Views,
@@ -35,6 +37,7 @@ from garmin_running_data_normalizer.gui.views import (
 from garmin_running_data_normalizer.output_check import OutputActionError
 from garmin_running_data_normalizer.run_all import RUN_ALL_VERSION, run_all
 from garmin_running_data_normalizer.view import data as view_data
+from garmin_running_data_normalizer.view import series as view_series
 from garmin_running_data_normalizer.view.data import load_view_data
 from garmin_running_data_normalizer.view.items import ITEMS
 from garmin_running_data_normalizer.view.series import MAX_TYPE_LENGTH, MAX_TYPES, activity_types, coverage, default_items, view_answer
@@ -143,6 +146,8 @@ class ViewApiTest(GuiServerTestCase):
             (["dist", "rhr", "vo2"], "1y", "week", None, "1y"),
             (["pace", "hr"], {"from": "2024-01-01", "to": "2024-03-31"}, "day", names[:1], (date(2024, 1, 1), date(2024, 3, 31))),
             (["count", "p5k", "sleep", "acwr", "steps", "gct"], "3y", "month", names, "3y"),
+            # The whole period as one period (stage M2 of v2.2.0).
+            (["dist", "pace", "rhr"], {"from": "2024-01-01", "to": "2024-03-31"}, "range", None, (date(2024, 1, 1), date(2024, 3, 31))),
         )
         for items, period, grain, types, chosen in cases:
             with self.subTest(items=items, period=period, grain=grain):
@@ -231,16 +236,61 @@ class ViewApiTest(GuiServerTestCase):
         # The checker's review of stage G3b-1: an error that no code
         # describes, in the numbers or in the bars of the shelf, answers as
         # any unexpected error of the server, without its words; the page
-        # then says that something went wrong, and the server goes on.
-        ticket = self.open(made_output())
-        payload = {"view": ticket, "items": ["dist"], "period": "all", "grain": "auto", "types": None}
+        # then says that something went wrong, and the server goes on. The
+        # bars are made in gui/views.py and kept with the output (stage M2 of
+        # v2.2.0); the opening made those of the first types, so the request
+        # asks for one type, whose bars are made anew.
+        output = made_output()
+        ticket = self.open(output)
+        names = [entry["name"] for entry in activity_types(load_view_data(output))]
+        payload = {"view": ticket, "items": ["dist"], "period": "all", "grain": "auto", "types": names[:1]}
         body = json.dumps(payload).encode("utf-8")
-        for name in ("view_answer", "coverage"):
-            with self.subTest(function=name), patch.object(gui_server, name, side_effect=RuntimeError("unexpected words")):
+        for module, name in ((gui_server, "view_answer"), (gui_views, "coverage")):
+            with self.subTest(function=name), patch.object(module, name, side_effect=RuntimeError("unexpected words")):
                 status, _, answer = self.post_api("/api/view/series", self.api_headers(body), body)
                 self.assertEqual(status, 500)
                 self.assertNotIn(b"unexpected words", answer)
         self.assertEqual(self.call("/api/view/series", payload)[0], 200)
+
+    def test_the_bars_of_the_shelf_are_made_once_for_an_output_and_its_types(self) -> None:
+        # Stage M2 of v2.2.0: a comparison by race day asks up to 13 times
+        # in a row, and the bars of the shelf are made from every row of the
+        # output; they are kept with the output by the activity types, in
+        # any order, and made again when the output is read again. The bars
+        # are counted wherever they are made (the first items of the opening
+        # take them from view/series.py).
+        output = self.copied()
+        real = view_series.coverage
+        made: list[Any] = []
+
+        def counted(data: Any, types: Any = None) -> Any:
+            made.append(None if types is None else sorted(types))
+            return real(data, types)
+
+        data = load_view_data(output)
+        names = [entry["name"] for entry in activity_types(data)]
+        self.assertGreaterEqual(len(names), 2)
+        with patch.object(gui_views, "coverage", counted), patch.object(view_series, "coverage", counted):
+            ticket = self.open(output)
+            # The opening makes them once, for its first items too.
+            self.assertEqual(made, [None])
+            for types in (None, None, names, list(reversed(names)), names[:1], names[:1]):
+                with self.subTest(types=types):
+                    status, answer = self.call(
+                        "/api/view/series", {"view": ticket, "items": ["dist"], "period": "all", "grain": "range", "types": types}
+                    )
+                    self.assertEqual(status, 200)
+                    self.assertEqual(answer["coverage"], as_json(real(data, types)))
+            self.assertEqual(made, [None, sorted(names), sorted(names[:1])])
+            activities = output / "analysis" / "activities.csv"
+            later = activities.stat().st_mtime_ns + 2_000_000_000
+            os.utime(activities, ns=(later, later))
+            # Every shelf of the reading before is dropped (the checker's
+            # review of M2): those of the other types are made again too.
+            for types in (None, None, names[:1], names[:1]):
+                status, answer = self.call("/api/view/series", {"view": ticket, "items": ["dist"], "period": "all", "grain": "range", "types": types})
+                self.assertEqual((status, answer["coverage"]), (200, as_json(real(data, types))))
+            self.assertEqual(made, [None, sorted(names), sorted(names[:1]), None, sorted(names[:1])])
 
     def test_the_numbers_are_read_once_and_again_when_the_output_changes(self) -> None:
         output = self.copied()
@@ -370,6 +420,37 @@ class ViewsTest(unittest.TestCase):
         later = vo2max.stat().st_mtime_ns + 2_000_000_000
         os.utime(vo2max, ns=(later, later))
         self.assertNotEqual(output_stamp(output), stamp)
+
+    def test_the_bars_of_the_shelf_are_kept_for_the_reading_of_the_ticket_only(self) -> None:
+        # Stage M2 of v2.2.0. The number of the plan, written as it is.
+        self.assertEqual(MAX_SHELVES, 8)
+        real = gui_views.coverage
+        made: list[Any] = []
+
+        def counted(data: Any, types: Any = None) -> Any:
+            made.append(types)
+            return real(data, types)
+
+        views = Views()
+        ticket, data = views.open(made_output())
+        with patch.object(gui_views, "coverage", counted):
+            # At most eight sets of types; the one used longest ago leaves
+            # first.
+            kinds = [[f"type {number}"] for number in range(MAX_SHELVES + 1)]
+            for types in kinds:
+                self.assertEqual(views.coverage(ticket, data, types), real(data, types))
+            self.assertEqual(len(made), MAX_SHELVES + 1)
+            views.coverage(ticket, data, kinds[-1])
+            self.assertEqual(len(made), MAX_SHELVES + 1)
+            views.coverage(ticket, data, kinds[0])
+            self.assertEqual(len(made), MAX_SHELVES + 2)
+            # Another reading of the output, and a ticket that is gone: the
+            # bars are made and not kept.
+            other = load_view_data(made_output())
+            for _ in range(2):
+                self.assertEqual(views.coverage(ticket, other), real(other))
+                self.assertEqual(views.coverage("gone", data), real(data))
+            self.assertEqual(len(made), MAX_SHELVES + 6)
 
     def test_a_request_for_numbers_has_its_form(self) -> None:
         self.assertEqual(
