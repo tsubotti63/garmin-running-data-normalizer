@@ -1082,6 +1082,16 @@ class GuiViewPageStructureTest(unittest.TestCase):
                 self.assertRegex(view_css, rf"\.calendar-cell\.s{step} \{{\s*fill: var\(--y{step}\);\s*\}}")
         self.assertRegex(view_css, r"\.calendar-cell\.zero \{\s*fill: none;\s*stroke: var\(--sub\);\s*stroke-width: 1\.5;\s*\}")
         self.assertRegex(view_css, r"\.calendar svg \{[^}]*pointer-events: none;")
+        # v2.2.0 N2: the value of the day chosen stays in the column at the
+        # left of its strip, whole where it fits (the English reading of a day
+        # without a recorded activity ran over the days of the week): one block
+        # no wider than the column that wraps whatever the reading of a panel
+        # does, and no rule of a calendar makes it nowrap again (Codex's review
+        # of the diff of N2).
+        self.assertRegex(view_css, r"\.calendar-side \.calendar-read strong \{\s*display: inline-block;\s*max-width: 100%;\s*white-space: normal;\s*\}")
+        for selector, body in re.findall(r"([^{}]*calendar[^{}]*)\{([^{}]*)\}", view_css):
+            with self.subTest(rule=selector.strip()):
+                self.assertNotIn("nowrap", body)
         forced = view_css[view_css.index("@media (forced-colors: active) {") :]
         self.assertRegex(forced, r"\.calendar-cell\.s6 \{\s*fill: CanvasText;\s*\}")
         for step, opacity in ((1, "0.15"), (2, "0.3"), (3, "0.45"), (4, "0.6"), (5, "0.8")):

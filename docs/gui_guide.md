@@ -1226,8 +1226,8 @@ values are made):
   - **Item**: the list in the title, to compare another item.
   - **Show as**: **One row per year** (a row a year, with one scale for all
     the rows), **Overlay** (a line a year on one panel, with the year at the
-    end of each line), or **Running total** (see below). At first, **One row
-    per year**.
+    end of each line), **Running total** (see below), or **Calendar** (see
+    [Calendar](#calendar)). At first, **One row per year**.
   - **Month**: **Whole year**, or one month of each year, from January to
     December.
   - **Line**: only for an item of several lines, such as VO2 Max, by the
@@ -1287,6 +1287,42 @@ values are made):
   than the panels, see
   [When the output changes while you look](#when-the-output-changes-while-you-look-from-220).
 
+#### Calendar
+
+- To compare amounts, use **One row per year**; to see the days in their
+  order (when you ran, and where days without a recorded activity ran on),
+  use **Calendar**.
+- **Calendar** in **Show as** makes a strip of each year: the weeks across
+  (from the week of 1 January) and the days of the week down, each day
+  colored by its value. The strips of the years chosen are one under another.
+- It goes by **Day** only, and uses no **Month** (the month chosen stays, and
+  comes back with the other ways). It cannot be used while comparing by race
+  day. Nor can it be used for an item that can have several records a day
+  (VO2 Max, the race predictions (5K, 10K, half marathon, and marathon),
+  Training readiness, Acute load, Chronic load, and Load ratio); for such an
+  item, **Items that cannot be a calendar** says why.
+- The legend above the strips gives up to six steps. Each holds its left
+  value and not its right one (10–20: 10 or more, under 20). A color further
+  right in the legend only means a higher value. The steps are the same for
+  every year chosen.
+- For a total or a count, a day without a recorded activity (0) is an
+  outline; a day without a value and a day outside the output are not drawn.
+  A recorded 0 (activities of 0 km) takes the first step.
+- At the left of a strip: the year, a period cut short, the value of the
+  year, and the value of the day chosen. The day chosen is the same day of the
+  year in every strip (28 February for 29 February in a common year, and the
+  nearest day of the output outside it).
+- Press a square, or select a strip and use ← and → (a week), ↑ and ↓ (a
+  day), and Home and End (the first and last day of the year in the output).
+  The arrows move otherwise than with **One row per year**, where ← and → move
+  one period. Tab goes to the next strip. The date, the day of the week, and
+  the value of the day chosen are read out too.
+- **Show as a table** gives the days in rows and the years in columns;
+  **Show as a calendar** goes back. In forced colors the steps can be hard to
+  tell apart; the values are at the left of a strip and in the table.
+
+![Compare years as a calendar: the strips of the distance from 2026 to 2023, each day in up to six steps of color and a day without a recorded activity as an outline, with the legend above the strips and the year, the total of the year, and the value of the day chosen at their left (synthetic data)](assets/gui-guide/view-compare-calendar.en.png)
+
 #### Compare by race day
 
 - In the title of the bar, choose **year** or **race day** to compare by.
@@ -1300,8 +1336,8 @@ values are made):
 - **Span**, in the place of the month, goes from 8, 12, 16 (at first), 20, or
   24 weeks before to the race day. It counts back from the Monday of the week
   of the race, so that every race has as many weeks. The grouping is **Week**
-  only, also for a running total. The ways to show are those of the years,
-  with **One row per race** at first.
+  only, also for a running total. The ways to show are those of the years but
+  **Calendar**, with **One row per race** at first.
 - **Race week (to the race day)** goes from the Monday of the week of the race
   to the race day. Where the race is not on a Sunday (or the output ends
   within that week), it is a period cut short, as the ends of a year are (a
@@ -1812,6 +1848,10 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
   keys reads out the period and the value of each year
   ([Compare years](#compare-years-from-220)). When comparing by race day, the
   button of a race tells its whole name and its days.
+- In a calendar (from 2.2.0), Tab goes from strip to strip, and ← → (a week),
+  ↑ ↓ (a day), and Home and End (the first and last day of the year in the
+  output) read out the date, the day of the week, and the value; so does a
+  strip that the focus comes to ([Calendar](#calendar)).
 - A chart of a panel of training or of the running form (from 2.2.0) tells
   that Enter opens the list of the activities of a period. Opened with Enter
   (or Space), the focus goes to the heading of the list, and how many

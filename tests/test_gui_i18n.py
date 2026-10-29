@@ -283,6 +283,8 @@ class GuiCatalogTest(unittest.TestCase):
                 ("view.help.compare_text", "view.compare.mode.rows"),
                 ("view.help.compare_text", "view.compare.mode.overlay"),
                 ("view.help.compare_text", "view.compare.mode.cumulative"),
+                # v2.2.0 N2: and the calendar.
+                ("view.help.compare_text", "view.compare.mode.calendar"),
                 ("view.help.compare_text", "view.compare.month"),
                 ("view.help.compare_text", "view.panel.unbig"),
                 ("view.shelf.bars_types", "view.types.label"),

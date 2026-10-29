@@ -764,7 +764,7 @@
   "view.help.layouts": "Layouts",
   "view.help.layouts_text": "Press a card above the shelf, and its items become the panels, in its order. “Save the panels as a layout…” keeps the panels shown as a layout of your own, and “Manage layouts…” renames, moves, and removes your layouts and hides built-in ones. The period, grouping, and activity types are not part of a layout; they are remembered apart.",
   "view.help.compare": "Compare years",
-  "view.help.compare_text": "“Compare years” in the heading of a panel compares its item year by year: “One row per year”, “Overlay”, or “Running total”, over the whole year or one “Month” of each year. “Show all panels again” goes back.",
+  "view.help.compare_text": "“Compare years” in the heading of a panel compares its item year by year: “One row per year”, “Overlay”, “Running total”, or “Calendar”, over the whole year or one “Month” of each year (a calendar shows the whole year by day). “Show all panels again” goes back.",
   "view.help.race": "Compare by race day",
   "view.help.race_text": "With two race marks or more whose days from 24 weeks before to the race day meet the days of the output, “race day” in the title of “Compare years” compares the weeks before each race. Choose 8 to 24 weeks in “Span”. It goes by week, and the week of a race ends on the race day.",
   "view.help.marks": "Marks",

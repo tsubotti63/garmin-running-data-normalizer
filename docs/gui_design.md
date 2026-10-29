@@ -998,6 +998,34 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   closes the list when what the panels count or show changes, never while
   numbers are on their way, with the answer of its last request only. The
   list is never remembered and never written to a file.
+- Comparing years as a calendar (stage N1): a fourth way to compare years,
+  for amounts in rows and for the order of the days in a calendar: a strip of
+  each year chosen, the weeks across from the week of 1 January (Monday weeks,
+  up to 54 columns) and the days of the week down, each day of the output in
+  one of up to six steps of the colors of the years (one hue). The steps are
+  the ticks of one scale over the days of all the years shown, made as a
+  panel makes its scale (from 0 for a total, the units of the page, the
+  clocks), each holding its left tick and not its right one; fewer steps are
+  spread over the six colors, and the legend names them. A day of a total or
+  a count without a recorded activity (0 with no activity) is an outline, a
+  recorded 0 (activities of 0 km) is in the first step, and a day without a
+  value or outside the output is not drawn. It goes by day only and uses no
+  month: the month remembered stays (grayed) and comes back with the other
+  ways, which ask again where the month that they use changes. It is grayed
+  for the nine estimates that can have several records a day (the kind
+  `obs`), with its reason behind an info button, and while comparing by race
+  day, where a calendar remembered shows one row per race. The numbers are
+  those of comparing years (each year by day, and the value of each year from
+  the whole output by year), and a calendar is drawn only from an answer of
+  whole years by day. The day chosen is one day of the year in every strip
+  (28 February for 29 February of a common year, and the nearest day of the
+  output outside it); a click, ← and → (a week), ↑ and ↓ (a day), and Home
+  and End (the first and last day of the year in the output) move it, stop at
+  the ends, and say it with its value, as the focus coming to a strip does.
+  The strips have their own size (the squares 11 to 16 px apart, as the years
+  chosen fit), the table is that of comparing years by day, and in forced
+  colors the steps are one color by their opacity. The settings remember the
+  calendar as a way. No new API.
 - An output that changes while the view page is open is read again at the
   next request (and so is any output when the date changes), so that a
   comparison or a list asked right after a new normalization can come from

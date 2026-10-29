@@ -1565,8 +1565,14 @@ button.small {
   font-size: 0.78rem;
 }
 
+/* The value of the day chosen goes whole to the next line where it does not
+   fit after the date; only one wider than the column (a day without a
+   recorded activity, in English) breaks, inside the column, whatever the
+   reading of a panel does (stage N2). */
 .calendar-side .calendar-read strong {
-  white-space: nowrap;
+  display: inline-block;
+  max-width: 100%;
+  white-space: normal;
 }
 
 .calendar {
