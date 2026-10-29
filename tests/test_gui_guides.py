@@ -9,6 +9,7 @@ from pathlib import Path
 
 from garmin_running_data_normalizer.gui.layouts import BUILT_IN_LAYOUTS
 from garmin_running_data_normalizer.view.data import ViewData
+from garmin_running_data_normalizer.view.items import ITEMS, OBSERVED
 from garmin_running_data_normalizer.view.series import period_bounds
 
 # The guides of main are read by the users of the stable release, through the
@@ -610,7 +611,8 @@ class GuiGuideTest(unittest.TestCase):
         # every year in its scene, and the years in rows and laid over one
         # another in the section of comparing years. M4: the list of a period
         # and the marks, after the overview, and comparing by race day, after
-        # the years laid over one another.
+        # the years laid over one another. N2: the calendar, before comparing
+        # by race day.
         names = (
             "normalized-page",
             "next-steps",
@@ -624,6 +626,7 @@ class GuiGuideTest(unittest.TestCase):
             "view-marks",
             "view-compare-rows",
             "view-compare-overlay",
+            "view-compare-calendar",
             "view-compare-race",
         )
         sizes = {"next-steps": (315, 213), "view-layouts": (371, 193), "view-layouts-manage": (440, 438)}
@@ -1286,6 +1289,127 @@ class GuiGuideTest(unittest.TestCase):
                 with self.subTest(language=language, remembered=phrase):
                     self.assertIn(phrase, remembers)
                     self.assertIn(phrase, messages["forget.text_also"])
+
+    def test_guides_give_the_calendar_as_the_page_does(self) -> None:
+        # v2.2.0 N2: the calendar of comparing years (stage N1) is the fourth
+        # way of **Show as**, with a heading of its own in the section of
+        # comparing years, before comparing by race day (the checker's review
+        # of the plan of N2), which the line of the ways and the keyboard link
+        # to. What the guides say of it is what the page does, so that a change
+        # of either fails here: the ways of the page in their order, the keys
+        # of a strip (a week and a day, unlike the one period of the cross
+        # line), the steps of its colors at most, the outline of a day without
+        # a recorded activity, the same day of a common year for 29 February,
+        # and the estimates that it is not for, the items of the kind obs, in
+        # the words of their reason on the page (the checker's answer 5). After
+        # the review of the diff by Codex: a day without a record is never
+        # called a rest, the reason is for those items only, Home and End stop
+        # at the output, and race day has the ways of the years but the
+        # calendar.
+        flow = (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8")
+        modes = [mode.strip().strip('"') for mode in re.search(r"export const COMPARE_MODES = \[([^\]]*)\];", flow).group(1).split(",")]
+        self.assertEqual(modes[-1], "calendar")
+        keys = re.search(r"const CALENDAR_KEYS = \{([^}]*)\};", flow).group(1)
+        self.assertEqual({key: int(n) for key, n in re.findall(r"(\w+): (-?\d+)", keys)}, {"ArrowLeft": -7, "ArrowRight": 7, "ArrowUp": -1, "ArrowDown": 1})
+        self.assertIn("export const CALENDAR_STEPS = 6;", flow)
+        for line in (
+            'return typeof item?.kind === "string" && item.kind !== "obs";',
+            'return isTotal(item ?? {}) && value === 0 && count === 0 ? "zero" : "value";',
+            "const day = slotDay(slot, year) ?? `${year}-02-28`;",
+            'if (key === "Home") {\n    next = span.from;\n  } else if (key === "End") {\n    next = span.to;',
+        ):
+            with self.subTest(code=line):
+                self.assertIn(line, flow)
+        self.assertEqual([item.key for item in ITEMS if item.kind == OBSERVED], ["vo2", "p5k", "p10k", "phalf", "pfull", "tr", "acute", "chronic", "acwr"])
+        heading = {"en": "Compare years (from 2.2.0)", "ja": "年でくらべる（2.2.0 から）"}
+        own = {"en": "Calendar", "ja": "カレンダー"}
+        race = {"en": "Compare by race day", "ja": "大会の日でくらべる"}
+        link = {"en": "[Calendar](#calendar)", "ja": "[カレンダー](#カレンダー)"}
+        estimates = {"en": r"Of the Garmin estimates, (.+?) can have several records a day", "ja": r"Garmin の推定値のうち (.+?)は、1 日に記録がいくつもある"}
+        example = {"en": "(10–20: 10 or more, under 20)", "ja": "（10–20 は 10 以上 20 未満）"}
+        right = {"en": "A color further right in the legend only means a higher value.", "ja": "凡例の右の色ほど値が大きいことだけを表します。"}
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            messages = catalog(language)
+            mark = "**{}**" if language == "en" else "「{}」"
+            words = {key.rsplit(".", 1)[-1]: mark.format(messages[key]) for key in ("view.compare.show", "view.grain.day", "view.compare.month", "view.compare.calendar_about", "view.panel.table", "view.compare.table_calendar")}
+            rows, calendar = (mark.format(messages[f"view.compare.mode.{mode}"]) for mode in ("rows", "calendar"))
+            start = text.index(f"\n### {heading[language]}\n")
+            part = text[start : text.index("\n### ", start + 1)]
+            with self.subTest(language=language, part="order"):
+                self.assertLess(part.index(f"\n#### {own[language]}\n"), part.index(f"\n#### {race[language]}\n"))
+            begin = part.index(f"\n#### {own[language]}\n")
+            own_part = part[begin : part.index(f"\n#### {race[language]}\n")]
+            own_reads = " ".join(own_part.split()) if language == "en" else re.sub(r"\n *", "", own_part)
+            # The line of the ways names the ways of the page in their order,
+            # and leads to the calendar.
+            ways = re.sub(r"\n *", " " if language == "en" else "", part)
+            ways = ways[ways.index(words["show"] + (": " if language == "en" else "：")) :]
+            ways = ways[: ways.index("At first," if language == "en" else "初めは")]
+            places = [ways.index(mark.format(messages[f"view.compare.mode.{mode}"])) for mode in modes]
+            with self.subTest(language=language, part="ways"):
+                self.assertEqual(places, sorted(places))
+                self.assertIn(link[language], ways)
+            names = re.search(estimates[language], messages["view.compare.calendar_only"]).group(1)
+            zero = messages["view.compare.calendar_zero_key"]
+            for words_of_the_page in (example, right):
+                with self.subTest(language=language, note=words_of_the_page[language]):
+                    self.assertIn(words_of_the_page[language], messages["view.compare.calendar_note"])
+            if language == "en":
+                phrases = (
+                    f"To compare amounts, use {rows}; to see the days in their order (when you ran, and where days without a recorded activity ran on), use {calendar}.",
+                    f"{calendar} in {words['show']} makes a strip of each year: the weeks across (from the week of 1 January) and the days of the week down,",
+                    f"It goes by {words['day']} only, and uses no {words['month']} (the month chosen stays, and comes back with the other ways).",
+                    f"It cannot be used while comparing by race day. Nor can it be used for an item that can have several records a day ({names}); for such an item, {words['calendar_about']} says why.",
+                    "The legend above the strips gives up to six steps.",
+                    f"Each holds its left value and not its right one {example[language]}. {right[language]}",
+                    f"For a total or a count, a {zero[0].lower()}{zero[1:]} is an outline; a day without a value and a day outside the output are not drawn.",
+                    "A recorded 0 (activities of 0 km) takes the first step.",
+                    "(28 February for 29 February in a common year, and the nearest day of the output outside it)",
+                    f"use ← and → (a week), ↑ and ↓ (a day), and Home and End (the first and last day of the year in the output). The arrows move otherwise than with {rows}, where ← and → move one period.",
+                    f"{words['table']} gives the days in rows and the years in columns; {words['table_calendar']} goes back.",
+                    "In forced colors the steps can be hard to tell apart; the values are at the left of a strip and in the table.",
+                )
+                keyboard = "In a calendar (from 2.2.0), Tab goes from strip to strip, and ← → (a week), ↑ ↓ (a day), and Home and End (the first and last day of the year in the output) read out the date, the day of the week, and the value; so does a strip that the focus comes to ([Calendar](#calendar))."
+                race_ways = f"The ways to show are those of the years but {calendar}, with"
+                shades = ("dark", "light", "pale", "deep")
+                rest = re.search(r"\brest\b", own_reads)
+            else:
+                phrases = (
+                    f"量をくらべるときは{rows}、日の並び（いつ走ったか・記録の無い日が続いた所）を見るときは{calendar}です。",
+                    f"{words['show']}の{calendar}で、1 年を 1 本の帯にします。横に週（1 月 1 日の週から）、縦に曜日（月〜日）で、",
+                    f"まとめ方は{words['day']}だけで、{words['month']}は使いません（選んでいた月は覚えていて、ほかの見せ方に戻すとその月で出ます）。",
+                    f"大会の日でくらべる間は使えません。1 日に記録がいくつもある項目（{names}）でも使えず、そのわけは{words['calendar_about']}で開きます。",
+                    "色は 6 段までで、帯の上の凡例に区切りが出ます。",
+                    f"区切りは左の値を含み、右の値を含みません{example[language]}。{right[language]}",
+                    f"合計や回数の項目で{zero}は枠だけ、値の無い日と出力の外の日は何も描きません。",
+                    "記録された 0（距離 0 km のアクティビティの日など）は、いちばん下の段の色です。",
+                    "平年の帯では 2 月 29 日の代わりに 2 月 28 日、出力の外なら出力の中のいちばん近い日",
+                    f"← → キー（1 週）、↑ ↓ キー（1 日）、Home と End（その年の出力の最初と最後の日）で日を選びます。{rows}の ← →（1 区切り）とは動き方が違います。",
+                    f"{words['table']}で日ごとの表（月日 × 年）になり、{words['table_calendar']}で戻ります。",
+                    "強制カラーの画面では段が見分けにくいことがあるので、値は帯の左と表で読めます。",
+                )
+                keyboard = "カレンダー（2.2.0 から）では、帯ごとに Tab キーで移り、← → キーで 1 週、↑ ↓ キーで 1 日、Home と End でその年の出力の最初と最後の日へ動かすと、日付・曜日・値を読み上げます。帯に移ったときも読み上げます（[カレンダー](#カレンダー)）。"
+                race_ways = f"見せ方は{calendar}のほかの、年と同じ {len(modes) - 1} つで、初めは"
+                shades = ("濃い", "淡い", "明るい", "暗い", "薄い")
+                rest = re.search("休み", own_reads)
+            for phrase in phrases:
+                with self.subTest(language=language, phrase=phrase):
+                    self.assertEqual(own_reads.count(phrase), 1)
+            with self.subTest(language=language, part="keyboard"):
+                self.assertEqual(reads.count(keyboard), 1)
+            with self.subTest(language=language, part="race day"):
+                self.assertEqual(reads.count(race_ways), 1)
+            # A day without a recorded activity is not a rest: the watch may
+            # not have been worn (view.note.zero; Codex's review of the diff).
+            with self.subTest(language=language, part="rest"):
+                self.assertIsNone(rest)
+            # The steps go the other way in the dark appearance, so the guides
+            # never name them by their shade (the checker's N0-1).
+            for shade in shades:
+                with self.subTest(language=language, shade=shade):
+                    self.assertNotIn(shade, own_reads.lower())
 
     def test_readme_puts_the_gui_first(self) -> None:
         # v2.1.0 H1 (the whole flow): the README gives the GUI right after who
