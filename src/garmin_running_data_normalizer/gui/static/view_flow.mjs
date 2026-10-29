@@ -1290,8 +1290,9 @@ export function laterSender(send, wait, { setTimer = setTimeout, clearTimer = cl
 // --- Comparing one item by year (stage L1 of v2.2.0) ----------------------
 
 // The ways to compare: the years in rows, laid over one another, or added up
-// from the first day of the year (or of the month).
-export const COMPARE_MODES = ["rows", "overlay", "cumulative"];
+// from the first day of the year (or of the month); from stage N1, also as a
+// calendar of the days of each year.
+export const COMPARE_MODES = ["rows", "overlay", "cumulative", "calendar"];
 export const MAX_COMPARE_YEARS = 6;
 export const FIRST_COMPARE_YEARS = 4;
 // A leap year, so that 29 February has its place on the axis of the days.
@@ -1352,13 +1353,31 @@ export function compareValueGrain(month) {
 }
 
 // The groupings of a comparison, and the one at first: by month over a year,
-// by day over a month; a running total goes by day.
-export function compareGrains(month) {
+// by day over a month; a running total goes by day, and a calendar by day
+// only (stage N1 of v2.2.0).
+export function compareGrains(month, mode = "rows") {
+  if (mode === "calendar") {
+    return ["day"];
+  }
   return month ? ["day", "week"] : ["day", "week", "month"];
 }
 
 export function firstCompareGrain(mode, month) {
-  return mode === "cumulative" || month ? "day" : "month";
+  return mode === "cumulative" || mode === "calendar" || month ? "day" : "month";
+}
+
+// The month that a comparison uses: none while it is a calendar, which shows
+// whole years; the month remembered stays as it is for the other ways
+// (Codex's review of the plan of N1).
+export function compareMonthFor(mode, month) {
+  return mode === "calendar" ? null : month;
+}
+
+// Whether a comparison asks for its numbers again when its way changes: where
+// its grouping, or the month that it uses, is another (Codex's review of the
+// plan of N1: a month chosen and a calendar ask for other days).
+export function compareAsksAgain(before, after) {
+  return before.grain !== after.grain || before.month !== after.month;
 }
 
 // Where each period of a year is on the shared axis: a week by its order from
@@ -1413,12 +1432,21 @@ export function runningTotal(values) {
   });
 }
 
-// The way of a comparison for an item: a running total only of a total.
+// The way of a comparison for an item: a running total only of a total, and
+// a calendar only of an item of one value a day (not of the records of an
+// estimate, of which a day may have several).
 export function compareModeFor(item, mode) {
   if (!COMPARE_MODES.includes(mode)) {
     return "rows";
   }
-  return mode === "cumulative" && !isTotal(item ?? {}) ? "rows" : mode;
+  if (mode === "cumulative" && !isTotal(item ?? {})) {
+    return "rows";
+  }
+  return mode === "calendar" && !calendarItem(item) ? "rows" : mode;
+}
+
+export function calendarItem(item) {
+  return typeof item?.kind === "string" && item.kind !== "obs";
 }
 
 // The step of the color of each year chosen, 1 to 6: the newest the 6th.
@@ -1724,6 +1752,196 @@ export function compareTable(item, data, grain, month, span, language, mode = "r
   return { heads, rows, last, counts };
 }
 
+// --- The calendar of comparing years (stage N1 of v2.2.0) ------------------
+
+// The steps of the colors of a calendar: the six of the years.
+export const CALENDAR_STEPS = 6;
+// The keys of a calendar: a week to the left and to the right, a day up and
+// down (Codex's review of the plan of N1).
+const CALENDAR_KEYS = { ArrowLeft: -7, ArrowRight: 7, ArrowUp: -1, ArrowDown: 1 };
+
+// The place of a day in the calendar of its year: its column, the week by its
+// order from the week of 1 January (Monday weeks, as the weeks of a year are
+// counted), and its row, the day of the week from Monday (0) to Sunday (6).
+export function calendarPlace(iso) {
+  const day = dayCount(iso);
+  return { week: (mondayOf(iso) - mondayOf(`${iso.slice(0, 4)}-01-01`)) / 7, day: (((day + 3) % 7) + 7) % 7 };
+}
+
+// The columns of the calendar of a year: 53, or 54.
+export function calendarWeeks(year) {
+  return (mondayOf(`${year}-12-31`) - mondayOf(`${year}-01-01`)) / 7 + 1;
+}
+
+// The day at a place of the calendar of a year (its column and its row), or
+// null where the place is outside the year.
+export function calendarDate(year, week, day) {
+  const iso = isoOf(mondayOf(`${year}-01-01`) + week * 7 + day);
+  return iso.slice(0, 4) === String(year) ? iso : null;
+}
+
+// The day under a point of the squares of the calendar of a year, by its
+// column and its row (``x`` and ``y`` from the corner of the squares, which
+// are ``pitch`` apart), or null outside them and outside the year.
+export function calendarAt(year, x, y, pitch) {
+  const week = Math.floor(x / pitch);
+  const day = Math.floor(y / pitch);
+  return week < 0 || day < 0 || day > 6 ? null : calendarDate(year, week, day);
+}
+
+// The names of the days of the week, from Monday, short (1 January 2024 was a
+// Monday).
+export function calendarWeekdays(language) {
+  return Array.from({ length: 7 }, (_none, day) => dateFormat(language, "weekday").format(utcDate(`2024-01-0${day + 1}`)));
+}
+
+// The place of a day on the axis of the days of the years compared (a leap
+// year), and the day of a place in a year: none for 29 February of a common
+// year.
+export function daySlot(iso) {
+  return dayCount(`${LEAP_BASE}${iso.slice(4)}`) - dayCount(`${LEAP_BASE}-01-01`);
+}
+
+export function slotDay(slot, year) {
+  const base = isoOf(dayCount(`${LEAP_BASE}-01-01`) + slot);
+  return base.slice(5) === "02-29" && lastOfMonth(year, 2) === 28 ? null : `${year}${base.slice(4)}`;
+}
+
+// The days of a year that the output has: from its first day (or 1 January)
+// to its last (or 31 December); null where it has none of them.
+function calendarSpan(year, firstDay, lastDay) {
+  const from = `${year}-01-01` > firstDay ? `${year}-01-01` : firstDay;
+  const to = `${year}-12-31` < lastDay ? `${year}-12-31` : lastDay;
+  return from <= to ? { from, to } : null;
+}
+
+// The day of a year that a calendar shows for a place of the shared axis: its
+// own day, 28 February for 29 February of a common year, and the nearest day
+// that the output has where it does not reach it; null without a day of the
+// year in the output.
+export function calendarDay(slot, year, firstDay, lastDay) {
+  const span = calendarSpan(year, firstDay, lastDay);
+  if (span === null) {
+    return null;
+  }
+  const day = slotDay(slot, year) ?? `${year}-02-28`;
+  return day < span.from ? span.from : day > span.to ? span.to : day;
+}
+
+// The place that a key of a calendar moves to, in the days of the year of its
+// strip that the output has: a week, a day, or the first or last of them;
+// it stops at their ends. Null for another key.
+export function calendarMove(slot, year, key, firstDay, lastDay) {
+  const span = calendarSpan(year, firstDay, lastDay);
+  const day = calendarDay(slot, year, firstDay, lastDay);
+  if (span === null || day === null) {
+    return null;
+  }
+  let next;
+  if (key === "Home") {
+    next = span.from;
+  } else if (key === "End") {
+    next = span.to;
+  } else if (Object.hasOwn(CALENDAR_KEYS, key)) {
+    next = isoOf(Math.max(dayCount(span.from), Math.min(dayCount(span.to), dayCount(day) + CALENDAR_KEYS[key])));
+  } else {
+    return null;
+  }
+  return daySlot(next);
+}
+
+// What a day of a calendar draws: its value in a step, the outline of a day
+// of a total without a recorded activity (0 counted from no record), or
+// nothing (no value). A recorded 0, of activities of 0 km, is a value
+// (Codex's review of the plan of N1).
+export function calendarCell(item, value, count) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  return isTotal(item ?? {}) && value === 0 && count === 0 ? "zero" : "value";
+}
+
+// The step of the color of a value among the ticks of its scale (view_chart.mjs
+// calendarScale), 1 to 6: each step holds its left tick and not its right
+// one, and fewer steps than six spread over the six colors (four take the
+// 1st, 3rd, 4th, and 6th).
+export function calendarStep(ticks, value) {
+  const steps = ticks.length - 1;
+  if (steps <= 1) {
+    return CALENDAR_STEPS;
+  }
+  const found = ticks.findIndex((tick, at) => at > 0 && value < tick);
+  const index = found < 0 ? steps - 1 : found - 1;
+  return Math.round(1 + (index * (CALENDAR_STEPS - 1)) / (steps - 1));
+}
+
+// The steps of the legend of a calendar, in the words of the ticks of a
+// scale: below the first tick for a total, whose 0 without a record is an
+// outline of its own, then from one tick to the next.
+export function calendarLegend(item, ticks, language) {
+  const step = Math.abs(ticks[1] - ticks[0]);
+  const text = (value) => tickText(item.key, value, step, language);
+  return ticks.slice(1).map((upper, index) => ({
+    step: calendarStep(ticks, ticks[index]),
+    words:
+      index === 0 && isTotal(item)
+        ? message("view.compare.calendar_under", { value: text(upper) })
+        : message("view.compare.calendar_between", { from: text(ticks[index]), to: text(upper) }),
+  }));
+}
+
+// What a calendar says of a day of a year: its date and day of the week, and
+// its value with its count as a panel says them, that it is a day without a
+// recorded activity, that it has no value, or that the output does not have
+// it.
+export function calendarReading(item, entry, day, language) {
+  const date = utcDate(day);
+  const name = message("view.compare.calendar_day", { date: dateFormat(language, "day").format(date), weekday: dateFormat(language, "weekday").format(date) });
+  const index = entry.periods.findIndex((period) => period?.start === day);
+  if (index < 0) {
+    return { day: name, value: null, count: null, missing: message("view.compare.outside") };
+  }
+  const value = entry.values[index];
+  const count = entry.counts[index];
+  const cell = calendarCell(item, value, count);
+  if (cell === null) {
+    return { day: name, value: null, count: null, missing: message("view.no_value") };
+  }
+  return {
+    day: name,
+    value: cell === "zero" ? message("view.compare.calendar_zero", {}, { value: valueMessage(item.key, value, language) }) : valueMessage(item.key, value, language),
+    count: cell === "zero" ? null : countMessage(item, count, "day", language),
+    missing: null,
+  };
+}
+
+// The values of the days that take a color, as the page shows them
+// (``lines``, in km or minutes), of every year drawn, so that one scale holds
+// them all: not the days without a value, nor those of a total without a
+// recorded activity, which are outlines.
+export function calendarValues(item, data, lines) {
+  return data.flatMap((entry, index) => entry.values.flatMap((value, at) => (calendarCell(item, value, entry.counts[at]) === "value" ? [lines[index].values[at]] : [])));
+}
+
+// Whether the answer of a comparison can be drawn as a calendar: of the
+// years, by day, and of whole years. While the answer of another way is still
+// the last one (its numbers on their way), the calendar is not drawn from it
+// (Codex's review of the diff of N1).
+export function calendarAnswer(answer) {
+  return answer?.by === "year" && answer.grain === "day" && answer.month === null;
+}
+
+// The days of the years drawn that a total has without a recorded activity,
+// for the note under the legend.
+export function calendarZeroDays(item, data) {
+  return data.reduce((sum, entry) => sum + entry.values.filter((value, index) => calendarCell(item, value, entry.counts[index]) === "zero").length, 0);
+}
+
+// The note of those days, as a panel says it of the days of its period.
+export function calendarZeroNote(count, language) {
+  return message("view.note.zero", { n: countText(count, language) }, { grain: GRAIN_COUNT_KEYS.day });
+}
+
 // --- Comparing one item by race day (stage M2 of v2.2.0) -------------------
 
 // What a comparison compares by: the years, or the race marks, each from some
@@ -1822,8 +2040,8 @@ export function compareGrainFor(by, mode, month) {
   return by === "race" ? "week" : firstCompareGrain(mode, month);
 }
 
-export function compareGrainsFor(by, month) {
-  return by === "race" ? ["week"] : compareGrains(month);
+export function compareGrainsFor(by, month, mode = "rows") {
+  return by === "race" ? ["week"] : compareGrains(month, mode);
 }
 
 // The value of the whole span of a race in its answer of one period, of the

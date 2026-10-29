@@ -145,6 +145,39 @@ export function valueScale(low, high, { fromZero = false, count = 3, clock = nul
   return { lo: first, hi: last, ticks: ticks.length > 1 ? ticks : [first, first + step] };
 }
 
+// The ticks of the steps of the colors of a calendar (stage N1 of v2.2.0):
+// those of a scale over the values shown, as a panel makes them (from 0 for
+// a total), with one to six steps between them (Codex's review of the plan
+// of N1: the count of a scale is only a guide). None without a value.
+export function calendarScale(values, { fromZero = false, clock = null } = {}) {
+  const shown = (Array.isArray(values) ? values : []).filter(Number.isFinite);
+  if (!shown.length) {
+    return null;
+  }
+  const low = Math.min(...shown);
+  const high = Math.max(...shown);
+  for (const count of [5, 4, 3]) {
+    const { ticks } = valueScale(low, high, { fromZero, count, clock });
+    if (ticks.length - 1 <= 6) {
+      return ticks;
+    }
+  }
+  return coarserTicks(valueScale(low, high, { fromZero, count: 3, clock }).ticks, 6);
+}
+
+// Ticks of steps twice as wide, from the same first tick, until there are
+// ``steps`` steps at most; the last tick stays at or above the last one.
+export function coarserTicks(ticks, steps) {
+  let kept = ticks;
+  while (kept.length - 1 > steps) {
+    const step = (kept[1] - kept[0]) * 2;
+    const count = Math.ceil((kept[kept.length - 1] - kept[0]) / step - 1e-9);
+    const first = kept[0];
+    kept = Array.from({ length: count + 1 }, (_none, index) => Number((first + index * step).toFixed(10)));
+  }
+  return kept;
+}
+
 // The number of ticks for the height of a plot: two on a low strip, five on
 // a tall panel.
 export function tickCount(height) {

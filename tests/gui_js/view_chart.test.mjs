@@ -328,3 +328,30 @@ test("names that would meet show how many marks they are, and the others keep th
   const narrow = chart.markLabels([{ mark: mark("a", "2030-01-01", null, "race", "\u{1F3C3}".repeat(20)), x: 10 }], (text) => Array.from(text).length * 6, crowded, 0, 60);
   assert.deepEqual(narrow.map((label) => [label.x, label.text]), [[0, `${"\u{1F3C3}".repeat(9)}…`]]);
 });
+
+test("the steps of a calendar are one to six, from the ticks of a scale (stage N1 of v2.2.0)", () => {
+  // Codex's review of the plan of N1: up to 13 from 0, five ticks give seven
+  // steps of 2; the calendar takes those of four, three steps of 5.
+  assert.equal(chart.valueScale(0.5, 13, { fromZero: true, count: 5 }).ticks.length - 1, 7);
+  assert.deepEqual(chart.calendarScale([0.5, 13], { fromZero: true }), [0, 5, 10, 15]);
+  assert.deepEqual(chart.calendarScale([0.2, 999], { fromZero: true }), [0, 200, 400, 600, 800, 1000, 1200]);
+  assert.deepEqual(chart.calendarScale([7, 7]), [6.6, 6.8, 7, 7.2, 7.4]);
+  for (const [values, options] of [
+    [[0.5, 13], { fromZero: true }],
+    [[3, 91], { fromZero: true }],
+    [[61, 64], {}],
+    [[0, 0.4], { fromZero: true }],
+    [[290, 410], { clock: "second" }],
+    [[25, 340], { fromZero: true, clock: "minute" }],
+  ]) {
+    const ticks = chart.calendarScale(values, options);
+    assert.ok(ticks.length - 1 >= 1 && ticks.length - 1 <= 6, JSON.stringify(values));
+    assert.ok(ticks[0] <= Math.min(...values) && ticks[ticks.length - 1] > Math.max(...values), JSON.stringify(values));
+  }
+  assert.equal(chart.calendarScale([]), null);
+  assert.equal(chart.calendarScale([null, Number.NaN]), null);
+  // Steps twice as wide from the same first tick, until there are six at most.
+  assert.deepEqual(chart.coarserTicks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 6), [0, 2, 4, 6, 8, 10]);
+  assert.deepEqual(chart.coarserTicks([0, 2, 4, 6, 8, 10, 12, 14], 6), [0, 4, 8, 12, 16]);
+  assert.deepEqual(chart.coarserTicks([0, 5, 10], 6), [0, 5, 10]);
+});

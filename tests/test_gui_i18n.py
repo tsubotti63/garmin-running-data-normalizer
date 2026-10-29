@@ -326,6 +326,29 @@ class GuiCatalogTest(unittest.TestCase):
             with self.subTest(language=language, key="view.compare.title_by"):
                 title = catalog["view.compare.title_by"]
                 self.assertLess(title.index("{item}"), title.index("{by}"))
+            # v2.2.0 N1: what is not used as a calendar, and by race day the
+            # calendar too; the estimates that it is not for; and its note,
+            # which names where the values are read and never "darker" or
+            # "lighter" (the checker's N0-1: the steps go the other way in the
+            # dark appearance).
+            for named in ("view.period.label", "view.shelf.heading", "view.layouts.heading", "view.compare.month", "view.grain.day", "view.compare.item"):
+                with self.subTest(language=language, key="view.compare.off_calendar", named=named):
+                    self.assertIn(quote.format(catalog[named]), catalog["view.compare.off_calendar"])
+            with self.subTest(language=language, key="view.compare.off_race", named="view.compare.mode.calendar"):
+                self.assertIn(quote.format(catalog["view.compare.mode.calendar"]), catalog["view.compare.off_race"])
+            for item in ("vo2", "tr", "acute", "chronic", "acwr"):
+                with self.subTest(language=language, key="view.compare.calendar_only", item=item):
+                    self.assertIn(catalog[f"view.item.{item}"], catalog["view.compare.calendar_only"])
+            with self.subTest(language=language, key="view.compare.calendar_note"):
+                self.assertIn(quote.format(catalog["view.panel.table"]), catalog["view.compare.calendar_note"])
+            # The reading of the day chosen is at the left of its strip
+            # (Codex's review of the diff of N1).
+            for key in ("view.compare.calendar_note", "view.compare.calendar_label"):
+                with self.subTest(language=language, key=key, place="left"):
+                    self.assertIn("帯の左" if language == "ja" else "at the left of", catalog[key])
+                    self.assertNotIn("右上" if language == "ja" else "top right", catalog[key])
+                for word in ("濃い", "淡い", "明るい", "暗い", "薄い", "dark", "light", "pale", "deep"):
+                    self.assertNotIn(word, catalog["view.compare.calendar_note"].lower())
             # The other words are put in their places by the page itself.
             for key, name in (
                 ("view.empty.first_text", "{other}"),

@@ -1440,3 +1440,186 @@ test("the list says its period, its panel, the value of the panel, and its limit
   assert.equal(words(view.listLimitMessage(501, 500, "day", "ja"), "ja"), "この日には 501 件あります。一覧は 500 件までです。");
   assert.equal(words(view.listLimitMessage(501, 500, "day", "en"), "en"), "This day has 501 activities. The list shows up to 500.");
 });
+
+// --- The calendar of comparing years (stage N1 of v2.2.0) -------------------
+
+test("a calendar places each day by its week from the week of 1 January and its day of the week", () => {
+  // 1 January 2025 was a Wednesday, in the week of Monday 30 December.
+  assert.deepEqual(view.calendarPlace("2025-01-01"), { week: 0, day: 2 });
+  assert.deepEqual(view.calendarPlace("2025-05-04"), { week: 17, day: 6 });
+  assert.deepEqual(view.calendarPlace("2024-12-30"), { week: 52, day: 0 });
+  // 53 columns, or 54 for a leap year that starts on a Sunday.
+  assert.equal(view.calendarWeeks(2025), 53);
+  assert.equal(view.calendarWeeks(2012), 54);
+  // Every day of a leap and of a common year has its own place, and the
+  // place gives the day back; a place outside the year has none.
+  for (const year of [2024, 2025]) {
+    const places = new Set();
+    for (let count = Date.UTC(year, 0, 1) / 86400000; count <= Date.UTC(year, 11, 31) / 86400000; count += 1) {
+      const iso = new Date(count * 86400000).toISOString().slice(0, 10);
+      const place = view.calendarPlace(iso);
+      assert.ok(place.day >= 0 && place.day <= 6 && place.week >= 0 && place.week < view.calendarWeeks(year), iso);
+      assert.equal(view.calendarDate(year, place.week, place.day), iso);
+      places.add(`${place.week} ${place.day}`);
+    }
+    assert.equal(places.size, year === 2024 ? 366 : 365);
+  }
+  assert.equal(view.calendarDate(2025, 0, 0), null);
+  assert.equal(view.calendarDate(2025, 52, 3), null);
+});
+
+test("a calendar shows the same day of the year in every strip, or the nearest one that the output has", () => {
+  const leap = view.daySlot("2024-02-29");
+  assert.equal(view.slotDay(leap, 2024), "2024-02-29");
+  assert.equal(view.slotDay(leap, 2025), null);
+  assert.equal(view.daySlot("2025-03-01"), view.daySlot("2024-03-01"));
+  // 29 February of a common year is 28 February (the checker's review of the
+  // plan of N1); outside the output, the nearest day that it has.
+  assert.equal(view.calendarDay(leap, 2025, "2020-01-01", "2026-10-21"), "2025-02-28");
+  assert.equal(view.calendarDay(view.daySlot("2026-12-31"), 2026, "2020-01-01", "2026-10-21"), "2026-10-21");
+  assert.equal(view.calendarDay(view.daySlot("2020-01-02"), 2020, "2020-03-05", "2026-10-21"), "2020-03-05");
+  assert.equal(view.calendarDay(view.daySlot("2025-05-04"), 2025, "2020-01-01", "2026-10-21"), "2025-05-04");
+  assert.equal(view.calendarDay(0, 2019, "2020-03-05", "2026-10-21"), null);
+});
+
+test("the keys of a calendar move a week across, a day up and down, and to the ends of its year in the output, and stop there", () => {
+  const move = (day, key, first = "2020-01-01", last = "2026-10-21") => {
+    const year = Number(day.slice(0, 4));
+    return view.slotDay(view.calendarMove(view.daySlot(day), year, key, first, last), year);
+  };
+  assert.equal(move("2025-05-04", "ArrowRight"), "2025-05-11");
+  assert.equal(move("2025-05-04", "ArrowLeft"), "2025-04-27");
+  // Down from a Sunday goes on to the Monday of the next week.
+  assert.equal(move("2025-05-04", "ArrowDown"), "2025-05-05");
+  assert.equal(move("2025-05-05", "ArrowUp"), "2025-05-04");
+  // A day after 28 February: 1 March in a common year, 29 February in a leap
+  // one; from the place of 29 February, a common year starts at 28 February.
+  assert.equal(move("2025-02-28", "ArrowDown"), "2025-03-01");
+  assert.equal(move("2024-02-28", "ArrowDown"), "2024-02-29");
+  assert.equal(view.slotDay(view.calendarMove(view.daySlot("2024-02-29"), 2025, "ArrowDown", "2020-01-01", "2026-10-21"), 2025), "2025-03-01");
+  // Home and End: the first and last day of the year that the output has;
+  // the keys stop at the ends of the year and of the output.
+  assert.equal(move("2026-05-04", "Home", "2026-03-05"), "2026-03-05");
+  assert.equal(move("2026-05-04", "End"), "2026-10-21");
+  assert.equal(move("2026-10-20", "ArrowRight"), "2026-10-21");
+  assert.equal(move("2025-01-02", "ArrowLeft"), "2025-01-01");
+  assert.equal(move("2025-12-31", "ArrowDown"), "2025-12-31");
+  assert.equal(move("2026-03-05", "ArrowUp", "2026-03-05"), "2026-03-05");
+  // Another key, or a year without a day in the output, moves nothing.
+  assert.equal(view.calendarMove(0, 2025, "PageDown", "2020-01-01", "2026-10-21"), null);
+  assert.equal(view.calendarMove(0, 2019, "Home", "2020-01-01", "2026-10-21"), null);
+});
+
+test("a day of a total without a recorded activity is an outline, and a recorded 0 is a value in the first step", () => {
+  const dist = ITEMS.find((item) => item.key === "dist");
+  assert.equal(view.calendarCell(dist, 0, 0), "zero");
+  // Activities of 0 km are recorded (Codex's review of the plan of N1).
+  assert.equal(view.calendarCell(dist, 0, 2), "value");
+  assert.equal(view.calendarStep([0, 10, 20, 30, 40], 0), 1);
+  assert.equal(view.calendarCell(dist, 7600, 1), "value");
+  assert.equal(view.calendarCell(dist, null, 0), null);
+  assert.equal(view.calendarCell({ key: "count", kind: "count" }, 0, 0), "zero");
+  // The 0 of a daily item is its value.
+  assert.equal(view.calendarCell({ key: "sscore", kind: "day" }, 0, 0), "value");
+});
+
+test("the steps of a calendar hold their left value and spread over the six colors, in the words of the ticks", () => {
+  const ticks = [0, 5, 10, 15, 20];
+  assert.deepEqual([0, 4.99, 5, 9.99, 10, 15, 19.9].map((value) => view.calendarStep(ticks, value)), [1, 1, 3, 3, 4, 6, 6]);
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 5.5].map((value) => view.calendarStep([0, 1, 2, 3, 4, 5, 6], value)), [1, 2, 3, 4, 5, 6, 6]);
+  assert.equal(view.calendarStep([0, 10], 3), view.CALENDAR_STEPS);
+  const dist = ITEMS.find((item) => item.key === "dist");
+  const legend = view.calendarLegend(dist, [0, 10, 20, 30, 40], "ja");
+  assert.deepEqual(legend.map((entry) => entry.step), [1, 3, 4, 6]);
+  assert.deepEqual(legend.map((entry) => words(entry.words, "ja")), ["10 未満", "10–20", "20–30", "30–40"]);
+  assert.equal(words(view.calendarLegend(dist, [0, 10, 20], "en")[0].words, "en"), "under 10");
+  // A mean has no outline: its first step is between two ticks; a clock
+  // writes its ticks as a clock.
+  const hr = ITEMS.find((item) => item.key === "hr");
+  assert.deepEqual(view.calendarLegend(hr, [140, 150, 160], "ja").map((entry) => [entry.step, words(entry.words, "ja")]), [[1, "140–150"], [6, "150–160"]]);
+  const pace = ITEMS.find((item) => item.key === "pace");
+  assert.deepEqual(view.calendarLegend(pace, [300, 330, 360], "en").map((entry) => words(entry.words, "en")), ["5:00–5:30", "5:30–6:00"]);
+});
+
+test("a calendar says a day with its day of the week and its value, a day without a record, no value, or outside the output", () => {
+  const dist = ITEMS.find((item) => item.key === "dist");
+  const day = (iso) => ({ start: iso, end: iso, partial: false });
+  const entry = { periods: [day("2025-05-04"), day("2025-05-05"), day("2025-05-06"), day("2025-05-07")], values: [7600, 0, null, 0], counts: [1, 0, 0, 2] };
+  const say = (iso, language = "ja") => {
+    const reading = view.calendarReading(dist, entry, iso, language);
+    return [words(reading.day, language), words(reading.value, language), words(reading.count, language), words(reading.missing, language)];
+  };
+  assert.deepEqual(say("2025-05-04"), ["2025年5月4日（日）", "7.6 km", "1 回", ""]);
+  assert.deepEqual(say("2025-05-04", "en"), ["Sun, May 4, 2025", "7.6 km", "activities: 1", ""]);
+  assert.deepEqual(say("2025-05-05"), ["2025年5月5日（月）", "0.0 km（記録の無い日）", "", ""]);
+  assert.deepEqual(say("2025-05-06"), ["2025年5月6日（火）", "", "", "値なし"]);
+  assert.deepEqual(say("2025-05-07"), ["2025年5月7日（水）", "0.0 km", "2 回", ""]);
+  assert.deepEqual(say("2025-05-08"), ["2025年5月8日（木）", "", "", "出力の外です。"]);
+  // The days without a recorded activity, in the note of the legend.
+  assert.equal(view.calendarZeroDays(dist, [entry, entry]), 2);
+  assert.match(words(view.calendarZeroNote(2, "ja"), "ja"), /^記録の無い日（0）が 2 あります。/);
+});
+
+test("a calendar compares years by day, never an estimate of several records a day, and uses no month", () => {
+  assert.equal(view.compareModeFor({ kind: "obs" }, "calendar"), "rows");
+  for (const kind of ["sum", "count", "pace", "tw", "max", "day"]) {
+    assert.equal(view.compareModeFor({ kind }, "calendar"), "calendar", kind);
+  }
+  assert.equal(view.compareModeFor(null, "calendar"), "rows");
+  assert.equal(view.calendarItem({ kind: "obs" }), false);
+  assert.deepEqual(view.compareGrains(5, "calendar"), ["day"]);
+  assert.deepEqual(view.compareGrains(null, "calendar"), ["day"]);
+  assert.deepEqual(view.compareGrains(null), ["day", "week", "month"]);
+  assert.equal(view.firstCompareGrain("calendar", null), "day");
+  assert.deepEqual(view.compareGrainsFor("year", 5, "calendar"), ["day"]);
+  // By race day, by week whatever the way.
+  assert.deepEqual(view.compareGrainsFor("race", null, "calendar"), ["week"]);
+  assert.equal(view.compareGrainFor("race", "calendar", null), "week");
+  // The month that it uses: none for a calendar; the month remembered stays
+  // for the other ways.
+  assert.equal(view.compareMonthFor("calendar", 5), null);
+  assert.equal(view.compareMonthFor("rows", 5), 5);
+  // The settings remember a calendar, and no other form of it.
+  assert.equal(view.compareToOpen({ view_compare_mode: "calendar" }).mode, "calendar");
+  assert.equal(view.compareToOpen({ view_compare_mode: "Calendar" }).mode, "rows");
+});
+
+test("a comparison asks again where its way changes its grouping or the month that it uses", () => {
+  // One month by day, then a calendar: the same grouping, other days.
+  assert.equal(view.compareAsksAgain({ grain: "day", month: 5 }, { grain: "day", month: view.compareMonthFor("calendar", 5) }), true);
+  // Back from a calendar to the month remembered.
+  assert.equal(view.compareAsksAgain({ grain: "day", month: null }, { grain: "day", month: view.compareMonthFor("rows", 5) }), true);
+  // The whole year by day, then a calendar: the same numbers, drawn again.
+  assert.equal(view.compareAsksAgain({ grain: "day", month: null }, { grain: "day", month: view.compareMonthFor("calendar", null) }), false);
+  assert.equal(view.compareAsksAgain({ grain: "month", month: null }, { grain: "day", month: null }), true);
+  assert.equal(view.compareAsksAgain({ grain: "month", month: null }, { grain: "month", month: null }), false);
+});
+
+test("a calendar finds the day under the pointer by its column and its row, and colors the days of every year on one scale", () => {
+  // Squares 12 px apart: the column of a week and the row of a day.
+  assert.equal(view.calendarAt(2025, 17 * 12 + 5, 6 * 12 + 11, 12), "2025-05-04");
+  assert.equal(view.calendarAt(2025, 0, 2 * 12, 12), "2025-01-01");
+  assert.equal(view.calendarAt(2025, 0, 0, 12), null);
+  assert.equal(view.calendarAt(2025, -1, 30, 12), null);
+  assert.equal(view.calendarAt(2025, 30, 7 * 12, 12), null);
+  assert.equal(view.calendarAt(2025, 60 * 12, 30, 12), null);
+  // The values that take a color, as shown, of every year: not a day without
+  // a value nor one without a recorded activity; a recorded 0 is one.
+  const dist = ITEMS.find((item) => item.key === "dist");
+  const data = [
+    { values: [7600, 0, null, 0], counts: [1, 0, 0, 2] },
+    { values: [12000, 3000], counts: [1, 1] },
+  ];
+  const lines = [{ values: [7.6, 0, null, 0] }, { values: [12, 3] }];
+  assert.deepEqual(view.calendarValues(dist, data, lines), [7.6, 0, 12, 3]);
+  assert.deepEqual(view.calendarValues({ key: "sscore", kind: "day" }, [{ values: [0, 80], counts: [1, 1] }], [{ values: [0, 80] }]), [0, 80]);
+});
+
+test("a calendar is drawn only from an answer of whole years by day (Codex's review of the diff of N1)", () => {
+  assert.equal(view.calendarAnswer({ by: "year", grain: "day", month: null }), true);
+  // The answer of another way, while the new one is on its way.
+  assert.equal(view.calendarAnswer({ by: "year", grain: "month", month: null }), false);
+  assert.equal(view.calendarAnswer({ by: "year", grain: "day", month: 5 }), false);
+  assert.equal(view.calendarAnswer({ by: "race", grain: "week", month: null }), false);
+  assert.equal(view.calendarAnswer(null), false);
+});

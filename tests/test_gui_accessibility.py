@@ -804,7 +804,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
         compared = by_id(self.elements, "compare-announcer")
         self.assertEqual(compared.get("aria-live"), "polite")
         self.assertIn("visually-hidden", str(compared.get("class")).split())
-        self.assertEqual(self.script.count("setText(ui.compareAnnouncer,"), 1)
+        # From stage N1, a calendar says the day of its strip there too.
+        self.assertEqual(self.script.count("setText(ui.compareAnnouncer,"), 2)
+        self.assertIn('setText(ui.compareAnnouncer, t("view.compare.calendar_spoken", { day: describe(reading.day), value }));', self.script)
         speaking = [line.strip() for line in self.script.splitlines() if "moveCompareCross(" in line and ", true)" in line]
         self.assertEqual(speaking, [
             "moveCompareCross((state.compare.cursor ?? 0) + CROSS_KEYS[event.key], true);",
@@ -954,9 +956,10 @@ class GuiViewPageStructureTest(unittest.TestCase):
             "  const asked = state.compare.asked ?? null;\n  const before = asked?.by ?? null;",
             "  compare.asked = { by, races: races.map((race) => ({ id: race.id, day: race.day, name: race.name })) };",
             "state.compare.races = firstCompareRaces(raceChoices());\n        settleCompareGrain(state.compareAnswer?.by ?? null);",
-            # The grouping of a race day, whatever the way.
-            "const grain = compareGrainFor(compareByNow(), mode, state.compareMonth);",
-            "const grains = apart ? compareGrainsFor(compareByNow(), state.compareMonth) : null;",
+            # The grouping of a race day, whatever the way (from stage N1,
+            # with the month that the way uses: none for a calendar).
+            "const grain = compareGrainFor(compareByNow(), compareModeNow(), compareMonthNow());",
+            "const grains = apart ? compareGrainsFor(compareByNow(), compareMonthNow(), compareModeNow()) : null;",
             "ui.compareOffRace.hidden = !byRace;",
             # One row per race, by race day; a grouping that does not fit
             # what it compares by is set again at every request.
@@ -969,6 +972,122 @@ class GuiViewPageStructureTest(unittest.TestCase):
         ):
             with self.subTest(line=line):
                 self.assertIn(line, self.script)
+
+    def test_a_calendar_compares_years_by_day_in_strips_of_its_own(self) -> None:
+        # v2.2.0 N1, in the page and its script, which no test runs: the
+        # calendar is the fourth way to compare years, greyed for an estimate
+        # of several records a day (its reason behind an info button) and by
+        # race day (in the words of what is not used); its legend stands above
+        # its strips, and the table button goes back to it by its name. The
+        # script uses no month for it, asks again where the month that it uses
+        # changes, asks for the years by day and for their values as the years
+        # do (never the one period of a race: the checker's N1-1), draws its
+        # strips in their own size, and takes the keys, the pointer, a click,
+        # and the focus of a strip.
+        modes = by_id(self.elements, "compare-modes")
+        calendar = next(element for element in self.elements if element.get("data-compare-mode") == "calendar")
+        self.assertIs(calendar.parent, modes)
+        self.assertEqual((calendar.get("data-i18n"), calendar.get("aria-pressed")), ("view.compare.mode.calendar", "false"))
+        about = by_id(self.elements, "compare-calendar-about")
+        self.assertEqual((about.get("aria-controls"), about.get("aria-expanded"), about.get("data-i18n")), ("compare-calendar-about-text", "false", "view.compare.calendar_about"))
+        reason = next(element for element in self.elements if element.parent is by_id(self.elements, "compare-calendar-about-text"))
+        self.assertEqual(reason.get("data-i18n"), "view.compare.calendar_only")
+        for hidden in ("compare-calendar-about", "compare-calendar-about-text", "compare-off-calendar", "compare-legend", "compare-table-calendar"):
+            with self.subTest(hidden=hidden):
+                self.assertIn("hidden", by_id(self.elements, hidden).attributes)
+        self.assertEqual(by_id(self.elements, "compare-off-calendar").get("data-i18n"), "view.compare.off_calendar")
+        self.assertIs(by_id(self.elements, "compare-table-calendar").parent, by_id(self.elements, "compare-table"))
+        stack = by_id(self.elements, "compare-stack")
+        legend = by_id(self.elements, "compare-legend")
+        panels = by_id(self.elements, "compare-panels")
+        self.assertIs(legend.parent, stack)
+        self.assertLess(self.elements.index(legend), self.elements.index(panels))
+        for line in (
+            # Greyed for an estimate and by race day; the month greyed, and kept.
+            'button.disabled = (way === "cumulative" && !total) || (way === "calendar" && (!calendar || race));',
+            "ui.compareCalendarAbout.hidden = calendar;",
+            'ui.compareMonth.disabled = mode === "calendar";',
+            'return mode === "calendar" && compareByNow() === "race" ? "rows" : mode;',
+            "return compareMonthFor(compareModeNow(), state.compareMonth);",
+            'if (mode === "calendar" && compareByNow() === "race") {',
+            "if (!compareAsksAgain({ grain: state.compare.grain, month }, { grain, month: compareMonthNow() })) {",
+            "ui.compareOffCalendar.hidden = !calendar;",
+            'ui.compareTableCalendar.hidden = !compare.table || mode !== "calendar";',
+            'ui.compareLegend.hidden = !ready || compare.table || mode !== "calendar";',
+            # A strip a year, in its own size, its legend above them.
+            "compared = data.map((entry, index) => buildCompareCalendar(compareContext, entry, lines[index], name));",
+            'ui.compareAxis.hidden = compare.table || calendar;',
+            "if (entry.size !== calendarSize(context)) {",
+            'strip.setAttribute("aria-label", t("view.compare.calendar_label", { year: describe(entry.label), name }));',
+            'ui.comparePanels.querySelector(`[data-plot="${focused}"]`)?.focus({ preventScroll: true });',
+            # The keys, the pointer, a click, and the focus of a strip.
+            "calendarKeyDown(event);",
+            "calendarPointer(event);",
+            "calendarClick(event);",
+            "calendarFocus(event);",
+            "moveCompareCross(slot, true, year);",
+            # Drawn only from an answer of whole years by day, and the day that
+            # the keys or a click chose kept in view (Codex's review of the
+            # diff of N1).
+            '&& (mode !== "calendar" || calendarAnswer(state.compareAnswer));',
+            "renderCalendarCursor(entry, context, at, speak && entry.data[0].year === year);",
+            'entry.cursor.scrollIntoView({ block: "nearest", inline: "nearest" });',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+        # No test runs the page (Codex's review of the diff of N1): what each
+        # of its events does is held to the rules that the node tests run, by
+        # the same room of a strip that its squares are drawn in; the real
+        # page is checked by hand, and again for the release candidate.
+        bodies = {
+            name: re.search(rf"function {name}\((?:[^)]*)\) \{{(.*?)\n\}}", self.script, re.DOTALL)
+            for name in ("calendarSlotAt", "calendarPointer", "calendarClick", "calendarKeyDown", "calendarFocus", "drawCompareCalendar")
+        }
+        for name, lines in (
+            ("calendarSlotAt", (
+                "const day = calendarAt(entry.data[0].year, event.clientX - box.left - CALENDAR_LEFT, event.clientY - box.top - CALENDAR_TOP, entry.pitch);",
+                "if (day === null || day < state.view.first_day || day > state.view.last_day) {",
+                "return { year: entry.data[0].year, slot: daySlot(day) };",
+            )),
+            ("calendarPointer", ("const at = calendarSlotAt(event);", "moveCompareCross(at.slot, false);")),
+            ("calendarClick", ("const at = calendarSlotAt(event);", "moveCompareCross(at.slot, true, at.year);")),
+            ("calendarKeyDown", (
+                "const slot = calendarMove(state.compare.cursor ?? 0, year, event.key, state.view.first_day, state.view.last_day);",
+                "moveCompareCross(slot, true, year);",
+                "event.preventDefault();",
+            )),
+            ("calendarFocus", ("speakCalendar(compareContext, state.compare.cursor, entry.data[0].year);",)),
+            ("drawCompareCalendar", ("const x = CALENDAR_LEFT + place.week * pitch;", "const y = CALENDAR_TOP + place.day * pitch;")),
+        ):
+            body = bodies[name]
+            assert body is not None, name
+            for line in lines:
+                with self.subTest(function=name, line=line):
+                    self.assertIn(line, body.group(1))
+        request = re.search(r"async function requestCompare\(again = true\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert request is not None
+        body = request.group(1)
+        self.assertIn("const month = compareMonthNow();", body)
+        self.assertIn(": years.map((year) => seriesPayload([key], compareRange(year, month), grain));", body)
+        self.assertIn('callApi("/api/view/series", seriesPayload([key], "all", by === "race" ? "year" : compareValueGrain(month))),', body)
+        # The one period of a span only for a race.
+        self.assertEqual(body.count("RANGE_GRAIN"), 1)
+        self.assertIn("seriesPayload([key], raceRange(race.day, weeks), RANGE_GRAIN)", body)
+        # The colors of its steps are those of the years; a day without a
+        # recorded activity an outline of var(--sub) (6.36 : 1 and 7.5 : 1);
+        # in forced colors, one color by opacity; the strip takes the pointer.
+        view_css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        for step in range(1, 7):
+            with self.subTest(step=step):
+                self.assertRegex(view_css, rf"\.calendar-cell\.s{step} \{{\s*fill: var\(--y{step}\);\s*\}}")
+        self.assertRegex(view_css, r"\.calendar-cell\.zero \{\s*fill: none;\s*stroke: var\(--sub\);\s*stroke-width: 1\.5;\s*\}")
+        self.assertRegex(view_css, r"\.calendar svg \{[^}]*pointer-events: none;")
+        forced = view_css[view_css.index("@media (forced-colors: active) {") :]
+        self.assertRegex(forced, r"\.calendar-cell\.s6 \{\s*fill: CanvasText;\s*\}")
+        for step, opacity in ((1, "0.15"), (2, "0.3"), (3, "0.45"), (4, "0.6"), (5, "0.8")):
+            with self.subTest(forced=step):
+                self.assertRegex(forced, rf"\.calendar-cell\.s{step} \{{\s*fill-opacity: {opacity};\s*\}}")
+        self.assertRegex(forced, r"\.calendar-cell\.zero \{\s*stroke: CanvasText;\s*\}")
 
     def test_the_list_of_a_period_is_named_and_goes_back_to_its_chart(self) -> None:
         # Stage M3 of v2.2.0: a chart of the activities with values says by a
@@ -1076,7 +1195,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertIn("state.compareStop = { code: error.code, detail: error.detail };", body)
         # Its stop says what a comparison can change (view_flow.mjs, which the
         # node tests check).
-        self.assertIn("compareStopBox(state.compareStop.code, state.compareStop.detail, state.productVersion, state.compareMonth)", self.script)
+        self.assertIn("compareStopBox(state.compareStop.code, state.compareStop.detail, state.productVersion, compareMonthNow())", self.script)
         self.assertNotRegex(body, r"state\.(grain|period|range|items|answer) =")
         grain = re.search(r"function setGrain\(grain\) \{(.*?)\n\}", self.script, re.DOTALL)
         assert grain is not None

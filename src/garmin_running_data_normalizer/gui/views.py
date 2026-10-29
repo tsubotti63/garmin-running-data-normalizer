@@ -248,8 +248,9 @@ def grain_ok(grain: Any) -> bool:
 
 
 # How the view page compares one item by year (stage L1 of v2.2.0): the
-# years in rows, laid over one another, or added up from the first day.
-COMPARE_MODES = ("rows", "overlay", "cumulative")
+# years in rows, laid over one another, or added up from the first day; from
+# stage N1, also as a calendar of the days of each year.
+COMPARE_MODES = ("rows", "overlay", "cumulative", "calendar")
 
 
 def compare_mode_ok(mode: Any) -> bool:
