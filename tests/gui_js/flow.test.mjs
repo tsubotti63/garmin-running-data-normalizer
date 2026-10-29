@@ -200,9 +200,16 @@ test("the page tells what forgetting the settings did, and whether a file is lef
     notice: null,
     present: false,
   });
-  for (const answer of [{ forgotten: false, had_settings: true, notice: "SETTINGS_NOT_REMOVED" }, null, {}]) {
+  for (const answer of [{ forgotten: false, had_settings: true, notice: "SETTINGS_NOT_REMOVED" }, null, {}, { forgotten: false, notice: "OTHER" }]) {
     assert.deepEqual(flow.forgetOutcome(answer), { key: null, notice: "SETTINGS_NOT_REMOVED", present: true });
   }
+  // The settings were removed, but the marks of the view page were not
+  // (stage M1 of v2.2.0).
+  assert.deepEqual(flow.forgetOutcome({ forgotten: false, had_settings: true, notice: "MARKS_NOT_REMOVED" }), {
+    key: null,
+    notice: "MARKS_NOT_REMOVED",
+    present: true,
+  });
   // When the page starts, from the settings that the server read.
   assert.equal(flow.launchSettings({ settings: { launch: "first", present: true } }).present, true);
   assert.equal(flow.launchSettings({ settings: { launch: "later", store: "/s", present: false } }).present, false);

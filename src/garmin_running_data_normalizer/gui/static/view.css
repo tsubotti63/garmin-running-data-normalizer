@@ -464,6 +464,134 @@ button.small {
   display: none;
 }
 
+/* The window of the marks opens under the row above the panels, at its
+   right end. */
+.marks-pop {
+  top: 100%;
+  right: 0;
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  margin-top: 6px;
+  overflow: auto;
+  color: var(--text);
+}
+
+.marks-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 2px 0 6px;
+  color: var(--sub);
+  font-size: 0.8rem;
+}
+
+.marks-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.marks-notice {
+  margin: 4px 0 6px;
+}
+
+.marks-notice:empty {
+  display: none;
+}
+
+.marks-list {
+  max-height: 190px;
+  overflow: auto;
+}
+
+.marks-item {
+  display: grid;
+  grid-template-columns: 22px auto auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.marks-when {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.marks-kind {
+  color: var(--sub);
+  white-space: nowrap;
+}
+
+.marks-name {
+  overflow-wrap: anywhere;
+}
+
+.marks-ask {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.marks-ask p {
+  margin: 0;
+}
+
+.marks-none {
+  margin: 4px 0;
+  color: var(--sub);
+}
+
+.marks-form {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.marks-form-heading {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-weight: 700;
+}
+
+.marks-days,
+.marks-name-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.marks-form input,
+.marks-form select {
+  width: auto;
+  min-width: 0;
+}
+
+/* The fields keep their own widths in the grid of the form. */
+.marks-form > select,
+.marks-days,
+.marks-name-row {
+  justify-self: start;
+}
+
+.marks-name-row input {
+  width: 18em;
+  max-width: 100%;
+}
+
+.marks-problem {
+  grid-column: 1 / -1;
+}
+
+.marks-store {
+  margin: 8px 0 0;
+}
+
 /* The windows of the layouts open over the top of the shelf, or next to the
    folded shelf, from the box of the shelf and the panels, so that the
    scrolling shelf does not cut them. */
@@ -1588,6 +1716,59 @@ button.small {
   stroke-width: 1.5;
 }
 
+/* The marks of the person (stage M1 of v2.2.0): thin lines and light bands in
+   the colors of the text, never in a color of their own, told apart by the
+   form of their lines: a race a full line, shoes a dotted line, another mark
+   a dashed line, and an injury a line of dashes and dots. A span is a light
+   band whose edges are the line of its kind. Their names are on the top
+   chart, in the color of the text, with a ring of the surface. */
+.day-mark {
+  fill: none;
+  stroke: var(--sub);
+  stroke-width: 1.5;
+}
+
+.day-mark.race {
+  stroke: var(--text);
+}
+
+.day-mark.shoes {
+  stroke-width: 2;
+  stroke-dasharray: 0.1 4;
+  stroke-linecap: round;
+}
+
+.day-mark.other {
+  stroke-dasharray: 6 3;
+}
+
+.day-mark.injury {
+  stroke-dasharray: 8 3 1.5 3;
+}
+
+.day-band {
+  fill: var(--sub);
+  fill-opacity: 0.1;
+}
+
+.day-mark-name {
+  fill: var(--sub);
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.day-mark-name.race {
+  fill: var(--text);
+}
+
+.overview-day-mark {
+  stroke: var(--text);
+  stroke-width: 1.2;
+}
+
 .overview-dim {
   fill: var(--surface);
   fill-opacity: 0.7;
@@ -1616,6 +1797,24 @@ button.small {
   .coverage-run,
   .overview-marks {
     fill: CanvasText;
+  }
+
+  /* The marks of the person keep the forms of their lines (stage M1). */
+  .day-mark,
+  .day-mark.race,
+  .overview-day-mark {
+    stroke: CanvasText;
+  }
+
+  .day-band {
+    fill: GrayText;
+    fill-opacity: 0.3;
+  }
+
+  .day-mark-name,
+  .day-mark-name.race {
+    fill: CanvasText;
+    stroke: Canvas;
   }
 
   .chart-bar.c2 {

@@ -180,6 +180,11 @@ test("after the other tab forgot the settings, the page remembers none of them",
     // And how one item is compared by year (stage L1).
     view_compare_mode: "overlay",
     view_compare_month: 5,
+    // And the marks, whether they show, and what to tell of their file
+    // (stage M1).
+    view_marks: [{ id: "m-0000000a", kind: "race", name: "Made up", day: "2030-04-14", end: null }],
+    view_marks_shown: false,
+    marks_notice: "MARKS_NOT_WRITTEN",
   };
   assert.deepEqual(view.settingsAfterForget(later), { launch: "later", store: "/x", present: false });
   assert.equal(view.itemsRemembered(forgotten), false);
@@ -958,4 +963,72 @@ test("a stop of a comparison is that of the panels, with the grouping as the nex
   const may = view.compareStopBox("VIEW_ANSWER_TOO_LARGE", null, "2.2.0", 5);
   assert.deepEqual(may.lines.find((line) => line.key === "next.label").keyParams, { step: "view.compare.too_large_next_month" });
   assert.deepEqual(view.compareStopBox("OUTPUT_CHANGED", null, "2.2.0", 5), view.stopBox("OUTPUT_CHANGED", null, "2.2.0"));
+});
+
+// v2.2.0 M1: the marks of the person.
+const madeUp = (id, day, end = null, kind = "race", name = `Made-up ${id}`) => ({ id, kind, name, day, end });
+
+test("the page takes the marks, whether they show, and what to tell of their file from the settings", () => {
+  const marks = [madeUp("m-0000000a", "2030-04-14"), madeUp("m-0000000b", "2030-05-02", "2030-05-20", "injury")];
+  assert.deepEqual(view.marksToOpen({ view_marks: marks, view_marks_shown: false, marks_notice: "MARKS_UNREADABLE" }), {
+    marks,
+    shown: false,
+    notice: "MARKS_UNREADABLE",
+  });
+  // At first they show; a mark of another form, or a notice that the page
+  // does not know, is nothing.
+  assert.deepEqual(view.marksToOpen({}), { marks: [], shown: true, notice: null });
+  assert.deepEqual(view.marksToOpen(null), { marks: [], shown: true, notice: null });
+  const others = [null, "m", { id: 1 }, { ...marks[0], kind: "trip" }, { ...marks[0], end: 3 }, { ...marks[0], name: null }];
+  assert.deepEqual(view.marksToOpen({ view_marks: [...others, marks[0]], marks_notice: "SETTINGS_INVALID" }), { marks: [marks[0]], shown: true, notice: null });
+  assert.deepEqual(view.marksTaken({ marks }), []);
+  // The page changes no mark while their file is not used.
+  assert.deepEqual(view.MARKS_LOCKED, ["MARKS_UNREADABLE", "MARKS_NEWER"]);
+  assert.equal(view.MAX_MARKS, 200);
+  assert.deepEqual(view.MARK_KINDS, ["race", "injury", "shoes", "other"]);
+});
+
+test("a day of a mark is a date of the calendar from 1900, as the server checks it", () => {
+  // The days of the server: from 1 January 1900 to the end of years of four digits.
+  for (const day of ["1900-01-01", "2032-02-29", "2030-12-31", "9999-12-31"]) {
+    assert.equal(view.markDayOk(day), true, day);
+  }
+  for (const day of ["1899-12-31", "0099-01-01", "2030-02-29", "2030-02-30", "2030-13-01", "2030-1-01", " 2030-01-01", "10000-01-01", "", null, 20300101]) {
+    assert.equal(view.markDayOk(day), false, String(day));
+  }
+  assert.equal(view.markDaysProblem("2030-03-10", ""), null);
+  assert.equal(view.markDaysProblem("2030-03-10", "2030-03-10"), null);
+  assert.equal(view.markDaysProblem("2030-03-10", "2030-03-20"), null);
+  for (const [day, end] of [["2030-03-10", "2030-03-09"], ["", ""], ["2030-02-30", ""], ["2030-03-10", "2030-02-30"]]) {
+    assert.equal(view.markDaysProblem(day, end), "view.marks.error.day", `${day} ${end}`);
+  }
+});
+
+test("the charts say how many marks their days hold, and the top chart names ten of them", () => {
+  const marks = [madeUp("m-1", "2030-01-05"), madeUp("m-2", "2030-02-01", "2030-03-15", "injury"), madeUp("m-3", "2030-06-01")];
+  // A span counts where any of its days are shown.
+  assert.deepEqual(view.marksWithin(marks, "2030-03-01", "2030-05-31").map((mark) => mark.id), ["m-2"]);
+  assert.deepEqual(view.marksWithin(marks, "2030-01-05", "2030-01-05").map((mark) => mark.id), ["m-1"]);
+  assert.deepEqual(view.marksWithin(marks, "2030-07-01", "2030-12-31"), []);
+  const many = Array.from({ length: 12 }, (_, number) => madeUp(`m-${number}`, `2030-01-${String(number + 1).padStart(2, "0")}`));
+  const spoken = view.spokenMarks(many);
+  assert.equal(spoken.count, 12);
+  assert.equal(spoken.named.length, view.SPOKEN_MARKS);
+  assert.equal(view.SPOKEN_MARKS, 10);
+  assert.equal(spoken.more, 2);
+  assert.deepEqual(view.spokenMarks(marks), { count: 3, named: marks, more: 0 });
+  assert.deepEqual(view.markDays(marks[1], "ja"), { day: "2030年2月1日", end: "2030年3月15日" });
+  assert.deepEqual(view.markDays(marks[0], "en"), { day: "January 5, 2030", end: null });
+});
+
+test("every kind of mark, problem, and notice has words in both languages", () => {
+  for (const language of ["en", "ja"]) {
+    const messages = catalogs[language];
+    for (const key of [...Object.values(view.MARK_PROBLEM_KEYS), ...Object.values(view.MARKS_NOTICE_KEYS)]) {
+      assert.ok(messages[key]?.trim(), `${language} ${key}`);
+    }
+    for (const kind of view.MARK_KINDS) {
+      assert.ok(messages[`view.marks.kind.${kind}`]?.trim(), `${language} ${kind}`);
+    }
+  }
 });

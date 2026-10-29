@@ -16,7 +16,9 @@ place that the system keeps for each person's application data (stage B4c):
 Application Support in the Library of a Mac, LOCALAPPDATA on Windows, and the
 XDG state home elsewhere. Only ``settings_file`` names it, and the tests
 replace that function, so that no test reads or writes the settings of the
-person who runs them.
+person who runs them. From v2.2.0 (stage M1) the marks of the view page are
+another file in the same folder, which ``marks_file`` names from the place
+of the settings.
 """
 from __future__ import annotations
 
@@ -32,6 +34,8 @@ STORE_FOLDER_NAME = "snapshots"
 # This app's folder of settings and its one file (stage B4c).
 SETTINGS_FOLDER_NAME = "garmin-running-data-normalizer"
 SETTINGS_FILE_NAME = "gui-settings.json"
+# The marks of the view page, in a file of their own (stage M1 of v2.2.0).
+MARKS_FILE_NAME = "gui-marks.json"
 # Folders that cloud apps keep under these names, wherever they are.
 _CLOUD_FOLDER_NAMES = frozenset({"dropbox", "onedrive", "google drive", "icloud drive", "iclouddrive"})
 # OneDrive for work or school names its folder "OneDrive - <organization>".
@@ -99,6 +103,13 @@ def settings_file() -> Path:
     return settings_file_for(sys.platform, os.environ, home())
 
 
+def marks_file() -> Path:
+    """The file of the marks of the view page, in this app's folder of
+    settings (stage M1 of v2.2.0): it follows ``settings_file``, so that the
+    tests that replace that function keep the marks in their folder too."""
+    return settings_file().with_name(MARKS_FILE_NAME)
+
+
 def makeable_settings_folders(path: Path, platform: str = sys.platform) -> tuple[Path, ...]:
     """The folders above this app's folder of settings that may be made when
     they are missing (stage B4c): on systems other than a Mac and Windows,
@@ -164,6 +175,7 @@ def cloud_kind(path: Path, platform: str = sys.platform) -> str | None:
 
 __all__ = [
     "DEFAULT_FOLDER_NAME",
+    "MARKS_FILE_NAME",
     "SETTINGS_FILE_NAME",
     "SETTINGS_FOLDER_NAME",
     "STORE_FOLDER_NAME",
@@ -173,6 +185,7 @@ __all__ = [
     "home",
     "make_default_folder",
     "makeable_settings_folders",
+    "marks_file",
     "settings_file",
     "settings_file_for",
 ]

@@ -32,7 +32,8 @@ from garmin_running_data_normalizer.gui.outputs import (
     output_summary,
     support_bundle_path,
 )
-from garmin_running_data_normalizer.gui.settings import remember_run_at
+from garmin_running_data_normalizer.gui.marks import change_marks
+from garmin_running_data_normalizer.gui.settings import remember_run_at, write_marks
 from garmin_running_data_normalizer.run_all import run_all
 from garmin_running_data_normalizer.standalone import validate_standalone_handoff
 from tests.v1_3_outputs import as_release, as_v1_3
@@ -222,6 +223,19 @@ class SupportBundleTest(OutputTestCase):
                     self.assertNotIn(places.SETTINGS_FILE_NAME, name)
                     self.assertNotIn(store.name.encode("utf-8"), content)
                     self.assertNotIn(str(settings_path.parent).encode("utf-8"), content)
+
+    def test_the_bundle_holds_no_marks_of_the_view_page(self) -> None:
+        # Stage M1 of v2.2.0: the names of the marks are the person's own
+        # record, kept next to the settings; the bundle never holds them.
+        marks_path = places.marks_file()
+        name = "Made-up mark of this test"
+        self.assertIsNone(write_marks(marks_path, change_marks([], {"op": "add", "kind": "injury", "name": name, "day": "2030-05-02"})))
+        make_support_bundle(self.output)
+        with zipfile.ZipFile(self.root / "output-support-bundle.zip") as archive:
+            for member in archive.namelist():
+                with self.subTest(member=member):
+                    self.assertNotIn(places.MARKS_FILE_NAME, member)
+                    self.assertNotIn(name.encode("utf-8"), archive.read(member))
 
     def test_an_existing_bundle_is_never_replaced(self) -> None:
         make_support_bundle(self.output)

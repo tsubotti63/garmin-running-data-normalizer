@@ -286,6 +286,9 @@ class GuiCatalogTest(unittest.TestCase):
                 ("view.help.compare_text", "view.compare.month"),
                 ("view.help.compare_text", "view.panel.unbig"),
                 ("view.shelf.bars_types", "view.types.label"),
+                # v2.2.0 M1: a file of the marks that cannot be read is
+                # removed by forgetting the settings.
+                ("view.marks.notice.unreadable", "forget.button"),
             ):
                 with self.subTest(language=language, key=key):
                     self.assertIn(quote.format(catalog[named]), catalog[key])
@@ -418,6 +421,36 @@ class GuiMessageCoverageTest(unittest.TestCase):
             for key in [*keys.values(), "view.layouts.error.other"]:
                 with self.subTest(language=language, key=key):
                     self.assertTrue(key.startswith("view.layouts.error."))
+                    self.assertTrue(messages.get(key, "").strip())
+
+    def test_every_code_of_a_change_of_the_marks_has_words_where_it_was_asked(self) -> None:
+        # v2.2.0 M1: a change of the marks that the server refuses says why
+        # in the window of the marks; the page knows each code of
+        # gui/marks.py, and says for any other code that the marks could not
+        # be changed. What the page tells of the file of the marks has words
+        # too, apart from those of the settings.
+        codes = codes_in("gui/marks.py", r'\n(MARKS?_[A-Z_]+) = "\1"')
+        self.assertEqual(sorted(codes), ["MARKS_FULL", "MARK_DAY_INVALID", "MARK_NAME_INVALID", "MARK_NOT_FOUND"])
+        flow = (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8")
+        script = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        tables = {}
+        for name in ("MARK_PROBLEM_KEYS", "MARKS_NOTICE_KEYS"):
+            table = re.search(rf"export const {name} = \{{(.*?)\n\}};", flow, re.DOTALL)
+            assert table is not None
+            tables[name] = dict(re.findall(r'^\s+(\w+): "([^"]+)",$', table.group(1), re.MULTILINE))
+        self.assertEqual(sorted(tables["MARK_PROBLEM_KEYS"]), sorted(codes))
+        notices = codes_in("gui/settings.py", r'\n(MARKS_[A-Z_]+) = "\1"')
+        self.assertEqual(sorted(notices), ["MARKS_NEWER", "MARKS_NOT_REMOVED", "MARKS_NOT_WRITTEN", "MARKS_UNREADABLE"])
+        # The view page tells of its file; the normalization page, which
+        # forgets the settings, tells that the marks could not be removed.
+        self.assertEqual(sorted(tables["MARKS_NOTICE_KEYS"]), sorted(set(notices) - {"MARKS_NOT_REMOVED"}))
+        self.assertEqual(flow_table("SETTINGS_KEYS")["MARKS_NOT_REMOVED"], "settings.marks_not_removed")
+        self.assertIn('state.markProblem = MARK_PROBLEM_KEYS[error.code] ?? "view.marks.error.other";', script)
+        for language in LANGUAGES:
+            messages = load_catalog(language)
+            for key in [*tables["MARK_PROBLEM_KEYS"].values(), *tables["MARKS_NOTICE_KEYS"].values(), "view.marks.error.other"]:
+                with self.subTest(language=language, key=key):
+                    self.assertTrue(key.startswith(("view.marks.error.", "view.marks.notice.")))
                     self.assertTrue(messages.get(key, "").strip())
 
     def test_every_error_message_has_a_next_step(self) -> None:

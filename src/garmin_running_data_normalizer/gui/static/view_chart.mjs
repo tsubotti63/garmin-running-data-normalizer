@@ -449,3 +449,83 @@ export function overviewShapes({ values, periods, width, height, total = false, 
   const to = scale.x(end + 1);
   return { scale, base, marks, total, frame: { from, to }, first, last };
 }
+
+// The marks of the person on a chart (stage M1 of v2.2.0), from the day
+// ``start`` to the day ``end`` (day numbers, both shown) between ``left`` and
+// ``right``: a mark of one day is a line in the middle of its day, where the
+// value of a day is; a span is a band from the start of its first day (x) to
+// the end of its last (``band.end``), cut where it goes on beyond the days
+// shown, so that only its own start and end have an edge. A band of a few
+// days on a long period is drawn 2 px wide (from ``band.from``), inside the
+// chart, but its edges stay at its days. The marks outside the days shown are
+// left out.
+export function markShapes(marks, start, end, left, right) {
+  const scale = timeScale(start, end, left, right);
+  const shapes = [];
+  for (const mark of marks) {
+    const first = dayNumber(mark.day);
+    const last = mark.end ? dayNumber(mark.end) : first;
+    if (!Number.isFinite(first) || !Number.isFinite(last) || last < start || first > end) {
+      continue;
+    }
+    if (!mark.end) {
+      shapes.push({ mark, x: scale.x(first + 0.5), band: null });
+      continue;
+    }
+    const x = scale.x(Math.max(first, start));
+    const to = scale.x(Math.min(last, end) + 1);
+    const width = Math.max(2, to - x);
+    shapes.push({ mark, x, band: { from: Math.max(left, Math.min(x, right - width)), width, end: to, starts: first >= start, ends: last <= end } });
+  }
+  return shapes;
+}
+
+// The names of the marks on the top chart, from left to right, each just
+// after its line or the start of its band: a name that would meet the name
+// before it joins it, and a group of more than one mark shows how many it
+// holds (``crowded(n)``) in place of the names. ``measure`` gives the width
+// of a text; the names stay between ``left`` and ``right``, and one longer
+// than that is cut, with "…".
+export function markLabels(shapes, measure, crowded, left, right, gap = 6) {
+  const groups = [];
+  const join = (group, marks) => {
+    group.marks.push(...marks);
+    group.text = crowded(group.marks.length);
+    group.width = measure(group.text);
+  };
+  for (const shape of [...shapes].sort((a, b) => a.x - b.x)) {
+    const x = shape.x + 4;
+    const last = groups[groups.length - 1];
+    if (last !== undefined && x < last.x + last.width + gap) {
+      join(last, [shape.mark]);
+    } else {
+      groups.push({ x, marks: [shape.mark], text: shape.mark.name, width: measure(shape.mark.name) });
+    }
+  }
+  // A name that would go past the right end ends there, and joins the group
+  // before it where they meet then.
+  for (let index = groups.length - 1; index >= 0; index -= 1) {
+    const group = groups[index];
+    if (group.x + group.width > right) {
+      group.x = Math.max(left, right - group.width);
+    }
+    const before = groups[index - 1];
+    if (before !== undefined && group.x < before.x + before.width + gap) {
+      join(before, group.marks);
+      groups.splice(index, 1);
+    }
+  }
+  const room = right - left;
+  for (const group of groups) {
+    if (group.width > room) {
+      // By characters, not by halves of a pair of UTF-16 units.
+      const characters = Array.from(group.text);
+      while (characters.length > 1 && measure(`${characters.join("")}…`) > room) {
+        characters.pop();
+      }
+      group.text = `${characters.join("")}…`;
+      group.x = left;
+    }
+  }
+  return groups.map(({ x, marks, text }) => ({ x, marks, text }));
+}

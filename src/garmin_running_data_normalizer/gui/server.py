@@ -50,10 +50,12 @@ from .runs import (
     output_name_problem,
 )
 from .layouts import BUILT_IN_IDS, USER_LAYOUT_ID, LayoutChangeError, built_in_answer
+from .marks import MarkChangeError
 from .settings import (
     SHELF_STATES,
     THEMES,
     change_layouts,
+    change_marks,
     forget_settings,
     launch_settings,
     recent_outputs,
@@ -169,6 +171,7 @@ API_ROUTES = {
     "/api/settings/theme": "_api_settings_theme",
     "/api/settings/view": "_api_settings_view",
     "/api/settings/layouts": "_api_settings_layouts",
+    "/api/settings/marks": "_api_settings_marks",
     "/api/settings/forget": "_api_settings_forget",
     # The view page (stage G3b): an output opened, and its numbers.
     "/api/view/open": "_api_view_open",
@@ -751,8 +754,9 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         # v2.2.0 (stage K1), when the page gives them, the layout used last
         # (None for none), the period, the grouping, and the activity types
         # (None for those counted at first), by the rules of a request of the
-        # numbers; and from stage L1, how one item is compared by year and in
-        # which month (None for rows and for the whole year).
+        # numbers; from stage L1, how one item is compared by year and in
+        # which month (None for rows and for the whole year); and from stage
+        # M1, whether the marks show.
         items, shelf = payload.get("items"), payload.get("shelf")
         if (
             not isinstance(items, list)
@@ -785,6 +789,10 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
                 if payload[name] is not None and not ok(payload[name]):
                     raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
                 view[name] = payload[name]
+        if "marks_shown" in payload:
+            if not isinstance(payload["marks_shown"], bool):
+                raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+            view["marks_shown"] = payload["marks_shown"]
         notice = remember_view(items, shelf, view)
         return {"remembered": notice is None, "notice": notice}
 
@@ -803,6 +811,17 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             "hidden": layouts["hidden"],
             "layout": layouts["current"],
         }
+
+    def _api_settings_marks(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # One change of the marks of the view page (stage M1 of v2.2.0): the
+        # marks after it; or as they were when they were not written, and
+        # none when their file is not used (it is never written over); a
+        # change that cannot be made answers its code.
+        try:
+            marks, notice = change_marks(payload)
+        except MarkChangeError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
+        return {"remembered": notice is None, "notice": notice, "marks": marks}
 
     def _api_view_open(self, payload: dict[str, Any]) -> dict[str, Any]:
         # The view page opens an output as an action of the fourth box

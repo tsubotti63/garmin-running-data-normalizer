@@ -308,6 +308,9 @@ class GuiApiRequestTest(GuiServerTestCase):
                     "view_types": None,
                     "view_compare_mode": None,
                     "view_compare_month": None,
+                    "view_marks_shown": None,
+                    "view_marks": [],
+                    "marks_notice": None,
                     "timezone": None,
                     "notice": None,
                     "present": False,
@@ -706,6 +709,8 @@ class GuiPageScriptTest(unittest.TestCase):
         assert heard is not None
         self.assertIn("state.settings = settingsAfterForget(state.settings);", heard.group(1))
         self.assertIn("state.forgotten = true;", heard.group(1))
+        # From v2.2.0 (stage M1), the marks are gone with their file.
+        self.assertIn("takeMarks([]);", heard.group(1))
         remember = re.search(r"function rememberItems\(byPerson = false\) \{(.*?)\n\}", source, re.DOTALL)
         assert remember is not None
         self.assertIn("if (byPerson) {\n    state.forgotten = false;\n  }", remember.group(1))
@@ -719,10 +724,10 @@ class GuiPageScriptTest(unittest.TestCase):
         # From v2.2.0 (stage K2), the period, the grouping, the activity
         # types, and a drag of the overview are changes of the person too: the
         # items (also by a layout) and the shelf (2), the period (two in
-        # setPeriod), and these; and from stage L1 the way and the month of a
-        # comparison by year.
-        self.assertEqual(source.count("rememberItems(true);"), 12)
-        for name in ("changeItems", "setPeriod", "shiftPeriod", "rangeTyped", "setGrain", "changeTypes", "overviewUp", "chooseCompareMode", "chooseCompareMonth"):
+        # setPeriod), and these; from stage L1 the way and the month of a
+        # comparison by year; and from stage M1 whether the marks show.
+        self.assertEqual(source.count("rememberItems(true);"), 13)
+        for name in ("changeItems", "setPeriod", "shiftPeriod", "rangeTyped", "setGrain", "changeTypes", "overviewUp", "chooseCompareMode", "chooseCompareMonth", "changeMarksShown"):
             with self.subTest(name=name):
                 body = re.search(rf"\nfunction {name}\([^)]*\) \{{(.*?)\n\}}", source, re.DOTALL)
                 assert body is not None

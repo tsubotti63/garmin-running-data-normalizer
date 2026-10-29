@@ -37,6 +37,17 @@ and activity types, and the timezone of the last run that made its output. A
 value of another form of these keys is left out alone, and of the layouts,
 the one layout. Settings whose file would be over 64 KiB are not written: the
 file before stays, and the page is told that they were not remembered.
+
+From stage M1 the marks of the view page (gui/marks.py) are a file of their
+own in the same folder, read and written as the settings are and under the
+same lock, with one difference: a file of the marks that cannot be read, as
+one of a newer version, is not used and never written over, as the marks
+are the person's own record, which the file may still hold when it is read
+again. Forgetting the settings removes both files, and the page tells what
+was left when one of them cannot be removed. As for the settings, the lock
+holds for the threads of one server only: two GUIs that change the marks at
+the same moment can keep only one of the two changes (each change reads the
+file again first, so that changes one after another are all kept).
 """
 from __future__ import annotations
 
@@ -56,6 +67,8 @@ from ..view.series import MAX_PANELS, MAX_TYPES, type_name_ok
 from . import places
 from .layouts import BUILT_IN_IDS, kept_hidden, kept_layouts
 from .layouts import change_layouts as _changed_layouts
+from .marks import MARKS_FORMAT, MARKS_FORMAT_PREFIX, MARKS_FORMAT_VERSION, kept_marks
+from .marks import change_marks as _changed_marks
 from .views import compare_mode_ok, compare_month_ok, grain_ok, period_choice
 
 SETTINGS_FORMAT = "garmin-running-data-normalizer-gui-settings-v2"
@@ -81,6 +94,15 @@ SETTINGS_INVALID = "SETTINGS_INVALID"
 SETTINGS_NEWER = "SETTINGS_NEWER"
 SETTINGS_NOT_WRITTEN = "SETTINGS_NOT_WRITTEN"
 SETTINGS_NOT_REMOVED = "SETTINGS_NOT_REMOVED"
+# What to tell of the file of the marks (stage M1 of v2.2.0), apart from the
+# settings.
+MARKS_UNREADABLE = "MARKS_UNREADABLE"
+MARKS_NEWER = "MARKS_NEWER"
+MARKS_NOT_WRITTEN = "MARKS_NOT_WRITTEN"
+# Forgetting removed the file of the settings, but not that of the marks.
+MARKS_NOT_REMOVED = "MARKS_NOT_REMOVED"
+# What reading a file of this app found.
+_NO_FILE, _READ, _UNREADABLE = "none", "read", "unreadable"
 
 
 def _place(value: Any) -> str | None:
@@ -99,9 +121,9 @@ def _place(value: Any) -> str | None:
     return value if Path(value).is_absolute() else None
 
 
-def _version(value: Any) -> int | None:
-    if isinstance(value, str) and value.startswith(_FORMAT_PREFIX):
-        number = value[len(_FORMAT_PREFIX):]
+def _version(value: Any, prefix: str = _FORMAT_PREFIX) -> int | None:
+    if isinstance(value, str) and value.startswith(prefix):
+        number = value[len(prefix):]
         if number.isascii() and number.isdigit():
             return int(number)
     return None
@@ -178,6 +200,9 @@ def _view_values(data: dict[str, Any]) -> dict[str, Any]:
         values["view_compare_mode"] = data["view_compare_mode"]
     if compare_month_ok(data.get("view_compare_month")):
         values["view_compare_month"] = data["view_compare_month"]
+    # Whether the marks show (stage M1).
+    if isinstance(data.get("view_marks_shown"), bool):
+        values["view_marks_shown"] = data["view_marks_shown"]
     return values
 
 
@@ -224,24 +249,24 @@ def _read_all(descriptor: int) -> bytes | None:
             return None
 
 
-def read_settings(path: Path) -> tuple[dict[str, Any], str | None]:
-    """The settings at ``path``, and what to tell of the file: nothing when
-    there is none or it is used, SETTINGS_INVALID for a file that cannot be
-    read or is not of this form, and SETTINGS_NEWER for a file of a newer
-    version. A file that is not used gives no settings."""
+def _read_json(path: Path) -> tuple[str, Any]:
+    """The JSON of a file of this app at ``path``: (_NO_FILE, None) when there
+    is none, (_READ, data) when it is read, and (_UNREADABLE, None) for a link,
+    a folder, a file over 64 KiB, or one that is not UTF-8 JSON of a sensible
+    depth."""
     try:
         before = os.lstat(path)
     except FileNotFoundError:
-        return {}, None
+        return _NO_FILE, None
     except OSError:
-        return {}, SETTINGS_INVALID
+        return _UNREADABLE, None
     if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_SETTINGS_BYTES:
-        return {}, SETTINGS_INVALID
+        return _UNREADABLE, None
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
     try:
         descriptor = os.open(path, flags)
     except OSError:
-        return {}, SETTINGS_INVALID
+        return _UNREADABLE, None
     try:
         content = _read_all(descriptor)
     except OSError:
@@ -249,11 +274,24 @@ def read_settings(path: Path) -> tuple[dict[str, Any], str | None]:
     finally:
         os.close(descriptor)
     if content is None:
-        return {}, SETTINGS_INVALID
+        return _UNREADABLE, None
     try:
         data = json.loads(content.decode("utf-8"))
         check_json_depth(data)
     except (UnicodeDecodeError, ValueError, RecursionError):
+        return _UNREADABLE, None
+    return _READ, data
+
+
+def read_settings(path: Path) -> tuple[dict[str, Any], str | None]:
+    """The settings at ``path``, and what to tell of the file: nothing when
+    there is none or it is used, SETTINGS_INVALID for a file that cannot be
+    read or is not of this form, and SETTINGS_NEWER for a file of a newer
+    version. A file that is not used gives no settings."""
+    found, data = _read_json(path)
+    if found == _NO_FILE:
+        return {}, None
+    if found == _UNREADABLE:
         return {}, SETTINGS_INVALID
     version = _version(data.get("format")) if isinstance(data, dict) else None
     if version is not None and version > _FORMAT_VERSION:
@@ -293,6 +331,14 @@ def write_settings(path: Path, values: dict[str, Any], makeable: tuple[Path, ...
     # before stays.
     if len(content) > MAX_SETTINGS_BYTES:
         return SETTINGS_NOT_WRITTEN
+    return None if _write_content(path, content, makeable) else SETTINGS_NOT_WRITTEN
+
+
+def _write_content(path: Path, content: bytes, makeable: tuple[Path, ...]) -> bool:
+    """Write ``content`` as the file at ``path``, whole, through a temporary
+    file in the same folder: True when it is written. This app's folder is
+    made when it is missing, and the folders of ``makeable`` above it; no
+    other folder is made."""
     folder = path.parent
     temporary = folder / f".{path.name}.{os.getpid()}.{secrets.token_hex(4)}.tmp"
     written = False
@@ -319,8 +365,41 @@ def write_settings(path: Path, values: dict[str, Any], makeable: tuple[Path, ...
                 os.unlink(temporary)
             except OSError:
                 pass
-        return SETTINGS_NOT_WRITTEN
-    return None
+        return False
+    return True
+
+
+def read_marks(path: Path) -> tuple[list[dict[str, Any]], str | None]:
+    """The marks at ``path`` (stage M1 of v2.2.0), and what to tell of the
+    file: nothing when there is none or it is used, MARKS_UNREADABLE for a
+    file that cannot be read or is not of this form, and MARKS_NEWER for a
+    file of a newer version. A file that is not used gives no marks, and is
+    never written over."""
+    found, data = _read_json(path)
+    if found == _NO_FILE:
+        return [], None
+    if found == _UNREADABLE or not isinstance(data, dict):
+        return [], MARKS_UNREADABLE
+    version = _version(data.get("format"), MARKS_FORMAT_PREFIX)
+    if version is not None and version > MARKS_FORMAT_VERSION:
+        return [], MARKS_NEWER
+    marks = kept_marks(data.get("marks")) if version == MARKS_FORMAT_VERSION else None
+    return ([], MARKS_UNREADABLE) if marks is None else (marks, None)
+
+
+def write_marks(path: Path, marks: list[dict[str, Any]], makeable: tuple[Path, ...] = ()) -> str | None:
+    """Write ``marks`` as the file of the marks at ``path``, whole, as the
+    settings are written: None when they are written, or MARKS_NOT_WRITTEN,
+    also for marks whose file would be over 64 KiB (the file before stays)."""
+    kept = kept_marks(marks)
+    if kept is None:
+        return MARKS_NOT_WRITTEN
+    content = (
+        json.dumps({"format": MARKS_FORMAT, "marks": kept}, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    if len(content) > MAX_SETTINGS_BYTES:
+        return MARKS_NOT_WRITTEN
+    return None if _write_content(path, content, makeable) else MARKS_NOT_WRITTEN
 
 
 def settings_present(path: Path) -> bool:
@@ -336,31 +415,42 @@ def settings_present(path: Path) -> bool:
     return True
 
 
-def remove_settings(path: Path) -> str | None:
-    """Forget the settings: remove the file at ``path`` (a link there is
-    removed, not what it points to) and this app's folder when nothing else
-    is in it. None when there is no file now, or SETTINGS_NOT_REMOVED."""
+def _remove_file(path: Path) -> bool:
+    """Remove the file at ``path`` (a link there is removed, not what it
+    points to), without the lock: True when no file is there now."""
+    try:
+        status = os.lstat(path)
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    if stat.S_ISDIR(status.st_mode):
+        return False
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        return False
+    return True
+
+
+def remove_settings(path: Path, others: tuple[Path, ...] = ()) -> str | None:
+    """Forget the settings: remove the file at ``path`` and those of
+    ``others`` in the same folder (the marks, from stage M1 of v2.2.0), each
+    tried even when another cannot be removed, and this app's folder when
+    nothing else is in it. None when no file is there now,
+    SETTINGS_NOT_REMOVED when the file of the settings is left, and
+    MARKS_NOT_REMOVED when only another is."""
     with _CHANGE_LOCK:
-        try:
-            status = os.lstat(path)
-        except FileNotFoundError:
-            status = None
-        except OSError:
-            return SETTINGS_NOT_REMOVED
-        if status is not None:
-            if stat.S_ISDIR(status.st_mode):
-                return SETTINGS_NOT_REMOVED
-            try:
-                os.unlink(path)
-            except FileNotFoundError:
-                pass
-            except OSError:
-                return SETTINGS_NOT_REMOVED
+        removed = [_remove_file(place) for place in (path, *others)]
         try:
             os.rmdir(path.parent)
         except OSError:
             pass
-        return None
+        if not removed[0]:
+            return SETTINGS_NOT_REMOVED
+        return None if all(removed) else MARKS_NOT_REMOVED
 
 
 def remember_run_at(
@@ -422,6 +512,8 @@ VIEW_KEYS = {
     # How one item is compared by year, and in which month (stage L1).
     "compare_mode": "view_compare_mode",
     "compare_month": "view_compare_month",
+    # Whether the marks show (stage M1).
+    "marks_shown": "view_marks_shown",
 }
 
 
@@ -477,12 +569,38 @@ def change_layouts_at(
         return (after, None) if notice is None else (before, notice)
 
 
-def launch_answer(values: dict[str, Any], notice: str | None, *, present: bool) -> dict[str, Any]:
+def change_marks_at(
+    path: Path, change: Any, makeable: tuple[Path, ...] = ()
+) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """Change the marks once (stage M1 of v2.2.0): read the file, change, and
+    write it under the lock of the settings. The marks after the change and
+    None when they are written; the marks as they were and MARKS_NOT_WRITTEN
+    when they are not; and None and MARKS_UNREADABLE or MARKS_NEWER for a file
+    that is not used, which is never written over. A change that cannot be
+    made raises marks.MarkChangeError, and nothing is written."""
+    with _CHANGE_LOCK:
+        before, notice = read_marks(path)
+        if notice is not None:
+            return None, notice
+        after = _changed_marks(before, change)
+        notice = write_marks(path, after, makeable)
+        return (after, None) if notice is None else (before, notice)
+
+
+def launch_answer(
+    values: dict[str, Any],
+    notice: str | None,
+    *,
+    present: bool,
+    marks: list[dict[str, Any]] | None = None,
+    marks_notice: str | None = None,
+) -> dict[str, Any]:
     """What the page takes from the settings when it starts: a later launch
     when a place is remembered (the tips alone do not make one), the places,
     the tips, the colors (stage G3a), the items and the shelf of the view page
-    (stage G3b), what to tell of the file, and whether there is a file to
-    forget (stage C1)."""
+    (stage G3b), what to tell of the file, whether there is a file to forget
+    (stage C1), and from stage M1 of v2.2.0 the marks and what to tell of
+    their file."""
     store = values.get("store")
     parent = values.get("output_parent")
     return {
@@ -502,6 +620,9 @@ def launch_answer(values: dict[str, Any], notice: str | None, *, present: bool) 
         "view_types": values.get("view_types"),
         "view_compare_mode": values.get("view_compare_mode"),
         "view_compare_month": values.get("view_compare_month"),
+        "view_marks_shown": values.get("view_marks_shown"),
+        "view_marks": list(marks or []),
+        "marks_notice": marks_notice,
         "timezone": values.get("timezone"),
         "notice": notice,
         "present": present,
@@ -516,7 +637,11 @@ def _target() -> tuple[Path, tuple[Path, ...]]:
 
 def launch_settings() -> dict[str, Any]:
     path, _makeable = _target()
-    return launch_answer(*read_settings(path), present=settings_present(path))
+    marks_path = places.marks_file()
+    values, notice = read_settings(path)
+    marks, marks_notice = read_marks(marks_path)
+    present = settings_present(path) or settings_present(marks_path)
+    return launch_answer(values, notice, present=present, marks=marks, marks_notice=marks_notice)
 
 
 def launch_theme() -> str | None:
@@ -559,15 +684,25 @@ def change_layouts(change: Any) -> tuple[dict[str, Any], str | None]:
     return change_layouts_at(path, change, makeable)
 
 
+def change_marks(change: Any) -> tuple[list[dict[str, Any]] | None, str | None]:
+    _path, makeable = _target()
+    return change_marks_at(places.marks_file(), change, makeable)
+
+
 def forget_settings() -> tuple[str | None, bool]:
-    """Forget the settings: what to tell (None when no file is left), and
-    whether there was anything to forget (stage C1)."""
+    """Forget the settings and the marks: what to tell (None when no file is
+    left), and whether there was anything to forget (stage C1)."""
     path, _makeable = _target()
-    present = settings_present(path)
-    return remove_settings(path), present
+    marks_path = places.marks_file()
+    present = settings_present(path) or settings_present(marks_path)
+    return remove_settings(path, (marks_path,)), present
 
 
 __all__ = [
+    "MARKS_NEWER",
+    "MARKS_NOT_REMOVED",
+    "MARKS_NOT_WRITTEN",
+    "MARKS_UNREADABLE",
     "MAX_PLACE_LENGTH",
     "MAX_RECENT_OUTPUTS",
     "MAX_SETTINGS_BYTES",
@@ -581,10 +716,13 @@ __all__ = [
     "VIEW_KEYS",
     "change_layouts",
     "change_layouts_at",
+    "change_marks",
+    "change_marks_at",
     "forget_settings",
     "launch_answer",
     "launch_settings",
     "launch_theme",
+    "read_marks",
     "read_settings",
     "recent_outputs",
     "remember_hints",
@@ -599,5 +737,6 @@ __all__ = [
     "settings_present",
     "timezone_kept",
     "types_kept",
+    "write_marks",
     "write_settings",
 ]
