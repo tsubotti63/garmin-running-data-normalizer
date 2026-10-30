@@ -2285,3 +2285,138 @@ button.small {
     stroke: Highlight;
   }
 }
+
+/* The menu of the other views in the row above the panels (stage O1 of
+   v2.2.0): a button and its menu, which opens below it at its right. */
+.other-views {
+  position: relative;
+}
+
+.other-views > button svg {
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.other-menu {
+  top: 100%;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 11em;
+  margin-top: 4px;
+  padding: 4px;
+}
+
+.other-menu button {
+  justify-content: flex-start;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.other-menu button:hover,
+.other-menu button:focus-visible {
+  background: var(--accent-soft);
+}
+
+/* Two items plotted against each other (stage O1 of v2.2.0): one chart in
+   the place of the panels, a point an activity in the first color of the
+   page with a ring of the surface where points meet, and the point chosen
+   framed in the color of what is chosen now (the sample of OP0). */
+.plot-stack {
+  min-height: 220px;
+}
+
+.plot-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.plot-body .plot-view {
+  border-bottom: 0;
+}
+
+.plot-body.waiting {
+  opacity: 0.55;
+}
+
+/* The reading of the point chosen wraps at the right of the head, which
+   keeps the room of one line; the chart is drawn again in the room that a
+   reading of two lines leaves (Codex's review of the diff of O1). */
+.plot-head {
+  align-items: flex-start;
+  min-height: calc(0.86rem * 1.35 + 6px);
+}
+
+.plot-head .plot-read {
+  max-width: 100%;
+  white-space: normal;
+  text-align: right;
+}
+
+.plot-points {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 0 12px;
+  border-radius: 4px;
+  cursor: crosshair;
+}
+
+.plot-points svg {
+  display: block;
+  overflow: visible;
+  /* The chart takes the pointer itself, as a .plot does. */
+  pointer-events: none;
+}
+
+.plot-dot {
+  fill: var(--d1);
+  stroke: var(--surface);
+  stroke-width: 1;
+}
+
+.plot-dot.plot-chosen {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.plot-axis {
+  fill: var(--text);
+  font-weight: 600;
+}
+
+.plot-read .plot-same {
+  color: var(--muted);
+}
+
+.plot-none {
+  margin: 12px;
+}
+
+.plot-table {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.plot-caveat {
+  color: var(--sub);
+}
+
+@media (forced-colors: active) {
+  .plot-dot {
+    fill: CanvasText;
+    stroke: Canvas;
+  }
+
+  .plot-dot.plot-chosen {
+    fill: Highlight;
+    stroke: CanvasText;
+  }
+}

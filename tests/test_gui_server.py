@@ -346,6 +346,7 @@ class GuiApiRequestTest(GuiServerTestCase):
                     "view_compare_by": None,
                     "view_compare_weeks": None,
                     "view_marks_shown": None,
+                    "view_plot": None,
                     "view_marks": [],
                     "marks_notice": None,
                     "timezone": None,
@@ -762,10 +763,11 @@ class GuiPageScriptTest(unittest.TestCase):
         # types, and a drag of the overview are changes of the person too: the
         # items (also by a layout) and the shelf (2), the period (two in
         # setPeriod), and these; from stage L1 the way and the month of a
-        # comparison by year; from stage M1 whether the marks show; and from
-        # stage M2 what a comparison compares by and its weeks.
-        self.assertEqual(source.count("rememberItems(true);"), 15)
-        for name in ("changeItems", "setPeriod", "shiftPeriod", "rangeTyped", "setGrain", "changeTypes", "overviewUp", "chooseCompareMode", "chooseCompareMonth", "changeMarksShown"):
+        # comparison by year; from stage M1 whether the marks show; from
+        # stage M2 what a comparison compares by and its weeks; and from stage
+        # O1 the two items plotted against each other.
+        self.assertEqual(source.count("rememberItems(true);"), 16)
+        for name in ("changeItems", "setPeriod", "shiftPeriod", "rangeTyped", "setGrain", "changeTypes", "overviewUp", "chooseCompareMode", "chooseCompareMonth", "changeMarksShown", "choosePlotItem"):
             with self.subTest(name=name):
                 body = re.search(rf"\nfunction {name}\([^)]*\) \{{(.*?)\n\}}", source, re.DOTALL)
                 assert body is not None

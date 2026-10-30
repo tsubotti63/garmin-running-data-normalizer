@@ -666,8 +666,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
         fields = [element for element in self.elements if element.tag in {"input", "select", "textarea"}]
         # From v2.2.0 L1, the item, the month, and the line of a comparison;
         # from M1, whether the marks show, and the date, the last day, the
-        # kind, and the name of a mark; from M2, the weeks before a race day.
-        self.assertEqual(len(fields), 20)
+        # kind, and the name of a mark; from M2, the weeks before a race day;
+        # from O1, the two items plotted against each other.
+        self.assertEqual(len(fields), 22)
         for field in fields:
             with self.subTest(field=field.get("id")):
                 self.assertTrue(field.get("id") in labelled or field.get("aria-label") or field.get("aria-labelledby"))
@@ -1138,6 +1139,16 @@ class GuiViewPageStructureTest(unittest.TestCase):
         ):
             with self.subTest(line=line):
                 self.assertIn(line, self.script)
+        # The table of the list and that of the points (stage O1 of v2.2.0)
+        # each hide the arrow of their order and name their rows: held to
+        # the body of each, as one could keep the lines of the other (the
+        # partial guard of O1).
+        for name in ("buildListTable", "buildPlotTable"):
+            body = re.search(rf"function {name}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
+            assert body is not None
+            for line in ('arrow.setAttribute("aria-hidden", "true");', 'cell.scope = "row";'):
+                with self.subTest(table=name, line=line):
+                    self.assertIn(line, body.group(1))
         # The heading takes the focus by the keyboard only: a click keeps it
         # on the chart, whose arrow keys move the cross line.
         self.assertIn("openList(event.target.dataset.key, state.cursor ?? (state.answer?.periods.length ?? 1) - 1, true);", self.script)
@@ -1150,6 +1161,124 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # A head of a column breaks between its words only.
         self.assertRegex(view_css, r"\.list-sort \{[^}]*overflow-wrap: normal;")
 
+    def test_two_items_are_plotted_in_the_place_of_the_panels(self) -> None:
+        # v2.2.0 O1, in the page and its script, which no test runs: the menu
+        # of the other views in the row above the panels takes the keys of a
+        # menu also with one item (the checker's review of the plan of O1);
+        # the points take the place of the panels as a comparison does, with
+        # the period and the activity types of the page, which then ask for
+        # the points and leave the panels to ask again on the way back
+        # (Codex's review of the plan of O1); the words that no relation is
+        # shown always show under them; an item of one list is disabled in
+        # the other, and says why; the answers are one generation, a ticket
+        # opened again once, an output that stops closes them; the pointer,
+        # the keys, and the table go by the rules that the node tests run.
+        caveat = by_id(self.elements, "caveat")
+        button = by_id(self.elements, "other-views")
+        menu = by_id(self.elements, "other-views-menu")
+        item = by_id(self.elements, "other-plot")
+        self.assertIn(caveat, button.ancestors())
+        self.assertEqual((button.get("aria-haspopup"), button.get("aria-expanded"), button.get("aria-controls")), ("menu", "false", "other-views-menu"))
+        self.assertEqual((menu.get("role"), menu.get("aria-labelledby")), ("menu", "other-views"))
+        self.assertIn("hidden", menu.attributes)
+        self.assertIs(item.parent, menu)
+        self.assertEqual((item.get("role"), item.get("tabindex"), item.get("data-i18n")), ("menuitem", "-1", "view.other.plot"))
+        plot = by_id(self.elements, "plot")
+        self.assertIn("hidden", plot.attributes)
+        self.assertEqual(plot.get("aria-labelledby"), "plot-title")
+        for name in ("plot-x", "plot-y", "plot-table", "plot-back", "plot-count", "plot-loading", "plot-stop", "plot-body", "plot-none", "plot-announcer", "plot-cut", "plot-caveat"):
+            with self.subTest(element=name):
+                self.assertIn(plot, by_id(self.elements, name).ancestors())
+        self.assertEqual(by_id(self.elements, "plot-announcer").get("aria-live"), "polite")
+        self.assertEqual(by_id(self.elements, "plot-off").get("data-i18n"), "view.plot.off")
+        # The words of no relation are never hidden, nor touched by the script.
+        words = by_id(self.elements, "plot-caveat")
+        self.assertEqual(words.get("data-i18n"), "view.plot.caveat")
+        self.assertNotIn("hidden", words.attributes)
+        self.assertNotIn("plot-caveat", self.script)
+        for line in (
+            # The menu and its keys.
+            'ui.otherViews.addEventListener("keydown", otherButtonKey);',
+            'ui.otherMenu.addEventListener("keydown", otherMenuKey);',
+            'if (event.key === "ArrowDown") {\n    event.preventDefault();\n    setOtherViews(true, "first");',
+            'if (event.key === "Escape") {\n    event.preventDefault();\n    setOtherViews(false, "button");',
+            'ui.otherViews.setAttribute("aria-expanded", String(state.otherOpen));',
+            # In the place of the panels; the period and the types ask for what shows.
+            "function apart() {\n  return comparing() || plotting();\n}",
+            "function shownAnswer() {\n  return plotting() ? state.plotAnswer : state.answer;\n}",
+            "function requestShown() {\n  if (plotting()) {\n    state.panelsStale = true;\n    requestPlot();\n  } else {\n    requestSeries();\n  }\n}",
+            "  const answer = shownAnswer();\n  const range = shiftedRange(answer?.start, answer?.end, direction, state.view?.first_day, state.view?.last_day);",
+            "  rememberItems(true);\n  requestShown();\n  requestCompare();\n}",
+            "button.disabled = !viewing || plotting() || (grains !== null && !grains.includes(button.dataset.grain));",
+            "  if (state.panelsStale) {\n    state.panelsStale = false;\n    requestSeries();\n  }",
+            # One generation of answers, a ticket opened again once, an output that stops.
+            'const answer = await callApi("/api/view/points", payload);\n    if (seq !== state.plotSeq) {\n      return;\n    }',
+            "        state.plotLoading = false;\n        requestPlot(false);\n        return;",
+            "    requestSeries();\n    requestCompare();\n    requestPlot();",
+            "      if (plotPairOf(state.plotPair, answer.items) === null) {\n        state.plot = null;",
+            # The lists, the settings, and the rules of the page.
+            "option.disabled = item.key === other;",
+            'const taken = axis === "x" ? "view.plot.taken_y" : "view.plot.taken_x";',
+            "    plot: { x: state.plotPair.x, y: state.plotPair.y },",
+            "    state.plotPair = plotPairToOpen(state.settings);",
+            "return nearestPoint(context.shapes.places, event.clientX - box.left, event.clientY - box.top, PLOT_REACH);",
+            "const next = plotMove(state.plot?.chosen ?? null, plotContext.answer.points.length, event.key);",
+            "const rows = sortedListRows(drawn.points, state.plot.sort, typeName, state.language);",
+            "const shapes = pointShapes(",
+            # After the review of the diff by Codex: an output that opens drops
+            # the answers of the points on their way; the order of the table
+            # goes with an item changed; the focus stays, also on a head of
+            # the table; the chart takes the room that its head leaves.
+            "  const seq = ++state.openSeq;\n  state.compareSeq += 1;\n  // And those of the points, before they could open the output before\n  // again (Codex's review of the diff of O1).\n  state.plotSeq += 1;",
+            'state.plot.sort = plotSortAfter(state.plot.sort, ["when", "type", pair.x, pair.y]);',
+            "column !== null ? `button[data-action=\"plot-sort\"][data-column=\"${column}\"]` : focused?.closest(\".plot-points\") ? \".plot-points\"",
+            "const room = chart.chart.getBoundingClientRect();",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+        # Lines that other parts of the page have too, held to the body of
+        # each function, as one could keep the lines of another (the
+        # checker's review of the partial guard of O1): the rows of a table
+        # added 400 at a time (those of a panel had no test before), the
+        # reading of a point that the announcer says, the caption and the
+        # heads of the table of the points, and its answers as those of the
+        # list.
+        held = {
+            "buildTable": (
+                "for (const row of rows.slice(shownRows, shownRows + TABLE_ROWS)) {",
+                "shownRows = Math.min(rows.length, shownRows + TABLE_ROWS);",
+            ),
+            "buildPlotTable": (
+                "for (const row of rows.slice(shownRows, shownRows + TABLE_ROWS)) {",
+                "shownRows = Math.min(rows.length, shownRows + TABLE_ROWS);",
+                'const caption = element("caption", "visually-hidden", t("view.plot.table_caption"));',
+                'cell.scope = "col";',
+            ),
+            "buildPlotChart": ('read.setAttribute("aria-hidden", "true");',),
+        }
+        for name, lines in held.items():
+            body = re.search(rf"function {name}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
+            assert body is not None
+            for line in lines:
+                with self.subTest(function=name, line=line):
+                    self.assertIn(line, body.group(1))
+        request = re.search(r"async function requestPlot\(again = true\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert request is not None
+        self.assertIn("const seq = ++state.plotSeq;", request.group(1))
+        self.assertIn('error.code === "VIEW_NOT_OPEN" && again && state.target !== null', request.group(1))
+        self.assertIn("requestPlot(false);", request.group(1))
+        self.assertIn("OUTPUT_STOPS.includes(error.code)", request.group(1))
+        self.assertEqual(request.group(1).count("if (seq !== state.plotSeq) {\n      return;\n    }"), 2)
+        self.assertEqual(self.script.count("      state.compare = null;\n      state.plot = null;\n"), 5)
+        self.assertRegex((STATIC_ROOT / "view.css").read_text(encoding="utf-8"), r"\.plot-head \.plot-read \{[^}]*white-space: normal;")
+        view_css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        self.assertRegex(view_css, r"\.plot-dot \{\s*fill: var\(--d1\);\s*stroke: var\(--surface\);\s*stroke-width: 1;\s*\}")
+        self.assertRegex(view_css, r"\.plot-dot\.plot-chosen \{\s*stroke: var\(--accent\);\s*stroke-width: 2\.5;\s*\}")
+        self.assertRegex(view_css, r"\.plot-points svg \{[^}]*pointer-events: none;")
+        forced = view_css[view_css.rindex("@media (forced-colors: active) {") :]
+        self.assertRegex(forced, r"\.plot-dot \{\s*fill: CanvasText;\s*stroke: Canvas;\s*\}")
+        self.assertRegex(forced, r"\.plot-dot\.plot-chosen \{\s*fill: Highlight;\s*stroke: CanvasText;\s*\}")
+
     def test_the_list_follows_the_panels_and_drops_old_answers(self) -> None:
         # Stage M3 of v2.2.0 (the checker's review of the plan, and Codex's):
         # the list closes when what the panels count or show changes, and
@@ -1160,7 +1289,8 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # request is shown; a ticket that the server no longer keeps opens
         # the output again once; and it goes with its panel when the panels
         # are drawn again, the focus where it was.
-        for change, count in (("numbers", 1), ("items", 1), ("marks", 2), ("table", 1), ("big", 2), ("compare", 1), ("full", 2)):
+        # From O1 of v2.2.0, the points of two items close it too.
+        for change, count in (("numbers", 1), ("items", 1), ("marks", 2), ("table", 1), ("big", 2), ("compare", 1), ("full", 2), ("plot", 1)):
             with self.subTest(change=change):
                 self.assertEqual(self.script.count(f'listChanged("{change}");'), count)
         series = re.search(r"async function requestSeries\(again = true\) \{(.*?)\n\}", self.script, re.DOTALL)
@@ -1215,25 +1345,28 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertIn("state.compareSeq += 1;", leave.group(1))
         self.assertNotRegex(leave.group(1), r"state\.(grain|period|range|items) =")
         for line in (
-            "state.compareSeq += 1;\n  const current",
+            "state.compareSeq += 1;\n  // And those of the points, before they could open the output before\n  // again (Codex's review of the diff of O1).\n  state.plotSeq += 1;\n  const current",
             "const apart = viewing && comparing();",
             "button.disabled = !viewing || apart;",
             "ui.rangeFrom.disabled = apart;",
             "ui.rangeTo.disabled = apart;",
             "ui.periodBack.disabled = !viewing || apart ||",
-            "button.disabled = !viewing || (grains !== null && !grains.includes(button.dataset.grain));",
+            "button.disabled = !viewing || plotting() || (grains !== null && !grains.includes(button.dataset.grain));",
             "ui.compareOff.hidden = !apart;",
-            "const viewing = live && state.view !== null && state.opening === null && !comparing();",
-            "ui.addItems.disabled = !viewing || comparing() || state.items.length >= MAX_PANELS;",
-            "const showPanels = viewing && state.items.length > 0 && state.answer !== null && state.seriesStop === null && !comparing();",
-            "ui.caveat.hidden = !viewing || comparing();",
+            # From O1 of v2.2.0, the points of two items take the place of the
+            # panels as a comparison does.
+            "function apart() {\n  return comparing() || plotting();\n}",
+            "const viewing = live && state.view !== null && state.opening === null && !apart();",
+            "ui.addItems.disabled = !viewing || apart() || state.items.length >= MAX_PANELS;",
+            "const showPanels = viewing && state.items.length > 0 && state.answer !== null && state.seriesStop === null && !apart();",
+            "ui.caveat.hidden = !viewing || apart();",
             "compare_mode: state.compareMode,",
             "compare_month: state.compareMonth,",
             "const compare = compareToOpen(state.settings);",
         ):
             with self.subTest(line=line):
                 self.assertIn(line, self.script)
-        self.assertEqual(self.script.count("const viewing = live && state.view !== null && state.opening === null && !comparing();"), 2)
+        self.assertEqual(self.script.count("const viewing = live && state.view !== null && state.opening === null && !apart();"), 2)
         # A ticket opened again for an output that is no longer the one chosen
         # is dropped (the review by Codex); an output without days has no
         # years to compare.

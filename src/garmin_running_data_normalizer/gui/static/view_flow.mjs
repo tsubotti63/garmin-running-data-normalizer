@@ -467,8 +467,8 @@ export function itemsRemembered(settings) {
 
 // What the page keeps of the settings after the other tab forgot them: no
 // items, no shelf, no tips, no colors, no layouts, and no period, grouping,
-// activity types, or timezone (stage K2 of v2.2.0), and no marks (stage M1),
-// as the files have none now. The page keeps showing what it shows, but the
+// activity types, or timezone (stage K2 of v2.2.0), no marks (stage M1), and
+// no two items plotted (stage O1), as the files have none now. The page keeps showing what it shows, but the
 // marks, which are gone.
 export function settingsAfterForget(settings) {
   const kept = { ...(settings ?? {}) };
@@ -489,6 +489,7 @@ export function settingsAfterForget(settings) {
     "view_compare_by",
     "view_compare_weeks",
     "view_marks_shown",
+    "view_plot",
     "view_marks",
     "marks_notice",
   ]) {
@@ -2427,4 +2428,133 @@ export function listLimitMessage(total, limit, grain, language) {
   return Object.hasOwn(FINER_GRAINS, grain)
     ? message("view.list.limit", params, { grain: GRAIN_KEYS[FINER_GRAINS[grain]] })
     : message("view.list.limit_day", params);
+}
+
+// --- Two items plotted against each other (stage O1 of v2.2.0) ------------
+
+// The newest points that the server gives at most (view/series.py
+// MAX_POINTS), and the two items at first (the sample of OP0).
+export const MAX_POINTS = 5000;
+export const PLOT_FIRST = Object.freeze({ x: "pace", y: "hr" });
+
+// Whether an item can be plotted: one of the activities that one activity
+// has a value of, which the count is not (view/series.py point_item).
+export function plotItem(item) {
+  return typeof item?.key === "string" && isActivityItem(item) && item.kind !== "count";
+}
+
+// The two items that the settings remember, as one pair of two different
+// names; the first pair where they remember none, or another form (Codex's
+// review of the plan of O1: never one of them alone). The table of the items
+// checks them when an output is open (plotPairOf).
+export function plotPairToOpen(settings) {
+  const pair = settings?.view_plot;
+  const named = (key) => typeof key === "string" && Object.hasOwn(ITEM_KEYS, key);
+  return pair !== null && typeof pair === "object" && named(pair.x) && named(pair.y) && pair.x !== pair.y ? { x: pair.x, y: pair.y } : { ...PLOT_FIRST };
+}
+
+// The pair to plot among the items of an output: the pair as it is where
+// both can be plotted, otherwise the first pair, and null where an output
+// has neither.
+export function plotPairOf(pair, items) {
+  const known = itemsByKey(items);
+  const can = (key) => plotItem(known.get(key));
+  if (can(pair?.x) && can(pair?.y) && pair.x !== pair.y) {
+    return { x: pair.x, y: pair.y };
+  }
+  return can(PLOT_FIRST.x) && can(PLOT_FIRST.y) ? { ...PLOT_FIRST } : null;
+}
+
+// The local date and time of a point as the reading and the table write it:
+// with its year, since the points span years, as the output has it without
+// changing its timezone, and its date only where its time cannot be read
+// (Codex's review of the plan of O1).
+export function plotWhen(point, language) {
+  const found = typeof point?.datetime === "string" ? LOCAL_MOMENT.exec(point.datetime) : null;
+  const day = utcDate(found === null ? point.day : found[1]);
+  const parts = { date: dateFormat(language, "day").format(day), weekday: dateFormat(language, "weekday").format(day) };
+  return found === null ? message("view.compare.calendar_day", parts) : message("view.plot.when", { ...parts, time: `${Number(found[2])}:${found[3]}` });
+}
+
+// The point under the pointer: the nearest of the places drawn (in pixels)
+// within ``reach``, the newest of those as near (the points come oldest
+// first); none farther (Codex's review of the plan of O1).
+export function nearestPoint(places, x, y, reach) {
+  let found = null;
+  let nearest = reach * reach;
+  places.forEach((place, index) => {
+    const distance = (place.x - x) ** 2 + (place.y - y) ** 2;
+    if (distance <= nearest) {
+      found = index;
+      nearest = distance;
+    }
+  });
+  return found;
+}
+
+// How many other points have the same two values as one: they are drawn in
+// the same place, and the keys reach every one of them.
+export function sameValues(points, index, x, y) {
+  const point = points[index];
+  return point === undefined ? 0 : points.filter((other, at) => at !== index && other.values[x] === point.values[x] && other.values[y] === point.values[y]).length;
+}
+
+// The point that a key moves to among ``count`` points in the order of their
+// date and time: the one before or after, the first or the last, stopping at
+// the ends; from none chosen, the newest (or the first for Home). Null for
+// another key.
+export function plotMove(index, count, key) {
+  if (!count) {
+    return null;
+  }
+  if (key === "Home") {
+    return 0;
+  }
+  if (key === "End") {
+    return count - 1;
+  }
+  if (key !== "ArrowLeft" && key !== "ArrowRight") {
+    return null;
+  }
+  if (index === null || index === undefined || index < 0 || index >= count) {
+    return count - 1;
+  }
+  return Math.max(0, Math.min(count - 1, index + (key === "ArrowRight" ? 1 : -1)));
+}
+
+// The line under the points, in numbers only (the checker's review of the
+// plan of O1): the points, the activities of the period, and those without
+// both values; where the newest are kept, also how many have both values.
+export function plotCount(answer, language) {
+  const params = {
+    points: countText(answer.points.length, language),
+    total: countText(answer.total, language),
+    with: countText(answer.with_values, language),
+    missing: countText(answer.missing, language),
+  };
+  return message(answer.points.length < answer.with_values ? "view.plot.count_cut" : "view.plot.count", params);
+}
+
+// Whether the points are the newest only, and the words that say so (OP0).
+export function plotCut(answer) {
+  return Array.isArray(answer?.points) && answer.points.length < answer.with_values;
+}
+
+// The order of the table of the points with its columns: as it is, or the
+// newest first where its column went with an item changed (Codex's review of
+// the diff of O1).
+export function plotSortAfter(sort, columns) {
+  return columns.includes(sort?.column) ? sort : { column: "when", descending: true };
+}
+
+// What a point says: its date and time, its activity type, and its two
+// values, as the reading and the keyboard give them.
+export function plotReading(point, x, y, typeName, language, same = 0) {
+  return {
+    when: plotWhen(point, language),
+    type: typeName(point.type),
+    x: { name: message(ITEM_KEYS[x]), value: valueMessage(x, point.values[x], language) },
+    y: { name: message(ITEM_KEYS[y]), value: valueMessage(y, point.values[y], language) },
+    same: same > 0 ? message("view.plot.same", { n: countText(same, language) }) : null,
+  };
 }

@@ -122,8 +122,10 @@ export function niceStep(span, count, clock = null) {
 // total, with room above and below for the others, out to whole steps on both
 // ends, with two ticks at least.
 export function valueScale(low, high, { fromZero = false, count = 3, clock = null } = {}) {
-  let lo = low;
-  let hi = high;
+  // A value that is not a number, such as a pace too large for the units of
+  // the page, takes no part (Codex's review of the diff of O1).
+  let lo = Number.isFinite(low) ? low : Number.isFinite(high) ? high : 0;
+  let hi = Number.isFinite(high) ? high : lo;
   if (fromZero) {
     lo = 0;
     hi = hi > 0 ? hi * 1.04 : 1;
@@ -139,7 +141,7 @@ export function valueScale(low, high, { fromZero = false, count = 3, clock = nul
     last = first + step;
   }
   const ticks = [];
-  for (let value = first; value <= last + step * 1e-6; value += step) {
+  for (let value = first; value <= last + step * 1e-6 && ticks.length <= MAX_TICKS; value += step) {
     ticks.push(Number(value.toFixed(10)));
   }
   return { lo: first, hi: last, ticks: ticks.length > 1 ? ticks : [first, first + step] };
@@ -561,4 +563,70 @@ export function markLabels(shapes, measure, crowded, left, right, gap = 6) {
     }
   }
   return groups.map(({ x, marks, text }) => ({ x, marks, text }));
+}
+
+// --- Two items plotted against each other (stage O1 of v2.2.0) ------------
+
+// The room of a plot of points: the ticks of the values up at the left, as a
+// panel has them, the name of the item up above the plot, and the ticks and
+// the name of the item across below it.
+export const POINTS_TOP = 22;
+export const POINTS_BOTTOM = 40;
+export const POINT_RADIUS = 3.5;
+export const CHOSEN_RADIUS = 5;
+// A tick across every this many pixels at least, so that the words of the
+// ticks, clocks among them, never meet (Codex's review of the plan of O1).
+export const ACROSS_TICK_GAP = 90;
+// No scale has more ticks than this, whatever its values.
+const MAX_TICKS = 200;
+
+// The number of the ticks across for the width of a plot: one every 90 px or
+// so, two at least and six at most.
+export function acrossTickCount(width) {
+  return Math.max(2, Math.min(6, Math.floor(width / ACROSS_TICK_GAP)));
+}
+
+// Every other tick across, until the ticks are far enough apart for their
+// words (the ticks up need 16 px only: thinTicks).
+export function thinAcross(ticks, x) {
+  let kept = ticks;
+  while (kept.length > 2 && Math.abs(x(kept[1]) - x(kept[0])) < ACROSS_TICK_GAP * 0.7) {
+    kept = kept.filter((_tick, index) => index % 2 === 0);
+  }
+  return kept;
+}
+
+// The places of the points of two items in a plot of ``width`` by ``height``,
+// from their values as the page shows them (``xs`` across, ``ys`` up): a
+// scale for each over its values, never from 0, so that the points spread
+// (the checker's review of the plan of O1: the ticks say where a scale
+// starts), in the clock of its unit; and the place of every point. Null
+// without a point.
+export function pointShapes(xs, ys, { width, height, clockX = null, clockY = null }) {
+  // The scales go over the values that are numbers only; a point of
+  // another value is not drawn.
+  const shownX = xs.filter(Number.isFinite);
+  const shownY = ys.filter(Number.isFinite);
+  if (!shownX.length || !shownY.length || xs.length !== ys.length) {
+    return null;
+  }
+  const left = PLOT_LEFT;
+  const right = Math.max(left + 1, width - PLOT_RIGHT);
+  const top = POINTS_TOP;
+  const bottom = Math.max(top + 1, height - POINTS_BOTTOM);
+  const across = valueScale(Math.min(...shownX), Math.max(...shownX), { count: acrossTickCount(right - left), clock: clockX });
+  const up = valueScale(Math.min(...shownY), Math.max(...shownY), { count: tickCount(bottom - top), clock: clockY });
+  const x = (value) => left + ((value - across.lo) / (across.hi - across.lo)) * (right - left);
+  const y = (value) => bottom - ((value - up.lo) / (up.hi - up.lo)) * (bottom - top);
+  return {
+    left,
+    right,
+    top,
+    bottom,
+    across: { ...across, ticks: thinAcross(across.ticks, x) },
+    up: { ...up, ticks: thinTicks(up.ticks, y) },
+    x,
+    y,
+    places: xs.map((value, index) => ({ x: x(value), y: y(ys[index]) })),
+  };
 }

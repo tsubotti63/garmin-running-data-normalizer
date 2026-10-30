@@ -32,7 +32,7 @@ from typing import Any
 from ..output_check import OutputActionError
 from ..view.data import MANIFEST, ViewData, load_view_data, local_today
 from ..view.items import ACTIVITIES, DATASETS, ITEMS, ITEMS_BY_KEY, Item
-from ..view.series import GRAINS, LAST_YEARS, MAX_PANELS, RANGE_GRAIN, coverage
+from ..view.series import GRAINS, LAST_YEARS, MAX_PANELS, RANGE_GRAIN, coverage, point_item
 
 MAX_VIEWS = 4
 MAX_SHELVES = 8
@@ -223,6 +223,26 @@ def list_request(payload: dict[str, Any]) -> tuple[str, tuple[date, date], list[
     return key, chosen, types
 
 
+def points_request(payload: dict[str, Any]) -> tuple[str, str, str | tuple[date, date], list[str] | None]:
+    """The two items, the period, and the activity types of a request for two
+    items of the activities plotted against each other (stage O1 of v2.2.0):
+    two different items that one activity has a value of (series.point_item);
+    a period of PERIODS, or a range of two dates, as the numbers take it; and
+    the names of the activity types, or None for the running ones."""
+    x, y = payload.get("x"), payload.get("y")
+    if not point_item(x):
+        raise ViewRequestError("x")
+    if not point_item(y) or y == x:
+        raise ViewRequestError("y")
+    chosen = period_choice(payload.get("period", "all"))
+    if chosen is None:
+        raise ViewRequestError("period")
+    types = payload.get("types")
+    if types is not None and not types_ok(types):
+        raise ViewRequestError("types")
+    return x, y, chosen, types
+
+
 def period_choice(period: Any) -> str | tuple[date, date] | None:
     """The period that a request names: one of PERIODS, or a range of two
     dates, the first not after the second; None when it is of another form.
@@ -281,6 +301,20 @@ def compare_weeks_ok(weeks: Any) -> bool:
     return type(weeks) is int and weeks in COMPARE_WEEKS
 
 
+def plot_pair_ok(pair: Any) -> bool:
+    """Whether a request names the two items plotted against each other
+    (stage O1 of v2.2.0): both of them, as one pair, two different items that
+    one activity has a value of, so that the settings never keep one of them
+    alone (Codex's review of the plan of O1)."""
+    return (
+        isinstance(pair, dict)
+        and set(pair) == {"x", "y"}
+        and point_item(pair["x"])
+        and point_item(pair["y"])
+        and pair["x"] != pair["y"]
+    )
+
+
 def types_ok(types: Any) -> bool:
     """Whether a request names the activity types that it counts: a list of
     names, each once, as 2.1.0 took them; the limit of the size of a request
@@ -309,6 +343,8 @@ __all__ = [
     "list_request",
     "output_stamp",
     "period_choice",
+    "plot_pair_ok",
+    "points_request",
     "series_request",
     "types_ok",
 ]

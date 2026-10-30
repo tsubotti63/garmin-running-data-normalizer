@@ -91,6 +91,7 @@
   <p id="compare-off" class="compare-off" data-i18n="view.compare.off" hidden></p>
   <p id="compare-off-race" class="compare-off" data-i18n="view.compare.off_race" hidden></p>
   <p id="compare-off-calendar" class="compare-off" data-i18n="view.compare.off_calendar" hidden></p>
+  <p id="plot-off" class="compare-off" data-i18n="view.plot.off" hidden></p>
   <div id="view-body" class="view-body">
     <aside id="shelf" class="shelf" aria-labelledby="shelf-heading">
       <section id="layouts" class="layouts" aria-labelledby="layouts-heading">
@@ -189,6 +190,12 @@
         <p class="caveat-text" data-i18n="view.caveat"></p>
         <p id="loading" class="loading" role="status" aria-live="polite"></p>
         <span class="spacer"></span>
+        <span class="other-views">
+          <button type="button" id="other-views" class="small" aria-haspopup="menu" aria-expanded="false" aria-controls="other-views-menu"><span data-i18n="view.other.button"></span><svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true" focusable="false"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <span id="other-views-menu" class="pop other-menu" role="menu" aria-labelledby="other-views" hidden>
+            <button type="button" id="other-plot" role="menuitem" tabindex="-1" data-i18n="view.other.plot"></button>
+          </span>
+        </span>
         <span class="align-row">
           <input id="marks-shown" type="checkbox">
           <label for="marks-shown" data-i18n="view.marks.show"></label>
@@ -289,6 +296,34 @@
           <p id="compare-announcer" class="visually-hidden" aria-live="polite"></p>
         </div>
         <p id="compare-note" class="compare-note" data-i18n="view.compare.partial_note" hidden></p>
+      </section>
+      <section id="plot" class="compare plot-two" aria-labelledby="plot-title" hidden>
+        <div class="compare-bar">
+          <div class="compare-line">
+            <label for="plot-x" class="visually-hidden" data-i18n="view.plot.x"></label>
+            <label for="plot-y" class="visually-hidden" data-i18n="view.plot.y"></label>
+            <h3 id="plot-title" class="compare-title"><span id="plot-before"></span><select id="plot-x"></select><span id="plot-middle"></span><select id="plot-y"></select><span id="plot-after"></span></h3>
+            <button type="button" id="plot-table" class="small" aria-pressed="false"><span id="plot-table-chart" data-i18n="view.panel.chart" hidden></span><span id="plot-table-table" data-i18n="view.panel.table"></span></button>
+            <span class="spacer"></span>
+            <button type="button" id="plot-back" class="small" data-i18n="view.panel.unbig"></button>
+          </div>
+          <div class="compare-line">
+            <span id="plot-count" class="note"></span>
+            <p id="plot-loading" class="loading" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+        <div id="plot-stop" class="errbox view-stop" hidden>
+          <h4 id="plot-stop-heading" tabindex="-1" data-i18n="view.stop.series_heading"></h4>
+          <div id="plot-stop-lines" class="messages"></div>
+          <p id="plot-stop-code" class="stop-code"></p>
+        </div>
+        <div id="plot-stack" class="stack plot-stack">
+          <div id="plot-body" class="plot-body"></div>
+          <p id="plot-none" class="note plot-none" data-i18n="view.plot.none" hidden></p>
+          <p id="plot-announcer" class="visually-hidden" aria-live="polite"></p>
+        </div>
+        <p id="plot-cut" class="compare-note" hidden></p>
+        <p id="plot-caveat" class="compare-note plot-caveat" data-i18n="view.plot.caveat"></p>
       </section>
       <div id="series-stop" class="errbox view-stop" hidden>
         <h3 id="series-stop-heading" tabindex="-1" data-i18n="view.stop.series_heading"></h3>
