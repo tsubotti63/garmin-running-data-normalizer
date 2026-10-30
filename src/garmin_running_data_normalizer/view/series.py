@@ -24,6 +24,8 @@ them as they show them.
 
 from __future__ import annotations
 
+import math
+import re
 from bisect import bisect_right
 from collections import Counter, defaultdict
 from collections.abc import Collection
@@ -70,6 +72,14 @@ LAST_YEARS = {"10y": 10, "5y": 5, "3y": 3, "1y": 1}
 # the item of the panel when it is none of them.
 MAX_LIST_ROWS = 500
 LIST_ITEMS = ("dist", "time", "pace", "hr", "mx", "cad", "asc")
+# Two items of the activities plotted against each other (stage O1 of
+# v2.2.0): a point an activity with a value of both, the newest up to this
+# many.
+MAX_POINTS = 5000
+# The local date and time of an activity as the output writes it
+# (common/time.py): the date, and the time of the day before its offset, as
+# the page orders them (view_flow.mjs LOCAL_MOMENT).
+LOCAL_MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?")
 # The type of an activity without activity_type.
 NO_TYPE = ""
 # The activity types that the settings remember (stage K1 of v2.2.0): a choice
@@ -482,10 +492,9 @@ def activity_list(
     period of more than MAX_LIST_ROWS activities gives their number only."""
     if key not in ITEMS_BY_KEY or ITEMS_BY_KEY[key].dataset != ACTIVITIES:
         raise ValueError(f"not an item of the activities: {key}")
-    periods = period_bounds(data, period, RANGE_GRAIN)
+    periods, chosen = _period_rows(data, period, types)
     if periods is None:
         return {"start": None, "end": None, "total": 0, "rows": [], "limit": MAX_LIST_ROWS, "value": None}
-    chosen = [row for row in _activity_rows(data, types) if periods.index(row.day) is not None]
     [line] = item_series(data, key, periods, types)["lines"]
     columns = LIST_ITEMS if key in LIST_ITEMS or ITEMS_BY_KEY[key].kind == COUNT else (*LIST_ITEMS, key)
     rows = None
@@ -509,13 +518,96 @@ def activity_list(
     }
 
 
+def _period_rows(
+    data: ViewData,
+    period: str | tuple[date, date],
+    types: Collection[str] | None,
+) -> tuple[Periods | None, list[Row]]:
+    """The days of ``period`` cut to the output as one period, and the
+    activities of the activity types counted in them, chosen as the panels
+    choose them: those of the list of a period (stage M3 of v2.2.0) and of
+    the points of two items (stage O1)."""
+    periods = period_bounds(data, period, RANGE_GRAIN)
+    if periods is None:
+        return None, []
+    return periods, [row for row in _activity_rows(data, types) if periods.index(row.day) is not None]
+
+
 def _list_value(item: Item, row: Row) -> float | None:
     """The value of an activity in a column of the list, as the panel of
-    ``item`` counts it: the pace by its time over its distance."""
+    ``item`` counts it: the pace by its time over its distance, and none
+    where that is not a finite number (Codex's review of the plan of O1)."""
     if item.kind == PACE:
         distance, duration = row.values[DISTANCE], row.values[DURATION]
-        return duration / distance if _positive(distance) and _positive(duration) else None
+        if not (_positive(distance) and _positive(duration)):
+            return None
+        pace = duration / distance
+        return pace if math.isfinite(pace) else None
     return row.values[item.field]
+
+
+def point_item(key: Any) -> bool:
+    """Whether ``key`` is an item that two items plotted against each other
+    can take (stage O1 of v2.2.0): an item of the activities that one
+    activity has a value of, which the count is not."""
+    return (
+        isinstance(key, str)
+        and key in ITEMS_BY_KEY
+        and ITEMS_BY_KEY[key].dataset == ACTIVITIES
+        and ITEMS_BY_KEY[key].kind != COUNT
+    )
+
+
+def _moment_key(row: Row) -> str:
+    """What the points are ordered by: the date and the time of the day of
+    an activity as they show, before the offset, and its day where its time
+    cannot be read (view_flow.mjs listMomentKey)."""
+    moment = row.marks.get("datetime")
+    found = LOCAL_MOMENT.match(moment) if isinstance(moment, str) else None
+    return found.group(0) if found is not None else date.fromordinal(row.day).isoformat()
+
+
+def activity_points(
+    data: ViewData,
+    x: str,
+    y: str,
+    period: str | tuple[date, date] = "all",
+    types: Collection[str] | None = None,
+) -> dict[str, Any]:
+    """Two items of the activities plotted against each other (stage O1 of
+    v2.2.0): the activities of the activity types counted in the days of
+    ``period``, chosen as the list of a period chooses them, each a point
+    where it has a value of both items, as the list writes them. The newest
+    MAX_POINTS points are given, oldest first, by the date and the time of
+    the day as they show, then in the order of the output; ``total`` counts
+    the activities of the period, ``with_values`` those with both values,
+    and ``missing`` the others."""
+    if not point_item(x) or not point_item(y) or x == y:
+        raise ValueError(f"not two items of the activities: {x}, {y}")
+    periods, chosen = _period_rows(data, period, types)
+    with_values = []
+    for index, row in enumerate(chosen):
+        values = {key: _list_value(ITEMS_BY_KEY[key], row) for key in (x, y)}
+        if values[x] is not None and values[y] is not None:
+            with_values.append((_moment_key(row), index, row, values))
+    with_values.sort(key=lambda entry: (entry[0], entry[1]))
+    return {
+        "start": None if periods is None else date.fromordinal(periods.start).isoformat(),
+        "end": None if periods is None else date.fromordinal(periods.end).isoformat(),
+        "total": len(chosen),
+        "with_values": len(with_values),
+        "missing": len(chosen) - len(with_values),
+        "limit": MAX_POINTS,
+        "points": [
+            {
+                "day": date.fromordinal(row.day).isoformat(),
+                "datetime": row.marks.get("datetime"),
+                "type": row.marks["type"],
+                "values": values,
+            }
+            for _key, _index, row, values in with_values[-MAX_POINTS:]
+        ],
+    }
 
 
 __all__ = [
@@ -525,12 +617,14 @@ __all__ = [
     "MAX_ANSWER_BYTES",
     "MAX_LIST_ROWS",
     "MAX_PANELS",
+    "MAX_POINTS",
     "MAX_TYPES",
     "MAX_TYPE_LENGTH",
     "NO_TYPE",
     "Periods",
     "RANGE_GRAIN",
     "activity_list",
+    "activity_points",
     "activity_types",
     "auto_grain",
     "coverage",
@@ -538,6 +632,7 @@ __all__ = [
     "default_types",
     "item_series",
     "period_bounds",
+    "point_item",
     "type_name_ok",
     "view_answer",
 ]

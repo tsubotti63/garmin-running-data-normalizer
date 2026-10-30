@@ -355,3 +355,39 @@ test("the steps of a calendar are one to six, from the ticks of a scale (stage N
   assert.deepEqual(chart.coarserTicks([0, 2, 4, 6, 8, 10, 12, 14], 6), [0, 4, 8, 12, 16]);
   assert.deepEqual(chart.coarserTicks([0, 5, 10], 6), [0, 5, 10]);
 });
+
+test("two items are plotted on scales of their values, never from 0, with the ticks across far enough apart for their words", () => {
+  // Stage O1 of v2.2.0 (the checker's review of the plan, and Codex's).
+  const shapes = chart.pointShapes([300, 310, 320, 350, 280], [140, 150, 145, 160, 138], { width: 900, height: 420, clockX: "second" });
+  assert.ok(shapes.across.lo <= 280 && shapes.across.hi >= 350 && shapes.across.lo > 0);
+  assert.ok(shapes.up.lo <= 138 && shapes.up.hi >= 160 && shapes.up.lo > 0);
+  for (const place of shapes.places) {
+    assert.ok(place.x >= shapes.left && place.x <= shapes.right && place.y >= shapes.top && place.y <= shapes.bottom);
+  }
+  const apart = (ticks, x) => ticks.map(x).every((at, index, all) => index === 0 || at - all[index - 1] >= chart.ACROSS_TICK_GAP * 0.7);
+  assert.ok(apart(shapes.across.ticks, shapes.x));
+  assert.equal(chart.acrossTickCount(100), 2);
+  assert.equal(chart.acrossTickCount(400), 4);
+  assert.equal(chart.acrossTickCount(900), 6);
+  // A narrow chart thins the ticks across.
+  const narrow = chart.pointShapes([0, 1000], [0, 1], { width: 200, height: 200 });
+  assert.ok(apart(narrow.across.ticks, narrow.x));
+  // A value that the page cannot show as a number (a pace too large for its
+  // units) takes no part in the scales, and is not placed; a scale of such
+  // values ends (Codex's review of the diff of O1).
+  const huge = chart.pointShapes([300, Infinity, 320], [140, 150, NaN], { width: 900, height: 420, clockX: "second" });
+  assert.ok(Number.isFinite(huge.across.hi) && huge.across.hi < 400 && Number.isFinite(huge.up.hi));
+  assert.ok(!Number.isFinite(huge.places[1].x) && !Number.isFinite(huge.places[2].y));
+  assert.equal(chart.pointShapes([Infinity], [1], { width: 900, height: 420 }), null);
+  for (const [low, high] of [[-Infinity, Infinity], [NaN, 5], [5, NaN], [0, 1e306 * 1000]]) {
+    const scale = chart.valueScale(low, high, { count: 5 });
+    assert.ok(scale.ticks.length >= 2 && scale.ticks.length <= 201 && scale.ticks.every(Number.isFinite));
+  }
+  // No point, one point, and points of one value.
+  assert.equal(chart.pointShapes([], [], { width: 900, height: 420 }), null);
+  for (const [xs, ys] of [[[5], [5]], [[5, 5, 5], [7, 7, 7]]]) {
+    const one = chart.pointShapes(xs, ys, { width: 300, height: 200 });
+    assert.equal(one.places.length, xs.length);
+    assert.ok(one.places.every((place) => Number.isFinite(place.x) && Number.isFinite(place.y)));
+  }
+});

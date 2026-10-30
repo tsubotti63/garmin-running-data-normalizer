@@ -164,6 +164,18 @@ import {
   listValueText,
   listWhen,
   sortedListRows,
+  countText,
+  nearestPoint,
+  plotCount,
+  plotCut,
+  plotItem,
+  plotMove,
+  plotPairOf,
+  plotPairToOpen,
+  plotReading,
+  plotSortAfter,
+  plotWhen,
+  sameValues,
 } from "./view_flow.mjs";
 import {
   PLOT_BOTTOM,
@@ -184,6 +196,9 @@ import {
   sharedExtents,
   timeScale,
   timeTicks,
+  CHOSEN_RADIUS,
+  POINT_RADIUS,
+  pointShapes,
 } from "./view_chart.mjs";
 
 const LANGUAGES = ["en", "ja"];
@@ -201,6 +216,9 @@ const VIEW_TAB = "garmin-running-view";
 // The rows of a table that are added at a time, as the person scrolls to
 // them, so that a table of fifteen years by day opens at once.
 const TABLE_ROWS = 400;
+// How near the pointer chooses a point of the chart of two items (stage O1
+// of v2.2.0).
+const PLOT_REACH = 12;
 const SVG = "http://www.w3.org/2000/svg";
 // The parts of the help that a note of a panel opens.
 const HELP_LINK_KEYS = {
@@ -263,6 +281,7 @@ const ui = {
   compareOff: byId("compare-off"),
   compareOffRace: byId("compare-off-race"),
   compareOffCalendar: byId("compare-off-calendar"),
+  plotOff: byId("plot-off"),
   body: byId("view-body"),
   shelf: byId("shelf"),
   shelfCount: byId("shelf-count"),
@@ -306,6 +325,10 @@ const ui = {
   stopOther: byId("stop-other"),
   stopCode: byId("stop-code"),
   caveat: byId("caveat"),
+  // The menu of the other views (stage O1 of v2.2.0).
+  otherViews: byId("other-views"),
+  otherMenu: byId("other-views-menu"),
+  otherPlot: byId("other-plot"),
   fullEnter: byId("full-enter"),
   fullBar: byId("full-bar"),
   fullText: byId("full-text"),
@@ -361,6 +384,26 @@ const ui = {
   compareTableTable: byId("compare-table-table"),
   compareTableCalendar: byId("compare-table-calendar"),
   compareBack: byId("compare-back"),
+  // Two items plotted against each other (stage O1 of v2.2.0).
+  plot: byId("plot"),
+  plotBefore: byId("plot-before"),
+  plotX: byId("plot-x"),
+  plotMiddle: byId("plot-middle"),
+  plotY: byId("plot-y"),
+  plotAfter: byId("plot-after"),
+  plotTable: byId("plot-table"),
+  plotTableChart: byId("plot-table-chart"),
+  plotTableTable: byId("plot-table-table"),
+  plotBack: byId("plot-back"),
+  plotCount: byId("plot-count"),
+  plotLoading: byId("plot-loading"),
+  plotStop: byId("plot-stop"),
+  plotStopLines: byId("plot-stop-lines"),
+  plotStopCode: byId("plot-stop-code"),
+  plotBody: byId("plot-body"),
+  plotNone: byId("plot-none"),
+  plotAnnouncer: byId("plot-announcer"),
+  plotCut: byId("plot-cut"),
   compareYears: byId("compare-years"),
   compareYearsLabel: byId("compare-years-label"),
   compareUpTo: byId("compare-up-to"),
@@ -511,6 +554,23 @@ const state = {
   compareSeq: 0,
   compareLoading: false,
   compareStop: null,
+  // Two items plotted against each other (stage O1 of v2.2.0): while the
+  // points show, whether their table shows, its order, and the point chosen
+  // (its place in the answer); null while the panels show. The pair is
+  // remembered apart. The period and the activity types are the page's, so
+  // that a change of them while the points show leaves the panels to ask
+  // again on the way back (Codex's review of the plan of O1). The answer
+  // drawn, the request that it answers, the count of the generations, whether
+  // one is on its way, a stop, and the menu of the other views.
+  plot: null,
+  plotPair: { x: "pace", y: "hr" },
+  plotAnswer: null,
+  plotAsked: null,
+  plotSeq: 0,
+  plotLoading: false,
+  plotStop: null,
+  panelsStale: false,
+  otherOpen: false,
   // The marks of the person (stage M1 of v2.2.0): as the server keeps them,
   // a count that changes with them (which draws the panels again), whether
   // they show, and what to tell of their file; a change that waits for its
@@ -859,6 +919,7 @@ function viewValues() {
     compare_by: state.compareBy,
     compare_weeks: state.compareWeeks,
     marks_shown: state.marksShown,
+    plot: { x: state.plotPair.x, y: state.plotPair.y },
   };
 }
 
@@ -996,6 +1057,9 @@ const OUTPUT_STOPS = [
 async function openOutput(target, focus = false) {
   const seq = ++state.openSeq;
   state.compareSeq += 1;
+  // And those of the points, before they could open the output before
+  // again (Codex's review of the diff of O1).
+  state.plotSeq += 1;
   const current = state.view === null ? null : state.items;
   state.opening = target.name;
   state.openingTarget = target;
@@ -1044,6 +1108,18 @@ async function openOutput(target, focus = false) {
       state.compareAnswer = null;
       state.compareStop = null;
     }
+    // The points go on where the pair can be plotted in this output; their
+    // answer is asked for again (Codex's review of the plan of O1).
+    if (state.plot !== null) {
+      if (plotPairOf(state.plotPair, answer.items) === null) {
+        state.plot = null;
+      } else {
+        state.plot.chosen = null;
+      }
+      state.plotAnswer = null;
+      state.plotAsked = null;
+      state.plotStop = null;
+    }
     rememberItems();
     render();
     // A button that opened it is hidden now.
@@ -1052,6 +1128,7 @@ async function openOutput(target, focus = false) {
     }
     requestSeries();
     requestCompare();
+    requestPlot();
   } catch (error) {
     if (seq !== state.openSeq) {
       return;
@@ -1061,6 +1138,7 @@ async function openOutput(target, focus = false) {
       state.view = null;
       setAnswer(null);
       state.compare = null;
+      state.plot = null;
       // The field keeps the output that could not be opened.
       state.target = error.code === "OUTPUT_LIST_CHANGED" ? null : target;
       state.stop = { code: error.code, detail: error.detail };
@@ -1204,6 +1282,7 @@ async function requestSeries(again = true) {
       state.view = null;
       setAnswer(null);
       state.compare = null;
+      state.plot = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.seriesStop = { code: error.code, detail: error.detail };
@@ -1277,25 +1356,29 @@ async function requestOverview() {
 function setPeriod(choiceName) {
   if (choiceName === "custom") {
     state.period = "custom";
-    state.range = state.range ?? (state.answer?.start ? { from: state.answer.start, to: state.answer.end } : null);
+    const answer = shownAnswer();
+    state.range = state.range ?? (answer?.start ? { from: answer.start, to: answer.end } : null);
     render();
     ui.rangeFrom.value = state.range?.from ?? "";
     ui.rangeTo.value = state.range?.to ?? "";
     ui.rangeFrom.focus();
     if (state.range !== null) {
       rememberItems(true);
-      requestSeries();
+      requestShown();
     }
     return;
   }
   state.period = choiceName;
   state.cursor = null;
   rememberItems(true);
-  requestSeries();
+  requestShown();
 }
 
+// The period before or after, from the answer that shows: that of the points
+// while they show (Codex's review of the plan of O1).
 function shiftPeriod(direction) {
-  const range = shiftedRange(state.answer?.start, state.answer?.end, direction, state.view?.first_day, state.view?.last_day);
+  const answer = shownAnswer();
+  const range = shiftedRange(answer?.start, answer?.end, direction, state.view?.first_day, state.view?.last_day);
   if (range !== null) {
     state.period = "custom";
     state.range = range;
@@ -1303,7 +1386,7 @@ function shiftPeriod(direction) {
     ui.rangeTo.value = range.to;
     state.cursor = null;
     rememberItems(true);
-    requestSeries();
+    requestShown();
   }
 }
 
@@ -1315,11 +1398,15 @@ function rangeTyped() {
     state.range = { from: ui.rangeFrom.value, to: ui.rangeTo.value };
     state.cursor = null;
     rememberItems(true);
-    requestSeries();
+    requestShown();
   }
 }
 
 function setGrain(grain) {
+  // The points have no grouping (stage O1 of v2.2.0).
+  if (plotting()) {
+    return;
+  }
   if (comparing()) {
     // A grouping of the comparison, apart from that of the panels.
     if (compareGrainsFor(compareByNow(), compareMonthNow(), compareModeNow()).includes(grain) && grain !== state.compare.grain) {
@@ -1339,7 +1426,7 @@ function changeTypes(name) {
   state.counted = toggledTypes(state.counted, name, state.view?.types);
   state.wantedTypes = typesRequest(state.counted, state.view?.types);
   rememberItems(true);
-  requestSeries();
+  requestShown();
   requestCompare();
 }
 
@@ -2064,8 +2151,9 @@ function cancelLayoutDrag() {
 
 // The layouts above the item shelf, their buttons, and their windows.
 function renderLayouts(live) {
-  // A layout holds panels, which are not shown while comparing years.
-  const viewing = live && state.view !== null && state.opening === null && !comparing();
+  // A layout holds panels, which are not shown while comparing years or
+  // plotting two items.
+  const viewing = live && state.view !== null && state.opening === null && !apart();
   const cards = currentCards();
   renderCards(ui.layoutCards, cards, viewing);
   renderCards(ui.railLayoutCards, cards, viewing);
@@ -2773,6 +2861,9 @@ function scheduleRedraw() {
     if (!ui.compare.hidden && !ui.compareStack.hidden && state.compareAnswer !== null) {
       renderCompareBody();
     }
+    if (!ui.plot.hidden) {
+      renderPlotBody(plotAnswerNow());
+    }
   });
 }
 
@@ -3029,6 +3120,7 @@ async function requestList(again = true) {
       state.view = null;
       setAnswer(null);
       state.compare = null;
+      state.plot = null;
       state.stop = { code: error.code, detail: error.detail };
       render();
       return;
@@ -3513,6 +3605,7 @@ async function requestCompare(again = true) {
       state.view = null;
       setAnswer(null);
       state.compare = null;
+      state.plot = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.compareStop = { code: error.code, detail: error.detail };
@@ -4772,7 +4865,7 @@ function renderFilters(live) {
   setText(ui.openLatest, t("view.output.open_remembered"));
   ui.openLatest.disabled = !live;
   ui.chooseOutput.disabled = !live || state.choosing;
-  const answer = state.answer;
+  const answer = shownAnswer();
   const apart = viewing && comparing();
   for (const button of ui.periodButtons) {
     button.disabled = !viewing || apart;
@@ -4791,7 +4884,7 @@ function renderFilters(live) {
   ui.periodNext.disabled = !viewing || apart || shiftedRange(answer?.start, answer?.end, 1, state.view?.first_day, state.view?.last_day) === null;
   const grains = apart ? compareGrainsFor(compareByNow(), compareMonthNow(), compareModeNow()) : null;
   for (const button of ui.grainButtons) {
-    button.disabled = !viewing || (grains !== null && !grains.includes(button.dataset.grain));
+    button.disabled = !viewing || plotting() || (grains !== null && !grains.includes(button.dataset.grain));
     button.setAttribute("aria-pressed", String(viewing && (grains === null ? state.grain : state.compare.grain) === button.dataset.grain));
   }
   const auto = viewing ? autoGrainOf(answer?.start, answer?.end) : null;
@@ -4865,8 +4958,9 @@ function coverageBar(months, firstMonth, lastMonth) {
 }
 
 function renderShelf(live) {
-  // While comparing years, the item is chosen in the bar of the comparison.
-  const viewing = live && state.view !== null && state.opening === null && !comparing();
+  // While comparing years or plotting two items, the items are chosen in
+  // their bar.
+  const viewing = live && state.view !== null && state.opening === null && !apart();
   const open = state.shelf === "open";
   ui.body.classList.toggle("folded", !open);
   ui.shelf.hidden = !open;
@@ -4947,8 +5041,8 @@ function renderShelf(live) {
 function renderPicker(viewing) {
   const folded = state.shelf === "closed";
   ui.addWrap.hidden = !folded || !viewing;
-  ui.addItems.disabled = !viewing || comparing() || state.items.length >= MAX_PANELS;
-  if (comparing()) {
+  ui.addItems.disabled = !viewing || apart() || state.items.length >= MAX_PANELS;
+  if (apart()) {
     state.pickerOpen = false;
   }
   ui.addItems.setAttribute("aria-expanded", String(state.pickerOpen));
@@ -5033,7 +5127,7 @@ function renderStage(live) {
         action: "normalize",
       };
     }
-  } else if (viewing && !state.items.length && !comparing()) {
+  } else if (viewing && !state.items.length && !apart()) {
     empty = {
       heading: t("view.empty.items_heading"),
       text: t(state.shelf === "open" ? "view.empty.items_shelf" : "view.empty.items_add", { button: t("view.add.button") }),
@@ -5061,17 +5155,18 @@ function renderStage(live) {
     ui.stopNormalize.disabled = !live;
     ui.stopOther.disabled = !live || state.choosing;
   }
-  ui.caveat.hidden = !viewing || comparing();
+  ui.caveat.hidden = !viewing || apart();
+  renderOtherViews(viewing && live && !apart());
   renderPicker(viewing);
-  renderMarks(viewing && !comparing(), live);
+  renderMarks(viewing && !apart(), live);
   setText(ui.loading, state.loading && viewing ? t("view.loading") : "");
   ui.align.disabled = !viewing;
   ui.align.checked = state.align;
-  ui.seriesStop.hidden = !viewing || state.seriesStop === null || comparing();
+  ui.seriesStop.hidden = !viewing || state.seriesStop === null || apart();
   if (!ui.seriesStop.hidden) {
     renderStop(ui.seriesStop, null, ui.seriesStopLines, ui.seriesStopCode, stopBox(state.seriesStop.code, state.seriesStop.detail, state.productVersion));
   }
-  const showPanels = viewing && state.items.length > 0 && state.answer !== null && state.seriesStop === null && !comparing();
+  const showPanels = viewing && state.items.length > 0 && state.answer !== null && state.seriesStop === null && !apart();
   // Graphs only, while there are panels; a stop shows the whole page again,
   // and the focus goes from the button that hides to what shows instead.
   let refocus = false;
@@ -5157,6 +5252,605 @@ function renderHelp() {
   document.body.classList.toggle("help-open", state.helpOpen);
 }
 
+// --- Two items plotted against each other (stage O1 of v2.2.0) ------------
+
+// What the points show now: the answer drawn and its pair, the shapes of the
+// chart for the pointer and the keys, and what they were drawn for, so that
+// they are drawn again only when that changes.
+let plotContext = null;
+
+function plotting() {
+  return state.plot !== null && state.view !== null;
+}
+
+// The panels give their place to a comparison of years or to the points.
+function apart() {
+  return comparing() || plotting();
+}
+
+// The answer that the period and its arrows go by: that of the points while
+// they show (Codex's review of the plan of O1).
+function shownAnswer() {
+  return plotting() ? state.plotAnswer : state.answer;
+}
+
+// Ask for what shows: the points while they show, and the panels on the way
+// back, since the period and the activity types are the page's.
+function requestShown() {
+  if (plotting()) {
+    state.panelsStale = true;
+    requestPlot();
+  } else {
+    requestSeries();
+  }
+}
+
+// The menu of the other views in the row above the panels: Enter, Space, or
+// Down on its button opens it on its first item, Esc closes it to its button,
+// and Tab or a click elsewhere closes it (the checker's review of the plan of
+// O1: the keys of a menu of one item as of more).
+function renderOtherViews(usable) {
+  ui.otherViews.disabled = !usable;
+  if (!usable) {
+    state.otherOpen = false;
+  }
+  ui.otherViews.setAttribute("aria-expanded", String(state.otherOpen));
+  ui.otherMenu.hidden = !state.otherOpen;
+  ui.otherPlot.disabled = plotPairOf(state.plotPair, state.view?.items) === null;
+}
+
+function setOtherViews(open, focus = null) {
+  state.otherOpen = open;
+  render();
+  if (focus === "first") {
+    otherItems()[0]?.focus();
+  } else if (focus === "button") {
+    ui.otherViews.focus();
+  }
+}
+
+function otherItems() {
+  return [...ui.otherMenu.querySelectorAll('[role="menuitem"]')].filter((item) => !item.disabled);
+}
+
+function otherButtonKey(event) {
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    setOtherViews(true, "first");
+  }
+}
+
+function otherMenuKey(event) {
+  const items = otherItems();
+  const at = items.indexOf(document.activeElement);
+  if (event.key === "Escape") {
+    event.preventDefault();
+    setOtherViews(false, "button");
+  } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    items[(at + (event.key === "ArrowDown" ? 1 : items.length - 1) + items.length) % items.length]?.focus();
+  } else if (event.key === "Home" || event.key === "End") {
+    event.preventDefault();
+    (event.key === "Home" ? items[0] : items[items.length - 1])?.focus();
+  } else if (event.key === "Tab") {
+    // Tab goes on from the button of the menu, which closes.
+    ui.otherViews.focus();
+    setOtherViews(false);
+  }
+}
+
+// The points of two items in the place of the panels: the pair remembered
+// (or the first one), with the period and the activity types of the page.
+function enterPlot() {
+  const pair = state.view === null || comparing() ? null : plotPairOf(state.plotPair, state.view.items);
+  if (pair === null) {
+    return;
+  }
+  listChanged("plot");
+  state.plotPair = pair;
+  state.plot = { table: false, sort: { column: "when", descending: true }, chosen: null };
+  state.plotAnswer = null;
+  state.plotAsked = null;
+  state.plotStop = null;
+  state.otherOpen = false;
+  state.typesOpen = false;
+  state.pickerOpen = false;
+  state.notesOpen = null;
+  state.layoutsOpen = false;
+  state.layoutSaving = false;
+  state.railLayoutsOpen = false;
+  render();
+  ui.plotX.focus();
+  requestPlot();
+}
+
+// Back to the panels as they were; answers on their way are dropped, and the
+// panels ask again where the period or the activity types changed meanwhile.
+function leavePlot() {
+  state.plot = null;
+  state.plotAnswer = null;
+  state.plotAsked = null;
+  state.plotStop = null;
+  state.plotLoading = false;
+  state.plotSeq += 1;
+  render();
+  ui.otherViews.focus();
+  if (state.panelsStale) {
+    state.panelsStale = false;
+    requestSeries();
+  }
+}
+
+function plotPayload() {
+  return {
+    view: state.view.view,
+    x: state.plotPair.x,
+    y: state.plotPair.y,
+    period: periodRequest(state.period, state.range),
+    types: typesRequest(state.counted, state.view.types),
+  };
+}
+
+// Ask for the points as one generation: an answer of an older one is dropped
+// when it comes; a ticket that the server no longer keeps opens the output
+// again, once; an output that cannot be read stops the page, and another stop
+// shows in the bar of the points (Codex's review of the plan of O1).
+async function requestPlot(again = true) {
+  if (!plotting()) {
+    return;
+  }
+  const seq = ++state.plotSeq;
+  state.plotLoading = true;
+  render();
+  const payload = plotPayload();
+  try {
+    const answer = await callApi("/api/view/points", payload);
+    if (seq !== state.plotSeq) {
+      return;
+    }
+    state.plotAnswer = answer;
+    state.plotAsked = payload;
+    state.plotStop = null;
+    if (state.plot !== null) {
+      state.plot.chosen = null;
+    }
+  } catch (error) {
+    if (seq !== state.plotSeq) {
+      return;
+    }
+    if (connectionFailure(error)) {
+      // The bar says so.
+    } else if (error.code === "VIEW_NOT_OPEN" && again && state.target !== null) {
+      if (await reopen()) {
+        if (seq !== state.plotSeq) {
+          return;
+        }
+        state.plotLoading = false;
+        requestPlot(false);
+        return;
+      }
+    } else if (OUTPUT_STOPS.includes(error.code)) {
+      state.view = null;
+      setAnswer(null);
+      state.compare = null;
+      state.plot = null;
+      state.stop = { code: error.code, detail: error.detail };
+    } else {
+      state.plotStop = { code: error.code, detail: error.detail };
+    }
+  }
+  if (seq === state.plotSeq) {
+    state.plotLoading = false;
+  }
+  render();
+}
+
+// One of the two items changed; the other stays, the pair is remembered, and
+// the points are asked for again.
+function choosePlotItem(axis, key) {
+  if (!plotting()) {
+    return;
+  }
+  const pair = { ...state.plotPair, [axis]: key };
+  if (plotPairOf(pair, state.view.items)?.[axis] !== key) {
+    render();
+    return;
+  }
+  state.plotPair = pair;
+  state.plot.chosen = null;
+  state.plot.sort = plotSortAfter(state.plot.sort, ["when", "type", pair.x, pair.y]);
+  rememberItems(true);
+  requestPlot();
+}
+
+// The answer of the pair chosen: an answer of another pair on its way is not
+// drawn, as a calendar draws only its own (Codex's review of the diff of N1).
+function plotAnswerNow() {
+  const answer = state.plotAnswer;
+  const asked = state.plotAsked;
+  return answer !== null && asked !== null && asked.x === state.plotPair.x && asked.y === state.plotPair.y ? answer : null;
+}
+
+// The items of a list: those that can be plotted; the item of the other list
+// is disabled, and says why (the checker's review of the plan of O1).
+function renderPlotItems(select, axis, chosen, other) {
+  const items = (state.view?.items ?? []).filter(plotItem);
+  const taken = axis === "x" ? "view.plot.taken_y" : "view.plot.taken_x";
+  const signature = JSON.stringify([items.map((item) => item.key), chosen, other, state.language]);
+  if (select.dataset.signature !== signature) {
+    select.replaceChildren(
+      ...items.map((item) => {
+        const name = t(itemKey(item.key));
+        const option = element("option", "", item.key === other ? t(taken, { name }) : name);
+        option.value = item.key;
+        option.disabled = item.key === other;
+        return option;
+      }),
+    );
+    select.dataset.signature = signature;
+  }
+  select.value = chosen;
+}
+
+// The bar of the points, its lines, and their chart or table. The words
+// under the points, that no relation is shown, always show with them (the
+// checker's review of the decisions of O1).
+function renderPlot(live) {
+  const viewing = live && state.view !== null && state.opening === null;
+  const plot = viewing && plotting() ? state.plot : null;
+  ui.plot.hidden = plot === null;
+  ui.plotOff.hidden = plot === null;
+  if (plot === null) {
+    plotContext = null;
+    ui.plotBody.replaceChildren();
+    return;
+  }
+  const [before = "", rest = ""] = t("view.plot.title", { x: "\u0001", y: "\u0002" }).split("\u0001");
+  const [middle = "", after = ""] = rest.split("\u0002");
+  setText(ui.plotBefore, before);
+  setText(ui.plotMiddle, middle);
+  setText(ui.plotAfter, after);
+  renderPlotItems(ui.plotX, "x", state.plotPair.x, state.plotPair.y);
+  renderPlotItems(ui.plotY, "y", state.plotPair.y, state.plotPair.x);
+  const drawn = plotAnswerNow();
+  ui.plotTable.disabled = drawn === null || !drawn.points.length;
+  ui.plotTable.setAttribute("aria-pressed", String(plot.table));
+  ui.plotTableChart.hidden = !plot.table;
+  ui.plotTableTable.hidden = plot.table;
+  setText(ui.plotLoading, state.plotLoading ? t("view.loading") : "");
+  ui.plotStop.hidden = state.plotStop === null;
+  if (!ui.plotStop.hidden) {
+    renderStop(ui.plotStop, null, ui.plotStopLines, ui.plotStopCode, stopBox(state.plotStop.code, state.plotStop.detail, state.productVersion));
+  }
+  setText(ui.plotCount, drawn === null ? "" : describe(plotCount(drawn, state.language)));
+  ui.plotCut.hidden = drawn === null || !plotCut(drawn);
+  setText(ui.plotCut, ui.plotCut.hidden ? "" : t("view.plot.cut", { max: countText(drawn.limit, state.language) }));
+  ui.plotNone.hidden = drawn === null || drawn.points.length > 0;
+  renderPlotBody(drawn);
+}
+
+// The chart of the points or their table, drawn again only when what they
+// show changes; the point chosen moves without drawing them again.
+function renderPlotBody(drawn) {
+  const plot = state.plot;
+  if (plot === null) {
+    return;
+  }
+  // While the points of a new request are on their way, what shows stays,
+  // dimmed, so that the focus stays where it is; they are drawn in its place
+  // when they come.
+  ui.plotBody.classList.toggle("waiting", state.plotLoading);
+  if (drawn === null && state.plotLoading && plotContext !== null && plotContext.answer !== null) {
+    return;
+  }
+  const box = ui.plotBody.getBoundingClientRect();
+  const size = [Math.round(box.width), Math.round(box.height)];
+  const wanted = { answer: drawn, table: plot.table, sort: JSON.stringify(plot.sort), language: state.language, size: size.join(" ") };
+  if (plotContext !== null && Object.keys(wanted).every((key) => plotContext[key] === wanted[key])) {
+    renderPlotChosen(false);
+    return;
+  }
+  plotContext = { ...wanted, shapes: null };
+  // The focus stays where it was, on the chart, the table, or a head of the
+  // table, drawn again in its place (Codex's review of the diff of O1).
+  const focused = ui.plotBody.contains(document.activeElement) ? document.activeElement : null;
+  const column = focused?.closest('button[data-action="plot-sort"]')?.dataset.column ?? null;
+  const refocus =
+    column !== null ? `button[data-action="plot-sort"][data-column="${column}"]` : focused?.closest(".plot-points") ? ".plot-points" : focused?.closest(".plot-table") ? ".plot-table" : null;
+  if (drawn === null || !drawn.points.length) {
+    ui.plotBody.replaceChildren();
+    return;
+  }
+  const asked = state.plotAsked;
+  if (plot.table) {
+    ui.plotBody.replaceChildren(buildPlotTable(drawn, asked));
+  } else {
+    const chart = buildPlotChart(drawn, asked);
+    ui.plotBody.replaceChildren(chart.section);
+    Object.assign(plotContext, chart, { x: asked.x, y: asked.y });
+    // The chart takes the room that its head leaves, with the reading in it,
+    // which can wrap (Codex's review of the diff of O1).
+    fillPlotReading();
+    const room = chart.chart.getBoundingClientRect();
+    Object.assign(plotContext, drawPlotPoints(chart, drawn, asked, [room.width, room.height]), { headHeight: chart.head.getBoundingClientRect().height });
+    renderPlotChosen(false);
+  }
+  if (refocus !== null) {
+    ui.plotBody.querySelector(refocus)?.focus();
+  }
+}
+
+// The name of an item at its axis, with its unit, unless its name already
+// has it, as "Ground contact time (%)" has.
+function axisName(key) {
+  const name = t(itemKey(key));
+  const unit = unitKey(key) === undefined ? null : t(unitKey(key));
+  return unit === null || name.includes(`(${unit})`) || name.includes(`\uff08${unit}\uff09`) ? name : t("view.plot.axis", { name, unit });
+}
+
+// The chart: its head, with the reading of the point chosen, and its frame,
+// which takes the keys and the pointer; the points are drawn in it when it is
+// in the page, as large as its room (drawPlotPoints).
+function buildPlotChart(drawn, asked) {
+  const section = element("section", "panel-view plot-view");
+  section.setAttribute("aria-labelledby", "plot-title");
+  const head = element("div", "panel-head plot-head");
+  const read = element("span", "panel-read plot-read");
+  read.setAttribute("aria-hidden", "true");
+  head.append(element("span", "spacer"), read);
+  const chart = element("div", "plot-points");
+  chart.tabIndex = 0;
+  chart.setAttribute("role", "img");
+  chart.setAttribute("aria-label", t("view.plot.label", { x: t(itemKey(asked.x)), y: t(itemKey(asked.y)) }));
+  section.append(head, chart);
+  return { section, head, chart, read };
+}
+
+// The ticks up at the left and across below, the names of the two items, and
+// a point an activity, as the sample of OP0 drew them; a point chosen is drawn
+// again on top, framed.
+function drawPlotPoints(frame, drawn, asked, size) {
+  const x = asked.x;
+  const y = asked.y;
+  // As large as its room, which a small window keeps small.
+  const width = Math.max(240, Math.round(size[0]));
+  const height = Math.max(120, Math.round(size[1]));
+  const shapes = pointShapes(
+    drawn.points.map((point) => shown(x, point.values[x])),
+    drawn.points.map((point) => shown(y, point.values[y])),
+    { width, height, clockX: clockOf(x), clockY: clockOf(y) },
+  );
+  const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, width, height, "aria-hidden": "true", focusable: "false" });
+  const chosen = svgElement("circle", { class: "plot-dot plot-chosen", r: CHOSEN_RADIUS, display: "none" });
+  frame.chart.append(svg);
+  if (shapes === null) {
+    return { chosen, shapes };
+  }
+  const stepUp = Math.abs(shapes.up.ticks[1] - shapes.up.ticks[0]);
+  for (const tick of shapes.up.ticks) {
+    const at = shapes.y(tick).toFixed(1);
+    svg.append(svgElement("line", { class: "chart-grid", x1: shapes.left, x2: shapes.right, y1: at, y2: at }));
+    const label = svgElement("text", { class: "chart-tick", x: shapes.left - 8, y: (Number(at) + 4).toFixed(1), "text-anchor": "end" });
+    label.textContent = tickText(y, tick, stepUp, state.language);
+    svg.append(label);
+  }
+  const stepAcross = Math.abs(shapes.across.ticks[1] - shapes.across.ticks[0]);
+  shapes.across.ticks.forEach((tick, index, ticks) => {
+    const at = shapes.x(tick);
+    svg.append(svgElement("line", { class: "chart-grid", x1: at.toFixed(1), x2: at.toFixed(1), y1: shapes.top, y2: shapes.bottom }));
+    // The words of the ticks at the ends stay inside the chart.
+    const anchor = index === 0 && at - shapes.left < 24 ? "start" : index === ticks.length - 1 && shapes.right - at < 24 ? "end" : "middle";
+    const label = svgElement("text", { class: "chart-tick", x: at.toFixed(1), y: shapes.bottom + 16, "text-anchor": anchor });
+    label.textContent = tickText(x, tick, stepAcross, state.language);
+    svg.append(label);
+  });
+  const upName = svgElement("text", { class: "chart-tick plot-axis", x: shapes.left, y: shapes.top - 8 });
+  upName.textContent = axisName(y);
+  const acrossName = svgElement("text", { class: "chart-tick plot-axis", x: shapes.right, y: height - 4, "text-anchor": "end" });
+  acrossName.textContent = axisName(x);
+  svg.append(upName, acrossName);
+  const dots = svgElement("g", { class: "plot-dots" });
+  for (const place of shapes.places) {
+    // A point of a value that the page cannot place is not drawn.
+    if (Number.isFinite(place.x) && Number.isFinite(place.y)) {
+      dots.append(svgElement("circle", { class: "plot-dot", cx: place.x.toFixed(1), cy: place.y.toFixed(1), r: POINT_RADIUS }));
+    }
+  }
+  svg.append(dots, chosen);
+  return { chosen, shapes };
+}
+
+// The reading of the point chosen at the top right of the chart, or none;
+// what it says, for the keys and a click.
+function fillPlotReading() {
+  const context = plotContext;
+  const index = state.plot?.chosen ?? null;
+  const point = index === null ? undefined : context.answer.points[index];
+  if (point === undefined) {
+    context.read.replaceChildren();
+    return null;
+  }
+  const typeName = (name) => describe(typeMessage(name));
+  const reading = plotReading(point, context.x, context.y, typeName, state.language, sameValues(context.answer.points, index, context.x, context.y));
+  const nodes = [describe(reading.when), " ", reading.type];
+  for (const value of [reading.x, reading.y]) {
+    nodes.push(" ", describe(value.name), " ", element("strong", "", describe(value.value)));
+  }
+  if (reading.same !== null) {
+    nodes.push(" ", element("span", "plot-same", describe(reading.same)));
+  }
+  context.read.replaceChildren(...nodes);
+  return reading;
+}
+
+// The point chosen: its frame on top, and its reading at the top right of
+// the chart, which the keys and a click also say (Codex's review of the plan
+// of O1: the reading never hides the points). A reading of another number of
+// lines leaves the chart another room, and it is drawn again.
+function renderPlotChosen(speak) {
+  const context = plotContext;
+  if (context === null || context.answer === null || context.read === undefined || context.chosen === undefined) {
+    return;
+  }
+  const reading = fillPlotReading();
+  const index = state.plot?.chosen ?? null;
+  const place = reading === null || context.shapes === null ? undefined : context.shapes.places[index];
+  const placed = place !== undefined && Number.isFinite(place.x) && Number.isFinite(place.y);
+  context.chosen.setAttribute("cx", placed ? place.x.toFixed(1) : "0");
+  context.chosen.setAttribute("cy", placed ? place.y.toFixed(1) : "0");
+  context.chosen.setAttribute("display", placed ? "inline" : "none");
+  if (Math.abs(context.head.getBoundingClientRect().height - context.headHeight) > 1) {
+    context.size = null;
+    scheduleRedraw();
+  }
+  if (speak && reading !== null) {
+    const spoken = t("view.plot.spoken", {
+      when: describe(reading.when),
+      type: reading.type,
+      x: describe(reading.x.name),
+      xValue: describe(reading.x.value),
+      y: describe(reading.y.name),
+      yValue: describe(reading.y.value),
+    });
+    setText(ui.plotAnnouncer, reading.same === null ? spoken : `${spoken} ${describe(reading.same)}`);
+  }
+}
+
+function choosePoint(index, speak) {
+  if (state.plot === null || index === null) {
+    return;
+  }
+  state.plot.chosen = index;
+  renderPlotChosen(speak);
+}
+
+// The point under the pointer, by the places drawn (Codex's review of the
+// plan of O1).
+function plotPointAt(event) {
+  const context = plotContext;
+  const svg = context?.chart?.querySelector("svg");
+  if (!svg || context.shapes === null) {
+    return null;
+  }
+  const box = svg.getBoundingClientRect();
+  return nearestPoint(context.shapes.places, event.clientX - box.left, event.clientY - box.top, PLOT_REACH);
+}
+
+function pointsPointer(event) {
+  if (event.target.closest(".plot-points") !== null) {
+    const index = plotPointAt(event);
+    if (index !== null && index !== state.plot?.chosen) {
+      choosePoint(index, false);
+    }
+  }
+}
+
+function pointsClick(event) {
+  const sort = event.target.closest('button[data-action="plot-sort"]');
+  if (sort !== null && state.plot !== null) {
+    state.plot.sort = listSorted(state.plot.sort, sort.dataset.column);
+    render();
+    ui.plotBody.querySelector(`button[data-action="plot-sort"][data-column="${sort.dataset.column}"]`)?.focus();
+    return;
+  }
+  if (event.target.closest(".plot-points") !== null) {
+    choosePoint(plotPointAt(event), true);
+  }
+}
+
+// The keys of the chart: one point before or after in the order of their
+// dates and times, and the first and the last; every point can be chosen,
+// also where points meet.
+function pointsKeyDown(event) {
+  if (event.target.closest(".plot-points") === null || plotContext?.answer == null) {
+    return;
+  }
+  const next = plotMove(state.plot?.chosen ?? null, plotContext.answer.points.length, event.key);
+  if (next !== null) {
+    event.preventDefault();
+    choosePoint(next, true);
+  }
+}
+
+// The table of the points: one row an activity plotted, newest first at
+// first, ordered by its heads as the list of a period is; its rows are added
+// 400 at a time, as the table of a panel's are (Codex's review of the plan of
+// O1).
+function buildPlotTable(drawn, asked) {
+  const columns = ["when", "type", asked.x, asked.y];
+  const wrap = element("div", "list-table plot-table");
+  wrap.tabIndex = 0;
+  wrap.setAttribute("role", "region");
+  wrap.setAttribute("aria-label", t("view.plot.table_label", { x: t(itemKey(asked.x)), y: t(itemKey(asked.y)) }));
+  const table = element("table", "t");
+  const caption = element("caption", "visually-hidden", t("view.plot.table_caption"));
+  const head = element("thead");
+  const headRow = element("tr");
+  for (const column of columns) {
+    const cell = element("th", column === "when" || column === "type" ? "" : "n");
+    cell.scope = "col";
+    const button = element("button", "list-sort", describe(listHead(column)));
+    button.type = "button";
+    button.dataset.action = "plot-sort";
+    button.dataset.column = column;
+    if (state.plot.sort.column === column) {
+      cell.setAttribute("aria-sort", state.plot.sort.descending ? "descending" : "ascending");
+      const arrow = element("span", "list-arrow", state.plot.sort.descending ? "\u25bc" : "\u25b2");
+      arrow.setAttribute("aria-hidden", "true");
+      button.append(arrow);
+    }
+    cell.append(button);
+    headRow.append(cell);
+  }
+  head.append(headRow);
+  const body = element("tbody");
+  table.append(caption, head, body);
+  wrap.append(table);
+  const typeName = (name) => describe(typeMessage(name));
+  const rows = sortedListRows(drawn.points, state.plot.sort, typeName, state.language);
+  let shownRows = 0;
+  const sentinel = element("tr");
+  const more = () => {
+    const part = document.createDocumentFragment();
+    for (const row of rows.slice(shownRows, shownRows + TABLE_ROWS)) {
+      const line = element("tr");
+      for (const column of columns) {
+        const text =
+          column === "when"
+            ? describe(plotWhen(row, state.language))
+            : column === "type"
+              ? typeName(row.type)
+              : listValueText(column, row.values?.[column], state.language);
+        const cell = element(column === "when" ? "th" : "td", column === "when" || column === "type" ? "" : "n", text ?? "\u2014");
+        if (column === "when") {
+          cell.scope = "row";
+        }
+        line.append(cell);
+      }
+      part.append(line);
+    }
+    shownRows = Math.min(rows.length, shownRows + TABLE_ROWS);
+    sentinel.remove();
+    body.append(part);
+    if (shownRows < rows.length) {
+      body.append(sentinel);
+    }
+  };
+  more();
+  if (shownRows < rows.length && typeof IntersectionObserver === "function") {
+    const watcher = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        more();
+        if (shownRows >= rows.length) {
+          watcher.disconnect();
+        }
+      }
+    }, { root: wrap, rootMargin: "400px" });
+    watcher.observe(sentinel);
+  }
+  return wrap;
+}
+
 function render() {
   document.documentElement.lang = state.language;
   for (const node of document.querySelectorAll("[data-i18n]")) {
@@ -5177,6 +5871,7 @@ function render() {
   renderLayouts(live);
   renderStage(live);
   renderCompare(live);
+  renderPlot(live);
   renderFooter(live);
   renderHelp();
 }
@@ -5611,6 +6306,31 @@ function connect() {
     render();
   });
   ui.compareBack.addEventListener("click", leaveCompare);
+  // The other views and the points of two items (stage O1 of v2.2.0).
+  ui.otherViews.addEventListener("click", () => setOtherViews(!state.otherOpen, state.otherOpen ? null : "first"));
+  ui.otherViews.addEventListener("keydown", otherButtonKey);
+  ui.otherMenu.addEventListener("keydown", otherMenuKey);
+  ui.otherPlot.addEventListener("click", () => {
+    setOtherViews(false);
+    enterPlot();
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (state.otherOpen && event.target.closest(".other-views") === null) {
+      setOtherViews(false);
+    }
+  });
+  ui.plotX.addEventListener("change", () => choosePlotItem("x", ui.plotX.value));
+  ui.plotY.addEventListener("change", () => choosePlotItem("y", ui.plotY.value));
+  ui.plotTable.addEventListener("click", () => {
+    if (state.plot !== null) {
+      state.plot.table = !state.plot.table;
+      render();
+    }
+  });
+  ui.plotBack.addEventListener("click", leavePlot);
+  ui.plotBody.addEventListener("pointermove", pointsPointer);
+  ui.plotBody.addEventListener("click", pointsClick);
+  ui.plotBody.addEventListener("keydown", pointsKeyDown);
   ui.compareYears.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-year]");
     if (button !== null) {
@@ -5708,6 +6428,7 @@ function connect() {
     const watcher = new ResizeObserver(scheduleRedraw);
     watcher.observe(ui.panels);
     watcher.observe(ui.comparePanels);
+    watcher.observe(ui.plotBody);
     plotWatcher = new ResizeObserver(scheduleRedraw);
   } else {
     window.addEventListener("resize", scheduleRedraw);
@@ -5757,6 +6478,7 @@ async function start() {
     const by = compareByToOpen(state.settings);
     state.compareBy = by.by;
     state.compareWeeks = by.weeks;
+    state.plotPair = plotPairToOpen(state.settings);
     state.wantedTypes = Array.isArray(state.settings.view_types) ? [...state.settings.view_types] : null;
     const marks = marksToOpen(state.settings);
     takeMarks(marks.marks);

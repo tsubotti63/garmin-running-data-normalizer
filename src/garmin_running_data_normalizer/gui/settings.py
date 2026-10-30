@@ -69,7 +69,7 @@ from .layouts import BUILT_IN_IDS, kept_hidden, kept_layouts
 from .layouts import change_layouts as _changed_layouts
 from .marks import MARKS_FORMAT, MARKS_FORMAT_PREFIX, MARKS_FORMAT_VERSION, kept_marks
 from .marks import change_marks as _changed_marks
-from .views import compare_by_ok, compare_mode_ok, compare_month_ok, compare_weeks_ok, grain_ok, period_choice
+from .views import compare_by_ok, compare_mode_ok, compare_month_ok, compare_weeks_ok, grain_ok, period_choice, plot_pair_ok
 
 SETTINGS_FORMAT = "garmin-running-data-normalizer-gui-settings-v2"
 _FORMAT_PREFIX = "garmin-running-data-normalizer-gui-settings-v"
@@ -208,6 +208,9 @@ def _view_values(data: dict[str, Any]) -> dict[str, Any]:
     # Whether the marks show (stage M1).
     if isinstance(data.get("view_marks_shown"), bool):
         values["view_marks_shown"] = data["view_marks_shown"]
+    # The two items plotted against each other, as one pair (stage O1).
+    if plot_pair_ok(data.get("view_plot")):
+        values["view_plot"] = {"x": data["view_plot"]["x"], "y": data["view_plot"]["y"]}
     return values
 
 
@@ -522,6 +525,8 @@ VIEW_KEYS = {
     "compare_weeks": "view_compare_weeks",
     # Whether the marks show (stage M1).
     "marks_shown": "view_marks_shown",
+    # The two items plotted against each other (stage O1).
+    "plot": "view_plot",
 }
 
 
@@ -631,6 +636,7 @@ def launch_answer(
         "view_compare_by": values.get("view_compare_by"),
         "view_compare_weeks": values.get("view_compare_weeks"),
         "view_marks_shown": values.get("view_marks_shown"),
+        "view_plot": values.get("view_plot"),
         "view_marks": list(marks or []),
         "marks_notice": marks_notice,
         "timezone": values.get("timezone"),

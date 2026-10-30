@@ -363,6 +363,24 @@ class GuiCatalogTest(unittest.TestCase):
                 with self.subTest(language=language, key=key):
                     self.assertIn(quote.format(name), catalog[key])
 
+    def test_two_items_plotted_say_no_relation_and_quote_the_page(self) -> None:
+        # v2.2.0 O1 (the checker's review of the plan): what is not used while
+        # plotting quotes the words of the page; no word of the points reads a
+        # relation into them, and the English "relation" is only in the fixed
+        # words under the points, which say that none is shown.
+        catalogs = {language: load_catalog(language) for language in LANGUAGES}
+        for language, catalog in catalogs.items():
+            quote = "“{}”" if language == "en" else "「{}」"
+            for named in ("view.shelf.heading", "view.layouts.heading", "view.grain.label"):
+                with self.subTest(language=language, named=named):
+                    self.assertIn(quote.format(catalog[named]), catalog["view.plot.off"])
+            plotted = " ".join(value for key, value in catalog.items() if key.startswith(("view.plot.", "view.other.")) and key != "view.plot.caveat")
+            for word in ("関係", "相関", "傾向") if language == "ja" else ("correlat", "trend", "relation"):
+                with self.subTest(language=language, word=word):
+                    self.assertNotIn(word, plotted.lower())
+        self.assertEqual(catalogs["ja"]["view.plot.caveat"], "点で並べた 2 つの項目のあいだの関係（どちらが原因か）は、このアプリは示しません。")
+        self.assertEqual(catalogs["en"]["view.plot.caveat"], "This app shows no relation or cause between the two items plotted.")
+
     def test_page_scripts_change_text_without_markup(self) -> None:
         # Paths and names from the computer reach the page; it sets them with
         # textContent only, so that none of them is read as HTML (stage B1a).

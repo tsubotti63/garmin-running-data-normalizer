@@ -1623,3 +1623,110 @@ test("a calendar is drawn only from an answer of whole years by day (Codex's rev
   assert.equal(view.calendarAnswer({ by: "race", grain: "week", month: null }), false);
   assert.equal(view.calendarAnswer(null), false);
 });
+
+// --- Two items plotted against each other (stage O1 of v2.2.0) ------------
+
+const COUNT_ITEM = { key: "count", group: "act", kind: "count", unit: "activity", unit_group: null, per_day: false, sleep: false, from_fit: false };
+
+test("two items are plotted from the items of one activity, as one pair of two different ones", () => {
+  // The items of the activities that one activity has a value of: not the
+  // count, nor an item of the days (view/series.py point_item).
+  assert.deepEqual([...ITEMS, COUNT_ITEM].filter(view.plotItem).map((entry) => entry.key), ["dist", "pace", "hr", "asc", "gct"]);
+  assert.deepEqual(view.PLOT_FIRST, { x: "pace", y: "hr" });
+  assert.equal(view.MAX_POINTS, 5000);
+  // The pair that the settings remember, as one, never one of them alone
+  // (Codex's review of the plan of O1).
+  assert.deepEqual(view.plotPairToOpen({ view_plot: { x: "dist", y: "gct" } }), { x: "dist", y: "gct" });
+  for (const pair of [{ x: "dist", y: "dist" }, { x: "dist" }, { x: "nope", y: "hr" }, ["dist", "hr"], "dist", null, undefined]) {
+    assert.deepEqual(view.plotPairToOpen({ view_plot: pair }), { x: "pace", y: "hr" });
+  }
+  assert.deepEqual(view.plotPairToOpen(null), { x: "pace", y: "hr" });
+  // Among the items of an output: the pair, the first pair, or none.
+  assert.deepEqual(view.plotPairOf({ x: "dist", y: "gct" }, ITEMS), { x: "dist", y: "gct" });
+  assert.deepEqual(view.plotPairOf({ x: "dist", y: "rhr" }, ITEMS), { x: "pace", y: "hr" });
+  assert.deepEqual(view.plotPairOf({ x: "count", y: "dist" }, [...ITEMS, COUNT_ITEM]), { x: "pace", y: "hr" });
+  assert.deepEqual(view.plotPairOf({ x: "hr", y: "hr" }, ITEMS), { x: "pace", y: "hr" });
+  assert.equal(view.plotPairOf({ x: "dist", y: "rhr" }, ITEMS.filter((entry) => entry.key !== "hr")), null);
+  // Forgetting the settings forgets the pair.
+  assert.equal("view_plot" in view.settingsAfterForget({ view_plot: { x: "dist", y: "hr" } }), false);
+});
+
+test("a point says its date and time with its year, or its date only, as the output has them", () => {
+  const point = { day: "2026-09-14", datetime: "2026-09-14T06:30:00+09:00", type: "running", values: { pace: 0.321, hr: 144 } };
+  assert.equal(words(view.plotWhen(point, "ja"), "ja"), "2026年9月14日（月）6:30");
+  assert.equal(words(view.plotWhen(point, "en"), "en"), "Mon, September 14, 2026 6:30");
+  // Without a time that can be read, the day of the row (Codex's review of
+  // the plan of O1); never a timezone changed.
+  assert.equal(words(view.plotWhen({ ...point, datetime: null }, "ja"), "ja"), "2026年9月14日（月）");
+  assert.equal(words(view.plotWhen({ ...point, datetime: "the morning" }, "en"), "en"), "Mon, September 14, 2026");
+  assert.equal(words(view.plotWhen({ ...point, datetime: "2026-09-14T23:05:12-04:00" }, "ja"), "ja"), "2026年9月14日（月）23:05");
+  const reading = view.plotReading(point, "pace", "hr", (name) => `T:${name}`, "ja", 2);
+  assert.equal(reading.type, "T:running");
+  assert.equal(words(reading.x.name, "ja"), "平均ペース");
+  assert.equal(words(reading.x.value, "ja"), "5:21 /km");
+  assert.equal(words(reading.y.value, "ja"), "144 bpm");
+  assert.equal(words(reading.same, "ja"), "同じ値の回がほかに 2 回");
+  assert.equal(view.plotReading(point, "pace", "hr", String, "ja", 0).same, null);
+});
+
+test("the point under the pointer is the nearest drawn within reach, the newest of those as near", () => {
+  const places = [{ x: 10, y: 10 }, { x: 20, y: 10 }, { x: 20, y: 10 }, { x: 100, y: 100 }];
+  assert.equal(view.nearestPoint(places, 11, 10, 12), 0);
+  // Two points in one place: the newer, which comes later.
+  assert.equal(view.nearestPoint(places, 19, 11, 12), 2);
+  assert.equal(view.nearestPoint(places, 60, 60, 12), null);
+  assert.equal(view.nearestPoint([], 0, 0, 12), null);
+  const points = [{ values: { a: 1, b: 2 } }, { values: { a: 1, b: 2 } }, { values: { a: 1, b: 3 } }];
+  assert.equal(view.sameValues(points, 0, "a", "b"), 1);
+  assert.equal(view.sameValues(points, 2, "a", "b"), 0);
+  assert.equal(view.sameValues(points, 9, "a", "b"), 0);
+});
+
+test("the keys move one point in the order of their dates, or to the first and the last, and stop at the ends", () => {
+  assert.equal(view.plotMove(null, 5, "ArrowRight"), 4);
+  assert.equal(view.plotMove(null, 5, "ArrowLeft"), 4);
+  assert.equal(view.plotMove(null, 5, "Home"), 0);
+  assert.equal(view.plotMove(2, 5, "ArrowLeft"), 1);
+  assert.equal(view.plotMove(2, 5, "ArrowRight"), 3);
+  assert.equal(view.plotMove(4, 5, "ArrowRight"), 4);
+  assert.equal(view.plotMove(0, 5, "ArrowLeft"), 0);
+  assert.equal(view.plotMove(1, 5, "End"), 4);
+  assert.equal(view.plotMove(1, 5, "ArrowUp"), null);
+  assert.equal(view.plotMove(null, 0, "End"), null);
+});
+
+test("a table of the points is never ordered by a column that it no longer has", () => {
+  // Codex's review of the diff of O1: the column of an item changed goes.
+  const columns = ["when", "type", "pace", "hr"];
+  assert.deepEqual(view.plotSortAfter({ column: "hr", descending: false }, columns), { column: "hr", descending: false });
+  assert.deepEqual(view.plotSortAfter({ column: "dist", descending: false }, columns), { column: "when", descending: true });
+  assert.deepEqual(view.plotSortAfter(undefined, columns), { column: "when", descending: true });
+});
+
+test("the line under the points says their numbers only, and that the newest are kept where they are cut", () => {
+  // The checker's review of the plan of O1, with the words of OP0.
+  const answer = { total: 4900, with_values: 4812, missing: 88, limit: 5000, points: new Array(4812).fill(null) };
+  assert.equal(words(view.plotCount(answer, "ja"), "ja"), "点：4,812 回（この期間の 4,900 回のうち、両方の値がある回。値の無い回 88）");
+  assert.equal(view.plotCut(answer), false);
+  const cut = { total: 6200, with_values: 6100, missing: 100, limit: 5000, points: new Array(5000).fill(null) };
+  assert.equal(words(view.plotCount(cut, "ja"), "ja"), "点：5,000 回（この期間の 6,200 回のうち、両方の値がある 6,100 回の新しい回。値の無い回 100）");
+  assert.equal(words(view.plotCount(cut, "en"), "en"), "Points: 5,000 (the newest of the 6,100 activities of this period with both values, of 6,200; without them: 100)");
+  assert.equal(view.plotCut(cut), true);
+  assert.equal(translate(catalogs, "ja", "view.plot.cut", { max: "5,000" }), "新しい 5,000 回だけを点にしています。期間をしぼると全部を出せます。");
+});
+
+test("the points are in the order of their dates and times as the server orders them", () => {
+  // view/series.py _moment_key and listMomentKey are one rule: the date and
+  // the time as they show, the day where the time cannot be read, and then
+  // the order of the output (as the test of the server has them).
+  const points = [
+    { day: "2024-03-04", datetime: "2024-03-04T07:00:00+09:00", type: "running", values: { dist: 5000 } },
+    { day: "2024-03-04", datetime: "2024-03-04T06:30:00+08:00", type: "running", values: { dist: 6000 } },
+    { day: "2024-03-04", datetime: null, type: "running", values: { dist: 7000 } },
+    { day: "2024-03-04", datetime: "not a time", type: "running", values: { dist: 8000 } },
+    { day: "2024-03-03", datetime: "2024-03-03T21:00:00+09:00", type: "running", values: { dist: 9000 } },
+    { day: "2024-03-04", datetime: "2024-03-04T07:00:00+09:00", type: "running", values: { dist: 4000 } },
+  ];
+  const sorted = view.sortedListRows(points, { column: "when", descending: false }, String, "ja");
+  assert.deepEqual(sorted.map((row) => row.values.dist), [9000, 7000, 8000, 6000, 5000, 4000]);
+});

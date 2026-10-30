@@ -520,6 +520,42 @@ class SettingsOfVersion220Test(unittest.TestCase):
         values = read_settings(self.path)[0]
         self.assertEqual((values["view_compare_by"], values.get("view_compare_weeks")), ("race", None))
 
+    def test_the_two_items_plotted_are_kept_as_one_pair(self) -> None:
+        # Stage O1 of v2.2.0: the two items plotted against each other, kept
+        # as one pair of two different items that one activity has a value
+        # of, and given to the page when it starts; a pair of another form is
+        # left out whole, so that one of them is never kept alone (Codex's
+        # review of the plan of O1).
+        for pair in ({"x": "pace", "y": "hr"}, {"x": "dist", "y": "time"}, {"x": "gct", "y": "pace"}):
+            with self.subTest(pair=pair):
+                self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_plot": pair})
+                values = read_settings(self.path)[0]
+                self.assertEqual(values["view_plot"], pair)
+                self.assertEqual(launch_answer(values, None, present=True)["view_plot"], pair)
+        for pair in (
+            {"x": "hr", "y": "hr"},
+            {"x": "count", "y": "hr"},
+            {"x": "pace", "y": "rhr"},
+            {"x": "pace"},
+            {"y": "hr"},
+            {"x": "pace", "y": "hr", "z": "dist"},
+            {"x": "pace", "y": None},
+            {"x": "Pace", "y": "hr"},
+            ["pace", "hr"],
+            "pace",
+            None,
+        ):
+            with self.subTest(pair=pair):
+                self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_plot": pair})
+                values = read_settings(self.path)[0]
+                self.assertEqual(values, {"store": self.store})
+                self.assertIsNone(launch_answer(values, None, present=True)["view_plot"])
+        # The page writes the pair with the rest of the view; None takes it away.
+        self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"plot": {"x": "dist", "y": "pace"}}))
+        self.assertEqual(read_settings(self.path)[0]["view_plot"], {"x": "dist", "y": "pace"})
+        self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"plot": None}))
+        self.assertNotIn("view_plot", read_settings(self.path)[0])
+
     def test_the_view_page_changes_only_the_values_that_it_gives(self) -> None:
         self.assertIsNone(write_settings(self.path, {"store": self.store, **self.view_values()}))
         self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"grain": "month", "period": "5y"}))
@@ -739,6 +775,24 @@ class LayoutsApiTest(GuiServerTestCase):
         for extra in ({"compare_by": "month"}, {"compare_by": 2}, {"compare_weeks": 10}, {"compare_weeks": 28}, {"compare_weeks": True}, {"compare_weeks": "16"}, {"compare_weeks": 16.0}):
             with self.subTest(extra=extra):
                 self.assertEqual(self.post("/api/settings/view", {**base, **extra}), (422, {"error": "REQUEST_INVALID"}))
+
+    def test_the_view_page_remembers_the_two_items_plotted(self) -> None:
+        # Stage O1 of v2.2.0: the pair of the two items plotted, with the rest
+        # of the view; None takes it away, and a pair of another form is
+        # refused.
+        path = places.settings_file()
+        base = {"items": ["dist"], "shelf": "open"}
+        self.assertEqual(
+            self.post("/api/settings/view", {**base, "plot": {"x": "dist", "y": "pace"}}),
+            (200, {"remembered": True, "notice": None}),
+        )
+        self.assertEqual(read_settings(path)[0]["view_plot"], {"x": "dist", "y": "pace"})
+        self.assertEqual(self.post("/api/status")[1]["settings"]["view_plot"], {"x": "dist", "y": "pace"})
+        self.assertEqual(self.post("/api/settings/view", {**base, "plot": None})[0], 200)
+        self.assertNotIn("view_plot", read_settings(path)[0])
+        for plot in ({"x": "dist", "y": "dist"}, {"x": "count", "y": "dist"}, {"x": "dist"}, {"x": "dist", "y": "rhr"}, ["dist", "pace"], "dist", 3):
+            with self.subTest(plot=plot):
+                self.assertEqual(self.post("/api/settings/view", {**base, "plot": plot}), (422, {"error": "REQUEST_INVALID"}))
 
     def test_a_choice_of_types_that_cannot_be_kept_whole_is_not_remembered(self) -> None:
         # The page may count types that the settings cannot keep (the checker,

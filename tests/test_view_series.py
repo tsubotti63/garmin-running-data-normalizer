@@ -32,7 +32,9 @@ from garmin_running_data_normalizer.view.series import (
     MAX_ANSWER_BYTES,
     MAX_LIST_ROWS,
     MAX_PANELS,
+    MAX_POINTS,
     activity_list,
+    activity_points,
     activity_types,
     auto_grain,
     coverage,
@@ -40,6 +42,7 @@ from garmin_running_data_normalizer.view.series import (
     default_types,
     item_series,
     period_bounds,
+    point_item,
     view_answer,
 )
 
@@ -432,6 +435,124 @@ class ActivityListTest(unittest.TestCase):
             with self.subTest(key=key):
                 with self.assertRaises(ValueError):
                     activity_list(self.data(), key, (date(2024, 3, 4), date(2024, 3, 10)))
+
+
+class ActivityPointsTest(unittest.TestCase):
+    """Two items of the activities plotted against each other (stage O1 of
+    v2.2.0): the activities of the list of a period with a value of both,
+    the newest up to a limit, in the order of the time as it shows."""
+
+    def data(self) -> ViewData:
+        return ActivityListTest().data()
+
+    def test_the_points_are_the_rows_of_the_list_with_both_values(self) -> None:
+        # The numbers are made once (the checker's review of the plan of O1):
+        # for every week and every two items, the points are the rows of the
+        # list of the same days and types that have a value of both.
+        data = self.data()
+        keys = [item.key for item in ITEMS if point_item(item.key)]
+        self.assertEqual(keys, [item.key for item in ITEMS if item.dataset == ACTIVITIES and item.kind != COUNT])
+        weeks = period_bounds(data, "all", "week")
+        assert weeks is not None
+        for first, last, _partial in weeks.spans:
+            span = (date.fromordinal(first), date.fromordinal(last))
+            lists = {key: activity_list(data, key, span) for key in keys}
+            for x in keys:
+                for y in keys:
+                    if x == y:
+                        continue
+                    with self.subTest(week=span[0].isoformat(), x=x, y=y):
+                        answer = activity_points(data, x, y, span)
+                        rows = [
+                            {"day": a["day"], "datetime": a["datetime"], "type": a["type"], "values": {x: a["values"][x], y: b["values"][y]}}
+                            for a, b in zip(lists[x]["rows"], lists[y]["rows"])
+                        ]
+                        expected = [row for row in rows if None not in row["values"].values()]
+                        self.assertEqual(sorted(map(json.dumps, answer["points"])), sorted(map(json.dumps, expected)))
+                        self.assertEqual(answer["total"], lists[x]["total"])
+                        self.assertEqual(answer["with_values"], len(expected))
+                        self.assertEqual(answer["total"], answer["with_values"] + answer["missing"])
+                        self.assertEqual((answer["start"], answer["end"]), (lists[x]["start"], lists[x]["end"]))
+        # The week of 4 March: the distance and the pace of two activities;
+        # the third has no distance.
+        answer = activity_points(data, "dist", "pace", (date(2024, 3, 4), date(2024, 3, 10)))
+        self.assertEqual((answer["total"], answer["with_values"], answer["missing"], answer["limit"]), (3, 2, 1, MAX_POINTS))
+        self.assertEqual([point["values"]["dist"] for point in answer["points"]], [10000.0, 4000.0])
+        self.assertAlmostEqual(answer["points"][0]["values"]["pace"], 0.3)
+
+    def test_the_points_are_in_the_order_of_the_time_as_it_shows(self) -> None:
+        # As the list orders them (the checker's M3-1): the date and the time
+        # of the day before the offset, the day where the time cannot be
+        # read, and then the order of the output.
+        data = view_data(
+            [
+                act("2024-03-04", moment="2024-03-04T07:00:00+09:00", distance_m=5000, duration_sec=1500),
+                act("2024-03-04", moment="2024-03-04T06:30:00+08:00", distance_m=6000, duration_sec=1800),
+                act("2024-03-04", distance_m=7000, duration_sec=2100),
+                act("2024-03-04", moment="not a time", distance_m=8000, duration_sec=2400),
+                act("2024-03-03", moment="2024-03-03T21:00:00+09:00", distance_m=9000, duration_sec=2700),
+                act("2024-03-04", moment="2024-03-04T07:00:00+09:00", distance_m=4000, duration_sec=1200),
+            ]
+        )
+        answer = activity_points(data, "dist", "time")
+        self.assertEqual([point["values"]["dist"] for point in answer["points"]], [9000.0, 7000.0, 8000.0, 6000.0, 5000.0, 4000.0])
+
+    def test_the_newest_points_up_to_the_limit(self) -> None:
+        self.assertEqual(MAX_POINTS, 5000)
+        data = self.data()
+        everything = activity_points(data, "dist", "time")
+        with patch.object(series_module, "MAX_POINTS", 2):
+            answer = activity_points(data, "dist", "time")
+        self.assertEqual(answer["points"], everything["points"][-2:])
+        self.assertEqual((answer["total"], answer["with_values"], answer["missing"], answer["limit"]), (everything["total"], everything["with_values"], everything["missing"], 2))
+        self.assertGreater(everything["with_values"], 2)
+
+    def test_a_pace_that_is_not_a_finite_number_has_no_value(self) -> None:
+        # Codex's review of the plan of O1: a positive time over a tiny
+        # positive distance is not finite; the activity has no pace, in the
+        # points and in the list, and the answer is JSON without NaN or
+        # Infinity.
+        data = view_data(
+            [
+                act("2024-03-04", moment="2024-03-04T06:00:00+09:00", distance_m=1e-300, duration_sec=1e300, avg_hr=150),
+                act("2024-03-05", moment="2024-03-05T06:00:00+09:00", distance_m=10000, duration_sec=3000, avg_hr=140),
+            ]
+        )
+        answer = activity_points(data, "pace", "hr")
+        self.assertEqual((answer["total"], answer["with_values"], answer["missing"]), (2, 1, 1))
+        self.assertEqual(answer["points"][0]["day"], "2024-03-05")
+        json.dumps(answer, allow_nan=False)
+        listed = activity_list(data, "pace", (date(2024, 3, 4), date(2024, 3, 10)))
+        self.assertEqual([row["values"]["pace"] for row in listed["rows"]], [None, 0.3])
+        # The list of a period is JSON without them too (the checker's review
+        # of the decisions of O1).
+        json.dumps(listed, allow_nan=False)
+
+    def test_the_points_count_the_types_and_the_days_of_the_period(self) -> None:
+        data = self.data()
+        cycling = activity_points(data, "dist", "hr", "all", ["cycling"])
+        self.assertEqual([(point["type"], point["day"]) for point in cycling["points"]], [("cycling", "2024-03-06")])
+        # The last year of the output, which ends on 12 March 2024, cut to
+        # its first day.
+        year = activity_points(data, "dist", "time", "1y")
+        self.assertEqual((year["start"], year["end"]), ("2024-02-27", "2024-03-12"))
+        outside = activity_points(data, "dist", "time", (date(2020, 1, 1), date(2020, 1, 31)))
+        self.assertEqual(outside, {"start": None, "end": None, "total": 0, "with_values": 0, "missing": 0, "limit": MAX_POINTS, "points": []})
+        none = activity_points(data, "dist", "time", "all", [])
+        self.assertEqual((none["total"], none["points"]), (0, []))
+
+    def test_the_page_knows_the_limit_and_the_items_of_the_points(self) -> None:
+        # The page says the limit of the server and takes its items, but the
+        # count, as point_item does.
+        script = (Path(series_module.__file__).parent.parent / "gui" / "static" / "view_flow.mjs").read_text(encoding="utf-8")
+        self.assertIn(f"export const MAX_POINTS = {MAX_POINTS};", script)
+        self.assertIn('return typeof item?.key === "string" && isActivityItem(item) && item.kind !== "count";', script)
+
+    def test_only_two_different_items_of_one_activity_are_plotted(self) -> None:
+        for x, y in (("dist", "dist"), ("count", "dist"), ("dist", "count"), ("rhr", "dist"), ("dist", "vo2"), ("nope", "dist"), (None, "dist")):
+            with self.subTest(x=x, y=y):
+                with self.assertRaises(ValueError):
+                    activity_points(self.data(), x, y)  # type: ignore[arg-type]
 
 
 class TotalTest(unittest.TestCase):
