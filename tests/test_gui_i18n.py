@@ -305,6 +305,10 @@ class GuiCatalogTest(unittest.TestCase):
                 ("view.help.other_plot", "view.other.plot"),
                 ("view.help.other_spread", "view.other.spread"),
                 ("view.help.other_spread", "view.panel.unbig"),
+                # v2.2.0 Q2: the help of the summary names its button and a
+                # period of years.
+                ("view.help.recap_text", "view.recap.button"),
+                ("view.help.recap_text", "view.period.years1"),
             ):
                 with self.subTest(language=language, key=key):
                     self.assertIn(quote.format(catalog[named]), catalog[key])
@@ -416,7 +420,8 @@ class GuiCatalogTest(unittest.TestCase):
         # value only (Codex's review of the plan of Q1, 10).
         catalogs = {language: load_catalog(language) for language in LANGUAGES}
         for language, catalog in catalogs.items():
-            recap = " ".join(value for key, value in catalog.items() if key.startswith("view.recap."))
+            # The help of the summary too (stage Q2).
+            recap = " ".join(value for key, value in catalog.items() if key.startswith(("view.recap.", "view.help.recap")))
             words = ("増", "減", "速", "遅", "良", "悪", "改善", "上が", "下が", "↑", "↓", "▲", "▼") if language == "ja" else ("increas", "decreas", "faster", "slower", "better", "worse", "improv", "gain", "loss", "rise", "drop", "↑", "↓")
             for word in words:
                 with self.subTest(language=language, word=word):

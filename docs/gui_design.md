@@ -1090,11 +1090,33 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   high as the chart. The table gives a row a range, those of no activity among
   them. In forced colors, the bars are in the color of the text and the range
   chosen in the highlight.
+- The summary of the panels (stage Q1): `/api/view/series` with `"previous":
+  true` (a truth value, with the whole period `RANGE_GRAIN` only) also gives
+  the days chosen, before the output cuts them, and whether the output holds
+  them, and the panels of the period of the same length just before, counted
+  by `item_series` from the same reading with the same types: the years of
+  `LAST_YEARS` back from the day before the period (the day after the same day
+  n years before, as `period_bounds` counts them), the same number of days
+  before a range, and none for all time; an end before 1 January of the year 1
+  is null, and a period wholly outside the output has no panels. **Summary…**
+  after **Other views** opens a window that is not modal at the place of the
+  window of the marks (one of the two at a time), its title taking the focus:
+  a row for each item of the panels (a row for each series, in the order of
+  the server, named as the lines of a panel), the value of each period, and
+  their difference, that of the two values as written, with a sign only where
+  it does not read as 0, and a dash where a value is missing or the output
+  cuts a period, whose values are marked * with a note. It shows and asks only
+  with panels, outside a comparison of years and the other views, and not in
+  the graphs only; an answer is drawn only for what it was asked for (the
+  ticket, the period, the types, and the items), and the answers on their way
+  are dropped where the window hides and where an output starts opening. The
+  windows under the row above the panels end above the bar at the bottom of
+  the page.
 - An output that changes while the view page is open is read again at the
   next request (and so is any output when the date changes), so that a
-  comparison or a list asked right after a new normalization can come from
-  another reading than the panels beside it; asking again uses the new
-  reading. The guides say this in one place.
+  comparison, a list, or the summary asked right after a new normalization
+  can come from another reading than the panels beside it; asking again uses
+  the new reading. The guides say this in one place.
 
 ## Data handling in 2.0.0
 
