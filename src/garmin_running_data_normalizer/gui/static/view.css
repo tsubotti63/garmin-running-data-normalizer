@@ -2409,6 +2409,20 @@ button.small {
   color: var(--sub);
 }
 
+/* The distribution of one item (stage P1 of v2.2.0): one chart of bars in
+   the place of the panels, as the points, a bar a range in the first color
+   of the page, and the range chosen framed in the color of what is chosen
+   now. */
+.spread-bar {
+  fill: var(--d1);
+}
+
+.spread-chosen {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
 @media (forced-colors: active) {
   .plot-dot {
     fill: CanvasText;
@@ -2418,5 +2432,13 @@ button.small {
   .plot-dot.plot-chosen {
     fill: Highlight;
     stroke: CanvasText;
+  }
+
+  .spread-bar {
+    fill: CanvasText;
+  }
+
+  .spread-chosen {
+    stroke: Highlight;
   }
 }

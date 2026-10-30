@@ -1730,3 +1730,138 @@ test("the points are in the order of their dates and times as the server orders 
   const sorted = view.sortedListRows(points, { column: "when", descending: false }, String, "ja");
   assert.deepEqual(sorted.map((row) => row.values.dist), [9000, 7000, 8000, 6000, 5000, 4000]);
 });
+
+test("the item of a distribution is one of the points, the distance at first, and the settings keep it", () => {
+  // Stage P1 of v2.2.0: the items of the points, the distance as the sample
+  // of OP0 showed it, and an item of another output gives its place.
+  assert.equal(view.SPREAD_FIRST, "dist");
+  assert.equal(view.spreadItemToOpen({ view_spread: "gct" }), "gct");
+  for (const key of ["nope", 3, null, undefined, ["dist"]]) {
+    assert.equal(view.spreadItemToOpen({ view_spread: key }), "dist");
+  }
+  assert.equal(view.spreadItemToOpen(null), "dist");
+  assert.equal(view.spreadItemOf("gct", ITEMS), "gct");
+  assert.equal(view.spreadItemOf("rhr", ITEMS), "dist");
+  assert.equal(view.spreadItemOf("count", [...ITEMS, COUNT_ITEM]), "dist");
+  assert.equal(view.spreadItemOf("rhr", ITEMS.filter((entry) => entry.key !== "dist")), "pace");
+  assert.equal(view.spreadItemOf("dist", ITEMS.filter((entry) => !view.plotItem(entry))), null);
+  assert.equal("view_spread" in view.settingsAfterForget({ view_spread: "dist" }), false);
+});
+
+test("a range is written from the numbers of the answer, in the units of the page, for every item, also wider", () => {
+  // The checker's review of the plan of P1: the ends are (first + i) times
+  // the width over the scale of the answer, as the page writes the values
+  // of the item, at the width of the item and at 100 times it.
+  const cases = [
+    ["dist", { first: 10, width: 1000, scale: 1 }, "10〜11 km", "10–11 km"],
+    ["dist", { first: 0, width: 100000, scale: 1 }, "0〜100 km", "0–100 km"],
+    ["time", { first: 3, width: 600, scale: 1 }, "0:30〜0:40", "0:30–0:40"],
+    ["time", { first: 1, width: 60000, scale: 1 }, "16:40〜33:20", "16:40–33:20"],
+    ["pace", { first: 31, width: 10, scale: 1000 }, "5:10〜5:20 /km", "5:10–5:20 /km"],
+    ["pace", { first: 0, width: 1000, scale: 1000 }, "0:00〜16:40 /km", "0:00–16:40 /km"],
+    ["hr", { first: 29, width: 5, scale: 1 }, "145〜150 bpm", "145–150 bpm"],
+    ["mx", { first: 0, width: 500, scale: 1 }, "0〜500 bpm", "0–500 bpm"],
+    ["cad", { first: 34, width: 5, scale: 1 }, "170〜175", "170–175"],
+    ["pow", { first: 0, width: 1000, scale: 1 }, "0〜1,000", "0–1,000"],
+    ["load", { first: 10, width: 10, scale: 1 }, "100〜110", "100–110"],
+    ["asc", { first: 4, width: 10, scale: 1 }, "40〜50 m", "40–50 m"],
+    ["vo", { first: 17, width: 5, scale: 1 }, "8.5〜9.0 cm", "8.5–9.0 cm"],
+    ["vo", { first: 0, width: 500, scale: 1 }, "0〜50 cm", "0–50 cm"],
+    ["gct", { first: 24, width: 10, scale: 1 }, "240〜250 ms", "240–250 ms"],
+    ["gctp", { first: 30, width: 10, scale: 10 }, "30〜31 %", "30–31%"],
+    ["bal", { first: 99, width: 5, scale: 10 }, "49.5〜50.0 %", "49.5–50.0%"],
+    ["vr", { first: 0, width: 500, scale: 10 }, "0〜50 %", "0–50%"],
+    ["sl", { first: 24, width: 50, scale: 1 }, "1.20〜1.25 m", "1.20–1.25 m"],
+    ["sl", { first: 0, width: 5000, scale: 1 }, "0〜5 m", "0–5 m"],
+  ];
+  for (const [key, numbers, ja, en] of cases) {
+    const answer = { ...numbers, counts: [1], limit: 200, widened: false };
+    assert.equal(words(view.spreadRange(key, answer, 0, "ja"), "ja"), ja, key);
+    assert.equal(words(view.spreadRange(key, answer, 0, "en"), "en"), en, key);
+  }
+  // The words of a wider width: 10 minutes times 10 and 10 seconds a
+  // kilometre times 5, as the checker asked to see them.
+  const time = { first: 0, width: 6000, scale: 1, counts: [1], limit: 200, widened: true };
+  assert.equal(words(view.spreadWide("time", time, "ja"), "ja"), "区切りが 200 を超えるので、幅を 1:40 にしました。");
+  assert.equal(words(view.spreadWide("time", time, "en"), "en"), "As there would be more than 200 ranges, each range is 1:40 wide.");
+  const pace = { first: 6, width: 50, scale: 1000, counts: [1], limit: 200, widened: true };
+  assert.equal(words(view.spreadWide("pace", pace, "ja"), "ja"), "区切りが 200 を超えるので、幅を 0:50 /km にしました。");
+  assert.equal(words(view.spreadWide("dist", { first: 0, width: 5000, scale: 1, counts: [1], limit: 200, widened: true }, "ja"), "ja"), "区切りが 200 を超えるので、幅を 5 km にしました。");
+  assert.equal(view.spreadWide("dist", { first: 0, width: 1000, scale: 1, counts: [1], limit: 200, widened: false }, "ja"), null);
+});
+
+test("a range says its ends and its count, and an end that the page cannot write is a dash", () => {
+  // The checker's P1-3: the reading and the keys say what an end means.
+  const answer = { first: 10, width: 1000, scale: 1, counts: [3, 0, 42], limit: 200, widened: false };
+  assert.equal(words(view.spreadReading("dist", answer, 2, "ja"), "ja"), "12 km 以上 13 km 未満：42 回");
+  assert.equal(words(view.spreadReading("dist", answer, 1, "en"), "en"), "11 km or more, under 12 km: 0");
+  const pace = { first: 31, width: 10, scale: 1000, counts: [5], limit: 200, widened: false };
+  assert.equal(words(view.spreadReading("pace", pace, 0, "ja"), "ja"), "5:10 /km 以上 5:20 /km 未満：5 回");
+  // The checker's P1-4 and Codex's review of the plan of P1: ends past 2^53
+  // are not exact, and an answer of a number of more than 310 digits is
+  // Infinity in the page; neither is ever written as Infinity or NaN.
+  const past = { first: 2 ** 53, width: 1, scale: 1, counts: [1, 1], limit: 200, widened: false };
+  const huge = JSON.parse(`{"first": 1${"0".repeat(311)}, "width": 10, "scale": 1000, "counts": [1, 2], "limit": 200, "widened": true}`);
+  assert.equal(huge.first, Infinity);
+  const finite = { first: 1e290, width: 1000, scale: 1, counts: [1, 1], limit: 200, widened: true };
+  // A small number of a range with a very wide width, as an activity of 1e300
+  // m and one of 10 km give (the partial guard of P1): its ends are numbers,
+  // too large for the page to write.
+  const wide = { first: 0, width: 5e297, scale: 1, counts: [1, 1], limit: 200, widened: true };
+  assert.equal(words(view.spreadRange("dist", wide, 0, "ja"), "ja"), "0〜—");
+  for (const [key, given] of [["dist", past], ["pace", huge], ["dist", { ...past, first: 1e297, width: 5e297 }], ["dist", finite], ["dist", wide]]) {
+    for (const index of [0, 1]) {
+      for (const language of ["ja", "en"]) {
+        const text = [words(view.spreadRange(key, given, index, language), language), words(view.spreadReading(key, given, index, language), language), words(view.spreadWide(key, given, language), language)].join(" ");
+        // Never a number of hundreds of digits: the page writes a dash for an
+        // end of 1e15 or more in its units, so at most 18 digits, its
+        // separators aside (an end past 2^53 may be inexact).
+        assert.doesNotMatch(text.replace(/[,.\s\u202f]/g, ""), /Infinity|NaN|\d{21}/, text);
+      }
+    }
+  }
+  assert.deepEqual(view.spreadEnds(huge, 0), { left: null, right: null });
+  assert.equal(words(view.spreadRange("pace", huge, 0, "ja"), "ja"), "—〜—");
+  // Codex's review of the diff of P1: a number of a range past 2^53 is not
+  // exact in the page (5e17 mm of the step length are the range 1e16 of 50
+  // mm), and two ends that the page cannot tell apart, also of numbers below
+  // it (the range 2^53 - 3 of 3 m), are never written as one value.
+  const step = { first: 1e16, width: 50, scale: 1, counts: [1], limit: 200, widened: false };
+  assert.equal(step.first + 1, step.first);
+  assert.equal(words(view.spreadReading("sl", step, 0, "ja"), "ja"), "— 以上 — 未満：1 回");
+  const meet = { first: 2 ** 53 - 3, width: 3, scale: 1, counts: [1], limit: 200, widened: false };
+  assert.ok(Number.isSafeInteger(meet.first + 1) && meet.first * 3 === (meet.first + 1) * 3);
+  assert.deepEqual(view.spreadEnds(meet, 0), { left: null, right: null });
+  // Past 2^53 the next number of a range can be two ranges further (2^53 + 2
+  // and 2^53 + 4): its ends would differ, but the right one would be wrong.
+  const off = { first: 2 ** 53 + 2, width: 1, scale: 1, counts: [1], limit: 200, widened: false };
+  assert.ok(off.first < off.first + 1 && off.first + 1 - off.first === 2);
+  assert.deepEqual(view.spreadEnds(off, 0), { left: null, right: null });
+  for (const given of [past, huge, finite, step, meet, answer, pace, { first: 2 ** 53 - 20, width: 1, scale: 1, counts: [1, 1] }]) {
+    for (const index of [0, 1]) {
+      const { left, right } = view.spreadEnds(given, index);
+      assert.ok(left === null || right === null || left < right, JSON.stringify(given));
+    }
+  }
+});
+
+test("the keys move one range, those of no activity among them, and stop at the ends", () => {
+  // The checker's P1-3: as the rows of the table.
+  assert.equal(view.spreadMove(null, 5, "ArrowRight"), 0);
+  assert.equal(view.spreadMove(null, 5, "ArrowLeft"), 4);
+  assert.equal(view.spreadMove(2, 5, "ArrowLeft"), 1);
+  assert.equal(view.spreadMove(2, 5, "ArrowRight"), 3);
+  assert.equal(view.spreadMove(4, 5, "ArrowRight"), 4);
+  assert.equal(view.spreadMove(0, 5, "ArrowLeft"), 0);
+  assert.equal(view.spreadMove(3, 5, "Home"), 0);
+  assert.equal(view.spreadMove(1, 5, "End"), 4);
+  assert.equal(view.spreadMove(1, 5, "ArrowUp"), null);
+  assert.equal(view.spreadMove(null, 0, "End"), null);
+});
+
+test("the line under the ranges says their numbers only", () => {
+  const answer = { total: 3380, with_values: 3370, missing: 10, counts: [1], limit: 200 };
+  assert.equal(words(view.spreadCount(answer, "ja"), "ja"), "数えた回：3,370 回（この期間の 3,380 回のうち、値がある回。値の無い回 10）");
+  assert.equal(words(view.spreadCount(answer, "en"), "en"), "Counted: 3,370 (the activities of this period with a value, of 3,380; without one: 10)");
+  assert.equal(translate(catalogs, "ja", "view.spread.faster_left"), "値が小さいほど速い（グラフでは左ほど速い）。");
+});

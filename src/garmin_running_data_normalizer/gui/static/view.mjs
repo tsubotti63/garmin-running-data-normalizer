@@ -176,6 +176,14 @@ import {
   plotSortAfter,
   plotWhen,
   sameValues,
+  spreadCount,
+  spreadEndWords,
+  spreadItemOf,
+  spreadItemToOpen,
+  spreadMove,
+  spreadRange,
+  spreadReading,
+  spreadWide,
 } from "./view_flow.mjs";
 import {
   PLOT_BOTTOM,
@@ -199,6 +207,9 @@ import {
   CHOSEN_RADIUS,
   POINT_RADIUS,
   pointShapes,
+  SPREAD_CHOSEN_WIDTH,
+  spreadRangeAt,
+  spreadShapes,
 } from "./view_chart.mjs";
 
 const LANGUAGES = ["en", "ja"];
@@ -282,6 +293,7 @@ const ui = {
   compareOffRace: byId("compare-off-race"),
   compareOffCalendar: byId("compare-off-calendar"),
   plotOff: byId("plot-off"),
+  spreadOff: byId("spread-off"),
   body: byId("view-body"),
   shelf: byId("shelf"),
   shelfCount: byId("shelf-count"),
@@ -329,6 +341,7 @@ const ui = {
   otherViews: byId("other-views"),
   otherMenu: byId("other-views-menu"),
   otherPlot: byId("other-plot"),
+  otherSpread: byId("other-spread"),
   fullEnter: byId("full-enter"),
   fullBar: byId("full-bar"),
   fullText: byId("full-text"),
@@ -404,6 +417,25 @@ const ui = {
   plotNone: byId("plot-none"),
   plotAnnouncer: byId("plot-announcer"),
   plotCut: byId("plot-cut"),
+  // The distribution of one item (stage P1 of v2.2.0).
+  spread: byId("spread"),
+  spreadBefore: byId("spread-before"),
+  spreadItem: byId("spread-item"),
+  spreadAfter: byId("spread-after"),
+  spreadTable: byId("spread-table"),
+  spreadTableChart: byId("spread-table-chart"),
+  spreadTableTable: byId("spread-table-table"),
+  spreadBack: byId("spread-back"),
+  spreadCount: byId("spread-count"),
+  spreadLoading: byId("spread-loading"),
+  spreadStop: byId("spread-stop"),
+  spreadStopLines: byId("spread-stop-lines"),
+  spreadStopCode: byId("spread-stop-code"),
+  spreadBody: byId("spread-body"),
+  spreadNone: byId("spread-none"),
+  spreadAnnouncer: byId("spread-announcer"),
+  spreadWide: byId("spread-wide"),
+  spreadFaster: byId("spread-faster"),
   compareYears: byId("compare-years"),
   compareYearsLabel: byId("compare-years-label"),
   compareUpTo: byId("compare-up-to"),
@@ -569,6 +601,16 @@ const state = {
   plotSeq: 0,
   plotLoading: false,
   plotStop: null,
+  // The distribution of one item (stage P1 of v2.2.0), as the points: while
+  // it shows, whether its table shows and the range chosen; null while the
+  // panels show. The item is remembered apart.
+  spread: null,
+  spreadItem: "dist",
+  spreadAnswer: null,
+  spreadAsked: null,
+  spreadSeq: 0,
+  spreadLoading: false,
+  spreadStop: null,
   panelsStale: false,
   otherOpen: false,
   // The marks of the person (stage M1 of v2.2.0): as the server keeps them,
@@ -920,6 +962,7 @@ function viewValues() {
     compare_weeks: state.compareWeeks,
     marks_shown: state.marksShown,
     plot: { x: state.plotPair.x, y: state.plotPair.y },
+    spread: state.spreadItem,
   };
 }
 
@@ -1060,6 +1103,8 @@ async function openOutput(target, focus = false) {
   // And those of the points, before they could open the output before
   // again (Codex's review of the diff of O1).
   state.plotSeq += 1;
+  // And those of a distribution (stage P1).
+  state.spreadSeq += 1;
   const current = state.view === null ? null : state.items;
   state.opening = target.name;
   state.openingTarget = target;
@@ -1120,6 +1165,19 @@ async function openOutput(target, focus = false) {
       state.plotAsked = null;
       state.plotStop = null;
     }
+    // And a distribution where its item can be counted (stage P1).
+    if (state.spread !== null) {
+      const key = spreadItemOf(state.spreadItem, answer.items);
+      if (key === null) {
+        state.spread = null;
+      } else {
+        state.spreadItem = key;
+        state.spread.chosen = null;
+      }
+      state.spreadAnswer = null;
+      state.spreadAsked = null;
+      state.spreadStop = null;
+    }
     rememberItems();
     render();
     // A button that opened it is hidden now.
@@ -1129,6 +1187,7 @@ async function openOutput(target, focus = false) {
     requestSeries();
     requestCompare();
     requestPlot();
+    requestSpread();
   } catch (error) {
     if (seq !== state.openSeq) {
       return;
@@ -1139,6 +1198,7 @@ async function openOutput(target, focus = false) {
       setAnswer(null);
       state.compare = null;
       state.plot = null;
+      state.spread = null;
       // The field keeps the output that could not be opened.
       state.target = error.code === "OUTPUT_LIST_CHANGED" ? null : target;
       state.stop = { code: error.code, detail: error.detail };
@@ -1283,6 +1343,7 @@ async function requestSeries(again = true) {
       setAnswer(null);
       state.compare = null;
       state.plot = null;
+      state.spread = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.seriesStop = { code: error.code, detail: error.detail };
@@ -1403,8 +1464,9 @@ function rangeTyped() {
 }
 
 function setGrain(grain) {
-  // The points have no grouping (stage O1 of v2.2.0).
-  if (plotting()) {
+  // The points and a distribution have no grouping (stages O1 and P1 of
+  // v2.2.0).
+  if (otherShown()) {
     return;
   }
   if (comparing()) {
@@ -2864,6 +2926,9 @@ function scheduleRedraw() {
     if (!ui.plot.hidden) {
       renderPlotBody(plotAnswerNow());
     }
+    if (!ui.spread.hidden) {
+      renderSpreadBody(spreadAnswerNow());
+    }
   });
 }
 
@@ -3121,6 +3186,7 @@ async function requestList(again = true) {
       setAnswer(null);
       state.compare = null;
       state.plot = null;
+      state.spread = null;
       state.stop = { code: error.code, detail: error.detail };
       render();
       return;
@@ -3606,6 +3672,7 @@ async function requestCompare(again = true) {
       setAnswer(null);
       state.compare = null;
       state.plot = null;
+      state.spread = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.compareStop = { code: error.code, detail: error.detail };
@@ -4884,7 +4951,7 @@ function renderFilters(live) {
   ui.periodNext.disabled = !viewing || apart || shiftedRange(answer?.start, answer?.end, 1, state.view?.first_day, state.view?.last_day) === null;
   const grains = apart ? compareGrainsFor(compareByNow(), compareMonthNow(), compareModeNow()) : null;
   for (const button of ui.grainButtons) {
-    button.disabled = !viewing || plotting() || (grains !== null && !grains.includes(button.dataset.grain));
+    button.disabled = !viewing || otherShown() || (grains !== null && !grains.includes(button.dataset.grain));
     button.setAttribute("aria-pressed", String(viewing && (grains === null ? state.grain : state.compare.grain) === button.dataset.grain));
   }
   const auto = viewing ? autoGrainOf(answer?.start, answer?.end) : null;
@@ -5263,23 +5330,31 @@ function plotting() {
   return state.plot !== null && state.view !== null;
 }
 
-// The panels give their place to a comparison of years or to the points.
+// The points or a distribution in the place of the panels (stages O1 and
+// P1): the other views, which have no grouping and ask for their answers with
+// the period and the activity types of the page.
+function otherShown() {
+  return plotting() || spreading();
+}
+
+// The panels give their place to a comparison of years or to another view.
 function apart() {
-  return comparing() || plotting();
+  return comparing() || otherShown();
 }
 
-// The answer that the period and its arrows go by: that of the points while
-// they show (Codex's review of the plan of O1).
+// The answer that the period and its arrows go by: that of the other view
+// while it shows (Codex's reviews of the plans of O1 and P1).
 function shownAnswer() {
-  return plotting() ? state.plotAnswer : state.answer;
+  return plotting() ? state.plotAnswer : spreading() ? state.spreadAnswer : state.answer;
 }
 
-// Ask for what shows: the points while they show, and the panels on the way
-// back, since the period and the activity types are the page's.
+// Ask for what shows: the other view while it shows, and the panels on the
+// way back, since the period and the activity types are the page's.
 function requestShown() {
-  if (plotting()) {
+  if (otherShown()) {
     state.panelsStale = true;
     requestPlot();
+    requestSpread();
   } else {
     requestSeries();
   }
@@ -5297,6 +5372,7 @@ function renderOtherViews(usable) {
   ui.otherViews.setAttribute("aria-expanded", String(state.otherOpen));
   ui.otherMenu.hidden = !state.otherOpen;
   ui.otherPlot.disabled = plotPairOf(state.plotPair, state.view?.items) === null;
+  ui.otherSpread.disabled = spreadItemOf(state.spreadItem, state.view?.items) === null;
 }
 
 function setOtherViews(open, focus = null) {
@@ -5434,6 +5510,7 @@ async function requestPlot(again = true) {
       setAnswer(null);
       state.compare = null;
       state.plot = null;
+      state.spread = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.plotStop = { code: error.code, detail: error.detail };
@@ -5538,9 +5615,10 @@ function renderPlotBody(drawn) {
   }
   // While the points of a new request are on their way, what shows stays,
   // dimmed, so that the focus stays where it is; they are drawn in its place
-  // when they come.
+  // when they come; those of the same pair only, as for a distribution
+  // (Codex's review of the diff of P1).
   ui.plotBody.classList.toggle("waiting", state.plotLoading);
-  if (drawn === null && state.plotLoading && plotContext !== null && plotContext.answer !== null) {
+  if (drawn === null && state.plotLoading && plotContext !== null && plotContext.answer !== null && plotContext.pair === `${state.plotPair.x} ${state.plotPair.y}`) {
     return;
   }
   const box = ui.plotBody.getBoundingClientRect();
@@ -5550,7 +5628,7 @@ function renderPlotBody(drawn) {
     renderPlotChosen(false);
     return;
   }
-  plotContext = { ...wanted, shapes: null };
+  plotContext = { ...wanted, pair: drawn === null ? null : `${state.plotAsked.x} ${state.plotAsked.y}`, shapes: null };
   // The focus stays where it was, on the chart, the table, or a head of the
   // table, drawn again in its place (Codex's review of the diff of O1).
   const focused = ui.plotBody.contains(document.activeElement) ? document.activeElement : null;
@@ -5851,6 +5929,442 @@ function buildPlotTable(drawn, asked) {
   return wrap;
 }
 
+// --- The distribution of one item (stage P1 of v2.2.0) ---------------------
+
+// What the distribution shows now, as plotContext for the points.
+let spreadContext = null;
+
+function spreading() {
+  return state.spread !== null && state.view !== null;
+}
+
+// The distribution of one item in the place of the panels, as the points:
+// the item remembered (or the distance), with the period and the activity
+// types of the page.
+function enterSpread() {
+  const key = state.view === null || comparing() ? null : spreadItemOf(state.spreadItem, state.view.items);
+  if (key === null) {
+    return;
+  }
+  listChanged("spread");
+  state.spreadItem = key;
+  state.spread = { table: false, chosen: null };
+  state.spreadAnswer = null;
+  state.spreadAsked = null;
+  state.spreadStop = null;
+  state.otherOpen = false;
+  state.typesOpen = false;
+  state.pickerOpen = false;
+  state.notesOpen = null;
+  state.layoutsOpen = false;
+  state.layoutSaving = false;
+  state.railLayoutsOpen = false;
+  render();
+  ui.spreadItem.focus();
+  requestSpread();
+}
+
+// Back to the panels as they were, as from the points.
+function leaveSpread() {
+  state.spread = null;
+  state.spreadAnswer = null;
+  state.spreadAsked = null;
+  state.spreadStop = null;
+  state.spreadLoading = false;
+  state.spreadSeq += 1;
+  render();
+  ui.otherViews.focus();
+  if (state.panelsStale) {
+    state.panelsStale = false;
+    requestSeries();
+  }
+}
+
+function spreadPayload() {
+  return {
+    view: state.view.view,
+    item: state.spreadItem,
+    period: periodRequest(state.period, state.range),
+    types: typesRequest(state.counted, state.view.types),
+  };
+}
+
+// Ask for the ranges as one generation, as for the points (Codex's review of
+// the plan of P1): an answer of an older one is dropped when it comes; a
+// ticket that the server no longer keeps opens the output again, once; an
+// output that cannot be read stops the page, and another stop shows in the
+// bar of the distribution.
+async function requestSpread(again = true) {
+  if (!spreading()) {
+    return;
+  }
+  const seq = ++state.spreadSeq;
+  state.spreadLoading = true;
+  render();
+  const payload = spreadPayload();
+  try {
+    const answer = await callApi("/api/view/spread", payload);
+    if (seq !== state.spreadSeq) {
+      return;
+    }
+    state.spreadAnswer = answer;
+    state.spreadAsked = payload;
+    state.spreadStop = null;
+    if (state.spread !== null) {
+      state.spread.chosen = null;
+    }
+  } catch (error) {
+    if (seq !== state.spreadSeq) {
+      return;
+    }
+    if (connectionFailure(error)) {
+      // The bar says so.
+    } else if (error.code === "VIEW_NOT_OPEN" && again && state.target !== null) {
+      if (await reopen()) {
+        if (seq !== state.spreadSeq) {
+          return;
+        }
+        state.spreadLoading = false;
+        requestSpread(false);
+        return;
+      }
+    } else if (OUTPUT_STOPS.includes(error.code)) {
+      state.view = null;
+      setAnswer(null);
+      state.compare = null;
+      state.plot = null;
+      state.spread = null;
+      state.stop = { code: error.code, detail: error.detail };
+    } else {
+      state.spreadStop = { code: error.code, detail: error.detail };
+    }
+  }
+  if (seq === state.spreadSeq) {
+    state.spreadLoading = false;
+  }
+  render();
+}
+
+// The item of the distribution changed; it is remembered, and the ranges are
+// asked for again.
+function chooseSpreadItem(key) {
+  if (!spreading()) {
+    return;
+  }
+  if (spreadItemOf(key, state.view.items) !== key) {
+    render();
+    return;
+  }
+  state.spreadItem = key;
+  state.spread.chosen = null;
+  rememberItems(true);
+  requestSpread();
+}
+
+// The answer of the item chosen: an answer of another item on its way is
+// not drawn, as for the points.
+function spreadAnswerNow() {
+  const answer = state.spreadAnswer;
+  const asked = state.spreadAsked;
+  return answer !== null && asked !== null && asked.item === state.spreadItem ? answer : null;
+}
+
+// The items of the list: those of the points.
+function renderSpreadItems(select, chosen) {
+  const items = (state.view?.items ?? []).filter(plotItem);
+  const signature = JSON.stringify([items.map((item) => item.key), chosen, state.language]);
+  if (select.dataset.signature !== signature) {
+    select.replaceChildren(
+      ...items.map((item) => {
+        const option = element("option", "", t(itemKey(item.key)));
+        option.value = item.key;
+        return option;
+      }),
+    );
+    select.dataset.signature = signature;
+  }
+  select.value = chosen;
+}
+
+// The bar of the distribution, its lines, and its chart or table: the line
+// of the numbers, the words of a wider width, and, for the pace, which way is
+// faster; no words of a relation, which a distribution does not show (the
+// checker's review of the plan of P1).
+function renderSpread(live) {
+  const viewing = live && state.view !== null && state.opening === null;
+  const spread = viewing && spreading() ? state.spread : null;
+  ui.spread.hidden = spread === null;
+  ui.spreadOff.hidden = spread === null;
+  if (spread === null) {
+    spreadContext = null;
+    ui.spreadBody.replaceChildren();
+    return;
+  }
+  const [before = "", after = ""] = t("view.spread.title", { item: "\u0001" }).split("\u0001");
+  setText(ui.spreadBefore, before);
+  setText(ui.spreadAfter, after);
+  renderSpreadItems(ui.spreadItem, state.spreadItem);
+  const drawn = spreadAnswerNow();
+  ui.spreadTable.disabled = drawn === null || !drawn.counts.length;
+  ui.spreadTable.setAttribute("aria-pressed", String(spread.table));
+  ui.spreadTableChart.hidden = !spread.table;
+  ui.spreadTableTable.hidden = spread.table;
+  setText(ui.spreadLoading, state.spreadLoading ? t("view.loading") : "");
+  ui.spreadStop.hidden = state.spreadStop === null;
+  if (!ui.spreadStop.hidden) {
+    renderStop(ui.spreadStop, null, ui.spreadStopLines, ui.spreadStopCode, stopBox(state.spreadStop.code, state.spreadStop.detail, state.productVersion));
+  }
+  setText(ui.spreadCount, drawn === null ? "" : describe(spreadCount(drawn, state.language)));
+  const wide = drawn === null ? null : spreadWide(state.spreadAsked.item, drawn, state.language);
+  ui.spreadWide.hidden = wide === null;
+  setText(ui.spreadWide, wide === null ? "" : describe(wide));
+  ui.spreadFaster.hidden = drawn === null || state.spreadAsked.item !== "pace";
+  ui.spreadNone.hidden = drawn === null || drawn.counts.length > 0;
+  renderSpreadBody(drawn);
+}
+
+// The chart of the ranges or their table, drawn again only when what they
+// show changes; the range chosen moves without drawing them again.
+function renderSpreadBody(drawn) {
+  const spread = state.spread;
+  if (spread === null) {
+    return;
+  }
+  // While the ranges of a new request are on their way, what shows stays,
+  // dimmed, so that the focus stays where it is, as for the points: those of
+  // the same item only, never ranges in the units of another (Codex's review
+  // of the diff of P1).
+  ui.spreadBody.classList.toggle("waiting", state.spreadLoading);
+  if (drawn === null && state.spreadLoading && spreadContext !== null && spreadContext.answer !== null && spreadContext.item === state.spreadItem) {
+    return;
+  }
+  const box = ui.spreadBody.getBoundingClientRect();
+  const size = [Math.round(box.width), Math.round(box.height)];
+  const wanted = { answer: drawn, table: spread.table, language: state.language, size: size.join(" ") };
+  if (spreadContext !== null && Object.keys(wanted).every((key) => spreadContext[key] === wanted[key])) {
+    renderSpreadChosen(false);
+    return;
+  }
+  spreadContext = { ...wanted, item: drawn === null ? null : state.spreadAsked.item, shapes: null };
+  // The focus stays where it was, on the chart or the table, drawn again in
+  // its place.
+  const focused = ui.spreadBody.contains(document.activeElement) ? document.activeElement : null;
+  const refocus = focused?.closest(".spread-bars") ? ".spread-bars" : focused?.closest(".spread-table") ? ".spread-table" : null;
+  if (drawn === null || !drawn.counts.length) {
+    ui.spreadBody.replaceChildren();
+    return;
+  }
+  const key = state.spreadAsked.item;
+  if (spread.table) {
+    ui.spreadBody.replaceChildren(buildSpreadTable(drawn, key));
+  } else {
+    const chart = buildSpreadChart(key);
+    ui.spreadBody.replaceChildren(chart.section);
+    Object.assign(spreadContext, chart, { key });
+    fillSpreadReading();
+    const room = chart.chart.getBoundingClientRect();
+    Object.assign(spreadContext, drawSpreadBars(chart, drawn, key, [room.width, room.height]), { headHeight: chart.head.getBoundingClientRect().height });
+    renderSpreadChosen(false);
+  }
+  if (refocus !== null) {
+    ui.spreadBody.querySelector(refocus)?.focus();
+  }
+}
+
+// The chart: its head, with the reading of the range chosen, and its frame,
+// which takes the keys and the pointer, as the chart of the points.
+function buildSpreadChart(key) {
+  const section = element("section", "panel-view plot-view");
+  section.setAttribute("aria-labelledby", "spread-title");
+  const head = element("div", "panel-head plot-head");
+  const read = element("span", "panel-read plot-read");
+  read.setAttribute("aria-hidden", "true");
+  head.append(element("span", "spacer"), read);
+  const chart = element("div", "plot-points spread-bars");
+  chart.tabIndex = 0;
+  chart.setAttribute("role", "img");
+  chart.setAttribute("aria-label", t("view.spread.label", { item: t(itemKey(key)) }));
+  section.append(head, chart);
+  return { section, head, chart, read };
+}
+
+// The ticks of the counts up at the left, the words of the ends of the
+// ranges across, the names of the count and of the item, and a bar a range
+// with an activity; the range chosen framed on top.
+function drawSpreadBars(frame, drawn, key, size) {
+  // As large as its room, which a small window keeps small.
+  const width = Math.max(240, Math.round(size[0]));
+  const height = Math.max(120, Math.round(size[1]));
+  const shapes = spreadShapes(drawn.counts, drawn.first, { width, height });
+  const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, width, height, "aria-hidden": "true", focusable: "false" });
+  const chosen = svgElement("rect", { class: "spread-chosen", display: "none" });
+  frame.chart.append(svg);
+  if (shapes === null) {
+    return { chosen, shapes };
+  }
+  for (const tick of shapes.up.ticks) {
+    const at = shapes.y(tick).toFixed(1);
+    svg.append(svgElement("line", { class: "chart-grid", x1: shapes.left, x2: shapes.right, y1: at, y2: at }));
+    const label = svgElement("text", { class: "chart-tick", x: shapes.left - 8, y: (Number(at) + 4).toFixed(1), "text-anchor": "end" });
+    label.textContent = countText(tick, state.language);
+    svg.append(label);
+  }
+  const bars = svgElement("g", { class: "spread-bars-drawn" });
+  shapes.bars.forEach((bar, index) => {
+    // A range of no activity has no bar.
+    if (drawn.counts[index] > 0) {
+      bars.append(
+        svgElement("rect", {
+          class: "spread-bar",
+          x: bar.x0.toFixed(2),
+          y: bar.y.toFixed(1),
+          width: Math.max(0, bar.x1 - bar.x0).toFixed(2),
+          height: Math.max(0, shapes.bottom - bar.y).toFixed(1),
+        }),
+      );
+    }
+  });
+  svg.append(bars);
+  shapes.ends.forEach((end, index, ends) => {
+    const at = shapes.x(end);
+    // The words of the ends at the ends stay inside the chart.
+    const anchor = index === 0 && at - shapes.left < 24 ? "start" : index === ends.length - 1 && shapes.right - at < 24 ? "end" : "middle";
+    const label = svgElement("text", { class: "chart-tick", x: at.toFixed(1), y: shapes.bottom + 16, "text-anchor": anchor });
+    label.textContent = spreadEndWords(key, drawn, end, state.language);
+    svg.append(label);
+  });
+  const upName = svgElement("text", { class: "chart-tick plot-axis", x: shapes.left, y: shapes.top - 8 });
+  upName.textContent = t("view.spread.head_count");
+  const acrossName = svgElement("text", { class: "chart-tick plot-axis", x: shapes.right, y: height - 4, "text-anchor": "end" });
+  acrossName.textContent = axisName(key);
+  svg.append(upName, acrossName, chosen);
+  return { chosen, shapes };
+}
+
+// The reading of the range chosen at the top right of the chart, or none;
+// what it says, for the keys and a click.
+function fillSpreadReading() {
+  const context = spreadContext;
+  const index = state.spread?.chosen ?? null;
+  if (index === null || context.answer === null || index >= context.answer.counts.length) {
+    context.read.replaceChildren();
+    return null;
+  }
+  const reading = spreadReading(context.key, context.answer, index, state.language);
+  context.read.replaceChildren(describe(reading));
+  return reading;
+}
+
+// The range chosen: its frame on top, as high as the chart and at least a
+// few pixels wide where the range is narrower, and its reading at the top
+// right, which the keys and a click also say; a reading of another number of
+// lines leaves the chart another room, and it is drawn again.
+function renderSpreadChosen(speak) {
+  const context = spreadContext;
+  if (context === null || context.answer === null || context.read === undefined || context.chosen === undefined) {
+    return;
+  }
+  const reading = fillSpreadReading();
+  const index = state.spread?.chosen ?? null;
+  const bar = reading === null || context.shapes === null ? undefined : context.shapes.bars[index];
+  if (bar === undefined) {
+    context.chosen.setAttribute("display", "none");
+  } else {
+    const half = Math.max(SPREAD_CHOSEN_WIDTH, bar.x1 - bar.x0) / 2;
+    const middle = (bar.x0 + bar.x1) / 2;
+    context.chosen.setAttribute("x", (middle - half).toFixed(2));
+    context.chosen.setAttribute("width", (half * 2).toFixed(2));
+    context.chosen.setAttribute("y", context.shapes.top.toFixed(1));
+    context.chosen.setAttribute("height", (context.shapes.bottom - context.shapes.top).toFixed(1));
+    context.chosen.setAttribute("display", "inline");
+  }
+  if (Math.abs(context.head.getBoundingClientRect().height - context.headHeight) > 1) {
+    context.size = null;
+    scheduleRedraw();
+  }
+  if (speak && reading !== null) {
+    setText(ui.spreadAnnouncer, describe(reading));
+  }
+}
+
+function chooseRange(index, speak) {
+  if (state.spread === null || index === null) {
+    return;
+  }
+  state.spread.chosen = index;
+  renderSpreadChosen(speak);
+}
+
+// The range under the pointer, by the places drawn.
+function spreadRangeUnder(event) {
+  const context = spreadContext;
+  const svg = context?.chart?.querySelector("svg");
+  if (!svg || context.shapes === null) {
+    return null;
+  }
+  const box = svg.getBoundingClientRect();
+  return spreadRangeAt(context.shapes, event.clientX - box.left);
+}
+
+function spreadPointer(event) {
+  if (event.target.closest(".spread-bars") !== null) {
+    const index = spreadRangeUnder(event);
+    if (index !== null && index !== state.spread?.chosen) {
+      chooseRange(index, false);
+    }
+  }
+}
+
+function spreadClick(event) {
+  if (event.target.closest(".spread-bars") !== null) {
+    chooseRange(spreadRangeUnder(event), true);
+  }
+}
+
+// The keys of the chart: one range before or after, those of no activity
+// among them, and the first and the last (the checker's P1-3).
+function spreadKeyDown(event) {
+  if (event.target.closest(".spread-bars") === null || spreadContext?.answer == null) {
+    return;
+  }
+  const next = spreadMove(state.spread?.chosen ?? null, spreadContext.answer.counts.length, event.key);
+  if (next !== null) {
+    event.preventDefault();
+    chooseRange(next, true);
+  }
+}
+
+// The table of the ranges: a row a range in their order, those of no
+// activity among them, 200 rows at most, made at once (Codex's review of the
+// plan of P1).
+function buildSpreadTable(drawn, key) {
+  const wrap = element("div", "list-table plot-table spread-table");
+  wrap.tabIndex = 0;
+  wrap.setAttribute("role", "region");
+  wrap.setAttribute("aria-label", t("view.spread.table_label", { item: t(itemKey(key)) }));
+  const table = element("table", "t");
+  const caption = element("caption", "visually-hidden", t("view.spread.table_caption"));
+  const head = element("thead");
+  const headRow = element("tr");
+  const rangeHead = element("th", "", axisName(key));
+  rangeHead.scope = "col";
+  const countHead = element("th", "n", t("view.spread.head_count"));
+  countHead.scope = "col";
+  headRow.append(rangeHead, countHead);
+  head.append(headRow);
+  const body = element("tbody");
+  drawn.counts.forEach((count, index) => {
+    const line = element("tr");
+    const range = element("th", "", describe(spreadRange(key, drawn, index, state.language)));
+    range.scope = "row";
+    line.append(range, element("td", "n", countText(count, state.language)));
+    body.append(line);
+  });
+  table.append(caption, head, body);
+  wrap.append(table);
+  return wrap;
+}
+
 function render() {
   document.documentElement.lang = state.language;
   for (const node of document.querySelectorAll("[data-i18n]")) {
@@ -5872,6 +6386,7 @@ function render() {
   renderStage(live);
   renderCompare(live);
   renderPlot(live);
+  renderSpread(live);
   renderFooter(live);
   renderHelp();
 }
@@ -6314,6 +6829,10 @@ function connect() {
     setOtherViews(false);
     enterPlot();
   });
+  ui.otherSpread.addEventListener("click", () => {
+    setOtherViews(false);
+    enterSpread();
+  });
   document.addEventListener("pointerdown", (event) => {
     if (state.otherOpen && event.target.closest(".other-views") === null) {
       setOtherViews(false);
@@ -6331,6 +6850,18 @@ function connect() {
   ui.plotBody.addEventListener("pointermove", pointsPointer);
   ui.plotBody.addEventListener("click", pointsClick);
   ui.plotBody.addEventListener("keydown", pointsKeyDown);
+  // The distribution of one item (stage P1 of v2.2.0).
+  ui.spreadItem.addEventListener("change", () => chooseSpreadItem(ui.spreadItem.value));
+  ui.spreadTable.addEventListener("click", () => {
+    if (state.spread !== null) {
+      state.spread.table = !state.spread.table;
+      render();
+    }
+  });
+  ui.spreadBack.addEventListener("click", leaveSpread);
+  ui.spreadBody.addEventListener("pointermove", spreadPointer);
+  ui.spreadBody.addEventListener("click", spreadClick);
+  ui.spreadBody.addEventListener("keydown", spreadKeyDown);
   ui.compareYears.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-year]");
     if (button !== null) {
@@ -6429,6 +6960,7 @@ function connect() {
     watcher.observe(ui.panels);
     watcher.observe(ui.comparePanels);
     watcher.observe(ui.plotBody);
+    watcher.observe(ui.spreadBody);
     plotWatcher = new ResizeObserver(scheduleRedraw);
   } else {
     window.addEventListener("resize", scheduleRedraw);
@@ -6479,6 +7011,7 @@ async function start() {
     state.compareBy = by.by;
     state.compareWeeks = by.weeks;
     state.plotPair = plotPairToOpen(state.settings);
+    state.spreadItem = spreadItemToOpen(state.settings);
     state.wantedTypes = Array.isArray(state.settings.view_types) ? [...state.settings.view_types] : null;
     const marks = marksToOpen(state.settings);
     takeMarks(marks.marks);

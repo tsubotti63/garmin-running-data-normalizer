@@ -92,6 +92,7 @@
   <p id="compare-off-race" class="compare-off" data-i18n="view.compare.off_race" hidden></p>
   <p id="compare-off-calendar" class="compare-off" data-i18n="view.compare.off_calendar" hidden></p>
   <p id="plot-off" class="compare-off" data-i18n="view.plot.off" hidden></p>
+  <p id="spread-off" class="compare-off" data-i18n="view.spread.off" hidden></p>
   <div id="view-body" class="view-body">
     <aside id="shelf" class="shelf" aria-labelledby="shelf-heading">
       <section id="layouts" class="layouts" aria-labelledby="layouts-heading">
@@ -194,6 +195,7 @@
           <button type="button" id="other-views" class="small" aria-haspopup="menu" aria-expanded="false" aria-controls="other-views-menu"><span data-i18n="view.other.button"></span><svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true" focusable="false"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           <span id="other-views-menu" class="pop other-menu" role="menu" aria-labelledby="other-views" hidden>
             <button type="button" id="other-plot" role="menuitem" tabindex="-1" data-i18n="view.other.plot"></button>
+            <button type="button" id="other-spread" role="menuitem" tabindex="-1" data-i18n="view.other.spread"></button>
           </span>
         </span>
         <span class="align-row">
@@ -324,6 +326,33 @@
         </div>
         <p id="plot-cut" class="compare-note" hidden></p>
         <p id="plot-caveat" class="compare-note plot-caveat" data-i18n="view.plot.caveat"></p>
+      </section>
+      <section id="spread" class="compare spread-one" aria-labelledby="spread-title" hidden>
+        <div class="compare-bar">
+          <div class="compare-line">
+            <label for="spread-item" class="visually-hidden" data-i18n="view.spread.item"></label>
+            <h3 id="spread-title" class="compare-title"><span id="spread-before"></span><select id="spread-item"></select><span id="spread-after"></span></h3>
+            <button type="button" id="spread-table" class="small" aria-pressed="false"><span id="spread-table-chart" data-i18n="view.panel.chart" hidden></span><span id="spread-table-table" data-i18n="view.panel.table"></span></button>
+            <span class="spacer"></span>
+            <button type="button" id="spread-back" class="small" data-i18n="view.panel.unbig"></button>
+          </div>
+          <div class="compare-line">
+            <span id="spread-count" class="note"></span>
+            <p id="spread-loading" class="loading" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+        <div id="spread-stop" class="errbox view-stop" hidden>
+          <h4 id="spread-stop-heading" tabindex="-1" data-i18n="view.stop.series_heading"></h4>
+          <div id="spread-stop-lines" class="messages"></div>
+          <p id="spread-stop-code" class="stop-code"></p>
+        </div>
+        <div id="spread-stack" class="stack plot-stack">
+          <div id="spread-body" class="plot-body"></div>
+          <p id="spread-none" class="note plot-none" data-i18n="view.spread.none" hidden></p>
+          <p id="spread-announcer" class="visually-hidden" aria-live="polite"></p>
+        </div>
+        <p id="spread-wide" class="compare-note" hidden></p>
+        <p id="spread-faster" class="compare-note" data-i18n="view.spread.faster_left" hidden></p>
       </section>
       <div id="series-stop" class="errbox view-stop" hidden>
         <h3 id="series-stop-heading" tabindex="-1" data-i18n="view.stop.series_heading"></h3>

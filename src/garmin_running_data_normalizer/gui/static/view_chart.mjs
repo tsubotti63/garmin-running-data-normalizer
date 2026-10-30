@@ -630,3 +630,94 @@ export function pointShapes(xs, ys, { width, height, clockX = null, clockY = nul
     places: xs.map((value, index) => ({ x: x(value), y: y(ys[index]) })),
   };
 }
+
+// --- The distribution of one item (stage P1 of v2.2.0) ---------------------
+
+// A gap of 2 px between the bars of the ranges where a range is this wide at
+// least: narrower ranges, up to 200 of them in a chart of 240 px, touch, and
+// a bar is never wider than its range (Codex's review of the plan of P1).
+export const SPREAD_GAP_FROM = 8;
+// The frame of the range chosen is this wide at least, also where a range is
+// narrower.
+export const SPREAD_CHOSEN_WIDTH = 4;
+
+// The steps of the counts and of the ends with their words: 1, 2, 5, 10, ...
+const LEADS = [1, 2, 5];
+
+// The ticks of a count from 0: whole numbers only, in steps of 1, 2, 5, 10,
+// and so on, about ``count`` of them up to the highest count or above it
+// (Codex's review of the plan of P1: no tick of half an activity).
+export function countTicks(high, count = 3) {
+  const top = Number.isFinite(high) && high > 0 ? Math.ceil(high) : 1;
+  let step = 1;
+  for (let power = 1; step * count < top && power < 1e15; power *= 10) {
+    step = LEADS.map((lead) => lead * power).find((candidate) => candidate * count >= top) ?? 10 * power;
+  }
+  const ticks = [];
+  for (let value = 0; value < top + step && ticks.length <= MAX_TICKS; value += step) {
+    ticks.push(value);
+  }
+  return ticks.length > 1 ? ticks : [0, step];
+}
+
+// The ends of the ranges that have their words across: every one where they
+// are far enough apart, as the ticks across of the points (thinAcross);
+// otherwise every 2nd, 5th, 10th, ..., at the ends whose number is a multiple
+// of it, so that they fall on round values. ``first`` is the number of the
+// first range, of which a number too large for the page keeps the multiples
+// from the first end.
+export function spreadEndsShown(first, count, range) {
+  let every = 1;
+  for (let power = 1; range * every < ACROSS_TICK_GAP * 0.7 && power < 1e15; power *= 10) {
+    every = LEADS.map((lead) => lead * power).find((candidate) => range * candidate >= ACROSS_TICK_GAP * 0.7) ?? 10 * power;
+  }
+  const offset = Number.isSafeInteger(first) ? ((first % every) + every) % every : 0;
+  const ends = [];
+  for (let end = 0; end <= count; end += 1) {
+    if ((end + offset) % every === 0) {
+      ends.push(end);
+    }
+  }
+  return ends;
+}
+
+// The places of the bars of the ranges in a plot of ``width`` by ``height``:
+// across by the order of a range only, never by the values of its ends, which
+// a value too large for the page leaves inexact or not a number (Codex's
+// review of the plan of P1); up by its count, from 0. Null without a range.
+export function spreadShapes(counts, first, { width, height }) {
+  if (!Array.isArray(counts) || !counts.length) {
+    return null;
+  }
+  const left = PLOT_LEFT;
+  const right = Math.max(left + 1, width - PLOT_RIGHT);
+  const top = POINTS_TOP;
+  const bottom = Math.max(top + 1, height - POINTS_BOTTOM);
+  const ticks = countTicks(Math.max(...counts.filter(Number.isFinite), 0), tickCount(bottom - top));
+  const high = ticks[ticks.length - 1];
+  const y = (value) => bottom - (value / high) * (bottom - top);
+  const range = (right - left) / counts.length;
+  const gap = range >= SPREAD_GAP_FROM ? 2 : 0;
+  const x = (end) => left + end * range;
+  return {
+    left,
+    right,
+    top,
+    bottom,
+    range,
+    up: { lo: 0, hi: high, ticks: thinTicks(ticks, y) },
+    x,
+    y,
+    ends: spreadEndsShown(first, counts.length, range),
+    bars: counts.map((count, index) => ({ x0: x(index) + gap / 2, x1: x(index + 1) - gap / 2, y: y(Number.isFinite(count) ? count : 0) })),
+  };
+}
+
+// The range under the pointer, at ``x`` pixels across, or null outside the
+// ranges.
+export function spreadRangeAt(shapes, x) {
+  if (shapes === null || !(x >= shapes.left && x < shapes.right)) {
+    return null;
+  }
+  return Math.min(shapes.bars.length - 1, Math.floor((x - shapes.left) / shapes.range));
+}

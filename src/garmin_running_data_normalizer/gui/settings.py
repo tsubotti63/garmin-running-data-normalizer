@@ -63,7 +63,7 @@ from ..common.json_depth import check_json_depth
 from ..common.private_files import PRIVATE_DIRECTORY_MODE, PRIVATE_FILE_MODE
 from ..common.time import MAX_TIMEZONE_LENGTH, TimezoneDataUnavailableError, TimezoneNameInvalidError, resolve_timezone_name
 from ..view.items import ITEMS_BY_KEY
-from ..view.series import MAX_PANELS, MAX_TYPES, type_name_ok
+from ..view.series import MAX_PANELS, MAX_TYPES, point_item, type_name_ok
 from . import places
 from .layouts import BUILT_IN_IDS, kept_hidden, kept_layouts
 from .layouts import change_layouts as _changed_layouts
@@ -211,6 +211,10 @@ def _view_values(data: dict[str, Any]) -> dict[str, Any]:
     # The two items plotted against each other, as one pair (stage O1).
     if plot_pair_ok(data.get("view_plot")):
         values["view_plot"] = {"x": data["view_plot"]["x"], "y": data["view_plot"]["y"]}
+    # The item of the distribution, by the rule of an item of the points
+    # (stage P1).
+    if point_item(data.get("view_spread")):
+        values["view_spread"] = data["view_spread"]
     return values
 
 
@@ -527,6 +531,8 @@ VIEW_KEYS = {
     "marks_shown": "view_marks_shown",
     # The two items plotted against each other (stage O1).
     "plot": "view_plot",
+    # The item of the distribution (stage P1).
+    "spread": "view_spread",
 }
 
 
@@ -637,6 +643,7 @@ def launch_answer(
         "view_compare_weeks": values.get("view_compare_weeks"),
         "view_marks_shown": values.get("view_marks_shown"),
         "view_plot": values.get("view_plot"),
+        "view_spread": values.get("view_spread"),
         "view_marks": list(marks or []),
         "marks_notice": marks_notice,
         "timezone": values.get("timezone"),

@@ -347,6 +347,7 @@ class GuiApiRequestTest(GuiServerTestCase):
                     "view_compare_weeks": None,
                     "view_marks_shown": None,
                     "view_plot": None,
+                    "view_spread": None,
                     "view_marks": [],
                     "marks_notice": None,
                     "timezone": None,
@@ -765,9 +766,10 @@ class GuiPageScriptTest(unittest.TestCase):
         # setPeriod), and these; from stage L1 the way and the month of a
         # comparison by year; from stage M1 whether the marks show; from
         # stage M2 what a comparison compares by and its weeks; and from stage
-        # O1 the two items plotted against each other.
-        self.assertEqual(source.count("rememberItems(true);"), 16)
-        for name in ("changeItems", "setPeriod", "shiftPeriod", "rangeTyped", "setGrain", "changeTypes", "overviewUp", "chooseCompareMode", "chooseCompareMonth", "changeMarksShown", "choosePlotItem"):
+        # O1 the two items plotted against each other; from P1 the item of a
+        # distribution.
+        self.assertEqual(source.count("rememberItems(true);"), 17)
+        for name in ("changeItems", "setPeriod", "shiftPeriod", "rangeTyped", "setGrain", "changeTypes", "overviewUp", "chooseCompareMode", "chooseCompareMonth", "changeMarksShown", "choosePlotItem", "chooseSpreadItem"):
             with self.subTest(name=name):
                 body = re.search(rf"\nfunction {name}\([^)]*\) \{{(.*?)\n\}}", source, re.DOTALL)
                 assert body is not None

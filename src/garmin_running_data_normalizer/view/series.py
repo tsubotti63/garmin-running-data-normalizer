@@ -28,9 +28,11 @@ import math
 import re
 from bisect import bisect_right
 from collections import Counter, defaultdict
-from collections.abc import Collection
+from collections.abc import Collection, Iterator
 from dataclasses import dataclass
 from datetime import date, timedelta
+from decimal import Decimal
+from fractions import Fraction
 from functools import cached_property
 from typing import Any
 
@@ -76,6 +78,35 @@ LIST_ITEMS = ("dist", "time", "pace", "hr", "mx", "cad", "asc")
 # v2.2.0): a point an activity with a value of both, the newest up to this
 # many.
 MAX_POINTS = 5000
+# The distribution of one item of the activities (stage P1 of v2.2.0): how
+# many activities fall in each range of the width of the item, up to this
+# many ranges; the width times the first of 2, 5, 10, 20, 50, ... that is
+# enough where more would be needed.
+MAX_RANGES = 200
+# The ranges of each item that one activity has a value of: its value in the
+# units of the output times the first number, cut in ranges of the second,
+# each with its left end and without its right one: 1 km in metres, 10
+# minutes in seconds, 10 seconds a kilometre, 0.5 cm in millimetres, 1 % in
+# tenths of a percent, and so on (OP0 of v2.2.0). The page writes the ends of
+# the ranges from these two numbers of an answer only (the checker's review
+# of the plan of P1).
+SPREAD_RANGES = {
+    "dist": (1, 1000),
+    "time": (1, 600),
+    "pace": (1000, 10),
+    "hr": (1, 5),
+    "mx": (1, 5),
+    "cad": (1, 5),
+    "pow": (1, 10),
+    "load": (1, 10),
+    "asc": (1, 10),
+    "vo": (1, 5),
+    "gct": (1, 10),
+    "gctp": (10, 10),
+    "bal": (10, 5),
+    "vr": (10, 5),
+    "sl": (1, 50),
+}
 # The local date and time of an activity as the output writes it
 # (common/time.py): the date, and the time of the day before its offset, as
 # the page orders them (view_flow.mjs LOCAL_MOMENT).
@@ -610,6 +641,93 @@ def activity_points(
     }
 
 
+def _exact(value: float) -> Fraction:
+    """A value of the output as the decimal number that it writes, so that
+    no division of floating numbers moves it over the end of a range: 342.38
+    seconds over 1007 metres are 340 seconds a kilometre, and not 339.99...
+    (the checker's and Codex's reviews of the plan of P1)."""
+    return Fraction(Decimal(repr(value)))
+
+
+def _range_number(item: Item, row: Row, scale: int, width: int) -> int:
+    """The number of the range of ``width`` that an activity with a value of
+    ``item`` (as _list_value gives it) is in: its value times ``scale``, the
+    pace by its time times 1000 over its distance, not rounded, and cut
+    toward the smaller number, as a Python integer, which a value as large as
+    1e300 has at once (the checker's review of the plan of P1)."""
+    if item.kind == PACE:
+        value = _exact(row.values[DURATION]) * scale / _exact(row.values[DISTANCE])
+    else:
+        value = _exact(row.values[item.field]) * scale
+    return math.floor(value / width)
+
+
+def _wider() -> Iterator[int]:
+    """The steps of a wider range: 1, 2, 5, 10, 20, 50, ..."""
+    power = 1
+    while True:
+        for lead in (1, 2, 5):
+            yield lead * power
+        power *= 10
+
+
+def activity_spread(
+    data: ViewData,
+    key: str,
+    period: str | tuple[date, date] = "all",
+    types: Collection[str] | None = None,
+) -> dict[str, Any]:
+    """The distribution of one item of the activities (stage P1 of v2.2.0):
+    the activities of the activity types counted in the days of ``period``,
+    chosen as the points are, that have a value of the item as the list
+    writes it, counted in the ranges of the width of the item from the first
+    range with an activity to the last, at most MAX_RANGES of them, with the
+    width times the first step of _wider that is enough. A value is not
+    rounded: 10999.6 metres are in the range of 10 to 11 km (the Human
+    maintainer, 2026-10-30). The range ``first + i`` holds ``counts[i]``
+    activities, from ``(first + i) * width / scale`` in the units of the
+    output to the next; ``total`` counts the activities of the period,
+    ``with_values`` those with a value, and ``missing`` the others."""
+    if not point_item(key):
+        raise ValueError(f"not an item of the activities: {key}")
+    item = ITEMS_BY_KEY[key]
+    scale, width = SPREAD_RANGES[key]
+    periods, chosen = _period_rows(data, period, types)
+    # Each value once in a range of the width of the item; a wider range only
+    # takes those together (Codex's review of the plan of P1).
+    counted = Counter(
+        _range_number(item, row, scale, width) for row in chosen if _list_value(item, row) is not None
+    )
+    factor = 1
+    if counted:
+        low, high = min(counted), max(counted)
+        factor = next(step for step in _wider() if high // step - low // step + 1 <= MAX_RANGES)
+    ranges: Counter[int] = Counter()
+    for number, count in counted.items():
+        ranges[number // factor] += count
+    first = min(ranges) if ranges else None
+    last = max(ranges) if ranges else None
+    # The step keeps the ranges to MAX_RANGES; their list is never made over a
+    # wider span, which values as large as 1e300 would make endless (the
+    # partial guard of P1).
+    if first is not None and last - first >= MAX_RANGES:
+        raise RuntimeError(f"more than {MAX_RANGES} ranges")
+    with_values = sum(counted.values())
+    return {
+        "start": None if periods is None else date.fromordinal(periods.start).isoformat(),
+        "end": None if periods is None else date.fromordinal(periods.end).isoformat(),
+        "total": len(chosen),
+        "with_values": with_values,
+        "missing": len(chosen) - with_values,
+        "limit": MAX_RANGES,
+        "scale": scale,
+        "width": width * factor,
+        "widened": factor > 1,
+        "first": first,
+        "counts": [] if first is None else [ranges.get(number, 0) for number in range(first, last + 1)],
+    }
+
+
 __all__ = [
     "GRAINS",
     "LAST_YEARS",
@@ -618,13 +736,16 @@ __all__ = [
     "MAX_LIST_ROWS",
     "MAX_PANELS",
     "MAX_POINTS",
+    "MAX_RANGES",
     "MAX_TYPES",
     "MAX_TYPE_LENGTH",
     "NO_TYPE",
     "Periods",
     "RANGE_GRAIN",
+    "SPREAD_RANGES",
     "activity_list",
     "activity_points",
+    "activity_spread",
     "activity_types",
     "auto_grain",
     "coverage",

@@ -667,8 +667,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # From v2.2.0 L1, the item, the month, and the line of a comparison;
         # from M1, whether the marks show, and the date, the last day, the
         # kind, and the name of a mark; from M2, the weeks before a race day;
-        # from O1, the two items plotted against each other.
-        self.assertEqual(len(fields), 22)
+        # from O1, the two items plotted against each other; from P1, the
+        # item of a distribution.
+        self.assertEqual(len(fields), 23)
         for field in fields:
             with self.subTest(field=field.get("id")):
                 self.assertTrue(field.get("id") in labelled or field.get("aria-label") or field.get("aria-labelledby"))
@@ -1204,13 +1205,13 @@ class GuiViewPageStructureTest(unittest.TestCase):
             'if (event.key === "Escape") {\n    event.preventDefault();\n    setOtherViews(false, "button");',
             'ui.otherViews.setAttribute("aria-expanded", String(state.otherOpen));',
             # In the place of the panels; the period and the types ask for what shows.
-            "function apart() {\n  return comparing() || plotting();\n}",
-            "function shownAnswer() {\n  return plotting() ? state.plotAnswer : state.answer;\n}",
-            "function requestShown() {\n  if (plotting()) {\n    state.panelsStale = true;\n    requestPlot();\n  } else {\n    requestSeries();\n  }\n}",
+            "function apart() {\n  return comparing() || otherShown();\n}",
+            "function shownAnswer() {\n  return plotting() ? state.plotAnswer : spreading() ? state.spreadAnswer : state.answer;\n}",
+            "function otherShown() {\n  return plotting() || spreading();\n}",
+            "function requestShown() {\n  if (otherShown()) {\n    state.panelsStale = true;\n    requestPlot();\n    requestSpread();\n  } else {\n    requestSeries();\n  }\n}",
             "  const answer = shownAnswer();\n  const range = shiftedRange(answer?.start, answer?.end, direction, state.view?.first_day, state.view?.last_day);",
             "  rememberItems(true);\n  requestShown();\n  requestCompare();\n}",
-            "button.disabled = !viewing || plotting() || (grains !== null && !grains.includes(button.dataset.grain));",
-            "  if (state.panelsStale) {\n    state.panelsStale = false;\n    requestSeries();\n  }",
+            "button.disabled = !viewing || otherShown() || (grains !== null && !grains.includes(button.dataset.grain));",
             # One generation of answers, a ticket opened again once, an output that stops.
             'const answer = await callApi("/api/view/points", payload);\n    if (seq !== state.plotSeq) {\n      return;\n    }',
             "        state.plotLoading = false;\n        requestPlot(false);\n        return;",
@@ -1232,7 +1233,6 @@ class GuiViewPageStructureTest(unittest.TestCase):
             "  const seq = ++state.openSeq;\n  state.compareSeq += 1;\n  // And those of the points, before they could open the output before\n  // again (Codex's review of the diff of O1).\n  state.plotSeq += 1;",
             'state.plot.sort = plotSortAfter(state.plot.sort, ["when", "type", pair.x, pair.y]);',
             "column !== null ? `button[data-action=\"plot-sort\"][data-column=\"${column}\"]` : focused?.closest(\".plot-points\") ? \".plot-points\"",
-            "const room = chart.chart.getBoundingClientRect();",
         ):
             with self.subTest(line=line):
                 self.assertIn(line, self.script)
@@ -1242,7 +1242,8 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # added 400 at a time (those of a panel had no test before), the
         # reading of a point that the announcer says, the caption and the
         # heads of the table of the points, and its answers as those of the
-        # list.
+        # list; from P1, the way back to the panels and the room of the
+        # chart, which a distribution has too.
         held = {
             "buildTable": (
                 "for (const row of rows.slice(shownRows, shownRows + TABLE_ROWS)) {",
@@ -1255,6 +1256,13 @@ class GuiViewPageStructureTest(unittest.TestCase):
                 'cell.scope = "col";',
             ),
             "buildPlotChart": ('read.setAttribute("aria-hidden", "true");',),
+            "leavePlot": ("  if (state.panelsStale) {\n    state.panelsStale = false;\n    requestSeries();\n  }",),
+            "renderPlotBody": (
+                "const room = chart.chart.getBoundingClientRect();",
+                # And of the same pair only (Codex's review of the diff of P1).
+                "plotContext.answer !== null && plotContext.pair === `${state.plotPair.x} ${state.plotPair.y}`) {",
+                "plotContext = { ...wanted, pair: drawn === null ? null : `${state.plotAsked.x} ${state.plotAsked.y}`, shapes: null };",
+            ),
         }
         for name, lines in held.items():
             body = re.search(rf"function {name}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
@@ -1269,7 +1277,8 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertIn("requestPlot(false);", request.group(1))
         self.assertIn("OUTPUT_STOPS.includes(error.code)", request.group(1))
         self.assertEqual(request.group(1).count("if (seq !== state.plotSeq) {\n      return;\n    }"), 2)
-        self.assertEqual(self.script.count("      state.compare = null;\n      state.plot = null;\n"), 5)
+        # An output that stops closes a distribution too (stage P1).
+        self.assertEqual(self.script.count("      state.compare = null;\n      state.plot = null;\n      state.spread = null;\n"), 6)
         self.assertRegex((STATIC_ROOT / "view.css").read_text(encoding="utf-8"), r"\.plot-head \.plot-read \{[^}]*white-space: normal;")
         view_css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
         self.assertRegex(view_css, r"\.plot-dot \{\s*fill: var\(--d1\);\s*stroke: var\(--surface\);\s*stroke-width: 1;\s*\}")
@@ -1278,6 +1287,108 @@ class GuiViewPageStructureTest(unittest.TestCase):
         forced = view_css[view_css.rindex("@media (forced-colors: active) {") :]
         self.assertRegex(forced, r"\.plot-dot \{\s*fill: CanvasText;\s*stroke: Canvas;\s*\}")
         self.assertRegex(forced, r"\.plot-dot\.plot-chosen \{\s*fill: Highlight;\s*stroke: CanvasText;\s*\}")
+
+    def test_a_distribution_takes_the_place_of_the_panels(self) -> None:
+        # v2.2.0 P1, in the page and its script, which no test runs: the
+        # distribution is the second item of the menu of the other views; it
+        # takes the place of the panels as the points do, with the period and
+        # the activity types of the page, which then ask for it and leave the
+        # panels to ask again on the way back (Codex's review of the plan of
+        # P1); its answers are one generation; its ranges are placed by their
+        # order, the ends written from the numbers of the answer, and no words
+        # of a relation under them (the checker's review of the plan of P1).
+        # The lines that the points have too are held to the body of each
+        # function (the partial guard of O1).
+        menu = by_id(self.elements, "other-views-menu")
+        item = by_id(self.elements, "other-spread")
+        self.assertEqual([element.get("id") for element in self.elements if element.parent is menu], ["other-plot", "other-spread"])
+        self.assertEqual((item.get("role"), item.get("tabindex"), item.get("data-i18n")), ("menuitem", "-1", "view.other.spread"))
+        spread = by_id(self.elements, "spread")
+        self.assertIn("hidden", spread.attributes)
+        self.assertEqual(spread.get("aria-labelledby"), "spread-title")
+        for name in ("spread-item", "spread-table", "spread-back", "spread-count", "spread-loading", "spread-stop", "spread-body", "spread-none", "spread-announcer", "spread-wide", "spread-faster"):
+            with self.subTest(element=name):
+                self.assertIn(spread, by_id(self.elements, name).ancestors())
+        self.assertEqual(by_id(self.elements, "spread-announcer").get("aria-live"), "polite")
+        self.assertEqual(by_id(self.elements, "spread-off").get("data-i18n"), "view.spread.off")
+        faster = by_id(self.elements, "spread-faster")
+        self.assertEqual(faster.get("data-i18n"), "view.spread.faster_left")
+        self.assertIn("hidden", faster.attributes)
+        self.assertEqual([element.get("data-i18n") for element in self.elements if spread in element.ancestors() and "caveat" in (element.get("data-i18n") or "")], [])
+        held = {
+            "enterSpread": ('listChanged("spread");', "state.spread = { table: false, chosen: null };", "ui.spreadItem.focus();", "requestSpread();"),
+            "leaveSpread": ("state.spreadSeq += 1;", "ui.otherViews.focus();", "  if (state.panelsStale) {\n    state.panelsStale = false;\n    requestSeries();\n  }"),
+            "chooseSpreadItem": ("if (spreadItemOf(key, state.view.items) !== key) {", "rememberItems(true);", "requestSpread();"),
+            "spreadAnswerNow": ("asked.item === state.spreadItem",),
+            "renderSpread": (
+                "ui.spreadOff.hidden = spread === null;",
+                "describe(spreadCount(drawn, state.language))",
+                "spreadWide(state.spreadAsked.item, drawn, state.language)",
+                'ui.spreadFaster.hidden = drawn === null || state.spreadAsked.item !== "pace";',
+            ),
+            "renderSpreadBody": (
+                'ui.spreadBody.classList.toggle("waiting", state.spreadLoading);',
+                'focused?.closest(".spread-bars") ? ".spread-bars"',
+                "const room = chart.chart.getBoundingClientRect();",
+                # Codex's review of the diff of P1: what stays while an answer
+                # is on its way is of the same item only.
+                "spreadContext.answer !== null && spreadContext.item === state.spreadItem) {",
+                "spreadContext = { ...wanted, item: drawn === null ? null : state.spreadAsked.item, shapes: null };",
+            ),
+            "buildSpreadChart": ('read.setAttribute("aria-hidden", "true");', "chart.tabIndex = 0;", 'chart.setAttribute("role", "img");', 't("view.spread.label", { item: t(itemKey(key)) })'),
+            "drawSpreadBars": ("spreadShapes(drawn.counts, drawn.first, { width, height })", "if (drawn.counts[index] > 0) {", "spreadEndWords(key, drawn, end, state.language)", 'upName.textContent = t("view.spread.head_count");'),
+            "renderSpreadChosen": ("Math.max(SPREAD_CHOSEN_WIDTH, bar.x1 - bar.x0)", "setText(ui.spreadAnnouncer, describe(reading));"),
+            "spreadKeyDown": ("spreadMove(state.spread?.chosen ?? null, spreadContext.answer.counts.length, event.key)",),
+            "buildSpreadTable": ('const caption = element("caption", "visually-hidden", t("view.spread.table_caption"));', 'rangeHead.scope = "col";', 'countHead.scope = "col";', 'range.scope = "row";'),
+            "renderOtherViews": ("ui.otherSpread.disabled = spreadItemOf(state.spreadItem, state.view?.items) === null;",),
+            "scheduleRedraw": ("renderSpreadBody(spreadAnswerNow());",),
+            "render": ("renderSpread(live);",),
+        }
+        for name, lines in held.items():
+            body = re.search(rf"function {name}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
+            assert body is not None
+            for line in lines:
+                with self.subTest(function=name, line=line):
+                    self.assertIn(line, body.group(1))
+        request = re.search(r"async function requestSpread\(again = true\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert request is not None
+        for line in (
+            "const seq = ++state.spreadSeq;",
+            'const answer = await callApi("/api/view/spread", payload);',
+            'error.code === "VIEW_NOT_OPEN" && again && state.target !== null',
+            "requestSpread(false);",
+            "OUTPUT_STOPS.includes(error.code)",
+            "      state.spread = null;\n      state.stop = { code: error.code, detail: error.detail };",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, request.group(1))
+        self.assertEqual(request.group(1).count("if (seq !== state.spreadSeq) {\n      return;\n    }"), 2)
+        opened = re.search(r"async function openOutput\(target, focus = false\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert opened is not None
+        for line in (
+            "state.spreadSeq += 1;",
+            "const key = spreadItemOf(state.spreadItem, answer.items);\n      if (key === null) {\n        state.spread = null;\n      } else {\n        state.spreadItem = key;\n        state.spread.chosen = null;\n      }",
+            "requestSpread();",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, opened.group(1))
+        for line in (
+            "    spread: state.spreadItem,",
+            "    state.spreadItem = spreadItemToOpen(state.settings);",
+            "    watcher.observe(ui.spreadBody);",
+            'ui.otherSpread.addEventListener("click", () => {\n    setOtherViews(false);\n    enterSpread();\n  });',
+            'ui.spreadItem.addEventListener("change", () => chooseSpreadItem(ui.spreadItem.value));',
+            'ui.spreadBack.addEventListener("click", leaveSpread);',
+            'ui.spreadBody.addEventListener("keydown", spreadKeyDown);',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+        view_css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        self.assertRegex(view_css, r"\.spread-bar \{\s*fill: var\(--d1\);\s*\}")
+        self.assertRegex(view_css, r"\.spread-chosen \{\s*fill: none;\s*stroke: var\(--accent\);\s*stroke-width: 2\.5;\s*\}")
+        forced = view_css[view_css.rindex("@media (forced-colors: active) {") :]
+        self.assertRegex(forced, r"\.spread-bar \{\s*fill: CanvasText;\s*\}")
+        self.assertRegex(forced, r"\.spread-chosen \{\s*stroke: Highlight;\s*\}")
 
     def test_the_list_follows_the_panels_and_drops_old_answers(self) -> None:
         # Stage M3 of v2.2.0 (the checker's review of the plan, and Codex's):
@@ -1289,8 +1400,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # request is shown; a ticket that the server no longer keeps opens
         # the output again once; and it goes with its panel when the panels
         # are drawn again, the focus where it was.
-        # From O1 of v2.2.0, the points of two items close it too.
-        for change, count in (("numbers", 1), ("items", 1), ("marks", 2), ("table", 1), ("big", 2), ("compare", 1), ("full", 2), ("plot", 1)):
+        # From O1 of v2.2.0, the points of two items close it too, and from
+        # P1 a distribution.
+        for change, count in (("numbers", 1), ("items", 1), ("marks", 2), ("table", 1), ("big", 2), ("compare", 1), ("full", 2), ("plot", 1), ("spread", 1)):
             with self.subTest(change=change):
                 self.assertEqual(self.script.count(f'listChanged("{change}");'), count)
         series = re.search(r"async function requestSeries\(again = true\) \{(.*?)\n\}", self.script, re.DOTALL)
@@ -1345,17 +1457,17 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertIn("state.compareSeq += 1;", leave.group(1))
         self.assertNotRegex(leave.group(1), r"state\.(grain|period|range|items) =")
         for line in (
-            "state.compareSeq += 1;\n  // And those of the points, before they could open the output before\n  // again (Codex's review of the diff of O1).\n  state.plotSeq += 1;\n  const current",
+            "state.compareSeq += 1;\n  // And those of the points, before they could open the output before\n  // again (Codex's review of the diff of O1).\n  state.plotSeq += 1;\n  // And those of a distribution (stage P1).\n  state.spreadSeq += 1;\n  const current",
             "const apart = viewing && comparing();",
             "button.disabled = !viewing || apart;",
             "ui.rangeFrom.disabled = apart;",
             "ui.rangeTo.disabled = apart;",
             "ui.periodBack.disabled = !viewing || apart ||",
-            "button.disabled = !viewing || plotting() || (grains !== null && !grains.includes(button.dataset.grain));",
+            "button.disabled = !viewing || otherShown() || (grains !== null && !grains.includes(button.dataset.grain));",
             "ui.compareOff.hidden = !apart;",
             # From O1 of v2.2.0, the points of two items take the place of the
             # panels as a comparison does.
-            "function apart() {\n  return comparing() || plotting();\n}",
+            "function apart() {\n  return comparing() || otherShown();\n}",
             "const viewing = live && state.view !== null && state.opening === null && !apart();",
             "ui.addItems.disabled = !viewing || apart() || state.items.length >= MAX_PANELS;",
             "const showPanels = viewing && state.items.length > 0 && state.answer !== null && state.seriesStop === null && !apart();",

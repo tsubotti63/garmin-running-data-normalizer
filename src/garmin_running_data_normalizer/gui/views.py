@@ -243,6 +243,24 @@ def points_request(payload: dict[str, Any]) -> tuple[str, str, str | tuple[date,
     return x, y, chosen, types
 
 
+def spread_request(payload: dict[str, Any]) -> tuple[str, str | tuple[date, date], list[str] | None]:
+    """The item, the period, and the activity types of a request for the
+    distribution of one item of the activities (stage P1 of v2.2.0): an item
+    that one activity has a value of (series.point_item, as for the points);
+    a period of PERIODS, or a range of two dates, as the numbers take it; and
+    the names of the activity types, or None for the running ones."""
+    key = payload.get("item")
+    if not point_item(key):
+        raise ViewRequestError("item")
+    chosen = period_choice(payload.get("period", "all"))
+    if chosen is None:
+        raise ViewRequestError("period")
+    types = payload.get("types")
+    if types is not None and not types_ok(types):
+        raise ViewRequestError("types")
+    return key, chosen, types
+
+
 def period_choice(period: Any) -> str | tuple[date, date] | None:
     """The period that a request names: one of PERIODS, or a range of two
     dates, the first not after the second; None when it is of another form.
@@ -346,5 +364,6 @@ __all__ = [
     "plot_pair_ok",
     "points_request",
     "series_request",
+    "spread_request",
     "types_ok",
 ]

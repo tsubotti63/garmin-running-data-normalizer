@@ -468,7 +468,7 @@ export function itemsRemembered(settings) {
 // What the page keeps of the settings after the other tab forgot them: no
 // items, no shelf, no tips, no colors, no layouts, and no period, grouping,
 // activity types, or timezone (stage K2 of v2.2.0), no marks (stage M1), and
-// no two items plotted (stage O1), as the files have none now. The page keeps showing what it shows, but the
+// no two items plotted (stage O1) nor item of a distribution (stage P1), as the files have none now. The page keeps showing what it shows, but the
 // marks, which are gone.
 export function settingsAfterForget(settings) {
   const kept = { ...(settings ?? {}) };
@@ -490,6 +490,7 @@ export function settingsAfterForget(settings) {
     "view_compare_weeks",
     "view_marks_shown",
     "view_plot",
+    "view_spread",
     "view_marks",
     "marks_notice",
   ]) {
@@ -2557,4 +2558,141 @@ export function plotReading(point, x, y, typeName, language, same = 0) {
     y: { name: message(ITEM_KEYS[y]), value: valueMessage(y, point.values[y], language) },
     same: same > 0 ? message("view.plot.same", { n: countText(same, language) }) : null,
   };
+}
+
+// --- The distribution of one item (stage P1 of v2.2.0) ---------------------
+
+// The item of the distribution first shown, as the sample of OP0 showed it.
+export const SPREAD_FIRST = "dist";
+
+// The item that the settings remember, by the rule of an item of the points;
+// the first one where they remember none, or another form. The table of the
+// items checks it when an output is open (spreadItemOf).
+export function spreadItemToOpen(settings) {
+  const key = settings?.view_spread;
+  return typeof key === "string" && Object.hasOwn(ITEM_KEYS, key) ? key : SPREAD_FIRST;
+}
+
+// The item of the distribution among the items of an output: the item as it
+// is where it can be counted, otherwise the distance, otherwise the first
+// that can, and null where an output has none (the checker's review of the
+// plan of P1, as plotPairOf).
+export function spreadItemOf(key, items) {
+  const known = itemsByKey(items);
+  if (plotItem(known.get(key))) {
+    return key;
+  }
+  if (plotItem(known.get(SPREAD_FIRST))) {
+    return SPREAD_FIRST;
+  }
+  return (Array.isArray(items) ? items : []).find(plotItem)?.key ?? null;
+}
+
+// The end of the range ``number`` in the units of the output, or null where
+// the page cannot write it: a number of a range past 2^53 is not exact in the
+// page, so that two ends could be one value (Codex's review of the diff of
+// P1), and an end that is not a number, as a value too large for the page.
+function spreadEnd(answer, number) {
+  const value = (number * answer.width) / answer.scale;
+  return Number.isSafeInteger(number) && Number.isFinite(value) ? value : null;
+}
+
+// The left and the right end of the range ``index`` of an answer, in the
+// units of the output, from the numbers of the answer only, so that the page
+// keeps no width of its own (the checker's review of the plan of P1); none
+// where the page cannot tell them apart, so that a range is never from a
+// value to the same value.
+export function spreadEnds(answer, index) {
+  const left = spreadEnd(answer, answer.first + index);
+  const right = spreadEnd(answer, answer.first + index + 1);
+  return left !== null && right !== null && !(left < right) ? { left: null, right: null } : { left, right };
+}
+
+// The words of an end as the page shows the values of the item, with as many
+// digits as the width of the ranges needs, as a tick has them; a dash where
+// the page cannot write it, a value too large for it (Codex's review of the
+// plan of P1: never Infinity, NaN, or a number of hundreds of digits).
+function spreadEndText(key, value, step, language) {
+  const shownValue = value === null ? null : shown(key, value);
+  if (shownValue === null || !Number.isFinite(shownValue) || Math.abs(shownValue) >= 1e15) {
+    return "\u2014";
+  }
+  return tickText(key, shownValue, shown(key, step), language);
+}
+
+// An end with the unit of its item, as a value is written; a clock has none.
+function spreadEndValue(key, value, step, language) {
+  const text = spreadEndText(key, value, step, language);
+  const unit = ITEM_FORMATS[key].unit;
+  return text !== "\u2014" && Object.hasOwn(VALUE_KEYS, unit) ? message(VALUE_KEYS[unit], { value: text }) : plain(text);
+}
+
+// A range in its short form, as the ends across and the table write it:
+// 10〜11 km, 5:10〜5:20 /km (the checker's P1-3).
+export function spreadRange(key, answer, index, language) {
+  const { left, right } = spreadEnds(answer, index);
+  const step = answer.width / answer.scale;
+  return message("view.spread.range", { from: spreadEndText(key, left, step, language) }, { to: spreadEndValue(key, right, step, language) });
+}
+
+// The words of the end of a range across.
+export function spreadEndWords(key, answer, end, language) {
+  return spreadEndText(key, spreadEnd(answer, answer.first + end), answer.width / answer.scale, language);
+}
+
+// A range with its count, as the reading and the keys say it, with the
+// meaning of its ends: 10 km or more and less than 11 km (the checker's P1-3).
+export function spreadReading(key, answer, index, language) {
+  const { left, right } = spreadEnds(answer, index);
+  const step = answer.width / answer.scale;
+  return message(
+    "view.spread.reading",
+    {},
+    {
+      from: spreadEndValue(key, left, step, language),
+      to: spreadEndValue(key, right, step, language),
+      n: message("view.value.count", { value: countText(answer.counts[index], language) }),
+    },
+  );
+}
+
+// The line under the ranges, in numbers only.
+export function spreadCount(answer, language) {
+  return message("view.spread.count", {
+    total: countText(answer.total, language),
+    with: countText(answer.with_values, language),
+    missing: countText(answer.missing, language),
+  });
+}
+
+// The words of a wider width than that of the item (OP-1 of v2.2.0), or null.
+export function spreadWide(key, answer, language) {
+  if (!answer?.widened) {
+    return null;
+  }
+  const step = answer.width / answer.scale;
+  return message("view.spread.wide", { max: countText(answer.limit, language) }, { width: spreadEndValue(key, Number.isFinite(step) ? step : null, step, language) });
+}
+
+// The range that a key moves to among ``count`` ranges, those of 0 among
+// them, as the rows of the table: the one before or after, stopping at the
+// ends, the first or the last; from none chosen, the first for the right and
+// the last for the left. Null for another key (the checker's P1-3).
+export function spreadMove(index, count, key) {
+  if (!count) {
+    return null;
+  }
+  if (key === "Home") {
+    return 0;
+  }
+  if (key === "End") {
+    return count - 1;
+  }
+  if (key !== "ArrowLeft" && key !== "ArrowRight") {
+    return null;
+  }
+  if (index === null || index === undefined || index < 0 || index >= count) {
+    return key === "ArrowRight" ? 0 : count - 1;
+  }
+  return Math.max(0, Math.min(count - 1, index + (key === "ArrowRight" ? 1 : -1)));
 }
