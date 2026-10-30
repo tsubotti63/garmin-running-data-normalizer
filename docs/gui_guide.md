@@ -298,7 +298,7 @@ that is open, and then run the same line again.
 
 ## Ways to use it
 
-The steps of eight common cases. The sections that the links lead to give the
+The steps of nine common cases. The sections that the links lead to give the
 details of each box. A Snapshot is a copy of one Export, which this app keeps
 in a Snapshot Store, so that the Exports that you import are normalized
 together ([Box 2](#box-2-snapshots)).
@@ -425,6 +425,22 @@ race by race.
 5. For the numbers, press **Show as a table**.
 
 More: [Compare by race day](#compare-by-race-day), [Marks](#marks-from-220)
+
+### See how often you ran each distance in the last year
+
+When: you want to see how many times you ran each distance in the past
+year.
+
+1. [Open the view page](#open-the-view-page).
+2. Press **1 year** in **Period** above. Keep **Activity types counted** to
+   running types (at first, every running type in the output).
+3. Choose **Distribution** in **Other views** above the panels, and
+   **Distance** in the list of its title (the distance comes first): a bar for
+   each range of 1 km, as high as the activities in it.
+4. Press a bar to read its range and its activities at the top right. For the
+   numbers, press **Show as a table**.
+
+More: [Distribution](#distribution), [Other views](#other-views-from-220)
 
 ### Give the numbers to an AI as a CSV file
 
@@ -1356,6 +1372,97 @@ values are made):
 
 ![Compare by race day: the distance in one row per race, four races with the bars of their weeks from 16 weeks before to the race day, and the name and the date of each race with "Total of this span" in the heading of its row (marks and data made up for the example)](assets/gui-guide/view-compare-race.en.png)
 
+### Other views (from 2.2.0)
+
+- **Other views** above the panels shows **Plot two items** or
+  **Distribution** in the place of the panels. Enter, Space, or ↓ opens its
+  menu on the first item; ↑, ↓, Home, and End move in it, and Esc closes it,
+  back to its button. Tab or a click elsewhere closes it too.
+- While one shows, the **Items**, **Layouts**, and **Group by** are not used;
+  a line under the filters says so. The **Period**, ‹ ›, the days of a custom
+  range, and **Activity types counted** can be used, and a period or activity
+  types changed here stay for the panels when you go back (while comparing
+  years, the period cannot be changed).
+- **Show all panels again** goes back, the focus on **Other views**. To go
+  from one view to the other, go back to the panels first. While comparing
+  years, **Other views** is not shown.
+
+#### Plot two items
+
+- Each activity is one point, one item across and another up, chosen in the
+  lists of the title, **Item across** and **Item up**; at first the average
+  pace across and the average heart rate up, and later the two chosen last. An
+  item chosen in one list cannot be chosen in the other, and the list says
+  why. The items are the 15 of **Training (per activity)** (but
+  **Activities**) and **Running form (FIT)**; those of **Body (daily)** and
+  **Garmin estimates** cannot be chosen.
+- A line under the title gives the numbers only: the points, the activities of
+  the period, those with both values, and those without. Only the newest 5,000
+  are plotted; where there are more, a line says so (a shorter period shows
+  them all). **This app shows no relation or cause between the two items
+  plotted.** is always under the points.
+- Each scale goes over the values of its item, not from 0. A smaller value of
+  the average pace is faster: further down as the item up, and further left as
+  the item across.
+- Press a point, or select the chart and use ← and → (one point in the order
+  of the dates and times) and Home and End (the first and the last): its date
+  and time with the year, its type, its two values, and how many more have the
+  same values, if any, are at the top right, and are read out too.
+- **Show as a table** gives one row an activity (the date and time, the type,
+  and the two values), ordered by the buttons of its heads (newest first at
+  first); **Show as a chart** goes back.
+- Where an item changes, the points before are not shown until the new ones
+  come; where the period or the activity types change, the points stay,
+  dimmed, until then.
+
+![Plot two items: a point an activity for the average pace (across) and the average heart rate (up), the point chosen at the right with its date and time, type, and two values at the top right, and the words under the points that the app shows no relation (synthetic data)](assets/gui-guide/view-plot.en.png)
+
+#### Distribution
+
+- How many activities fall in each range of one item, as bars. Choose the item
+  in the list of the title: the distance at first, and later the item chosen
+  last, among the 15 items of **Plot two items**.
+- Each item has the width of its ranges in the table below. A range holds its
+  left value and not its right one (10–11 km: 10 km or more, under 11 km).
+
+| Item | Width of a range |
+| --- | --- |
+| Distance | 1 km |
+| Time | 10 minutes (0:10) |
+| Average pace | 10 seconds (0:10 /km) |
+| Average heart rate | 5 bpm |
+| Maximum heart rate | 5 bpm |
+| Cadence | 5 (Garmin value as is) |
+| Power | 10 (Garmin value as is) |
+| Training load | 10 (Garmin value as is) |
+| Total ascent | 10 m |
+| Vertical oscillation | 0.5 cm |
+| Ground contact time | 10 ms |
+| Ground contact time (%) | 1% |
+| Ground contact time balance | 0.5% |
+| Vertical ratio | 0.5% |
+| Stride length | 0.05 m |
+
+- The ranges count the values before they are rounded. The list and the points
+  show rounded values, so an activity near the end of a range can look as if
+  it were in the next one: 10,999.6 m shows as 11.0 km, and is in the range
+  10–11 km.
+- Where there would be more than 200 ranges, each range is the first of 2, 5,
+  10, ... times as wide that is enough, and a line says so. A range of no
+  activity has no bar (0 in the table).
+- A line under the title gives the numbers only: the activities counted, those
+  of the period, and those without a value. For the average pace, **A smaller
+  value is faster (further left in the chart is faster).** is there too.
+- Press a bar, or select the chart and use ← and → (one range at a time, those
+  of no activity among them) and Home and End (the first and the last): the
+  range and its activities are at the top right, as **10 km or more, under 11
+  km: 42**, and are read out too.
+- **Show as a table** gives the activities of each range; **Show as a chart**
+  goes back. An end of a range of a value too large to write, such as a record
+  of an error, is a dash (—).
+
+![Distribution: the bars of the distance, a range of 1 km each, with the range chosen, 10 km or more, under 11 km, framed and its activities at the top right (synthetic data)](assets/gui-guide/view-spread.en.png)
+
 ### When the output changes while you look (from 2.2.0)
 
 - At every request of numbers, the view page checks that the output is as it
@@ -1375,13 +1482,17 @@ later one.
 - Remembered: the items shown and their order (six at most; the same for every
   output), whether the item shelf is open, and the appearance (when **Light**
   or **Dark** is chosen); from 2.2.0, also the period, the grouping, the
-  activity types counted, the layouts (those saved, and the one used
-  last), the way and the month of [Compare years](#compare-years-from-220),
-  what it compares by (the years or the race days) and the weeks of a span,
-  and whether **Show marks** is on. The [marks](#marks-from-220) themselves are
-  kept in the file of the marks.
-  When another output has no value for an item shown, the second line
-  of its panel says "There is no value in this period."
+  activity types counted, the layouts (those saved, and the one used last),
+  the way and the month of [Compare years](#compare-years-from-220), what it
+  compares by (the years or the race days) and the weeks of a span, whether
+  **Show marks** is on, and the two items plotted and the item of a
+  distribution of [Other views](#other-views-from-220). The
+  [marks](#marks-from-220) themselves are kept in the file of the marks. While
+  no panel is left, neither that nor the period or another choice changed
+  meanwhile is remembered: what was remembered before stays (the appearance,
+  the layouts saved, and the marks are kept as ever). When another output has
+  no value for an item shown, the second line of its panel says "There is no
+  value in this period."
 - When another output opens (from 2.2.0), a period such as **1 year** stays
   as it is. A period chosen with **Custom range…** shrinks to the days of the
   output when it overlaps them in part, and becomes **All time** when it does
@@ -1390,9 +1501,10 @@ later one.
   output.
 - Not remembered: the output shown, the same scale, a panel enlarged, a table
   shown, full screen, whether years were compared, with the years or races
-  chosen, and whether a list of activities was open. As the output shown is not remembered, the page
-  opened from the bar at the bottom offers the latest output with the button
-  of [Open the view page](#open-the-view-page).
+  chosen, whether a list of activities was open, and whether another view was
+  shown, with the point or the range chosen. As the output shown is not
+  remembered, the page opened from the bar at the bottom offers the latest
+  output with the button of [Open the view page](#open-the-view-page).
 - **Forget the remembered settings…** in the bar at the bottom of the
   normalization page forgets all of these, and also the Snapshot Store, the
   folder for the output, and the list of earlier outputs: the next launch goes
@@ -1511,7 +1623,8 @@ The GUI remembers only these:
   chosen), and the items and the item shelf of the view page; from 2.2.0, also
   its period, grouping, activity types counted, layouts (those saved, and the
   one used last), how years are compared (the way, the month, by year or race
-  day, and the weeks of a span), and whether marks show.
+  day, and the weeks of a span), whether marks show, and the two items plotted
+  and the item of a distribution.
 - The timezone of the last run that made its output (from 2.2.0). At later
   launches, box 3 is set with it (**(as last time)**).
 - The marks of the view page (from 2.2.0), in a file of their own.
@@ -1544,12 +1657,12 @@ then removes the file of the settings, never while a run is active; from
 also forgets the appearance, the items and the item shelf of the view page,
 your layouts, the period, the grouping, the activity types counted, how years
 are compared (the way, the month, by year or race day, and the weeks of a
-span), whether marks show, and the timezone of the last run that made its
-output. It
-can be pressed only while there are remembered settings. The
-store and the outputs stay, and the next launch goes as a first launch; a
-store that is not in the default place must then be opened again. When the
-file cannot be read, the bar says so, and the launch goes as a first one.
+span), whether marks show, the two items plotted and the item of a
+distribution, and the timezone of the last run that made its output. It can be
+pressed only while there are remembered settings. The store and the outputs
+stay, and the next launch goes as a first launch; a store that is not in the
+default place must then be opened again. When the file cannot be read, the bar
+says so, and the launch goes as a first one.
 
 ## If something is wrong
 
@@ -1861,6 +1974,14 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
   ([The activities of a period](#the-activities-of-a-period-from-220)).
 - The top chart tells how many marks (from 2.2.0) are in its period, and the
   names and days of up to 10 ([Marks](#marks-from-220)).
+- In **Other views** (from 2.2.0), Enter, Space, or ↓ opens the menu on its
+  first item, ↑, ↓, Home, and End move in it, and Esc closes it, back to its
+  button. In **Plot two items**, select the chart: ← and → (one point in the
+  order of the dates and times) and Home and End choose a point and read out
+  its date and time, its type, and its two values (and how many more have the
+  same values). In **Distribution**, ← and → (those of no activity among them)
+  and Home and End choose a range and read out the range and its activities
+  ([Other views](#other-views-from-220)).
 
 ## The GUI and the command line
 

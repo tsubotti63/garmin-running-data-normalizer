@@ -1026,6 +1026,70 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   chosen fit), the table is that of comparing years by day, and in forced
   colors the steps are one color by their opacity. The settings remember the
   calendar as a way. No new API.
+- Other views (stages O1 and P1): **Other views** in the row above the panels
+  is a menu: Enter, Space, or Down opens it on its first item, Up and Down
+  (round), Home, and End move in it, Esc closes it to its button, and Tab or a
+  click elsewhere closes it; the row, and the menu with it, is not shown while
+  comparing years or while another view shows. Another view takes the place of
+  the panels as a comparison of years does: the item shelf, the layouts, and
+  the grouping are not used, with a line that says so; the period, its arrows
+  (which go by the answer of the view), a custom range, and the activity types
+  are the page's, and a change of them stays for the panels, which ask again
+  on the way back, the focus on the menu. Each view asks for its answer under
+  the checks of the numbers (the ticket, the activity types of the output, the
+  size of the answer, and an output that changed); its activities are those of
+  the types counted in the days of the period, chosen by the function that
+  chooses the rows of the list of a period, and a value is one that the list
+  writes (the pace by the time over the distance). The items are the 15 of one
+  activity (the kinds `act`, but the count, and `fit`); the settings remember
+  those chosen while the page has panels, as the rest of the view
+  (`view_plot`, a pair kept whole or not at all, and `view_spread`). The
+  answers are of one generation: an older answer, or one of another pair or
+  item, is never drawn, an output that opens drops those on their way, a
+  ticket that the server no longer keeps opens the output again once, and an
+  output that stops closes the view; while an answer of the same pair or item
+  is on its way, the chart before stays, dimmed.
+- Two items plotted (stage O1): `/api/view/points` gives each activity with a
+  value of both items as a point, the newest `MAX_POINTS` (5,000) at most,
+  oldest first in the order of their dates and times as they show, with how
+  many activities the period has, how many have both values, and how many do
+  not. The page draws a scale for each item over its values (never from 0, and
+  the pace with a smaller value lower or further left, as the panels draw it),
+  in the units and the clocks of the page, a point an activity, and always the
+  words that this app shows no relation or cause between the two items. The
+  first pair is the average pace across and the average heart rate up; an item
+  chosen in one list is disabled in the other, with why. The reading at the
+  top right gives the date and time with the year, the type, the two values,
+  and how many more have the same values; the pointer chooses the nearest
+  point within 12 px, and a click, ← and → (by the order of the dates and
+  times), Home, and End choose a point and say it. The table gives a row an
+  activity, newest first at first, ordered by its heads, 400 rows at a time.
+- The distribution of one item (stage P1): `/api/view/spread` counts the
+  activities with a value of the item in ranges of the width of the item
+  (`SPREAD_RANGES`: a scale and a width in the units of the output, which the
+  guides give as a table in the units of the page, tied to it by a test), each
+  holding its left end and not its right one, from the first range with an
+  activity to the last; at most `MAX_RANGES` (200) ranges, the width times the
+  first of 2, 5, 10, 20, ... that is enough, counted from the numbers of the
+  ranges, never from the span of the values (the server stops where more would
+  be made). A value is counted as the output writes it, never rounded: an
+  exact fraction of its decimal text, the pace by its time times 1000 over its
+  distance, and the number of its range cut toward the smaller number as an
+  integer of Python, so that a value shown rounded can be in the range below
+  (10,999.6 m, shown as 11.0 km, is in the range from 10 to 11 km, as the
+  guides say). The answer gives `first`, `width`, and `scale`, from which
+  alone the page writes the ends; an end that the page cannot write (a range
+  number past 2^53, two ends that it cannot tell apart, or a value of 1e15 or
+  more in the units of the page) is a dash. The page draws a bar a range with
+  an activity, placed by the order of the range only, in the first color, with
+  a gap of 2 px between bars of 8 px or more; the counts on whole ticks from
+  0; the ends in words where they are far enough apart; and the pace faster to
+  the left, which a line says. The reading gives the range and its count ("10
+  km or more, under 11 km: 42"); a click, ← and → (one range, those of no
+  activity among them), Home, and End choose a range and say it, framed as
+  high as the chart. The table gives a row a range, those of no activity among
+  them. In forced colors, the bars are in the color of the text and the range
+  chosen in the highlight.
 - An output that changes while the view page is open is read again at the
   next request (and so is any output when the date changes), so that a
   comparison or a list asked right after a new normalization can come from
