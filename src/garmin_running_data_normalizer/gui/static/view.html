@@ -198,6 +198,7 @@
             <button type="button" id="other-spread" role="menuitem" tabindex="-1" data-i18n="view.other.spread"></button>
           </span>
         </span>
+        <button type="button" id="recap-open" class="small" aria-expanded="false" aria-controls="recap-pop" data-i18n="view.recap.button"></button>
         <span class="align-row">
           <input id="marks-shown" type="checkbox">
           <label for="marks-shown" data-i18n="view.marks.show"></label>
@@ -234,6 +235,20 @@
             <p id="mark-problem" class="layout-problem marks-problem" role="status" aria-live="polite"></p>
           </div>
           <p class="note marks-store" data-i18n="view.marks.store_note"></p>
+        </div>
+        <div id="recap-pop" class="pop recap-pop" role="dialog" aria-labelledby="recap-pop-title" hidden>
+          <div class="pop-head"><span id="recap-pop-title" class="pop-title" tabindex="-1" data-i18n="view.recap.title"></span><button type="button" id="recap-pop-close" class="small" data-i18n="help.close"></button></div>
+          <p id="recap-days" class="recap-days"></p>
+          <p id="recap-loading" class="loading" role="status" aria-live="polite"></p>
+          <div id="recap-stop" class="errbox view-stop" hidden>
+            <h4 id="recap-stop-heading" tabindex="-1" data-i18n="view.stop.series_heading"></h4>
+            <div id="recap-stop-lines" class="messages"></div>
+            <p id="recap-stop-code" class="stop-code"></p>
+          </div>
+          <div id="recap-body" class="recap-body" tabindex="0" role="region" aria-labelledby="recap-pop-title"></div>
+          <p id="recap-difference-note" class="note recap-note" data-i18n="view.recap.note"></p>
+          <p class="note recap-note" data-i18n="view.recap.records_note"></p>
+          <p id="recap-cut" class="note recap-note"></p>
         </div>
       </div>
       <section id="compare" class="compare" aria-labelledby="compare-title" hidden>

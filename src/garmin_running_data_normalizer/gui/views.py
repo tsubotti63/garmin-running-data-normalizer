@@ -206,6 +206,17 @@ def series_request(payload: dict[str, Any]) -> tuple[list[str], str | tuple[date
     return list(items), chosen, grain, types
 
 
+def previous_request(payload: dict[str, Any], grain: str) -> bool:
+    """Whether a request for numbers asks for the period of the same length
+    just before (stage Q1 of v2.2.0): a truth value only, as the month of a
+    comparison is an integer only (not 1 or "true"), and true with the whole
+    period (RANGE_GRAIN) only; false where the request leaves it out."""
+    previous = payload.get("previous", False)
+    if type(previous) is not bool or (previous and grain != RANGE_GRAIN):
+        raise ViewRequestError("previous")
+    return previous
+
+
 def list_request(payload: dict[str, Any]) -> tuple[str, tuple[date, date], list[str] | None]:
     """The item, the days, and the activity types of a request for the list
     of the activities of one period of a panel (stage M3 of v2.2.0): an item
@@ -363,6 +374,7 @@ __all__ = [
     "period_choice",
     "plot_pair_ok",
     "points_request",
+    "previous_request",
     "series_request",
     "spread_request",
     "types_ok",

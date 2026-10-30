@@ -126,6 +126,11 @@ import {
   periodToOpen,
   rangeProblem,
   readout,
+  recapColumns,
+  recapDays,
+  recapDifference,
+  recapPartial,
+  recapRows,
   rememberedItems,
   rememberedKeys,
   settingsAfterForget,
@@ -352,6 +357,21 @@ const ui = {
   marksPop: byId("marks-pop"),
   marksPopTitle: byId("marks-pop-title"),
   marksPopClose: byId("marks-pop-close"),
+  // The summary of the panels (stage Q1 of v2.2.0).
+  recapOpen: byId("recap-open"),
+  recapPop: byId("recap-pop"),
+  recapTitle: byId("recap-pop-title"),
+  recapClose: byId("recap-pop-close"),
+  recapDays: byId("recap-days"),
+  recapLoading: byId("recap-loading"),
+  recapStop: byId("recap-stop"),
+  recapStopLines: byId("recap-stop-lines"),
+  recapStopCode: byId("recap-stop-code"),
+  recapBody: byId("recap-body"),
+  recapDifferenceNote: byId("recap-difference-note"),
+  recapCut: byId("recap-cut"),
+  // The bar at the bottom of the page, above the windows (stage Q1).
+  viewBar: document.querySelector(".view-bar"),
   marksLegend: byId("marks-legend"),
   marksNotice: byId("marks-notice"),
   marksList: byId("marks-list"),
@@ -627,6 +647,17 @@ const state = {
   marksNotice: null,
   marksWaiting: false,
   marksOpen: false,
+  // The summary of the panels (stage Q1 of v2.2.0): whether its window is
+  // open, its answer and what it asked for, whether an answer is on its way,
+  // the generation of its requests, its stop, and whether it showed at the
+  // last render.
+  recapOpen: false,
+  recapAnswer: null,
+  recapAsked: null,
+  recapLoading: false,
+  recapSeq: 0,
+  recapStop: null,
+  recapShown: false,
   markEditing: null,
   markAsk: null,
   markProblem: null,
@@ -1105,6 +1136,9 @@ async function openOutput(target, focus = false) {
   state.plotSeq += 1;
   // And those of a distribution (stage P1).
   state.spreadSeq += 1;
+  // And those of the summary (Codex's review of the diff of Q1).
+  state.recapSeq += 1;
+  state.recapLoading = false;
   const current = state.view === null ? null : state.items;
   state.opening = target.name;
   state.openingTarget = target;
@@ -1178,6 +1212,10 @@ async function openOutput(target, focus = false) {
       state.spreadAsked = null;
       state.spreadStop = null;
     }
+    // The summary asks again for the output that opened (stage Q1).
+    state.recapAnswer = null;
+    state.recapAsked = null;
+    state.recapStop = null;
     rememberItems();
     render();
     // A button that opened it is hidden now.
@@ -1657,6 +1695,10 @@ async function changeMarks(change, done = null) {
 // field takes the focus, and its opener takes it back when it closes.
 async function openMarks(open) {
   state.marksOpen = open;
+  if (open) {
+    // One window opens under the right end of the row at a time (stage Q1).
+    state.recapOpen = false;
+  }
   state.markAsk = null;
   state.markProblem = null;
   editMark(null, false);
@@ -1758,10 +1800,21 @@ function marksAction(event) {
 
 // The window of the marks stays inside the window of the browser, and
 // scrolls; it is measured again when the browser's window changes size.
-function fitMarksWindow() {
-  if (!ui.marksPop.hidden) {
-    ui.marksPop.style.maxHeight = `${Math.max(240, Math.floor(window.innerHeight - ui.marksPop.getBoundingClientRect().top - 12))}px`;
+// A window under the row above the panels reaches down to the bar at the
+// bottom of the page, which stays on the screen above it, and no further on
+// a low screen (stage Q1: the end of a window was under the bar at 1366x650,
+// and Codex's review of the diff: 240 pixels at least went under it too).
+function fitPop(pop) {
+  if (pop.hidden) {
+    return;
   }
+  const bar = ui.viewBar.getBoundingClientRect();
+  const bottom = bar.height > 0 ? Math.min(window.innerHeight, bar.top) : window.innerHeight;
+  pop.style.maxHeight = `${Math.max(0, Math.floor(bottom - pop.getBoundingClientRect().top - 12))}px`;
+}
+
+function fitMarksWindow() {
+  fitPop(ui.marksPop);
 }
 
 // Whether the marks show is a change of the person, remembered with the view.
@@ -1789,6 +1842,244 @@ function markSwatch(kind, span) {
 // The row of the panels holds the switch and the button of the marks; the
 // window says what the panels show, lists the marks (newest first), and adds
 // or changes one.
+// --- The summary of the panels (stage Q1 of v2.2.0) ----------------------
+
+// Whether the window of the summary can show: an output shown, panels,
+// neither a comparison of years nor another view, and not the graphs only
+// (Codex's review of the plan of Q1: the row above the panels shows without
+// a panel, and full screen hides it by its style only).
+function recapShowable(viewing) {
+  return viewing && !apart() && state.items.length > 0 && !state.full;
+}
+
+// What the summary asks for: the ticket, the period as chosen, the activity
+// types counted, and the items of the panels in their order; a change of
+// any of them asks again (Codex's simpler form).
+function recapKey() {
+  return JSON.stringify([state.view?.view ?? null, periodRequest(state.period, state.range), typesRequest(state.counted, state.view?.types), state.items]);
+}
+
+// The window opens with the focus on its title, asking again, and its
+// button takes the focus back when it closes; the window of the marks, at the
+// same place, closes as its button closes it.
+function openRecap(open) {
+  state.recapOpen = open;
+  state.recapAsked = null;
+  if (open && state.marksOpen) {
+    state.marksOpen = false;
+    state.markAsk = null;
+    editMark(null, false);
+  }
+  render();
+  if (open) {
+    ui.recapTitle.focus();
+  } else {
+    ui.recapOpen.focus();
+  }
+}
+
+// The numbers of the summary: the whole period of the page and the period
+// of the same length just before it, as the server makes them; the answer of
+// the last request only, kept with what it asked for, so that it is drawn
+// for that only. A ticket that the server no longer keeps opens the
+// output again once; an output that cannot be read stops the page; another
+// stop shows in the window, and the panels stay (Codex's review of the plan).
+async function requestRecap(again = true) {
+  if (!state.recapShown || state.view === null || !state.items.length) {
+    return;
+  }
+  const seq = ++state.recapSeq;
+  const key = recapKey();
+  state.recapAsked = key;
+  state.recapAnswer = null;
+  state.recapStop = null;
+  state.recapLoading = true;
+  render();
+  try {
+    const payload = { ...seriesPayload(state.items, periodRequest(state.period, state.range), RANGE_GRAIN), previous: true };
+    const answer = await callApi("/api/view/series", payload);
+    if (seq !== state.recapSeq) {
+      return;
+    }
+    state.recapAnswer = { key, answer };
+  } catch (error) {
+    if (seq !== state.recapSeq) {
+      return;
+    }
+    if (connectionFailure(error)) {
+      // The bar says so.
+    } else if (error.code === "VIEW_NOT_OPEN" && again && state.target !== null) {
+      if (await reopen()) {
+        if (seq !== state.recapSeq) {
+          return;
+        }
+        state.recapLoading = false;
+        requestRecap(false);
+        return;
+      }
+    } else if (OUTPUT_STOPS.includes(error.code)) {
+      state.view = null;
+      setAnswer(null);
+      state.compare = null;
+      state.plot = null;
+      state.spread = null;
+      state.stop = { code: error.code, detail: error.detail };
+    } else {
+      state.recapStop = { code: error.code, detail: error.detail };
+    }
+  }
+  if (seq === state.recapSeq) {
+    state.recapLoading = false;
+  }
+  render();
+}
+
+// The table of the summary keeps its heads and two rows or so where the
+// window is low, which then scrolls as a whole (Codex's review of the diff of
+// Q1); a shorter table keeps all of it.
+const RECAP_KEPT = 112;
+
+function fitRecapWindow() {
+  if (!ui.recapPop.hidden) {
+    ui.recapBody.style.minHeight = "";
+    ui.recapBody.style.minHeight = `${Math.min(ui.recapBody.scrollHeight, RECAP_KEPT)}px`;
+  }
+  fitPop(ui.recapPop);
+}
+
+// The window of the summary: hidden while it cannot show, its state kept,
+// and asked again once when it shows again (the checker's answer 5 of the
+// plan of Q1); the focus inside it goes back to its button where it hides.
+function renderRecap(viewing, live) {
+  // An output that stops closes the window, which another output opens
+  // without (the plan of Q1); a stop above an output shown keeps it.
+  if (state.view === null && state.stop !== null) {
+    state.recapOpen = false;
+  }
+  const showable = recapShowable(viewing);
+  ui.recapOpen.disabled = !viewing || !state.items.length;
+  ui.recapOpen.setAttribute("aria-expanded", String(state.recapOpen && showable));
+  const focused = ui.recapPop.contains(document.activeElement);
+  ui.recapPop.hidden = !state.recapOpen || !showable;
+  if (ui.recapPop.hidden) {
+    if (state.recapShown) {
+      // Answers on their way are dropped, and a ticket that the server no
+      // longer keeps is not opened again: the window asks again when it shows
+      // again (Codex's review of the diff of Q1).
+      state.recapShown = false;
+      state.recapSeq += 1;
+      state.recapLoading = false;
+    }
+    if (focused) {
+      // To the button, or where it does not show, to the heading of what
+      // shows instead, as graphs only does (Codex's review of the diff).
+      const shown = (node) => node.closest("[hidden]") === null;
+      const target = !ui.recapOpen.disabled && shown(ui.recapOpen) ? ui.recapOpen : [ui.stopHeading, ui.emptyHeading].find(shown);
+      target?.focus();
+    }
+    return;
+  }
+  if (!state.recapShown) {
+    state.recapShown = true;
+    state.recapAsked = null;
+  }
+  if (live && state.recapAsked !== recapKey()) {
+    // Asked after this render, once for what it shows.
+    state.recapAsked = recapKey();
+    queueMicrotask(() => requestRecap());
+  }
+  const columns = recapColumns(periodRequest(state.period, state.range), state.language);
+  // An answer for other items or another period is not drawn under these.
+  const answer = state.recapAnswer?.key === recapKey() ? state.recapAnswer.answer : null;
+  setText(ui.recapLoading, state.recapLoading ? t("view.loading") : "");
+  ui.recapStop.hidden = state.recapStop === null;
+  if (!ui.recapStop.hidden) {
+    renderStop(ui.recapStop, null, ui.recapStopLines, ui.recapStopCode, stopBox(state.recapStop.code, state.recapStop.detail, state.productVersion));
+  }
+  const days = answer === null ? null : recapDays(answer, columns, state.language);
+  setText(ui.recapDays, days === null ? "" : describe(days));
+  ui.recapDifferenceNote.hidden = columns.before === null;
+  renderRecapTable(answer, columns);
+  fitRecapWindow();
+}
+
+// The table of the summary: a row for each item of the panels (a row for
+// each series of an item of several), its value in the period shown, in the
+// period before, and their difference as a number only; a value of a period
+// that the output cuts marked *, with no difference. While an answer is on
+// its way the table is empty: a table is read as numbers (the checker's
+// answer 4 of the plan of Q1).
+function renderRecapTable(answer, columns) {
+  const signature = JSON.stringify([state.language, answer, state.items]);
+  if (ui.recapBody.dataset.signature === signature) {
+    return;
+  }
+  ui.recapBody.dataset.signature = signature;
+  setText(ui.recapCut, "");
+  if (answer === null) {
+    ui.recapBody.replaceChildren();
+    return;
+  }
+  if (!Array.isArray(answer.panels) || !answer.panels.length) {
+    ui.recapBody.replaceChildren(element("p", "note", t("view.summary.none")));
+    return;
+  }
+  const previous = columns.before === null ? null : answer.previous;
+  const table = element("table");
+  const head = element("tr");
+  for (const name of [t("view.recap.item"), describe(columns.now), ...(columns.before === null ? [] : [describe(columns.before), t("view.recap.difference")])]) {
+    const cell = element("th", "", name);
+    cell.scope = "col";
+    head.append(cell);
+  }
+  const thead = element("thead");
+  thead.append(head);
+  const tbody = element("tbody");
+  const nowWhole = answer.whole === true;
+  const beforeWhole = previous !== null && previous.whole === true;
+  const beforeOutside = previous === null || typeof previous.start !== "string";
+  const valueText = (key, line, cut) => {
+    const value = line?.values?.[0];
+    return Number.isFinite(value) ? `${describe(valueMessage(key, value, state.language))}${cut ? "*" : ""}` : t("view.recap.none");
+  };
+  answer.panels.forEach((panel, index) => {
+    const key = state.items[index];
+    const before = previous?.panels?.[index] ?? null;
+    for (const row of recapRows(panel, before, state.language)) {
+      const tr = element("tr");
+      const name = element("th", "", itemName(key));
+      name.scope = "row";
+      if (row.name !== null) {
+        // The name of the line under that of the item, a word apart when
+        // it is read.
+        name.append(" ", element("span", "recap-line", describe(row.name)));
+      }
+      tr.append(name, element("td", "", valueText(key, row.now, !nowWhole)));
+      if (columns.before !== null) {
+        tr.append(element("td", "", beforeOutside ? "\u2014" : valueText(key, row.before, !beforeWhole)));
+        const difference = nowWhole && beforeWhole ? recapDifference(key, row.now?.values?.[0], row.before?.values?.[0], state.language) : null;
+        tr.append(element("td", "", difference === null ? "\u2014" : describe(difference)));
+      }
+      tbody.append(tr);
+    }
+  });
+  table.append(thead, tbody);
+  ui.recapBody.replaceChildren(table);
+  // The notes of the periods that the output cuts.
+  const notes = [];
+  const nowPartial = nowWhole ? null : recapPartial(answer.chosen, answer.start, answer.end, state.language);
+  if (nowPartial !== null) {
+    notes.push(t("view.recap.cut_note", { name: describe(columns.now), partial: describe(nowPartial) }));
+  }
+  if (previous !== null && !beforeOutside && !beforeWhole) {
+    const beforePartial = recapPartial(previous.chosen, previous.start, previous.end, state.language);
+    if (beforePartial !== null) {
+      notes.push(t("view.recap.cut_note", { name: describe(columns.before), partial: describe(beforePartial) }));
+    }
+  }
+  setText(ui.recapCut, notes.join(" "));
+}
+
 function renderMarks(viewing, live) {
   const locked = marksLocked();
   ui.marksShown.checked = state.marksShown;
@@ -5226,6 +5517,7 @@ function renderStage(live) {
   renderOtherViews(viewing && live && !apart());
   renderPicker(viewing);
   renderMarks(viewing && !apart(), live);
+  renderRecap(viewing, live);
   setText(ui.loading, state.loading && viewing ? t("view.loading") : "");
   ui.align.disabled = !viewing;
   ui.align.checked = state.align;
@@ -6672,8 +6964,18 @@ function connect() {
   // field adds or saves.
   ui.marksShown.addEventListener("change", changeMarksShown);
   window.addEventListener("resize", fitMarksWindow);
+  window.addEventListener("resize", fitRecapWindow);
   ui.marksOpen.addEventListener("click", () => openMarks(!state.marksOpen));
   ui.marksPopClose.addEventListener("click", () => openMarks(false));
+  // The summary of the panels (stage Q1 of v2.2.0).
+  ui.recapOpen.addEventListener("click", () => openRecap(!state.recapOpen));
+  ui.recapClose.addEventListener("click", () => openRecap(false));
+  ui.recapPop.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      openRecap(false);
+    }
+  });
   ui.marksList.addEventListener("click", marksAction);
   ui.markSave.addEventListener("click", saveMark);
   ui.markCancel.addEventListener("click", () => editMark(null));

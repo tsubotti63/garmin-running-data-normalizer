@@ -1865,3 +1865,146 @@ test("the line under the ranges says their numbers only", () => {
   assert.equal(words(view.spreadCount(answer, "en"), "en"), "Counted: 3,370 (the activities of this period with a value, of 3,380; without one: 10)");
   assert.equal(translate(catalogs, "ja", "view.spread.faster_left"), "値が小さいほど速い（グラフでは左ほど速い）。");
 });
+
+// --- The summary of the panels (stage Q1 of v2.2.0) -----------------------
+
+test("the columns of the summary name the period shown and the one of the same length before it, none for all time", () => {
+  const names = (period, language) => {
+    const columns = view.recapColumns(period, language);
+    return [words(columns.now, language), columns.before === null ? null : words(columns.before, language)];
+  };
+  assert.deepEqual(names("1y", "ja"), ["この 1 年", "前の 1 年"]);
+  assert.deepEqual(names("3y", "ja"), ["この 3 年", "前の 3 年"]);
+  assert.deepEqual(names("5y", "en"), ["The last 5 years", "The 5 years before"]);
+  assert.deepEqual(names("10y", "en"), ["The last 10 years", "The 10 years before"]);
+  assert.deepEqual(names("1y", "en"), ["The last year", "The year before"]);
+  assert.deepEqual(names("all", "ja"), ["全期間", null]);
+  assert.deepEqual(names("all", "en"), ["All time", null]);
+  // A range by its days as chosen, one day too (the checker's answer 3).
+  assert.deepEqual(names({ from: "2024-01-01", to: "2024-01-31" }, "ja"), ["この期間", "その前の 31 日"]);
+  assert.deepEqual(names({ from: "2024-01-01", to: "2024-01-31" }, "en"), ["This period", "The 31 days before"]);
+  assert.deepEqual(names({ from: "2024-02-29", to: "2024-02-29" }, "ja"), ["この期間", "その前の 1 日"]);
+  assert.deepEqual(names({ from: "2024-02-29", to: "2024-02-29" }, "en"), ["This period", "The day before"]);
+  assert.deepEqual(names({ from: "2000-01-01", to: "2024-12-31" }, "en"), ["This period", "The 9,132 days before"]);
+});
+
+test("a difference is now minus before with its sign only, no sign where it reads as 0, and a dash without a value", () => {
+  const difference = (key, now, before, language = "ja") => words(view.recapDifference(key, now, before, language), language);
+  assert.equal(difference("dist", 12345.6, 10000), "+2.3 km");
+  assert.equal(difference("dist", 10000, 10100), "−0.1 km");
+  assert.equal(difference("dist", 10000, 10000), "0.0 km");
+  // Small differences either way read as 0, never −0.0 (Codex's review of
+  // the plan of Q1, 6).
+  assert.equal(difference("dist", 10000, 10000.04), "0.0 km");
+  assert.equal(difference("dist", 10000.04, 10000), "0.0 km");
+  assert.equal(difference("dist", 10000, 10049.9), "0.0 km");
+  assert.equal(difference("dist", 10000, 10050), "−0.1 km");
+  assert.equal(difference("count", 12, 10), "+2 回");
+  assert.equal(difference("count", 12, 10, "en"), "+2");
+  assert.equal(difference("count", 5, 5), "0 回");
+  assert.equal(difference("hr", 151.6, 150), "+2 bpm");
+  // A pace and a time as a clock, both signs rounded alike: half a minute
+  // is a minute either way.
+  assert.equal(difference("pace", 0.3, 0.305), "−0:05 /km");
+  assert.equal(difference("pace", 0.305, 0.3), "+0:05 /km");
+  assert.equal(difference("time", 3630, 3600), "+0:01");
+  assert.equal(difference("time", 3600, 3630), "−0:01");
+  assert.equal(difference("time", 3610, 3600), "0:00");
+  assert.equal(difference("time", 3600, 3610), "0:00");
+  // A value of 0 is a value: 0 km before is a difference.
+  assert.equal(difference("dist", 5000, 0), "+5.0 km");
+  // The two values as the table writes them are subtracted (stage Q1):
+  // 49.0 and 49.0 are 0.0 apart, 0.15 km is written 0.2 km, and 1.325 m is
+  // written 1.33 m by the numbers of the language, where toFixed gives 1.32.
+  assert.equal(difference("vo2", 49.04, 48.96), "0.0");
+  assert.equal(difference("dist", 150, 0), "+0.2 km");
+  assert.equal(difference("sl", 1325, 1300), "+0.03 m");
+  assert.equal(difference("hr", 150.5, 150.4), "+1 bpm");
+  // A clock rounds as it is written, below 0 too: -30 seconds is 0:00 as 0
+  // is, and -90 seconds is -0:01 (Codex's review of the diff of Q1).
+  assert.equal(words(view.valueMessage("time", -30, "ja"), "ja"), "0:00");
+  assert.equal(difference("time", -30, 0), "0:00");
+  assert.equal(difference("time", -90, 0), "\u22120:01");
+  for (const [now, before] of [[null, 1], [1, null], [Number.NaN, 1], [undefined, undefined]]) {
+    assert.equal(difference("dist", now, before), "—");
+  }
+});
+
+test("a period that the output cuts says where, from, to, or both, and a period held whole says nothing", () => {
+  const partial = (chosen, start, end, language = "ja") => words(view.recapPartial(chosen, start, end, language), language);
+  assert.equal(partial({ start: "2023-03-01", end: "2024-02-29" }, "2023-05-01", "2024-02-29"), "（途中：2023年5月1日から）");
+  assert.equal(partial({ start: "2024-01-15", end: "2024-02-10" }, "2024-01-15", "2024-01-31"), "（途中：2024年1月31日まで）");
+  assert.equal(partial({ start: "2023-12-01", end: "2024-02-10" }, "2024-01-01", "2024-01-31"), "（途中：2024年1月1日から2024年1月31日まで）");
+  assert.equal(partial({ start: "2023-12-01", end: "2024-02-10" }, "2024-01-01", "2024-01-31", "en"), " (cut: from January 1, 2024 to January 31, 2024)");
+  assert.equal(partial({ start: "2023-05-01", end: "2024-02-29" }, "2023-06-01", "2024-02-29", "en"), " (cut: from June 1, 2023)");
+  // An end before the calendar is null, and cut.
+  assert.equal(partial({ start: null, end: "0001-02-28" }, "0001-01-01", "0001-02-28"), "（途中：1年1月1日から）");
+  assert.equal(view.recapPartial({ start: "2024-01-01", end: "2024-01-31" }, "2024-01-01", "2024-01-31", "ja"), null);
+  assert.equal(view.recapPartial({ start: "2023-01-01", end: "2023-12-31" }, null, null, "ja"), null);
+});
+
+test("the line of the days says what the two periods count, as the output cuts them", () => {
+  const days = (answer, period, language = "ja") => words(view.recapDays(answer, view.recapColumns(period, language), language), language);
+  const answer = { start: "2023-03-01", end: "2024-02-29", previous: { start: "2022-03-01", end: "2023-02-28" } };
+  assert.equal(days(answer, "1y"), "この 1 年：2023年3月1日〜2024年2月29日／前の 1 年：2022年3月1日〜2023年2月28日");
+  assert.equal(days(answer, "1y", "en"), "The last year: March 1, 2023–February 29, 2024; The year before: March 1, 2022–February 28, 2023");
+  const outside = { start: "2024-01-01", end: "2024-01-31", previous: { start: null, end: null } };
+  assert.equal(days(outside, { from: "2024-01-01", to: "2024-01-31" }), "この期間：2024年1月1日〜2024年1月31日／その前の 31 日：出力の外");
+  assert.equal(days({ start: "2020-01-01", end: "2024-02-29", previous: null }, "all"), "全期間：2020年1月1日〜2024年2月29日");
+  assert.equal(view.recapDays({ start: null, end: null, previous: null }, view.recapColumns("1y", "ja"), "ja"), null);
+});
+
+test("an item has a row for each series of the two periods, in the order of the server, named as one panel", () => {
+  const line = (source, sport, first, last, value) => ({
+    series: { vo2max_source_series: source, sport },
+    values: [value],
+    counts: [value === null ? 0 : 1],
+    first_day: first,
+    last_day: last,
+  });
+  const empty = { series: null, values: [null], counts: [0] };
+  const shape = (rows, language = "ja") =>
+    rows.map((row) => [row.name === null ? null : words(row.name, language), row.now?.values[0] ?? null, row.before?.values[0] ?? null]);
+  const old = (value) => line("activity_vo2max_daily", "RUNNING", "2011-04-01", "2022-01-09", value);
+  const fresh = (value) => line("performance_metrics_daily", "RUNNING", "2022-01-12", "2026-10-18", value);
+  // A series of the period before only, an old source, comes first and is
+  // named "until" (Codex's review of the plan of Q1, 1); the panel of now
+  // has one line and no name.
+  assert.deepEqual(shape(view.recapRows({ lines: [fresh(50)] }, { lines: [old(47), fresh(48)] }, "ja")), [
+    ["〜2022年1月9日", null, 47],
+    ["2022年1月12日〜", 50, 48],
+  ]);
+  // A series of now only; the line without a series of the server is left
+  // out where there is a series.
+  assert.deepEqual(shape(view.recapRows({ lines: [fresh(50)] }, { lines: [empty] }, "ja")), [[null, 50, null]]);
+  assert.deepEqual(shape(view.recapRows({ lines: [empty] }, { lines: [old(47)] }, "en"), "en"), [[null, null, 47]]);
+  // VO2 Max without a value in both periods keeps its row (Codex's 2).
+  assert.deepEqual(shape(view.recapRows({ lines: [empty] }, { lines: [empty] }, "ja")), [[null, null, null]]);
+  assert.deepEqual(shape(view.recapRows({ lines: [] }, null, "ja")), [[null, null, null]]);
+  // An item of one line, 0 of an activity item a value of its row.
+  const dist = (value) => ({ series: null, values: [value], counts: [value ? 3 : 0] });
+  assert.deepEqual(shape(view.recapRows({ lines: [dist(12000)] }, { lines: [dist(0)] }, "ja")), [[null, 12000, 0]]);
+  assert.deepEqual(shape(view.recapRows({ lines: [dist(12000)] }, null, "ja")), [[null, 12000, null]]);
+  // The first day first: a source that starts earlier is the first line
+  // and is named "until", whatever the order of the names (the partial guard
+  // of Q1: the sources of Garmin sort the same way by both).
+  const zold = line("z_source", "RUNNING", "2011-04-01", "2022-01-09", 40);
+  const anew = line("a_source", "RUNNING", "2022-01-12", "2026-10-18", 50);
+  assert.deepEqual(shape(view.recapRows({ lines: [anew] }, { lines: [anew, zold] }, "ja")), [
+    ["〜2022年1月9日", null, 40],
+    ["2022年1月12日〜", 50, 50],
+  ]);
+  // The same first day: the source "x" before "x y", as the server orders
+  // the tuple, not as the keys sort as texts (the checker's Q1-8).
+  const x = (source, value) => line(source, "RUNNING", "2020-01-01", "2020-12-31", value);
+  assert.deepEqual(
+    view.recapRows({ lines: [x("x y", 2), x("x", 1)] }, null, "ja").map((row) => row.now.series.vo2max_source_series),
+    ["x", "x y"],
+  );
+  // The sports of one series, by the sport.
+  const sports = view.recapRows({ lines: [fresh(50)] }, { lines: [line("performance_metrics_daily", "CYCLING", "2022-01-12", "2026-10-18", 45), fresh(48)] }, "en");
+  assert.deepEqual(shape(sports, "en"), [
+    ["Cycling", null, 45],
+    ["Running", 50, 48],
+  ]);
+});

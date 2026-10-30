@@ -35,6 +35,7 @@ from garmin_running_data_normalizer.gui.views import (
     item_table,
     list_request,
     output_stamp,
+    previous_request,
     series_request,
 )
 from garmin_running_data_normalizer.output_check import OutputActionError
@@ -162,6 +163,32 @@ class ViewApiTest(GuiServerTestCase):
                 expected["coverage"] = coverage(data, types)
                 self.assertEqual(answer, as_json(expected))
 
+    def test_the_summary_has_the_period_before(self) -> None:
+        # Stage Q1 of v2.2.0: the whole period with the period of the same
+        # length just before it, as the server makes them, from one reading.
+        output = made_output()
+        ticket = self.open(output)
+        data = load_view_data(output)
+        for items, period, chosen in (
+            (["dist", "pace", "rhr"], "1y", "1y"),
+            (["count", "vo2"], {"from": "2024-01-01", "to": "2024-03-31"}, (date(2024, 1, 1), date(2024, 3, 31))),
+            (["dist"], "all", "all"),
+        ):
+            with self.subTest(items=items, period=period):
+                status, answer = self.call(
+                    "/api/view/series", {"view": ticket, "items": items, "period": period, "grain": "range", "types": None, "previous": True}
+                )
+                self.assertEqual(status, 200)
+                expected = view_answer(data, items, chosen, "range", None, True)
+                expected["coverage"] = coverage(data, None)
+                self.assertEqual(answer, as_json(expected))
+                self.assertIn("previous", answer)
+        # Without it, the answer is that of the whole period as before.
+        status, answer = self.call("/api/view/series", {"view": ticket, "items": ["dist"], "period": "1y", "grain": "range", "previous": False})
+        self.assertEqual(status, 200)
+        self.assertNotIn("previous", answer)
+        self.assertNotIn("chosen", answer)
+
     def test_requests_of_another_form_are_refused(self) -> None:
         ticket = self.open(made_output())
         good = {"view": ticket, "items": ["dist"], "period": "all", "grain": "auto", "types": None}
@@ -183,6 +210,12 @@ class ViewApiTest(GuiServerTestCase):
             {"types": ["running", "running"]},
             {"types": [1]},
             {"types": ["no such type"]},
+            # Stage Q1 of v2.2.0: the period before, as a truth value, with the whole period.
+            {"previous": 1},
+            {"previous": "true"},
+            {"previous": None},
+            {"previous": True},
+            {"previous": True, "grain": "week"},
         ):
             with self.subTest(change=change):
                 self.assertEqual(self.call("/api/view/series", {**good, **change}), (422, {"error": "REQUEST_INVALID"}))
@@ -724,6 +757,16 @@ class ViewsTest(unittest.TestCase):
             with self.subTest(payload=payload):
                 with self.assertRaises(ViewRequestError):
                     series_request(payload)
+        # Stage Q1 of v2.2.0: the period before, a truth value only (as the
+        # month of a comparison is an integer only), true with the whole
+        # period only, and false where the request leaves it out.
+        self.assertIs(previous_request({}, "auto"), False)
+        self.assertIs(previous_request({"previous": False}, "week"), False)
+        self.assertIs(previous_request({"previous": True}, "range"), True)
+        for previous, grain in ((1, "range"), ("true", "range"), (None, "range"), (0, "range"), (True, "auto"), (True, "month")):
+            with self.subTest(previous=previous, grain=grain):
+                with self.assertRaises(ViewRequestError):
+                    previous_request({"previous": previous}, grain)
 
     def test_a_request_for_the_activities_of_a_period_has_its_form(self) -> None:
         # Stage M3 of v2.2.0: an item of the activities, the days of one

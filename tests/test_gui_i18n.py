@@ -408,6 +408,31 @@ class GuiCatalogTest(unittest.TestCase):
         self.assertEqual(catalogs["ja"]["view.spread.reading"], "{from} 以上 {to} 未満：{n}")
         self.assertEqual(catalogs["en"]["view.spread.reading"], "{from} or more, under {to}: {n}")
 
+    def test_the_summary_says_a_difference_as_a_number_only(self) -> None:
+        # v2.2.0 Q1 (the answer of the person to Q0, opinions 1 and 3 of the
+        # checker's review of its sample): a difference is a sign and a
+        # number, no word of a direction or of better or worse; the notes say
+        # what a difference is and that a value counts the records with a
+        # value only (Codex's review of the plan of Q1, 10).
+        catalogs = {language: load_catalog(language) for language in LANGUAGES}
+        for language, catalog in catalogs.items():
+            recap = " ".join(value for key, value in catalog.items() if key.startswith("view.recap."))
+            words = ("増", "減", "速", "遅", "良", "悪", "改善", "上が", "下が", "↑", "↓", "▲", "▼") if language == "ja" else ("increas", "decreas", "faster", "slower", "better", "worse", "improv", "gain", "loss", "rise", "drop", "↑", "↓")
+            for word in words:
+                with self.subTest(language=language, word=word):
+                    self.assertNotIn(word, recap.lower())
+        self.assertEqual(catalogs["ja"]["view.recap.note"], "差は「今 − 前」の数です。")
+        self.assertEqual(catalogs["en"]["view.recap.note"], "A difference is the value now minus the value before.")
+        self.assertEqual(catalogs["ja"]["view.recap.records_note"], "値は、その期間に値のある記録だけで数えます。項目によっては、期間の一部にしか記録が無いことがあります。")
+        self.assertEqual(
+            catalogs["en"]["view.recap.records_note"],
+            "A value counts only the records with a value in the period; some items have records in a part of the period only.",
+        )
+        # The notes of a period cut by the output take the form of the page
+        # (view.compare.since), and say why there is no difference.
+        self.assertEqual(catalogs["ja"]["view.recap.partial_from"], "（途中：{date}から）")
+        self.assertEqual(catalogs["ja"]["view.recap.cut_note"], "* {name}{partial}。途中なので、差は出しません。")
+
     def test_page_scripts_change_text_without_markup(self) -> None:
         # Paths and names from the computer reach the page; it sets them with
         # textContent only, so that none of them is read as HTML (stage B1a).

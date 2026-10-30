@@ -79,6 +79,7 @@ from .views import (
     list_request,
     points_request,
     spread_request,
+    previous_request,
     series_request,
     types_ok,
 )
@@ -904,6 +905,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             if not isinstance(ticket, str):
                 raise ViewRequestError("view")
             items, period, grain, types = series_request(payload)
+            # The period before, for the summary (stage Q1 of v2.2.0).
+            previous = previous_request(payload, grain)
         except ViewRequestError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
         try:
@@ -916,7 +919,7 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise _command_failed() from exc
         if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
-        answer = view_answer(data, items, period, grain, types)
+        answer = view_answer(data, items, period, grain, types, previous)
         answer["coverage"] = self.server.views.coverage(ticket, data, types)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")

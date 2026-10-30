@@ -149,6 +149,20 @@ def _add_years(day: date, years: int) -> date:
         return day.replace(year=day.year + years, day=28)
 
 
+def _years_before(end: int, years: int) -> int:
+    """The day number of the first day of the ``years`` years that end on the
+    day number ``end``, as LAST_YEARS counts them (the day after the same day
+    ``years`` years before, 28 February for 29 February), or 0 where that day
+    is before 1 January of the year 1, which no date writes (stage Q1 of
+    v2.2.0: _add_years would raise there, for the periods of an output of the
+    first years too). The day after 31 December of the year 0 is 1 January of
+    the year 1 (Codex's review of the diff of Q1)."""
+    day = date.fromordinal(end)
+    if day.year - years < 1:
+        return 1 if day.year - years == 0 and (day.month, day.day) == (12, 31) else 0
+    return _add_years(day, -years).toordinal() + 1
+
+
 def auto_grain(start: int, end: int) -> str:
     """The grouping of "Auto": by month for more than 3 years, by week for
     more than 1 year, and by day otherwise."""
@@ -201,8 +215,7 @@ def period_bounds(
         start, end = data.first_day, data.last_day
     elif period in LAST_YEARS:
         end = data.last_day
-        back = _add_years(date.fromordinal(end), -LAST_YEARS[period]) + timedelta(days=1)
-        start = max(back.toordinal(), data.first_day)
+        start = max(_years_before(end, LAST_YEARS[period]), data.first_day)
     else:
         raise ValueError(f"unknown period: {period}")
     if grain == "auto":
@@ -487,18 +500,78 @@ def default_items(data: ViewData, shelf: dict[str, dict[str, Any]] | None = None
     return [key for key in FIRST_ITEMS if shelf[key]["months"]]
 
 
+def chosen_span(data: ViewData, period: str | tuple[date, date]) -> tuple[int, int] | None:
+    """The days of ``period`` as chosen, before the output cuts them, as day
+    numbers (stage Q1 of v2.2.0): a range as it is, the years of LAST_YEARS
+    back from the last day of the output (0 where their first day is before
+    the calendar), and "all" from the first day of the output to its last;
+    None for an output without rows."""
+    if data.first_day is None or data.last_day is None:
+        return None
+    if isinstance(period, tuple):
+        return period[0].toordinal(), period[1].toordinal()
+    if period == "all":
+        return data.first_day, data.last_day
+    if period in LAST_YEARS:
+        return _years_before(data.last_day, LAST_YEARS[period]), data.last_day
+    raise ValueError(f"unknown period: {period}")
+
+
+def previous_span(data: ViewData, period: str | tuple[date, date]) -> tuple[int, int] | None:
+    """The days just before the period chosen, of the same length, as day
+    numbers (stage Q1 of v2.2.0): the years of LAST_YEARS back from the day
+    before its first day, counted as LAST_YEARS counts them, and the same
+    number of days for a range; None for "all" and for an output without
+    rows. A number below 1 is a day before 1 January of the year 1."""
+    chosen = chosen_span(data, period)
+    if chosen is None or period == "all":
+        return None
+    first, last = chosen
+    end = first - 1
+    if isinstance(period, str):
+        return (_years_before(end, LAST_YEARS[period]) if end >= 1 else 0), end
+    return first - (last - first + 1), end
+
+
+def _day_or_none(number: int) -> str | None:
+    """A day number as a date, or None before the calendar."""
+    return date.fromordinal(number).isoformat() if number >= 1 else None
+
+
+def _span_answer(data: ViewData, span: tuple[int, int]) -> tuple[dict[str, Any], tuple[int, int] | None, bool]:
+    """The days of a span chosen as an answer writes them, each end None
+    before the calendar; the days of the output in it (None where it is wholly
+    outside); and whether the output holds all of it."""
+    first, last = span
+    cut_first, cut_last = max(first, data.first_day), min(last, data.last_day)
+    cut = (cut_first, cut_last) if cut_first <= cut_last else None
+    whole = first >= data.first_day and last <= data.last_day
+    return {"start": _day_or_none(first), "end": _day_or_none(last)}, cut, whole
+
+
 def view_answer(
     data: ViewData,
     keys: Collection[str],
     period: str | tuple[date, date] = "all",
     grain: str = "auto",
     types: Collection[str] | None = None,
+    previous: bool = False,
 ) -> dict[str, Any]:
-    """The numbers of a page: its periods, once, and a panel for each item."""
+    """The numbers of a page: its periods, once, and a panel for each item.
+    With ``previous`` (the whole period only, stage Q1 of v2.2.0), also the
+    days chosen and whether the output holds all of them, and the numbers of
+    the period of the same length just before, counted from the same reading
+    of the output in the same way: None for "all" and where the period is
+    outside the output."""
+    if previous and grain != RANGE_GRAIN:
+        raise ValueError("the period before is for the whole period only")
     periods = period_bounds(data, period, grain)
     if periods is None:
-        return {"start": None, "end": None, "grain": None, "periods": [], "panels": []}
-    return {
+        answer: dict[str, Any] = {"start": None, "end": None, "grain": None, "periods": [], "panels": []}
+        if previous:
+            answer["previous"] = None
+        return answer
+    answer = {
         "start": date.fromordinal(periods.start).isoformat(),
         "end": date.fromordinal(periods.end).isoformat(),
         "grain": periods.grain,
@@ -508,6 +581,26 @@ def view_answer(
         ],
         "panels": [item_series(data, key, periods, types) for key in keys],
     }
+    if previous:
+        chosen = chosen_span(data, period)
+        if chosen is None:
+            raise RuntimeError("an output with periods has days")
+        answer["chosen"], _cut, answer["whole"] = _span_answer(data, chosen)
+        before = previous_span(data, period)
+        if before is None:
+            answer["previous"] = None
+        else:
+            days, cut, whole = _span_answer(data, before)
+            answer["previous"] = {
+                "chosen": days,
+                "start": None if cut is None else date.fromordinal(cut[0]).isoformat(),
+                "end": None if cut is None else date.fromordinal(cut[1]).isoformat(),
+                "whole": whole,
+                "panels": None
+                if cut is None
+                else [item_series(data, key, Periods(cut[0], cut[1], RANGE_GRAIN, ((cut[0], cut[1], False),)), types) for key in keys],
+            }
+    return answer
 
 
 def activity_list(
@@ -748,12 +841,14 @@ __all__ = [
     "activity_spread",
     "activity_types",
     "auto_grain",
+    "chosen_span",
     "coverage",
     "default_items",
     "default_types",
     "item_series",
     "period_bounds",
     "point_item",
+    "previous_span",
     "type_name_ok",
     "view_answer",
 ]
