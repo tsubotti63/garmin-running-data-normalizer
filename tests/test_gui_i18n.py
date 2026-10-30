@@ -299,6 +299,12 @@ class GuiCatalogTest(unittest.TestCase):
                 ("view.help.race_text", "view.compare.by.race"),
                 ("view.help.race_text", "view.compare.weeks"),
                 ("view.help.list_text", "view.list.close"),
+                # v2.2.0 OP2: the help of the other views names the menu, its
+                # two views, and the way back.
+                ("view.help.other_plot", "view.other.button"),
+                ("view.help.other_plot", "view.other.plot"),
+                ("view.help.other_spread", "view.other.spread"),
+                ("view.help.other_spread", "view.panel.unbig"),
             ):
                 with self.subTest(language=language, key=key):
                     self.assertIn(quote.format(catalog[named]), catalog[key])

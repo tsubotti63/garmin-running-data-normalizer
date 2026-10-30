@@ -1,16 +1,26 @@
 from __future__ import annotations
 
+import itertools
 import json
 import re
 import struct
 import unittest
 from datetime import date, timedelta
+from fractions import Fraction
 from pathlib import Path
 
 from garmin_running_data_normalizer.gui.layouts import BUILT_IN_LAYOUTS
 from garmin_running_data_normalizer.view.data import ViewData
-from garmin_running_data_normalizer.view.items import ITEMS, OBSERVED
-from garmin_running_data_normalizer.view.series import period_bounds
+from garmin_running_data_normalizer.view import series as series_module
+from garmin_running_data_normalizer.view.items import ITEMS, ITEMS_BY_KEY, OBSERVED
+from garmin_running_data_normalizer.view.series import (
+    MAX_POINTS,
+    MAX_RANGES,
+    SPREAD_RANGES,
+    activity_spread,
+    period_bounds,
+    point_item,
+)
 
 # The guides of main are read by the users of the stable release, through the
 # README, so they name and install the release that is published, which the
@@ -18,6 +28,7 @@ from garmin_running_data_normalizer.view.series import period_bounds
 # procedure gives its own line (v2.0.1 F4; decision 20261024-4).
 from scripts.validate_public_product_state import CURRENT_STABLE_VERSION
 from tests import test_gui_i18n
+from tests.test_view_series import act, view_data
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -612,7 +623,8 @@ class GuiGuideTest(unittest.TestCase):
         # another in the section of comparing years. M4: the list of a period
         # and the marks, after the overview, and comparing by race day, after
         # the years laid over one another. N2: the calendar, before comparing
-        # by race day.
+        # by race day. OP2: the points and a distribution, after comparing by
+        # race day.
         names = (
             "normalized-page",
             "next-steps",
@@ -628,6 +640,8 @@ class GuiGuideTest(unittest.TestCase):
             "view-compare-overlay",
             "view-compare-calendar",
             "view-compare-race",
+            "view-plot",
+            "view-spread",
         )
         sizes = {"next-steps": (315, 213), "view-layouts": (371, 193), "view-layouts-manage": (440, 438)}
         japanese = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
@@ -661,7 +675,9 @@ class GuiGuideTest(unittest.TestCase):
         # the details, and the first two start the GUI by a link, not by its
         # steps (the checker). From v2.2.0 (stage L2), a seventh scene compares
         # May of every year, after the past year on the view page; from M4, an
-        # eighth compares the 16 weeks before races, after it.
+        # eighth compares the 16 weeks before races, after it; from OP2, a ninth
+        # gives the distances of the last year as a distribution, after it (the
+        # checker's answer 3 of the plan of OP2).
         parts = {
             "en": ("How it goes", "Ways to use it", "More: [", "(#start-the-gui)"),
             "ja": ("全体の流れ", "場面ごとの使い方", "くわしくは：[", "(#gui-を起動する)"),
@@ -689,17 +705,18 @@ class GuiGuideTest(unittest.TestCase):
                         if scene.startswith(("Give the numbers to an AI", "数字を CSV にして")):
                             care = {"en": "personal data", "ja": "個人のデータ"}[language]
                             self.assertLess(reads.index(care), reads.index("`about`"))
-        self.assertEqual(len(scenes["en"]), 8)
-        self.assertEqual(len(scenes["ja"]), 8)
-        for language, title, race in (
-            ("en", "Compare May of every year", "Compare the 16 weeks before races"),
-            ("ja", "毎年の 5 月をくらべる", "大会の前の 16 週をくらべる"),
+        self.assertEqual(len(scenes["en"]), 9)
+        self.assertEqual(len(scenes["ja"]), 9)
+        for language, title, race, spread in (
+            ("en", "Compare May of every year", "Compare the 16 weeks before races", "See how often you ran each distance in the last year"),
+            ("ja", "毎年の 5 月をくらべる", "大会の前の 16 週をくらべる", "直近 1 年に、どの距離を何回走ったかを見る"),
         ):
             with self.subTest(language=language, scene="compare"):
                 self.assertTrue(scenes[language][5].startswith(title))
                 self.assertTrue(scenes[language][6].startswith(race))
-                self.assertTrue(scenes[language][7].startswith(("Give the numbers to an AI", "数字を CSV にして")))
-        intro = {"en": "The steps of eight common cases.", "ja": "よくある 8 つの場面の手順です。"}
+                self.assertTrue(scenes[language][7].startswith(spread))
+                self.assertTrue(scenes[language][8].startswith(("Give the numbers to an AI", "数字を CSV にして")))
+        intro = {"en": "The steps of nine common cases.", "ja": "よくある 9 つの場面の手順です。"}
         for language, path in GUIDES.items():
             with self.subTest(language=language, part="intro"):
                 self.assertIn(intro[language], path.read_text(encoding="utf-8"))
@@ -775,10 +792,12 @@ class GuiGuideTest(unittest.TestCase):
         }
         # What is forgotten, in the words of the page's question; from M4,
         # also the month, what a comparison compares by, the weeks of a span,
-        # and whether marks show (the question of 2.2.0 had left them out).
+        # and whether marks show (the question of 2.2.0 had left them out); from
+        # OP2, the two items plotted and the item of a distribution (stages O1
+        # and P1 remember them).
         forgotten = {
-            "en": "It also forgets the appearance, the items and the item shelf of the view page, your layouts, the period, the grouping, the activity types counted, how years are compared (the way, the month, by year or race day, and the weeks of a span), whether marks show, and the timezone of the last run that made its output.",
-            "ja": "画面の色と、見るページで並べた項目と棚の開け閉め、自分の表示の型、期間とまとめ方と数える種目、年でくらべるのしかた（見せ方・月・くらべ方・範囲の週の数）、「印を出す」かどうか、前に出力を作った正規化のタイムゾーンも忘れます。",
+            "en": "It also forgets the appearance, the items and the item shelf of the view page, your layouts, the period, the grouping, the activity types counted, how years are compared (the way, the month, by year or race day, and the weeks of a span), whether marks show, the two items plotted and the item of a distribution, and the timezone of the last run that made its output.",
+            "ja": "画面の色と、見るページで並べた項目と棚の開け閉め、自分の表示の型、期間とまとめ方と数える種目、年でくらべるのしかた（見せ方・月・くらべ方・範囲の週の数）、「印を出す」かどうか、点で並べる 2 つの項目と分かれ方の項目、前に出力を作った正規化のタイムゾーンも忘れます。",
         }
         removed = {"en": "The marks of the view page are removed too, and cannot be brought back.", "ja": "見るページの印も消えます（戻せません）。"}
         gone = {"en": "removes the file of the settings only", "ja": "設定のファイルだけを消します"}
@@ -808,27 +827,33 @@ class GuiGuideTest(unittest.TestCase):
         # what a comparison compares by and the weeks of a span (stage M2) and
         # whether marks show (stage M1) are remembered, the marks themselves in
         # their file, and the races chosen and a list of a period (stage M3)
-        # are not.
+        # are not. From OP2, the two items plotted and the item of a
+        # distribution (stages O1 and P1) are remembered, and another view shown
+        # and what is chosen in it are not; nothing of the view is remembered
+        # while no panel is left, which is said once, for all of it (the
+        # checker's review of the plan of OP2).
         phrases = {
             "en": (
                 "At first, the period is **All time**, and the grouping **Auto**; from 2.2.0, those chosen last stay for the next time",
-                "or **Dark** is chosen); from 2.2.0, also the period, the grouping, the activity types counted, the layouts (those saved, and the one used last), the way and the month of [Compare years](#compare-years-from-220), what it compares by (the years or the race days) and the weeks of a span, and whether **Show marks** is on. The [marks](#marks-from-220) themselves are kept in the file of the marks.",
+                "or **Dark** is chosen); from 2.2.0, also the period, the grouping, the activity types counted, the layouts (those saved, and the one used last), the way and the month of [Compare years](#compare-years-from-220), what it compares by (the years or the race days) and the weeks of a span, whether **Show marks** is on, and the two items plotted and the item of a distribution of [Other views](#other-views-from-220). The [marks](#marks-from-220) themselves are kept in the file of the marks.",
+                "While no panel is left, neither that nor the period or another choice changed meanwhile is remembered: what was remembered before stays (the appearance, the layouts saved, and the marks are kept as ever).",
                 "When another output opens (from 2.2.0), a period such as **1 year** stays as it is.",
                 "A period chosen with **Custom range…** shrinks to the days of the output when it overlaps them in part, and becomes **All time** when it does not overlap them at all.",
                 "The activity types counted are those remembered that the output has; when it has none of them, every running type in the output.",
-                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, full screen, whether years were compared, with the years or races chosen, and whether a list of activities was open.",
+                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, full screen, whether years were compared, with the years or races chosen, whether a list of activities was open, and whether another view was shown, with the point or the range chosen.",
                 "the names of places and of the items of the view page, and from 2.2.0 also the names of the layouts you saved, the days of a period chosen with **Custom range…**, the activity types counted, and the timezone. They stay on this computer",
             ),
             "ja": (
                 "期間とまとめ方は、はじめは「全期間」と「自動」です。2.2.0 からは、選んだものを覚えていて、次に開いたときもそのままです",
-                "画面の色（「ライト」か「ダーク」を選んだとき）。2.2.0 からは、期間、まとめ方、数える種目、表示の型（保存した型と、最後に使った型）、[年でくらべる](#年でくらべる220-から)の見せ方と月、くらべ方（年か大会の日か）と範囲の週の数、「印を出す」かどうかも覚えます。[印](#印220-から)そのものは、印のファイルに残ります。",
+                "画面の色（「ライト」か「ダーク」を選んだとき）。2.2.0 からは、期間、まとめ方、数える種目、表示の型（保存した型と、最後に使った型）、[年でくらべる](#年でくらべる220-から)の見せ方と月、くらべ方（年か大会の日か）と範囲の週の数、「印を出す」かどうか、[ほかの見方](#ほかの見方220-から)の点で並べる 2 つの項目と分かれ方の項目も覚えます。[印](#印220-から)そのものは、印のファイルに残ります。",
+                "段を全部外して 1 つも無い間は、そのことも、その間に変えた期間などのしかたも覚えず、前に覚えたもののままです（画面の色、保存した表示の型、印は覚えます）。",
                 "ほかの出力を開いたとき（2.2.0 から）：「1 年」などの期間は、そのままです。",
                 # The words of the button of an enlarged panel changed in 2.2.0 (the
                 # checker's K3-2); the English words are those of 2.1.0.
                 "⤢ の所が「段を並べて見る」（2.1.0 では「元に戻す」）になり、",
                 "「範囲を選ぶ…」で選んだ期間は、その出力の日の範囲と一部だけ重なるときは重なる所に縮まり、まったく重ならないときは「全期間」になります。",
                 "数える種目は、覚えた種目のうち、その出力にある種目です。1 つも無いときは、その出力のランニングの種目すべてです。",
-                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、区切りの一覧を開いていたか。",
+                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、区切りの一覧を開いていたか、ほかの見方を開いていたかと、選んだ点や分かれ方の区切り。",
                 "2.2.0 からは、保存した表示の型の名前、「範囲を選ぶ…」で選んだ期間の日付、数える種目、タイムゾーンも入ります。",
             ),
         }
@@ -1410,6 +1435,214 @@ class GuiGuideTest(unittest.TestCase):
             for shade in shades:
                 with self.subTest(language=language, shade=shade):
                     self.assertNotIn(shade, own_reads.lower())
+
+    def test_guides_give_the_other_views_as_the_page_does(self) -> None:
+        # v2.2.0 OP2: the other views of stages O1 and P1 have a section of
+        # their own after comparing years, with a heading for each view under
+        # it, as the calendar and the race day are under comparing years (the
+        # checker's answer 2 of the plan of OP2). What the guides say of them
+        # is what the page and the server do, so that a change of either fails
+        # here: the first pair and the first item, the limit of the points, the
+        # items of the views (those of one activity but the count, in the
+        # groups of the shelf), the limit of the ranges and the steps of a
+        # wider width, the width of each item as a table in the units of the
+        # page (the checker's OP2-1 and answer 4), the way the pace goes in each
+        # view (OP2-2), a value counted before it is rounded (the promise of
+        # P1: 10,999.6 m, shown as 11.0 km, is in the range of 10 to 11 km), the
+        # reading of a range, the keys, what is remembered, and the scene of
+        # the distances of the last year (answer 3), which chooses the distance
+        # and keeps the running types, as a distribution opens with the item
+        # and the types chosen last (Codex's review of the diff). Every word
+        # quoted is a word of the page or a value as the page writes it.
+        flow = (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8")
+        self.assertEqual(MAX_POINTS, 5000)
+        self.assertIn(f"export const MAX_POINTS = {MAX_POINTS};", flow)
+        self.assertIn('export const PLOT_FIRST = Object.freeze({ x: "pace", y: "hr" });', flow)
+        self.assertIn('export const SPREAD_FIRST = "dist";', flow)
+        self.assertEqual(MAX_RANGES, 200)
+        self.assertEqual(list(itertools.islice(series_module._wider(), 4)), [1, 2, 5, 10])
+        # The items in the order of the page (ITEMS), which the table
+        # follows; SPREAD_RANGES has a width for each, in any order (Codex's
+        # review of the diff of OP2).
+        keys = [item.key for item in ITEMS if point_item(item.key)]
+        self.assertEqual(set(keys), set(SPREAD_RANGES))
+        self.assertEqual(len(keys), 15)
+        self.assertEqual({ITEMS_BY_KEY[key].group for key in keys}, {"act", "fit"})
+        self.assertEqual([item.key for item in ITEMS if item.group in ("act", "fit") and not point_item(item.key)], ["count"])
+        self.assertEqual({item.group for item in ITEMS}, {"act", "fit", "body", "est"})
+        block = re.search(r"export const ITEM_FORMATS = \{\n(.*?)\n\};", flow, re.S).group(1)
+        formats = {
+            key: (unit, Fraction(factor.replace(" ", "")), int(digits))
+            for key, unit, factor, digits in re.findall(r'^  (\w+): \{ unit: "(\w+)", factor: ([0-9./ ]+), digits: (\d+) \},$', block, re.M)
+        }
+        # The example of the guides, as the server counts it and the page
+        # writes it.
+        answer = activity_spread(view_data([act("2026-03-01", distance_m=10999.6)]), "dist")
+        self.assertEqual((answer["first"], answer["counts"]), (10, [1]))
+        unit, factor, digits = formats["dist"]
+        self.assertEqual(unit, "km")
+        self.assertEqual(f"{float(Fraction('10999.6') * factor):.{digits}f}", "11.0")
+
+        def width_words(key: str, language: str, messages: dict[str, str]) -> str:
+            # The width of the ranges of an item, as the page writes a width:
+            # the scale and the width of the server, in the unit of the page.
+            scale, width = SPREAD_RANGES[key]
+            unit, factor, _digits = formats[key]
+            shown = Fraction(width, scale) * factor
+            number = format(float(shown), "g")
+            if unit in ("hm", "pace"):
+                self.assertEqual(shown.denominator, 1)
+                clock = f"{int(shown) // 60}:{int(shown) % 60:02d}"
+                if unit == "hm":
+                    return f"{int(shown)} minutes ({clock})" if language == "en" else f"{int(shown)} 分（{clock}）"
+                clock = messages["view.value.pace"].format(value=clock)
+                return f"{int(shown)} seconds ({clock})" if language == "en" else f"{int(shown)} 秒（{clock}）"
+            if unit == "raw":
+                return f"{number} ({messages['view.unit.raw']})" if language == "en" else f"{number}（{messages['view.unit.raw']}）"
+            return messages[f"view.value.{'pct' if unit == 'pct_fit' else unit}"].format(value=number)
+
+        heading = {"en": "Other views (from 2.2.0)", "ja": "ほかの見方（2.2.0 から）"}
+        before = {"en": "Compare years (from 2.2.0)", "ja": "年でくらべる（2.2.0 から）"}
+        after = {"en": "When the output changes while you look (from 2.2.0)", "ja": "見ている間に出力が変わったとき（2.2.0 から）"}
+        own = {"en": ("Plot two items", "Distribution"), "ja": ("点で並べる", "分かれ方")}
+        heads = {"en": ("Item", "Width of a range"), "ja": ("項目", "区切りの幅")}
+        scene = {"en": "See how often you ran each distance in the last year", "ja": "直近 1 年に、どの距離を何回走ったかを見る"}
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            messages = catalog(language)
+            mark = "**{}**" if language == "en" else "「{}」"
+            name = {key: messages[f"view.item.{key}"] for key in ("pace", "hr", "dist")}
+            places = [text.index(f"\n### {title}\n") for title in (before[language], heading[language], after[language])]
+            with self.subTest(language=language, part="order"):
+                self.assertEqual(places, sorted(places))
+            part = text[places[1] : places[2]]
+            plot_at, spread_at = (part.index(f"\n#### {title}\n") for title in own[language])
+            with self.subTest(language=language, part="headings"):
+                self.assertLess(plot_at, spread_at)
+            parts = {
+                "menu": part[:plot_at],
+                "plot": part[plot_at:spread_at],
+                "spread": part[spread_at:],
+            }
+            joined = {key: " ".join(value.split()) if language == "en" else re.sub(r"\n *", "", value) for key, value in parts.items()}
+            # The widths, as a table of two columns in the order of the page.
+            rows = re.findall(r"^\| (.+?) \| (.+?) \|$", parts["spread"], re.M)
+            with self.subTest(language=language, part="widths"):
+                self.assertEqual(rows[:2], [heads[language], ("---", "---")])
+                self.assertEqual(rows[2:], [(messages[f"view.item.{key}"], width_words(key, language, messages)) for key in keys])
+            reading = messages["view.spread.reading"].format(**{"from": messages["view.value.km"].format(value="10"), "to": messages["view.value.km"].format(value="11"), "n": messages["view.value.count"].format(value="42")})
+            shown_value = messages["view.value.km"].format(value="11.0")
+            range_words = messages["view.spread.range"].format(**{"from": "10", "to": messages["view.value.km"].format(value="11")})
+            if language == "en":
+                phrases = {
+                    "menu": (
+                        f"{mark.format(messages['view.other.button'])} above the panels shows {mark.format(messages['view.other.plot'])} or {mark.format(messages['view.other.spread'])} in the place of the panels.",
+                        "Enter, Space, or ↓ opens its menu on the first item; ↑, ↓, Home, and End move in it, and Esc closes it, back to its button. Tab or a click elsewhere closes it too.",
+                        f"While one shows, the {mark.format(messages['view.shelf.heading'])}, {mark.format(messages['view.layouts.heading'])}, and {mark.format(messages['view.grain.label'])} are not used; a line under the filters says so.",
+                        "a period or activity types changed here stay for the panels when you go back (while comparing years, the period cannot be changed).",
+                        f"{mark.format(messages['view.panel.unbig'])} goes back, the focus on {mark.format(messages['view.other.button'])}. To go from one view to the other, go back to the panels first. While comparing years, {mark.format(messages['view.other.button'])} is not shown.",
+                    ),
+                    "plot": (
+                        f"Each activity is one point, one item across and another up, chosen in the lists of the title, {mark.format(messages['view.plot.x'])} and {mark.format(messages['view.plot.y'])}; at first the {name['pace'].lower()} across and the {name['hr'].lower()} up, and later the two chosen last. An item chosen in one list cannot be chosen in the other, and the list says why.",
+                        "A line under the title gives the numbers only: the points, the activities of the period, those with both values, and those without.",
+                        "Press a point, or select the chart and use ← and → (one point in the order of the dates and times) and Home and End (the first and the last): its date and time with the year, its type, its two values,",
+                        f"{mark.format(messages['view.panel.table'])} gives one row an activity (the date and time, the type, and the two values), ordered by the buttons of its heads (newest first at first); {mark.format(messages['view.panel.chart'])} goes back.",
+                        f"The items are the {len(keys)} of {mark.format(messages['view.group.act'])} (but {mark.format(messages['view.item.count'])}) and {mark.format(messages['view.group.fit'])}; those of {mark.format(messages['view.group.body'])} and {mark.format(messages['view.group.est'])} cannot be chosen.",
+                        f"Only the newest {MAX_POINTS:,} are plotted; where there are more, a line says so (a shorter period shows them all).",
+                        f"{mark.format(messages['view.plot.caveat'])} is always under the points.",
+                        "Each scale goes over the values of its item, not from 0. A smaller value of the average pace is faster: further down as the item up, and further left as the item across.",
+                        "how many more have the same values, if any, are at the top right, and are read out too.",
+                        "Where an item changes, the points before are not shown until the new ones come; where the period or the activity types change, the points stay, dimmed, until then.",
+                    ),
+                    "spread": (
+                        f"How many activities fall in each range of one item, as bars. Choose the item in the list of the title: the {name['dist'].lower()} at first, and later the item chosen last, among the {len(keys)} items of {mark.format(messages['view.other.plot'])}.",
+                        "A range of no activity has no bar (0 in the table).",
+                        "A line under the title gives the numbers only: the activities counted, those of the period, and those without a value.",
+                        "Press a bar, or select the chart and use ← and → (one range at a time, those of no activity among them) and Home and End (the first and the last):",
+                        f"{mark.format(messages['view.panel.table'])} gives the activities of each range; {mark.format(messages['view.panel.chart'])} goes back.",
+                        f"A range holds its left value and not its right one ({range_words}: 10 km or more, under 11 km).",
+                        f"The ranges count the values before they are rounded. The list and the points show rounded values, so an activity near the end of a range can look as if it were in the next one: 10,999.6 m shows as {shown_value}, and is in the range {range_words}.",
+                        f"Where there would be more than {MAX_RANGES} ranges, each range is the first of 2, 5, 10, ... times as wide that is enough, and a line says so.",
+                        f"For the average pace, {mark.format(messages['view.spread.faster_left'])} is there too.",
+                        f"the range and its activities are at the top right, as {mark.format(reading)}, and are read out too.",
+                        "An end of a range of a value too large to write, such as a record of an error, is a dash (—).",
+                    ),
+                }
+                keyboard = "In **Other views** (from 2.2.0), Enter, Space, or ↓ opens the menu on its first item, ↑, ↓, Home, and End move in it, and Esc closes it, back to its button. In **Plot two items**, select the chart: ← and → (one point in the order of the dates and times) and Home and End choose a point and read out its date and time, its type, and its two values (and how many more have the same values). In **Distribution**, ← and → (those of no activity among them) and Home and End choose a range and read out the range and its activities ([Other views](#other-views-from-220))."
+                remembered = ("whether **Show marks** is on, and the two items plotted and the item of a distribution of [Other views](#other-views-from-220).", "whether marks show, and the two items plotted and the item of a distribution.")
+                forgets = "the two items plotted and the item of a distribution"
+                steps = (f"2. Press {mark.format(messages['view.period.years1'])} in {mark.format(messages['view.period.label'])} above. Keep {mark.format(messages['view.types.label'])} to running types", f"3. Choose {mark.format(messages['view.other.spread'])} in {mark.format(messages['view.other.button'])} above the panels, and {mark.format(name['dist'])} in the list of its title")
+            else:
+                phrases = {
+                    "menu": (
+                        f"段の上の{mark.format(messages['view.other.button'])}で、段の代わりに{mark.format(messages['view.other.plot'])}か{mark.format(messages['view.other.spread'])}を出します。",
+                        "メニューは、Enter・Space・↓ キーで開いて最初の項目に移り、↑ ↓・Home・End キーで動き、Esc キーでボタンに戻って閉じます。Tab キーか、ほかの所を押しても閉じます。",
+                        f"出ている間は{mark.format(messages['view.shelf.heading'])}{mark.format(messages['view.layouts.heading'])}{mark.format(messages['view.grain.label'])}を使いません。フィルターの下に、そのことが 1 行で出ます。",
+                        "ここで変えた期間と数える種目は、段に戻ってもそのまま段に効きます（年でくらべる間は、期間を変えられません）。",
+                        f"戻るときは{mark.format(messages['view.panel.unbig'])}を押します。フォーカスは{mark.format(messages['view.other.button'])}に戻ります。点で並べると分かれ方を行き来するときは、いったん段に戻ります。年でくらべる間は、{mark.format(messages['view.other.button'])}は出ません。",
+                    ),
+                    "plot": (
+                        f"1 回のアクティビティを 1 つの点にして、2 つの項目を横と縦に並べます。項目は、題の中の{mark.format(messages['view.plot.x'])}と{mark.format(messages['view.plot.y'])}の一覧で選びます。初めは{name['pace']}（横）と{name['hr']}（縦）で、次に開いたときは前に選んだ 2 つです。もう一方で選んでいる項目は選べず、一覧にそのわけが出ます。",
+                        "題の下に、数だけの行が出ます（点の数、この期間の回、両方の値がある回、値の無い回）。",
+                        "点を押すか、グラフを選んで ← → キー（日時の順に 1 つずつ）、Home と End（最初と最後）で点を選ぶと、右上に日時（年つき）・種目・2 つの値と、",
+                        f"{mark.format(messages['view.panel.table'])}で 1 回ごとの表（日時・種目・2 つの値）になり、列の見出しのボタンで並べ替えられます（初めは新しい順）。{mark.format(messages['view.panel.chart'])}で戻ります。",
+                        f"選べるのは{mark.format(messages['view.group.act'])}（{mark.format(messages['view.item.count'])}のほか）と{mark.format(messages['view.group.fit'])}の {len(keys)} の項目で、{mark.format(messages['view.group.body'])}と{mark.format(messages['view.group.est'])}の項目は選べません。",
+                        f"点にするのは新しい {MAX_POINTS:,} 回までで、それより多いときは、そのことが 1 文で出ます（期間をしぼると、全部を出せます）。",
+                        f"点の下には、いつも{mark.format(messages['view.plot.caveat'])}が出ます。",
+                        "目盛りは、それぞれの項目の値の範囲です（0 からではありません）。平均ペースは、値が小さいほど速い回です。縦の項目なら下ほど、横の項目なら左ほど速くなります。",
+                        "同じ値の回がほかにあればその数が出ます。読み上げでも聞けます。",
+                        "項目を替えると、新しい点が届くまで、前の点は出しません。期間や数える種目を変えたときは、届くまで今の点を薄く残します。",
+                    ),
+                    "spread": (
+                        f"1 つの項目の 1 回ごとの値が、どの区切りに何回あるかを、棒で見ます。項目は題の中の一覧で選びます。初めは{name['dist']}で、次に開いたときは前に選んだ項目です。選べる項目は点で並べると同じ {len(keys)} です。",
+                        "回数の無い区切りは、棒を描きません（表では 0）。",
+                        "題の下に、数だけの行（数えた回・この期間の回・値の無い回）が出ます。",
+                        "棒を押すか、グラフを選んで ← → キー（1 つずつ。回数の無い区切りも通ります）、Home と End（最初と最後）で区切りを選ぶと、",
+                        f"{mark.format(messages['view.panel.table'])}で区切りごとの回数の表になり、{mark.format(messages['view.panel.chart'])}で戻ります。",
+                        f"区切りは左の値を含み、右の値を含みません（{range_words} は 10 km 以上 11 km 未満）。",
+                        f"区切りは、丸める前の値で数えます。一覧や点の値は丸めて出すので、区切りの境目のすぐ近くの回は、表示と区切りが違って見えることがあります（10,999.6 m の回は{mark.format(shown_value)}と出て、{range_words} に入ります）。",
+                        f"区切りが {MAX_RANGES} を超えるときは、幅を 2 倍・5 倍・10 倍…のうち足りるいちばん小さい幅に広げ、そのことを 1 行で言います。",
+                        f"平均ペースのときは{mark.format(messages['view.spread.faster_left'])}も出ます。",
+                        f"右上に{mark.format(reading)}のように、範囲と回数が出ます。読み上げでも聞けます。",
+                        "記録の誤りのような、とても大きい値の区切りの端は「—」で書きます。",
+                    ),
+                }
+                keyboard = "ほかの見方（2.2.0 から）では、メニューを Enter・Space・↓ キーで開くと最初の項目に移り、↑ ↓・Home・End キーで動き、Esc キーでボタンに戻って閉じます。点で並べるでは、グラフを選んで ← → キー（日時の順に 1 つずつ）と Home・End で点を選ぶと、日時・種目・2 つの値（同じ値の回があればその数も）を読み上げます。分かれ方では、← → キー（回数の無い区切りも通ります）と Home・End で区切りを選ぶと、範囲と回数を読み上げます（[ほかの見方](#ほかの見方220-から)）。"
+                remembered = ("「印を出す」かどうか、[ほかの見方](#ほかの見方220-から)の点で並べる 2 つの項目と分かれ方の項目も覚えます。", "「印を出す」かどうか、点で並べる 2 つの項目と分かれ方の項目も。")
+                forgets = "点で並べる 2 つの項目と分かれ方の項目"
+                steps = (f"2. 上の{mark.format(messages['view.period.label'])}で{mark.format(messages['view.period.years1'])}を押します。{mark.format(messages['view.types.label'])}は、ランニングの種目だけにします", f"3. 段の上の{mark.format(messages['view.other.button'])}で{mark.format(messages['view.other.spread'])}を選び、題の一覧で{mark.format(name['dist'])}を選びます")
+            for key, expected in phrases.items():
+                for phrase in expected:
+                    with self.subTest(language=language, part=key, phrase=phrase):
+                        self.assertEqual(joined[key].count(phrase), 1)
+            with self.subTest(language=language, part="keyboard"):
+                self.assertEqual(reads.count(keyboard), 1)
+            for phrase in remembered:
+                with self.subTest(language=language, remembered=phrase):
+                    self.assertEqual(reads.count(phrase), 1)
+            with self.subTest(language=language, part="forget"):
+                self.assertIn(forgets, messages["forget.text_also"])
+            # The scene of the distances of the last year leads to the
+            # distribution, in the words of the page.
+            start = text.index(f"\n### {scene[language]}\n")
+            scene_text = text[start : text.index("\n### ", start + 1)]
+            scene_reads = " ".join(scene_text.split()) if language == "en" else re.sub(r"\n *", "", scene_text)
+            with self.subTest(language=language, part="scene"):
+                for step in steps:
+                    self.assertIn(step, scene_reads)
+                self.assertIn("(#distribution)" if language == "en" else "(#分かれ方)", scene_text)
+            # Every word quoted is a word of the page, or the reading of a range
+            # and a value as the page writes them, or the dash of an end.
+            words = set(messages.values()) | {reading, shown_value, "—"}
+            pattern = r"\*\*([^*]+)\*\*|\"([^\"]+)\"" if language == "en" else r"「([^」]+)」()"
+            for key, value in joined.items():
+                for word in (bold or plain for bold, plain in re.findall(pattern, value)):
+                    with self.subTest(language=language, part=key, quoted=word):
+                        self.assertIn(word, words)
+            # The width of the distance in the help is that of the table.
+            with self.subTest(language=language, part="help"):
+                self.assertIn(width_words("dist", language, messages), messages["view.help.other_spread"])
 
     def test_readme_puts_the_gui_first(self) -> None:
         # v2.1.0 H1 (the whole flow): the README gives the GUI right after who
