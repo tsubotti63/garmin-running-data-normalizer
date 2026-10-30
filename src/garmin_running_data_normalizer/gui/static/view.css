@@ -476,6 +476,77 @@ button.small {
   color: var(--text);
 }
 
+/* The summary of the panels (stage Q1 of v2.2.0): a window under the row
+   above the panels, its table in a region that scrolls by itself; a low
+   window scrolls as a whole. */
+.recap-pop {
+  top: 100%;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 640px;
+  max-width: calc(100vw - 32px);
+  margin-top: 6px;
+  overflow: auto;
+  color: var(--text);
+}
+
+.recap-days {
+  margin: 0;
+  color: var(--sub);
+}
+
+.recap-body {
+  overflow: auto;
+  min-height: 0;
+}
+
+.recap-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.recap-body th,
+.recap-body td {
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The heads stay at the top of the region as it scrolls, as those of the
+   table of a panel. */
+.recap-body thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+  color: var(--sub);
+  font-weight: 600;
+}
+
+.recap-body th[scope="row"],
+.recap-body thead th:first-child {
+  text-align: left;
+  white-space: normal;
+}
+
+.recap-body th[scope="row"] {
+  font-weight: 400;
+}
+
+.recap-line {
+  display: block;
+  color: var(--sub);
+  font-size: 0.8rem;
+}
+
+.recap-note {
+  margin: 0;
+}
+
 .marks-legend {
   display: flex;
   flex-wrap: wrap;

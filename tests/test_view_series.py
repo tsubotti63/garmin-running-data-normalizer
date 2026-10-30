@@ -44,12 +44,14 @@ from garmin_running_data_normalizer.view.series import (
     activity_spread,
     activity_types,
     auto_grain,
+    chosen_span,
     coverage,
     default_items,
     default_types,
     item_series,
     period_bounds,
     point_item,
+    previous_span,
     view_answer,
 )
 
@@ -316,6 +318,181 @@ class RangeTest(unittest.TestCase):
         # activities, between the first and the last, is 0.
         self.assertEqual(panel(data, "load", span, "range")["lines"][0]["values"], [None])
         self.assertEqual(panel(data, "dist", (date(2024, 3, 8), date(2024, 3, 13)), "range")["lines"][0]["values"], [0.0])
+
+
+class PreviousPeriodTest(unittest.TestCase):
+    """The period of the same length just before the one shown, for the
+    summary of the panels (stage Q1 of v2.2.0): made by the server from the
+    period as chosen, before the output cuts it, and counted from the same
+    reading of the output in the same way as the period shown."""
+
+    def summary(self, data: Any, period: Any, keys: tuple[str, ...] = ("dist",)) -> dict[str, Any]:
+        return view_answer(data, list(keys), period, "range", None, True)
+
+    def test_the_years_before_are_years_of_the_calendar(self) -> None:
+        # The checker's Q1-2: a year with 29 February has the year of the
+        # calendar before it (a day shorter than the days that ‹ moves by).
+        data = view_data([act("2003-06-01", distance_m=5000), act("2023-06-01", distance_m=8000), act("2024-02-29", distance_m=10000)])
+        for period, chosen, before in (
+            ("1y", ("2023-03-01", "2024-02-29"), ("2022-03-01", "2023-02-28")),
+            ("3y", ("2021-03-01", "2024-02-29"), ("2018-03-01", "2021-02-28")),
+            ("5y", ("2019-03-01", "2024-02-29"), ("2014-03-01", "2019-02-28")),
+            ("10y", ("2014-03-01", "2024-02-29"), ("2004-02-29", "2014-02-28")),
+        ):
+            with self.subTest(period=period):
+                answer = self.summary(data, period)
+                self.assertEqual(answer["chosen"], {"start": chosen[0], "end": chosen[1]})
+                self.assertEqual(answer["previous"]["chosen"], {"start": before[0], "end": before[1]})
+                self.assertEqual(chosen_span(data, period), (day(chosen[0]), day(chosen[1])))
+                self.assertEqual(previous_span(data, period), (day(before[0]), day(before[1])))
+        # The year before, between the first and the last activity, holds none: 0.
+        before = self.summary(data, "1y")["previous"]
+        self.assertEqual((before["whole"], before["panels"][0]["lines"][0]["values"]), (True, [0.0]))
+
+    def test_a_range_has_the_same_number_of_days_before_it(self) -> None:
+        data = view_data([act("2024-01-01", distance_m=1000), act("2024-03-31", distance_m=2000)])
+        self.assertEqual(previous_span(data, (date(2024, 2, 1), date(2024, 2, 29))), (day("2024-01-03"), day("2024-01-31")))
+        self.assertEqual(previous_span(data, (date(2024, 3, 1), date(2024, 3, 1))), (day("2024-02-29"), day("2024-02-29")))
+        # All has none; its days are those of the output.
+        answer = self.summary(data, "all")
+        self.assertIsNone(answer["previous"])
+        self.assertEqual((answer["chosen"], answer["whole"]), ({"start": "2024-01-01", "end": "2024-03-31"}, True))
+        self.assertIsNone(previous_span(data, "all"))
+        # A period outside the output: the empty answer, without a period before.
+        answer = self.summary(data, (date(2010, 1, 1), date(2010, 1, 31)))
+        self.assertEqual((answer["panels"], answer["previous"]), ([], None))
+        self.assertNotIn("chosen", answer)
+
+    def test_whole_says_whether_the_output_cuts_a_period(self) -> None:
+        # The checker's Q1-5: the edges of the output, for the period before.
+        data = view_data([act("2024-01-01", distance_m=1000), act("2024-01-31", distance_m=2000)])
+        for period, days, whole in (
+            # It starts on the first day of the output: whole.
+            ((date(2024, 1, 11), date(2024, 1, 20)), ("2024-01-01", "2024-01-10"), True),
+            # A day earlier: cut.
+            ((date(2024, 1, 10), date(2024, 1, 19)), ("2024-01-01", "2024-01-09"), False),
+            # It ends on the first day of the output: one day in it.
+            ((date(2024, 1, 2), date(2024, 1, 2)), ("2024-01-01", "2024-01-01"), True),
+        ):
+            with self.subTest(period=period):
+                before = self.summary(data, period)["previous"]
+                self.assertEqual(((before["start"], before["end"]), before["whole"]), (days, whole))
+        # A day earlier still: wholly outside, without numbers.
+        self.assertEqual(
+            self.summary(data, (date(2024, 1, 1), date(2024, 1, 1)))["previous"],
+            {"chosen": {"start": "2023-12-31", "end": "2023-12-31"}, "start": None, "end": None, "whole": False, "panels": None},
+        )
+        # The period shown, cut at its start or at its end.
+        answer = self.summary(data, (date(2023, 12, 25), date(2024, 1, 5)))
+        self.assertEqual((answer["start"], answer["chosen"], answer["whole"]), ("2024-01-01", {"start": "2023-12-25", "end": "2024-01-05"}, False))
+        answer = self.summary(data, (date(2024, 1, 20), date(2024, 2, 5)))
+        self.assertEqual((answer["end"], answer["chosen"]["end"], answer["whole"]), ("2024-01-31", "2024-02-05", False))
+
+    def test_the_first_days_of_the_calendar(self) -> None:
+        # The checker's Q1-1, Q1-6, and Q1-7 and Codex's review of the plan:
+        # each end before 1 January of the year 1 is None on its own, and the
+        # days of the output decide what is counted.
+        data = view_data([act("0001-01-01", distance_m=1000), act("0002-06-01", distance_m=2000)])
+        self.assertEqual(
+            self.summary(data, (date(1, 1, 1), date(1, 3, 1)))["previous"],
+            {"chosen": {"start": None, "end": None}, "start": None, "end": None, "whole": False, "panels": None},
+        )
+        before = self.summary(data, (date(1, 3, 1), date(1, 4, 30)))["previous"]
+        self.assertEqual(
+            (before["chosen"], before["start"], before["end"], before["whole"]),
+            ({"start": None, "end": "0001-02-28"}, "0001-01-01", "0001-02-28", False),
+        )
+        self.assertEqual(before["panels"][0]["lines"][0]["values"], [1000.0])
+        # Ten years back from the year 2: the period shown no longer breaks,
+        # by any grouping.
+        answer = self.summary(data, "10y")
+        self.assertEqual((answer["start"], answer["chosen"], answer["whole"]), ("0001-01-01", {"start": None, "end": "0002-06-01"}, False))
+        self.assertEqual(answer["previous"]["chosen"], {"start": None, "end": None})
+        self.assertEqual(spans(data, "10y", "year")[0], ("0001-01-01", "0001-12-31", False))
+        answer = self.summary(data, "1y")
+        self.assertEqual(
+            (answer["chosen"], answer["previous"]["chosen"], answer["previous"]["start"], answer["previous"]["whole"]),
+            ({"start": "0001-06-02", "end": "0002-06-01"}, {"start": None, "end": "0001-06-01"}, "0001-01-01", False),
+        )
+        # The years that end on 31 December start on 1 January of the year 1,
+        # the day after 31 December of the year 0, whole (Codex's review of
+        # the diff of Q1); a day earlier, the year starts before the calendar.
+        for last, period in (("0001-12-31", "1y"), ("0010-12-31", "10y")):
+            with self.subTest(last=last):
+                data = view_data([act("0001-01-01", distance_m=1000), act(last, distance_m=2000)])
+                answer = self.summary(data, period)
+                self.assertEqual((answer["start"], answer["chosen"], answer["whole"]), ("0001-01-01", {"start": "0001-01-01", "end": last}, True))
+                self.assertEqual(answer["previous"], {"chosen": {"start": None, "end": None}, "start": None, "end": None, "whole": False, "panels": None})
+        data = view_data([act("0001-01-01", distance_m=1000), act("0001-12-30", distance_m=2000)])
+        self.assertEqual((self.summary(data, "1y")["chosen"], self.summary(data, "1y")["whole"]), ({"start": None, "end": "0001-12-30"}, False))
+
+    def test_the_period_before_is_counted_as_the_panels_count(self) -> None:
+        # The checker's Q1-3 and Codex's review of the plan: a total is 0
+        # between the first and the last activity and None before the first;
+        # a maximum; the mean of every record of an estimate.
+        acute = "acute_training_load_daily"
+        data = view_data(
+            [
+                uds("2023-12-01", resting_heart_rate=50),
+                act("2024-01-05", distance_m=10000, duration_sec=3000, avg_hr=150, max_hr=170),
+                act("2024-02-20", distance_m=5000, duration_sec=1800, avg_hr=160, max_hr=180),
+                act("2024-03-04", distance_m=8000, duration_sec=2400, avg_hr=155, max_hr=175),
+                uds("2024-02-06", resting_heart_rate=54),
+                (acute, daily(acute, "2024-02-06", time="07:00", daily_training_load_acute=300)),
+                (acute, daily(acute, "2024-02-06", time="19:00", daily_training_load_acute=330)),
+                (acute, daily(acute, "2024-02-12", time="07:00", daily_training_load_acute=390)),
+            ]
+        )
+        keys = ("dist", "count", "pace", "hr", "mx", "rhr", "acute")
+        for period in ((date(2024, 2, 1), date(2024, 2, 10)), (date(2023, 12, 15), date(2023, 12, 31)), (date(2024, 2, 5), date(2024, 3, 5)), "1y"):
+            with self.subTest(period=period):
+                answer = self.summary(data, period, keys)
+                self.assertEqual(answer["panels"], view_answer(data, list(keys), period, "range")["panels"])
+                before = answer["previous"]
+                if before["start"] is None:
+                    # Wholly outside the output (the year before "1y" here): no numbers.
+                    self.assertEqual((before["end"], before["panels"]), (None, None))
+                    continue
+                self.assertEqual(before["panels"], view_answer(data, list(keys), (date.fromisoformat(before["start"]), date.fromisoformat(before["end"])), "range")["panels"])
+
+        def values(period: Any) -> dict[str, Any]:
+            before = self.summary(data, period, keys)["previous"]
+            return {key: panel["lines"][0]["values"][0] for key, panel in zip(keys, before["panels"])}
+
+        # Between the first and the last activity: 0 km and 0 activities; no maximum.
+        self.assertEqual({key: values((date(2024, 2, 1), date(2024, 2, 10)))[key] for key in ("dist", "count", "mx")}, {"dist": 0.0, "count": 0.0, "mx": None})
+        # Before the first activity, in the output: no value.
+        early = values((date(2023, 12, 15), date(2023, 12, 31)))
+        self.assertEqual((early["dist"], early["count"], early["rhr"]), (None, None, 50.0))
+        # The maximum and the mean of every record (two on one day).
+        answer = self.summary(data, (date(2024, 2, 5), date(2024, 3, 5)), keys)
+        shown = {key: panel["lines"][0]["values"][0] for key, panel in zip(keys, answer["panels"])}
+        self.assertEqual((shown["mx"], shown["acute"]), (180.0, 340.0))
+
+    def test_the_period_before_counts_the_types_counted(self) -> None:
+        # The activity types counted are those of the period shown too (the
+        # partial guard of Q1: the running types were counted before).
+        data = view_data(
+            [
+                act("2023-12-01", distance_m=1000),
+                act("2024-01-03", distance_m=5000),
+                act("2024-01-04", "cycling", distance_m=20000),
+                act("2024-01-13", distance_m=6000),
+                act("2024-01-14", "cycling", distance_m=30000),
+            ]
+        )
+        period = (date(2024, 1, 11), date(2024, 1, 20))
+        for types, now, before in ((None, 6000.0, 5000.0), (["cycling"], 30000.0, 20000.0), (["running", "cycling"], 36000.0, 25000.0)):
+            with self.subTest(types=types):
+                answer = view_answer(data, ["dist"], period, "range", types, True)
+                self.assertEqual(answer["panels"][0]["lines"][0]["values"], [now])
+                self.assertEqual((answer["previous"]["start"], answer["previous"]["whole"]), ("2024-01-01", True))
+                self.assertEqual(answer["previous"]["panels"][0]["lines"][0]["values"], [before])
+
+    def test_the_period_before_is_asked_with_the_whole_period_only(self) -> None:
+        data = view_data([act("2024-01-01", distance_m=1000)])
+        with self.assertRaises(ValueError):
+            view_answer(data, ["dist"], "all", "week", None, True)
 
 
 def value_of(item: Any, rows: list[dict[str, Any]]) -> tuple[float | None, int]:

@@ -1277,8 +1277,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertIn("requestPlot(false);", request.group(1))
         self.assertIn("OUTPUT_STOPS.includes(error.code)", request.group(1))
         self.assertEqual(request.group(1).count("if (seq !== state.plotSeq) {\n      return;\n    }"), 2)
-        # An output that stops closes a distribution too (stage P1).
-        self.assertEqual(self.script.count("      state.compare = null;\n      state.plot = null;\n      state.spread = null;\n"), 6)
+        # An output that stops closes a distribution too (stage P1), also
+        # where the summary asks (stage Q1).
+        self.assertEqual(self.script.count("      state.compare = null;\n      state.plot = null;\n      state.spread = null;\n"), 7)
         self.assertRegex((STATIC_ROOT / "view.css").read_text(encoding="utf-8"), r"\.plot-head \.plot-read \{[^}]*white-space: normal;")
         view_css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
         self.assertRegex(view_css, r"\.plot-dot \{\s*fill: var\(--d1\);\s*stroke: var\(--surface\);\s*stroke-width: 1;\s*\}")
@@ -1390,6 +1391,180 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertRegex(forced, r"\.spread-bar \{\s*fill: CanvasText;\s*\}")
         self.assertRegex(forced, r"\.spread-chosen \{\s*stroke: Highlight;\s*\}")
 
+    def test_the_summary_is_a_window_of_the_items_of_the_panels(self) -> None:
+        # v2.2.0 Q1, in the page and its script, which no test runs: the
+        # summary opens from the row above the panels, after the other views,
+        # as the window of the marks does (its title takes the focus, the
+        # close button and Escape go back to its button, a press outside does
+        # not close it), and one of the two windows shows at a time; its
+        # table is in a region of its own that the keys scroll (Codex's review
+        # of the plan of Q1, 11). It shows and asks only with panels, outside
+        # a comparison of years, another view, and the graphs only, and asks
+        # once again where it shows again (Codex's 7, the checker's answer 5);
+        # it asks again where the ticket, the period, the types, or the items
+        # change, its answers are one generation, the table is empty while an
+        # answer is on its way (the checker's answer 4), and a stop of its own
+        # shows in it, the panels kept (Codex's 9).
+        row = by_id(self.elements, "caveat")
+        button = by_id(self.elements, "recap-open")
+        children = [element.get("id") or element.get("class") for element in self.elements if element.parent is row]
+        self.assertEqual(children[children.index("other-views") + 1], "recap-open")
+        self.assertEqual(
+            (button.tag, button.get("class"), button.get("aria-expanded"), button.get("aria-controls"), button.get("data-i18n")),
+            ("button", "small", "false", "recap-pop", "view.recap.button"),
+        )
+        window = by_id(self.elements, "recap-pop")
+        self.assertIs(window.parent, row)
+        self.assertEqual((window.get("role"), window.get("aria-labelledby")), ("dialog", "recap-pop-title"))
+        self.assertIn("hidden", window.attributes)
+        self.assertEqual(by_id(self.elements, "recap-pop-title").get("tabindex"), "-1")
+        self.assertEqual(by_id(self.elements, "recap-pop-title").get("data-i18n"), "view.recap.title")
+        self.assertEqual(by_id(self.elements, "recap-pop-close").get("data-i18n"), "help.close")
+        loading = by_id(self.elements, "recap-loading")
+        self.assertEqual((loading.get("role"), loading.get("aria-live")), ("status", "polite"))
+        body = by_id(self.elements, "recap-body")
+        self.assertEqual((body.get("tabindex"), body.get("role"), body.get("aria-labelledby")), ("0", "region", "recap-pop-title"))
+        self.assertIn("hidden", by_id(self.elements, "recap-stop").attributes)
+        for name in ("recap-pop-title", "recap-pop-close", "recap-days", "recap-loading", "recap-stop", "recap-stop-heading", "recap-stop-lines", "recap-stop-code", "recap-body", "recap-difference-note", "recap-cut"):
+            with self.subTest(element=name):
+                self.assertIn(window, by_id(self.elements, name).ancestors())
+        notes = [element.get("data-i18n") for element in self.elements if window in element.ancestors() and element.tag == "p" and element.get("data-i18n")]
+        self.assertEqual(notes, ["view.recap.note", "view.recap.records_note"])
+        held = {
+            "recapShowable": ("return viewing && !apart() && state.items.length > 0 && !state.full;",),
+            "recapKey": ("JSON.stringify([state.view?.view ?? null, periodRequest(state.period, state.range), typesRequest(state.counted, state.view?.types), state.items])",),
+            "openRecap": (
+                "state.recapAsked = null;",
+                "  if (open && state.marksOpen) {\n    state.marksOpen = false;\n    state.markAsk = null;\n    editMark(null, false);\n  }",
+                "ui.recapTitle.focus();",
+                "ui.recapOpen.focus();",
+            ),
+            "openMarks": ("  if (open) {\n    // One window opens under the right end of the row at a time (stage Q1).\n    state.recapOpen = false;\n  }",),
+            # A low window keeps the heads and two rows or so of its table,
+            # and scrolls as a whole (Codex's review of the diff of Q1).
+            "fitRecapWindow": (
+                'ui.recapBody.style.minHeight = "";',
+                "ui.recapBody.style.minHeight = `${Math.min(ui.recapBody.scrollHeight, RECAP_KEPT)}px`;",
+                "fitPop(ui.recapPop);",
+            ),
+            "fitMarksWindow": ("fitPop(ui.marksPop);",),
+            # A window ends above the bar at the bottom of the page, which
+            # stays on the screen above it (the real page of Q1).
+            "fitPop": (
+                "const bar = ui.viewBar.getBoundingClientRect();",
+                "const bottom = bar.height > 0 ? Math.min(window.innerHeight, bar.top) : window.innerHeight;",
+                # No more than the room above the bar (Codex's review of the
+                # diff of Q1: 240 pixels at least went under it).
+                "pop.style.maxHeight = `${Math.max(0, Math.floor(bottom - pop.getBoundingClientRect().top - 12))}px`;",
+            ),
+            "renderRecap": (
+                "  if (state.view === null && state.stop !== null) {\n    state.recapOpen = false;\n  }",
+                "ui.recapOpen.disabled = !viewing || !state.items.length;",
+                'ui.recapOpen.setAttribute("aria-expanded", String(state.recapOpen && showable));',
+                "const focused = ui.recapPop.contains(document.activeElement);",
+                "ui.recapPop.hidden = !state.recapOpen || !showable;",
+                # A window that hides drops its answers on their way and opens
+                # no ticket again, and the focus inside it goes to the button
+                # or to the heading of what shows instead (Codex's review of
+                # the diff of Q1).
+                "    if (state.recapShown) {",
+                "      state.recapShown = false;\n      state.recapSeq += 1;\n      state.recapLoading = false;\n    }",
+                "const target = !ui.recapOpen.disabled && shown(ui.recapOpen) ? ui.recapOpen : [ui.stopHeading, ui.emptyHeading].find(shown);",
+                "      target?.focus();\n    }\n    return;",
+                "  if (!state.recapShown) {\n    state.recapShown = true;\n    state.recapAsked = null;\n  }",
+                "  if (live && state.recapAsked !== recapKey()) {",
+                "queueMicrotask(() => requestRecap());",
+                "recapColumns(periodRequest(state.period, state.range), state.language)",
+                'setText(ui.recapLoading, state.recapLoading ? t("view.loading") : "");',
+                "ui.recapStop.hidden = state.recapStop === null;",
+                "renderStop(ui.recapStop, null, ui.recapStopLines, ui.recapStopCode, stopBox(state.recapStop.code, state.recapStop.detail, state.productVersion));",
+                "describe(days)",
+                "ui.recapDifferenceNote.hidden = columns.before === null;",
+                # An answer for other items or another period is never drawn
+                # under these (the real page of Q1).
+                "const answer = state.recapAnswer?.key === recapKey() ? state.recapAnswer.answer : null;",
+                "  renderRecapTable(answer, columns);\n  fitRecapWindow();",
+            ),
+            "renderRecapTable": (
+                "  if (answer === null) {\n    ui.recapBody.replaceChildren();\n    return;\n  }",
+                'cell.scope = "col";',
+                'const name = element("th", "", itemName(key));',
+                'name.scope = "row";',
+                'name.append(" ", element("span", "recap-line", describe(row.name)));',
+                "for (const row of recapRows(panel, before, state.language)) {",
+                "const nowWhole = answer.whole === true;",
+                "const beforeWhole = previous !== null && previous.whole === true;",
+                'const beforeOutside = previous === null || typeof previous.start !== "string";',
+                "const difference = nowWhole && beforeWhole ? recapDifference(key, row.now?.values?.[0], row.before?.values?.[0], state.language) : null;",
+                # A period before wholly outside the output has dashes, not
+                # "no value" (the partial guard of Q1).
+                'tr.append(element("td", "", beforeOutside ? "\\u2014" : valueText(key, row.before, !beforeWhole)));',
+                'tr.append(element("td", "", difference === null ? "\\u2014" : describe(difference)));',
+                '`${describe(valueMessage(key, value, state.language))}${cut ? "*" : ""}`',
+                't("view.recap.none")',
+                "recapPartial(answer.chosen, answer.start, answer.end, state.language)",
+                "recapPartial(previous.chosen, previous.start, previous.end, state.language)",
+                't("view.recap.cut_note", { name: describe(columns.now), partial: describe(nowPartial) })',
+            ),
+            "renderStage": ("  renderMarks(viewing && !apart(), live);\n  renderRecap(viewing, live);",),
+        }
+        for name, lines in held.items():
+            found = re.search(rf"function {name}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
+            assert found is not None, name
+            for line in lines:
+                with self.subTest(function=name, line=line):
+                    self.assertIn(line, found.group(1))
+        request = re.search(r"async function requestRecap\(again = true\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert request is not None
+        for line in (
+            # Not while the window does not show (Codex's review of the diff).
+            "if (!state.recapShown || state.view === null || !state.items.length) {",
+            "const seq = ++state.recapSeq;",
+            "  const key = recapKey();\n  state.recapAsked = key;",
+            "state.recapAnswer = { key, answer };",
+            "  state.recapAnswer = null;\n  state.recapStop = null;\n  state.recapLoading = true;",
+            "const payload = { ...seriesPayload(state.items, periodRequest(state.period, state.range), RANGE_GRAIN), previous: true };",
+            'const answer = await callApi("/api/view/series", payload);',
+            'error.code === "VIEW_NOT_OPEN" && again && state.target !== null',
+            "requestRecap(false);",
+            "OUTPUT_STOPS.includes(error.code)",
+            "state.recapStop = { code: error.code, detail: error.detail };",
+            "  if (seq === state.recapSeq) {\n    state.recapLoading = false;\n  }",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, request.group(1))
+        self.assertEqual(request.group(1).count("if (seq !== state.recapSeq) {\n      return;\n    }"), 2)
+        opened = re.search(r"async function openOutput\(target, focus = false\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert opened is not None
+        # The answers of the summary on their way are dropped as an output
+        # starts opening, as those of the other views, before they could open
+        # the output before again (Codex's review of the diff of Q1).
+        self.assertIn("  state.spreadSeq += 1;\n  // And those of the summary (Codex's review of the diff of Q1).\n  state.recapSeq += 1;\n  state.recapLoading = false;\n  const current", opened.group(1))
+        self.assertIn("    state.recapAnswer = null;\n    state.recapAsked = null;\n    state.recapStop = null;", opened.group(1))
+        for line in (
+            'window.addEventListener("resize", fitRecapWindow);',
+            'ui.recapOpen.addEventListener("click", () => openRecap(!state.recapOpen));',
+            'ui.recapClose.addEventListener("click", () => openRecap(false));',
+            '  ui.recapPop.addEventListener("keydown", (event) => {\n    if (event.key === "Escape") {\n      event.preventDefault();\n      openRecap(false);\n    }\n  });',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+        # Not remembered, and only the menu of the other views closes on a
+        # press outside it.
+        remembered = re.search(r"function viewValues\(\) \{(.*?)\n\}", self.script, re.DOTALL)
+        outside = re.search(r'document\.addEventListener\("pointerdown", \(event\) => \{(.*?)\n  \}\);', self.script, re.DOTALL)
+        assert remembered is not None and outside is not None
+        self.assertNotIn("recap", remembered.group(1))
+        self.assertIn("state.otherOpen", outside.group(1))
+        self.assertNotIn("recap", outside.group(1))
+        view_css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        self.assertRegex(view_css, r"\.recap-pop \{[^}]*top: 100%;[^}]*right: 0;[^}]*max-width: calc\(100vw - 32px\);")
+        self.assertRegex(view_css, r"\.recap-body \{\s*overflow: auto;")
+        self.assertRegex(view_css, r"\.recap-pop \{[^}]*overflow: auto;")
+        self.assertIn("const RECAP_KEPT = 112;", self.script)
+        self.assertRegex(view_css, r"\.recap-body thead th \{\s*position: sticky;\s*top: 0;\s*z-index: 1;\s*background: var\(--surface\);")
+        self.assertIn('viewBar: document.querySelector(".view-bar"),', self.script)
+
     def test_the_list_follows_the_panels_and_drops_old_answers(self) -> None:
         # Stage M3 of v2.2.0 (the checker's review of the plan, and Codex's):
         # the list closes when what the panels count or show changes, and
@@ -1457,7 +1632,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertIn("state.compareSeq += 1;", leave.group(1))
         self.assertNotRegex(leave.group(1), r"state\.(grain|period|range|items) =")
         for line in (
-            "state.compareSeq += 1;\n  // And those of the points, before they could open the output before\n  // again (Codex's review of the diff of O1).\n  state.plotSeq += 1;\n  // And those of a distribution (stage P1).\n  state.spreadSeq += 1;\n  const current",
+            "state.compareSeq += 1;\n  // And those of the points, before they could open the output before\n  // again (Codex's review of the diff of O1).\n  state.plotSeq += 1;\n  // And those of a distribution (stage P1).\n  state.spreadSeq += 1;\n  // And those of the summary (Codex's review of the diff of Q1).\n  state.recapSeq += 1;\n  state.recapLoading = false;\n  const current",
             "const apart = viewing && comparing();",
             "button.disabled = !viewing || apart;",
             "ui.rangeFrom.disabled = apart;",

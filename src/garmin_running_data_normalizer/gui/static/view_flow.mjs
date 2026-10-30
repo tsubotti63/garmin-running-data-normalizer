@@ -358,9 +358,14 @@ function dateFormat(language, kind) {
   return dateFormats.get(name);
 }
 
+// A day of the output at midnight UTC; a year below 100 is that year, which
+// Date.UTC would read as 1900 and later (stage Q1: the summary writes the
+// first days of the calendar).
 function utcDate(iso) {
   const [year, month, day] = String(iso).split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  return date;
 }
 
 // A day as the language writes it: 2026年10月26日, October 26, 2026.
@@ -2695,4 +2700,156 @@ export function spreadMove(index, count, key) {
     return key === "ArrowRight" ? 0 : count - 1;
   }
   return Math.max(0, Math.min(count - 1, index + (key === "ArrowRight" ? 1 : -1)));
+}
+
+// --- The summary of the panels (stage Q1 of v2.2.0) -----------------------
+
+// The names of the columns of the summary for a period of the page: the
+// period shown and the one of the same length just before it (none for all
+// time), a range by its number of days.
+const RECAP_NOW_KEYS = {
+  "1y": "view.recap.now.years1",
+  "3y": "view.recap.now.years3",
+  "5y": "view.recap.now.years5",
+  "10y": "view.recap.now.years10",
+};
+const RECAP_BEFORE_KEYS = {
+  "1y": "view.recap.before.years1",
+  "3y": "view.recap.before.years3",
+  "5y": "view.recap.before.years5",
+  "10y": "view.recap.before.years10",
+};
+
+export function recapColumns(period, language) {
+  if (period !== null && typeof period === "object" && typeof period.from === "string" && typeof period.to === "string") {
+    const days = daysBetween(period.from, period.to) + 1;
+    return {
+      now: message("view.recap.now.custom"),
+      before: days === 1 ? message("view.recap.before.day") : message("view.recap.before.days", { n: countText(days, language) }),
+    };
+  }
+  if (Object.hasOwn(RECAP_NOW_KEYS, period)) {
+    return { now: message(RECAP_NOW_KEYS[period]), before: message(RECAP_BEFORE_KEYS[period]) };
+  }
+  return { now: message("view.recap.all"), before: null };
+}
+
+// A value as the page writes it, rounded as its text is: a clock as
+// clockMinutes and clockSeconds round it (-30 seconds is 0:00, Codex's review
+// of the diff of Q1), and a number by the same format as its text, which
+// rounds 1.325 to 1.33 where toFixed gives 1.32.
+function roundedShown(key, value) {
+  const number = shown(key, value);
+  if (clockOf(key) !== null) {
+    return Math.round(number);
+  }
+  return Number(numberFormat("en", ITEM_FORMATS[key].digits).format(number).replaceAll(",", ""));
+}
+
+// The difference "now − before" of two values of an item as a number with
+// its sign only, as the panels write a value (no arrow, no color, no word of
+// a direction): the two values as the table writes them are subtracted, so
+// that the difference is that of the two numbers read (stage Q1: 49.0 and
+// 49.0 are never +0.1 apart); the value of the difference without its sign
+// is written first, and a sign is put before it only where it does not read
+// as 0, so that −0.0 never shows and a clock rounds both signs alike (Codex's
+// review of the plan of Q1). A dash where a value is missing.
+export function recapDifference(key, now, before, language) {
+  if (!Number.isFinite(now) || !Number.isFinite(before)) {
+    return plain("—");
+  }
+  const difference = roundedShown(key, now) - roundedShown(key, before);
+  const text = shownText(key, Math.abs(difference), language);
+  const signed = text === shownText(key, 0, language) ? text : `${difference > 0 ? "+" : "−"}${text}`;
+  const unit = ITEM_FORMATS[key].unit;
+  return Object.hasOwn(VALUE_KEYS, unit) ? message(VALUE_KEYS[unit], { value: signed }) : plain(signed);
+}
+
+// The words of a period that the output cuts (the checker's Q1-5): from the
+// first day of the output, to its last day, or both; null for a period that
+// the output holds whole. ``chosen`` is the period as chosen, an end of it
+// null before the calendar; ``start`` and ``end`` the days of the output in it.
+export function recapPartial(chosen, start, end, language) {
+  if (typeof start !== "string" || typeof end !== "string") {
+    return null;
+  }
+  const from = typeof chosen?.start !== "string" || chosen.start < start;
+  const to = typeof chosen?.end !== "string" || chosen.end > end;
+  if (from && to) {
+    return message("view.recap.partial_both", { from: dateText(start, language), to: dateText(end, language) });
+  }
+  if (from) {
+    return message("view.recap.partial_from", { date: dateText(start, language) });
+  }
+  if (to) {
+    return message("view.recap.partial_to", { date: dateText(end, language) });
+  }
+  return null;
+}
+
+// The order of the lines of the server: the first day of the series in the
+// whole output, then its source and its sport, each compared as text (the
+// checker's Q1-8: the key of a line, a JSON text, sorts otherwise).
+function lineOrder(a, b) {
+  const first = (line) => String(line.first_day ?? "");
+  const parts = (line) => {
+    const series = seriesOf(line) ?? {};
+    return [String(series.vo2max_source_series ?? ""), String(series.sport ?? "")];
+  };
+  for (const [x, y] of [[first(a), first(b)], ...parts(a).map((part, index) => [part, parts(b)[index]])]) {
+    if (x !== y) {
+      return x < y ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
+// The rows of an item in the summary (the checker's Q1-4 and Codex's review
+// of the plan of Q1): a row for each series of the two periods, matched by
+// its key, in the order of the server, named as one panel of them all; a
+// line without a series is left out only where there is a series, as the
+// server gives one where no series has a value; an item has a row at least.
+// Each row holds the line of each period, or null where it has none.
+export function recapRows(nowPanel, beforePanel, language) {
+  const now = Array.isArray(nowPanel?.lines) ? nowPanel.lines : [];
+  const before = Array.isArray(beforePanel?.lines) ? beforePanel.lines : [];
+  const series = [...now, ...before].some((line) => seriesOf(line) !== null);
+  const rows = new Map();
+  for (const [side, lines] of [["now", now], ["before", before]]) {
+    for (const line of lines) {
+      if (series && seriesOf(line) === null) {
+        continue;
+      }
+      const key = seriesKey(line);
+      const row = rows.get(key) ?? { line, now: null, before: null };
+      row[side] = line;
+      rows.set(key, row);
+    }
+  }
+  let ordered = [...rows.values()];
+  if (series) {
+    ordered.sort((a, b) => lineOrder(a.line, b.line));
+  }
+  if (!ordered.length) {
+    ordered = [{ line: now[0] ?? before[0] ?? { series: null }, now: now[0] ?? null, before: before[0] ?? null }];
+  }
+  const names = lineNames({ lines: ordered.map((row) => row.line) }, language);
+  return ordered.map((row, index) => ({ name: names[index], now: row.now, before: row.before }));
+}
+
+// The days that the two periods count, as the output cuts them, so that one
+// sees what the summary compares (Codex's review of the plan of Q1: ‹ moves
+// otherwise at the ends of the output and around 29 February).
+export function recapDays(answer, columns, language) {
+  if (typeof answer?.start !== "string" || typeof answer?.end !== "string") {
+    return null;
+  }
+  const days = (start, end) => message("view.recap.span", { from: dateText(start, language), to: dateText(end, language) });
+  const now = days(answer.start, answer.end);
+  if (columns.before === null || !answer.previous) {
+    return message("view.recap.days_one", {}, { now: columns.now, nowDays: now });
+  }
+  const previous = answer.previous;
+  const before = typeof previous.start === "string" && typeof previous.end === "string" ? days(previous.start, previous.end) : message("view.recap.outside");
+  return message("view.recap.days", {}, { now: columns.now, nowDays: now, before: columns.before, beforeDays: before });
 }
