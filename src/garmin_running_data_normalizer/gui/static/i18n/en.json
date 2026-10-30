@@ -770,6 +770,8 @@
   "view.help.other": "Other views",
   "view.help.other_plot": "“Plot two items” in “Other views” above the panels makes each activity a point, one item across and another up, chosen in the lists of the title; press a point to read its date and values at the top right. It shows no relation or cause between the two items.",
   "view.help.other_spread": "“Distribution” counts the activities in each range of one item, of a set width (1 km for the distance), as bars; the ranges count the values before they are rounded. Press a bar to read its range and its activities at the top right. “Show all panels again” goes back.",
+  "view.help.recap": "Summary",
+  "view.help.recap_text": "“Summary…” above the panels shows the items of the panels in a table: the value in the period shown and in the period of the same length just before it, and their difference. A value is that of the whole period; a difference is that of the two values as written, a sign and a number only. The values of a period that the output cuts are marked *, without a difference. The period before “1 year” and the others is in years of the calendar; before a range, the same number of days.",
   "view.help.marks": "Marks",
   "view.help.marks_text": "“Marks…” above the panels adds a race, an injury, shoes, or another mark, with a name and a date (and a last day for a span). Marks show as lines on every panel, told apart by their form: a race a full line, shoes a dotted line, another mark a dashed line, and an injury a line of dashes and dots. “Show marks” hides them. The marks stay only in the folder of the settings of the GUI on this computer.",
   "view.help.list": "The activities of a period",

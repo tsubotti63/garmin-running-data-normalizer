@@ -18,8 +18,10 @@ from garmin_running_data_normalizer.view.series import (
     MAX_RANGES,
     SPREAD_RANGES,
     activity_spread,
+    chosen_span,
     period_bounds,
     point_item,
+    previous_span,
 )
 
 # The guides of main are read by the users of the stable release, through the
@@ -624,7 +626,7 @@ class GuiGuideTest(unittest.TestCase):
         # and the marks, after the overview, and comparing by race day, after
         # the years laid over one another. N2: the calendar, before comparing
         # by race day. OP2: the points and a distribution, after comparing by
-        # race day.
+        # race day. Q2: the summary, after a distribution.
         names = (
             "normalized-page",
             "next-steps",
@@ -642,6 +644,7 @@ class GuiGuideTest(unittest.TestCase):
             "view-compare-race",
             "view-plot",
             "view-spread",
+            "view-recap",
         )
         sizes = {"next-steps": (315, 213), "view-layouts": (371, 193), "view-layouts-manage": (440, 438)}
         japanese = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
@@ -705,18 +708,19 @@ class GuiGuideTest(unittest.TestCase):
                         if scene.startswith(("Give the numbers to an AI", "数字を CSV にして")):
                             care = {"en": "personal data", "ja": "個人のデータ"}[language]
                             self.assertLess(reads.index(care), reads.index("`about`"))
-        self.assertEqual(len(scenes["en"]), 9)
-        self.assertEqual(len(scenes["ja"]), 9)
-        for language, title, race, spread in (
-            ("en", "Compare May of every year", "Compare the 16 weeks before races", "See how often you ran each distance in the last year"),
-            ("ja", "毎年の 5 月をくらべる", "大会の前の 16 週をくらべる", "直近 1 年に、どの距離を何回走ったかを見る"),
+        self.assertEqual(len(scenes["en"]), 10)
+        self.assertEqual(len(scenes["ja"]), 10)
+        for language, title, race, spread, recap in (
+            ("en", "Compare May of every year", "Compare the 16 weeks before races", "See how often you ran each distance in the last year", "Compare the last year with the year before"),
+            ("ja", "毎年の 5 月をくらべる", "大会の前の 16 週をくらべる", "直近 1 年に、どの距離を何回走ったかを見る", "この 1 年と前の 1 年をくらべる"),
         ):
             with self.subTest(language=language, scene="compare"):
                 self.assertTrue(scenes[language][5].startswith(title))
                 self.assertTrue(scenes[language][6].startswith(race))
                 self.assertTrue(scenes[language][7].startswith(spread))
-                self.assertTrue(scenes[language][8].startswith(("Give the numbers to an AI", "数字を CSV にして")))
-        intro = {"en": "The steps of nine common cases.", "ja": "よくある 9 つの場面の手順です。"}
+                self.assertTrue(scenes[language][8].startswith(recap))
+                self.assertTrue(scenes[language][9].startswith(("Give the numbers to an AI", "数字を CSV にして")))
+        intro = {"en": "The steps of ten common cases.", "ja": "よくある 10 の場面の手順です。"}
         for language, path in GUIDES.items():
             with self.subTest(language=language, part="intro"):
                 self.assertIn(intro[language], path.read_text(encoding="utf-8"))
@@ -840,7 +844,7 @@ class GuiGuideTest(unittest.TestCase):
                 "When another output opens (from 2.2.0), a period such as **1 year** stays as it is.",
                 "A period chosen with **Custom range…** shrinks to the days of the output when it overlaps them in part, and becomes **All time** when it does not overlap them at all.",
                 "The activity types counted are those remembered that the output has; when it has none of them, every running type in the output.",
-                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, full screen, whether years were compared, with the years or races chosen, whether a list of activities was open, and whether another view was shown, with the point or the range chosen.",
+                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, full screen, whether years were compared, with the years or races chosen, whether a list of activities was open, whether another view was shown, with the point or the range chosen, and whether the summary was open.",
                 "the names of places and of the items of the view page, and from 2.2.0 also the names of the layouts you saved, the days of a period chosen with **Custom range…**, the activity types counted, and the timezone. They stay on this computer",
             ),
             "ja": (
@@ -853,7 +857,7 @@ class GuiGuideTest(unittest.TestCase):
                 "⤢ の所が「段を並べて見る」（2.1.0 では「元に戻す」）になり、",
                 "「範囲を選ぶ…」で選んだ期間は、その出力の日の範囲と一部だけ重なるときは重なる所に縮まり、まったく重ならないときは「全期間」になります。",
                 "数える種目は、覚えた種目のうち、その出力にある種目です。1 つも無いときは、その出力のランニングの種目すべてです。",
-                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、区切りの一覧を開いていたか、ほかの見方を開いていたかと、選んだ点や分かれ方の区切り。",
+                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、区切りの一覧を開いていたか、ほかの見方を開いていたかと、選んだ点や分かれ方の区切り、まとめの窓を開いていたか。",
                 "2.2.0 からは、保存した表示の型の名前、「範囲を選ぶ…」で選んだ期間の日付、数える種目、タイムゾーンも入ります。",
             ),
         }
@@ -1073,7 +1077,7 @@ class GuiGuideTest(unittest.TestCase):
                     "the marks do not show and the file is never written over",
                 ),
                 5: (
-                    "Right after you normalize again, or right after the date changes, the values of the years or the races in **Compare years** (also by race day) and the activities of a period can come from another reading than the panels beside them.",
+                    "Right after you normalize again, or right after the date changes, the values of the years or the races in **Compare years** (also by race day), the activities of a period, and the table of **Summary…** can come from another reading than the panels beside them.",
                 ),
             },
             "ja": {
@@ -1093,7 +1097,7 @@ class GuiGuideTest(unittest.TestCase):
                     "印を出さず、ファイルも書き換えません",
                 ),
                 5: (
-                    "正規化し直した直後や日付が変わった直後は、年でくらべる（大会の日でくらべるも）の年ごと・大会ごとの値と、区切りのアクティビティの一覧が、並んでいる段と別の読みから作られることがあります。",
+                    "正規化し直した直後や日付が変わった直後は、年でくらべる（大会の日でくらべるも）の年ごと・大会ごとの値と、区切りのアクティビティの一覧と、まとめの表が、並んでいる段と別の読みから作られることがあります。",
                 ),
             },
         }
@@ -1503,7 +1507,8 @@ class GuiGuideTest(unittest.TestCase):
 
         heading = {"en": "Other views (from 2.2.0)", "ja": "ほかの見方（2.2.0 から）"}
         before = {"en": "Compare years (from 2.2.0)", "ja": "年でくらべる（2.2.0 から）"}
-        after = {"en": "When the output changes while you look (from 2.2.0)", "ja": "見ている間に出力が変わったとき（2.2.0 から）"}
+        # Q2: the summary follows the other views.
+        after = {"en": "Summary (from 2.2.0)", "ja": "まとめ（2.2.0 から）"}
         own = {"en": ("Plot two items", "Distribution"), "ja": ("点で並べる", "分かれ方")}
         heads = {"en": ("Item", "Width of a range"), "ja": ("項目", "区切りの幅")}
         scene = {"en": "See how often you ran each distance in the last year", "ja": "直近 1 年に、どの距離を何回走ったかを見る"}
@@ -1643,6 +1648,162 @@ class GuiGuideTest(unittest.TestCase):
             # The width of the distance in the help is that of the table.
             with self.subTest(language=language, part="help"):
                 self.assertIn(width_words("dist", language, messages), messages["view.help.other_spread"])
+
+    def test_guides_give_the_summary_as_the_page_does(self) -> None:
+        # v2.2.0 Q2: the summary of the panels of stage Q1 has a section of its
+        # own after the other views, before the readings (the checker's answer
+        # 1 of the plan of Q2). What the guides say of it is what the page and
+        # the server do, so that a change of either fails here: the way each
+        # item is counted, as a table tied to the kinds of the items and to the
+        # words of the page (the checker's Q2-1), the headings after ‹ and ›
+        # (Q2-2), 0 and no value (Q2-3), the types counted (Q2-4), a year of the
+        # calendar before (Q2-5), the difference, the keys, and the tenth scene
+        # (answer 3). Every word quoted is a word of the page or a heading as
+        # the page writes it.
+        flow = (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8")
+        page = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        # The words of a kind as the summary counts it: those of kindKey with a
+        # grouping that is not a day, which the summary never asks for.
+        block = re.search(r"const KIND_KEYS = \{\n(.*?)\n\};", flow, re.S).group(1)
+        kind_keys = dict(re.findall(r'^  (\w+): "(view\.kind\.\w+)",$', block, re.M))
+        self.assertEqual(set(kind_keys), {"sum", "count", "pace", "tw", "max"})
+        self.assertIn('return grain === "day" ? "view.kind.day" : item.per_day ? "view.kind.day_mean_per_day" : "view.kind.day_mean";', flow)
+        self.assertIn('return grain === "day" ? "view.kind.obs_points" : "view.kind.obs_mean";', flow)
+        self.assertIn("{ ...seriesPayload(state.items, periodRequest(state.period, state.range), RANGE_GRAIN), previous: true }", page)
+        # Codex's review of the diff of Q2: a total is 0 between the first and
+        # the last activity of the types counted; the heading of the days
+        # before counts the days of the range; Escape closes the window where
+        # the focus is in it.
+        server = (ROOT / "src/garmin_running_data_normalizer/view/series.py").read_text(encoding="utf-8")
+        self.assertIn("        rows = _activity_rows(data, types)\n        lines = [_activity_line(item, rows, periods, left_out)]", server)
+        self.assertIn("    # The first and the last activity of the types counted, in the output.\n    first = rows[0].day if rows else None", server)
+        self.assertIn("    const days = daysBetween(period.from, period.to) + 1;", flow)
+        self.assertIn('  ui.recapPop.addEventListener("keydown", (event) => {\n    if (event.key === "Escape") {', page)
+        self.assertEqual({item.kind for item in ITEMS}, {"sum", "count", "pace", "tw", "max", "day", "obs"})
+
+        def kind_word(item: object) -> str:
+            kind = getattr(item, "kind")
+            if kind in kind_keys:
+                return kind_keys[kind]
+            if kind == "day":
+                return "view.kind.day_mean_per_day" if getattr(item, "per_day") else "view.kind.day_mean"
+            return "view.kind.obs_mean"
+
+        groups: dict[str, list[str]] = {}
+        for item in ITEMS:
+            groups.setdefault(kind_word(item), []).append(item.key)
+        # ‹ and › make the period a range (the checker's Q2-2).
+        shift = re.search(r"function shiftPeriod\(direction\) \{(.*?)\n\}", page, re.S).group(1)
+        self.assertIn('state.period = "custom";', shift)
+        # The year before a year with 29 February is a year of the calendar, a
+        # day shorter than the days that ‹ moves by (the checker's Q1-2 and
+        # Q2-5).
+        data = view_data([act("2023-01-10", distance_m=1000), act("2024-02-29", distance_m=1000)])
+        now, before = chosen_span(data, "1y"), previous_span(data, "1y")
+        self.assertEqual((now[1] - now[0] + 1, before[1] - before[0] + 1), (366, 365))
+        self.assertEqual(date.fromordinal(before[1]) + timedelta(days=1), date.fromordinal(now[0]))
+        heading = {"en": "Summary (from 2.2.0)", "ja": "まとめ（2.2.0 から）"}
+        before_heading = {"en": "Other views (from 2.2.0)", "ja": "ほかの見方（2.2.0 から）"}
+        after = {"en": "When the output changes while you look (from 2.2.0)", "ja": "見ている間に出力が変わったとき（2.2.0 から）"}
+        heads = {"en": ("How it is counted", "Items"), "ja": ("数え方", "項目")}
+        joiner = {"en": "; ", "ja": "・"}
+        scene = {"en": "Compare the last year with the year before", "ja": "この 1 年と前の 1 年をくらべる"}
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            messages = catalog(language)
+            mark = "**{}**" if language == "en" else "「{}」"
+            days = {n: messages["view.recap.before.days"].format(n=n) for n in (31, 365)}
+            places = [text.index(f"\n### {title}\n") for title in (before_heading[language], heading[language], after[language])]
+            with self.subTest(language=language, part="order"):
+                self.assertEqual(places, sorted(places))
+            part = text[places[1] : places[2]]
+            joined = " ".join(part.split()) if language == "en" else re.sub(r"\n *", "", part)
+            # The way each item is counted, as a table of two columns: the
+            # words of the page for its kind, and its items in the order of
+            # the page.
+            rows = re.findall(r"^\| (.+?) \| (.+?) \|$", part, re.M)
+            with self.subTest(language=language, part="kinds"):
+                self.assertEqual(rows[:2], [heads[language], ("---", "---")])
+                self.assertEqual(rows[2:], [(messages[word], joiner[language].join(messages[f"view.item.{key}"] for key in keys)) for word, keys in groups.items()])
+                self.assertEqual(sorted(key for keys in groups.values() for key in keys), sorted(item.key for item in ITEMS))
+            if language == "en":
+                phrases = (
+                    f"{mark.format(messages['view.recap.button'])} above the panels opens a window with a table of the items of the panels: the value of each in the period shown and in the period of the same length just before it, and their difference.",
+                    f"It opens where the window of {mark.format(messages['view.marks.button'])} opens, so that only one of the two is open. {mark.format(messages['help.close'])}, or the Esc key in the window, closes it (a press outside it does not). Whether it was open is not remembered.",
+                    "It can be used with panels, while years are not compared, no other view shows, and the graphs are not shown alone.",
+                    f"Its columns are {mark.format(messages['view.recap.item'])}, the period shown ({mark.format(messages['view.recap.now.years1'])}, {mark.format(messages['view.recap.now.custom'])}, and so on), the period before ({mark.format(messages['view.recap.before.years1'])}, {mark.format(days[31])}, and so on), and {mark.format(messages['view.recap.difference'])}.",
+                    f"counted with the same {mark.format(messages['view.types.label'])} as the panels",
+                    f"A period without a value says {mark.format(messages['view.recap.none'])}. An item that is a total or a number of recorded activities is 0 for a period without an activity of the types counted where the period reaches between the first and the last activity of the types counted in the output, and then has a difference",
+                    f"The period before is, for {mark.format(messages['view.period.years1'])}, {mark.format(messages['view.period.years3'])}, and so on, as many years of the calendar up to the day before the period shown; for a range of {mark.format(messages['view.period.custom'])}, the same number of days just before it.",
+                    "‹ moves by the same number of days, so where the year shown has 29 February, the period it moves to and the year before differ by a day",
+                    f"‹ and › make the period a range, and the columns then say {mark.format(messages['view.recap.now.custom'])} and the days of the range moved ({mark.format(days[365])} from {mark.format(messages['view.period.years1'])}, or 366 for a year with 29 February).",
+                    "A difference is the value now minus the value before, as a sign and a number only, that of the two values as the table writes them",
+                    f"the line under the title says {mark.format(messages['view.recap.outside'])}.",
+                    f"The window takes the focus on its title. Tab goes to {mark.format(messages['help.close'])} and to the table, which ↑ and ↓ scroll (its heads stay).",
+                )
+                keyboard = f"In {mark.format(messages['view.recap.button'])} (from 2.2.0), the window takes the focus on its title; Tab goes to {mark.format(messages['help.close'])} and to the table, which ↑ and ↓ scroll, and Esc closes it, back to its button ([Summary](#summary-from-220))."
+                steps = (f"2. Press {mark.format(messages['view.period.years1'])} in {mark.format(messages['view.period.label'])} above.", f"3. Press {mark.format(messages['view.recap.button'])} above the panels", f"5. ‹ and › make the period a range: the columns then say {mark.format(messages['view.recap.now.custom'])} and {mark.format(days[365])} (366 for a year with 29 February).")
+                link = "(#summary-from-220)"
+            else:
+                phrases = (
+                    f"段の上の行の{mark.format(messages['view.recap.button'])}で、並べた段の項目を表にした窓を開きます。今の期間と、その前の同じ長さの期間の値と、その差が並びます。",
+                    f"窓は{mark.format(messages['view.marks.button'])}の窓と同じ所に開くので、どちらか 1 つだけが開きます。閉じるときは{mark.format(messages['help.close'])}を押すか、窓の中で Esc キーを押します（窓の外を押しても閉じません）。開いていたかは覚えません。",
+                    "段が 1 つ以上あり、年でくらべる・ほかの見方・全画面でないときに使えます。",
+                    f"列は{mark.format(messages['view.recap.item'])}、今の期間（{mark.format(messages['view.recap.now.years1'])}{mark.format(messages['view.recap.now.custom'])}など）、前の期間（{mark.format(messages['view.recap.before.years1'])}{mark.format(days[31])}など）、{mark.format(messages['view.recap.difference'])}です。",
+                    f"段と同じ{mark.format(messages['view.types.label'])}で数えます。",
+                    f"値が無いときは{mark.format(messages['view.recap.none'])}です。記録されたアクティビティの合計と数の項目は、その期間に数える種目のアクティビティが 1 回も無くても、期間が、出力の中の数える種目の最初と最後のアクティビティのあいだにかかるなら 0 で、差も出ます。",
+                    f"前の期間は、{mark.format(messages['view.period.years1'])}{mark.format(messages['view.period.years3'])}などなら、今の期間の始まりの前の日までの同じ年数（暦の年）です。{mark.format(messages['view.period.custom'])}の範囲なら、同じ日数のすぐ前です。",
+                    "‹ は同じ日数だけ動かすので、今の 1 年に 2 月 29 日があると 1 日ずれます。",
+                    f"‹ › を押すと期間は範囲になり、列の見出しは{mark.format(messages['view.recap.now.custom'])}と、動かした範囲の日数の見出しに変わります（{mark.format(messages['view.period.years1'])}からなら{mark.format(days[365])}、2 月 29 日を含む 1 年なら 366 日）。",
+                    "差は、表に書いた今の値から前の値を引いた数で、符号と数だけです",
+                    f"題の下の行は{mark.format(messages['view.recap.outside'])}です。",
+                    f"窓を開くと、窓の題にフォーカスが移ります。Tab キーで{mark.format(messages['help.close'])}と表へ進み、表は ↑ ↓ キーで送れます（見出しの行は止まります）。",
+                )
+                keyboard = f"まとめ（2.2.0 から）は、窓を開くと窓の題にフォーカスが移り、Tab キーで{mark.format(messages['help.close'])}と表へ進みます。表は ↑ ↓ キーで送れ、Esc キーで{mark.format(messages['view.recap.button'])}に戻って閉じます（[まとめ](#まとめ220-から)）。"
+                steps = (f"2. 上の{mark.format(messages['view.period.label'])}で{mark.format(messages['view.period.years1'])}を押します。", f"3. 段の上の{mark.format(messages['view.recap.button'])}を押します。", f"5. ‹ › を押すと期間は範囲になり、列の見出しは{mark.format(messages['view.recap.now.custom'])}と{mark.format(days[365])}（2 月 29 日を含む 1 年なら 366 日）に変わります。")
+                link = "(#まとめ220-から)"
+            for phrase in phrases:
+                with self.subTest(language=language, phrase=phrase):
+                    self.assertEqual(joined.count(phrase), 1)
+            with self.subTest(language=language, part="keyboard"):
+                self.assertEqual(reads.count(keyboard), 1)
+            # The tenth scene leads to the summary, in the words of the page.
+            start = text.index(f"\n### {scene[language]}\n")
+            scene_text = text[start : text.index("\n### ", start + 1)]
+            scene_reads = " ".join(scene_text.split()) if language == "en" else re.sub(r"\n *", "", scene_text)
+            with self.subTest(language=language, part="scene"):
+                for step in steps:
+                    self.assertIn(step, scene_reads)
+                self.assertIn(link, scene_text)
+            # Every word quoted is a word of the page, a heading as the page
+            # writes it, or the dash and the star of the table.
+            words = set(messages.values()) | set(days.values()) | {"—", "*"}
+            pattern = r"\*\*([^*]+)\*\*" if language == "en" else r"「([^」]+)」"
+            for value in (joined, scene_reads):
+                for word in re.findall(pattern, value):
+                    with self.subTest(language=language, quoted=word):
+                        self.assertIn(word, words)
+
+    def test_the_design_gives_the_summary(self) -> None:
+        # v2.2.0 Q2: the design of the GUI gives the summary of stage Q1 after
+        # the distribution, with the names of the code that it is made of, and
+        # the readings of an output that changes name it with a comparison and
+        # a list (the plan of Q2).
+        flowing = " ".join((ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        spread = flowing.index("- The distribution of one item (stage P1):")
+        summary = flowing.index("- The summary of the panels (stage Q1):")
+        readings = flowing.index("- An output that changes while the view page is open is read again")
+        self.assertLess(spread, summary)
+        self.assertLess(summary, readings)
+        part = flowing[summary:readings]
+        for name in ('`/api/view/series` with `"previous": true`', "`RANGE_GRAIN`", "`item_series`", "`LAST_YEARS`", "`period_bounds`", "**Summary…** after **Other views**"):
+            with self.subTest(name=name):
+                self.assertIn(name, part)
+        self.assertIn("a comparison, a list, or the summary asked right after a new normalization", flowing)
+        server = (ROOT / "src/garmin_running_data_normalizer/view/series.py").read_text(encoding="utf-8")
+        self.assertIn("def view_answer(\n    data: ViewData,\n    keys: Collection[str],\n    period: str | tuple[date, date] = \"all\",\n    grain: str = \"auto\",\n    types: Collection[str] | None = None,\n    previous: bool = False,\n)", server)
+        self.assertIn('return grain === "day" ? "view.kind.obs_points" : "view.kind.obs_mean";', (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8"))
 
     def test_readme_puts_the_gui_first(self) -> None:
         # v2.1.0 H1 (the whole flow): the README gives the GUI right after who

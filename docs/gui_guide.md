@@ -298,7 +298,7 @@ that is open, and then run the same line again.
 
 ## Ways to use it
 
-The steps of nine common cases. The sections that the links lead to give the
+The steps of ten common cases. The sections that the links lead to give the
 details of each box. A Snapshot is a copy of one Export, which this app keeps
 in a Snapshot Store, so that the Exports that you import are normalized
 together ([Box 2](#box-2-snapshots)).
@@ -441,6 +441,23 @@ year.
    numbers, press **Show as a table**.
 
 More: [Distribution](#distribution), [Other views](#other-views-from-220)
+
+### Compare the last year with the year before
+
+When: you want to compare the distance, the average pace, and so on of the
+last year with the year before.
+
+1. [Open the view page](#open-the-view-page).
+2. Press **1 year** in **Period** above.
+3. Press **Summary…** above the panels: for each item of the panels, **The
+   last year**, **The year before**, and **Difference**.
+4. Check the days of the two periods compared in the line under the title. A
+   difference is the value now minus the value before; a period that the
+   output cuts (*) has none.
+5. ‹ and › make the period a range: the columns then say **This period** and
+   **The 365 days before** (366 for a year with 29 February).
+
+More: [Summary](#summary-from-220)
 
 ### Give the numbers to an AI as a CSV file
 
@@ -1463,16 +1480,86 @@ values are made):
 
 ![Distribution: the bars of the distance, a range of 1 km each, with the range chosen, 10 km or more, under 11 km, framed and its activities at the top right (synthetic data)](assets/gui-guide/view-spread.en.png)
 
+### Summary (from 2.2.0)
+
+- **Summary…** above the panels opens a window with a table of the items of
+  the panels: the value of each in the period shown and in the period of the
+  same length just before it, and their difference. It opens where the window
+  of **Marks…** opens, so that only one of the two is open. **Close**, or the
+  Esc key in the window, closes it (a press outside it does not). Whether it
+  was open is not remembered.
+- It can be used with panels, while years are not compared, no other view
+  shows, and the graphs are not shown alone. Meanwhile the window hides; it
+  shows again, and counts again, when they end.
+- Its rows are the items of the panels, in their order. An item of several
+  lines, such as VO2 Max, has a row for each line, named as in the legend; a
+  line that only the period before has can give a name that the legend of the
+  panel does not have.
+- Its columns are **Item**, the period shown (**The last year**, **This
+  period**, and so on), the period before (**The year before**, **The 31 days
+  before**, and so on), and **Difference**. For **All time**, there are no
+  columns of the period before and of the difference.
+- A value is that of the whole period, counted with the same **Activity types
+  counted** as the panels, in the way of its item in this table. Its words are
+  those beside the heading of a panel by week, month, or year; by day, that
+  heading says other words, but the summary counts the same way. A mean of the
+  records weighs a day with several records as many times.
+
+| How it is counted | Items |
+| --- | --- |
+| Total of recorded activities | Distance; Time; Training load; Total ascent |
+| Number of recorded activities | Activities |
+| Total time ÷ total distance (calculated by this app) | Average pace |
+| Time-weighted mean (calculated by this app) | Average heart rate; Cadence; Power; Vertical oscillation; Ground contact time; Ground contact time (%); Ground contact time balance; Vertical ratio; Stride length |
+| Maximum in the period | Maximum heart rate |
+| Mean of the days with a value | Resting heart rate; Stress level, daily average; Body Battery charged; Body Battery drained; Sleep time; Deep sleep; Light sleep; REM sleep; Sleep score; HRV (reference value); Endurance score; Hill score |
+| Mean per day of the days with a value | Steps |
+| Mean of the records (combined by this app) | VO2 Max; Race prediction 5K; Race prediction 10K; Race prediction half marathon; Race prediction marathon; Training readiness; Acute load; Chronic load; Load ratio |
+
+- A period without a value says **No value**. An item that is a total or a
+  number of recorded activities is 0 for a period without an activity of the
+  types counted where the period reaches between the first and the last
+  activity of the types counted in the output, and then has a difference; a
+  period with activities but none with a value of the item, and one that does
+  not reach between them, says **No value**.
+- The period before is, for **1 year**, **3 years**, and so on, as many years
+  of the calendar up to the day before the period shown; for a range of
+  **Custom range…**, the same number of days just before it.
+- The line under the title gives the days that the two periods count, in the
+  output. They can differ from those of the period moved with ‹: ‹ moves by
+  the same number of days, so where the year shown has 29 February, the period
+  it moves to and the year before differ by a day; and at the first day of the
+  output, ‹ keeps the length and moves the period back into the output. ‹ and
+  › make the period a range, and the columns then say **This period** and the
+  days of the range moved (**The 365 days before** from **1 year**, or 366 for
+  a year with 29 February).
+- A difference is the value now minus the value before, as a sign and a number
+  only, that of the two values as the table writes them (no color, no arrow,
+  and no word such as more or less). It is a dash (—) where a value is missing
+  or where the output cuts a period. The values of a period that the output
+  cuts are marked *, with a note under the table of the days of the output in
+  it. Where the period before is wholly outside the output, its column is
+  dashes too, and the line under the title says **outside the output**.
+- As the note under the table says, a value counts only the records with a
+  value in the period. For an item whose records start in the middle, such as
+  the total ascent, a period with records in a part of it only has a smaller
+  total, and the difference can be large.
+- The window takes the focus on its title. Tab goes to **Close** and to the
+  table, which ↑ and ↓ scroll (its heads stay).
+
+![The summary: the window of Summary… above the panels, with the last year, the year before, and their difference, and a row for each line of VO2 Max (synthetic data)](assets/gui-guide/view-recap.en.png)
+
 ### When the output changes while you look (from 2.2.0)
 
 - At every request of numbers, the view page checks that the output is as it
   was, and reads it again where it changed (the same output normalized again).
   It also reads it again when the date changes (to leave out records after
   today).
-- Right after you normalize again, or right after the date changes, the
-  values of the years or the races in **Compare years** (also by race day)
-  and the activities of a period can come from another reading than the panels
-  beside them. Compare again, or open the list again, for the new reading.
+- Right after you normalize again, or right after the date changes, the values
+  of the years or the races in **Compare years** (also by race day), the
+  activities of a period, and the table of **Summary…** can come from another
+  reading than the panels beside them. Compare again, open the list again, or
+  open the summary again, for the new reading.
 
 ### What is remembered for the next time
 
@@ -1501,10 +1588,11 @@ later one.
   output.
 - Not remembered: the output shown, the same scale, a panel enlarged, a table
   shown, full screen, whether years were compared, with the years or races
-  chosen, whether a list of activities was open, and whether another view was
-  shown, with the point or the range chosen. As the output shown is not
-  remembered, the page opened from the bar at the bottom offers the latest
-  output with the button of [Open the view page](#open-the-view-page).
+  chosen, whether a list of activities was open, whether another view was
+  shown, with the point or the range chosen, and whether the summary was open.
+  As the output shown is not remembered, the page opened from the bar at the
+  bottom offers the latest output with the button of [Open the view
+  page](#open-the-view-page).
 - **Forget the remembered settings…** in the bar at the bottom of the
   normalization page forgets all of these, and also the Snapshot Store, the
   folder for the output, and the list of earlier outputs: the next launch goes
@@ -1982,6 +2070,9 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
   same values). In **Distribution**, ← and → (those of no activity among them)
   and Home and End choose a range and read out the range and its activities
   ([Other views](#other-views-from-220)).
+- In **Summary…** (from 2.2.0), the window takes the focus on its title; Tab
+  goes to **Close** and to the table, which ↑ and ↓ scroll, and Esc closes it,
+  back to its button ([Summary](#summary-from-220)).
 
 ## The GUI and the command line
 
