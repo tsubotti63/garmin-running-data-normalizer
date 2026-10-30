@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import json
+import math
 import re
+import time
 import unittest
 from datetime import date, timedelta
+from decimal import Decimal
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -33,8 +37,11 @@ from garmin_running_data_normalizer.view.series import (
     MAX_LIST_ROWS,
     MAX_PANELS,
     MAX_POINTS,
+    MAX_RANGES,
+    SPREAD_RANGES,
     activity_list,
     activity_points,
+    activity_spread,
     activity_types,
     auto_grain,
     coverage,
@@ -553,6 +560,187 @@ class ActivityPointsTest(unittest.TestCase):
             with self.subTest(x=x, y=y):
                 with self.assertRaises(ValueError):
                     activity_points(self.data(), x, y)  # type: ignore[arg-type]
+
+
+class ActivitySpreadTest(unittest.TestCase):
+    """The distribution of one item of the activities (stage P1 of v2.2.0):
+    the activities of the points with a value of the item, counted in the
+    ranges of its width from their values as the output writes them, not
+    rounded, up to MAX_RANGES ranges."""
+
+    def data(self) -> ViewData:
+        return ActivityListTest().data()
+
+    def ranges(self, key: str, *rows: dict[str, float]) -> dict[str, Any]:
+        data = view_data([act("2024-03-04", moment="2024-03-04T06:00:00+09:00", **values) for values in rows])
+        answer = activity_spread(data, key)
+        json.dumps(answer, allow_nan=False)
+        return answer
+
+    def test_the_ranges_count_the_rows_of_the_list_with_a_value(self) -> None:
+        # The same activities as the list and the points (the checker's review
+        # of the plan of O1): for every week and every item, the ranges count
+        # the rows of the list of the same days that have a value of the item,
+        # each in the range of its value as the output writes it.
+        data = self.data()
+        keys = [item.key for item in ITEMS if point_item(item.key)]
+        self.assertEqual(sorted(SPREAD_RANGES), sorted(keys))
+        weeks = period_bounds(data, "all", "week")
+        assert weeks is not None
+        for first, last, _partial in weeks.spans:
+            span = (date.fromordinal(first), date.fromordinal(last))
+            for key in keys:
+                with self.subTest(week=span[0].isoformat(), item=key):
+                    listed = activity_list(data, key, span)
+                    answer = activity_spread(data, key, span)
+                    json.dumps(answer, allow_nan=False)
+                    # The rows of the list are those of the output in its order.
+                    rows = [row for row in data.rows[ACTIVITIES] if span[0].toordinal() <= row.day <= span[1].toordinal() and row.marks["type"] == "running"]
+                    self.assertEqual(len(rows), len(listed["rows"]))
+                    with_value = [row for row, entry in zip(rows, listed["rows"]) if entry["values"][key] is not None]
+                    scale, width = SPREAD_RANGES[key]
+                    expected: dict[int, int] = {}
+                    for row in with_value:
+                        if key == "pace":
+                            exact = Fraction(Decimal(repr(row.values["duration_sec"]))) * scale / Fraction(Decimal(repr(row.values["distance_m"])))
+                        else:
+                            exact = Fraction(Decimal(repr(row.values[ITEMS_BY_KEY[key].field]))) * scale
+                        number = math.floor(exact / width)
+                        expected[number] = expected.get(number, 0) + 1
+                    self.assertEqual((answer["total"], answer["with_values"]), (listed["total"], len(with_value)))
+                    self.assertEqual(answer["total"], answer["with_values"] + answer["missing"])
+                    self.assertEqual((answer["start"], answer["end"]), (listed["start"], listed["end"]))
+                    self.assertEqual((answer["scale"], answer["width"], answer["widened"], answer["limit"]), (scale, width, False, MAX_RANGES))
+                    if expected:
+                        self.assertEqual(answer["first"], min(expected))
+                        self.assertEqual(answer["counts"], [expected.get(number, 0) for number in range(min(expected), max(expected) + 1)])
+                    else:
+                        self.assertEqual((answer["first"], answer["counts"]), (None, []))
+        # A time below 0 is counted as it is, as the list writes it (Codex's
+        # review of the plan of P1): -60 seconds are in the range of -10 to 0
+        # minutes, 0 in that of 0 to 10, and 900 in that of 10 to 20.
+        answer = activity_spread(data, "time", (date(2024, 2, 26), date(2024, 3, 3)))
+        self.assertEqual((answer["first"], answer["counts"]), (-1, [1, 1, 1]))
+
+    def test_the_values_are_not_rounded_nor_moved_by_a_division_of_floating_numbers(self) -> None:
+        # The Human maintainer, 2026-10-30: the values as they are, so that
+        # "10 km or more and less than 11 km" says the truth of each; and the
+        # pace by its time times 1000 over its distance, which a division of
+        # floating numbers moves to the range below (the checker's and
+        # Codex's reviews of the plan of P1).
+        cases = (
+            ("dist", {"distance_m": 10999.6}, 10),
+            ("dist", {"distance_m": 11000.0}, 11),
+            ("time", {"duration_sec": 600.0}, 1),
+            ("pace", {"distance_m": 1007, "duration_sec": 342.38}, 34),
+            ("pace", {"distance_m": 10000, "duration_sec": 5095}, 50),
+            ("pace", {"distance_m": 10000, "duration_sec": 3100}, 31),
+            ("cad", {"avg_run_cadence": 174.6}, 34),
+            ("bal", {"fit_avg_stance_time_balance_percent": 49.95}, 99),
+            ("sl", {"fit_avg_step_length_mm": 1249.9}, 24),
+        )
+        for key, values, number in cases:
+            with self.subTest(item=key, values=values):
+                answer = self.ranges(key, values)
+                self.assertEqual((answer["first"], answer["counts"], answer["with_values"]), (number, [1], 1))
+        # The case of the pace is one that a floating division moves: 342.38
+        # seconds over 1007 metres are 340 seconds a kilometre exactly.
+        self.assertEqual(math.floor(342.38 / 1007 * 1000 / 10), 33)
+
+    def test_the_ranges_are_widened_by_steps_up_to_the_limit(self) -> None:
+        self.assertEqual(MAX_RANGES, 200)
+        # 200 ranges are not widened; 201 are, by the first step that is
+        # enough, and the counts are those of the wider width.
+        exact = self.ranges("dist", {"distance_m": 500}, {"distance_m": 199500})
+        self.assertEqual((exact["width"], exact["widened"], exact["first"], len(exact["counts"])), (1000, False, 0, 200))
+        self.assertEqual((exact["counts"][0], exact["counts"][-1], sum(exact["counts"])), (1, 1, 2))
+        more = self.ranges("dist", {"distance_m": 500}, {"distance_m": 200500}, {"distance_m": 1999})
+        self.assertEqual((more["width"], more["widened"], more["first"], len(more["counts"])), (2000, True, 0, 101))
+        self.assertEqual((more["counts"][0], more["counts"][-1], sum(more["counts"])), (2, 1, 3))
+        # The ranges from -1 m and 199,000 m are 201 (Codex's review of the
+        # plan of P1): their number is that of the last range and the first,
+        # not of the span of the values.
+        below = self.ranges("dist", {"distance_m": -1}, {"distance_m": 199000})
+        self.assertEqual((below["width"], below["first"], len(below["counts"])), (2000, -1, 101))
+        # The ranges 1 and 400 take 5 times the width: 2 times would leave the
+        # ranges 0 to 200, which are 201, though the values span 399 ranges.
+        edge = self.ranges("dist", {"distance_m": 1000}, {"distance_m": 400000})
+        self.assertEqual((edge["width"], edge["first"], len(edge["counts"])), (5000, 0, 81))
+        # 601 ranges take 5 times the width: 2 times leave 301.
+        five = self.ranges("dist", {"distance_m": 0}, {"distance_m": 600000})
+        self.assertEqual((five["width"], five["first"], len(five["counts"])), (5000, 0, 121))
+        # Taken together, the counts are those of the wider width counted again.
+        values = [-7000, -1, 0, 999, 1000, 4999, 5000, 149999, 150000, 1000001]
+        answer = self.ranges("dist", *({"distance_m": value} for value in values))
+        wide = answer["width"]
+        again: dict[int, int] = {}
+        for value in values:
+            again[value // wide] = again.get(value // wide, 0) + 1
+        self.assertTrue(answer["widened"])
+        self.assertEqual(answer["counts"], [again.get(number, 0) for number in range(min(again), max(again) + 1)])
+
+    def test_very_large_values_have_their_ranges_at_once(self) -> None:
+        # The checker's review of the plan of P1: a whole number of 298 digits
+        # and more, at once, and widened until the ranges are 200 at most.
+        started = time.perf_counter()
+        distance = self.ranges("dist", {"distance_m": 1e300}, {"distance_m": 10000})
+        pace = self.ranges("pace", {"distance_m": 0.001, "duration_sec": 1e300}, {"distance_m": 10000, "duration_sec": 3000})
+        self.assertLess(time.perf_counter() - started, 2)
+        for answer in (distance, pace):
+            self.assertTrue(answer["widened"])
+            self.assertLessEqual(len(answer["counts"]), MAX_RANGES)
+            self.assertEqual(sum(answer["counts"]), 2)
+        # The last range holds 1e300 m: its right end is past it.
+        self.assertGreater((distance["first"] + len(distance["counts"])) * distance["width"], 10**300)
+
+    def test_a_pace_that_is_not_a_finite_number_has_no_range(self) -> None:
+        # As in the points and the list (Codex's review of the plan of P1):
+        # whether an activity has a value is that of _list_value.
+        data = view_data(
+            [
+                act("2024-03-04", moment="2024-03-04T06:00:00+09:00", distance_m=1e-300, duration_sec=1e300),
+                act("2024-03-05", moment="2024-03-05T06:00:00+09:00", distance_m=10000, duration_sec=3000),
+            ]
+        )
+        answer = activity_spread(data, "pace")
+        self.assertEqual((answer["total"], answer["with_values"], answer["missing"], answer["first"], answer["counts"]), (2, 1, 1, 30, [1]))
+        json.dumps(answer, allow_nan=False)
+
+    def test_the_ranges_count_the_types_and_the_days_of_the_period(self) -> None:
+        data = self.data()
+        cycling = activity_spread(data, "dist", "all", ["cycling"])
+        self.assertEqual((cycling["total"], cycling["first"], cycling["counts"]), (1, 30, [1]))
+        year = activity_spread(data, "dist", "1y")
+        self.assertEqual((year["start"], year["end"]), ("2024-02-27", "2024-03-12"))
+        outside = activity_spread(data, "dist", (date(2020, 1, 1), date(2020, 1, 31)))
+        self.assertEqual(
+            outside,
+            {"start": None, "end": None, "total": 0, "with_values": 0, "missing": 0, "limit": MAX_RANGES, "scale": 1, "width": 1000, "widened": False, "first": None, "counts": []},
+        )
+        none = activity_spread(data, "dist", "all", [])
+        self.assertEqual((none["total"], none["counts"]), (0, []))
+
+    def test_every_item_has_the_width_of_its_ranges(self) -> None:
+        # OP0 of v2.2.0: 1 km, 10 minutes, 10 seconds a kilometre, 5 bpm, 5
+        # steps, 10 W, 10 of the load, 10 m, 0.5 cm, 10 ms, 1 %, 0.5 %, 0.5 %,
+        # and 5 cm, in the units of the output.
+        widths = {key: Fraction(width, scale) for key, (scale, width) in SPREAD_RANGES.items()}
+        self.assertEqual(
+            widths,
+            {
+                "dist": 1000, "time": 600, "pace": Fraction(1, 100), "hr": 5, "mx": 5, "cad": 5, "pow": 10, "load": 10,
+                "asc": 10, "vo": 5, "gct": 10, "gctp": 1, "bal": Fraction(1, 2), "vr": Fraction(1, 2), "sl": 50,
+            },
+        )
+        for key, (scale, width) in SPREAD_RANGES.items():
+            with self.subTest(item=key):
+                self.assertTrue(type(scale) is int and type(width) is int and scale > 0 and width > 0)
+
+    def test_only_an_item_of_one_activity_has_a_distribution(self) -> None:
+        for key in ("count", "rhr", "vo2", "nope", None):
+            with self.subTest(item=key):
+                with self.assertRaises(ValueError):
+                    activity_spread(self.data(), key)  # type: ignore[arg-type]
 
 
 class TotalTest(unittest.TestCase):

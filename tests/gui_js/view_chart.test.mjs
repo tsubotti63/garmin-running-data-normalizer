@@ -391,3 +391,49 @@ test("two items are plotted on scales of their values, never from 0, with the ti
     assert.ok(one.places.every((place) => Number.isFinite(place.x) && Number.isFinite(place.y)));
   }
 });
+
+test("the ticks of a count are whole numbers from 0", () => {
+  // Codex's review of the plan of P1: never half an activity.
+  assert.deepEqual(chart.countTicks(1, 3), [0, 1]);
+  assert.deepEqual(chart.countTicks(0, 3), [0, 1]);
+  assert.deepEqual(chart.countTicks(7, 3), [0, 5, 10]);
+  assert.deepEqual(chart.countTicks(42, 5), [0, 10, 20, 30, 40, 50]);
+  for (const high of [1, 2, 3, 9, 11, 99, 101, 3380, 123456]) {
+    const ticks = chart.countTicks(high, 3);
+    assert.ok(ticks.every(Number.isInteger) && ticks[0] === 0 && ticks[ticks.length - 1] >= high, String(high));
+  }
+});
+
+test("the bars of the ranges are placed by their order, touch where they are narrow, and say round ends", () => {
+  // Codex's review of the plan of P1: a gap of 2 px between bars that are
+  // wide enough, none between up to 200 ranges in the narrowest chart, a bar
+  // never wider than its range, and the places by the order of a range only.
+  const wide = chart.spreadShapes([1, 0, 3], 10, { width: 400, height: 220 });
+  assert.equal(wide.bars.length, 3);
+  assert.ok(wide.range >= chart.SPREAD_GAP_FROM);
+  assert.equal(Math.round((wide.bars[0].x1 - wide.bars[0].x0) * 10) / 10, Math.round((wide.range - 2) * 10) / 10);
+  assert.equal(wide.bars[1].y, wide.bottom);
+  assert.deepEqual(wide.up.ticks, [0, 1, 2, 3]);
+  const narrow = chart.spreadShapes(new Array(200).fill(1), 0, { width: 240, height: 120 });
+  assert.ok(narrow.range < chart.SPREAD_GAP_FROM);
+  for (const [index, bar] of narrow.bars.entries()) {
+    assert.ok(bar.x1 - bar.x0 <= narrow.range + 1e-9);
+    assert.equal(bar.x0, narrow.x(index));
+  }
+  // The same places whatever the first range is, also a number too large
+  // for the page.
+  const far = chart.spreadShapes([1, 0, 3], Infinity, { width: 400, height: 220 });
+  assert.deepEqual(far.bars, wide.bars);
+  // The ends with words: every end where they are far enough apart,
+  // otherwise those whose number is a multiple of 2, 5, 10, ...
+  assert.deepEqual(wide.ends, [0, 1, 2, 3]);
+  assert.deepEqual(chart.spreadEndsShown(10, 12, 30), [0, 5, 10]);
+  assert.deepEqual(chart.spreadEndsShown(3, 200, 1.2), [97, 197]);
+  assert.deepEqual(chart.spreadEndsShown(2 ** 60, 12, 30), [0, 5, 10]);
+  // The range under the pointer.
+  assert.equal(chart.spreadRangeAt(wide, wide.left), 0);
+  assert.equal(chart.spreadRangeAt(wide, wide.right - 0.5), 2);
+  assert.equal(chart.spreadRangeAt(wide, wide.left - 1), null);
+  assert.equal(chart.spreadRangeAt(wide, wide.right), null);
+  assert.equal(chart.spreadShapes([], 0, { width: 400, height: 220 }), null);
+});

@@ -528,10 +528,91 @@ class ViewApiTest(GuiServerTestCase):
             self.assertEqual(self.call("/api/view/points", {**plotted, "view": ticket}), (422, {"error": "HANDOFF_INVALID"}))
             self.assertEqual(self.call("/api/view/points", {**plotted, "view": ticket}), (409, {"error": "VIEW_NOT_OPEN"}))
 
+    def test_the_distribution_is_that_of_the_view_page(self) -> None:
+        # Stage P1 of v2.2.0: the ranges of one item of the activities are
+        # those of the function of the view page, for a period of its names,
+        # a range, and the activity types counted.
+        output = made_output()
+        ticket = self.open(output)
+        data = load_view_data(output)
+        names = [entry["name"] for entry in activity_types(data)]
+        for key, period, types in (
+            ("dist", "all", None),
+            ("pace", "1y", names[:1]),
+            ("gct", {"from": "2024-01-01", "to": "2024-12-31"}, names),
+        ):
+            with self.subTest(item=key, period=period, types=types):
+                status, answer = self.call("/api/view/spread", {"view": ticket, "item": key, "period": period, "types": types})
+                self.assertEqual(status, 200, answer)
+                chosen = period if isinstance(period, str) else (date.fromisoformat(period["from"]), date.fromisoformat(period["to"]))
+                self.assertEqual(answer, as_json(view_series.activity_spread(data, key, chosen, types)))
+                self.assertGreater(answer["total"], 0)
+                self.assertEqual(answer["total"], answer["with_values"] + answer["missing"])
+                self.assertEqual(sum(answer["counts"]), answer["with_values"])
+                self.assertLessEqual(len(answer["counts"]), answer["limit"])
+
+    def test_requests_for_a_distribution_of_another_form_are_refused(self) -> None:
+        ticket = self.open(made_output())
+        good = {"view": ticket, "item": "dist", "period": "all", "types": None}
+        for change in (
+            {"view": None},
+            {"view": 3},
+            {"item": None},
+            {"item": ["dist"]},
+            {"item": "nope"},
+            # The count and an item of the days are not values of one
+            # activity, as for the points.
+            {"item": "count"},
+            {"item": "rhr"},
+            {"item": "vo2"},
+            {"period": None},
+            {"period": "custom"},
+            {"period": {"from": "2024-03-04"}},
+            {"period": {"from": "2024-03-10", "to": "2024-03-04"}},
+            {"types": "running"},
+            {"types": ["running", "running"]},
+            {"types": [1]},
+            {"types": ["no such type"]},
+        ):
+            with self.subTest(change=change):
+                self.assertEqual(self.call("/api/view/spread", {**good, **change}), (422, {"error": "REQUEST_INVALID"}))
+        self.assertEqual(self.call("/api/view/spread", {**good, "view": "not-a-ticket-of-this-server"}), (409, {"error": "VIEW_NOT_OPEN"}))
+        with patch.object(gui_server, "MAX_ANSWER_BYTES", 100):
+            self.assertEqual(self.call("/api/view/spread", good), (422, {"error": "VIEW_ANSWER_TOO_LARGE"}))
+        body = json.dumps(good).encode("utf-8")
+        with patch.object(gui_server, "activity_spread", side_effect=RuntimeError("unexpected words")):
+            status, _, answer = self.post_api("/api/view/spread", self.api_headers(body), body)
+        self.assertEqual(status, 500)
+        self.assertNotIn(b"unexpected words", answer)
+        self.assertEqual(self.call("/api/view/spread", good)[0], 200)
+
+    def test_the_distribution_is_read_as_the_numbers_are(self) -> None:
+        # As the points: no reading of its own while the output does not
+        # change, and the codes of the check of the output when it does.
+        output = self.copied()
+        loads: list[Path] = []
+
+        def counted(place: Path) -> Any:
+            loads.append(place)
+            return load_view_data(place)
+
+        spread = {"item": "pace", "period": "all", "types": None}
+        with patch.object(self.server.views, "_load", counted):
+            ticket = self.open(output)
+            first = self.call("/api/view/spread", {**spread, "view": ticket})
+            self.assertEqual(first[0], 200)
+            self.assertEqual(self.call("/api/view/spread", {**spread, "view": ticket}), first)
+            self.assertEqual(len(loads), 1)
+            activities = output / "analysis" / "activities.csv"
+            with activities.open("a", encoding="utf-8") as handle:
+                handle.write("\n")
+            self.assertEqual(self.call("/api/view/spread", {**spread, "view": ticket}), (422, {"error": "HANDOFF_INVALID"}))
+            self.assertEqual(self.call("/api/view/spread", {**spread, "view": ticket}), (409, {"error": "VIEW_NOT_OPEN"}))
+
     def test_the_view_page_needs_the_launch_key(self) -> None:
         body = json.dumps({"output": "chosen", "path": str(made_output())}).encode("utf-8")
         headers = [header for header in self.api_headers(body) if header[0] != gui_server.LAUNCH_KEY_HEADER]
-        for path in ("/api/view/open", "/api/view/series", "/api/view/activities", "/api/view/points", "/api/settings/view"):
+        for path in ("/api/view/open", "/api/view/series", "/api/view/activities", "/api/view/points", "/api/view/spread", "/api/settings/view"):
             with self.subTest(path=path):
                 status, _, answer = self.post_api(path, headers, body)
                 self.assertEqual((status, json.loads(answer)), (403, {"error": "FORBIDDEN"}))

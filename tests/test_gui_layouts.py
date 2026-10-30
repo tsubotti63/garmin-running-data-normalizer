@@ -556,6 +556,28 @@ class SettingsOfVersion220Test(unittest.TestCase):
         self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"plot": None}))
         self.assertNotIn("view_plot", read_settings(self.path)[0])
 
+    def test_the_item_of_the_distribution_is_kept_as_an_item_of_the_points(self) -> None:
+        # Stage P1 of v2.2.0: the item of the distribution, by the rule of an
+        # item of the points (series.point_item), given to the page when it
+        # starts; another value is left out.
+        for key in ("dist", "pace", "sl"):
+            with self.subTest(item=key):
+                self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_spread": key})
+                values = read_settings(self.path)[0]
+                self.assertEqual(values["view_spread"], key)
+                self.assertEqual(launch_answer(values, None, present=True)["view_spread"], key)
+        for key in ("count", "rhr", "vo2", "Dist", "nope", ["dist"], {"item": "dist"}, 3, None):
+            with self.subTest(item=key):
+                self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_spread": key})
+                values = read_settings(self.path)[0]
+                self.assertEqual(values, {"store": self.store})
+                self.assertIsNone(launch_answer(values, None, present=True)["view_spread"])
+        # The page writes it with the rest of the view; None takes it away.
+        self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"spread": "pace"}))
+        self.assertEqual(read_settings(self.path)[0]["view_spread"], "pace")
+        self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"spread": None}))
+        self.assertNotIn("view_spread", read_settings(self.path)[0])
+
     def test_the_view_page_changes_only_the_values_that_it_gives(self) -> None:
         self.assertIsNone(write_settings(self.path, {"store": self.store, **self.view_values()}))
         self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"grain": "month", "period": "5y"}))
@@ -793,6 +815,20 @@ class LayoutsApiTest(GuiServerTestCase):
         for plot in ({"x": "dist", "y": "dist"}, {"x": "count", "y": "dist"}, {"x": "dist"}, {"x": "dist", "y": "rhr"}, ["dist", "pace"], "dist", 3):
             with self.subTest(plot=plot):
                 self.assertEqual(self.post("/api/settings/view", {**base, "plot": plot}), (422, {"error": "REQUEST_INVALID"}))
+
+    def test_the_view_page_remembers_the_item_of_the_distribution(self) -> None:
+        # Stage P1 of v2.2.0: the item of the distribution, with the rest of
+        # the view; None takes it away, and another value is refused.
+        path = places.settings_file()
+        base = {"items": ["dist"], "shelf": "open"}
+        self.assertEqual(self.post("/api/settings/view", {**base, "spread": "pace"}), (200, {"remembered": True, "notice": None}))
+        self.assertEqual(read_settings(path)[0]["view_spread"], "pace")
+        self.assertEqual(self.post("/api/status")[1]["settings"]["view_spread"], "pace")
+        self.assertEqual(self.post("/api/settings/view", {**base, "spread": None})[0], 200)
+        self.assertNotIn("view_spread", read_settings(path)[0])
+        for spread in ("count", "rhr", "nope", ["dist"], {"item": "dist"}, 3, True):
+            with self.subTest(spread=spread):
+                self.assertEqual(self.post("/api/settings/view", {**base, "spread": spread}), (422, {"error": "REQUEST_INVALID"}))
 
     def test_a_choice_of_types_that_cannot_be_kept_whole_is_not_remembered(self) -> None:
         # The page may count types that the settings cannot keep (the checker,

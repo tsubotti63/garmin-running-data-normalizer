@@ -78,11 +78,22 @@ from .views import (
     period_choice,
     list_request,
     points_request,
+    spread_request,
     series_request,
     types_ok,
 )
 from ..view.items import ITEMS_BY_KEY
-from ..view.series import MAX_ANSWER_BYTES, MAX_PANELS, activity_list, activity_points, activity_types, default_items, view_answer
+from ..view.series import (
+    MAX_ANSWER_BYTES,
+    MAX_PANELS,
+    activity_list,
+    activity_points,
+    activity_spread,
+    activity_types,
+    default_items,
+    point_item,
+    view_answer,
+)
 
 
 HOST = "127.0.0.1"
@@ -184,6 +195,7 @@ API_ROUTES = {
     # The activities of one period of a panel (stage M3 of v2.2.0).
     "/api/view/activities": "_api_view_activities",
     "/api/view/points": "_api_view_points",
+    "/api/view/spread": "_api_view_spread",
 }
 
 
@@ -818,6 +830,12 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             if payload["plot"] is not None and not plot_pair_ok(payload["plot"]):
                 raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
             view["plot"] = payload["plot"]
+        # The item of the distribution, by the rule of an item of the points
+        # (stage P1).
+        if "spread" in payload:
+            if payload["spread"] is not None and not point_item(payload["spread"]):
+                raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+            view["spread"] = payload["spread"]
         notice = remember_view(items, shelf, view)
         return {"remembered": notice is None, "notice": notice}
 
@@ -952,6 +970,32 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
         answer = activity_points(data, x, y, period, types)
+        if len(json_body(answer)) > MAX_ANSWER_BYTES:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
+        return answer
+
+    def _api_view_spread(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The distribution of one item of the activities (stage P1 of
+        # v2.2.0), from what the view page read of the output, chosen as the
+        # points are, under the checks of its numbers.
+        ticket = payload.get("view")
+        try:
+            if not isinstance(ticket, str):
+                raise ViewRequestError("view")
+            key, period, types = spread_request(payload)
+        except ViewRequestError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
+        try:
+            data = self.server.views.data(ticket)
+        except ViewNotOpenError as exc:
+            raise ApiError(HTTPStatus.CONFLICT, "VIEW_NOT_OPEN") from exc
+        except OutputActionError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code, exc.version) from exc
+        except Exception as exc:
+            raise _command_failed() from exc
+        if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+        answer = activity_spread(data, key, period, types)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer

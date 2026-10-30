@@ -381,6 +381,27 @@ class GuiCatalogTest(unittest.TestCase):
         self.assertEqual(catalogs["ja"]["view.plot.caveat"], "点で並べた 2 つの項目のあいだの関係（どちらが原因か）は、このアプリは示しません。")
         self.assertEqual(catalogs["en"]["view.plot.caveat"], "This app shows no relation or cause between the two items plotted.")
 
+    def test_a_distribution_says_no_relation_nor_a_shape_and_quotes_the_page(self) -> None:
+        # v2.2.0 P1 (the checker's review of the plan): what is not used while
+        # a distribution shows quotes the words of the page; no word of it reads
+        # a relation, a mean, or a shape into the ranges, and it has no fixed
+        # words of a relation, which it does not show.
+        catalogs = {language: load_catalog(language) for language in LANGUAGES}
+        for language, catalog in catalogs.items():
+            quote = "“{}”" if language == "en" else "「{}」"
+            for named in ("view.shelf.heading", "view.layouts.heading", "view.grain.label"):
+                with self.subTest(language=language, named=named):
+                    self.assertIn(quote.format(catalog[named]), catalog["view.spread.off"])
+            spread = " ".join(value for key, value in catalog.items() if key.startswith("view.spread.") or key == "view.other.spread")
+            words = ("関係", "相関", "傾向", "原因", "平均", "中央値", "山") if language == "ja" else ("correlat", "trend", "relation", "cause", "average", "mean", "median", "peak", "normal")
+            for word in words:
+                with self.subTest(language=language, word=word):
+                    self.assertNotIn(word, spread.lower())
+        # The reading says what the ends of a range mean (the checker's P1-3),
+        # as the calendar of comparing years says it.
+        self.assertEqual(catalogs["ja"]["view.spread.reading"], "{from} 以上 {to} 未満：{n}")
+        self.assertEqual(catalogs["en"]["view.spread.reading"], "{from} or more, under {to}: {n}")
+
     def test_page_scripts_change_text_without_markup(self) -> None:
         # Paths and names from the computer reach the page; it sets them with
         # textContent only, so that none of them is read as HTML (stage B1a).
