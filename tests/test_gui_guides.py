@@ -846,7 +846,8 @@ class GuiGuideTest(unittest.TestCase):
         # distribution (stages O1 and P1) are remembered, and another view shown
         # and what is chosen in it are not; nothing of the view is remembered
         # while no panel is left, which is said once, for all of it (the
-        # checker's review of the plan of OP2).
+        # checker's review of the plan of OP2). From L3, the year highlighted
+        # on one panel is not remembered.
         phrases = {
             "en": (
                 "At first, the period is **All time**, and the grouping **Auto**; from 2.2.0, those chosen last stay for the next time",
@@ -855,7 +856,7 @@ class GuiGuideTest(unittest.TestCase):
                 "When another output opens (from 2.2.0), a period such as **1 year** stays as it is.",
                 "A period chosen with **Custom range…** shrinks to the days of the output when it overlaps them in part, and becomes **All time** when it does not overlap them at all.",
                 "The activity types counted are those remembered that the output has; when it has none of them, every running type in the output.",
-                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, full screen, whether years were compared, with the years or races chosen, whether a list of activities was open, whether another view was shown, with the point or the range chosen, whether the summary was open, and whether the window of saving as an image was open, with its choices.",
+                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, full screen, whether years were compared, with the years or races chosen and the year highlighted, whether a list of activities was open, whether another view was shown, with the point or the range chosen, whether the summary was open, and whether the window of saving as an image was open, with its choices.",
                 "the names of places and of the items of the view page, and from 2.2.0 also the names of the layouts you saved, the days of a period chosen with **Custom range…**, the activity types counted, and the timezone. They stay on this computer",
             ),
             "ja": (
@@ -868,7 +869,7 @@ class GuiGuideTest(unittest.TestCase):
                 "⤢ の所が「段を並べて見る」（2.1.0 では「元に戻す」）になり、",
                 "「範囲を選ぶ…」で選んだ期間は、その出力の日の範囲と一部だけ重なるときは重なる所に縮まり、まったく重ならないときは「全期間」になります。",
                 "数える種目は、覚えた種目のうち、その出力にある種目です。1 つも無いときは、その出力のランニングの種目すべてです。",
-                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、区切りの一覧を開いていたか、ほかの見方を開いていたかと、選んだ点や分かれ方の区切り、まとめの窓を開いていたか、画像で保存の窓を開いていたかと、その選び。",
+                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、強調した年、区切りの一覧を開いていたか、ほかの見方を開いていたかと、選んだ点や分かれ方の区切り、まとめの窓を開いていたか、画像で保存の窓を開いていたかと、その選び。",
                 "2.2.0 からは、保存した表示の型の名前、「範囲を選ぶ…」で選んだ期間の日付、数える種目、タイムゾーンも入ります。",
             ),
         }
@@ -885,6 +886,56 @@ class GuiGuideTest(unittest.TestCase):
             for phrase in before[language]:
                 with self.subTest(language=language, before=phrase):
                     self.assertNotIn(phrase, reads)
+
+    def test_guides_give_the_colors_of_the_years_and_a_year_highlighted(self) -> None:
+        # v2.2.0 L3: the years laid over one another and their running totals
+        # have colors of their own, newest first, the 5th and 6th dashed too;
+        # a press on a key, a line, a point, or the name at the end of a line
+        # highlights a year, and a press again or Esc on the chart or a key
+        # puts it back; not remembered, the same by race day, without fading
+        # in forced colors, and in a picture as it shows. The help says it in
+        # a sentence, and each says what the page does.
+        phrases = {
+            "en": (
+                "With **Overlay** and **Running total**, each year has a color of its own: of the years chosen, newest first, the purple of the page, orange, teal, and navy (a light gray on a dark screen), and the 5th and 6th years are dashed too. Taking a year out colors the years left again, newest first.",
+                "With **Overlay** and **Running total**, press a year in the legend, a line, a point, or the year at the end of a line to highlight that year: its line gets thicker and goes on top, and the other years fade. Press it again, or press Esc on the chart or on a year in the legend, to go back. A press away from the lines and the points changes nothing. The year highlighted is not remembered. Comparing by race day works the same way. In forced colors, the other years do not fade; the year highlighted only gets thicker.",
+                "The years in the legend of **Overlay** and **Running total** (from 2.2.0) are reached with Tab; Enter or Space highlights one, and pressing it again, or Esc on the chart or on a year in the legend, goes back",
+                "A year highlighted when comparing years goes in as it shows: the other years faint, and its name bold in the legend.",
+            ),
+            "ja": (
+                "「重ねる」と「累積」では、年ごとに色がちがいます。選んだ年のうち新しい順に、ページの紫・オレンジ・青緑・紺（暗い画面では白に近い灰）で、5 年めと 6 年めは破線にもなります。年を外すと、残った年を新しい順に塗り直します。",
+                "「重ねる」と「累積」で、凡例の年・線・点・線の端の年を押すと、その年を強調します（線が太くなっていちばん上になり、ほかの年は薄くなります）。もう一度押すか、グラフか凡例の年で Esc キーを押すと戻ります。線や点から離れた所を押しても変わりません。強調した年は覚えません。大会の日でくらべるときも同じです。強制カラーの画面では、ほかの年は薄くならず、強調した年が太くなるだけです。",
+                "「重ねる」と「累積」の凡例の年（2.2.0 から）は、Tab キーで移り、Enter キーか Space キーで強調します。もう一度押すか、グラフか凡例の年で Esc キーを押すと戻ります",
+                "年でくらべるで強調した年は、そのまま写ります（ほかの年は薄く、凡例ではその年の名前が太字になります）。",
+            ),
+        }
+        help_text = {
+            "en": " In “Overlay” and “Running total”, each year has a color of its own, and pressing a year in the legend or its line highlights it (press it again, or Esc on the chart or on a year in the legend, to go back).",
+            "ja": "「重ねる」と「累積」では年ごとに色がちがい、凡例の年や線を押すと、その年を強調します（もう一度押すか、グラフか凡例の年で Esc キーを押すと戻ります）。",
+        }
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            for phrase in phrases[language]:
+                with self.subTest(language=language, phrase=phrase):
+                    self.assertIn(phrase, reads)
+            catalog = json.loads((STATIC_ROOT / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
+            with self.subTest(language=language, help=True):
+                self.assertTrue(catalog["view.help.compare_text"].endswith(help_text[language]))
+        # What the page does: the colors by the order among the years chosen
+        # (the newest the 6th step), on the lines of one panel only; a press on
+        # a key, on the names first, then on what the lines draw; Esc on the
+        # chart or a key; nothing remembered; no fading in forced colors (the
+        # test of the styles); the marks on the shapes of a picture.
+        page = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        flow = (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8")
+        chart = (STATIC_ROOT / "view_chart.mjs").read_text(encoding="utf-8")
+        self.assertIn("return new Map(sorted.map((year, index) => [year, MAX_COMPARE_YEARS - index]));", function_body(flow, "yearSteps"))
+        self.assertIn('const color = one ? `y${entry.data[index].step}` : "c1";', function_body(page, "drawComparePlot"))
+        self.assertIn("if (box && x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height) {", function_body(chart, "shapeAt"))
+        self.assertIn("event.target.matches?.('.plot[data-plot=\"one\"], button.key[data-lit]')", page)
+        self.assertNotRegex(function_body(page, "viewValues"), r"\blit\b")
+        self.assertIn('const className = key.getAttribute("aria-pressed") === "true" ? "save-key lit" : "save-key";', function_body(page, "saveComparePart"))
 
     def test_guides_give_the_layouts_of_the_view_page(self) -> None:
         # v2.2.0 K3: the section of the layouts comes before the item shelf

@@ -1002,7 +1002,7 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   for amounts in rows and for the order of the days in a calendar: a strip of
   each year chosen, the weeks across from the week of 1 January (Monday weeks,
   up to 54 columns) and the days of the week down, each day of the output in
-  one of up to six steps of the colors of the years (one hue). The steps are
+  one of up to six steps of one hue. The steps are
   the ticks of one scale over the days of all the years shown, made as a
   panel makes its scale (from 0 for a total, the units of the page, the
   clocks), each holding its left tick and not its right one; fewer steps are
@@ -1139,6 +1139,44 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   is sent to the server or anywhere else, and the Content-Security-Policy
   stays as it is. Only SVG is made; PNG and the other formats are out of
   scope.
+- The colors of the years compared and a year highlighted (stage L3): the
+  lines of the years laid over one another or as running totals take colors of
+  their own (`--year1` to `--year6` in styles.css), apart from the six steps
+  of one hue of the calendar (`--y1` to `--y6`): of the years (or the races)
+  chosen, newest first, the purple of the page, orange, teal, and navy (a
+  light gray on dark), then indigo and sky blue (brick and yellow on dark),
+  each 3:1 or more on the surface. They go by the order among the years
+  chosen, not by the year, so that the first four, the most apart, are always
+  used: taking out the newest year makes the next one purple. As a guide for
+  the design, not a promise that thin lines are told apart, the closest pair
+  of the first four is 15 or more apart under normal vision and 8 or more
+  under protanopia and deuteranopia (OKLab ΔE ×100 in linear sRGB, simulated
+  with the matrices of Machado and others (2009) at severity 1, clipped to 0
+  to 1): 23.2, 10.9, and 18.1 on light, and 22.4, 13.7, and 14.1 on dark.
+  Tritanopia is left out of the guide: on light, the purple and the teal are
+  6.7 apart and both are full lines; a year hard to follow there is followed
+  by highlighting it. The 5th and 6th years are dashed too, as in forced
+  colors, where every year but the newest is; a dash is cut square (butt) as
+  long as its round end drew it until L3, so that a thicker line keeps its
+  gaps. A press on a year in the legend (a button for each year that the chart
+  draws, with aria-pressed, bold in an edge of the color of the text when
+  pressed; by race day, it says the whole name and the days of its race to the
+  ear, as the buttons of the races do), or on the chart within 8 px of what
+  the line of a year draws (the pieces of its line, never across a break, and
+  its dots from their edge; the names at the ends of the lines first; a tie
+  goes to the year drawn on top), highlights it: its line 3.5 px wide and
+  drawn last, and the other years at 0.28 opacity; a press on it again, or Esc
+  on the chart or on a key, puts it back. The chart is not drawn again: the
+  marks of its shapes and keys change, so that a key keeps the focus. A year
+  highlighted lasts while the chart draws it, and is never remembered. While a
+  year is highlighted, the other lines fall under 3:1 on the surface (1.35 : 1
+  on light and 1.26 : 1 on dark for the lowest): it is a passing state that
+  the person chooses and ends with one press or Esc, and the readings of every
+  year stay at full strength in the box beside the cross line. In forced
+  colors no year fades; the year highlighted only gets thicker. A picture
+  saved shows the highlight as the page does (the marks are on the shapes
+  themselves, which the box of a picture keeps), with the key of the year in
+  bold.
 - An output that changes while the view page is open is read again at the
   next request (and so is any output when the date changes), so that a
   comparison, a list, or the summary asked right after a new normalization

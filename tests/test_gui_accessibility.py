@@ -6,7 +6,9 @@ by hand before a release.
 """
 from __future__ import annotations
 
+import itertools
 import json
+import math
 import re
 import unittest
 from html.parser import HTMLParser
@@ -79,6 +81,14 @@ CHART_PAIRS = (
     ("y4", "surface"),
     ("y5", "surface"),
     ("y6", "surface"),
+    # From stage L3, the lines of the years on one panel have colors of their
+    # own; the calendar keeps the six steps above.
+    ("year1", "surface"),
+    ("year2", "surface"),
+    ("year3", "surface"),
+    ("year4", "surface"),
+    ("year5", "surface"),
+    ("year6", "surface"),
 )
 
 
@@ -181,6 +191,49 @@ def relative_luminance(color: str) -> float:
 def contrast(first: str, second: str) -> float:
     lighter, darker = sorted((relative_luminance(first), relative_luminance(second)), reverse=True)
     return (lighter + 0.05) / (darker + 0.05)
+
+
+# The colors of the years compared on one panel told apart (stage L3 of v2.2.0):
+# in OKLab, under normal vision and under the three kinds of color blindness
+# simulated with the matrices of Machado, Oliveira, and Fernandes (2009) at
+# severity 1 in linear sRGB, clipped to 0 to 1.
+COLOR_BLINDNESS = {
+    "protan": ((0.152286, 1.052583, -0.204868), (0.114503, 0.786281, 0.099216), (-0.003882, -0.048116, 1.051998)),
+    "deutan": ((0.367322, 0.860646, -0.227968), (0.280085, 0.672501, 0.047413), (-0.011820, 0.042940, 0.968881)),
+    "tritan": ((1.255528, -0.076749, -0.178779), (-0.078411, 0.930809, 0.147602), (0.004733, 0.691367, 0.303900)),
+}
+
+
+def seen(color: str, kind: str = "normal") -> tuple[float, float, float]:
+    def linear(channel: int) -> float:
+        value = channel / 255
+        return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+
+    rgb = [linear(int(color[index : index + 2], 16)) for index in (1, 3, 5)]
+    if kind != "normal":
+        rgb = [min(max(sum(weight * value for weight, value in zip(row, rgb)), 0.0), 1.0) for row in COLOR_BLINDNESS[kind]]
+    red, green, blue = rgb
+    cones = (
+        0.4122214708 * red + 0.5363325363 * green + 0.0514459929 * blue,
+        0.2119034982 * red + 0.6806995451 * green + 0.1073969566 * blue,
+        0.0883024619 * red + 0.2817188376 * green + 0.6299787005 * blue,
+    )
+    long_, middle, short = (max(value, 0.0) ** (1 / 3) for value in cones)
+    return (
+        0.2104542553 * long_ + 0.7936177850 * middle - 0.0040720468 * short,
+        1.9779984951 * long_ - 2.4285922050 * middle + 0.4505937099 * short,
+        0.0259040371 * long_ + 0.7827717662 * middle - 0.8086757660 * short,
+    )
+
+
+def apart(first: str, second: str, kind: str = "normal") -> float:
+    return 100 * math.dist(seen(first, kind), seen(second, kind))
+
+
+def faded(color: str, surface: str, opacity: float) -> str:
+    # A color drawn at an opacity over the surface, as the browser blends it.
+    mixed = (round(opacity * int(color[index : index + 2], 16) + (1 - opacity) * int(surface[index : index + 2], 16)) for index in (1, 3, 5))
+    return "#" + "".join(f"{value:02x}" for value in mixed)
 
 
 class GuiPageStructureTest(unittest.TestCase):
@@ -951,10 +1004,6 @@ class GuiViewPageStructureTest(unittest.TestCase):
             "compare.races = racesKept(compare.races, choices);",
             # The races chosen, up to six, one at least.
             "button.disabled = on ? chosen.length <= 1 : chosen.length >= MAX_COMPARE_RACES;",
-            # The short name to the eye, the whole name and the days to the
-            # ear (Codex's review of the diff of M2).
-            'shown.setAttribute("aria-hidden", "true");',
-            'button.append(shown, element("span", "visually-hidden", describe(chip.spoken)));',
             # The marks that change follow into the comparison; another
             # output takes its races and its grouping.
             "    followMarks();\n",
@@ -979,6 +1028,132 @@ class GuiViewPageStructureTest(unittest.TestCase):
         ):
             with self.subTest(line=line):
                 self.assertIn(line, self.script)
+        # The short name to the eye, the whole name and the days to the ear
+        # (Codex's review of the diff of M2), in the bar of the races: from
+        # L3 the keys of the legend by race day say them so too, so these
+        # lines are held to the function of the bar.
+        from tests.test_gui_view_save import function_body
+
+        bar = function_body(self.script, "renderCompareRaces")
+        for line in ('shown.setAttribute("aria-hidden", "true");', 'button.append(shown, element("span", "visually-hidden", describe(chip.spoken)));'):
+            with self.subTest(bar=line):
+                self.assertIn(line, bar)
+
+    def test_a_year_stands_out_on_one_panel(self) -> None:
+        # v2.2.0 L3, in the page and its script, which no test runs: the keys of
+        # the legend of one panel are buttons in a group named by what they do,
+        # pressed or not; each year a group of its shapes, with what it draws
+        # and the boxes of its name kept for the pointer; a press marks the
+        # shapes and the keys and draws nothing again (Codex's review of the
+        # plan, 3), so that a key keeps the focus; a press on the chart goes by
+        # the place in the units of its view box (the checker's review of the
+        # handling, 5); Esc puts it back only with one, on its chart or a key;
+        # it lasts while one panel draws it, and is never remembered. After
+        # Codex's review of the diff: a key only for a year that the chart
+        # draws (1), a race to the ear by its whole name and its days, as its
+        # button in the bar (5), the boxes of the names measured each time
+        # they are marked, a name stood out bold (3), and the dots of the cross
+        # line in their order again (4, and the checker's).
+        from tests.test_gui_view_save import function_body
+
+        for name, lines in (
+            (
+                "buildCompareOne",
+                (
+                    'keys.setAttribute("role", "group");',
+                    'keys.setAttribute("aria-label", t(context.by === "race" ? "view.compare.lit_races" : "view.compare.lit_years"));',
+                    "const drawn = yearDrawn(entry);",
+                    'const key = element(drawn ? "button" : "span", "key");',
+                    'key.type = "button";',
+                    "key.dataset.lit = entry.id;",
+                    'key.setAttribute("aria-pressed", String(lit !== null && lit.id === entry.id));',
+                    "const chip = raceChip(entry.race, state.language);",
+                    'shown.setAttribute("aria-hidden", "true");',
+                    'key.append(shown, element("span", "visually-hidden", describe(chip.spoken)));',
+                ),
+            ),
+            (
+                "drawComparePlot",
+                (
+                    "entry.groups = null;",
+                    "hits: one,",
+                    'const group = one ? svgElement("g", { class: "compare-marks" }) : svg;',
+                    "names[end.index] = text;",
+                    "Object.assign(entry, { shapes, cross, crossLine, crossDots, groups: one ? groups : null, names });\n  markLit(entry);",
+                ),
+            ),
+            (
+                "markLit",
+                (
+                    "for (const index of topFirst(entry.groups.length, at).reverse()) {",
+                    'node?.classList.toggle("lit", index === at);',
+                    'node?.classList.toggle("dim", at >= 0 && index !== at);',
+                    "entry.groups[index].parentNode.append(entry.groups[index]);",
+                    "for (const dot of entry.crossDots) {\n    entry.cross.append(dot);\n  }\n  if (at >= 0) {\n    entry.cross.append(entry.crossDots[at]);\n  }",
+                    "entry.boxes = entry.names.map((name) => name.getBBox());",
+                ),
+            ),
+            (
+                "standOut",
+                (
+                    "state.compare.lit = id === null ? null : litAfter(state.compare.lit, compareContext.by, id);",
+                    'key.setAttribute("aria-pressed", String(state.compare.lit?.id === key.dataset.lit));',
+                    "markLit(entry);",
+                    "renderSaveNotice();",
+                ),
+            ),
+            (
+                "compareClick",
+                (
+                    "const place = plotPlace(event.clientX, event.clientY, svg.getBoundingClientRect(), width, height);",
+                    "const order = topFirst(entry.data.length, lit === null ? -1 : entry.data.findIndex((year) => year.id === lit.id));",
+                    "entry.shapes.map((shape) => shape.lines[0]?.hits ?? null),",
+                    "place.reach,",
+                    "standOut(entry.data[at].id);",
+                ),
+            ),
+            (
+                "renderCompareBody",
+                (
+                    "compare.lit = litKept(compare.lit, { by: answer.by, mode, table: compare.table, data });",
+                    "const focusedKey = ui.comparePanels.contains(document.activeElement) ? (document.activeElement.dataset.lit ?? null) : null;",
+                    'ui.comparePanels.querySelector(`button.key[data-lit="${CSS.escape(focusedKey)}"]`)?.focus({ preventScroll: true });',
+                ),
+            ),
+            ("enterCompare", ("    lit: null,\n",)),
+        ):
+            body = function_body(self.script, name)
+            for line in lines:
+                with self.subTest(function=name, line=line):
+                    self.assertIn(line, body)
+        stand = function_body(self.script, "standOut")
+        for drawn in ("render()", "renderCompareBody(", "renderCompareCharts(", "drawComparePlot("):
+            with self.subTest(drawn=drawn):
+                self.assertNotIn(drawn, stand)
+        for line in (
+            '''    if (event.key === "Escape" && state.compare?.lit && event.target.matches?.('.plot[data-plot="one"], button.key[data-lit]')) {\n      event.preventDefault();\n      standOut(null);\n    } else if''',
+            '''    const key = event.target.closest?.("button.key[data-lit]") ?? null;\n    if (key !== null) {\n      standOut(key.dataset.lit);\n    } else if (event.target.closest?.('.plot[data-plot="one"]')) {\n      compareClick(event);''',
+        ):
+            with self.subTest(listener=line):
+                self.assertEqual(self.script.count(line), 1)
+        # Never remembered.
+        self.assertNotRegex(function_body(self.script, "viewValues"), r"\blit\b")
+        for language, catalog in self.catalogs.items():
+            for key in ("view.compare.lit_years", "view.compare.lit_races"):
+                with self.subTest(language=language, key=key):
+                    self.assertTrue(catalog[key])
+        # The key pressed is bold in an edge of the color of the text, its name
+        # at the end of its line too; where the system forces its colors, the
+        # edge of the highlight, and the others without an edge.
+        css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        normal, after = css.split("@media (forced-colors: active) {", 1)
+        forced = after.split("\n}\n", 1)[0]
+        self.assertRegex(normal, r"\.panel-keys button\.key \{[^}]*border: 1px solid transparent;[^}]*\}")
+        self.assertRegex(normal, r'\.panel-keys button\.key\[aria-pressed="true"\] \{\s*border-color: var\(--text\);\s*color: var\(--text\);\s*font-weight: 600;\s*\}')
+        self.assertRegex(normal, r"\.compare-label\.lit \{\s*fill: var\(--text\);\s*font-weight: 600;\s*\}")
+        self.assertRegex(forced, r"\.compare-label,\s*\.compare-label\.newest,\s*\.compare-label\.lit \{\s*fill: CanvasText;\s*\}")
+        self.assertRegex(forced, r"\.panel-keys button\.key \{\s*border-color: Canvas;\s*\}")
+        self.assertRegex(forced, r'\.panel-keys button\.key\[aria-pressed="true"\] \{\s*border-color: Highlight;\s*\}')
 
     def test_a_calendar_compares_years_by_day_in_strips_of_its_own(self) -> None:
         # v2.2.0 N1, in the page and its script, which no test runs: the
@@ -1080,7 +1255,8 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # The one period of a span only for a race.
         self.assertEqual(body.count("RANGE_GRAIN"), 1)
         self.assertIn("seriesPayload([key], raceRange(race.day, weeks), RANGE_GRAIN)", body)
-        # The colors of its steps are those of the years; a day without a
+        # The colors of its steps are the six steps of one hue (from stage L3,
+        # apart from the colors of the lines of the years); a day without a
         # recorded activity an outline of var(--sub) (6.36 : 1 and 7.5 : 1);
         # in forced colors, one color by opacity; the strip takes the pointer.
         view_css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
@@ -1933,9 +2109,10 @@ class GuiStyleTest(unittest.TestCase):
             r"\.chart-cross,[^{]*\{\s*stroke: Highlight;",
             r"\.overview-handle\.on \{\s*fill: Highlight;",
             # Stage L1 of v2.2.0: the years in the color of the text, the older
-            # ones dashed, and a cut bar hollow with an edge.
+            # ones dashed, and a cut bar hollow with an edge; from stage L3, a
+            # dash cut square, as long as its round end drew it.
             r"\.chart-line\.y6,[^{]*\{\s*stroke: CanvasText;",
-            r"\.chart-line\.y5,\s*\.key-line\.y5 \{\s*stroke-dasharray: 8 3;",
+            r"\.chart-line\.y5,\s*\.key-line\.y5 \{\s*stroke-dasharray: 10 1;\s*stroke-linecap: butt;",
             r"\.chart-bar\.partial\.outlined \{\s*fill: Canvas;\s*stroke: CanvasText;",
             # Stage M3 of v2.2.0: the frame of the period of the list keeps
             # its edge.
@@ -1945,6 +2122,73 @@ class GuiStyleTest(unittest.TestCase):
                 self.assertRegex(block, rule)
         script = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
         self.assertIn('"stroke-dasharray": dash', script)
+
+    def test_the_lines_of_the_years_have_colors_of_their_own_told_apart(self) -> None:
+        # Stage L3 of v2.2.0: the lines of the years on one panel take colors of
+        # their own (--year1 to --year6), the calendar the six steps of one hue
+        # (--y1 to --y6). As a guide for the design, not a promise that thin
+        # lines are told apart (Codex's review of the plan, 10), the closest
+        # pair of the first four, newest first (the 6th to the 3rd steps), is 15
+        # or more apart under normal vision and 8 or more under protanopia and
+        # deuteranopia; tritanopia is left out. The design gives the numbers
+        # that this test computes.
+        design = " ".join((ROOT / "docs/gui_design.md").read_text(encoding="utf-8").split())
+        gaps = {}
+        for theme, colors in self.themes.items():
+            first = [colors[f"year{step}"] for step in (6, 5, 4, 3)]
+            for kind, least in (("normal", 15), ("protan", 8), ("deutan", 8)):
+                gap = min(apart(one, other, kind) for one, other in itertools.combinations(first, 2))
+                gaps[theme, kind] = f"{gap:.1f}"
+                with self.subTest(theme=theme, kind=kind):
+                    self.assertGreaterEqual(gap, least)
+        self.assertIn(
+            f"{gaps['light', 'normal']}, {gaps['light', 'protan']}, and {gaps['light', 'deutan']} on light, and "
+            f"{gaps['dark', 'normal']}, {gaps['dark', 'protan']}, and {gaps['dark', 'deutan']} on dark.",
+            design,
+        )
+        self.assertIn("each day of the output in one of up to six steps of one hue. The steps are", design)
+        self.assertIn("The 5th and 6th years are dashed too, as in forced colors, where every year but the newest is;", design)
+        light = self.themes["light"]
+        self.assertIn(f"on light, the purple and the teal are {apart(light['year6'], light['year4'], 'tritan'):.1f} apart", design)
+        # The 5th and 6th years (the 2nd and the 1st steps) dashed too, cut square
+        # as long as their round ends drew them, two dashes apart; the first
+        # four full lines. Where the system forces its colors, every dash of a
+        # year is cut square (Codex's review of the plan, 6).
+        view = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        normal, after = view.split("@media (forced-colors: active) {", 1)
+        forced = after.split("\n}\n", 1)[0]
+        for step in range(1, 7):
+            with self.subTest(step=step):
+                self.assertRegex(normal, rf"\.chart-line\.y{step},\s*\.chart-dots\.y{step},\s*\.key-line\.y{step} \{{\s*stroke: var\(--year{step}\);\s*\}}")
+                self.assertRegex(normal, rf"\.chart-cross-dot\.y{step} \{{\s*fill: var\(--year{step}\);\s*\}}")
+        dash = r"\.chart-line\.y(\d),\s*\.key-line\.y\1 \{\s*stroke-dasharray: ([\d ]+);\s*stroke-linecap: butt;\s*\}"
+        self.assertEqual(dict(re.findall(dash, normal)), {"2": "10 1 4 1", "1": "3 2"})
+        for step in (3, 4, 5, 6):
+            with self.subTest(full=step):
+                self.assertNotRegex(normal, rf"\.chart-line\.y{step}[^{{}}]*\{{[^{{}}]*stroke-dasharray")
+        self.assertEqual(dict(re.findall(dash, forced)), {"5": "10 1", "4": "6 1", "3": "4 1", "2": "10 1 4 1", "1": "3 2"})
+        # A year stood out: its line 3.5 px wide; the other years faint only by
+        # the class of a year stood out, never in forced colors (Codex's review
+        # of the plan, 7, and the checker's review of its handling).
+        self.assertRegex(normal, r"\.compare-marks\.lit \.chart-line \{\s*stroke-width: 3\.5;\s*\}")
+        self.assertRegex(normal, r"\.compare-marks\.dim,\s*\.compare-label\.dim,\s*\.chart-cross-dot\.dim \{\s*opacity: 0\.28;\s*\}")
+        self.assertRegex(forced, r"\.compare-marks\.dim,\s*\.compare-label\.dim,\s*\.chart-cross-dot\.dim \{\s*opacity: 1;\s*\}")
+        rules = re.sub(r"/\*.*?\*/", "", view, flags=re.DOTALL)
+        for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", rules):
+            if re.search(r"(?:^|;)\s*opacity:", body) and re.search(r"compare-marks|compare-label|chart-cross-dot|chart-line", selectors):
+                with self.subTest(rule=selectors.strip()):
+                    self.assertTrue(all(".dim" in part for part in selectors.split(",")))
+        # While a year stands out, the others fall under 3:1, as the design
+        # says with the lowest of each theme; and its numbers are those of the
+        # page and of the pointer.
+        lowest = {
+            theme: min(contrast(faded(colors[f"year{step}"], colors["surface"], 0.28), colors["surface"]) for step in range(1, 7)) for theme, colors in self.themes.items()
+        }
+        self.assertLess(max(lowest.values()), 3)
+        self.assertIn(f"the other lines fall under 3:1 on the surface ({lowest['light']:.2f} : 1 on light and {lowest['dark']:.2f} : 1 on dark for the lowest)", design)
+        self.assertIn("its line 3.5 px wide and drawn last, and the other years at 0.28 opacity", design)
+        self.assertIn("or on the chart within 8 px of what the line of a year draws", design)
+        self.assertIn("export const HIT_REACH = 8;", (STATIC_ROOT / "view_chart.mjs").read_text(encoding="utf-8"))
 
     def test_motion_can_be_reduced(self) -> None:
         self.assertIn("@media (prefers-reduced-motion: reduce)", self.source)

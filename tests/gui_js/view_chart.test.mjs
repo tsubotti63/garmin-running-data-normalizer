@@ -437,3 +437,96 @@ test("the bars of the ranges are placed by their order, touch where they are nar
   assert.equal(chart.spreadRangeAt(wide, wide.right), null);
   assert.equal(chart.spreadShapes([], 0, { width: 400, height: 220 }), null);
 });
+
+test("a press stands out the year whose shapes it meets, its name first, and a tie goes to the one on top (stage L3 of v2.2.0)", () => {
+  // The places of each piece of a line, as its path draws them: never across
+  // a break.
+  const periods = months(2026, 6);
+  const scale = chart.timeScale(periods[0].start, periods[5].end, 0, 600);
+  const y = (value) => 100 - value;
+  const drawn = chart.linePath([10, 20, null, 30, null, 40], periods, scale, y);
+  assert.deepEqual(
+    drawn.runs.map((run) => run.length),
+    [2, 1, 1],
+  );
+  assert.equal((drawn.path.match(/M/g) ?? []).length, drawn.runs.length);
+  assert.deepEqual(drawn.runs[0][1], [Math.round(chart.periodMiddle(scale, periods[1]) * 10) / 10, 80]);
+  // Rounded as the path rounds them, so that lines drawn on one another tie
+  // (Codex's review of the diff of L3, 2).
+  const fine = chart.linePath([1, 2, 3], periods.slice(0, 3), scale, (value) => 50 + value / 300);
+  assert.deepEqual(
+    fine.runs.flat(),
+    [...fine.path.matchAll(/[ML]([\d.]+) ([\d.]+)/g)].map((match) => [Number(match[1]), Number(match[2])]),
+  );
+  const upper = { runs: chart.linePath([1, 1], periods.slice(0, 2), scale, () => 50.04).runs, dots: [] };
+  const lower = { runs: chart.linePath([1, 1], periods.slice(0, 2), scale, () => 50.01).runs, dots: [] };
+  const along = (upper.runs[0][0][0] + upper.runs[0][1][0]) / 2;
+  assert.equal(chart.shapeAt([upper, lower], [], along, 50, [0, 1]), 0);
+  assert.equal(chart.shapeAt([upper, lower], [], along, 50, [1, 0]), 1);
+  // The dots of 0, their middles and radii, as their path draws them.
+  const zeros = chart.zeroDots([50, 0, null, 0], periods, scale, 100);
+  assert.equal(zeros.length, 2);
+  assert.ok(zeros.every(([, middle, radius]) => radius >= 2 && radius <= 4 && middle === 100 - radius - 0.5));
+  assert.equal((chart.zeroPath([50, 0, null, 0], periods, scale, 100).match(/M/g) ?? []).length, 2);
+  // A total laid over the other years keeps what it draws with ``hits``: the
+  // pieces of its line, its points alone, its markers, and its dots of 0.
+  const slots = Array.from({ length: 12 }, (_value, index) => ({ start: index, end: index, partial: false }));
+  const base = { periods: slots, start: 0, end: 11, width: 1000, height: 160, total: true, lineOnly: true };
+  const values = [100, 0, 50, 0, 0, 80, 90, 0, 70, 60, 50, 40];
+  const over = chart.panelShapes({ ...base, lines: [{ values }], hits: true }).lines[0].hits;
+  assert.deepEqual(
+    over.runs.map((run) => run.length),
+    [1, 1, 2, 4],
+  );
+  assert.equal(over.dots.length, 2 + 8 + 4);
+  assert.ok(over.dots.every(([x, y]) => x === Math.round(x * 10) / 10 && y === Math.round(y * 10) / 10));
+  assert.equal(chart.panelShapes({ ...base, lines: [{ values }] }).lines[0].hits, null);
+  // The points of the records of each day: dots of their radius, no line.
+  const points = chart.panelShapes({ ...base, total: false, lineOnly: true, lines: [{ values: [50, 60], points: [[0, 50], [3, 60]] }], hits: true }).lines[0].hits;
+  assert.deepEqual(points.runs, []);
+  assert.deepEqual(
+    points.dots.map((dot) => dot[2]),
+    [chart.MARKER_RADIUS, chart.MARKER_RADIUS],
+  );
+
+  // A steep piece from (100, 20) to (110, 180) and a flat line at 100: its
+  // middle is its own, though the value across is far from it.
+  const steep = { runs: [[[100, 20], [110, 180]]], dots: [] };
+  const flat = { runs: [[[0, 100], [300, 100]]], dots: [] };
+  assert.equal(chart.shapeAt([steep, flat], [], 102.5, 60, [0, 1]), 0);
+  assert.equal(chart.shapeDistance(steep, 102.5, 60), 0);
+  // Never across a break: two pieces of one line, 100 px apart.
+  const broken = { runs: [[[0, 50], [100, 50]], [[200, 50], [300, 50]]], dots: [] };
+  assert.equal(chart.shapeAt([broken], [], 150, 50, [0]), null);
+  assert.equal(chart.shapeAt([broken], [], 104, 52, [0]), 0);
+  // A dot from its edge, within the reach of 8 px.
+  const alone = { runs: [], dots: [[150, 50, 4]] };
+  assert.equal(chart.shapeDistance(alone, 150, 52), 0);
+  assert.equal(chart.shapeAt([alone], [], 150, 62, [0]), 0);
+  assert.equal(chart.shapeAt([alone], [], 150, 62.5, [0]), null);
+  const records = { runs: [], dots: [[150, 50, 1.6]] };
+  assert.equal(chart.shapeAt([records], [], 150, 59.5, [0]), 0);
+  assert.equal(chart.shapeAt([records], [], 150, 59.7, [0]), null);
+  // The name at the end of a line first, over a line under it.
+  const boxes = [undefined, { x: 400, y: 40, width: 30, height: 13 }];
+  const under = { runs: [[[380, 45], [440, 45]]], dots: [] };
+  assert.equal(chart.shapeAt([under, null], boxes, 410, 45, [0, 1]), 1);
+  // A tie goes to the year drawn on top.
+  const across = { runs: [[[100, 100], [200, 100]]], dots: [] };
+  const down = { runs: [[[150, 50], [150, 150]]], dots: [] };
+  assert.equal(chart.shapeAt([across, down], [], 150, 100, [0, 1]), 0);
+  assert.equal(chart.shapeAt([across, down], [], 150, 100, [1, 0]), 1);
+  // Far from every shape, or out of the chart: none.
+  assert.equal(chart.shapeAt([across, down], boxes, -20, -20, [0, 1]), null);
+  assert.equal(chart.shapeAt([across, down], boxes, 170, 109, [0, 1]), null);
+  // The place of a press in the units of the view box, from the place of the
+  // chart on the page, and its reach of 8 px of the page in them.
+  assert.equal(chart.HIT_REACH, 8);
+  assert.deepEqual(chart.plotPlace(130, 70, { left: 100, top: 50, width: 600, height: 200 }, 600, 200), { x: 30, y: 20, reach: 8 });
+  assert.deepEqual(chart.plotPlace(130, 70, { left: 100, top: 50, width: 1200, height: 400 }, 600, 200), { x: 15, y: 10, reach: 4 });
+  assert.deepEqual(chart.plotPlace(130, 70, { left: 100, top: 50, width: 0, height: 0 }, 600, 200), { x: 30, y: 20, reach: 8 });
+  // The lines from the one drawn on top: the one stood out, then the newest.
+  assert.deepEqual(chart.topFirst(4, -1), [0, 1, 2, 3]);
+  assert.deepEqual(chart.topFirst(4, 2), [2, 0, 1, 3]);
+  assert.deepEqual(chart.topFirst(4, 4), [0, 1, 2, 3]);
+});

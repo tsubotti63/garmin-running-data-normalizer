@@ -1329,6 +1329,17 @@ values are made):
   a chart and press ← or → to move by one period, Page Up or Page Down by 12,
   and Home or End to an end; the periods and the values of the years are
   then read aloud.
+- With **Overlay** and **Running total**, each year has a color of its own: of
+  the years chosen, newest first, the purple of the page, orange, teal, and
+  navy (a light gray on a dark screen), and the 5th and 6th years are dashed
+  too. Taking a year out colors the years left again, newest first.
+- With **Overlay** and **Running total**, press a year in the legend, a line,
+  a point, or the year at the end of a line to highlight that year: its line
+  gets thicker and goes on top, and the other years fade. Press it again, or
+  press Esc on the chart or on a year in the legend, to go back. A press away
+  from the lines and the points changes nothing. The year highlighted is not
+  remembered. Comparing by race day works the same way. In forced colors, the
+  other years do not fade; the year highlighted only gets thicker.
 - A stop shows under the bar, in the words of a stop of the panels. Where
   there are too many numbers, group by **Week** or **Month** (by **Week** with
   one month chosen).
@@ -1602,6 +1613,8 @@ values are made):
   the cross line, and the frames that show the day, point, or range chosen,
   with the readings of its values, never go in; the points, the bars, and the
   days themselves do.
+- A year highlighted when comparing years goes in as it shows: the other years
+  faint, and its name bold in the legend.
 - **Save** hands the file to the browser as a download, which the browser
   saves where its settings say (usually your downloads, or where you choose if
   it asks each time). This app cannot know that it was saved, so the bar at
@@ -1666,12 +1679,12 @@ later one.
   output.
 - Not remembered: the output shown, the same scale, a panel enlarged, a table
   shown, full screen, whether years were compared, with the years or races
-  chosen, whether a list of activities was open, whether another view was
-  shown, with the point or the range chosen, whether the summary was open, and
-  whether the window of saving as an image was open, with its choices. As the
-  output shown is not remembered, the page opened from the bar at the bottom
-  offers the latest output with the button of [Open the view
-  page](#open-the-view-page).
+  chosen and the year highlighted, whether a list of activities was open,
+  whether another view was shown, with the point or the range chosen, whether
+  the summary was open, and whether the window of saving as an image was open,
+  with its choices. As the output shown is not remembered, the page opened
+  from the bar at the bottom offers the latest output with the button of [Open
+  the view page](#open-the-view-page).
 - **Forget the remembered settings…** in the bar at the bottom of the
   normalization page forgets all of these, and also the Snapshot Store, the
   folder for the output, and the list of earlier outputs: the next launch goes
@@ -2137,6 +2150,10 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
   keys reads out the period and the value of each year
   ([Compare years](#compare-years-from-220)). When comparing by race day, the
   button of a race tells its whole name and its days.
+- The years in the legend of **Overlay** and **Running total** (from 2.2.0)
+  are reached with Tab; Enter or Space highlights one, and pressing it again,
+  or Esc on the chart or on a year in the legend, goes back ([Compare
+  years](#compare-years-from-220)).
 - In a calendar (from 2.2.0), Tab goes from strip to strip, and ← → (a week),
   ↑ ↓ (a day), and Home and End (the first and last day of the year in the
   output) read out the date, the day of the week, and the value; so does a

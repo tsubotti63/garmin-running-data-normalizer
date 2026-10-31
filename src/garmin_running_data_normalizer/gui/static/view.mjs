@@ -117,6 +117,8 @@ import {
   layoutNotes,
   lineNames,
   lineStyles,
+  litAfter,
+  litKept,
   monthIndex,
   movedItems,
   overviewGrip,
@@ -207,6 +209,7 @@ import {
   saveWindowShows,
   savedAttributes,
   savedPanels,
+  yearDrawn,
 } from "./view_flow.mjs";
 import {
   PLOT_BOTTOM,
@@ -224,9 +227,12 @@ import {
   panelShapes,
   periodDays,
   periodMiddle,
+  plotPlace,
+  shapeAt,
   sharedExtents,
   timeScale,
   timeTicks,
+  topFirst,
   CHOSEN_RADIUS,
   POINT_RADIUS,
   pointShapes,
@@ -2337,7 +2343,10 @@ function saveComparePart(entry) {
       pieces.push({ text: node.textContent, className: "save-kind" });
     } else if (node.matches(".panel-keys")) {
       for (const key of node.querySelectorAll(".key")) {
-        pieces.push({ text: key.textContent, className: "save-key", swatch: () => key.querySelector("svg").cloneNode(true) });
+        // The key of a year stood out is bold, as on the page (stage L3 of
+        // v2.2.0).
+        const className = key.getAttribute("aria-pressed") === "true" ? "save-key lit" : "save-key";
+        pieces.push({ text: keyWords(key), className, swatch: () => key.querySelector("svg").cloneNode(true) });
       }
     }
   }
@@ -2456,12 +2465,12 @@ function saveNoticeNow() {
 // goes: the item, what it is compared by, the years or the races, how it
 // shows, the month or the weeks, and the line; the two items plotted; the
 // item of a distribution (the checker's review of the handling of Codex's
-// review of the plan of R2), and the grouping of a comparison (Codex's
-// review of the diff of R2).
+// review of the plan of R2), the grouping of a comparison (Codex's review of
+// the diff of R2), and the year stood out (stage L3 of v2.2.0).
 function saveContent(view) {
   if (view === "compare" && state.compare !== null) {
     const by = compareByNow();
-    return [state.compare.key, by, by === "race" ? state.compare.races : state.compare.years, compareModeNow(), compareMonthNow(), state.compareWeeks, state.compare.series, state.compare.grain];
+    return [state.compare.key, by, by === "race" ? state.compare.races : state.compare.years, compareModeNow(), compareMonthNow(), state.compareWeeks, state.compare.series, state.compare.grain, state.compare.lit?.id ?? null];
   }
   if (view === "plot") {
     return [state.plotPair.x, state.plotPair.y];
@@ -4729,6 +4738,9 @@ function enterCompare(key) {
     calendarAbout: false,
     cursor: null,
     cursorAxis: null,
+    // The year (or the race) stood out on one panel, never remembered
+    // (stage L3 of v2.2.0).
+    lit: null,
   };
   state.compareAnswer = null;
   state.compareStop = null;
@@ -5184,6 +5196,15 @@ function renderCompareRaces() {
   }
 }
 
+// The words of a key of the legend as the eye reads them, without those for
+// the ear only (a race by its short name: stage L3 of v2.2.0).
+function keyWords(key) {
+  return [...key.childNodes]
+    .filter((node) => !node.classList?.contains("visually-hidden"))
+    .map((node) => node.textContent)
+    .join("");
+}
+
 // A short piece of a line in the color of a year.
 function yearSwatch(step) {
   const swatch = svgElement("svg", { viewBox: "0 0 22 8", "aria-hidden": "true", focusable: "false" });
@@ -5209,6 +5230,9 @@ function renderCompareBody(force = false) {
     return;
   }
   const focused = ui.comparePanels.contains(document.activeElement) ? (document.activeElement.dataset.plot ?? null) : null;
+  // A key of the legend of one panel keeps the focus too (stage L3 of
+  // v2.2.0).
+  const focusedKey = ui.comparePanels.contains(document.activeElement) ? (document.activeElement.dataset.lit ?? null) : null;
   plotWatcher?.disconnect();
   const item = compareItem();
   // By race day (stage M2 of v2.2.0), the races in the form of the years.
@@ -5216,6 +5240,8 @@ function renderCompareBody(force = false) {
   const data = race
     ? raceData({ races: answer.races, weeks: answer.weeks, mode, series: compare.series, answers: answer.answers, wholes: answer.wholes, language: state.language })
     : compareData({ years: answer.years, month: answer.month, grain: answer.grain, mode, series: compare.series, answers: answer.answers, whole: answer.whole });
+  // A year stood out stays while one panel draws it (stage L3 of v2.2.0).
+  compare.lit = litKept(compare.lit, { by: answer.by, mode, table: compare.table, data });
   const span = race ? answer.weeks : compareSpan(answer.grain, answer.month, answer.years);
   const lines = data.map((entry) => ({
     values: entry.values.map((value) => (Number.isFinite(value) ? shown(compare.key, value) : null)),
@@ -5280,6 +5306,9 @@ function renderCompareBody(force = false) {
   comparedSignature = signature;
   if (focused !== null) {
     ui.comparePanels.querySelector(`[data-plot="${focused}"]`)?.focus({ preventScroll: true });
+  }
+  if (focusedKey !== null) {
+    ui.comparePanels.querySelector(`button.key[data-lit="${CSS.escape(focusedKey)}"]`)?.focus({ preventScroll: true });
   }
 }
 
@@ -5352,10 +5381,31 @@ function buildCompareOne(context, name) {
   const heading = element("h4", "panel-name", name);
   heading.id = "compare-one-name";
   head.append(heading, element("span", "panel-unit", t(unitKey(context.key))), element("span", "panel-kind", compareKindText(context)));
+  // The keys are buttons that stand a year (or a race) out (stage L3 of
+  // v2.2.0).
   const keys = element("span", "panel-keys");
+  keys.setAttribute("role", "group");
+  keys.setAttribute("aria-label", t(context.by === "race" ? "view.compare.lit_races" : "view.compare.lit_years"));
+  const lit = state.compare.lit;
   for (const entry of context.data) {
-    const key = element("span", "key");
-    key.append(yearSwatch(entry.step), describe(context.by === "race" ? entry.short : entry.label));
+    // A year with nothing to draw stays words; a race says its whole name and
+    // its days to the ear, as its button in the bar does.
+    const drawn = yearDrawn(entry);
+    const key = element(drawn ? "button" : "span", "key");
+    if (drawn) {
+      key.type = "button";
+      key.dataset.lit = entry.id;
+      key.setAttribute("aria-pressed", String(lit !== null && lit.id === entry.id));
+    }
+    key.append(yearSwatch(entry.step));
+    if (context.by === "race") {
+      const chip = raceChip(entry.race, state.language);
+      const shown = element("span", "", describe(chip.short));
+      shown.setAttribute("aria-hidden", "true");
+      key.append(shown, element("span", "visually-hidden", describe(chip.spoken)));
+    } else {
+      key.append(describe(entry.label));
+    }
     keys.append(key);
   }
   head.append(keys);
@@ -5377,7 +5427,7 @@ function buildCompareOne(context, name) {
   frame.hidden = true;
   body.append(plot, frame);
   section.append(body);
-  return { section, kind: "one", plot, read: null, frame, data: context.data, lines: context.lines, size: null, shapes: null, scale: null, cross: null, right: PLOT_RIGHT };
+  return { section, kind: "one", plot, read: null, frame, data: context.data, lines: context.lines, size: null, shapes: null, scale: null, cross: null, right: PLOT_RIGHT, groups: null };
 }
 
 // The table of a comparison: the periods in rows, the years in columns, and
@@ -5453,7 +5503,8 @@ function endLabel(context, entry) {
 // Draw the chart of a plot of a comparison at its size: a year in a row, in
 // the color of the panels, with the bars cut by the output edged; or the years
 // on one panel, older under newer, their names at the right in the room that
-// they take.
+// they take; from stage L3, each year in a group of its shapes, with what it
+// draws and its name kept for the pointer.
 function drawComparePlot(entry, context) {
   const plot = entry.plot;
   const width = plot.clientWidth;
@@ -5461,6 +5512,7 @@ function drawComparePlot(entry, context) {
   entry.size = `${width} ${height}`;
   entry.shapes = null;
   entry.cross = null;
+  entry.groups = null;
   if (width < 60 || height < 24) {
     plot.replaceChildren();
     return;
@@ -5494,6 +5546,7 @@ function drawComparePlot(entry, context) {
       shared: context.shared,
       lineOnly: one,
       running: context.mode === "cumulative",
+      hits: one,
     }),
   );
   const first = shapes[0];
@@ -5509,10 +5562,21 @@ function drawComparePlot(entry, context) {
   }
   appendScale(svg, context.key, first, width - entry.right);
   // The older years first, so that the newest is on top.
+  const stack = one ? svgElement("g") : svg;
+  const groups = [];
+  if (one) {
+    svg.append(stack);
+  }
   for (let index = entry.data.length - 1; index >= 0; index -= 1) {
     const color = one ? `y${entry.data[index].step}` : "c1";
-    appendMarks(svg, shapes[index].lines[0], color, null, { outlined: !one, newest: one && index === 0 });
+    const group = one ? svgElement("g", { class: "compare-marks" }) : svg;
+    appendMarks(group, shapes[index].lines[0], color, null, { outlined: !one, newest: one && index === 0 });
+    if (one) {
+      stack.append(group);
+      groups[index] = group;
+    }
   }
+  const names = [];
   if (one) {
     const ends = labels.map((label, index) => (label === null ? null : { x: periodMiddle(first.scale, entry.data[index].slots[label.index]), y: shapes[index].y(entry.lines[index].values[label.index]) }));
     const shownEnds = ends.flatMap((end, index) => (end === null ? [] : [{ ...end, index }]));
@@ -5521,6 +5585,7 @@ function drawComparePlot(entry, context) {
       const text = svgElement("text", { class: `compare-label${end.index === 0 ? " newest" : ""}`, x: (end.x + 7).toFixed(1), y: (places[at] + 4).toFixed(1) });
       text.textContent = labels[end.index].text;
       svg.append(text);
+      names[end.index] = text;
     });
   }
   const cross = svgElement("g", { class: "cross" });
@@ -5533,7 +5598,8 @@ function drawComparePlot(entry, context) {
     return dot;
   });
   svg.append(cross);
-  Object.assign(entry, { shapes, cross, crossLine, crossDots });
+  Object.assign(entry, { shapes, cross, crossLine, crossDots, groups: one ? groups : null, names });
+  markLit(entry);
 }
 
 // Draw the plots whose size changed, the axis at the width of the plots, and
@@ -5726,6 +5792,82 @@ function compareKey(event) {
     return;
   }
   event.preventDefault();
+}
+
+// The marks of the year stood out on the chart of one panel (stage L3 of
+// v2.2.0): its group of shapes drawn over the others, its name, and its dot
+// on the cross line, marked, and those of the other years marked faint;
+// without one, the years as they were drawn, the newest on top. The boxes of
+// the names are measured as they are drawn now, a name stood out bold.
+function markLit(entry) {
+  if (!entry.groups) {
+    return;
+  }
+  const lit = state.compare?.lit ?? null;
+  const at = lit === null ? -1 : entry.data.findIndex((year) => year.id === lit.id);
+  for (const index of topFirst(entry.groups.length, at).reverse()) {
+    entry.groups[index].parentNode.append(entry.groups[index]);
+  }
+  entry.data.forEach((_year, index) => {
+    for (const node of [entry.groups[index], entry.names[index], entry.crossDots[index]]) {
+      node?.classList.toggle("lit", index === at);
+      node?.classList.toggle("dim", at >= 0 && index !== at);
+    }
+  });
+  for (const dot of entry.crossDots) {
+    entry.cross.append(dot);
+  }
+  if (at >= 0) {
+    entry.cross.append(entry.crossDots[at]);
+  }
+  entry.boxes = entry.names.map((name) => name.getBBox());
+}
+
+// Stand a year (or a race) out by its id, or put back the one stood out, by
+// its id again or by null: the keys of the legend and the marks of the chart
+// change, and nothing is drawn again, so that a key keeps the focus; the line
+// after a saving goes (stage L3 of v2.2.0).
+function standOut(id) {
+  if (state.compare === null || compareContext === null) {
+    return;
+  }
+  state.compare.lit = id === null ? null : litAfter(state.compare.lit, compareContext.by, id);
+  for (const entry of compared) {
+    if (entry.kind === "one") {
+      for (const key of entry.section.querySelectorAll("button.key[data-lit]")) {
+        key.setAttribute("aria-pressed", String(state.compare.lit?.id === key.dataset.lit));
+      }
+      markLit(entry);
+    }
+  }
+  renderSaveNotice();
+}
+
+// A press on the chart of one panel stands out the year whose name or
+// shapes are at the press, and puts it back on the one stood out; a press
+// away from them changes nothing, so that the chart can take the keyboard
+// (stage L3 of v2.2.0).
+function compareClick(event) {
+  const entry = compared.find((candidate) => candidate.kind === "one" && candidate.plot.contains(event.target));
+  const svg = entry?.plot.querySelector(":scope > svg") ?? null;
+  if (!entry?.groups || svg === null) {
+    return;
+  }
+  const [width, height] = viewSize(svg);
+  const place = plotPlace(event.clientX, event.clientY, svg.getBoundingClientRect(), width, height);
+  const lit = state.compare.lit;
+  const order = topFirst(entry.data.length, lit === null ? -1 : entry.data.findIndex((year) => year.id === lit.id));
+  const at = shapeAt(
+    entry.shapes.map((shape) => shape.lines[0]?.hits ?? null),
+    entry.boxes,
+    place.x,
+    place.y,
+    order,
+    place.reach,
+  );
+  if (at !== null) {
+    standOut(entry.data[at].id);
+  }
 }
 
 // --- The calendar of comparing years (stage N1 of v2.2.0) ------------------
@@ -8077,7 +8219,12 @@ function connect() {
     }
   });
   ui.comparePanels.addEventListener("keydown", (event) => {
-    if (event.target.classList?.contains("plot")) {
+    // Esc puts back a year stood out, on its chart or a key of its legend
+    // (stage L3 of v2.2.0); without one, the page takes it.
+    if (event.key === "Escape" && state.compare?.lit && event.target.matches?.('.plot[data-plot="one"], button.key[data-lit]')) {
+      event.preventDefault();
+      standOut(null);
+    } else if (event.target.classList?.contains("plot")) {
       compareKey(event);
     } else if (event.target.classList?.contains("calendar")) {
       calendarKeyDown(event);
@@ -8091,9 +8238,15 @@ function connect() {
     }
   });
   // The strips of a calendar take a click and say the day that the focus
-  // comes to (stage N1 of v2.2.0).
+  // comes to (stage N1 of v2.2.0); the keys of the legend of one panel and
+  // its chart stand a year out (stage L3).
   ui.comparePanels.addEventListener("click", (event) => {
-    if (event.target.closest?.(".calendar")) {
+    const key = event.target.closest?.("button.key[data-lit]") ?? null;
+    if (key !== null) {
+      standOut(key.dataset.lit);
+    } else if (event.target.closest?.('.plot[data-plot="one"]')) {
+      compareClick(event);
+    } else if (event.target.closest?.(".calendar")) {
       calendarClick(event);
     }
   });
