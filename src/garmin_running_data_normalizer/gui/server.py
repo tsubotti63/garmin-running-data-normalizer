@@ -79,6 +79,7 @@ from .views import (
     list_request,
     points_request,
     spread_request,
+    shoes_request,
     previous_request,
     series_request,
     types_ok,
@@ -93,6 +94,8 @@ from ..view.series import (
     activity_types,
     default_items,
     point_item,
+    shoe_answer,
+    shoe_count,
     view_answer,
 )
 
@@ -197,6 +200,8 @@ API_ROUTES = {
     "/api/view/activities": "_api_view_activities",
     "/api/view/points": "_api_view_points",
     "/api/view/spread": "_api_view_spread",
+    # The view by shoes (stage S1 of v2.2.0).
+    "/api/view/shoes": "_api_view_shoes",
 }
 
 
@@ -895,6 +900,9 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             # The built-in layouts (stage K1 of v2.2.0).
             "layouts": built_in_answer(),
             "coverage": shelf,
+            # Whether the view by shoes has shoes to show (stage S1 of
+            # v2.2.0); the answers of the numbers say it again.
+            "shoes": shoe_count(data),
         }
 
     def _api_view_series(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -921,6 +929,9 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
         answer = view_answer(data, items, period, grain, types, previous)
         answer["coverage"] = self.server.views.coverage(ticket, data, types)
+        # As the bars of the shelf: an output read again can have other shoes
+        # (Codex's review of the plan of S1 of v2.2.0).
+        answer["shoes"] = shoe_count(data)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer
@@ -999,6 +1010,33 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
         answer = activity_spread(data, key, period, types)
+        if len(json_body(answer)) > MAX_ANSWER_BYTES:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
+        return answer
+
+    def _api_view_shoes(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The view by shoes (stage S1 of v2.2.0), from what the view page read
+        # of the output, chosen as the list of a period is, under the checks of
+        # its numbers. The answer holds the names of the shoes, which the page
+        # shows as text; nothing of it is written anywhere.
+        ticket = payload.get("view")
+        try:
+            if not isinstance(ticket, str):
+                raise ViewRequestError("view")
+            period, types = shoes_request(payload)
+        except ViewRequestError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
+        try:
+            data = self.server.views.data(ticket)
+        except ViewNotOpenError as exc:
+            raise ApiError(HTTPStatus.CONFLICT, "VIEW_NOT_OPEN") from exc
+        except OutputActionError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code, exc.version) from exc
+        except Exception as exc:
+            raise _command_failed() from exc
+        if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+        answer = shoe_answer(data, period, types)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer

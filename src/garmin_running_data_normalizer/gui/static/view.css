@@ -2471,6 +2471,83 @@ button.small {
   background: var(--accent-soft);
 }
 
+/* The item of the view by shoes says why it cannot be chosen, under its name
+   (stage S1 of v2.2.0). */
+.other-menu button.with-why {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.menu-why {
+  font-size: 0.8rem;
+  color: var(--sub);
+}
+
+/* An item that cannot be chosen stays in the way of the keys, so that why is
+   read (Codex's review of the diff of S1), and looks as a button turned off. */
+.other-menu button[aria-disabled="true"] {
+  color: var(--dis);
+  cursor: not-allowed;
+}
+
+@media (forced-colors: active) {
+  .other-menu button[aria-disabled="true"] {
+    color: GrayText;
+  }
+}
+
+/* The view by shoes (stage S1 of v2.2.0): a row a pair of shoes, as the
+   years in rows, in a stack that scrolls; its name is cut where it is long,
+   but what tells it from the shoes of its name never is (the checker's
+   review of the handling of Codex's review of the plan of S1). */
+.shoe-row .panel-name.shoe-name {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.shoe-own {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What tells it apart keeps the space before it in English (" (started
+   ...)"), which the start of an item of a flex would drop. */
+.shoe-added {
+  flex: none;
+  white-space: pre;
+}
+
+.shoe-row .compare-whole,
+.shoe-row .panel-read {
+  flex: none;
+}
+
+.shoes-notes {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The table by month keeps its months at the left while its pairs scroll by
+   (the checker's review of the diff of S1); the table of the shoes does not,
+   as their names can take most of its width. */
+.shoes-months .panel-table .t tbody th,
+.shoes-months .panel-table .t thead th:first-child {
+  position: sticky;
+  left: 0;
+}
+
+.shoes-months .panel-table .t tbody th {
+  background: var(--surface);
+}
+
+.shoes-months .panel-table .t thead th:first-child {
+  z-index: 2;
+}
+
 /* Two items plotted against each other (stage O1 of v2.2.0): one chart in
    the place of the panels, a point an activity in the first color of the
    page with a ring of the surface where points meet, and the point chosen

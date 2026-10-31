@@ -1,4 +1,9 @@
-"""A synthetic Export of about two and a half years for the view page (stage G1)."""
+"""A synthetic Export of about two and a half years for the view page (stage G1).
+
+With ``gear``, it has synthetic shoes too (stage S1 of v2.2.0): made-up names
+only, as every test and picture of the guides has. Without it, it is as it
+was, so that the numbers of the other tests stay.
+"""
 
 from __future__ import annotations
 
@@ -28,7 +33,7 @@ def days() -> list[date]:
     return [FIRST + timedelta(days=offset) for offset in range((LAST - FIRST).days + 1)]
 
 
-def activities() -> list[dict[str, object]]:
+def activities(gear: bool = False) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for offset, day in enumerate(days()):
         start = datetime(day.year, day.month, day.day, 21, 0, tzinfo=timezone.utc)
@@ -73,10 +78,87 @@ def activities() -> list[dict[str, object]]:
                 "name": f"Synthetic FIT {number}",
             }
         )
+    if gear:
+        # Runs with a shoe that the numbers leave out or count apart (stage
+        # S1 of v2.2.0): without a distance, after today, and without a date.
+        for activity_id, start, distance in (
+            (800_001, epoch_ms(utc("2024-10-10T21:00:00Z")), None),
+            (800_002, epoch_ms(utc("2099-01-01T21:00:00Z")), 1_000_000),
+            (800_003, None, 1_000_000),
+        ):
+            row = {"activityId": activity_id, "activityType": "running", "sportType": "RUNNING", "duration": 3_000_000}
+            if start is not None:
+                row["startTimeGmt"] = start
+            if distance is not None:
+                row["distance"] = distance
+            rows.append(row)
     return rows
 
 
-def write_view_export(root: Path) -> Path:
+# The synthetic gear (stage S1 of v2.2.0), by its gearPk: the shoes, a bike,
+# and gear whose two names of the type disagree, so that its type is null.
+# Two shoes share a name and are told apart by the day of their start; one has
+# no displayName and is named by its customMakeModel; the gearPk "0123" is the
+# key 123 of its links, as one token.
+SYNTHETIC_GEAR = (
+    {"gearPk": 1, "displayName": "ロード用 A", "customMakeModel": "Synthetic road 1", "gearTypeName": "Shoes", "dateBegin": "2023-01-01T00:00:00.0", "dateEnd": "2024-03-31T00:00:00.0", "maximumMeters": 800000},
+    {"gearPk": "0123", "displayName": "ロード用 B", "customMakeModel": "Synthetic road 2", "gearTypeName": "running_shoes", "dateBegin": "2024-03-01T00:00:00.0", "maximumMeters": 800000},
+    {"gearPk": 3, "displayName": "トレイル用 C", "customMakeModel": "Synthetic trail", "gearTypeName": "Shoes", "dateBegin": "2023-01-01T00:00:00.0", "maximumMeters": 600000},
+    {"gearPk": 4, "displayName": "レース用 D", "customMakeModel": "Synthetic race", "gearTypeName": "Shoes", "dateBegin": "2023-01-01T00:00:00.0", "maximumMeters": 0},
+    {"gearPk": 5, "displayName": "", "customMakeModel": "Synthetic model X", "gearTypeName": "Shoes", "dateBegin": "2024-09-01T00:00:00.0"},
+    {"gearPk": 6, "displayName": "ロード用 A", "customMakeModel": "Synthetic road 1", "gearTypeName": "Shoes", "dateBegin": "2025-01-01T00:00:00.0", "maximumMeters": 800000},
+    {"gearPk": 8, "displayName": "自転車", "gearTypeName": "Bike", "dateBegin": "2023-01-01T00:00:00.0"},
+    {"gearPk": 9, "displayName": "種類の分からない道具", "gearTypeName": "Shoes", "gearType": "Bike"},
+)
+
+
+def gear_links(rows: list[dict[str, object]]) -> dict[str, list[int]]:
+    """The links of the synthetic gear, by the key that the Gear file gives
+    (stage S1 of v2.2.0): the road runs with the shoe of their days, the trail
+    runs with C, the long runs with D too (two shoes), the treadmill runs
+    from September 2024 with the shoe of a model, and some with the bike only,
+    with the gear of a type not known only, or with gear not in the Export
+    (555); the bike rides with the bike, and a link to an activity not in the
+    Export (999999)."""
+    links: dict[str, list[int]] = {}
+
+    def link(key: str, activity_id: int) -> None:
+        links.setdefault(key, []).append(activity_id)
+
+    for row in rows:
+        activity_id, kind = row["activityId"], row["activityType"]
+        start = row.get("startTimeGmt")
+        day = datetime.fromtimestamp(start / 1000, timezone.utc).date() if isinstance(start, int) else None
+        if kind == "running":
+            if day is None or day < date(2024, 3, 1):
+                link("1", activity_id)
+            elif day < date(2025, 1, 1) or activity_id % 2:
+                link("123", activity_id)
+            else:
+                link("6", activity_id)
+            # The longest runs, which are runs (offset % 9 == 6), with D too.
+            if row.get("distance") == 1_100_000:
+                link("4", activity_id)
+            if isinstance(activity_id, int) and activity_id % 50 == 0:
+                link("8", activity_id)
+        elif kind == "trail_running":
+            link("3", activity_id)
+        elif kind == "treadmill_running":
+            if activity_id % 7 == 1:
+                link("8", activity_id)
+            elif activity_id % 7 == 2:
+                link("9", activity_id)
+            elif activity_id % 7 == 3:
+                link("555", activity_id)
+            elif day is not None and day >= date(2024, 9, 1):
+                link("5", activity_id)
+        elif kind == "road_biking":
+            link("8", activity_id)
+    link("1", 999_999)
+    return links
+
+
+def write_view_export(root: Path, gear: bool = False) -> Path:
     fitness = root / "DI-Connect-Fitness"
     metrics = root / "DI-Connect-Metrics"
     sleep_folder = root / "DI-Connect-Wellness"
@@ -84,8 +166,15 @@ def write_view_export(root: Path) -> Path:
     for folder in (fitness, metrics, sleep_folder, uploaded):
         folder.mkdir(parents=True)
     (fitness / "synthetic_summarizedActivities.json").write_text(
-        json.dumps([{"summarizedActivitiesExport": activities()}]), encoding="utf-8"
+        json.dumps([{"summarizedActivitiesExport": activities(gear)}]), encoding="utf-8"
     )
+    if gear:
+        links = gear_links(activities(gear))
+        container = {
+            "gearDTOS": [dict(row) for row in SYNTHETIC_GEAR],
+            "gearActivityDTOs": {key: [{"activityId": activity_id} for activity_id in ids] for key, ids in links.items()},
+        }
+        (fitness / "synthetic_gear.json").write_text(json.dumps([container], ensure_ascii=False), encoding="utf-8")
     for number, text in enumerate(FIT_STARTS):
         start = int(utc(text).timestamp()) - FIT_EPOCH_OFFSET
         (uploaded / f"synthetic_activity_{number}.fit").write_bytes(

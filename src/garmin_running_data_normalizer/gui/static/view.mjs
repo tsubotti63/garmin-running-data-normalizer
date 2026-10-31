@@ -204,6 +204,13 @@ import {
   saveProblem,
   saveShowable,
   saveViewFileName,
+  shoeName,
+  shoeWords,
+  shoesCount,
+  shoesNotes,
+  shoesRead,
+  shoesTables,
+  shoesWhy,
   saveViewFooter,
   saveViewReady,
   saveWindowShows,
@@ -372,6 +379,9 @@ const ui = {
   otherMenu: byId("other-views-menu"),
   otherPlot: byId("other-plot"),
   otherSpread: byId("other-spread"),
+  // The view by shoes (stage S1 of v2.2.0), and why it cannot be chosen.
+  otherShoes: byId("other-shoes"),
+  otherShoesWhy: byId("other-shoes-why"),
   fullEnter: byId("full-enter"),
   fullBar: byId("full-bar"),
   fullText: byId("full-text"),
@@ -505,6 +515,26 @@ const ui = {
   spreadAnnouncer: byId("spread-announcer"),
   spreadWide: byId("spread-wide"),
   spreadFaster: byId("spread-faster"),
+  // The view by shoes (stage S1 of v2.2.0).
+  shoes: byId("shoes"),
+  shoesTitle: byId("shoes-title"),
+  shoesTable: byId("shoes-table"),
+  shoesTableChart: byId("shoes-table-chart"),
+  shoesTableTable: byId("shoes-table-table"),
+  shoesSave: byId("shoes-save"),
+  shoesBack: byId("shoes-back"),
+  shoesCount: byId("shoes-count"),
+  shoesLoading: byId("shoes-loading"),
+  shoesStop: byId("shoes-stop"),
+  shoesStopLines: byId("shoes-stop-lines"),
+  shoesStopCode: byId("shoes-stop-code"),
+  shoesStack: byId("shoes-stack"),
+  shoesPanels: byId("shoes-panels"),
+  shoesAxis: byId("shoes-axis"),
+  shoesAnnouncer: byId("shoes-announcer"),
+  shoesNone: byId("shoes-none"),
+  shoesNotes: byId("shoes-notes"),
+  shoesOff: byId("shoes-off"),
   compareYears: byId("compare-years"),
   compareYearsLabel: byId("compare-years-label"),
   compareUpTo: byId("compare-up-to"),
@@ -681,6 +711,23 @@ const state = {
   spreadSeq: 0,
   spreadLoading: false,
   spreadStop: null,
+  // The view by shoes (stage S1 of v2.2.0), as the distribution: while it
+  // shows, whether its tables show and the month of its cross line; null
+  // while the panels show. What the server says of the shoes of the output
+  // ({count, too_large}), from the answers of opening and of the numbers.
+  shoes: null,
+  shoesAnswer: null,
+  shoesAsked: null,
+  shoesSeq: 0,
+  shoesLoading: false,
+  shoesStop: null,
+  shoesAvailable: null,
+  // The answers of the numbers and of the shoes both say it again: what the
+  // one asked for last said is kept, so that a late answer of data read
+  // before does not put back what a newer one said (Codex's review of the
+  // diff of S1).
+  availableAsks: 0,
+  availableFrom: 0,
   panelsStale: false,
   otherOpen: false,
   // The marks of the person (stage M1 of v2.2.0): as the server keeps them,
@@ -1202,6 +1249,9 @@ async function openOutput(target, focus = false) {
   state.recapSeq += 1;
   state.recapLoading = false;
   const current = state.view === null ? null : state.items;
+  // And the answers of the view by shoes, so that none of the output before
+  // is drawn for another (stage S1 of v2.2.0, Codex's review of its plan).
+  state.shoesSeq += 1;
   state.opening = target.name;
   state.openingTarget = target;
   state.stop = null;
@@ -1225,6 +1275,8 @@ async function openOutput(target, focus = false) {
     state.layouts.builtIns = Array.isArray(answer.layouts) ? answer.layouts : [];
     state.coverage = answer.coverage;
     state.coverageSeq += 1;
+    state.shoesAvailable = answer.shoes ?? null;
+    state.availableFrom = ++state.availableAsks;
     setAnswer(null);
     state.overview = null;
     state.big = null;
@@ -1274,6 +1326,18 @@ async function openOutput(target, focus = false) {
       state.spreadAsked = null;
       state.spreadStop = null;
     }
+    // And the view by shoes where this output has shoes to show (stage S1 of
+    // v2.2.0).
+    if (state.shoes !== null) {
+      if (shoesWhy(state.shoesAvailable) !== null) {
+        state.shoes = null;
+      } else {
+        state.shoes.cursor = null;
+      }
+      state.shoesAnswer = null;
+      state.shoesAsked = null;
+      state.shoesStop = null;
+    }
     // The summary asks again for the output that opened (stage Q1).
     state.recapAnswer = null;
     state.recapAsked = null;
@@ -1288,6 +1352,7 @@ async function openOutput(target, focus = false) {
     requestCompare();
     requestPlot();
     requestSpread();
+    requestShoes();
   } catch (error) {
     if (seq !== state.openSeq) {
       return;
@@ -1299,6 +1364,7 @@ async function openOutput(target, focus = false) {
       state.compare = null;
       state.plot = null;
       state.spread = null;
+      state.shoes = null;
       // The field keeps the output that could not be opened.
       state.target = error.code === "OUTPUT_LIST_CHANGED" ? null : target;
       state.stop = { code: error.code, detail: error.detail };
@@ -1408,6 +1474,7 @@ async function requestSeries(again = true) {
   render();
   try {
     const payload = seriesPayload(state.items, periodRequest(state.period, state.range), state.grain);
+    const asked = ++state.availableAsks;
     const answer = await callApi("/api/view/series", payload);
     if (seq !== state.seriesSeq) {
       return;
@@ -1418,6 +1485,13 @@ async function requestSeries(again = true) {
     if (answer.coverage) {
       state.coverage = answer.coverage;
       state.coverageSeq += 1;
+    }
+    // As the bars of the shelf: an output read again can have other shoes
+    // (Codex's review of the plan of S1 of v2.2.0), unless an answer asked
+    // for after this one said it (Codex's review of its diff).
+    if (answer.shoes && asked > state.availableFrom) {
+      state.shoesAvailable = answer.shoes;
+      state.availableFrom = asked;
     }
     state.seriesStop = null;
     if (state.cursor === null || state.cursor >= answer.periods.length) {
@@ -1444,6 +1518,7 @@ async function requestSeries(again = true) {
       state.compare = null;
       state.plot = null;
       state.spread = null;
+      state.shoes = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.seriesStop = { code: error.code, detail: error.detail };
@@ -1990,6 +2065,7 @@ async function requestRecap(again = true) {
       state.compare = null;
       state.plot = null;
       state.spread = null;
+      state.shoes = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.recapStop = { code: error.code, detail: error.detail };
@@ -2215,13 +2291,13 @@ function saveReady(viewing) {
 // The view whose picture a saving makes now: the panels, or the view that
 // takes their place (stage R2 of v2.2.0).
 function saveViewNow() {
-  return comparing() ? "compare" : plotting() ? "plot" : spreading() ? "spread" : "panels";
+  return comparing() ? "compare" : plotting() ? "plot" : spreading() ? "spread" : shoesShown() ? "shoes" : "panels";
 }
 
 // The button of the saving of a view, and the row under which the window
 // opens from it: the row above the panels, or the first line of the bar.
 function saveButton(view) {
-  return { panels: ui.saveOpen, compare: ui.compareSave, plot: ui.plotSave, spread: ui.spreadSave }[view];
+  return { panels: ui.saveOpen, compare: ui.compareSave, plot: ui.plotSave, spread: ui.spreadSave, shoes: ui.shoesSave }[view];
 }
 
 function saveRow(view) {
@@ -2246,7 +2322,7 @@ function saveTarget(viewing) {
     const problem = saveProblem({ stopped: state.seriesStop !== null, loading: state.loading, answer: state.answer, drawn, parts: plan.keys.length });
     return { view, plan, ready, name: plan.name, problem, loading: state.loading, marks: false };
   }
-  const target = view === "compare" ? saveCompareTarget() : view === "plot" ? savePlotTarget() : saveSpreadTarget();
+  const target = view === "compare" ? saveCompareTarget() : view === "plot" ? savePlotTarget() : view === "spread" ? saveSpreadTarget() : saveShoesTarget();
   const charts = target.parts.filter((part) => part.source !== null).length;
   target.ready =
     viewing &&
@@ -2331,6 +2407,46 @@ function compareSaveTitle(answer) {
 // value, the unit, the kind, and the keys with their swatches), its chart,
 // and the words that the page shows in place of an empty chart (Codex's
 // review of the plan of R2); the reading of the day chosen is not taken.
+// The view by shoes (stage S1 of v2.2.0): its answer drawn (its tables draw
+// no part), its title, its rows, which the parts of a comparison read, all of
+// them, also those scrolled out of the screen, its axis, and its notes (Codex's
+// review of the plan of S1); its period and the key of the distance name the
+// file, never the names of the shoes.
+function saveShoesTarget() {
+  const drawn = state.shoes === null ? null : state.shoesAnswer;
+  // The rows of the answer shown, not of one on its way, as for the other
+  // views (Codex's review of the plan of R2, 2).
+  const shown = drawn !== null && !state.shoes.table && shoesDrawn !== null && shoesDrawn[0] === drawn;
+  return {
+    view: "shoes",
+    answer: drawn,
+    loading: state.shoesLoading,
+    stopped: state.shoesStop !== null,
+    table: state.shoes?.table ?? false,
+    empty: drawn !== null && !drawn.shoes.length,
+    title: drawn === null ? "" : t("view.shoes.title"),
+    parts: shown ? shoeRows.map(saveComparePart) : [],
+    legend: null,
+    axis: shown && !ui.shoesAxis.hidden ? ui.shoesAxis.querySelector(":scope > svg") : null,
+    notes: drawn === null ? [] : saveNotesOf([...ui.shoesNotes.children]),
+    drop: SAVE_LEFT_OUT_VIEWS.shoes.join(", "),
+    name: drawn === null ? null : saveViewFileName("shoes", { key: "dist", start: drawn.start, end: drawn.end }),
+    footer:
+      drawn === null
+        ? []
+        : saveViewFooter("shoes", {
+            start: drawn.start,
+            end: drawn.end,
+            answerTypes: state.shoesAsked?.types ?? null,
+            types: state.view?.types,
+            version: state.productVersion,
+            language: state.language,
+            separator: t("view.spoken_separator"),
+          }),
+    marks: false,
+  };
+}
+
 function saveComparePart(entry) {
   const head = entry.section.querySelector(entry.kind === "calendar" ? ".calendar-side" : ".panel-head");
   const pieces = [];
@@ -2517,10 +2633,10 @@ function renderSave(viewing) {
   }
   const showable = saveWindowShows({ viewing, from: state.saveFrom, view, items: state.items.length, full: state.full });
   ui.saveOpen.disabled = !viewing || !state.items.length;
-  for (const each of ["compare", "plot", "spread"]) {
+  for (const each of ["compare", "plot", "spread", "shoes"]) {
     saveButton(each).disabled = !viewing;
   }
-  for (const each of ["panels", "compare", "plot", "spread"]) {
+  for (const each of ["panels", "compare", "plot", "spread", "shoes"]) {
     saveButton(each).setAttribute("aria-expanded", String(state.saveOpen && showable && state.saveFrom === each));
   }
   const focused = ui.savePop.contains(document.activeElement);
@@ -2550,7 +2666,10 @@ function renderSave(viewing) {
   const gone = panels ? renderSavePanels(target.plan) : false;
   // By race, the names of the races, which are those of the marks, show
   // always (the checker's answer 5 of the plan of R2).
-  setText(ui.saveWarn, (panels ? ui.saveMarks.checked : target.marks) ? `${warn}${state.language === "ja" ? "" : " "}${t("view.save.warn_marks")}` : warn);
+  // The view by shoes: the names of all the shoes, also of the rows out of
+  // the screen (Codex's review of the plan of S1 of v2.2.0).
+  const named = target.view === "shoes" ? t("view.save.warn_shoes") : (panels ? ui.saveMarks.checked : target.marks) ? t("view.save.warn_marks") : null;
+  setText(ui.saveWarn, named !== null ? `${warn}${state.language === "ja" ? "" : " "}${named}` : warn);
   const problem = state.saveProblem ?? (gone ? "view.save.gone" : null) ?? target.problem;
   setText(ui.saveProblem, problem !== null ? saveProblemText(problem) : target.loading ? t("view.loading") : "");
   fitSaveWindow();
@@ -3868,12 +3987,12 @@ function renderCharts() {
   }
 }
 
-function drawTimeAxis(start, end, width) {
-  ui.timeAxis.replaceChildren();
+function drawTimeAxis(start, end, width, place = ui.timeAxis) {
+  place.replaceChildren();
   if (width < 60) {
     return;
   }
-  const height = ui.timeAxis.clientHeight || 24;
+  const height = place.clientHeight || 24;
   const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, width, "aria-hidden": "true", focusable: "false" });
   const scale = timeScale(start, end, PLOT_LEFT, width - PLOT_RIGHT);
   for (const tick of timeTicks(start, end, width - PLOT_LEFT - PLOT_RIGHT)) {
@@ -3883,7 +4002,7 @@ function drawTimeAxis(start, end, width) {
     label.textContent = timeTickText(tick, state.language);
     svg.append(label);
   }
-  ui.timeAxis.append(svg);
+  place.append(svg);
 }
 
 function drawOverview(start, end, chartWidth) {
@@ -4096,6 +4215,9 @@ function scheduleRedraw() {
     }
     if (!ui.spread.hidden) {
       renderSpreadBody(spreadAnswerNow());
+    }
+    if (!ui.shoes.hidden) {
+      renderShoesBody(state.shoesAnswer);
     }
     // The window of the saving reads the charts drawn again, while it shows
     // only, so that the focus stays where it is (Codex's review of the plan
@@ -4361,6 +4483,7 @@ async function requestList(again = true) {
       state.compare = null;
       state.plot = null;
       state.spread = null;
+      state.shoes = null;
       state.stop = { code: error.code, detail: error.detail };
       render();
       return;
@@ -4854,6 +4977,7 @@ async function requestCompare(again = true) {
       state.compare = null;
       state.plot = null;
       state.spread = null;
+      state.shoes = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.compareStop = { code: error.code, detail: error.detail };
@@ -6646,7 +6770,7 @@ function plotting() {
 // P1): the other views, which have no grouping and ask for their answers with
 // the period and the activity types of the page.
 function otherShown() {
-  return plotting() || spreading();
+  return plotting() || spreading() || shoesShown();
 }
 
 // The panels give their place to a comparison of years or to another view.
@@ -6657,7 +6781,7 @@ function apart() {
 // The answer that the period and its arrows go by: that of the other view
 // while it shows (Codex's reviews of the plans of O1 and P1).
 function shownAnswer() {
-  return plotting() ? state.plotAnswer : spreading() ? state.spreadAnswer : state.answer;
+  return plotting() ? state.plotAnswer : spreading() ? state.spreadAnswer : shoesShown() ? state.shoesAnswer : state.answer;
 }
 
 // Ask for what shows: the other view while it shows, and the panels on the
@@ -6667,6 +6791,7 @@ function requestShown() {
     state.panelsStale = true;
     requestPlot();
     requestSpread();
+    requestShoes();
   } else {
     requestSeries();
   }
@@ -6685,6 +6810,13 @@ function renderOtherViews(usable) {
   ui.otherMenu.hidden = !state.otherOpen;
   ui.otherPlot.disabled = plotPairOf(state.plotPair, state.view?.items) === null;
   ui.otherSpread.disabled = spreadItemOf(state.spreadItem, state.view?.items) === null;
+  // The view by shoes where the output has shoes to show, or why not, under
+  // its name (stage S1 of v2.2.0); an item that cannot be chosen stays in the
+  // way of the keys, so that why is read (Codex's review of its diff).
+  const why = shoesWhy(state.shoesAvailable);
+  ui.otherShoes.setAttribute("aria-disabled", String(why !== null));
+  ui.otherShoesWhy.hidden = why === null;
+  setText(ui.otherShoesWhy, why === null ? "" : t(why));
 }
 
 function setOtherViews(open, focus = null) {
@@ -6823,6 +6955,7 @@ async function requestPlot(again = true) {
       state.compare = null;
       state.plot = null;
       state.spread = null;
+      state.shoes = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.plotStop = { code: error.code, detail: error.detail };
@@ -7346,6 +7479,7 @@ async function requestSpread(again = true) {
       state.compare = null;
       state.plot = null;
       state.spread = null;
+      state.shoes = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.spreadStop = { code: error.code, detail: error.detail };
@@ -7677,6 +7811,414 @@ function buildSpreadTable(drawn, key) {
   return wrap;
 }
 
+// --- The view by shoes (stage S1 of v2.2.0) ---------------------------------
+
+// The rows drawn of the shoes, what they draw with, and what they were drawn
+// for (an answer, as a table or not, in a language).
+let shoeRows = [];
+let shoesContext = null;
+let shoesDrawn = null;
+
+function shoesShown() {
+  return state.shoes !== null && state.view !== null;
+}
+
+// The distance of each pair of shoes by month in the place of the panels, as
+// the distribution: with the period and the activity types of the page,
+// where the output has shoes to show.
+function enterShoes() {
+  if (state.view === null || comparing() || shoesWhy(state.shoesAvailable) !== null) {
+    return;
+  }
+  listChanged("shoes");
+  state.shoes = { table: false, cursor: null };
+  state.shoesAnswer = null;
+  state.shoesAsked = null;
+  state.shoesStop = null;
+  state.otherOpen = false;
+  state.typesOpen = false;
+  state.pickerOpen = false;
+  state.notesOpen = null;
+  state.layoutsOpen = false;
+  state.layoutSaving = false;
+  state.railLayoutsOpen = false;
+  render();
+  ui.shoesTitle.focus();
+  requestShoes();
+}
+
+// Back to the panels as they were, as from the distribution.
+function leaveShoes() {
+  state.shoes = null;
+  state.shoesAnswer = null;
+  state.shoesAsked = null;
+  state.shoesStop = null;
+  state.shoesLoading = false;
+  state.shoesSeq += 1;
+  render();
+  ui.otherViews.focus();
+  if (state.panelsStale) {
+    state.panelsStale = false;
+    requestSeries();
+  }
+}
+
+function shoesPayload() {
+  return {
+    view: state.view.view,
+    period: periodRequest(state.period, state.range),
+    types: typesRequest(state.counted, state.view.types),
+  };
+}
+
+// Ask for the shoes as one generation, as for the distribution: an answer of
+// an older one is dropped when it comes; a ticket that the server no longer
+// keeps opens the output again, once; an output that cannot be read stops the
+// page, and another stop shows in the bar of the shoes. The answer says
+// again whether the output has shoes (Codex's review of the plan of S1).
+async function requestShoes(again = true) {
+  if (!shoesShown()) {
+    return;
+  }
+  const seq = ++state.shoesSeq;
+  state.shoesLoading = true;
+  render();
+  const payload = shoesPayload();
+  const asked = ++state.availableAsks;
+  try {
+    const answer = await callApi("/api/view/shoes", payload);
+    if (seq !== state.shoesSeq) {
+      return;
+    }
+    state.shoesAnswer = answer;
+    state.shoesAsked = payload;
+    state.shoesStop = null;
+    if (answer.available && asked > state.availableFrom) {
+      state.shoesAvailable = answer.available;
+      state.availableFrom = asked;
+    }
+  } catch (error) {
+    if (seq !== state.shoesSeq) {
+      return;
+    }
+    if (connectionFailure(error)) {
+      // The bar says so.
+    } else if (error.code === "VIEW_NOT_OPEN" && again && state.target !== null) {
+      if (await reopen()) {
+        if (seq !== state.shoesSeq) {
+          return;
+        }
+        state.shoesLoading = false;
+        requestShoes(false);
+        return;
+      }
+    } else if (OUTPUT_STOPS.includes(error.code)) {
+      state.view = null;
+      setAnswer(null);
+      state.compare = null;
+      state.plot = null;
+      state.spread = null;
+      state.shoes = null;
+      state.stop = { code: error.code, detail: error.detail };
+    } else {
+      state.shoesStop = { code: error.code, detail: error.detail };
+    }
+  }
+  if (seq === state.shoesSeq) {
+    state.shoesLoading = false;
+  }
+  render();
+}
+
+// The bar of the shoes, its lines, its rows or tables, and its notes, which
+// show only for a count of 1 or more (the checker's review of the counts).
+function renderShoes(live) {
+  const viewing = live && state.view !== null && state.opening === null;
+  const shoes = viewing && shoesShown() ? state.shoes : null;
+  ui.shoes.hidden = shoes === null;
+  ui.shoesOff.hidden = shoes === null;
+  if (shoes === null) {
+    shoeRows = [];
+    shoesContext = null;
+    shoesDrawn = null;
+    ui.shoesPanels.replaceChildren();
+    ui.shoesAxis.replaceChildren();
+    return;
+  }
+  const drawn = state.shoesAnswer;
+  ui.shoesTable.disabled = drawn === null || !drawn.shoes.length;
+  ui.shoesTable.setAttribute("aria-pressed", String(shoes.table));
+  ui.shoesTableChart.hidden = !shoes.table;
+  ui.shoesTableTable.hidden = shoes.table;
+  setText(ui.shoesLoading, state.shoesLoading ? t("view.loading") : "");
+  ui.shoesStop.hidden = state.shoesStop === null;
+  if (!ui.shoesStop.hidden) {
+    renderStop(ui.shoesStop, null, ui.shoesStopLines, ui.shoesStopCode, stopBox(state.shoesStop.code, state.shoesStop.detail, state.productVersion));
+  }
+  setText(ui.shoesCount, drawn === null ? "" : describe(shoesCount(drawn)));
+  ui.shoesNone.hidden = drawn === null || drawn.shoes.length > 0;
+  const notes = drawn === null ? [] : shoesNotes(drawn).map(describe);
+  if (JSON.stringify(notes) !== ui.shoesNotes.dataset.notes) {
+    ui.shoesNotes.replaceChildren(...notes.map((note) => element("p", "compare-note", note)));
+    ui.shoesNotes.dataset.notes = JSON.stringify(notes);
+  }
+  renderShoesBody(drawn);
+}
+
+// The rows of the shoes, or their tables, built again only for another
+// answer, way, or language; otherwise only the charts whose size changed.
+function renderShoesBody(drawn) {
+  const shoes = state.shoes;
+  if (shoes === null) {
+    return;
+  }
+  if (shoesDrawn !== null && shoesDrawn[0] === drawn && shoesDrawn[1] === shoes.table && shoesDrawn[2] === state.language) {
+    renderShoesCharts();
+    return;
+  }
+  const focused = ui.shoesPanels.contains(document.activeElement) ? (document.activeElement.dataset.plot ?? null) : null;
+  plotWatcher?.disconnect();
+  shoeRows = [];
+  shoesContext = null;
+  ui.shoesAxis.replaceChildren();
+  delete ui.shoesAxis.dataset.width;
+  shoesDrawn = [drawn, shoes.table, state.language];
+  if (drawn === null || !drawn.shoes.length) {
+    ui.shoesPanels.replaceChildren();
+    ui.shoesAxis.hidden = true;
+    return;
+  }
+  // The months of the period, once, for every pair: their days, as the time
+  // axis of the panels, across the years (Codex's review of the plan of S1),
+  // and one scale for all.
+  const periods = periodDays(drawn.periods);
+  const lines = drawn.shoes.map((shoe) => ({ values: shoe.values.map((value) => (Number.isFinite(value) ? shown("dist", value) : null)) }));
+  shoesContext = { periods, lines, shared: extent(lines), start: periods[0].start, end: periods[periods.length - 1].end };
+  if (shoes.cursor === null || shoes.cursor >= periods.length) {
+    shoes.cursor = periods.length - 1;
+  }
+  if (shoes.table) {
+    ui.shoesPanels.replaceChildren(...buildShoesTables(drawn));
+  } else {
+    shoeRows = drawn.shoes.map((shoe, index) => buildShoeRow(shoe, index));
+    ui.shoesPanels.replaceChildren(...shoeRows.map((entry) => entry.section));
+  }
+  ui.shoesAxis.hidden = shoes.table;
+  renderShoesCharts();
+  moveShoesCross(shoes.cursor, null);
+  for (const entry of shoeRows) {
+    plotWatcher?.observe(entry.plot);
+  }
+  if (focused !== null) {
+    ui.shoesPanels.querySelector(`[data-plot="${focused}"]`)?.focus({ preventScroll: true });
+  }
+}
+
+// A row of a pair of shoes, as a row of a year: its name (cut where it is
+// long, before what tells it apart), its distance in this period, its
+// reading, and its chart.
+function buildShoeRow(shoe, index) {
+  const section = element("section", "panel-view compare-row shoe-row");
+  const headingId = `shoe-${index}`;
+  section.setAttribute("aria-labelledby", headingId);
+  const head = element("div", "panel-head");
+  const heading = element("h4", "panel-name shoe-name");
+  heading.id = headingId;
+  const [name, added] = shoeWords(shoe, state.language);
+  heading.append(element("span", "shoe-own", describe(name)));
+  if (added !== null) {
+    heading.append(element("span", "shoe-added", describe(added)));
+  }
+  head.append(heading);
+  const whole = element("span", "compare-whole", `${t("view.shoes.whole")} `);
+  whole.append(element("strong", "", Number.isFinite(shoe.distance) ? describe(valueMessage("dist", shoe.distance, state.language)) : t("view.no_value")));
+  head.append(whole);
+  const read = element("span", "panel-read");
+  read.setAttribute("aria-hidden", "true");
+  head.append(read);
+  section.append(head);
+  const body = element("div", "panel-chart");
+  const plot = element("div", "plot");
+  plot.tabIndex = 0;
+  plot.setAttribute("role", "img");
+  plot.dataset.plot = String(index);
+  plot.setAttribute("aria-label", t("view.shoes.row_label", { shoe: describe(shoeName(shoe, state.language)) }));
+  body.append(plot);
+  section.append(body);
+  return { section, plot, read, index, size: null, shapes: null, cross: null };
+}
+
+// The chart of a row: the bars of its months, in the first color, on the
+// scale of every pair; the months that a period cuts hollow, as the rows of
+// the years.
+function drawShoePlot(entry) {
+  const context = shoesContext;
+  const plot = entry.plot;
+  const width = plot.clientWidth;
+  const height = plot.clientHeight;
+  entry.size = `${width} ${height}`;
+  entry.shapes = null;
+  entry.cross = null;
+  if (context === null || width < 60 || height < 24) {
+    plot.replaceChildren();
+    return;
+  }
+  const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, "aria-hidden": "true", focusable: "false" });
+  const shapes = panelShapes({ lines: [context.lines[entry.index]], periods: context.periods, start: context.start, end: context.end, width, height, total: true, shared: context.shared });
+  entry.shapes = shapes;
+  if (shapes.empty) {
+    plot.replaceChildren(svg, element("span", "panel-empty", t("view.summary.none")));
+    return;
+  }
+  appendScale(svg, "dist", shapes, width - PLOT_RIGHT);
+  appendMarks(svg, shapes.lines[0], "c1", null, { outlined: true });
+  const cross = svgElement("g", { class: "cross" });
+  cross.setAttribute("display", "none");
+  const crossLine = svgElement("line", { class: "chart-cross", y1: shapes.top, y2: shapes.top + shapes.plotHeight });
+  const crossDot = svgElement("circle", { class: "chart-cross-dot c1", r: 4.5 });
+  cross.append(crossLine, crossDot);
+  svg.append(cross);
+  plot.replaceChildren(svg);
+  Object.assign(entry, { cross, crossLine, crossDot });
+}
+
+// Draw the rows whose size changed, the axis at the width of the rows, and
+// the cross line again.
+function renderShoesCharts() {
+  if (shoesContext === null) {
+    return;
+  }
+  let changed = false;
+  for (const entry of shoeRows) {
+    if (entry.size !== `${entry.plot.clientWidth} ${entry.plot.clientHeight}`) {
+      drawShoePlot(entry);
+      changed = true;
+    }
+  }
+  const first = shoeRows[0];
+  if (first !== undefined) {
+    const width = first.plot.clientWidth;
+    if (changed || ui.shoesAxis.dataset.width !== String(width)) {
+      drawTimeAxis(shoesContext.start, shoesContext.end, width, ui.shoesAxis);
+      ui.shoesAxis.dataset.width = String(width);
+    }
+  }
+  if (changed && state.shoes !== null) {
+    moveShoesCross(state.shoes.cursor, null);
+  }
+}
+
+// Move the cross line of the shoes to one month: every row reads it, and the
+// row of the keys says it (``row``, or null).
+function moveShoesCross(cursor, row) {
+  const context = shoesContext;
+  const answer = state.shoesAnswer;
+  if (context === null || answer === null || state.shoes === null || cursor === null) {
+    return;
+  }
+  const at = Math.max(0, Math.min(context.periods.length - 1, cursor));
+  state.shoes.cursor = at;
+  for (const entry of shoeRows) {
+    const words = describe(shoesRead(answer.periods[at], answer.shoes[entry.index].values[at], state.language));
+    setText(entry.read, words);
+    if (entry.index === row) {
+      setText(ui.shoesAnnouncer, `${describe(shoeName(answer.shoes[entry.index], state.language))} ${words}`);
+    }
+    if (entry.shapes === null || entry.cross === null) {
+      continue;
+    }
+    const x = periodMiddle(entry.shapes.scale, context.periods[at]).toFixed(1);
+    entry.crossLine.setAttribute("x1", x);
+    entry.crossLine.setAttribute("x2", x);
+    const value = context.lines[entry.index].values[at];
+    if (Number.isFinite(value)) {
+      entry.crossDot.setAttribute("cx", x);
+      entry.crossDot.setAttribute("cy", entry.shapes.y(value).toFixed(1));
+      entry.crossDot.removeAttribute("display");
+    } else {
+      entry.crossDot.setAttribute("display", "none");
+    }
+    entry.cross.removeAttribute("display");
+  }
+}
+
+// The keys of a row: Left and Right a month, Home and End the first and the
+// last, as the rows of the years.
+function shoesKeyDown(event) {
+  const plot = event.target.closest?.("[data-plot]");
+  if (plot == null || state.shoes === null || shoesContext === null) {
+    return;
+  }
+  const last = shoesContext.periods.length - 1;
+  const moves = { ArrowLeft: state.shoes.cursor - 1, ArrowRight: state.shoes.cursor + 1, Home: 0, End: last };
+  if (!Object.hasOwn(moves, event.key)) {
+    return;
+  }
+  event.preventDefault();
+  moveShoesCross(moves[event.key], Number(plot.dataset.plot));
+}
+
+// The pointer over a row moves the cross line to the nearest month.
+function shoesPointer(event) {
+  const plot = event.target.closest?.("[data-plot]");
+  const entry = plot == null ? undefined : shoeRows.find((each) => each.plot === plot);
+  if (entry === undefined || entry.shapes === null || shoesContext === null || state.shoes === null) {
+    return;
+  }
+  const at = nearestPeriod(shoesContext.periods, entry.shapes.scale, event.clientX - plot.getBoundingClientRect().left);
+  if (at !== null && at !== state.shoes.cursor) {
+    moveShoesCross(at, null);
+  }
+}
+
+// The tables of the shoes: a row a pair, and a row a month with a column a
+// pair (Codex's review of the plan of S1).
+function buildShoesTables(drawn) {
+  const { summary, months } = shoesTables(drawn, state.language);
+  return [
+    buildShoesTable("shoes-table-name", t("view.shoes.table_label"), t("view.shoes.table_caption"), summary),
+    buildShoesTable("shoes-months-name", t("view.shoes.months_label"), t("view.shoes.months_caption"), months, "shoes-months"),
+  ];
+}
+
+// A table of the shoes; the table by month (of the kind "shoes-months")
+// keeps its months at the left while its pairs scroll by (the checker's
+// review of the diff of S1).
+function buildShoesTable(id, label, caption, { heads, rows }, kind = null) {
+  const section = element("section", kind === null ? "panel-view compare-table table" : `panel-view compare-table table ${kind}`);
+  section.setAttribute("aria-labelledby", id);
+  const head = element("div", "panel-head");
+  const heading = element("h4", "panel-name", label);
+  heading.id = id;
+  head.append(heading);
+  section.append(head);
+  const wrap = element("div", "panel-table");
+  wrap.tabIndex = 0;
+  wrap.setAttribute("role", "region");
+  wrap.setAttribute("aria-label", label);
+  const table = element("table", "t");
+  const headRow = element("tr");
+  heads.forEach((entry, index) => {
+    const cell = element("th", index === 0 ? "" : "n", describe(entry));
+    cell.scope = "col";
+    headRow.append(cell);
+  });
+  const thead = element("thead");
+  thead.append(headRow);
+  const tbody = element("tbody");
+  for (const row of rows) {
+    const tr = element("tr");
+    const first = element("th", "", describe(row[0]));
+    first.scope = "row";
+    tr.append(first, ...row.slice(1).map((cell) => element("td", "n", describe(cell))));
+    tbody.append(tr);
+  }
+  table.append(element("caption", "visually-hidden", caption), thead, tbody);
+  wrap.append(table);
+  section.append(wrap);
+  return section;
+}
+
 function render() {
   document.documentElement.lang = state.language;
   for (const node of document.querySelectorAll("[data-i18n]")) {
@@ -7699,6 +8241,7 @@ function render() {
   renderCompare(live);
   renderPlot(live);
   renderSpread(live);
+  renderShoes(live);
   // The window of the saving after every view, as it reads their charts
   // (Codex's reviews of the diff of R1 and of the plan of R2).
   renderSave(live && state.view !== null && state.opening === null);
@@ -8004,7 +8547,7 @@ function connect() {
   // Saving as an image (stage R1 of v2.2.0): Escape in the window closes it.
   ui.saveOpen.addEventListener("click", () => openSave(!(state.saveOpen && state.saveFrom === "panels"), "panels"));
   // The bars of the other views (stage R2 of v2.2.0).
-  for (const each of ["compare", "plot", "spread"]) {
+  for (const each of ["compare", "plot", "spread", "shoes"]) {
     saveButton(each).addEventListener("click", () => openSave(!(state.saveOpen && state.saveFrom === each), each));
   }
   ui.saveClose.addEventListener("click", () => openSave(false));
@@ -8183,6 +8726,24 @@ function connect() {
     setOtherViews(false);
     enterSpread();
   });
+  // The view by shoes (stage S1 of v2.2.0).
+  ui.otherShoes.addEventListener("click", () => {
+    // An item that cannot be chosen does nothing, and the menu stays.
+    if (shoesWhy(state.shoesAvailable) !== null) {
+      return;
+    }
+    setOtherViews(false);
+    enterShoes();
+  });
+  ui.shoesTable.addEventListener("click", () => {
+    if (state.shoes !== null) {
+      state.shoes.table = !state.shoes.table;
+      render();
+    }
+  });
+  ui.shoesBack.addEventListener("click", leaveShoes);
+  ui.shoesPanels.addEventListener("pointermove", shoesPointer);
+  ui.shoesPanels.addEventListener("keydown", shoesKeyDown);
   document.addEventListener("pointerdown", (event) => {
     if (state.otherOpen && event.target.closest(".other-views") === null) {
       setOtherViews(false);

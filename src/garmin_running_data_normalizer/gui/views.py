@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from ..output_check import OutputActionError
-from ..view.data import MANIFEST, ViewData, load_view_data, local_today
+from ..view.data import GEAR_FILES, MANIFEST, ViewData, load_view_data, local_today
 from ..view.items import ACTIVITIES, DATASETS, ITEMS, ITEMS_BY_KEY, Item
 from ..view.series import GRAINS, LAST_YEARS, MAX_PANELS, RANGE_GRAIN, coverage, point_item
 
@@ -56,7 +56,9 @@ def output_stamp(output: Path) -> Stamp:
     of the files that the view page reads; a file that cannot be looked at,
     or a link in its place, gives another stamp."""
     stamps = []
-    for path in (output, output / MANIFEST, *(output / dataset.path for dataset in DATASETS)):
+    # The files of the shoes too (stage S1 of v2.2.0): a change of them alone
+    # reads the output again.
+    for path in (output, output / MANIFEST, *(output / dataset.path for dataset in DATASETS), *(output / path for path in GEAR_FILES)):
         try:
             status = os.lstat(path)
         except OSError:
@@ -79,12 +81,18 @@ class _View:
     shelves: OrderedDict[frozenset[str] | None, dict[str, dict[str, Any]]] = field(default_factory=OrderedDict)
 
 
+def load_view(output: Path) -> ViewData:
+    """What the view page reads of an output: what the series command reads,
+    and the shoes (stage S1 of v2.2.0)."""
+    return load_view_data(output, gear=True)
+
+
 class Views:
     """The outputs that the view page opened, by their tickets."""
 
     def __init__(
         self,
-        load: Callable[[Path], ViewData] = load_view_data,
+        load: Callable[[Path], ViewData] = load_view,
         today: Callable[[str], date] = local_today,
         max_views: int = MAX_VIEWS,
     ) -> None:
@@ -270,6 +278,20 @@ def spread_request(payload: dict[str, Any]) -> tuple[str, str | tuple[date, date
     if types is not None and not types_ok(types):
         raise ViewRequestError("types")
     return key, chosen, types
+
+
+def shoes_request(payload: dict[str, Any]) -> tuple[str | tuple[date, date], list[str] | None]:
+    """The period and the activity types of a request for the view by shoes
+    (stage S1 of v2.2.0): a period of PERIODS, or a range of two dates, as the
+    numbers take it; and the names of the activity types, or None for the
+    running ones."""
+    chosen = period_choice(payload.get("period", "all"))
+    if chosen is None:
+        raise ViewRequestError("period")
+    types = payload.get("types")
+    if types is not None and not types_ok(types):
+        raise ViewRequestError("types")
+    return chosen, types
 
 
 def period_choice(period: Any) -> str | tuple[date, date] | None:
