@@ -2853,3 +2853,197 @@ export function recapDays(answer, columns, language) {
   const before = typeof previous.start === "string" && typeof previous.end === "string" ? days(previous.start, previous.end) : message("view.recap.outside");
   return message("view.recap.days", {}, { now: columns.now, nowDays: now, before: columns.before, beforeDays: before });
 }
+
+// --- Saving as an image (stage R1 of v2.2.0) ------------------------------
+
+// The properties of the styles of the page that a saved picture carries, each
+// as the attribute of SVG that says the same: the colors and the lines of its
+// shapes, and the sizes and forms of its letters. SVG has no attribute
+// font-variant-numeric, and its font-variant takes the same value (Codex's
+// review of the plan of R1); display is not written, as what does not show
+// is left out; the font is written once, on the outer element.
+export const SAVE_ATTRIBUTES = [
+  ["fill", "fill"],
+  ["stroke", "stroke"],
+  ["stroke-width", "stroke-width"],
+  ["stroke-dasharray", "stroke-dasharray"],
+  ["stroke-linecap", "stroke-linecap"],
+  ["stroke-linejoin", "stroke-linejoin"],
+  ["opacity", "opacity"],
+  ["fill-opacity", "fill-opacity"],
+  ["stroke-opacity", "stroke-opacity"],
+  ["font-size", "font-size"],
+  ["font-weight", "font-weight"],
+  ["font-variant-numeric", "font-variant"],
+  ["paint-order", "paint-order"],
+];
+// The one of those that a shape does not take from the shape around it, with
+// its first value.
+const SAVE_NOT_INHERITED = { opacity: "1" };
+
+// What a picture leaves out of the charts of the page: the cross line and the
+// frame of the period of the list, and the marks unless the person puts them
+// in (the plan of R1).
+export const SAVE_LEFT_OUT = [".cross", ".list-frame"];
+export const SAVE_MARKS = [".day-band", ".day-mark", ".day-mark-name"];
+
+// The attributes that a shape of a picture takes from the styles computed for
+// it in the page: all of them on the outer element; on the others, those that
+// differ from the shape around them, or for opacity from its first value, so
+// that the file stays small and shows the same.
+export function savedAttributes(computed, around = null) {
+  const attributes = [];
+  for (const [property, attribute] of SAVE_ATTRIBUTES) {
+    const value = computed[property];
+    if (typeof value !== "string" || value === "") {
+      continue;
+    }
+    if (around !== null && value === (Object.hasOwn(SAVE_NOT_INHERITED, property) ? SAVE_NOT_INHERITED[property] : around[property])) {
+      continue;
+    }
+    attributes.push([attribute, value]);
+  }
+  return attributes;
+}
+
+const ITEM_KEY = /^[a-z0-9]+$/;
+
+// The days of a saved picture: those of the answer, the period shown as ‹ ›
+// move it, not the ends of the weeks or months of its panels (the checker's
+// review of the plan of R1).
+export function saveDays(answer) {
+  return typeof answer?.start === "string" && typeof answer?.end === "string" ? { start: answer.start, end: answer.end } : null;
+}
+
+// The name of a saved picture: the days of the period shown (those of the
+// answer, which ‹ › move, not the ends of its weeks or months) and the keys of
+// the items of its panels in the order shown; nothing of the person's own,
+// such as the folder of the output or the names of marks and layouts. Null
+// where it cannot be made.
+export function saveFileName(start, end, keys) {
+  if (!ISO_DAY.test(String(start)) || !ISO_DAY.test(String(end)) || !keys.length || !keys.every((key) => ITEM_KEY.test(String(key)))) {
+    return null;
+  }
+  return `garmin-view_${start}_${end}_${keys.join("-")}.svg`;
+}
+
+// The panels that a picture copies, in the order shown (the panel made big
+// first: Codex's review of the plan of R1): those drawn as charts, or of them
+// the one chosen, where only one is saved.
+export function savedPanels(shown, tables, scope, chosen) {
+  const charts = shown.filter((key) => !tables.includes(key));
+  if (scope === "one") {
+    return charts.includes(chosen) ? [chosen] : [];
+  }
+  return charts;
+}
+
+// Whether a picture can be saved: where the summary can show, and with an
+// answer of the panels that is not on its way, no stop of the panels, and a
+// chart to copy, as the answer on its way keeps the charts of the one before
+// (Codex's review of the plan of R1).
+export function saveShowable({ viewing, apart, full, items, answer, loading, stopped, charts }) {
+  return Boolean(viewing && !apart && !full && items > 0 && answer !== null && answer !== undefined && !loading && !stopped && charts > 0);
+}
+
+// The pieces of the line under a picture: the period shown, the grain of the
+// answer (not "auto"), the activity types that the answer counts as the field
+// of the types says them (also an output without activities), and the name
+// and version of the app; the page puts its separator between them.
+export function saveFooter({ start, end, grain, answerTypes, types, version, language }) {
+  const counted = Array.isArray(answerTypes) ? answerTypes : defaultTypes(types);
+  return [
+    message("view.save.period", { from: dateText(start, language), to: dateText(end, language) }),
+    message("view.save.grain", {}, { grain: GRAIN_KEYS[grain] }),
+    message("view.save.types", {}, { types: typesSummary(counted, types) }),
+    typeof version === "string" && version !== "" ? message("view.save.app", { version }, { app: "app.title" }) : message("app.title"),
+  ];
+}
+
+// The lines of a row of pieces of text in a width (a heading with its keys,
+// or the line under a picture), as SVG does not wrap its text (Codex's review
+// of the plan of R1): each piece follows the one before after the gap where
+// it fits, and starts a new line where it does not; a piece wider than the
+// width is cut where it fits, after a space where it has one. ``measure``
+// gives the width of a text of a piece.
+export function saveLines(pieces, width, gap, measure) {
+  const lines = [];
+  let line = [];
+  let end = 0;
+  const close = () => {
+    if (line.length) {
+      lines.push(line);
+    }
+    line = [];
+    end = 0;
+  };
+  for (const piece of pieces) {
+    let rest = String(piece.text);
+    while (rest !== "") {
+      const start = line.length ? end + gap : 0;
+      const size = measure(rest, piece);
+      if (start + size <= width) {
+        line.push({ ...piece, text: rest, x: start, width: size });
+        end = start + size;
+        break;
+      }
+      if (line.length) {
+        close();
+        continue;
+      }
+      const cut = cutText(rest, width, (text) => measure(text, piece));
+      const text = rest.slice(0, cut);
+      line.push({ ...piece, text, x: 0, width: measure(text, piece) });
+      close();
+      rest = rest.slice(cut).replace(/^\s+/u, "");
+    }
+  }
+  close();
+  return lines;
+}
+
+// Where a text wider than the width is cut: after the last space before the
+// letters that fit, or else after the last letter that fits, at least one
+// letter, never inside a pair of the letters of UTF-16.
+function cutText(text, width, measure) {
+  const letters = Array.from(text);
+  let fits = letters[0].length;
+  let length = 0;
+  for (const letter of letters) {
+    length += letter.length;
+    if (measure(text.slice(0, length)) > width) {
+      break;
+    }
+    fits = length;
+  }
+  const space = text.lastIndexOf(" ", fits - 1);
+  return space > 0 ? space : fits;
+}
+
+// The frame of a picture: its width and the height of its parts, grown to
+// hold what they show out of their own frames, such as a label at the end of
+// the time axis, with the room of the outlines of the words (Codex's review
+// of the diff of R1). ``boxes`` are the edges of what the picture draws.
+export function saveFrame(boxes, width, height, pad = 4) {
+  let left = 0;
+  let top = 0;
+  let right = width;
+  let bottom = height;
+  for (const box of boxes) {
+    left = Math.min(left, box.left - pad);
+    top = Math.min(top, box.top - pad);
+    right = Math.max(right, box.right + pad);
+    bottom = Math.max(bottom, box.bottom + pad);
+  }
+  const x = Math.floor(left);
+  const y = Math.floor(top);
+  return { x, y, width: Math.ceil(right) - x, height: Math.ceil(bottom) - y };
+}
+
+// What the line after a saving is said of: the output, the period, the types,
+// the items of the panels, and the language. A change of any of them takes
+// the line away; a drawing again does not (the checker's review of the plan
+// of R1).
+export function saveNoticeKey({ ticket, period, types, items, language }) {
+  return JSON.stringify([ticket ?? null, period ?? null, types ?? null, items ?? [], language ?? null]);
+}

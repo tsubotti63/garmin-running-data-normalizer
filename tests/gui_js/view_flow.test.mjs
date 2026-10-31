@@ -2008,3 +2008,131 @@ test("an item has a row for each series of the two periods, in the order of the 
     ["Running", 50, 48],
   ]);
 });
+
+// --- Saving as an image (stage R1 of v2.2.0) -------------------------------
+
+test("a saved picture writes the styles of the page as attributes of SVG, tabular figures as font-variant", () => {
+  assert.deepEqual(
+    view.SAVE_ATTRIBUTES.find(([property]) => property === "font-variant-numeric"),
+    ["font-variant-numeric", "font-variant"],
+  );
+  // The outline of the names of the marks is drawn under the letters
+  // (the checker's R1-1).
+  assert.deepEqual(view.SAVE_ATTRIBUTES.find(([property]) => property === "paint-order"), ["paint-order", "paint-order"]);
+  // Every attribute is one that SVG has; font-family is written once, on the
+  // outer element, and display never.
+  const svg = new Set(["fill", "stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "stroke-linejoin", "opacity", "fill-opacity", "stroke-opacity", "font-size", "font-weight", "font-variant", "paint-order"]);
+  assert.deepEqual(view.SAVE_ATTRIBUTES.map(([, attribute]) => attribute).filter((attribute) => !svg.has(attribute)), []);
+  assert.equal(view.SAVE_ATTRIBUTES.some(([property]) => ["font-family", "display"].includes(property)), false);
+  const outer = { fill: "rgb(0, 0, 0)", stroke: "none", "stroke-width": "1px", opacity: "1", "font-size": "14px", "font-variant-numeric": "normal", "paint-order": "normal" };
+  assert.deepEqual(
+    view.savedAttributes(outer).map(([attribute]) => attribute),
+    ["fill", "stroke", "stroke-width", "opacity", "font-size", "font-variant", "paint-order"],
+  );
+  // Inside, what differs from the shape around it only.
+  const name = { ...outer, fill: "rgb(86, 96, 112)", stroke: "rgb(255, 255, 255)", "stroke-width": "4px", "font-size": "11px", "paint-order": "stroke" };
+  assert.deepEqual(view.savedAttributes(name, outer), [
+    ["fill", "rgb(86, 96, 112)"],
+    ["stroke", "rgb(255, 255, 255)"],
+    ["stroke-width", "4px"],
+    ["font-size", "11px"],
+    ["paint-order", "stroke"],
+  ]);
+  assert.deepEqual(view.savedAttributes({ ...outer, "font-variant-numeric": "tabular-nums" }, outer), [["font-variant", "tabular-nums"]]);
+  // Opacity is not taken from the shape around: written where it is not 1.
+  const faded = { ...outer, opacity: "0.5" };
+  assert.deepEqual(view.savedAttributes(faded, faded), [["opacity", "0.5"]]);
+  assert.deepEqual(view.savedAttributes(outer, faded), []);
+});
+
+test("a saved picture leaves out the cross line and the frame of the list, and the marks unless they go in", () => {
+  assert.deepEqual(view.SAVE_LEFT_OUT, [".cross", ".list-frame"]);
+  assert.deepEqual(view.SAVE_MARKS, [".day-band", ".day-mark", ".day-mark-name"]);
+});
+
+test("the days of a saved picture are those of the answer, not the ends of the weeks of its panels (periods[0].start)", () => {
+  const answer = { start: "2025-10-22", end: "2026-10-21", periods: [{ start: "2025-10-20", end: "2025-10-26" }, { start: "2026-10-19", end: "2026-10-25" }] };
+  assert.deepEqual(view.saveDays(answer), { start: "2025-10-22", end: "2026-10-21" });
+  assert.equal(view.saveDays({ start: null, end: null, periods: [] }), null);
+  assert.equal(view.saveDays(null), null);
+});
+
+test("the name of a saved picture has the days and the keys of the panels only, nothing of the person's own", () => {
+  assert.equal(view.saveFileName("2025-10-22", "2026-10-21", ["dist", "pace", "hr"]), "garmin-view_2025-10-22_2026-10-21_dist-pace-hr.svg");
+  // Not a key of an item, such as a name of a mark or a place: no name.
+  for (const keys of [["dist", "けが"], ["dist", "../x"], ["Dist"], []]) {
+    assert.equal(view.saveFileName("2025-10-22", "2026-10-21", keys), null, JSON.stringify(keys));
+  }
+  for (const [start, end] of [["2025年", "2026-10-21"], [null, "2026-10-21"], ["2025-10-22", undefined]]) {
+    assert.equal(view.saveFileName(start, end, ["dist"]), null, `${start} ${end}`);
+  }
+});
+
+test("a picture copies the panels in the order shown, the panel made big first, and charts only", () => {
+  // The order shown has the panel made big first (shownPanels), and the
+  // panels shown as tables are left out.
+  assert.deepEqual(view.savedPanels(["hr", "dist", "pace"], ["pace"], "all", "dist"), ["hr", "dist"]);
+  assert.deepEqual(view.savedPanels(["hr", "dist", "pace"], [], "one", "dist"), ["dist"]);
+  assert.deepEqual(view.savedPanels(["hr", "dist", "pace"], ["dist"], "one", "dist"), []);
+  assert.deepEqual(view.savedPanels(["hr", "dist"], [], "one", "vo2"), []);
+});
+
+test("a picture can be saved only with an answer not on its way, no stop of the panels, and a chart", () => {
+  const ready = { viewing: true, apart: false, full: false, items: 2, answer: {}, loading: false, stopped: false, charts: 1 };
+  assert.equal(view.saveShowable(ready), true);
+  for (const [name, value] of [["viewing", false], ["apart", true], ["full", true], ["items", 0], ["answer", null], ["loading", true], ["stopped", true], ["charts", 0]]) {
+    assert.equal(view.saveShowable({ ...ready, [name]: value }), false, name);
+  }
+});
+
+test("the line under a picture says the period, the grain of the answer, the types counted, and the version", () => {
+  const types = [
+    { name: "running", count: 10, running: true },
+    { name: "trail_running", count: 2, running: true },
+    { name: "cycling", count: 5, running: false },
+  ];
+  const pieces = (options, language = "ja") => view.saveFooter({ start: "2025-10-22", end: "2026-10-21", grain: "week", answerTypes: null, types, version: "2.2.0", language, ...options }).map((piece) => words(piece, language));
+  assert.deepEqual(pieces({}), ["期間 2025年10月22日〜2026年10月21日", "まとめ方 週", "数える種目 ランニングの種目すべて（2 つ）", "Garmin Running Data Normalizer 2.2.0"]);
+  assert.deepEqual(pieces({}, "en"), ["Period October 22, 2025–October 21, 2026", "Group by Week", "Activity types counted: All running types (2)", "Garmin Running Data Normalizer 2.2.0"]);
+  // The types that the answer counts, the grain of the answer, no version.
+  assert.deepEqual(pieces({ answerTypes: ["cycling"], grain: "day", version: null }), ["期間 2025年10月22日〜2026年10月21日", "まとめ方 日", "数える種目 1 つの種目", "Garmin Running Data Normalizer"]);
+  // An output without activities (Codex's review of the plan of R1).
+  assert.equal(pieces({ types: [] })[2], "数える種目 アクティビティの記録がありません");
+});
+
+test("the lines of a picture put each piece where it fits after the gap, and cut a piece wider than the width after a space", () => {
+  const measure = (text) => text.length * 10;
+  const shape = (lines) => lines.map((line) => line.map((piece) => [piece.text, piece.x]));
+  assert.deepEqual(shape(view.saveLines([{ text: "abc" }, { text: "de" }], 100, 5, measure)), [[["abc", 0], ["de", 35]]]);
+  assert.deepEqual(shape(view.saveLines([{ text: "abcdefg" }, { text: "hijk" }], 100, 5, measure)), [[["abcdefg", 0]], [["hijk", 0]]]);
+  assert.deepEqual(shape(view.saveLines([{ text: "ab cd efgh ij" }], 70, 5, measure)), [[["ab cd", 0]], [["efgh ij", 0]]]);
+  // Japanese has no space: cut after the last letter that fits.
+  assert.deepEqual(shape(view.saveLines([{ text: "印の名前がとても長い" }], 50, 5, measure)), [[["印の名前が", 0]], [["とても長い", 0]]]);
+  // Never inside a pair of the letters of UTF-16, at least one letter.
+  assert.deepEqual(shape(view.saveLines([{ text: "😀😀😀" }], 30, 5, measure)), [[["😀", 0]], [["😀", 0]], [["😀", 0]]]);
+  assert.deepEqual(shape(view.saveLines([{ text: "abc" }], 5, 5, measure)), [[["a", 0]], [["b", 0]], [["c", 0]]]);
+  // The measure has the piece: a name in bold is wider.
+  const bold = (text, piece) => text.length * (piece.bold ? 20 : 10);
+  assert.deepEqual(shape(view.saveLines([{ text: "ab", bold: true }, { text: "cd" }], 70, 5, bold)), [[["ab", 0], ["cd", 45]]]);
+  assert.deepEqual(shape(view.saveLines([{ text: "abc", bold: true }, { text: "cd" }], 70, 5, bold)), [[["abc", 0]], [["cd", 0]]]);
+});
+
+test("the line after a saving goes with the output, the period, the types, the items, and the language", () => {
+  const base = { ticket: "t1", period: "1y", types: null, items: ["dist"], language: "ja" };
+  const key = view.saveNoticeKey(base);
+  assert.equal(view.saveNoticeKey({ ...base }), key);
+  for (const [name, value] of [["ticket", "t2"], ["period", "3y"], ["types", ["running"]], ["items", ["dist", "hr"]], ["language", "en"]]) {
+    assert.notEqual(view.saveNoticeKey({ ...base, [name]: value }), key, name);
+  }
+});
+
+test("the frame of a picture grows to what its parts show out of their frames, with the room of the outlines", () => {
+  // Nothing out: the width and the height of the parts.
+  assert.deepEqual(view.saveFrame([], 1200, 500), { x: 0, y: 0, width: 1200, height: 500 });
+  assert.deepEqual(view.saveFrame([{ left: 8, top: 8, right: 1192, bottom: 480 }], 1200, 500), { x: 0, y: 0, width: 1200, height: 500 });
+  // A label at the end of the time axis, and one at the start (Codex's
+  // review of the diff of R1).
+  assert.deepEqual(view.saveFrame([{ left: 1180, top: 470, right: 1210.2, bottom: 484 }], 1200, 500), { x: 0, y: 0, width: 1215, height: 500 });
+  assert.deepEqual(view.saveFrame([{ left: -3, top: 2, right: 40, bottom: 12 }], 1200, 500), { x: -7, y: -2, width: 1207, height: 502 });
+  assert.deepEqual(view.saveFrame([{ left: 8, top: 490, right: 100, bottom: 503 }], 1200, 500, 0), { x: 0, y: 0, width: 1200, height: 503 });
+});

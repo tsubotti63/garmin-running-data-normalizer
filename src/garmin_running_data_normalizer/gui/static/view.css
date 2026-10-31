@@ -2494,6 +2494,106 @@ button.small {
   stroke-width: 2.5;
 }
 
+/* Saving as an image (stage R1 of v2.2.0): a window under the row above the
+   panels, where those of the marks and the summary open, one at a time. */
+.save-pop {
+  top: 100%;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 540px;
+  max-width: calc(100vw - 32px);
+  margin-top: 6px;
+  overflow: auto;
+  color: var(--text);
+}
+
+.save-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.save-field legend {
+  width: 100%;
+  margin-bottom: 2px;
+  padding: 0;
+  font-weight: 600;
+}
+
+.save-choice,
+.save-one {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* A choice keeps its words on one line; one that does not fit goes to the
+   next line whole (the real page of R1: "This panel only" was cut in three). */
+.save-field label {
+  white-space: nowrap;
+}
+
+.save-note,
+.save-file,
+.save-warn p {
+  margin: 0;
+}
+
+.save-file code {
+  overflow-wrap: anywhere;
+}
+
+.save-problem {
+  margin: 0;
+  color: var(--ng);
+}
+
+.save-problem:empty {
+  display: none;
+}
+
+/* The box out of the page that a picture is made in: the copies of the
+   charts, the words, and the time axis are styled there as in the page, in
+   the light colors where the person chose them, and read once at the end. */
+.save-stage {
+  position: fixed;
+  top: 0;
+  left: -100000px;
+  width: 1200px;
+  pointer-events: none;
+}
+
+/* The ground and the words of a picture, in the colors of the page. */
+.save-surface {
+  fill: var(--surface);
+}
+
+.save-name {
+  fill: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.save-unit,
+.save-kind,
+.save-key,
+.save-footer {
+  fill: var(--sub);
+  font-size: 12px;
+}
+
+.save-empty {
+  fill: var(--muted);
+  font-size: 12px;
+}
+
+
 @media (forced-colors: active) {
   .plot-dot {
     fill: CanvasText;
@@ -2511,5 +2611,20 @@ button.small {
 
   .spread-chosen {
     stroke: Highlight;
+  }
+
+  /* The ground and the words of a picture take the colors of the system as
+     its charts do (Codex's review of the plan of R1). */
+  .save-surface {
+    fill: Canvas;
+  }
+
+  .save-name,
+  .save-unit,
+  .save-kind,
+  .save-key,
+  .save-footer,
+  .save-empty {
+    fill: CanvasText;
   }
 }

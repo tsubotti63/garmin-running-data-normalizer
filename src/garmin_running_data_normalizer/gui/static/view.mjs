@@ -189,6 +189,18 @@ import {
   spreadRange,
   spreadReading,
   spreadWide,
+  SAVE_ATTRIBUTES,
+  SAVE_LEFT_OUT,
+  SAVE_MARKS,
+  saveDays,
+  saveFileName,
+  saveFooter,
+  saveFrame,
+  saveLines,
+  saveNoticeKey,
+  saveShowable,
+  savedAttributes,
+  savedPanels,
 } from "./view_flow.mjs";
 import {
   PLOT_BOTTOM,
@@ -370,6 +382,24 @@ const ui = {
   recapBody: byId("recap-body"),
   recapDifferenceNote: byId("recap-difference-note"),
   recapCut: byId("recap-cut"),
+  saveOpen: byId("save-open"),
+  savePop: byId("save-pop"),
+  saveTitle: byId("save-pop-title"),
+  saveClose: byId("save-pop-close"),
+  saveAll: byId("save-all"),
+  saveAllLabel: byId("save-all-label"),
+  saveOne: byId("save-one"),
+  savePanel: byId("save-panel"),
+  saveTables: byId("save-tables"),
+  saveLight: byId("save-light"),
+  saveScreen: byId("save-screen"),
+  saveMarks: byId("save-marks"),
+  saveMarksNone: byId("save-marks-none"),
+  saveName: byId("save-name"),
+  saveWarn: byId("save-warn"),
+  saveProblem: byId("save-problem"),
+  saveCancel: byId("save-cancel"),
+  saveGo: byId("save-go"),
   // The bar at the bottom of the page, above the windows (stage Q1).
   viewBar: document.querySelector(".view-bar"),
   marksLegend: byId("marks-legend"),
@@ -492,6 +522,7 @@ const ui = {
   themeChoices: [byId("theme-auto"), byId("theme-light"), byId("theme-dark")],
   themeNow: byId("theme-now"),
   settingsStatus: byId("settings-status"),
+  saveStatus: byId("save-status"),
   version: byId("product-version"),
   quit: byId("quit-button"),
   connection: byId("connection-status"),
@@ -658,6 +689,16 @@ const state = {
   recapSeq: 0,
   recapStop: null,
   recapShown: false,
+  // Saving as an image (stage R1 of v2.2.0): whether its window is open, its
+  // choices for this time it opens, why it could not save, and the line
+  // after a saving, as what it is said of.
+  saveOpen: false,
+  saveScope: "all",
+  savePanel: null,
+  saveColors: "light",
+  saveMarks: false,
+  saveProblem: null,
+  saveNotice: null,
   markEditing: null,
   markAsk: null,
   markProblem: null,
@@ -1698,6 +1739,7 @@ async function openMarks(open) {
   if (open) {
     // One window opens under the right end of the row at a time (stage Q1).
     state.recapOpen = false;
+    state.saveOpen = false;
   }
   state.markAsk = null;
   state.markProblem = null;
@@ -1865,6 +1907,10 @@ function recapKey() {
 function openRecap(open) {
   state.recapOpen = open;
   state.recapAsked = null;
+  if (open) {
+    // The window of the saving, at the same place, closes too (stage R1).
+    state.saveOpen = false;
+  }
   if (open && state.marksOpen) {
     state.marksOpen = false;
     state.markAsk = null;
@@ -2078,6 +2124,424 @@ function renderRecapTable(answer, columns) {
     }
   }
   setText(ui.recapCut, notes.join(" "));
+}
+
+// --- Saving as an image (stage R1 of v2.2.0) ------------------------------
+
+// The width of a picture, its margin, and the room of its charts, which are
+// those of the page made as wide as that, their heights in the same ratio; the
+// gap between the pieces of a heading, the heights of a line of a heading and
+// of the line under the picture, and the room of a key of a line (its swatch
+// and a gap).
+const SAVE_WIDTH = 1200;
+const SAVE_MARGIN = 8;
+const SAVE_ROOM = SAVE_WIDTH - 2 * SAVE_MARGIN;
+const SAVE_GAP = 8;
+const SAVE_LINE = 20;
+const SAVE_FOOT_LINE = 16;
+const SAVE_SWATCH = 26;
+
+// The chart of the page of a panel, or null where it has none (a table, or a
+// plot too small to draw).
+function savedChart(key) {
+  return drawn.find((entry) => entry.key === key)?.plot?.querySelector(":scope > svg") ?? null;
+}
+
+// What a saving does now: the panels in the order shown (the panel made big
+// first) without those shown as tables, the one chosen (which stays chosen
+// where it no longer shows, so that a picture never takes another panel
+// unseen) and those saved, the name of the file from the days of the answer,
+// and whether the page draws marks that can go in.
+function savePlan() {
+  const shown = shownPanels().map((entry) => entry.key);
+  const tables = shown.filter((key) => state.tables.has(key) && panelMode(key) !== "mini");
+  const charts = shown.filter((key) => !tables.includes(key));
+  const chosen = state.savePanel ?? charts[0] ?? null;
+  const keys = savedPanels(shown, tables, state.saveScope, chosen);
+  const days = saveDays(state.answer);
+  return {
+    charts,
+    tables,
+    chosen,
+    keys,
+    name: days === null ? null : saveFileName(days.start, days.end, keys),
+    marksDrawn: ui.panels.querySelector(".plot > svg .day-mark, .plot > svg .day-band") !== null,
+  };
+}
+
+// Whether the panels can be saved now, as the window shows it and as a saving
+// checks it again: an answer not on its way, no stop of the panels, and the
+// charts to copy (Codex's review of the plan of R1).
+function saveReady(viewing) {
+  const plan = savePlan();
+  const ready =
+    plan.name !== null &&
+    plan.keys.every((key) => savedChart(key) !== null) &&
+    saveShowable({
+      viewing,
+      apart: apart(),
+      full: state.full,
+      items: state.items.length,
+      answer: state.answer,
+      loading: state.loading,
+      stopped: state.seriesStop !== null,
+      charts: plan.keys.length,
+    });
+  return { plan, ready };
+}
+
+// What the line after a saving is said of (the checker's R1-3).
+function saveNoticeNow() {
+  return saveNoticeKey({
+    ticket: state.view?.view ?? null,
+    period: periodRequest(state.period, state.range),
+    types: typesRequest(state.counted, state.view?.types),
+    items: state.items,
+    language: state.language,
+  });
+}
+
+function fitSaveWindow() {
+  fitPop(ui.savePop);
+}
+
+// The window of the saving: where the window of the summary can show, its
+// choices of this time it opens, the name of the file that it makes, the line
+// before a saving, and why it cannot save; the focus inside it goes back to
+// its button where it hides.
+function renderSave(viewing) {
+  if (state.view === null && state.stop !== null) {
+    state.saveOpen = false;
+  }
+  const showable = recapShowable(viewing);
+  ui.saveOpen.disabled = !viewing || !state.items.length;
+  ui.saveOpen.setAttribute("aria-expanded", String(state.saveOpen && showable));
+  const focused = ui.savePop.contains(document.activeElement);
+  ui.savePop.hidden = !state.saveOpen || !showable;
+  if (ui.savePop.hidden) {
+    if (focused) {
+      const shown = (node) => node.closest("[hidden]") === null;
+      const target = !ui.saveOpen.disabled && shown(ui.saveOpen) ? ui.saveOpen : [ui.stopHeading, ui.emptyHeading].find(shown);
+      target?.focus();
+    }
+    return;
+  }
+  const { plan, ready } = saveReady(viewing);
+  setText(ui.saveAllLabel, t("view.save.all", { n: formatNumber(plan.charts.length) }));
+  const options = plan.charts.map((key) => [key, itemName(key)]);
+  const signature = JSON.stringify(options);
+  if (ui.savePanel.dataset.signature !== signature) {
+    ui.savePanel.replaceChildren(
+      ...options.map(([key, name]) => {
+        const option = element("option", "", name);
+        option.value = key;
+        return option;
+      }),
+    );
+    ui.savePanel.dataset.signature = signature;
+  }
+  // The panel chosen that no longer shows is not chosen in the list, and the
+  // window says so (Codex's review of the plan of R1).
+  const gone = state.saveScope === "one" && plan.chosen !== null && !plan.charts.includes(plan.chosen);
+  if (plan.charts.includes(plan.chosen)) {
+    ui.savePanel.value = plan.chosen;
+  } else {
+    ui.savePanel.selectedIndex = -1;
+  }
+  ui.saveAll.checked = state.saveScope === "all";
+  ui.saveOne.checked = state.saveScope === "one";
+  ui.saveOne.disabled = !plan.charts.length;
+  ui.savePanel.disabled = !plan.charts.length;
+  ui.saveTables.hidden = !plan.tables.length;
+  setText(ui.saveTables, !plan.tables.length ? "" : plan.charts.length ? t("view.save.tables", { n: formatNumber(plan.tables.length) }) : t("view.save.all_tables"));
+  ui.saveLight.checked = state.saveColors === "light";
+  ui.saveScreen.checked = state.saveColors === "screen";
+  if (!plan.marksDrawn) {
+    // Chosen again where marks show again, so that their names never go in
+    // as chosen before (Codex's review of the diff of R1).
+    state.saveMarks = false;
+  }
+  ui.saveMarks.disabled = !plan.marksDrawn;
+  ui.saveMarks.checked = plan.marksDrawn && state.saveMarks;
+  ui.saveMarksNone.hidden = plan.marksDrawn;
+  setText(ui.saveName, plan.name ?? "—");
+  const warn = t("view.save.warn");
+  setText(ui.saveWarn, ui.saveMarks.checked ? `${warn}${state.language === "ja" ? "" : " "}${t("view.save.warn_marks")}` : warn);
+  ui.saveGo.disabled = !ready;
+  const problem = state.saveProblem ?? (gone ? "view.save.gone" : null);
+  setText(ui.saveProblem, problem !== null ? t(problem) : state.loading ? t("view.loading") : "");
+  fitSaveWindow();
+}
+
+// The line after a saving, in the bar at the bottom, until the output, the
+// period, the types, the items, or the language change; a drawing again
+// keeps it (the checker's R1-3).
+function renderSaveNotice() {
+  if (state.saveNotice !== null && state.saveNotice !== saveNoticeNow()) {
+    state.saveNotice = null;
+  }
+  setText(ui.saveStatus, state.saveNotice === null ? "" : t("view.save.notice"));
+}
+
+// The window of the saving opens with the focus on its title, each time with
+// the first choices, which nothing remembers, so that the names of the marks
+// do not go in as chosen before (the plan of R1); the other windows at its
+// place close, and the line after a saving goes.
+function openSave(open) {
+  state.saveOpen = open;
+  state.saveProblem = null;
+  if (open) {
+    state.saveScope = "all";
+    state.savePanel = null;
+    state.saveColors = "light";
+    state.saveMarks = false;
+    state.saveNotice = null;
+    state.recapOpen = false;
+    if (state.marksOpen) {
+      state.marksOpen = false;
+      state.markAsk = null;
+      editMark(null, false);
+    }
+  }
+  render();
+  (open ? ui.saveTitle : ui.saveOpen).focus();
+}
+
+// A choice of the window.
+function changeSave(change) {
+  Object.assign(state, change, { saveProblem: null });
+  render();
+}
+
+// Saving: the panels checked again as the window names them, the picture made
+// in the box out of the page and handed to the browser as a download from a
+// blob: address, all in the press of the button with nothing between, as a
+// browser may not save a download that comes later (the checker's R1-4).
+// Nothing is sent anywhere. Where it cannot be done, the window stays with
+// the reason and the focus on its button, and the line after a saving does
+// not show (Codex's review of the plan of R1).
+function saveImage() {
+  const viewing = state.connected && !state.stopped && !state.quitting && state.view !== null && state.opening === null;
+  const { plan, ready } = saveReady(viewing);
+  let problem = null;
+  if (state.saveScope === "one" && !plan.keys.length) {
+    problem = "view.save.gone";
+  } else if (!ready || plan.name !== ui.saveName.textContent) {
+    problem = "view.save.changed";
+  }
+  if (problem === null) {
+    let stage = null;
+    let address = null;
+    try {
+      stage = saveStage(state.saveColors === "light");
+      const file = saveFile(stage, plan);
+      address = URL.createObjectURL(new Blob([file], { type: "image/svg+xml;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = address;
+      link.download = plan.name;
+      stage.append(link);
+      link.click();
+    } catch {
+      problem = "view.save.failed";
+    } finally {
+      stage?.remove();
+      if (address !== null) {
+        // After the browser has taken the file.
+        const taken = address;
+        setTimeout(() => URL.revokeObjectURL(taken), 10000);
+      }
+    }
+  }
+  state.saveProblem = problem;
+  if (problem === null) {
+    state.saveOpen = false;
+    state.saveNotice = saveNoticeNow();
+  }
+  render();
+  (problem === null ? ui.saveOpen : ui.saveGo).focus();
+}
+
+// The box out of the page that a picture is made in, in the light colors
+// where they are chosen: the only element beside the root of the page that
+// has data-theme (the plan of R1).
+function saveStage(light) {
+  const stage = element("div", "save-stage");
+  stage.setAttribute("aria-hidden", "true");
+  if (light) {
+    stage.dataset.theme = "light";
+  }
+  document.body.append(stage);
+  return stage;
+}
+
+// The width and the height of a chart of the page, as its view box has them.
+function viewSize(svg) {
+  const [, , width, height] = String(svg.getAttribute("viewBox") ?? "").split(/\s+/).map(Number);
+  return [width, height];
+}
+
+// A part of the page copied into a picture as wide as its charts: the shapes
+// of ``source`` (with those that match ``drop`` left out) in a frame of its
+// view box, which shows what the page shows outside it too (the checker's
+// R1-2). ``prepare`` may change the copy in the box first.
+function savePart(svg, stage, source, top, drop, prepare = null) {
+  const [width, height] = viewSize(source);
+  const copy = source.cloneNode(true);
+  stage.append(copy);
+  if (drop !== "") {
+    for (const node of copy.querySelectorAll(drop)) {
+      node.remove();
+    }
+  }
+  prepare?.(copy, width);
+  const tall = (height * SAVE_ROOM) / width;
+  const part = svgElement("svg", { x: SAVE_MARGIN, y: top.toFixed(1), width: SAVE_ROOM, height: tall.toFixed(1), viewBox: `0 0 ${width} ${height}`, overflow: "visible" });
+  part.append(...copy.childNodes);
+  copy.remove();
+  svg.append(part);
+  return tall;
+}
+
+// The words of a picture in lines, each piece at its place.
+function saveWords(svg, lines, top, height, measure) {
+  let y = top;
+  for (const line of lines) {
+    y += height;
+    for (const piece of line) {
+      let x = SAVE_MARGIN + piece.x;
+      if (piece.swatch) {
+        const swatch = lineSwatch(piece.swatch, piece.points);
+        for (const [name, value] of [["x", x], ["y", y - 9], ["width", 22], ["height", 8]]) {
+          swatch.setAttribute(name, String(value));
+        }
+        svg.append(swatch);
+        x += SAVE_SWATCH;
+      }
+      const words = svgElement("text", { class: piece.className, x: x.toFixed(1), y });
+      words.textContent = piece.text;
+      svg.append(words);
+    }
+  }
+  return y;
+}
+
+// The picture: for each panel its heading (the words of the heading of the
+// page, in lines that fit), its chart copied from the page without the cross
+// line, the frame of the list, and, unless they go in, the marks; the names
+// of the marks on its top chart as the page places them; then the time axis
+// and the line under it. Its styles are written in once it holds everything
+// (Codex's review of the plan of R1).
+function saveFile(stage, plan) {
+  const svg = svgElement("svg", { width: SAVE_WIDTH });
+  stage.append(svg);
+  const ground = svgElement("rect", { class: "save-surface", x: 0, y: 0, width: SAVE_WIDTH });
+  svg.append(ground);
+  const probe = svgElement("text");
+  svg.append(probe);
+  const measure = (words, piece) => {
+    probe.setAttribute("class", piece.className);
+    probe.textContent = words;
+    return probe.getComputedTextLength() + (piece.swatch ? SAVE_SWATCH : 0);
+  };
+  const answer = state.answer;
+  const marks = state.saveMarks && plan.marksDrawn;
+  const drop = [...SAVE_LEFT_OUT, ...(marks ? [] : SAVE_MARKS)].join(", ");
+  let y = SAVE_MARGIN;
+  plan.keys.forEach((key, index) => {
+    const entry = drawn.find((each) => each.key === key);
+    const heading = panelHeading(key, entry.item, entry.panel, answer.grain, entry.mode);
+    const pieces = [
+      { text: heading.name, className: "save-name" },
+      { text: heading.unit, className: "save-unit" },
+      ...(heading.kind === null ? [] : [{ text: heading.kind, className: "save-kind" }]),
+      ...heading.keys.map((line) => ({ text: line.name, className: "save-key", swatch: line.style, points: heading.points })),
+    ].filter((piece) => piece.text !== "");
+    y = saveWords(svg, saveLines(pieces, SAVE_ROOM, SAVE_GAP, measure), y, SAVE_LINE, measure) + 6;
+    const top = y;
+    // The names of the marks are on the top chart of the page; a picture
+    // whose top chart is another one writes them there (the plan of R1).
+    const names =
+      marks && index === 0 && key !== namedKey
+        ? (copy, width) => {
+            const periods = entry.periods;
+            appendMarkNames(copy, markShapes(state.marks, periods[0].start, periods[periods.length - 1].end, PLOT_LEFT, width - PLOT_RIGHT), width);
+          }
+        : null;
+    y += savePart(svg, stage, savedChart(key), top, drop, names);
+    if (entry.shapes?.empty) {
+      const empty = svgElement("text", { class: "save-empty", x: SAVE_WIDTH / 2, y: ((top + y) / 2).toFixed(1), "text-anchor": "middle" });
+      empty.textContent = t("view.summary.none");
+      svg.append(empty);
+    }
+    y += 10;
+  });
+  const axis = ui.timeAxis.querySelector(":scope > svg");
+  if (axis !== null) {
+    y += savePart(svg, stage, axis, y, "");
+  }
+  const days = saveDays(answer);
+  const separator = t("view.save.separator");
+  const footer = saveFooter({
+    start: days.start,
+    end: days.end,
+    grain: answer.grain,
+    answerTypes: state.answerTypes,
+    types: state.view?.types,
+    version: state.productVersion,
+    language: state.language,
+  }).map((piece) => describe(piece));
+  const footPieces = footer.map((words, index) => ({ text: index < footer.length - 1 ? `${words}${separator}` : words, className: "save-footer" }));
+  y = saveWords(svg, saveLines(footPieces, SAVE_ROOM, 0, measure), y + 6, SAVE_FOOT_LINE, measure) + SAVE_MARGIN + 4;
+  probe.remove();
+  svg.setAttribute("height", String(Math.ceil(y)));
+  svg.setAttribute("viewBox", `0 0 ${SAVE_WIDTH} ${Math.ceil(y)}`);
+  // What the parts show out of their frames, measured in the box at one
+  // pixel a unit, grows the frame of the picture (Codex's review of the diff
+  // of R1).
+  const origin = svg.getBoundingClientRect();
+  const boxes = [...svg.querySelectorAll("text, path, line, circle, rect")]
+    .filter((node) => node !== ground)
+    .map((node) => node.getBoundingClientRect())
+    .filter((box) => box.width > 0 || box.height > 0)
+    .map((box) => ({ left: box.left - origin.left, top: box.top - origin.top, right: box.right - origin.left, bottom: box.bottom - origin.top }));
+  const frame = saveFrame(boxes, SAVE_WIDTH, Math.ceil(y));
+  svg.setAttribute("width", String(frame.width));
+  svg.setAttribute("height", String(frame.height));
+  svg.setAttribute("viewBox", `${frame.x} ${frame.y} ${frame.width} ${frame.height}`);
+  for (const [name, value] of [["x", frame.x], ["y", frame.y], ["width", frame.width], ["height", frame.height]]) {
+    ground.setAttribute(name, String(value));
+  }
+  writeSaveStyles(svg);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(svg)}`;
+}
+
+// The styles of the page, written into a picture once it holds everything:
+// each element takes the attributes of SVG for what is computed for it in
+// the box (savedAttributes), what does not show is left out, and no class or
+// style stays; the font is that of the page, on the outer element.
+function writeSaveStyles(svg) {
+  const nodes = [svg, ...svg.querySelectorAll("*")];
+  const computed = new Map(
+    nodes.map((node) => {
+      const style = getComputedStyle(node);
+      return [node, { display: style.display, values: Object.fromEntries(SAVE_ATTRIBUTES.map(([property]) => [property, style.getPropertyValue(property)])) }];
+    }),
+  );
+  const font = getComputedStyle(svg).fontFamily;
+  for (const node of nodes) {
+    const { display, values } = computed.get(node);
+    if (node !== svg && display === "none") {
+      node.remove();
+      continue;
+    }
+    const around = node === svg ? null : computed.get(node.parentNode)?.values ?? null;
+    for (const [attribute, value] of savedAttributes(values, around)) {
+      node.setAttribute(attribute, value);
+    }
+    node.removeAttribute("class");
+    node.removeAttribute("style");
+  }
+  svg.setAttribute("font-family", font);
 }
 
 function renderMarks(viewing, live) {
@@ -2570,10 +3034,30 @@ function showsPoints(panel) {
   return panel.lines.some((line) => Array.isArray(line.points));
 }
 
+// The words of the heading of a panel, which the page and a picture of it
+// share (the checker's answer 2 of the plan of R1): its name, its unit, the
+// kind of its values but on a small panel, also by day, and the keys of its
+// lines where it has more than one, as lines or as points.
+function panelHeading(key, item, panel, grain, mode) {
+  const styles = lineStyles(panel);
+  const names = lineNames(panel, state.language);
+  const full = mode !== "mini";
+  return {
+    name: itemName(key),
+    unit: t(unitKey(key)),
+    kind: full ? t(kindKey(item, grain)) : null,
+    keys: full && panel.lines.length > 1 ? panel.lines.map((_line, number) => ({ style: styles[number], name: describe(names[number]) })) : [],
+    points: showsPoints(panel),
+    styles,
+    names,
+  };
+}
+
 function buildPanel({ key, item, panel }, index, count, periods, grain, marksText = "") {
   const mode = panelMode(key);
   const table = state.tables.has(key) && mode !== "mini";
-  const name = itemName(key);
+  const words = panelHeading(key, item, panel, grain, mode);
+  const name = words.name;
   const section = element("section", `panel-view${table ? " table" : ""}${mode === "normal" ? "" : ` ${mode}`}`);
   section.dataset.key = key;
   const headingId = `panel-${key}-name`;
@@ -2581,18 +3065,17 @@ function buildPanel({ key, item, panel }, index, count, periods, grain, marksTex
   const head = element("div", "panel-head");
   const heading = element("h3", "panel-name", name);
   heading.id = headingId;
-  head.append(heading, element("span", "panel-unit", t(unitKey(key))));
-  const styles = lineStyles(panel);
-  const names = lineNames(panel, state.language);
-  if (mode !== "mini") {
-    head.append(element("span", "panel-kind", t(kindKey(item, grain))));
-    if (panel.lines.length > 1) {
+  head.append(heading, element("span", "panel-unit", words.unit));
+  const { styles, names } = words;
+  if (words.kind !== null) {
+    head.append(element("span", "panel-kind", words.kind));
+    if (words.keys.length) {
       const keys = element("span", "panel-keys");
-      panel.lines.forEach((_line, number) => {
+      for (const line of words.keys) {
         const entry = element("span", "key");
-        entry.append(lineSwatch(styles[number], showsPoints(panel)), describe(names[number]));
+        entry.append(lineSwatch(line.style, words.points), line.name);
         keys.append(entry);
-      });
+      }
       head.append(keys);
     }
   }
@@ -5570,6 +6053,10 @@ function renderStage(live) {
     drawnSignature = null;
     overviewSignature = null;
   }
+  // The window of the saving after the panels, as it reads their charts
+  // (Codex's review of the diff of R1).
+  renderSave(viewing);
+  renderSaveNotice();
 }
 
 // The items of the first time, by their names.
@@ -6965,6 +7452,7 @@ function connect() {
   ui.marksShown.addEventListener("change", changeMarksShown);
   window.addEventListener("resize", fitMarksWindow);
   window.addEventListener("resize", fitRecapWindow);
+  window.addEventListener("resize", fitSaveWindow);
   ui.marksOpen.addEventListener("click", () => openMarks(!state.marksOpen));
   ui.marksPopClose.addEventListener("click", () => openMarks(false));
   // The summary of the panels (stage Q1 of v2.2.0).
@@ -6974,6 +7462,25 @@ function connect() {
     if (event.key === "Escape") {
       event.preventDefault();
       openRecap(false);
+    }
+  });
+  // Saving as an image (stage R1 of v2.2.0): Escape in the window closes it.
+  ui.saveOpen.addEventListener("click", () => openSave(!state.saveOpen));
+  ui.saveClose.addEventListener("click", () => openSave(false));
+  ui.saveCancel.addEventListener("click", () => openSave(false));
+  ui.saveAll.addEventListener("change", () => changeSave({ saveScope: "all" }));
+  // One panel is the panel the list shows when it is chosen, which stays
+  // chosen (Codex's review of the diff of R1).
+  ui.saveOne.addEventListener("change", () => changeSave({ saveScope: "one", savePanel: state.savePanel ?? (ui.savePanel.value || null) }));
+  ui.savePanel.addEventListener("change", () => changeSave({ saveScope: "one", savePanel: ui.savePanel.value }));
+  ui.saveLight.addEventListener("change", () => changeSave({ saveColors: "light" }));
+  ui.saveScreen.addEventListener("change", () => changeSave({ saveColors: "screen" }));
+  ui.saveMarks.addEventListener("change", () => changeSave({ saveMarks: ui.saveMarks.checked }));
+  ui.saveGo.addEventListener("click", saveImage);
+  ui.savePop.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      openSave(false);
     }
   });
   ui.marksList.addEventListener("click", marksAction);
