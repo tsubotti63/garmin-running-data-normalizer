@@ -341,6 +341,23 @@ class GuiViewSaveTest(unittest.TestCase):
         self.assertEqual(sorted(used - written - {"display"}), [])
         self.assertLessEqual({"fill", "stroke", "paint-order", "font-variant-numeric", "font-weight"}, used)
 
+    def test_a_picture_keeps_a_year_stood_out(self) -> None:
+        # Stage L3 of v2.2.0: a year stood out goes in as it shows, its marks on
+        # the shapes themselves, which the box keeps (Codex's review of the
+        # plan, 8), and its key bold, in the colors of the system where they
+        # are forced; the line after a saving goes when another year stands
+        # out (saveContent, above), but the window does not say that the
+        # picture changed (Codex's review of the plan, 2).
+        part = function_body(self.script, "saveComparePart")
+        self.assertIn('const className = key.getAttribute("aria-pressed") === "true" ? "save-key lit" : "save-key";', part)
+        self.assertIn('pieces.push({ text: keyWords(key), className, swatch: () => key.querySelector("svg").cloneNode(true) });', part)
+        self.assertIn('.filter((node) => !node.classList?.contains("visually-hidden"))', function_body(self.script, "keyWords"))
+        self.assertIn('const group = one ? svgElement("g", { class: "compare-marks" }) : svg;', function_body(self.script, "drawComparePlot"))
+        self.assertRegex(self.css, r"\.save-key\.lit \{\s*fill: var\(--text\);\s*font-weight: 600;\s*\}")
+        last = self.css.rindex("@media (forced-colors: active) {")
+        self.assertIn(".save-key.lit {\n    fill: CanvasText;\n  }", self.css[last:])
+        self.assertNotRegex(function_body(self.script, "saveImage"), r"\blit\b")
+
     def test_the_words_of_a_picture_take_the_colors_of_the_system_after_their_own(self) -> None:
         # Where the system forces its colors, the ground and the words of a
         # picture take them as its charts do; the rule comes after the
@@ -594,7 +611,7 @@ class GuiViewSaveTest(unittest.TestCase):
         self.assertIn("content: saveContent(view),", function_body(self.script, "saveNoticeNow"))
         content = function_body(self.script, "saveContent")
         for line in (
-            'return [state.compare.key, by, by === "race" ? state.compare.races : state.compare.years, compareModeNow(), compareMonthNow(), state.compareWeeks, state.compare.series, state.compare.grain];',
+            'return [state.compare.key, by, by === "race" ? state.compare.races : state.compare.years, compareModeNow(), compareMonthNow(), state.compareWeeks, state.compare.series, state.compare.grain, state.compare.lit?.id ?? null];',
             "return [state.plotPair.x, state.plotPair.y];",
             'return view === "spread" ? [state.spreadItem] : null;',
         ):

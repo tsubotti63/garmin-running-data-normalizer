@@ -291,9 +291,11 @@ export function barPaths(values, periods, scale, y, base) {
 }
 
 // The hollow dots of the periods of 0 of a total, on the baseline, as wide as
-// a period allows, from 2 px to the 4 px of a marker.
-export function zeroPath(values, periods, scale, base) {
-  let path = "";
+// a period allows, from 2 px to the 4 px of a marker: the middle and the
+// radius of each (for the pointer too, from stage L3 of v2.2.0), and their
+// path.
+export function zeroDots(values, periods, scale, base) {
+  const dots = [];
   values.forEach((value, index) => {
     if (value !== 0) {
       return;
@@ -301,9 +303,15 @@ export function zeroPath(values, periods, scale, base) {
     const period = periods[index];
     const room = (scale.x(period.end + 1) - scale.x(period.start)) / 2 - 1;
     const radius = Math.max(2, Math.min(MARKER_RADIUS, room));
-    path += circle(periodMiddle(scale, period), base - radius - 0.5, radius);
+    dots.push([periodMiddle(scale, period), base - radius - 0.5, radius]);
   });
-  return path;
+  return dots;
+}
+
+export function zeroPath(values, periods, scale, base) {
+  return zeroDots(values, periods, scale, base)
+    .map(([x, y, radius]) => circle(x, y, radius))
+    .join("");
 }
 
 // A line through the middles of the periods with a value, broken where a
@@ -314,6 +322,9 @@ export function linePath(values, periods, scale, y, { breakAtZero = false } = {}
   let path = "";
   let pen = false;
   const alone = [];
+  // The places of each piece of the line, for the pointer, rounded as the
+  // path draws them (stage L3 of v2.2.0).
+  const runs = [];
   values.forEach((value, index) => {
     if (!drawn(value)) {
       pen = false;
@@ -322,12 +333,16 @@ export function linePath(values, periods, scale, y, { breakAtZero = false } = {}
     const x = periodMiddle(scale, periods[index]);
     const yValue = y(value);
     path += `${pen ? "L" : "M"}${round(x)} ${round(yValue)}`;
+    if (!pen) {
+      runs.push([]);
+    }
+    runs[runs.length - 1].push([round(x), round(yValue)]);
     pen = true;
     if (!drawn(values[index - 1]) && !drawn(values[index + 1])) {
       alone.push([x, yValue]);
     }
   });
-  return { path, alone };
+  return { path, alone, runs };
 }
 
 // The places of the labels at the ends of the lines of the years compared
@@ -351,6 +366,80 @@ export function labelPlaces(ends, gap, bottom) {
   return placed;
 }
 
+// How near a press may be to what a line of the years on one panel draws to
+// stand its year out, in pixels of the page (stage L3 of v2.2.0).
+export const HIT_REACH = 8;
+
+// A dot for the pointer where its path draws it: its middle rounded as the
+// path rounds it, so that shapes drawn on one another tie, and its radius.
+const hitDot = ([x, y], radius) => [round(x), round(y), radius];
+
+// Where a press is on a chart, in the units of its view box, and the reach of
+// the pointer in them: ``box`` is the place of the chart on the page, whose
+// view box is as large as the chart in pixels of the page unless the page is
+// scaled.
+export function plotPlace(clientX, clientY, box, width, height) {
+  const across = box.width > 0 ? width / box.width : 1;
+  const down = box.height > 0 ? height / box.height : 1;
+  return { x: (clientX - box.left) * across, y: (clientY - box.top) * down, reach: HIT_REACH * across };
+}
+
+function segmentDistance([x1, y1], [x2, y2], x, y) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const length = dx * dx + dy * dy;
+  const along = length === 0 ? 0 : Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / length));
+  return Math.hypot(x - (x1 + along * dx), y - (y1 + along * dy));
+}
+
+// How far a place is from what a line draws (the ``hits`` of panelShapes):
+// the segments of each piece of its line, never across a break, and its dots
+// from their edge.
+export function shapeDistance(hits, x, y) {
+  let nearest = Infinity;
+  for (const run of hits?.runs ?? []) {
+    for (let at = 1; at < run.length; at += 1) {
+      nearest = Math.min(nearest, segmentDistance(run[at - 1], run[at], x, y));
+    }
+  }
+  for (const [middleX, middleY, radius] of hits?.dots ?? []) {
+    nearest = Math.min(nearest, Math.max(0, Math.hypot(x - middleX, y - middleY) - radius));
+  }
+  return nearest;
+}
+
+// The line (by its index) that a press at a place of a chart of the years on
+// one panel stands out: the one whose name at the end of its line holds the
+// place (``boxes``, of the names shown), or else the one whose shapes come
+// nearest within ``reach``; ``order`` lists the lines from the one drawn on
+// top, which a tie goes to. Null where none is near.
+export function shapeAt(hits, boxes, x, y, order, reach = HIT_REACH) {
+  for (const index of order) {
+    const box = boxes[index];
+    if (box && x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height) {
+      return index;
+    }
+  }
+  let found = null;
+  let nearest = Infinity;
+  for (const index of order) {
+    const distance = shapeDistance(hits[index], x, y);
+    if (distance <= reach && distance < nearest) {
+      found = index;
+      nearest = distance;
+    }
+  }
+  return found;
+}
+
+// The lines of a chart from the one drawn on top: the one stood out
+// (``lit``, an index or -1), then the others from the first, the newest year,
+// which is drawn last.
+export function topFirst(count, lit) {
+  const order = Array.from({ length: count }, (_none, index) => index);
+  return lit >= 0 && lit < count ? [lit, ...order.filter((index) => index !== lit)] : order;
+}
+
 // The marks of one panel: the ticks of its values, the baseline of a total,
 // and for each line its bars or its line, its points that stand alone, the
 // markers of a short line, the points of the records of each day, and the
@@ -359,8 +448,10 @@ export function labelPlaces(ends, gap, bottom) {
 // a clock; ``shared`` is the scale that the panel shares, if any. From stage
 // L1 of v2.2.0, the years compared: ``lineOnly`` draws a total as a line
 // (the years laid over one another), and ``running`` a running total, a line
-// from 0 that a period of 0 does not break and that has no dots of 0.
-export function panelShapes({ lines, periods, start, end, width, height, total = false, clock = null, shared = null, lineOnly = false, running = false }) {
+// from 0 that a period of 0 does not break and that has no dots of 0. From
+// stage L3, ``hits`` keeps where each line draws, for the pointer: the pieces
+// of its line and its dots, each with its radius.
+export function panelShapes({ lines, periods, start, end, width, height, total = false, clock = null, shared = null, lineOnly = false, running = false, hits = false }) {
   const scale = timeScale(start, end, PLOT_LEFT, width - PLOT_RIGHT);
   const top = PLOT_TOP;
   const plotHeight = Math.max(1, height - PLOT_TOP - PLOT_BOTTOM);
@@ -380,12 +471,16 @@ export function panelShapes({ lines, periods, start, end, width, height, total =
   const bars = zeros && !lineOnly && periods.length <= MAX_BARS;
   const big = periods.length > MAX_MARKERS;
   const shapes = lines.map((line) => {
-    const shape = { bars: null, line: null, alone: "", markers: "", points: "", pointRadius: 0, zero: "" };
+    const shape = { bars: null, line: null, alone: "", markers: "", points: "", pointRadius: 0, zero: "", hits: null };
     if (line.points !== undefined && line.points !== null) {
       // The records of each day, every one a point.
       const many = line.points.length > MAX_MARKERS || plotHeight < 70;
-      shape.points = dotsPath(line.points.map(([index, value]) => [periodMiddle(scale, periods[index]), y(value)]));
+      const places = line.points.map(([index, value]) => [periodMiddle(scale, periods[index]), y(value)]);
+      shape.points = dotsPath(places);
       shape.pointRadius = many ? DOT_RADIUS : MARKER_RADIUS;
+      if (hits) {
+        shape.hits = { runs: [], dots: places.map((place) => hitDot(place, shape.pointRadius)) };
+      }
       return shape;
     }
     if (bars) {
@@ -395,16 +490,23 @@ export function panelShapes({ lines, periods, start, end, width, height, total =
       shape.line = drawn.path;
       shape.alone = dotsPath(drawn.alone);
       shape.aloneRadius = big ? DOT_RADIUS + 0.4 : MARKER_RADIUS;
+      let markers = [];
       if (periods.length <= MAX_LINE_MARKERS && plotHeight >= 70) {
-        shape.markers = dotsPath(
-          line.values.flatMap((value, index) =>
-            Number.isFinite(value) && !(zeros && value === 0) ? [[periodMiddle(scale, periods[index]), y(value)]] : [],
-          ),
+        markers = line.values.flatMap((value, index) =>
+          Number.isFinite(value) && !(zeros && value === 0) ? [[periodMiddle(scale, periods[index]), y(value)]] : [],
         );
+        shape.markers = dotsPath(markers);
+      }
+      if (hits) {
+        shape.hits = {
+          runs: drawn.runs,
+          dots: [...drawn.alone.map((place) => hitDot(place, shape.aloneRadius)), ...markers.map((place) => hitDot(place, MARKER_RADIUS))],
+        };
       }
     }
     if (zeros) {
       shape.zero = zeroPath(line.values, periods, scale, base);
+      shape.hits?.dots.push(...zeroDots(line.values, periods, scale, base).map(([x, yValue, radius]) => hitDot([x, yValue], radius)));
     }
     return shape;
   });

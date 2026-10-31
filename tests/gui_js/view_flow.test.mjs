@@ -2330,3 +2330,39 @@ test("the names of the files in the guides are those that the page gives (stage 
     assert.deepEqual([...text.matchAll(/`(garmin-[^`]*\.svg)`/g)].map((match) => match[1]), names, guide);
   }
 });
+
+test("a year stood out stays while one panel draws it, and a press on it again puts it back (stage L3 of v2.2.0)", () => {
+  // A press stands a year out; on it again, back; on another, that one. A race
+  // goes by its own id, apart from a year.
+  assert.deepEqual(view.litAfter(null, "year", "2026"), { by: "year", id: "2026" });
+  assert.equal(view.litAfter({ by: "year", id: "2026" }, "year", "2026"), null);
+  assert.deepEqual(view.litAfter({ by: "year", id: "2026" }, "year", "2025"), { by: "year", id: "2025" });
+  assert.deepEqual(view.litAfter({ by: "year", id: "2026" }, "race", "2026"), { by: "race", id: "2026" });
+  // The years as compareData makes them: a value, none, the points of its
+  // records, and none of them.
+  const entry = (id, values, points = null) => ({ id, values, points });
+  const data = [entry("2026", [1, null]), entry("2025", [null, null]), entry("2024", [null], [[0, 50]]), entry("2023", [null], [])];
+  const lit = { by: "year", id: "2026" };
+  const kept = (id, change = {}) => view.litKept({ by: "year", id }, { by: "year", mode: "overlay", table: false, data, ...change });
+  assert.deepEqual(kept("2026"), lit);
+  assert.deepEqual(kept("2026", { mode: "cumulative" }), lit);
+  assert.deepEqual(kept("2024"), { by: "year", id: "2024" });
+  // Back where the way, the table, or what it is compared by changed, where
+  // the year went (the years, the month, the item), and where it has no shape
+  // left to draw (another line compared).
+  for (const change of [{ mode: "rows" }, { mode: "calendar" }, { table: true }, { by: "race" }, { data: data.slice(1) }]) {
+    assert.equal(kept("2026", change), null, JSON.stringify(change));
+  }
+  assert.equal(kept("2025"), null);
+  assert.equal(kept("2023"), null);
+  assert.equal(view.litKept(null, { by: "year", mode: "overlay", table: false, data }), null);
+  // What a year draws, which its key and a year kept go by (Codex's review of
+  // the diff of L3, 1).
+  assert.deepEqual(
+    data.map((each) => view.yearDrawn(each)),
+    [true, false, true, false],
+  );
+  // A year of compareData without an answer draws nothing.
+  const none = view.compareData({ years: [2026], month: null, grain: "month", mode: "overlay", series: null, answers: new Map(), whole: null });
+  assert.equal(view.litKept(lit, { by: "year", mode: "overlay", table: false, data: none }), null);
+});

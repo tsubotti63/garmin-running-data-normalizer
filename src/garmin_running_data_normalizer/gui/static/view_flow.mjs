@@ -1462,6 +1462,34 @@ export function yearSteps(years) {
   return new Map(sorted.map((year, index) => [year, MAX_COMPARE_YEARS - index]));
 }
 
+// The year (or the race) stood out on one panel after a press on one (stage
+// L3 of v2.2.0): what it is compared by and its id, or null where the press
+// was on the one stood out, which puts it back. It is never remembered.
+export function litAfter(lit, by, id) {
+  return lit !== null && lit.by === by && lit.id === id ? null : { by, id };
+}
+
+// Whether a year (or a race) of compareData has a shape to draw on one panel:
+// a value, or a point of its records where it has them.
+export function yearDrawn(entry) {
+  return entry.points === null ? entry.values.some(Number.isFinite) : entry.points.length > 0;
+}
+
+// The year stood out while it is drawn: on one panel (laid over one another
+// or as running totals, not as a table), compared by the same, with a shape
+// to draw; null otherwise, as where the years, the way, the item, what it is
+// compared by, the month or the weeks, or the line compared changed so.
+export function litKept(lit, { by, mode, table, data }) {
+  if (lit === null || table || (mode !== "overlay" && mode !== "cumulative") || lit.by !== by) {
+    return null;
+  }
+  const entry = data.find((each) => each.id === lit.id);
+  if (entry === undefined) {
+    return null;
+  }
+  return yearDrawn(entry) ? lit : null;
+}
+
 // Whether the answer of a year is cut by the days of the output: the days
 // that it starts after the range asked for, and that it ends before it, by the
 // periods of the answer (never by the first and last days of the output).

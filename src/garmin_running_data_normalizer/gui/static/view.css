@@ -1220,6 +1220,24 @@ button.small {
   height: 8px;
 }
 
+/* The keys of the years on one panel are buttons that stand a year out
+   (stage L3 of v2.2.0), as plain as the keys of a panel; the one pressed is
+   bold in an edge of the color of the text, so that the line is not the only
+   sign. */
+.panel-keys button.key {
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+}
+
+.panel-keys button.key[aria-pressed="true"] {
+  border-color: var(--text);
+  color: var(--text);
+  font-weight: 600;
+}
+
 .panel-read {
   margin-left: auto;
   color: var(--sub);
@@ -1764,6 +1782,26 @@ button.small {
   font-weight: 600;
 }
 
+/* A year stood out on one panel (stage L3 of v2.2.0): its line thicker and
+   drawn over the others, its name in the color of the text, and the other
+   years faint, their shapes (a group of them a year), their names, and their
+   dots on the cross line. The marks are on the shapes, which a picture
+   keeps. */
+.compare-marks.lit .chart-line {
+  stroke-width: 3.5;
+}
+
+.compare-label.lit {
+  fill: var(--text);
+  font-weight: 600;
+}
+
+.compare-marks.dim,
+.compare-label.dim,
+.chart-cross-dot.dim {
+  opacity: 0.28;
+}
+
 /* The values of the years at the cross line, beside it, over the plot. */
 .compare-read {
   position: absolute;
@@ -1936,65 +1974,81 @@ button.small {
   stroke: var(--d2);
 }
 
-/* The years compared (stage L1 of v2.2.0), the newest the 6th step. */
+/* The years compared (stage L1 of v2.2.0), the newest the 6th step, each in
+   a color of its own from stage L3 (styles.css, --year1 to --year6), and the
+   5th and 6th years (the 2nd and the 1st steps) dashed too, as where the
+   system forces its colors. A dash is cut square, so that the thicker line
+   of a year stood out keeps its gaps, as long as its round ends drew it. */
 .chart-line.y1,
 .chart-dots.y1,
 .key-line.y1 {
-  stroke: var(--y1);
+  stroke: var(--year1);
 }
 
 .chart-cross-dot.y1 {
-  fill: var(--y1);
+  fill: var(--year1);
 }
 
 .chart-line.y2,
 .chart-dots.y2,
 .key-line.y2 {
-  stroke: var(--y2);
+  stroke: var(--year2);
 }
 
 .chart-cross-dot.y2 {
-  fill: var(--y2);
+  fill: var(--year2);
 }
 
 .chart-line.y3,
 .chart-dots.y3,
 .key-line.y3 {
-  stroke: var(--y3);
+  stroke: var(--year3);
 }
 
 .chart-cross-dot.y3 {
-  fill: var(--y3);
+  fill: var(--year3);
 }
 
 .chart-line.y4,
 .chart-dots.y4,
 .key-line.y4 {
-  stroke: var(--y4);
+  stroke: var(--year4);
 }
 
 .chart-cross-dot.y4 {
-  fill: var(--y4);
+  fill: var(--year4);
 }
 
 .chart-line.y5,
 .chart-dots.y5,
 .key-line.y5 {
-  stroke: var(--y5);
+  stroke: var(--year5);
 }
 
 .chart-cross-dot.y5 {
-  fill: var(--y5);
+  fill: var(--year5);
 }
 
 .chart-line.y6,
 .chart-dots.y6,
 .key-line.y6 {
-  stroke: var(--y6);
+  stroke: var(--year6);
 }
 
 .chart-cross-dot.y6 {
-  fill: var(--y6);
+  fill: var(--year6);
+}
+
+.chart-line.y2,
+.key-line.y2 {
+  stroke-dasharray: 10 1 4 1;
+  stroke-linecap: butt;
+}
+
+.chart-line.y1,
+.key-line.y1 {
+  stroke-dasharray: 3 2;
+  stroke-linecap: butt;
 }
 
 .chart-dots,
@@ -2225,29 +2279,36 @@ button.small {
     stroke: CanvasText;
   }
 
+  /* The dashes of the years, cut square as long as their round ends drew
+     them until stage L3 of v2.2.0, so that a year stood out keeps its gaps. */
   .chart-line.y5,
   .key-line.y5 {
-    stroke-dasharray: 8 3;
+    stroke-dasharray: 10 1;
+    stroke-linecap: butt;
   }
 
   .chart-line.y4,
   .key-line.y4 {
-    stroke-dasharray: 4 3;
+    stroke-dasharray: 6 1;
+    stroke-linecap: butt;
   }
 
   .chart-line.y3,
   .key-line.y3 {
-    stroke-dasharray: 2 3;
+    stroke-dasharray: 4 1;
+    stroke-linecap: butt;
   }
 
   .chart-line.y2,
   .key-line.y2 {
-    stroke-dasharray: 8 3 2 3;
+    stroke-dasharray: 10 1 4 1;
+    stroke-linecap: butt;
   }
 
   .chart-line.y1,
   .key-line.y1 {
-    stroke-dasharray: 1 4;
+    stroke-dasharray: 3 2;
+    stroke-linecap: butt;
   }
 
   .chart-cross-dot.y1,
@@ -2260,8 +2321,25 @@ button.small {
   }
 
   .compare-label,
-  .compare-label.newest {
+  .compare-label.newest,
+  .compare-label.lit {
     fill: CanvasText;
+  }
+
+  /* A year stood out is thicker, and no year fades; the key pressed has the
+     edge of the highlight (stage L3 of v2.2.0). */
+  .compare-marks.dim,
+  .compare-label.dim,
+  .chart-cross-dot.dim {
+    opacity: 1;
+  }
+
+  .panel-keys button.key {
+    border-color: Canvas;
+  }
+
+  .panel-keys button.key[aria-pressed="true"] {
+    border-color: Highlight;
   }
 
   .chart-zero,
@@ -2603,6 +2681,12 @@ button.small {
   font-size: 12px;
 }
 
+/* The key of a year stood out, bold as on the page (stage L3 of v2.2.0). */
+.save-key.lit {
+  fill: var(--text);
+  font-weight: 600;
+}
+
 .save-empty {
   fill: var(--muted);
   font-size: 12px;
@@ -2632,6 +2716,10 @@ button.small {
      its charts do (Codex's review of the plan of R1). */
   .save-surface {
     fill: Canvas;
+  }
+
+  .save-key.lit {
+    fill: CanvasText;
   }
 
   .save-name,
