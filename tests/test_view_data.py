@@ -23,13 +23,17 @@ from unittest.mock import patch
 from garmin_running_data_normalizer import diagnostics  # noqa: F401
 from garmin_running_data_normalizer.output_check import OutputActionError
 from garmin_running_data_normalizer.run_all import ACTIVITIES_CSV_FIT_SESSION_COLUMNS, run_all
+from garmin_running_data_normalizer.common.identity import IDENTIFIER, read_identifier
 from garmin_running_data_normalizer.view import data as data_module
-from garmin_running_data_normalizer.view.data import load_view_data
+from garmin_running_data_normalizer.view import series_file
+from garmin_running_data_normalizer.view.data import gear_links, load_view_data
 from garmin_running_data_normalizer.view.items import ACTIVITIES, DATASETS, ITEMS, dataset_fields
 from garmin_running_data_normalizer.view.series import activity_types, coverage, item_series, period_bounds
 from tests.test_gui_runs import SYNTHETIC_EXPORT
 from tests.test_local_timezone import EVENING_IN_NEW_YORK, NEW_YORK, activity_row, write_export
 from tests.v1_3_outputs import as_release, as_v1_3
+from tests.view_export import activities as synthetic_activities
+from tests.view_export import gear_links as synthetic_links
 from tests.view_export import write_view_export
 
 TODAY = date(2026, 10, 26)
@@ -439,6 +443,55 @@ class ViewOutputRefusalTest(unittest.TestCase):
             read.assert_not_called()
         load_view_data(self.output, today=TODAY, max_file_bytes=largest, max_total_bytes=total)
 
+    def test_the_shoes_are_read_for_the_view_page_only(self) -> None:
+        # Stage S1 of v2.2.0: the series command reads none; an output without
+        # Gear has its two files, empty.
+        self.assertIsNone(load_view_data(self.output, today=TODAY).gear)
+        gear = load_view_data(self.output, today=TODAY, gear=True).gear
+        self.assertEqual((gear.shoes, gear.links, gear.unknown, gear.too_large), ((), {}, frozenset(), False))
+
+    def test_a_file_of_the_shoes_changed_before_or_after_the_checks(self) -> None:
+        # Codex's review of the plan of S1: after the checks, it is not read as
+        # checked; before them, the checks stop it, as any file of the output.
+        # Each of the two files (the partial guard of S1).
+        for name in data_module.GEAR_FILES:
+            with self.subTest(path=name):
+                shoes = self.output / name
+                kept = shoes.read_bytes()
+                with self.after_the_checks(lambda: shoes.write_bytes(kept + b" ")):
+                    self.assert_code("OUTPUT_CHANGED", gear=True)
+                self.assert_code("HANDOFF_INVALID", gear=True)
+                shoes.write_bytes(kept)
+
+    def test_a_manifest_without_a_file_of_the_shoes_means_that_the_output_changed(self) -> None:
+        # Every output of this version lists them (Codex's review of the plan of S1).
+        manifest = json.loads((self.output / "run_manifest.json").read_text(encoding="utf-8"))
+        entries = {entry["path"]: (entry["bytes"], entry["sha256"]) for entry in manifest["outputs"]}
+        self.assertTrue(set(data_module.GEAR_FILES) <= set(entries))
+        for path in data_module.GEAR_FILES:
+            with self.subTest(path=path), self.assertRaises(OutputActionError) as caught:
+                left = {name: value for name, value in entries.items() if name != path}
+                data_module._gear(self.output, left, 0, data_module.MAX_FILE_BYTES, data_module.MAX_TOTAL_BYTES)
+            self.assertEqual(caught.exception.code, "OUTPUT_CHANGED")
+
+    def test_shoes_over_the_limits_are_left_out_and_the_page_opens(self) -> None:
+        # Codex's review of the plan of S1: the limits are not widened; the
+        # files of the shoes count in what the files of the items leave, and
+        # over the limits they are not read.
+        manifest = json.loads((self.output / "run_manifest.json").read_text(encoding="utf-8"))
+        entries = {entry["path"]: (entry["bytes"], entry["sha256"]) for entry in manifest["outputs"]}
+        items = sum(entries[spec.path][0] for spec in DATASETS)
+        shoes = sum(entries[path][0] for path in data_module.GEAR_FILES)
+        over = load_view_data(self.output, today=date(2030, 6, 1), gear=True, max_total_bytes=items + shoes - 1)
+        self.assertEqual((over.gear.too_large, over.gear.shoes, len(over.rows[ACTIVITIES])), (True, (), 1))
+        self.assertFalse(load_view_data(self.output, today=TODAY, gear=True, max_total_bytes=items + shoes).gear.too_large)
+        largest = max(entries[path][0] for path in data_module.GEAR_FILES)
+        with patch.object(data_module, "_checked_bytes") as read:
+            self.assertTrue(data_module._gear(self.output, entries, 0, largest - 1, data_module.MAX_TOTAL_BYTES).too_large)
+            self.assertTrue(data_module._gear(self.output, entries, items, data_module.MAX_FILE_BYTES, items + shoes - 1).too_large)
+            read.assert_not_called()
+        self.assertFalse(data_module._gear(self.output, entries, 0, largest, data_module.MAX_TOTAL_BYTES).too_large)
+
     def test_a_file_replaced_by_a_link_after_the_checks(self) -> None:
         if not can_symlink(self.root):
             self.skipTest("symbolic links are not available")
@@ -451,6 +504,184 @@ class ViewOutputRefusalTest(unittest.TestCase):
 
         with self.after_the_checks(change):
             self.assert_code("OUTPUT_NOT_AVAILABLE")
+
+
+class ShoesOfAnOutputTest(unittest.TestCase):
+    """The shoes of the synthetic Export, as the view page reads them (stage
+    S1 of v2.2.0): made-up names only."""
+
+    SHOES = {"1", "123", "3", "4", "5", "6"}
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.directory = tempfile.TemporaryDirectory()
+        root = Path(cls.directory.name)
+        cls.output = root / "output"
+        run_all(write_view_export(root / "export", gear=True), cls.output)
+        cls.data = load_view_data(cls.output, gear=True)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.directory.cleanup()
+
+    def test_the_shoes_are_the_gear_of_a_type_of_shoes(self) -> None:
+        # The bike, and the gear whose two names of the type disagree, are not
+        # shoes. One shoe is named by its model; two of one name are told
+        # apart by the days of their start; 0 is a maximum distance, as
+        # Garmin gives it.
+        self.assertEqual(
+            {shoe.key: (shoe.name, shoe.begin, shoe.end, shoe.maximum, shoe.day, shoe.number) for shoe in self.data.gear.shoes},
+            {
+                "1": ("ロード用 A", "2023-01-01", "2024-03-31", 800000.0, "2023-01-01", None),
+                "123": ("ロード用 B", "2024-03-01", None, 800000.0, None, None),
+                "3": ("トレイル用 C", "2023-01-01", None, 600000.0, None, None),
+                "4": ("レース用 D", "2023-01-01", None, 0.0, None, None),
+                "5": ("Synthetic model X", "2024-09-01", None, None, None, None),
+                "6": ("ロード用 A", "2025-01-01", None, 800000.0, "2025-01-01", None),
+            },
+        )
+        # Their places are those of gear.json.
+        written = json.loads((self.output / "normalized" / "gear.json").read_text(encoding="utf-8"))
+        tokens = [read_identifier(record["gear_key"])[1] for record in written]
+        self.assertEqual(
+            [shoe.key for shoe in sorted(self.data.gear.shoes, key=lambda shoe: shoe.place)],
+            [token for token in tokens if token in self.SHOES],
+        )
+        self.assertEqual(read_identifier("0123"), (IDENTIFIER, "123"))
+
+    def test_the_activities_link_by_their_declared_key(self) -> None:
+        # By garmin_activity_key, with both ends explicit (Codex's review of
+        # the plan of S1): the link to an activity not in the Export is left
+        # out; links to gear of a type not known, or not in the Export, tell
+        # no shoe.
+        in_output = {f"garmin_activity:{row['activityId']}" for row in synthetic_activities(True)}
+        expected: dict[str, set[str]] = defaultdict(set)
+        unknown: set[str] = set()
+        for key, ids in synthetic_links(synthetic_activities(True)).items():
+            for activity_id in ids:
+                activity = f"garmin_activity:{activity_id}"
+                if activity not in in_output:
+                    continue
+                if key in self.SHOES:
+                    expected[activity].add(key)
+                elif key in ("9", "555"):
+                    unknown.add(activity)
+        self.assertEqual(self.data.gear.links, {activity: frozenset(keys) for activity, keys in expected.items()})
+        self.assertEqual(self.data.gear.unknown, frozenset(unknown))
+        self.assertTrue(any(len(keys) > 1 for keys in expected.values()))
+        # The rows keep the keys; the activities after today and without a
+        # date are not rows.
+        keys = {row.marks["key"] for row in self.data.rows[ACTIVITIES]}
+        self.assertEqual(set(expected) - keys, {"garmin_activity:800002", "garmin_activity:800003"})
+
+    def test_the_series_command_reads_no_shoes_of_the_same_output(self) -> None:
+        # Codex's review of the plan of S1: the command reads the output as
+        # before, and never the files of the shoes.
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        first, second = Path(directory.name) / "first.csv", Path(directory.name) / "second.csv"
+        series_file.write_series(self.output, first, items=["dist"])
+        with patch.object(data_module, "_gear", side_effect=AssertionError("the shoes were read")):
+            series_file.write_series(self.output, second, items=["dist"])
+            self.assertIsNone(load_view_data(self.output).gear)
+        self.assertEqual(second.read_bytes(), first.read_bytes())
+
+
+class GearLinksTest(unittest.TestCase):
+    """How the shoes and their links are read (stage S1 of v2.2.0), from
+    records as gear.json and activity_gear.json write them."""
+
+    def gear(self, key: Any, kind: Any = "Shoes", **fields: Any) -> dict[str, Any]:
+        return {"gear_key": key, "gear_type": kind, **fields}
+
+    def link(self, key: Any, activity: Any, activity_state: str = "explicit", gear_state: str = "explicit") -> dict[str, Any]:
+        return {
+            "gear_key": key,
+            "garmin_activity_key": activity,
+            "activity_relationship_status": activity_state,
+            "gear_relationship_status": gear_state,
+        }
+
+    def test_a_gear_key_is_one_token_however_it_is_written(self) -> None:
+        # As Run-All compares them (Codex's review of the plan of S1): the
+        # spaces around and the leading zeros left out, an integral float as
+        # an integer; full-width digits are text, another key.
+        for written in (123, " 0123 ", 123.0, "123"):
+            with self.subTest(written=written):
+                found = gear_links([self.gear("0123")], [self.link(written, "garmin_activity:1")])
+                self.assertEqual((found.links, found.unknown), ({"garmin_activity:1": frozenset({"123"})}, frozenset()))
+        found = gear_links([self.gear("１２３")], [self.link(123, "garmin_activity:1")])
+        self.assertEqual((found.links, found.unknown), ({}, frozenset({"garmin_activity:1"})))
+
+    def test_a_key_of_gear_written_twice_is_read_from_its_first_record(self) -> None:
+        # The partial guard of S1: a later record of the same key, of shoes or
+        # not, is left out.
+        gear = [self.gear(1, display_name="A"), self.gear(1, display_name="A again"), self.gear(2, "Bike"), self.gear(2, "Shoes")]
+        found = gear_links(gear, [self.link(1, "a"), self.link(2, "b")])
+        self.assertEqual([(shoe.key, shoe.name) for shoe in found.shoes], [("1", "A")])
+        self.assertEqual((found.links, found.unknown), ({"a": frozenset({"1"})}, frozenset()))
+
+    def test_the_types_of_shoes_and_the_links_that_tell_no_shoe(self) -> None:
+        gear = [
+            self.gear(1, "Shoes"),
+            self.gear(2, "running_shoes"),
+            self.gear(3, "SHOES"),
+            self.gear(4, "Bike"),
+            self.gear(5, "Running Shoes"),
+            self.gear(6, None),
+        ]
+        links = [
+            self.link(1, "a"),
+            self.link(2, "b"),
+            self.link(3, "c"),
+            # Other gear, and a type that is not one of the shoes in lower case.
+            self.link(4, "d"),
+            self.link(5, "e"),
+            # A type not known, gear not in the output, and no such gear.
+            self.link(6, "f"),
+            self.link(7, "g", gear_state="unresolved"),
+            self.link(8, "h"),
+            # A shoe at the end of a link of gear that is not explicit: not
+            # known (the partial guard of S1).
+            self.link(1, "j", gear_state="unresolved"),
+            # An activity not in the output, and no key: left out.
+            self.link(1, "i", activity_state="unresolved"),
+            self.link(1, ""),
+            self.link(1, None),
+        ]
+        found = gear_links(gear, links)
+        self.assertEqual([shoe.key for shoe in found.shoes], ["1", "2", "3"])
+        self.assertEqual(found.links, {"a": frozenset({"1"}), "b": frozenset({"2"}), "c": frozenset({"3"})})
+        self.assertEqual(found.unknown, frozenset({"f", "g", "h", "j"}))
+
+    def test_the_names_and_what_tells_shoes_of_one_name_apart(self) -> None:
+        # A name as written, else the model; what tells shoes of one name
+        # apart is the day of the start where it is theirs alone, else their
+        # number in the order of gear.json (Codex's review of the plan of S1:
+        # whatever the period).
+        gear = [
+            self.gear(1, display_name="A", date_begin="2030-01-01T00:00:00.0"),
+            self.gear(2, display_name="A", date_begin="2030-01-01T00:00:00.0"),
+            self.gear(3, display_name="A", date_begin="2031-02-03T00:00:00.0"),
+            self.gear(4, display_name=" ", custom_make_model="Model M"),
+            self.gear(5, display_name=None, custom_make_model=None, date_begin="not a date"),
+            self.gear(6, display_name="", custom_make_model="", date_begin="2030-13-01T00:00:00.0"),
+            self.gear(7, display_name="B", maximum_meters=0, date_end="2032-01-01T00:00:00.0"),
+            self.gear(8, display_name="C", maximum_meters=True),
+        ]
+        self.assertEqual(
+            [(shoe.key, shoe.name, shoe.begin, shoe.end, shoe.maximum, shoe.place, shoe.day, shoe.number) for shoe in gear_links(gear, []).shoes],
+            [
+                ("1", "A", "2030-01-01", None, None, 0, None, 1),
+                ("2", "A", "2030-01-01", None, None, 1, None, 2),
+                ("3", "A", "2031-02-03", None, None, 2, "2031-02-03", None),
+                ("4", "Model M", None, None, None, 3, None, None),
+                ("5", None, None, None, None, 4, None, 1),
+                ("6", None, None, None, None, 5, None, 2),
+                ("7", "B", None, "2032-01-01", 0.0, 6, None, None),
+                ("8", "C", None, None, None, 7, None, None),
+            ],
+        )
 
 
 class ViewTimezoneTest(unittest.TestCase):

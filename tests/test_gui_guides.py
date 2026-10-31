@@ -1887,13 +1887,15 @@ class GuiGuideTest(unittest.TestCase):
         # (the checker's review of the diff of R3).
         self.assertIn('ui.saveClose.addEventListener("click", () => openSave(false));\n  ui.saveCancel.addEventListener("click", () => openSave(false));', page)
         self.assertIn(".view-app.full .caveat,", css)
-        self.assertIn('export const SAVE_LEFT_OUT_VIEWS = {\n  compare: [".cross", ".calendar-cursor"],\n  plot: [".plot-chosen"],\n  spread: [".spread-chosen"],\n};', flow)
+        self.assertIn('export const SAVE_LEFT_OUT_VIEWS = {\n  compare: [".cross", ".calendar-cursor"],\n  plot: [".plot-chosen"],\n  spread: [".spread-chosen"],\n  // The cross lines of the rows of the shoes (stage S1 of v2.2.0).\n  shoes: [".cross"],\n};', flow)
         # A period without values stops two items plotted and a distribution
         # only; the panels and comparing years save the words of an empty
         # chart (Codex's review of the plan of R3).
         self.assertEqual(
             re.findall(r"^    empty: (.*),$", page, re.M),
-            ["target.empty", "false", 'entry.plot.querySelector(".panel-empty")?.textContent ?? null', "answer !== null && !answer.points.length", "answer !== null && !answer.counts.length"],
+            # And the view by shoes, which a period without shoes stops too
+            # (stage S1 of v2.2.0).
+            ["target.empty", "false", "drawn !== null && !drawn.shoes.length", 'entry.plot.querySelector(".panel-empty")?.textContent ?? null', "answer !== null && !answer.points.length", "answer !== null && !answer.counts.length"],
         )
         heading = {"en": "Saving as an image (from 2.2.0)", "ja": "画像で保存（2.2.0 から）"}
         before = {"en": "Summary (from 2.2.0)", "ja": "まとめ（2.2.0 から）"}

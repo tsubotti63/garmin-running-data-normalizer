@@ -19,6 +19,12 @@ rows. A row without a date, and a row with a date after today in the output's
 timezone, are counted and left out of the numbers: one date far ahead, from
 a wrong clock, would stretch all the time of the output and leave its last
 years empty.
+
+The view page also reads the shoes of an output (stage S1 of v2.2.0): the
+Gear and its links to the activities, after the files of the items, in the
+same way, within what those leave of the limits; files over them leave the
+shoes out, and the page opens without them. The series command does not
+read them.
 """
 
 from __future__ import annotations
@@ -31,12 +37,13 @@ import math
 import os
 import re
 import stat
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .. import __version__
+from ..common.identity import IDENTIFIER, read_identifier
 from ..common.json_depth import check_json_depth
 from ..common.time import TimezoneDataUnavailableError, TimezoneNameInvalidError, require_timezone_data
 from ..output_check import OutputActionError, checked_output
@@ -51,6 +58,12 @@ MAX_MANIFEST_BYTES = 256 * 1024 * 1024
 # file, and all the files of the page together.
 MAX_FILE_BYTES = 128 * 1024 * 1024
 MAX_TOTAL_BYTES = 512 * 1024 * 1024
+# The files of the shoes (stage S1 of v2.2.0), and the types of Garmin's gear
+# that are shoes, in lower case.
+GEAR = "normalized/gear.json"
+ACTIVITY_GEAR = "normalized/activity_gear.json"
+GEAR_FILES = (GEAR, ACTIVITY_GEAR)
+SHOE_TYPES = frozenset({"shoes", "running_shoes"})
 DATE_FORM = re.compile(r"\d{4}-\d{2}-\d{2}")
 # What a sleep needs to be used (wellness_metrics.md in the docs).
 SLEEP_USED_STATUS = "available"
@@ -73,13 +86,49 @@ class Row:
     marks: dict[str, Any]
 
 
+@dataclass(frozen=True, slots=True)
+class Shoe:
+    """A pair of shoes of an output (stage S1 of v2.2.0): its key, as a token
+    of common.identity; the words that name it as the output writes them
+    (display_name, else custom_make_model; None without either); the days of
+    its start and end that Garmin sets (the dates at the head of their text,
+    None where there is none) and its maximum distance in meters, as Garmin
+    gives it; its place among the shoes of gear.json; and, among the shoes of
+    the same name only, what tells it apart: the day of its start where no
+    other of them has it, else its number among them."""
+
+    key: str
+    name: str | None
+    begin: str | None
+    end: str | None
+    maximum: float | None
+    place: int
+    day: str | None = None
+    number: int | None = None
+
+
+@dataclass(frozen=True)
+class Gear:
+    """The shoes of an output (stage S1 of v2.2.0), and its activities by
+    their declared key (garmin_activity_key): the keys of the shoes that each
+    links to, and those with a link that tells no shoe (its gear not in the
+    output, or of a type not known). ``too_large`` marks the files left out
+    for the limits."""
+
+    shoes: tuple[Shoe, ...]
+    links: dict[str, frozenset[str]]
+    unknown: frozenset[str]
+    too_large: bool = False
+
+
 @dataclass(frozen=True)
 class ViewData:
     """The rows of one output that the view page reads, by file, sorted by
     their dates, and the rows that it left out: without a date, and after
     ``today``. The first and last days are those of all the rows kept;
     ``partial`` marks an output normalized with part of the input left out
-    (exit code 3), which the view page says (stage G3b)."""
+    (exit code 3), which the view page says (stage G3b). ``gear`` is None
+    where the shoes were not read (stage S1 of v2.2.0)."""
 
     version: str
     timezone: str
@@ -90,6 +139,7 @@ class ViewData:
     first_day: int | None
     last_day: int | None
     partial: bool = False
+    gear: Gear | None = None
 
 
 def load_view_data(
@@ -98,10 +148,13 @@ def load_view_data(
     today: date | None = None,
     max_file_bytes: int = MAX_FILE_BYTES,
     max_total_bytes: int = MAX_TOTAL_BYTES,
+    gear: bool = False,
 ) -> ViewData:
     """Check an output as the GUI checks it, and read what the view page
     shows of it. ``today`` is the date of this computer in the output's
-    timezone unless given. A check that fails raises ``OutputActionError``."""
+    timezone unless given. With ``gear``, which the view page asks and the
+    series command does not, the shoes are read too (stage S1 of v2.2.0). A
+    check that fails raises ``OutputActionError``."""
     output = Path(output)
     kept = _plain_bytes(output / MANIFEST, MAX_MANIFEST_BYTES)
     handoff, report, legacy = checked_output(output)
@@ -135,6 +188,7 @@ def load_view_data(
         kept_rows, no_date[dataset.name], after_today[dataset.name] = _rows(dataset, records, day_today)
         rows[dataset.name] = kept_rows
     days = [row.day for kept_rows in rows.values() for row in kept_rows]
+    shoes = _gear(output, entries, sum(sizes), max_file_bytes, max_total_bytes) if gear else None
     return ViewData(
         version=version,
         timezone=timezone,
@@ -145,6 +199,7 @@ def load_view_data(
         first_day=min(days) if days else None,
         last_day=max(days) if days else None,
         partial=handoff.get("run_status") == "PARTIAL_SUCCESS",
+        gear=shoes,
     )
 
 
@@ -217,6 +272,104 @@ def _checked_bytes(output: Path, relative: str, size: int, digest: str) -> bytes
     if len(data) != size or hashlib.sha256(data).hexdigest() != digest:
         raise OutputActionError("OUTPUT_CHANGED")
     return data
+
+
+def _gear(output: Path, entries: dict[str, tuple[int, str]], used: int, max_file_bytes: int, max_total_bytes: int) -> Gear:
+    """The shoes of an output (stage S1 of v2.2.0), read as the files of the
+    items are, after them: files over the limit of one file, or over what the
+    files of the items leave of the limit of all, leave the shoes out, and the
+    page opens without them (Codex's review of the plan of S1). A file that
+    the manifest leaves out, which every output of this version lists, means
+    that the output changed."""
+    if any(path not in entries for path in GEAR_FILES):
+        raise OutputActionError("OUTPUT_CHANGED")
+    sizes = [entries[path][0] for path in GEAR_FILES]
+    if any(size > max_file_bytes for size in sizes) or used + sum(sizes) > max_total_bytes:
+        return Gear((), {}, frozenset(), too_large=True)
+    return gear_links(
+        _json_records(_checked_bytes(output, GEAR, *entries[GEAR])),
+        _json_records(_checked_bytes(output, ACTIVITY_GEAR, *entries[ACTIVITY_GEAR])),
+    )
+
+
+def gear_links(gear: list[dict[str, Any]], links: list[dict[str, Any]]) -> Gear:
+    """The shoes of the records of gear.json, and the activities linked to
+    them by the records of activity_gear.json, joined as the output declares
+    them (stage S1 of v2.2.0): by garmin_activity_key, with both ends
+    explicit, never by the source activity_id; a gear key as a token of
+    common.identity, as Run-All compares them. The gear of a type of
+    SHOE_TYPES (in lower case) are shoes; a link whose gear is not in the
+    output, or of a type that is not known (null), tells no shoe, and its
+    activity is not known to be without one; links to other gear are left
+    out."""
+    kinds: dict[str, str | None] = {}
+    shoes: list[Shoe] = []
+    for record in gear:
+        key = _token(record.get("gear_key"))
+        if key is None or key in kinds:
+            continue
+        kind = record.get("gear_type")
+        kinds[key] = kind.lower() if isinstance(kind, str) else None
+        if kinds[key] in SHOE_TYPES:
+            shoes.append(
+                Shoe(
+                    key=key,
+                    name=_shoe_text(record.get("display_name")) or _shoe_text(record.get("custom_make_model")),
+                    begin=_shoe_day(record.get("date_begin")),
+                    end=_shoe_day(record.get("date_end")),
+                    maximum=_number(record.get("maximum_meters")),
+                    place=len(shoes),
+                )
+            )
+    found: dict[str, set[str]] = {}
+    unknown: set[str] = set()
+    for record in links:
+        activity = record.get("garmin_activity_key")
+        if record.get("activity_relationship_status") != "explicit" or not isinstance(activity, str) or not activity:
+            continue
+        key = _token(record.get("gear_key"))
+        if record.get("gear_relationship_status") != "explicit" or key is None or kinds.get(key) is None:
+            unknown.add(activity)
+        elif kinds[key] in SHOE_TYPES:
+            found.setdefault(activity, set()).add(key)
+    return Gear(_told_apart(shoes), {activity: frozenset(keys) for activity, keys in found.items()}, frozenset(unknown))
+
+
+def _told_apart(shoes: list[Shoe]) -> tuple[Shoe, ...]:
+    """The shoes, those of the same name each with what tells it apart (stage
+    S1 of v2.2.0): the day of its start where no other of them has it, else
+    its number among them, in the order of gear.json, whatever the period."""
+    named: dict[str | None, list[Shoe]] = {}
+    for shoe in shoes:
+        named.setdefault(shoe.name, []).append(shoe)
+    told = []
+    for shoe in shoes:
+        same = named[shoe.name]
+        if len(same) == 1:
+            told.append(shoe)
+        elif shoe.begin is not None and sum(other.begin == shoe.begin for other in same) == 1:
+            told.append(replace(shoe, day=shoe.begin))
+        else:
+            told.append(replace(shoe, number=same.index(shoe) + 1))
+    return tuple(told)
+
+
+def _shoe_text(value: Any) -> str | None:
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _shoe_day(value: Any) -> str | None:
+    """The date at the head of a date that Garmin sets, as the output writes
+    it (such as 2030-01-01T00:00:00.0), or None where it has none."""
+    if not isinstance(value, str):
+        return None
+    head = value[:10]
+    return head if _day(head) is not None else None
+
+
+def _token(value: Any) -> str | None:
+    kind, token = read_identifier(value)
+    return token if kind == IDENTIFIER else None
 
 
 def local_today(timezone: str) -> date:
@@ -308,6 +461,11 @@ def _rows(dataset: Dataset, records: list[dict[str, Any]], today: int) -> tuple[
             # and its activities have none.
             moment = record.get("activity_datetime_local")
             marks["datetime"] = moment if isinstance(moment, str) and moment else None
+            # The declared key of the activity, which its links to the shoes
+            # name (stage S1 of v2.2.0); "" where the column or the cell is
+            # empty, and then the activity links to no shoe.
+            key = record.get("garmin_activity_key")
+            marks["key"] = key if isinstance(key, str) else ""
         if dataset.name == "sleep_daily":
             status = record.get("sleep_normalization_status")
             marks["used"] = status == SLEEP_USED_STATUS and record.get(SLEEP_USED_FLAG) is True
@@ -325,11 +483,18 @@ def _rows(dataset: Dataset, records: list[dict[str, Any]], today: int) -> tuple[
 
 
 __all__ = [
+    "ACTIVITY_GEAR",
+    "GEAR",
+    "GEAR_FILES",
     "MANIFEST",
     "MAX_FILE_BYTES",
     "MAX_TOTAL_BYTES",
+    "SHOE_TYPES",
+    "Gear",
     "Row",
+    "Shoe",
     "ViewData",
+    "gear_links",
     "load_view_data",
     "local_today",
 ]

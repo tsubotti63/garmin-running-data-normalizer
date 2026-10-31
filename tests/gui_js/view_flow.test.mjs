@@ -2193,7 +2193,7 @@ test("the window says why a picture cannot be saved: a table, a stop, no values,
 });
 
 test("a picture of another view leaves out the cross, the frame of the day chosen, and the point or the range chosen", () => {
-  assert.deepEqual(view.SAVE_LEFT_OUT_VIEWS, { compare: [".cross", ".calendar-cursor"], plot: [".plot-chosen"], spread: [".spread-chosen"] });
+  assert.deepEqual(view.SAVE_LEFT_OUT_VIEWS, { compare: [".cross", ".calendar-cursor"], plot: [".plot-chosen"], spread: [".spread-chosen"], shoes: [".cross"] });
 });
 
 test("the name of a picture of another view has the years or the race days, the period, and the keys, nothing of the person's own", () => {
@@ -2365,4 +2365,109 @@ test("a year stood out stays while one panel draws it, and a press on it again p
   // A year of compareData without an answer draws nothing.
   const none = view.compareData({ years: [2026], month: null, grain: "month", mode: "overlay", series: null, answers: new Map(), whole: null });
   assert.equal(view.litKept(lit, { by: "year", mode: "overlay", table: false, data: none }), null);
+});
+
+test("the view by shoes says why it cannot show, and names a pair with what tells it apart (stage S1 of v2.2.0)", () => {
+  assert.equal(view.shoesWhy({ count: 3, too_large: false }), null);
+  assert.equal(view.shoesWhy({ count: 0, too_large: false }), "view.other.shoes_none");
+  // The files of the shoes left out for their size are told apart (Codex's
+  // review of the plan of S1).
+  assert.equal(view.shoesWhy({ count: 0, too_large: true }), "view.other.shoes_too_large");
+  for (const none of [null, undefined, {}, { count: "3" }, { count: -1 }]) {
+    assert.equal(view.shoesWhy(none), "view.other.shoes_none");
+  }
+  assert.equal(words({ key: "view.other.shoes_too_large", params: {} }), "靴のデータが大きすぎて読めません。");
+  const pair = (fields) => ({ name: "ロード用 A", day: null, number: null, ...fields });
+  assert.deepEqual(view.shoeWords(pair({}), "ja").map((part) => (part === null ? null : words(part))), ["ロード用 A", null]);
+  // What is added is a part of its own, which the page never cuts.
+  assert.deepEqual(view.shoeWords(pair({ day: "2025-01-01" }), "ja").map((part) => words(part)), ["ロード用 A", "（使い始め 2025年1月1日）"]);
+  assert.equal(words(view.shoeName(pair({ day: "2025-01-01" }), "ja")), "ロード用 A（使い始め 2025年1月1日）");
+  assert.equal(words(view.shoeName(pair({ day: "2025-01-01" }), "en"), "en"), "ロード用 A (started January 1, 2025)");
+  assert.equal(words(view.shoeName(pair({ number: 2 }), "ja")), "ロード用 A（2）");
+  assert.equal(words(view.shoeName(pair({ name: null, number: 1 }), "ja")), "名前の無い靴（1）");
+  // A day not of its form adds nothing.
+  assert.equal(words(view.shoeName(pair({ day: "2025-1-1" }), "ja")), "ロード用 A");
+  assert.equal(words(view.shoesCount({ shoes: [{}, {}], with_shoes: 5, activities: 9 })), "靴 2 足（この期間の数える種目の 9 回のうち、靴の付いた回 5 回）");
+  const february = { start: "2024-02-01", end: "2024-02-29", partial: false };
+  assert.equal(words(view.shoesRead(february, 5000, "ja")), `2024年2月：${words(view.valueMessage("dist", 5000, "ja"))}`);
+  assert.equal(words(view.shoesRead(february, null, "ja")), "2024年2月：—");
+});
+
+test("the notes of the view by shoes show a count of 1 or more only, and what Garmin sets always (stage S1 of v2.2.0)", () => {
+  // The checker's review of the counts of S1: both ways, each count alone.
+  const counts = { without_shoes: 4, not_known: 3, two_or_more: 2, without_distance: 1, left_out: 5 };
+  const keys = (answer) => view.shoesNotes(answer).map((note) => note.key);
+  assert.deepEqual(keys(counts), ["view.shoes.note_garmin", "view.shoes.note_without", "view.shoes.note_unknown", "view.shoes.note_two", "view.shoes.note_no_distance", "view.shoes.note_left_out"]);
+  const named = {
+    without_shoes: "view.shoes.note_without",
+    not_known: "view.shoes.note_unknown",
+    two_or_more: "view.shoes.note_two",
+    without_distance: "view.shoes.note_no_distance",
+    left_out: "view.shoes.note_left_out",
+  };
+  for (const [name, key] of Object.entries(named)) {
+    assert.deepEqual(keys({ ...counts, [name]: 0 }), keys(counts).filter((each) => each !== key), name);
+  }
+  assert.deepEqual(keys({ without_shoes: 0, not_known: 0, two_or_more: 0, without_distance: 0, left_out: 0 }), ["view.shoes.note_garmin"]);
+  assert.equal(words(view.shoesNotes(counts)[3]), "1 回に靴が 2 つ以上付いた回は、どの靴にも数えます（2 回）。そのため、靴の段の和は距離の段の値より大きくなることがあります。");
+  assert.equal(words(view.shoesNotes(counts)[5], "en"), "5 pairs of shoes without an activity in this period are not included.");
+  // Every way an activity is not known to have shoes, a key missing too
+  // (Codex's review of the diff of S1).
+  assert.equal(words(view.shoesNotes(counts)[2]), "靴か分からない回 3 回は、入っていません（付いた道具が出力に無いか、道具の種類が分からないか、道具と結べない回）。");
+  assert.equal(words(view.shoesNotes(counts)[2], "en"), "3 activities not known to have shoes are not included (their gear is not in the output, or of a type not known, or they cannot be linked to gear).");
+});
+
+test("the tables of the view by shoes: a row a pair, and a row a month with a column a pair (stage S1 of v2.2.0)", () => {
+  const km = (meters) => words(view.valueMessage("dist", meters, "ja"));
+  const answer = {
+    periods: [
+      { start: "2024-01-05", end: "2024-01-31", partial: true },
+      { start: "2024-02-01", end: "2024-02-29", partial: false },
+    ],
+    shoes: [
+      { name: "ロード用 A", day: null, number: null, values: [15000, null], activities_by_month: [2, 0], distance: 15000, activities: 2, first: "2024-01-05", last: "2024-01-20", begin: "2023-01-01", end: null, maximum: 800000 },
+      { name: "レース用 D", day: null, number: null, values: [0, 5000], activities_by_month: [0, 1], distance: 5000, activities: 1, first: "2024-02-10", last: "2024-02-10", begin: null, end: "2025-01-01", maximum: 0 },
+      // Activities without a distance only (the partial guard of S1).
+      { name: "トレイル用 C", day: null, number: null, values: [null, null], activities_by_month: [1, 0], distance: null, activities: 1, first: "2024-01-10", last: "2024-01-10", begin: null, end: null, maximum: null },
+    ],
+  };
+  const { summary, months } = view.shoesTables(answer, "ja");
+  assert.deepEqual(summary.heads.map((head) => words(head)), [
+    "靴",
+    "この期間の距離",
+    "この期間の回数",
+    "この期間に初めて使った日",
+    "この期間に最後に使った日",
+    "Garmin で決めた使い始め",
+    "Garmin で決めた使い終わり",
+    "Garmin で決めた上限の距離",
+  ]);
+  // The maximum distance from meters, 0 as Garmin gives it, "—" for none
+  // (Codex's review of the plan of S1).
+  assert.deepEqual(summary.rows.map((row) => row.map((cell) => words(cell))), [
+    ["ロード用 A", km(15000), "2 回", "2024年1月5日", "2024年1月20日", "2023年1月1日", "—", km(800000)],
+    ["レース用 D", km(5000), "1 回", "2024年2月10日", "2024年2月10日", "—", "2025年1月1日", km(0)],
+    ["トレイル用 C", "—", "1 回", "2024年1月10日", "2024年1月10日", "—", "—", "—"],
+  ]);
+  assert.deepEqual(months.heads.map((head) => words(head)), ["月", "ロード用 A", "レース用 D", "トレイル用 C"]);
+  assert.deepEqual(months.rows.map((row) => row.map((cell) => words(cell))), [
+    [words(view.periodMessage(answer.periods[0], "month", "ja")), `${km(15000)}（2 回）`, `${km(0)}（0 回）`, "—（1 回）"],
+    [words(view.periodMessage(answer.periods[1], "month", "ja")), "—", `${km(5000)}（1 回）`, "—"],
+  ]);
+});
+
+test("a picture of the view by shoes is named by its period and the key of the distance, never by a shoe (stage S1 of v2.2.0)", () => {
+  assert.equal(view.saveViewFileName("shoes", { key: "dist", start: "2024-01-05", end: "2024-12-31" }), "garmin-shoes_2024-01-05_2024-12-31_dist.svg");
+  assert.equal(view.saveViewFileName("shoes", { key: "ロード用 A", start: "2024-01-05", end: "2024-12-31" }), null);
+  assert.equal(view.saveViewFileName("shoes", { key: "dist", start: "2024-1-5", end: "2024-12-31" }), null);
+  const footer = view.saveViewFooter("shoes", {
+    start: "2024-01-05",
+    end: "2024-12-31",
+    answerTypes: ["running"],
+    types: [{ name: "running", count: 1, running: true }],
+    version: "2.1.0",
+    language: "ja",
+    separator: "、",
+  });
+  assert.deepEqual(footer.map((piece) => piece.key), ["view.save.period", "view.save.grain", "view.save.types", "view.save.app"]);
 });

@@ -7,6 +7,7 @@ import math
 import re
 import time
 import unittest
+from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
 from fractions import Fraction
@@ -15,7 +16,7 @@ from typing import Any
 from unittest.mock import patch
 
 from garmin_running_data_normalizer.run_all import ACTIVITIES_CSV_COLUMNS
-from garmin_running_data_normalizer.view.data import Row, ViewData
+from garmin_running_data_normalizer.view.data import Gear, Row, Shoe, ViewData
 from garmin_running_data_normalizer.view.items import (
     ACTIVITIES,
     DATASETS,
@@ -52,6 +53,8 @@ from garmin_running_data_normalizer.view.series import (
     period_bounds,
     point_item,
     previous_span,
+    shoe_answer,
+    shoe_count,
     view_answer,
 )
 
@@ -1215,6 +1218,121 @@ class AnswerSizeTest(unittest.TestCase):
         size = len(json.dumps(answer).encode("utf-8"))
         self.assertLessEqual(size, MAX_ANSWER_BYTES)
         self.assertEqual((MAX_ANSWER_BYTES, MAX_PANELS), (4 * 1024 * 1024, 6))
+
+
+def keyed(when: str, key: str, kind: str = "running", **values: float | None) -> tuple[str, Row]:
+    """An activity with its declared key (stage S1 of v2.2.0)."""
+    name, row = act(when, kind, **values)
+    return name, Row(row.day, row.values, row.disagree, {**row.marks, "key": key})
+
+
+def made_shoe(key: str, name: str, place: int) -> Shoe:
+    return Shoe(key=key, name=name, begin=None, end=None, maximum=None, place=place)
+
+
+class ShoeAnswerTest(unittest.TestCase):
+    """The view by shoes (stage S1 of v2.2.0), of rows made by hand."""
+
+    def setUp(self) -> None:
+        rows = [
+            keyed("2024-01-05", "k1", distance_m=10000.0),
+            keyed("2024-01-20", "k2", distance_m=5000.0),
+            keyed("2024-02-10", "k3", distance_m=7000.0),
+            keyed("2024-03-01", "k4", distance_m=3000.0),
+            keyed("2024-03-15", "", distance_m=2000.0),
+            keyed("2024-04-02", "k6"),
+            keyed("2024-04-03", "k7", "road_biking", distance_m=20000.0),
+        ]
+        gear = Gear(
+            shoes=(made_shoe("A", "Road A", 0), made_shoe("B", "Road B", 1), made_shoe("C", "Trail C", 2)),
+            links={"k1": frozenset({"A"}), "k2": frozenset({"A", "B"}), "k6": frozenset({"B"}), "k7": frozenset({"A"}), "k9": frozenset({"C"})},
+            unknown=frozenset({"k3"}),
+        )
+        self.data = replace(view_data(rows), gear=gear)
+
+    def test_the_activities_by_their_shoes_and_each_pair(self) -> None:
+        # Three kinds, in this order: with shoes (of which two or more); not
+        # known (a link that tells no shoe, or no key); without. A pair is
+        # counted from its activities: its distance in the whole period never
+        # adds up the months (Codex's review of the plan of S1), and the
+        # months between its first and last activities without one are 0.
+        answer = shoe_answer(self.data)
+        kinds = ("start", "end", "grain", "activities", "with_shoes", "two_or_more", "not_known", "without_shoes", "without_distance", "left_out")
+        self.assertEqual(
+            {key: answer[key] for key in kinds},
+            {
+                "start": "2024-01-05",
+                "end": "2024-04-03",
+                "grain": "month",
+                "activities": 6,
+                "with_shoes": 3,
+                "two_or_more": 1,
+                "not_known": 2,
+                "without_shoes": 1,
+                "without_distance": 1,
+                "left_out": 1,
+            },
+        )
+        self.assertEqual([period["start"] for period in answer["periods"]], ["2024-01-05", "2024-02-01", "2024-03-01", "2024-04-01"])
+        self.assertEqual(
+            [
+                (shoe["name"], shoe["values"], shoe["activities_by_month"], shoe["distance"], shoe["activities"], shoe["without_distance"], shoe["first"], shoe["last"])
+                for shoe in answer["shoes"]
+            ],
+            [
+                ("Road B", [5000.0, 0.0, 0.0, None], [1, 0, 0, 1], 5000.0, 2, 1, "2024-01-20", "2024-04-02"),
+                ("Road A", [15000.0, None, None, None], [2, 0, 0, 0], 15000.0, 2, 0, "2024-01-05", "2024-01-20"),
+            ],
+        )
+        self.assertEqual(answer["available"], {"count": 2, "too_large": False})
+        # What Garmin sets, and what tells shoes of one name apart, as read.
+        self.assertEqual(
+            {key: answer["shoes"][0][key] for key in ("day", "number", "begin", "end", "maximum")},
+            {"day": None, "number": None, "begin": None, "end": None, "maximum": None},
+        )
+
+    def test_the_types_counted_and_the_period(self) -> None:
+        # The types are those of the page: a ride counts when it is chosen.
+        answer = shoe_answer(self.data, "all", ["running", "road_biking"])
+        self.assertEqual((answer["activities"], [shoe["name"] for shoe in answer["shoes"]]), (7, ["Road A", "Road B"]))
+        road_a = answer["shoes"][0]
+        self.assertEqual((road_a["distance"], road_a["activities"], road_a["last"]), (35000.0, 3, "2024-04-03"))
+        # A range of days: the activities in it only; the pairs without one
+        # are counted only.
+        answer = shoe_answer(self.data, (date(2024, 2, 1), date(2024, 3, 31)))
+        self.assertEqual(
+            {key: answer[key] for key in ("activities", "with_shoes", "not_known", "without_shoes", "left_out")},
+            {"activities": 3, "with_shoes": 0, "not_known": 2, "without_shoes": 1, "left_out": 3},
+        )
+        self.assertEqual((answer["shoes"], len(answer["periods"])), ([], 2))
+
+    def test_the_distance_of_the_whole_period_is_added_from_the_activities(self) -> None:
+        # Codex's review of the diff of S1: in floats, 0.1 + 0.2 + 0.3 is not
+        # 0.1 + (0.2 + 0.3), so a whole added up again from the months would
+        # differ.
+        rows = [keyed("2024-01-05", "k1", distance_m=0.1), keyed("2024-02-01", "k2", distance_m=0.2), keyed("2024-02-02", "k3", distance_m=0.3)]
+        gear = Gear(shoes=(made_shoe("A", "Road A", 0),), links={key: frozenset({"A"}) for key in ("k1", "k2", "k3")}, unknown=frozenset())
+        [pair] = shoe_answer(replace(view_data(rows), gear=gear))["shoes"]
+        self.assertEqual((pair["values"], pair["distance"]), ([0.1, 0.5], 0.1 + 0.2 + 0.3))
+        self.assertNotEqual(pair["distance"], sum(pair["values"]))
+
+    def test_a_pair_without_any_distance_has_none_in_the_whole_period(self) -> None:
+        rows = [keyed("2024-01-05", "k1"), keyed("2024-03-05", "k2")]
+        gear = Gear((made_shoe("A", "Road A", 0),), {"k1": frozenset({"A"}), "k2": frozenset({"A"})}, frozenset())
+        [shoe] = shoe_answer(replace(view_data(rows), gear=gear))["shoes"]
+        self.assertEqual((shoe["values"], shoe["distance"], shoe["without_distance"], shoe["activities"]), ([None, 0.0, None], None, 2, 2))
+
+    def test_pairs_of_the_same_last_day_keep_the_order_of_gear_json(self) -> None:
+        rows = [keyed("2024-01-05", "k1", distance_m=1.0)]
+        gear = Gear((made_shoe("B", "Second", 0), made_shoe("A", "First", 1)), {"k1": frozenset({"A", "B"})}, frozenset())
+        self.assertEqual([shoe["name"] for shoe in shoe_answer(replace(view_data(rows), gear=gear))["shoes"]], ["Second", "First"])
+
+    def test_an_output_read_without_its_shoes_or_without_rows(self) -> None:
+        answer = shoe_answer(view_data([keyed("2024-01-05", "k1", distance_m=1.0)]))
+        self.assertEqual((answer["shoes"], answer["left_out"], answer["available"]), ([], 0, {"count": 0, "too_large": False}))
+        empty = shoe_answer(replace(view_data([]), gear=Gear((made_shoe("A", "Road A", 0),), {}, frozenset())))
+        self.assertEqual((empty["start"], empty["periods"], empty["shoes"], empty["left_out"]), (None, [], [], 1))
+        self.assertEqual(shoe_count(replace(view_data([]), gear=Gear((), {}, frozenset(), too_large=True))), {"count": 0, "too_large": True})
 
 
 if __name__ == "__main__":

@@ -1387,9 +1387,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
             'ui.otherViews.setAttribute("aria-expanded", String(state.otherOpen));',
             # In the place of the panels; the period and the types ask for what shows.
             "function apart() {\n  return comparing() || otherShown();\n}",
-            "function shownAnswer() {\n  return plotting() ? state.plotAnswer : spreading() ? state.spreadAnswer : state.answer;\n}",
-            "function otherShown() {\n  return plotting() || spreading();\n}",
-            "function requestShown() {\n  if (otherShown()) {\n    state.panelsStale = true;\n    requestPlot();\n    requestSpread();\n  } else {\n    requestSeries();\n  }\n}",
+            "function shownAnswer() {\n  return plotting() ? state.plotAnswer : spreading() ? state.spreadAnswer : shoesShown() ? state.shoesAnswer : state.answer;\n}",
+            "function otherShown() {\n  return plotting() || spreading() || shoesShown();\n}",
+            "function requestShown() {\n  if (otherShown()) {\n    state.panelsStale = true;\n    requestPlot();\n    requestSpread();\n    requestShoes();\n  } else {\n    requestSeries();\n  }\n}",
             "  const answer = shownAnswer();\n  const range = shiftedRange(answer?.start, answer?.end, direction, state.view?.first_day, state.view?.last_day);",
             "  rememberItems(true);\n  requestShown();\n  requestCompare();\n}",
             "button.disabled = !viewing || otherShown() || (grains !== null && !grains.includes(button.dataset.grain));",
@@ -1460,7 +1460,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertEqual(request.group(1).count("if (seq !== state.plotSeq) {\n      return;\n    }"), 2)
         # An output that stops closes a distribution too (stage P1), also
         # where the summary asks (stage Q1).
-        self.assertEqual(self.script.count("      state.compare = null;\n      state.plot = null;\n      state.spread = null;\n"), 7)
+        # With the view by shoes: the seven places, and its own request (stage
+        # S1 of v2.2.0).
+        self.assertEqual(self.script.count("      state.compare = null;\n      state.plot = null;\n      state.spread = null;\n      state.shoes = null;\n"), 8)
         self.assertRegex((STATIC_ROOT / "view.css").read_text(encoding="utf-8"), r"\.plot-head \.plot-read \{[^}]*white-space: normal;")
         view_css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
         self.assertRegex(view_css, r"\.plot-dot \{\s*fill: var\(--d1\);\s*stroke: var\(--surface\);\s*stroke-width: 1;\s*\}")
@@ -1483,7 +1485,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # function (the partial guard of O1).
         menu = by_id(self.elements, "other-views-menu")
         item = by_id(self.elements, "other-spread")
-        self.assertEqual([element.get("id") for element in self.elements if element.parent is menu], ["other-plot", "other-spread"])
+        self.assertEqual([element.get("id") for element in self.elements if element.parent is menu], ["other-plot", "other-spread", "other-shoes"])
         self.assertEqual((item.get("role"), item.get("tabindex"), item.get("data-i18n")), ("menuitem", "-1", "view.other.spread"))
         spread = by_id(self.elements, "spread")
         self.assertIn("hidden", spread.attributes)
@@ -1540,7 +1542,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
             'error.code === "VIEW_NOT_OPEN" && again && state.target !== null',
             "requestSpread(false);",
             "OUTPUT_STOPS.includes(error.code)",
-            "      state.spread = null;\n      state.stop = { code: error.code, detail: error.detail };",
+            "      state.spread = null;\n      state.shoes = null;\n      state.stop = { code: error.code, detail: error.detail };",
         ):
             with self.subTest(line=line):
                 self.assertIn(line, request.group(1))
@@ -1571,6 +1573,156 @@ class GuiViewPageStructureTest(unittest.TestCase):
         forced = view_css[view_css.rindex("@media (forced-colors: active) {") :]
         self.assertRegex(forced, r"\.spread-bar \{\s*fill: CanvasText;\s*\}")
         self.assertRegex(forced, r"\.spread-chosen \{\s*stroke: Highlight;\s*\}")
+
+    def test_the_view_by_shoes_takes_the_place_of_the_panels(self) -> None:
+        # v2.2.0 S1, in the page and its script, which no test runs: the third
+        # item of the menu of the other views, which says under its name why
+        # it cannot be chosen; a bar as that of the distribution; a row a pair
+        # of shoes in a stack that scrolls, over one time axis across the
+        # years (Codex's review of the plan of S1), the name cut before what
+        # tells it apart; the keys and the pointer move one cross line; its
+        # answers are one generation, which another output moves on; its
+        # tables; the answers of the numbers say again whether it has shoes.
+        menu = by_id(self.elements, "other-views-menu")
+        item = by_id(self.elements, "other-shoes")
+        self.assertIs(item.parent, menu)
+        self.assertEqual((item.get("role"), item.get("tabindex"), item.get("class")), ("menuitem", "-1", "with-why"))
+        name, why = [element for element in self.elements if element.parent is item]
+        self.assertEqual((name.get("data-i18n"), why.get("id"), why.get("class")), ("view.other.shoes", "other-shoes-why", "menu-why"))
+        self.assertIn("hidden", why.attributes)
+        shoes = by_id(self.elements, "shoes")
+        self.assertIn("hidden", shoes.attributes)
+        self.assertEqual(shoes.get("aria-labelledby"), "shoes-title")
+        title = by_id(self.elements, "shoes-title")
+        self.assertEqual((title.get("tabindex"), title.get("data-i18n")), ("-1", "view.shoes.title"))
+        for name in ("shoes-table", "shoes-save", "shoes-back", "shoes-count", "shoes-loading", "shoes-stop", "shoes-stack", "shoes-panels", "shoes-axis", "shoes-announcer", "shoes-none", "shoes-notes"):
+            with self.subTest(element=name):
+                self.assertIn(shoes, by_id(self.elements, name).ancestors())
+        stack = by_id(self.elements, "shoes-stack")
+        self.assertEqual(stack.get("class"), "stack compare-stack shoes-stack")
+        self.assertEqual([element.get("id") for element in self.elements if element.parent is stack], ["shoes-panels", "shoes-axis", "shoes-announcer"])
+        self.assertEqual(by_id(self.elements, "shoes-panels").get("class"), "panels")
+        self.assertEqual(by_id(self.elements, "shoes-announcer").get("aria-live"), "polite")
+        loading = by_id(self.elements, "shoes-loading")
+        self.assertEqual((loading.get("role"), loading.get("aria-live")), ("status", "polite"))
+        self.assertEqual(by_id(self.elements, "shoes-table").get("aria-pressed"), "false")
+        self.assertEqual(by_id(self.elements, "shoes-off").get("data-i18n"), "view.shoes.off")
+        held = {
+            "enterShoes": ("if (state.view === null || comparing() || shoesWhy(state.shoesAvailable) !== null) {", 'listChanged("shoes");', "state.shoes = { table: false, cursor: null };", "ui.shoesTitle.focus();", "requestShoes();"),
+            "leaveShoes": ("state.shoesSeq += 1;", "ui.otherViews.focus();", "  if (state.panelsStale) {\n    state.panelsStale = false;\n    requestSeries();\n  }"),
+            "shoesPayload": ("period: periodRequest(state.period, state.range),", "types: typesRequest(state.counted, state.view.types),"),
+            "shoesShown": ("return state.shoes !== null && state.view !== null;",),
+            "renderShoes": (
+                "ui.shoesOff.hidden = shoes === null;",
+                "ui.shoesTable.disabled = drawn === null || !drawn.shoes.length;",
+                'ui.shoesTable.setAttribute("aria-pressed", String(shoes.table));',
+                'setText(ui.shoesLoading, state.shoesLoading ? t("view.loading") : "");',
+                "ui.shoesStop.hidden = state.shoesStop === null;",
+                "describe(shoesCount(drawn))",
+                "ui.shoesNone.hidden = drawn === null || drawn.shoes.length > 0;",
+                "shoesNotes(drawn).map(describe)",
+                'ui.shoesNotes.replaceChildren(...notes.map((note) => element("p", "compare-note", note)));',
+            ),
+            "renderShoesBody": (
+                "const periods = periodDays(drawn.periods);",
+                'shown("dist", value)',
+                "shared: extent(lines)",
+                "ui.shoesPanels.replaceChildren(...buildShoesTables(drawn));",
+                "plotWatcher?.observe(entry.plot);",
+            ),
+            "buildShoeRow": (
+                'element("section", "panel-view compare-row shoe-row")',
+                "const headingId = `shoe-${index}`;",
+                'section.setAttribute("aria-labelledby", headingId);',
+                'heading.append(element("span", "shoe-own", describe(name)));',
+                'heading.append(element("span", "shoe-added", describe(added)));',
+                "plot.tabIndex = 0;",
+                'plot.setAttribute("role", "img");',
+                't("view.shoes.row_label", { shoe: describe(shoeName(shoe, state.language)) })',
+            ),
+            "drawShoePlot": (
+                "periods: context.periods, start: context.start, end: context.end, width, height, total: true, shared: context.shared",
+                'appendScale(svg, "dist", shapes, width - PLOT_RIGHT);',
+                'appendMarks(svg, shapes.lines[0], "c1", null, { outlined: true });',
+            ),
+            "renderShoesCharts": ("drawTimeAxis(shoesContext.start, shoesContext.end, width, ui.shoesAxis);",),
+            "moveShoesCross": ("describe(shoesRead(answer.periods[at], answer.shoes[entry.index].values[at], state.language))", "if (entry.index === row) {", "setText(ui.shoesAnnouncer,"),
+            "shoesKeyDown": ("const moves = { ArrowLeft: state.shoes.cursor - 1, ArrowRight: state.shoes.cursor + 1, Home: 0, End: last };", "event.preventDefault();", "moveShoesCross(moves[event.key], Number(plot.dataset.plot));"),
+            "shoesPointer": ("nearestPeriod(shoesContext.periods, entry.shapes.scale, event.clientX - plot.getBoundingClientRect().left)",),
+            "buildShoesTables": ('months, "shoes-months"),',),
+            "buildShoesTable": ('kind === null ? "panel-view compare-table table" : `panel-view compare-table table ${kind}`', 'element("caption", "visually-hidden", caption)', 'cell.scope = "col";', 'first.scope = "row";', 'wrap.setAttribute("role", "region");'),
+            "renderOtherViews": ("const why = shoesWhy(state.shoesAvailable);", 'ui.otherShoes.setAttribute("aria-disabled", String(why !== null));', "ui.otherShoesWhy.hidden = why === null;", 'setText(ui.otherShoesWhy, why === null ? "" : t(why));'),
+            "saveButton": ("shoes: ui.shoesSave }[view];",),
+            "saveShoesTarget": ("stopped: state.shoesStop !== null,", "loading: state.shoesLoading,", "answerTypes: state.shoesAsked?.types ?? null,"),
+            "renderSave": ('  for (const each of ["panels", "compare", "plot", "spread", "shoes"]) {\n    saveButton(each).setAttribute("aria-expanded",',),
+            "scheduleRedraw": ("renderShoesBody(state.shoesAnswer);",),
+            "render": ("renderShoes(live);",),
+            "drawTimeAxis": ("place.replaceChildren();", "place.append(svg);"),
+        }
+        for function, lines in held.items():
+            body = re.search(rf"function {function}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
+            assert body is not None, function
+            for line in lines:
+                with self.subTest(function=function, line=line):
+                    self.assertIn(line, body.group(1))
+        request = re.search(r"async function requestShoes\(again = true\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert request is not None
+        for line in (
+            "const seq = ++state.shoesSeq;",
+            'const answer = await callApi("/api/view/shoes", payload);',
+            "const asked = ++state.availableAsks;",
+            "    if (answer.available && asked > state.availableFrom) {\n      state.shoesAvailable = answer.available;\n      state.availableFrom = asked;\n    }",
+            'error.code === "VIEW_NOT_OPEN" && again && state.target !== null',
+            "requestShoes(false);",
+            "OUTPUT_STOPS.includes(error.code)",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, request.group(1))
+        self.assertEqual(request.group(1).count("if (seq !== state.shoesSeq) {\n      return;\n    }"), 2)
+        opened = re.search(r"async function openOutput\(target, focus = false\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert opened is not None
+        for line in (
+            "state.shoesSeq += 1;",
+            "    state.shoesAvailable = answer.shoes ?? null;\n    state.availableFrom = ++state.availableAsks;",
+            "      state.shoesAnswer = null;\n      state.shoesAsked = null;\n      state.shoesStop = null;",
+            "      if (shoesWhy(state.shoesAvailable) !== null) {\n        state.shoes = null;\n      } else {\n        state.shoes.cursor = null;\n      }",
+            "requestShoes();",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, opened.group(1))
+        # The answers of the numbers say again whether the output has shoes
+        # (Codex's review of the plan of S1), unless an answer asked for after
+        # them said it (Codex's review of the diff of S1).
+        series = re.search(r"async function requestSeries\(again = true\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert series is not None
+        self.assertIn("const asked = ++state.availableAsks;", series.group(1))
+        self.assertIn("    if (answer.shoes && asked > state.availableFrom) {\n      state.shoesAvailable = answer.shoes;\n      state.availableFrom = asked;\n    }", series.group(1))
+        for line in (
+            'ui.otherShoes.addEventListener("click", () => {\n    // An item that cannot be chosen does nothing, and the menu stays.\n    if (shoesWhy(state.shoesAvailable) !== null) {\n      return;\n    }\n    setOtherViews(false);\n    enterShoes();\n  });',
+            'ui.shoesTable.addEventListener("click", () => {\n    if (state.shoes !== null) {\n      state.shoes.table = !state.shoes.table;\n      render();\n    }\n  });',
+            'ui.shoesBack.addEventListener("click", leaveShoes);',
+            'ui.shoesPanels.addEventListener("pointermove", shoesPointer);',
+            'ui.shoesPanels.addEventListener("keydown", shoesKeyDown);',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+        view_css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        # A long name is cut, what tells it apart never (the checker's review
+        # of the handling of Codex's review of the plan of S1).
+        self.assertRegex(view_css, r"\.shoe-row \.panel-name\.shoe-name \{\s*display: flex;\s*min-width: 0;\s*overflow: hidden;\s*\}")
+        self.assertRegex(view_css, r"\.shoe-own \{\s*min-width: 0;\s*overflow: hidden;\s*text-overflow: ellipsis;\s*white-space: nowrap;\s*\}")
+        self.assertRegex(view_css, r"\.shoe-added \{\s*flex: none;\s*white-space: pre;\s*\}")
+        self.assertRegex(view_css, r"\.other-menu button\.with-why \{\s*display: flex;\s*flex-direction: column;\s*align-items: flex-start;\s*\}")
+        # An item that cannot be chosen stays in the way of the keys, and says
+        # why (Codex's review of the diff of S1).
+        self.assertNotIn("ui.otherShoes.disabled", self.script)
+        self.assertRegex(view_css, r'\.other-menu button\[aria-disabled="true"\] \{\s*color: var\(--dis\);\s*cursor: not-allowed;\s*\}')
+        self.assertRegex(view_css, r'@media \(forced-colors: active\) \{\s*\.other-menu button\[aria-disabled="true"\] \{\s*color: GrayText;\s*\}\s*\}')
+        # The table by month keeps its months at the left (the checker's
+        # review of the diff of S1).
+        self.assertRegex(view_css, r"\.shoes-months \.panel-table \.t tbody th,\s*\.shoes-months \.panel-table \.t thead th:first-child \{\s*position: sticky;\s*left: 0;\s*\}")
+        self.assertRegex(view_css, r"\.shoes-months \.panel-table \.t tbody th \{\s*background: var\(--surface\);\s*\}")
+        self.assertRegex(view_css, r"\.shoes-months \.panel-table \.t thead th:first-child \{\s*z-index: 2;\s*\}")
 
     def test_the_summary_is_a_window_of_the_items_of_the_panels(self) -> None:
         # v2.2.0 Q1, in the page and its script, which no test runs: the

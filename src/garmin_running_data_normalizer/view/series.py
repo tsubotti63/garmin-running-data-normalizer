@@ -821,6 +821,119 @@ def activity_spread(
     }
 
 
+def shoe_count(data: ViewData) -> dict[str, Any]:
+    """What the page needs to know of the shoes of an output before it shows
+    them (stage S1 of v2.2.0): how many pairs link to an activity of the
+    output up to today, of any type, and whether the files of the shoes were
+    left out for their size. An output read without its shoes has none."""
+    gear = data.gear
+    if gear is None:
+        return {"count": 0, "too_large": False}
+    keys = {row.marks.get("key") for row in data.rows[ACTIVITIES] if row.marks.get("key")}
+    linked = {shoe for activity, shoes in gear.links.items() if activity in keys for shoe in shoes}
+    return {"count": len(linked), "too_large": gear.too_large}
+
+
+def shoe_answer(
+    data: ViewData,
+    period: str | tuple[date, date] = "all",
+    types: Collection[str] | None = None,
+) -> dict[str, Any]:
+    """The view by shoes (stage S1 of v2.2.0): the months of ``period``,
+    once; the activities of the activity types counted in it, chosen as the
+    list of a period chooses them, by whether they link to shoes (to one or
+    more, of which to two or more; not known: a link that tells no shoe, or
+    no key; the rest without); and for each pair of shoes with an activity in
+    it, in the order of its last one, newest first (then of gear.json): its
+    distance by month, as the panel of the distance counts it (0 in the
+    months between its first and last activities without one), and in the
+    whole period, from its activities, never added up from the months; the
+    activities of each month; the number of its activities and of those
+    without a distance; the days of the first and the last; what Garmin sets
+    of it; and what tells it from the shoes of the same name. An activity
+    with two shoes counts for each. The pairs without an activity in the
+    period are counted only."""
+    item = ITEMS_BY_KEY["dist"]
+    gear = data.gear
+    shoes = () if gear is None else gear.shoes
+    months = period_bounds(data, period, "month")
+    whole, rows = _period_rows(data, period, types)
+    answer: dict[str, Any] = {
+        "start": None,
+        "end": None,
+        "grain": "month",
+        "periods": [],
+        "shoes": [],
+        "activities": len(rows),
+        "with_shoes": 0,
+        "two_or_more": 0,
+        "not_known": 0,
+        "without_shoes": 0,
+        "without_distance": 0,
+        "left_out": len(shoes),
+        "available": shoe_count(data),
+    }
+    if months is None or whole is None:
+        return answer
+    linked: dict[str, list[Row]] = defaultdict(list)
+    for row in rows:
+        key = row.marks.get("key") or ""
+        found = gear.links.get(key, frozenset()) if gear is not None and key else frozenset()
+        if found:
+            answer["with_shoes"] += 1
+            if len(found) > 1:
+                answer["two_or_more"] += 1
+            if not _has_value(item, row):
+                answer["without_distance"] += 1
+            for shoe in found:
+                linked[shoe].append(row)
+        elif not key or (gear is not None and key in gear.unknown):
+            answer["not_known"] += 1
+    answer["without_shoes"] = len(rows) - answer["with_shoes"] - answer["not_known"]
+    chosen = []
+    for shoe in shoes:
+        own = linked.get(shoe.key)
+        if not own:
+            continue
+        line = _activity_line(item, own, months, Counter())
+        [distance] = _activity_line(item, own, whole, Counter())["values"]
+        activities = [0] * len(months.spans)
+        for row in own:
+            index = months.index(row.day)
+            if index is not None:
+                activities[index] += 1
+        entry = {
+            "name": shoe.name,
+            "day": shoe.day,
+            "number": shoe.number,
+            "begin": shoe.begin,
+            "end": shoe.end,
+            "maximum": shoe.maximum,
+            "values": line["values"],
+            "activities_by_month": activities,
+            "distance": distance,
+            "activities": len(own),
+            "without_distance": sum(1 for row in own if not _has_value(item, row)),
+            "first": date.fromordinal(own[0].day).isoformat(),
+            "last": date.fromordinal(own[-1].day).isoformat(),
+        }
+        chosen.append((own[-1].day, shoe.place, entry))
+    chosen.sort(key=lambda found: (-found[0], found[1]))
+    answer.update(
+        {
+            "start": date.fromordinal(months.start).isoformat(),
+            "end": date.fromordinal(months.end).isoformat(),
+            "periods": [
+                {"start": date.fromordinal(first).isoformat(), "end": date.fromordinal(last).isoformat(), "partial": partial}
+                for first, last, partial in months.spans
+            ],
+            "shoes": [entry for _last, _place, entry in chosen],
+            "left_out": len(shoes) - len(chosen),
+        }
+    )
+    return answer
+
+
 __all__ = [
     "GRAINS",
     "LAST_YEARS",
@@ -849,6 +962,8 @@ __all__ = [
     "period_bounds",
     "point_item",
     "previous_span",
+    "shoe_answer",
+    "shoe_count",
     "type_name_ok",
     "view_answer",
 ]

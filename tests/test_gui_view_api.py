@@ -29,6 +29,7 @@ from garmin_running_data_normalizer.gui import views as gui_views
 from garmin_running_data_normalizer.gui.layouts import built_in_answer
 from garmin_running_data_normalizer.gui.views import (
     MAX_SHELVES,
+    load_view,
     MAX_VIEWS,
     ViewRequestError,
     Views,
@@ -44,7 +45,16 @@ from garmin_running_data_normalizer.view import data as view_data
 from garmin_running_data_normalizer.view import series as view_series
 from garmin_running_data_normalizer.view.data import load_view_data
 from garmin_running_data_normalizer.view.items import ITEMS
-from garmin_running_data_normalizer.view.series import MAX_TYPE_LENGTH, MAX_TYPES, activity_types, coverage, default_items, view_answer
+from garmin_running_data_normalizer.view.series import (
+    MAX_TYPE_LENGTH,
+    MAX_TYPES,
+    activity_types,
+    coverage,
+    default_items,
+    shoe_answer,
+    shoe_count,
+    view_answer,
+)
 from tests.test_gui_server import GuiServerTestCase
 from tests.v1_3_outputs import as_release, as_v1_3
 from tests.view_export import write_view_export
@@ -57,7 +67,9 @@ def setUpModule() -> None:
     directory = tempfile.TemporaryDirectory()
     root = Path(directory.name).resolve()
     run_all(write_view_export(root / "export"), root / "output")
-    _MADE.update(directory=directory, output=root / "output")
+    # With the synthetic shoes (stage S1 of v2.2.0).
+    run_all(write_view_export(root / "shoes-export", gear=True), root / "shoes-output")
+    _MADE.update(directory=directory, output=root / "output", shoes=root / "shoes-output")
 
 
 def tearDownModule() -> None:
@@ -66,6 +78,10 @@ def tearDownModule() -> None:
 
 def made_output() -> Path:
     return _MADE["output"]
+
+
+def shoe_output() -> Path:
+    return _MADE["shoes"]
 
 
 def as_json(value: Any) -> Any:
@@ -102,7 +118,7 @@ class ViewApiTest(GuiServerTestCase):
         data = load_view_data(output)
         self.assertEqual(
             set(answer),
-            {"view", "name", "version", "partial", "first_day", "last_day", "items", "types", "first_items", "layouts", "coverage"},
+            {"view", "name", "version", "partial", "first_day", "last_day", "items", "types", "first_items", "layouts", "coverage", "shoes"},
         )
         self.assertRegex(answer["view"], r"^[A-Za-z0-9_-]{16,}$")
         self.assertEqual(
@@ -123,6 +139,8 @@ class ViewApiTest(GuiServerTestCase):
         # The built-in layouts, by their ids and items (stage K1 of v2.2.0).
         self.assertEqual(answer["layouts"], built_in_answer())
         self.assertEqual(answer["coverage"], as_json(coverage(data)))
+        # Whether the view by shoes has shoes (stage S1 of v2.2.0): none here.
+        self.assertEqual(answer["shoes"], shoe_count(load_view(output)))
         # No place reaches the page, not even a part of one.
         text = json.dumps(answer)
         for place in (output, output.parent):
@@ -139,6 +157,51 @@ class ViewApiTest(GuiServerTestCase):
         with patch.object(view_data, "checked_output", partial):
             status, answer = self.call("/api/view/open", {"output": "chosen", "path": str(made_output())})
         self.assertEqual((status, answer["partial"]), (200, True))
+
+    def test_the_view_by_shoes_is_that_of_what_the_view_page_read(self) -> None:
+        # Stage S1 of v2.2.0, with the synthetic shoes: the view page reads
+        # them by default (Codex's review of the plan of S1), and every answer
+        # of its numbers says how many it has.
+        self.assertIs(Views()._load, load_view)
+        output = shoe_output()
+        status, opened = self.call("/api/view/open", {"output": "chosen", "path": str(output)})
+        self.assertEqual((status, opened["shoes"]), (200, {"count": 6, "too_large": False}))
+        data = load_view(output)
+        names = [entry["name"] for entry in activity_types(data)]
+        for period, types, chosen in (
+            ("all", None, "all"),
+            ("1y", names, "1y"),
+            ({"from": "2024-02-01", "to": "2024-05-31"}, ["treadmill_running"], (date(2024, 2, 1), date(2024, 5, 31))),
+        ):
+            with self.subTest(period=period, types=types):
+                status, answer = self.call("/api/view/shoes", {"view": opened["view"], "period": period, "types": types})
+                self.assertEqual(status, 200)
+                self.assertEqual(answer, as_json(shoe_answer(data, chosen, types)))
+        status, numbers = self.call("/api/view/series", {"view": opened["view"], "items": ["dist"], "period": "all", "grain": "auto", "types": None})
+        self.assertEqual((status, numbers["shoes"]), (200, {"count": 6, "too_large": False}))
+
+    def test_a_request_of_the_view_by_shoes_is_checked_as_the_numbers_are(self) -> None:
+        ticket = self.open(shoe_output())
+        names = ("ロード用 A", "ロード用 B", "トレイル用 C", "レース用 D", "Synthetic model X")
+        for payload, expected in (
+            ({"period": "all"}, (422, "REQUEST_INVALID")),
+            ({"view": 1, "period": "all"}, (422, "REQUEST_INVALID")),
+            ({"view": ticket, "period": "5w"}, (422, "REQUEST_INVALID")),
+            ({"view": ticket, "period": {"from": "2024-03-01", "to": "2024-02-01"}}, (422, "REQUEST_INVALID")),
+            ({"view": ticket, "period": "all", "types": "running"}, (422, "REQUEST_INVALID")),
+            ({"view": ticket, "period": "all", "types": ["running", "running"]}, (422, "REQUEST_INVALID")),
+            ({"view": ticket, "period": "all", "types": ["no such type"]}, (422, "REQUEST_INVALID")),
+            ({"view": "not-a-ticket", "period": "all"}, (409, "VIEW_NOT_OPEN")),
+        ):
+            with self.subTest(payload=payload):
+                status, answer = self.call("/api/view/shoes", payload)
+                self.assertEqual((status, answer), (expected[0], {"error": expected[1]}))
+                # No name of a shoe is in an answer of an error.
+                self.assertFalse(any(name in json.dumps(answer, ensure_ascii=False) for name in names))
+        # The answer has the limit of the others (the partial guard of S1).
+        with patch.object(gui_server, "MAX_ANSWER_BYTES", 100):
+            self.assertEqual(self.call("/api/view/shoes", {"view": ticket, "period": "all"}), (422, {"error": "VIEW_ANSWER_TOO_LARGE"}))
+
 
     def test_the_numbers_are_those_of_the_view_page(self) -> None:
         output = made_output()
@@ -161,6 +224,7 @@ class ViewApiTest(GuiServerTestCase):
                 self.assertEqual(status, 200)
                 expected = view_answer(data, items, chosen, grain, types)
                 expected["coverage"] = coverage(data, types)
+                expected["shoes"] = shoe_count(load_view(output))
                 self.assertEqual(answer, as_json(expected))
 
     def test_the_summary_has_the_period_before(self) -> None:
@@ -181,6 +245,7 @@ class ViewApiTest(GuiServerTestCase):
                 self.assertEqual(status, 200)
                 expected = view_answer(data, items, chosen, "range", None, True)
                 expected["coverage"] = coverage(data, None)
+                expected["shoes"] = shoe_count(load_view(output))
                 self.assertEqual(answer, as_json(expected))
                 self.assertIn("previous", answer)
         # Without it, the answer is that of the whole period as before.
@@ -236,6 +301,7 @@ class ViewApiTest(GuiServerTestCase):
         self.assertEqual(status, 200, answer)
         expected = view_answer(data, ["dist"], "all", "auto", names)
         expected["coverage"] = coverage(data, names)
+        expected["shoes"] = shoe_count(load_view(output))
         self.assertEqual(answer, as_json(expected))
 
     def test_a_ticket_that_the_server_does_not_keep_is_refused(self) -> None:
@@ -712,6 +778,14 @@ class ViewsTest(unittest.TestCase):
         later = vo2max.stat().st_mtime_ns + 2_000_000_000
         os.utime(vo2max, ns=(later, later))
         self.assertNotEqual(output_stamp(output), stamp)
+        # The files of the shoes too, each alone (stage S1 of v2.2.0).
+        for name in ("gear.json", "activity_gear.json"):
+            stamp = output_stamp(output)
+            shoes = output / "normalized" / name
+            later = shoes.stat().st_mtime_ns + 2_000_000_000
+            os.utime(shoes, ns=(later, later))
+            self.assertNotEqual(output_stamp(output), stamp, name)
+
 
     def test_the_bars_of_the_shelf_are_kept_for_the_reading_of_the_ticket_only(self) -> None:
         # Stage M2 of v2.2.0. The number of the plan, written as it is.

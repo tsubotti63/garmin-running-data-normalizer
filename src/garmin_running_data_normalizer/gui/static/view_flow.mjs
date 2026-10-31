@@ -3100,6 +3100,8 @@ export const SAVE_LEFT_OUT_VIEWS = {
   compare: [".cross", ".calendar-cursor"],
   plot: [".plot-chosen"],
   spread: [".spread-chosen"],
+  // The cross lines of the rows of the shoes (stage S1 of v2.2.0).
+  shoes: [".cross"],
 };
 
 // Whether the window of the saving shows (Codex's review of the plan of R2,
@@ -3161,6 +3163,11 @@ export function saveViewFileName(view, { key = null, keys = [], years = [], days
   if (view === "plot") {
     return `garmin-plot_${start}_${end}_${items.join("-")}.svg`;
   }
+  if (view === "shoes") {
+    // The view by shoes (stage S1 of v2.2.0): its period and the key of the
+    // distance, never the names of the shoes.
+    return `garmin-shoes_${start}_${end}_${key}.svg`;
+  }
   return view === "spread" ? `garmin-spread_${start}_${end}_${key}.svg` : null;
 }
 
@@ -3182,5 +3189,133 @@ export function saveViewFooter(view, { years = [], days = [], grain = null, star
       : [message("view.save.compare_races", { days: days.map(String).sort().map((day) => dateText(day, language)).join(daysSeparator) }), kinds, app];
   }
   const period = message("view.save.period", { from: dateText(start, language), to: dateText(end, language) });
+  if (view === "shoes") {
+    // By month, always (stage S1 of v2.2.0).
+    return [period, message("view.save.grain", {}, { grain: GRAIN_KEYS.month }), kinds, app];
+  }
   return view === "spread" ? [period, message("view.save.width", {}, { width: spreadWidthValue(key, answer, language) }), kinds, app] : [period, kinds, app];
+}
+
+// --- The view by shoes (stage S1 of v2.2.0) ---------------------------------
+
+// Why the view by shoes cannot show, from what the server says of the shoes
+// of an output ({count, too_large}): the key of the words, or null where it
+// has shoes to show. The files of the shoes left out for their size are told
+// apart (Codex's review of the plan of S1).
+export function shoesWhy(shoes) {
+  const known = shoes !== null && typeof shoes === "object";
+  if (known && shoes.too_large === true) {
+    return "view.other.shoes_too_large";
+  }
+  return known && Number.isInteger(shoes.count) && shoes.count > 0 ? null : "view.other.shoes_none";
+}
+
+// The name of a pair of shoes as the output writes it (or the words of a pair
+// without one), and what tells it from the shoes of the same name, as the
+// server says: the day of its start, or its number among them. The page cuts
+// a long name, never what is added (the checker's review of the handling of
+// Codex's review of the plan of S1).
+export function shoeWords(shoe, language) {
+  const name = typeof shoe.name === "string" && shoe.name !== "" ? plain(shoe.name) : message("view.shoes.unnamed");
+  if (typeof shoe.day === "string" && ISO_DAY.test(shoe.day)) {
+    return [name, message("view.shoes.started", { day: dateText(shoe.day, language) })];
+  }
+  return [name, Number.isInteger(shoe.number) ? message("view.shoes.number", { n: shoe.number }) : null];
+}
+
+// The whole name of a pair, as its table and the words read aloud say it.
+export function shoeName(shoe, language) {
+  const [name, added] = shoeWords(shoe, language);
+  return added === null ? name : message("view.shoes.name_added", {}, { name, added });
+}
+
+// The line of the counts of the view by shoes.
+export function shoesCount(answer) {
+  return message("view.shoes.count", { shoes: answer.shoes.length, with: answer.with_shoes, all: answer.activities });
+}
+
+const SHOES_NOTES = [
+  ["without_shoes", "view.shoes.note_without"],
+  ["not_known", "view.shoes.note_unknown"],
+  ["two_or_more", "view.shoes.note_two"],
+  ["without_distance", "view.shoes.note_no_distance"],
+  ["left_out", "view.shoes.note_left_out"],
+];
+
+// The notes of the view by shoes, under its rows or its tables and in a
+// picture saved: what Garmin sets, always, and each count only where it is 1
+// or more (the checker's review of the counts of S1).
+export function shoesNotes(answer) {
+  const notes = [message("view.shoes.note_garmin")];
+  for (const [name, key] of SHOES_NOTES) {
+    if (Number.isInteger(answer[name]) && answer[name] > 0) {
+      notes.push(message(key, { n: answer[name] }));
+    }
+  }
+  return notes;
+}
+
+// The value of a pair in the month of the cross line, as its row reads it.
+export function shoesRead(period, value, language) {
+  return message("view.shoes.read", {}, { period: periodMessage(period, "month", language), value: Number.isFinite(value) ? valueMessage("dist", value, language) : plain("—") });
+}
+
+// A day that Garmin sets, in the table: as the language writes it, or "—".
+function shoeDay(iso, language) {
+  return typeof iso === "string" && ISO_DAY.test(iso) ? plain(dateText(iso, language)) : plain("—");
+}
+
+// The maximum distance that Garmin sets, read in meters as Garmin names it,
+// and shown in km as the distance of the panels: a rule of this table only,
+// not of the items (Codex's review of the plan of S1); 0 as Garmin gives it,
+// and "—" for none.
+function shoeMaximum(meters, language) {
+  return Number.isFinite(meters) ? valueMessage("dist", meters, language) : plain("—");
+}
+
+const SHOES_HEADS = [
+  "view.shoes.head.shoe",
+  "view.shoes.head.distance",
+  "view.shoes.head.count",
+  "view.shoes.head.first",
+  "view.shoes.head.last",
+  "view.shoes.head.begin",
+  "view.shoes.head.end",
+  "view.shoes.head.maximum",
+];
+
+// The tables of the view by shoes: a row a pair (its distance, activities,
+// and days of first and last use in this period, then what Garmin sets), and
+// a row a month with a column a pair, its distance and activities, so that
+// the values of the charts are in a table too (Codex's review of the plan of
+// S1). A month outside the use of a pair, without an activity, is "—".
+export function shoesTables(answer, language) {
+  const summary = {
+    heads: SHOES_HEADS.map((key) => message(key)),
+    rows: answer.shoes.map((shoe) => [
+      shoeName(shoe, language),
+      Number.isFinite(shoe.distance) ? valueMessage("dist", shoe.distance, language) : plain("—"),
+      message("view.shoes.times", { n: shoe.activities }),
+      shoeDay(shoe.first, language),
+      shoeDay(shoe.last, language),
+      shoeDay(shoe.begin, language),
+      shoeDay(shoe.end, language),
+      shoeMaximum(shoe.maximum, language),
+    ]),
+  };
+  const months = {
+    heads: [message("view.shoes.head.month"), ...answer.shoes.map((shoe) => shoeName(shoe, language))],
+    rows: answer.periods.map((period, index) => [
+      periodMessage(period, "month", language),
+      ...answer.shoes.map((shoe) => {
+        const count = shoe.activities_by_month[index];
+        const value = shoe.values[index];
+        if (!count && !Number.isFinite(value)) {
+          return plain("—");
+        }
+        return message("view.shoes.month_cell", { n: count }, { value: Number.isFinite(value) ? valueMessage("dist", value, language) : plain("—") });
+      }),
+    ]),
+  };
+  return { summary, months };
 }
