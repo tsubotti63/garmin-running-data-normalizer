@@ -30,6 +30,7 @@ from garmin_running_data_normalizer.view.series import (
 # procedure gives its own line (v2.0.1 F4; decision 20261024-4).
 from scripts.validate_public_product_state import CURRENT_STABLE_VERSION
 from tests import test_gui_i18n
+from tests.test_gui_view_save import function_body
 from tests.test_view_series import act, view_data
 
 
@@ -626,7 +627,9 @@ class GuiGuideTest(unittest.TestCase):
         # and the marks, after the overview, and comparing by race day, after
         # the years laid over one another. N2: the calendar, before comparing
         # by race day. OP2: the points and a distribution, after comparing by
-        # race day. Q2: the summary, after a distribution.
+        # race day. Q2: the summary, after a distribution. R3: saving as an
+        # image, after the summary: its window, and a picture saved, cut above
+        # its line at the bottom (the checker's answer 4 of the plan of R3).
         names = (
             "normalized-page",
             "next-steps",
@@ -645,8 +648,13 @@ class GuiGuideTest(unittest.TestCase):
             "view-plot",
             "view-spread",
             "view-recap",
+            "view-save",
+            "view-save-picture",
         )
         sizes = {"next-steps": (315, 213), "view-layouts": (371, 193), "view-layouts-manage": (440, 438)}
+        # The picture saved is cut above its line at the bottom, under the
+        # chart of each language (R3).
+        sizes |= {("view-save-picture", "en"): (1200, 532), ("view-save-picture", "ja"): (1200, 598)}
         japanese = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
         for language, path in GUIDES.items():
             with self.subTest(language=language):
@@ -658,7 +666,7 @@ class GuiGuideTest(unittest.TestCase):
                         self.assertEqual(bool(japanese.search(words)), language == "ja")
                         data = (path.parent / link).read_bytes()
                         self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
-                        self.assertEqual(struct.unpack(">II", data[16:24]), sizes.get(name, (1470, 830)))
+                        self.assertEqual(struct.unpack(">II", data[16:24]), sizes.get((name, language), sizes.get(name, (1470, 830))))
                         self.assertLess(len(data), 1_000_000)
                         kinds = set()
                         place = 8
@@ -680,7 +688,9 @@ class GuiGuideTest(unittest.TestCase):
         # May of every year, after the past year on the view page; from M4, an
         # eighth compares the 16 weeks before races, after it; from OP2, a ninth
         # gives the distances of the last year as a distribution, after it (the
-        # checker's answer 3 of the plan of OP2).
+        # checker's answer 3 of the plan of OP2). From R3, an eleventh keeps a
+        # comparison of years as an image, after the summary (the checker's
+        # answer 2 of the plan of R3).
         parts = {
             "en": ("How it goes", "Ways to use it", "More: [", "(#start-the-gui)"),
             "ja": ("全体の流れ", "場面ごとの使い方", "くわしくは：[", "(#gui-を起動する)"),
@@ -708,8 +718,8 @@ class GuiGuideTest(unittest.TestCase):
                         if scene.startswith(("Give the numbers to an AI", "数字を CSV にして")):
                             care = {"en": "personal data", "ja": "個人のデータ"}[language]
                             self.assertLess(reads.index(care), reads.index("`about`"))
-        self.assertEqual(len(scenes["en"]), 10)
-        self.assertEqual(len(scenes["ja"]), 10)
+        self.assertEqual(len(scenes["en"]), 11)
+        self.assertEqual(len(scenes["ja"]), 11)
         for language, title, race, spread, recap in (
             ("en", "Compare May of every year", "Compare the 16 weeks before races", "See how often you ran each distance in the last year", "Compare the last year with the year before"),
             ("ja", "毎年の 5 月をくらべる", "大会の前の 16 週をくらべる", "直近 1 年に、どの距離を何回走ったかを見る", "この 1 年と前の 1 年をくらべる"),
@@ -719,8 +729,9 @@ class GuiGuideTest(unittest.TestCase):
                 self.assertTrue(scenes[language][6].startswith(race))
                 self.assertTrue(scenes[language][7].startswith(spread))
                 self.assertTrue(scenes[language][8].startswith(recap))
-                self.assertTrue(scenes[language][9].startswith(("Give the numbers to an AI", "数字を CSV にして")))
-        intro = {"en": "The steps of ten common cases.", "ja": "よくある 10 の場面の手順です。"}
+                self.assertTrue(scenes[language][9].startswith(("Keep a comparison of years as an image", "年でくらべた図を画像にして残す")))
+                self.assertTrue(scenes[language][10].startswith(("Give the numbers to an AI", "数字を CSV にして")))
+        intro = {"en": "The steps of eleven common cases.", "ja": "よくある 11 の場面の手順です。"}
         for language, path in GUIDES.items():
             with self.subTest(language=language, part="intro"):
                 self.assertIn(intro[language], path.read_text(encoding="utf-8"))
@@ -844,7 +855,7 @@ class GuiGuideTest(unittest.TestCase):
                 "When another output opens (from 2.2.0), a period such as **1 year** stays as it is.",
                 "A period chosen with **Custom range…** shrinks to the days of the output when it overlaps them in part, and becomes **All time** when it does not overlap them at all.",
                 "The activity types counted are those remembered that the output has; when it has none of them, every running type in the output.",
-                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, full screen, whether years were compared, with the years or races chosen, whether a list of activities was open, whether another view was shown, with the point or the range chosen, and whether the summary was open.",
+                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, full screen, whether years were compared, with the years or races chosen, whether a list of activities was open, whether another view was shown, with the point or the range chosen, whether the summary was open, and whether the window of saving as an image was open, with its choices.",
                 "the names of places and of the items of the view page, and from 2.2.0 also the names of the layouts you saved, the days of a period chosen with **Custom range…**, the activity types counted, and the timezone. They stay on this computer",
             ),
             "ja": (
@@ -857,7 +868,7 @@ class GuiGuideTest(unittest.TestCase):
                 "⤢ の所が「段を並べて見る」（2.1.0 では「元に戻す」）になり、",
                 "「範囲を選ぶ…」で選んだ期間は、その出力の日の範囲と一部だけ重なるときは重なる所に縮まり、まったく重ならないときは「全期間」になります。",
                 "数える種目は、覚えた種目のうち、その出力にある種目です。1 つも無いときは、その出力のランニングの種目すべてです。",
-                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、区切りの一覧を開いていたか、ほかの見方を開いていたかと、選んだ点や分かれ方の区切り、まとめの窓を開いていたか。",
+                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、区切りの一覧を開いていたか、ほかの見方を開いていたかと、選んだ点や分かれ方の区切り、まとめの窓を開いていたか、画像で保存の窓を開いていたかと、その選び。",
                 "2.2.0 からは、保存した表示の型の名前、「範囲を選ぶ…」で選んだ期間の日付、数える種目、タイムゾーンも入ります。",
             ),
         }
@@ -1717,7 +1728,10 @@ class GuiGuideTest(unittest.TestCase):
             places = [text.index(f"\n### {title}\n") for title in (before_heading[language], heading[language], after[language])]
             with self.subTest(language=language, part="order"):
                 self.assertEqual(places, sorted(places))
-            part = text[places[1] : places[2]]
+            # v2.2.0 R3: saving as an image comes between, so that the summary
+            # is read up to the next heading, as before R3 (Codex's review of
+            # the plan of R3).
+            part = text[places[1] : text.index("\n### ", places[1] + 1)]
             joined = " ".join(part.split()) if language == "en" else re.sub(r"\n *", "", part)
             # The way each item is counted, as a table of two columns: the
             # words of the page for its kind, and its items in the order of
@@ -1785,6 +1799,148 @@ class GuiGuideTest(unittest.TestCase):
                     with self.subTest(language=language, quoted=word):
                         self.assertIn(word, words)
 
+    def test_guides_give_the_saving_as_the_page_does(self) -> None:
+        # v2.2.0 R3: saving as an image (stages R1 and R2) has a section of
+        # its own after the summary, before the readings of an output that
+        # changes (the checker's answer 1 of the plan of R3), and the eleventh
+        # scene (answer 2). What the guides say of it is what the page does,
+        # so that a change of either fails here (Codex's review of the plan of
+        # R3): the first choices of the window, the row above the panels that
+        # hides, what a picture leaves out, the views that cannot save without
+        # values, the browser that saves the file, the reasons at the press,
+        # and where the focus goes. The names of the files are those that
+        # saveFileName and saveViewFileName give (tests/gui_js/view_flow.test.mjs).
+        # Every word quoted is a word of the page, whole: a label, or in
+        # English a line in quotes (the checker's review of the handling).
+        flow = (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8")
+        page = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        held = {
+            "openSave": ('state.saveScope = "all";', 'state.saveColors = "light";', "state.saveMarks = false;", "(open ? ui.saveTitle : saveButton(state.saveFrom)).focus();"),
+            "renderSave": ("if (state.saveOpen && state.saveFrom !== view) {\n    state.saveOpen = false;", "ui.saveOpen.disabled = !viewing || !state.items.length;", "ui.saveGo.disabled = !target.ready;"),
+            "saveImage": (
+                '} else if (!target.ready || target.name !== ui.saveName.textContent) {\n    problem = "view.save.changed";',
+                'problem = "view.save.failed";',
+                "link.download = target.name;",
+                "(problem === null ? saveButton(state.saveFrom) : ui.saveGo).focus();",
+            ),
+            "saveTarget": ("const problem = saveProblem({ stopped: state.seriesStop !== null, loading: state.loading, answer: state.answer, drawn, parts: plan.keys.length });",),
+        }
+        for name, lines in held.items():
+            body = function_body(page, name)
+            for line in lines:
+                with self.subTest(function=name, line=line):
+                    self.assertIn(line, body)
+        self.assertIn("ui.caveat.hidden = !viewing || apart();", page)
+        # Close and Cancel close the window back to its button, as Escape does
+        # (the checker's review of the diff of R3).
+        self.assertIn('ui.saveClose.addEventListener("click", () => openSave(false));\n  ui.saveCancel.addEventListener("click", () => openSave(false));', page)
+        self.assertIn(".view-app.full .caveat,", css)
+        self.assertIn('export const SAVE_LEFT_OUT_VIEWS = {\n  compare: [".cross", ".calendar-cursor"],\n  plot: [".plot-chosen"],\n  spread: [".spread-chosen"],\n};', flow)
+        # A period without values stops two items plotted and a distribution
+        # only; the panels and comparing years save the words of an empty
+        # chart (Codex's review of the plan of R3).
+        self.assertEqual(
+            re.findall(r"^    empty: (.*),$", page, re.M),
+            ["target.empty", "false", 'entry.plot.querySelector(".panel-empty")?.textContent ?? null', "answer !== null && !answer.points.length", "answer !== null && !answer.counts.length"],
+        )
+        heading = {"en": "Saving as an image (from 2.2.0)", "ja": "画像で保存（2.2.0 から）"}
+        before = {"en": "Summary (from 2.2.0)", "ja": "まとめ（2.2.0 から）"}
+        after = {"en": "When the output changes while you look (from 2.2.0)", "ja": "見ている間に出力が変わったとき（2.2.0 から）"}
+        says = {
+            "en": (
+                "**Save as image…** is right after **Summary…** in the row above the panels, and right after **Show as a table** in the bars of **Compare years**, **Plot two items**, and **Distribution**.",
+                "The row above the panels does not show while years are compared, another view is shown, or in full screen, where the window hides too and shows again after it. Without panels, its **Save as image…** cannot be pressed. When the view changes, the window closes.",
+                "its choices are the first ones again: all the panels, the light colors, and no marks (nothing is remembered).",
+                "the cross line, and the frames that show the day, point, or range chosen, with the readings of its values, never go in; the points, the bars, and the days themselves do.",
+                "for two items plotted or a distribution, a period without values to draw;",
+                "A panel or a year without values goes in with the words that the page shows for it.",
+                "**Save** hands the file to the browser as a download, which the browser saves where its settings say (usually your downloads, or where you choose if it asks each time). This app cannot know that it was saved,",
+                "the window says so, and the focus stays on **Save** where it can still be pressed; check the window, and press **Save** again when it can save.",
+                "In forced colors (a contrast theme of Windows, for example), the picture takes the colors of the screen, whichever **Colors** gives.",
+                "Esc, **Close**, or **Cancel** closes it, and the focus goes back to its **Save as image…** then and after the file is handed to the browser.",
+            ),
+            "ja": (
+                "段の上の行の「まとめ…」の右と、年でくらべる・点で並べる・分かれ方の帯の「表で見る」の右に、「画像で保存…」があります。",
+                "年でくらべる・ほかの見方・全画面の間は、段の上の行が隠れます（全画面の間は窓も隠れ、戻ると出ます）。段が無いときは、段の上の「画像で保存…」は押せません。見方が変わると、窓は閉じます。",
+                "窓を開くたびに、選びは初めの形（並べた段すべて・明るい色・印は入れない）に戻ります（覚えません）。",
+                "全体図・一覧・ボタン・出力のフォルダーの名前と、縦の線、選んだ日・点・区切りを示す枠、その値を読む所は入りません（点や棒、カレンダーの日そのものは入ります）。",
+                "点で並べると分かれ方で期間に図にする値が無いとき",
+                "値の無い段や年も、ページに出ている言葉のまま入ります。",
+                "窓の「保存」を押すと、画像のファイルをブラウザーにダウンロードとして渡します。保存する場所は、ブラウザーの設定のとおりです（ふつうはダウンロードの場所。毎回聞く設定なら、そのとき選んだ場所）。このアプリは、保存できたかを知らないので、",
+                "押したときに、保存する図が窓に出ていたものから変わっていたときと、画像を作れなかったときも、窓がわけを言います。「保存」が押せるときは、フォーカスは「保存」に残ります。窓を見直して、保存できるようになったら、もう一度「保存」を押してください。",
+                "強制カラーの画面（Windows のコントラスト テーマなど）では、どちらの「色」を選んでも、画像はその画面の色になります。",
+                "Esc キー・「閉じる」・「やめる」で閉じたときと、ファイルをブラウザーに渡したあとは、押した「画像で保存…」に戻ります。",
+            ),
+        }
+        scene = {"en": "Keep a comparison of years as an image", "ja": "年でくらべた図を画像にして残す"}
+        scenes = {"en": ("Compare the last year with the year before", "Give the numbers to an AI as a CSV file"), "ja": ("この 1 年と前の 1 年をくらべる", "数字を CSV にして、AI に渡す")}
+        steps = {
+            "en": ("Press **Compare years** in the heading of a panel", "Press **Save as image…** in its bar.", "Choose the colors under **Colors**, and press **Save**.", "look in your downloads.", "More: [Saving as an image](#saving-as-an-image-from-220)"),
+            "ja": ("段の見出しの「年でくらべる」を押し", "帯の「画像で保存…」を押します。", "「色」を選び、「保存」を押します。", "ブラウザーのダウンロードの場所を見ます。", "くわしくは：[画像で保存](#画像で保存220-から)"),
+        }
+        # The marks, privacy, and the keys elsewhere in the guides (the plan of
+        # R3, and Codex's review of it: an image you save can show the names
+        # of the marks, and forgetting the settings does not remove it).
+        elsewhere = {
+            "en": (
+                "This app keeps the marks only in `gui-marks.json`",
+                "An image you save shows their names where you put them in with [Saving as an image](#saving-as-an-image-from-220), and by race day.",
+                "so this app keeps them only in the file of the marks, `gui-marks.json`, never in an output, the Support Bundle, or the text of a report on GitHub (an image you save with [Saving as an image](#saving-as-an-image-from-220) shows them where you put them in, and by race day).",
+                "hands it to the browser as a download; this app sends nothing anywhere. With the marks put in, and by race day, the names of the marks show too.",
+                "The images you saved are your own files: **Forget the remembered settings…** does not remove them.",
+                "In **Save as image…** (from 2.2.0), the window takes the focus on its title; Esc, **Close**, or **Cancel** closes it, back to its button, as does handing the file to the browser; where it could not save, the window says why, and the focus stays on **Save** where it can still be pressed",
+            ),
+            "ja": (
+                "印は、このアプリが、このパソコンの GUI の設定のフォルダーの `gui-marks.json` にだけ残します",
+                "[画像で保存](#画像で保存220-から)で「印の線と名前を入れる」を選んだときと、大会の日でくらべた図を保存したときは、保存した画像に写ります。",
+                "このアプリは、印のファイル `gui-marks.json` にだけ残します。出力・問い合わせ用ファイル・GitHub への報告の文には入りません（[画像で保存](#画像で保存220-から)で印を入れたときと、大会の日でくらべた図は、あなたが保存する画像に写ります）。",
+                "ブラウザーにダウンロードとして渡すだけで、このアプリはどこへも送りません。印を入れたときと、大会の日でくらべた図は、印の名前も写ります。",
+                "保存した画像はあなたのファイルなので、「覚えた設定を消す…」では消えません。",
+                "画像で保存（2.2.0 から）は、窓を開くと窓の題にフォーカスが移ります。Esc キー・「閉じる」・「やめる」で閉じたときと、ファイルをブラウザーに渡したあとは、押した「画像で保存…」に戻ります。保存できなかったときは、窓がわけを言い、「保存」が押せるときは、フォーカスは「保存」に残ります",
+            ),
+        }
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            messages = catalog(language)
+            read = (lambda part: " ".join(part.split())) if language == "en" else (lambda part: re.sub(r"\n *", "", part))
+            places = [text.index(f"\n### {title}\n") for title in (before[language], heading[language], after[language])]
+            with self.subTest(language=language, part="order"):
+                self.assertEqual(places, sorted(places))
+                self.assertEqual(text.index("\n### ", places[1] + 1), places[2])
+            joined = read(text[places[1] : places[2]])
+            with self.subTest(language=language, part="section"):
+                for phrase in says[language]:
+                    self.assertIn(phrase, joined)
+                # The line after a saving, whole, as the page writes it.
+                notice = messages["view.save.notice"]
+                self.assertIn(f'"{notice}"' if language == "en" else f"「{notice}」", joined)
+            start = text.index(f"\n### {scene[language]}\n")
+            scene_reads = read(text[start : text.index("\n### ", start + 1)])
+            with self.subTest(language=language, part="scene"):
+                self.assertLess(text.index(f"\n### {scenes[language][0]}\n"), start)
+                self.assertEqual(text.index("\n### ", start + 1), text.index(f"\n### {scenes[language][1]}\n"))
+                for step in steps[language]:
+                    self.assertIn(step, scene_reads)
+            with self.subTest(language=language, part="elsewhere"):
+                whole = read(text)
+                for phrase in elsewhere[language]:
+                    self.assertIn(phrase, whole)
+            # Every word quoted is a word of the page, whole.
+            words = set(messages.values())
+            patterns = (r"\*\*([^*]+)\*\*", r'"([^"]+)"') if language == "en" else (r"「([^」]+)」",)
+            for value in (joined, scene_reads):
+                for pattern in patterns:
+                    for word in re.findall(pattern, value):
+                        with self.subTest(language=language, quoted=word):
+                            self.assertIn(word, words)
+            # The help of the page says it in short (the checker's answer 2).
+            with self.subTest(language=language, part="help"):
+                help_text = messages["view.help.save_text"]
+                self.assertIn(messages["view.save.button"], help_text)
+                for phrase in {"en": ("hands what you see to the browser as one SVG file to download", "dates (or years) and the keys of the items only", "nothing is sent anywhere"), "ja": ("ブラウザーにダウンロードとして渡します", "日付（または年）と項目の鍵だけ", "どこへも送りません")}[language]:
+                    self.assertIn(phrase, help_text)
+
     def test_the_design_gives_the_summary(self) -> None:
         # v2.2.0 Q2: the design of the GUI gives the summary of stage Q1 after
         # the distribution, with the names of the code that it is made of, and
@@ -1796,7 +1952,9 @@ class GuiGuideTest(unittest.TestCase):
         readings = flowing.index("- An output that changes while the view page is open is read again")
         self.assertLess(spread, summary)
         self.assertLess(summary, readings)
-        part = flowing[summary:readings]
+        # v2.2.0 R3: the item of saving comes between, so that the summary is
+        # read up to it, as before R3 (Codex's review of the diff of R3).
+        part = flowing[summary : flowing.index("- Saving as an image (stages R1 and R2):")]
         for name in ('`/api/view/series` with `"previous": true`', "`RANGE_GRAIN`", "`item_series`", "`LAST_YEARS`", "`period_bounds`", "**Summary…** after **Other views**"):
             with self.subTest(name=name):
                 self.assertIn(name, part)
@@ -1804,6 +1962,39 @@ class GuiGuideTest(unittest.TestCase):
         server = (ROOT / "src/garmin_running_data_normalizer/view/series.py").read_text(encoding="utf-8")
         self.assertIn("def view_answer(\n    data: ViewData,\n    keys: Collection[str],\n    period: str | tuple[date, date] = \"all\",\n    grain: str = \"auto\",\n    types: Collection[str] | None = None,\n    previous: bool = False,\n)", server)
         self.assertIn('return grain === "day" ? "view.kind.obs_points" : "view.kind.obs_mean";', (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8"))
+
+    def test_the_design_gives_the_saving(self) -> None:
+        # v2.2.0 R3: the design of the GUI gives saving as an image (stages R1
+        # and R2) after the summary, before an output that changes, with the
+        # names of the code that it is made of, and what the page cannot know;
+        # its privacy; and only SVG, PNG and the other formats out of scope
+        # (the checker's answer of the plan of R3).
+        design = (ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8")
+        flowing = " ".join(design.split())
+        summary = flowing.index("- The summary of the panels (stage Q1):")
+        saving = flowing.index("- Saving as an image (stages R1 and R2):")
+        readings = flowing.index("- An output that changes while the view page is open is read again")
+        self.assertLess(summary, saving)
+        self.assertLess(saving, readings)
+        part = flowing[saving:readings]
+        for name in ("`.save-stage`", "`writeSaveStyles`", "`SAVE_LEFT_OUT_VIEWS`", "`blob:`", "`download`", "`saveFileName`", "`saveViewFileName`"):
+            with self.subTest(name=name):
+                self.assertIn(name, part)
+        for phrase in (
+            "the page cannot know whether or where the browser saves it, so the bar at the bottom says that it was handed.",
+            "Nothing is sent to the server or anywhere else, and the Content-Security-Policy stays as it is.",
+            "Only SVG is made; PNG and the other formats are out of scope.",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, part)
+        page = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        flow = (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8")
+        for code in ('element("div", "save-stage")', "function writeSaveStyles(", "export const SAVE_LEFT_OUT_VIEWS = {", "export function saveFileName(", "export function saveViewFileName("):
+            with self.subTest(code=code):
+                self.assertIn(code, page + flow)
+        privacy = " ".join(section(design, "Privacy").split())
+        self.assertIn("From v2.2.0 a picture saved from the view page shows the dates and values of its charts, and the names of the marks where they are put in and by race day;", privacy)
+        self.assertIn("A picture saved is the person's own file, which \"Forget the remembered settings…\" does not remove.", privacy)
 
     def test_readme_puts_the_gui_first(self) -> None:
         # v2.1.0 H1 (the whole flow): the README gives the GUI right after who

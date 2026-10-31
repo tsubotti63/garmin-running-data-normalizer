@@ -98,12 +98,20 @@ class GuiViewSaveTest(unittest.TestCase):
         ja, en = catalog("ja"), catalog("en")
         self.assertEqual(ja["view.save.warn"], "画像には日付と値（個人のデータ）が写ります。このパソコンのダウンロードの場所に保存し、どこへも送りません。")
         self.assertEqual(ja["view.save.warn_marks"], "印の名前も写ります。")
-        self.assertEqual(en["view.save.warn"], "The image shows dates and values (your personal data). It is saved in the downloads place of this computer and sent nowhere.")
+        # v2.2.0 R3: the English words of the downloads, as the guides say
+        # them (the checker's review (c) of R1).
+        self.assertEqual(en["view.save.warn"], "The image shows dates and values (your personal data). It is saved in your downloads on this computer and sent nowhere.")
         self.assertEqual(en["view.save.warn_marks"], "The names of the marks show too.")
         # The page cannot know that the browser saved the file: the line
         # after a saving says that it was handed to the browser.
         self.assertEqual(ja["view.save.notice"], "画像のファイルをブラウザーに渡しました。ダウンロードの場所を見てください。")
         self.assertNotIn("saved", en["view.save.notice"].lower())
+        self.assertEqual(en["view.save.notice"], "The image file was handed to the browser. Look in your downloads.")
+        # What the window says where the picture to save is no longer the one
+        # that it showed at the press, in the words of every view (the
+        # checker's answer 3 of the plan of R3).
+        self.assertEqual(ja["view.save.changed"], "保存する図が変わりました。ファイルの名前を見直して、もう一度「保存」を押してください。")
+        self.assertEqual(en["view.save.changed"], "The picture to save changed. Check the file name and press Save again.")
         body = function_body(self.script, "renderSave")
         self.assertIn('setText(ui.saveWarn, (panels ? ui.saveMarks.checked : target.marks) ? `${warn}${state.language === "ja" ? "" : " "}${t("view.save.warn_marks")}` : warn);', body)
         # By race, always: the names of the races are those of the marks

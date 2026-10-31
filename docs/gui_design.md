@@ -1112,6 +1112,33 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   are dropped where the window hides and where an output starts opening. The
   windows under the row above the panels end above the bar at the bottom of
   the page.
+- Saving as an image (stages R1 and R2): **Save as image…** after **Summary…**
+  in the row above the panels, and after **Show as a table** in the bars of
+  comparing years, two items plotted, and a distribution, opens a window that
+  is not modal under the row of its button (one of the windows of the marks,
+  the summary, and saving at a time), its title taking the focus, with the
+  first choices each time (all the panels, the light colors, no marks), which
+  nothing remembers. The page copies the charts shown into a box out of the
+  page (`.save-stage`, in the light colors where they are chosen), writes the
+  colors and the fonts that its CSS gives into each shape (`writeSaveStyles`),
+  leaves out what lies on top of the charts to show a choice (the cross line,
+  the frame of the day chosen, and the point and the range chosen:
+  `SAVE_LEFT_OUT_VIEWS`), and makes one SVG file: the headings with the keys
+  of their lines, the charts, the axis, the words that the page shows under
+  them, and a line of the period or of the years or race days compared, the
+  grouping or the width of a range, the activity types counted, and the name
+  and version of this app. The file is handed to the browser as a download
+  from a `blob:` address by a link with `download`, in the press of **Save**
+  with nothing between; the page cannot know whether or where the browser
+  saves it, so the bar at the bottom says that it was handed. The name of the
+  file holds dates (or years) and the keys of the items only (`saveFileName`,
+  `saveViewFileName`), never the names of races or marks. The window says why
+  it cannot save (a table, an answer on its way, a stop, two items plotted or
+  a distribution without values, a chart without room, a panel chosen that
+  went), and the press checks again the name and whether it can save. Nothing
+  is sent to the server or anywhere else, and the Content-Security-Policy
+  stays as it is. Only SVG is made; PNG and the other formats are out of
+  scope.
 - An output that changes while the view page is open is read again at the
   next request (and so is any output when the date changes), so that a
   comparison, a list, or the summary asked right after a new normalization
@@ -1372,6 +1399,12 @@ Processing:
   and the folder of the settings stay until 2.2.0 forgets them or the folder
   is removed. The list of the activities of a period shows the dates and
   times of the output on the page only.
+- From v2.2.0 a picture saved from the view page shows the dates and values of
+  its charts, and the names of the marks where they are put in and by race
+  day; the page makes it and hands it to the browser as a download, sending
+  nothing anywhere. The name of its file holds dates (or years) and the keys
+  of the items only. A picture saved is the person's own file, which "Forget
+  the remembered settings…" does not remove.
 - The view page (v2.1.0) writes nothing in an output. The server keeps what
   it read in memory only, under a ticket that holds no place.
 - A Snapshot Store or a folder for the output in a folder that a cloud may
