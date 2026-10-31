@@ -298,7 +298,7 @@ that is open, and then run the same line again.
 
 ## Ways to use it
 
-The steps of ten common cases. The sections that the links lead to give the
+The steps of eleven common cases. The sections that the links lead to give the
 details of each box. A Snapshot is a copy of one Export, which this app keeps
 in a Snapshot Store, so that the Exports that you import are normalized
 together ([Box 2](#box-2-snapshots)).
@@ -458,6 +458,21 @@ last year with the year before.
    **The 365 days before** (366 for a year with 29 February).
 
 More: [Summary](#summary-from-220)
+
+### Keep a comparison of years as an image
+
+When: you want to keep the comparison of years as an image file.
+
+1. [Open the view page](#open-the-view-page).
+2. Press **Compare years** in the heading of a panel, and choose how it shows
+   and the years.
+3. Press **Save as image…** in its bar. The window names in one line what it
+   saves, and the name of the file.
+4. Choose the colors under **Colors**, and press **Save**.
+5. When the bar at the bottom says that the image file was handed to the
+   browser, look in your downloads.
+
+More: [Saving as an image](#saving-as-an-image-from-220)
 
 ### Give the numbers to an AI as a CSV file
 
@@ -1220,11 +1235,12 @@ values are made):
   other charts tell how many.
 - Marks of the kind **Race** can be compared in
   [Compare by race day](#compare-by-race-day).
-- The marks are kept only in `gui-marks.json`, in the folder of the settings
-  of the GUI on this computer ([What is remembered for the next
+- This app keeps the marks only in `gui-marks.json`, in the folder of the
+  settings of the GUI on this computer ([What is remembered for the next
   time](#what-is-remembered-for-the-next-time)). They are your own words, so
-  they never go into an output, the Support Bundle, or the text of a report
-  on GitHub.
+  they never go into an output, the Support Bundle, or the text of a report on
+  GitHub. An image you save shows their names where you put them in with
+  [Saving as an image](#saving-as-an-image-from-220), and by race day.
 - Where the file of the marks cannot be read, or was written by a newer
   version of this app, the marks do not show and the file is never written
   over (**Add**, **Change**, and **Remove** are grayed, and the bar at the
@@ -1549,6 +1565,68 @@ values are made):
 
 ![The summary: the window of Summary… above the panels, with the last year, the year before, and their difference, and a row for each line of VO2 Max (synthetic data)](assets/gui-guide/view-recap.en.png)
 
+### Saving as an image (from 2.2.0)
+
+- Makes what you see one image file in SVG. **Save as image…** is right after
+  **Summary…** in the row above the panels, and right after **Show as a
+  table** in the bars of **Compare years**, **Plot two items**, and
+  **Distribution**. It opens a window under the row of the button; only one of
+  the windows of **Marks…**, **Summary…**, and saving opens at a time.
+- The row above the panels does not show while years are compared, another
+  view is shown, or in full screen, where the window hides too and shows again
+  after it. Without panels, its **Save as image…** cannot be pressed. When the
+  view changes, the window closes.
+- Each time the window opens, its choices are the first ones again: all the
+  panels, the light colors, and no marks (nothing is remembered).
+- With the panels, **Panels to save** saves all of them or **This panel
+  only**, **Colors** gives **Light** or **As on the screen**, and **Marks**
+  can **Put in the lines and names of the marks**. A panel shown as a table
+  does not go in, and where the page shows no marks, no mark goes in.
+- In the other views, the window names in one line what it saves, and what you
+  see becomes one picture, without the choices of the panels and the marks. By
+  race day, the names of the races, which are the names of the marks, always
+  show.
+- The name of the file holds dates (or years) and the keys of the items only
+  (for example `garmin-view_2025-10-22_2026-10-21_dist-pace-hr.svg`): the
+  years compared, oldest first (`garmin-compare_2018-2022-2025_dist.svg`), the
+  days of the races, oldest first (never their names), or the period and the
+  keys of two items plotted or of a distribution.
+- The picture holds the headings of the panels with the keys of their lines,
+  the charts, the time axis, and a line under them (the period, the grouping,
+  the activity types counted, and the name and version of this app); in the
+  other views, a title line, the legend of a calendar (the rule of its steps
+  only), the words that the page shows under the points or the ranges, and a
+  line of the years or race days compared or of the width of a range. A panel
+  or a year without values goes in with the words that the page shows for it.
+- The overview, the list, the buttons, the name of the folder of the output,
+  the cross line, and the frames that show the day, point, or range chosen,
+  with the readings of its values, never go in; the points, the bars, and the
+  days themselves do.
+- **Save** hands the file to the browser as a download, which the browser
+  saves where its settings say (usually your downloads, or where you choose if
+  it asks each time). This app cannot know that it was saved, so the bar at
+  the bottom says "The image file was handed to the browser. Look in your
+  downloads." The picture shows dates and values (your personal data); nothing
+  is sent anywhere.
+- Where it cannot save, the window says why: a view, or every panel, shown as
+  a table; an answer on its way; numbers that stopped loading; for two items
+  plotted or a distribution, a period without values to draw; a chart without
+  room to be drawn; or a panel chosen that no longer shows.
+- When, at the press, the picture to save is no longer the one that the window
+  showed, or the image could not be made, the window says so, and the focus
+  stays on **Save** where it can still be pressed; check the window, and press
+  **Save** again when it can save.
+- With **As on the screen** on a dark screen, the picture is dark. In forced
+  colors (a contrast theme of Windows, for example), the picture takes the
+  colors of the screen, whichever **Colors** gives.
+- The window takes the focus on its title; Esc, **Close**, or **Cancel**
+  closes it, and the focus goes back to its **Save as image…** then and after
+  the file is handed to the browser.
+
+![Saving as an image: the window of Save as image… above the panels, with all the panels and the light colors chosen (synthetic data)](assets/gui-guide/view-save.en.png)
+
+![A picture saved: the overlay of a comparison of years, saved as an SVG file and opened in a browser, without its line at the bottom (synthetic data)](assets/gui-guide/view-save-picture.en.png)
+
 ### When the output changes while you look (from 2.2.0)
 
 - At every request of numbers, the view page checks that the output is as it
@@ -1589,9 +1667,10 @@ later one.
 - Not remembered: the output shown, the same scale, a panel enlarged, a table
   shown, full screen, whether years were compared, with the years or races
   chosen, whether a list of activities was open, whether another view was
-  shown, with the point or the range chosen, and whether the summary was open.
-  As the output shown is not remembered, the page opened from the bar at the
-  bottom offers the latest output with the button of [Open the view
+  shown, with the point or the range chosen, whether the summary was open, and
+  whether the window of saving as an image was open, with its choices. As the
+  output shown is not remembered, the page opened from the bar at the bottom
+  offers the latest output with the button of [Open the view
   page](#open-the-view-page).
 - **Forget the remembered settings…** in the bar at the bottom of the
   normalization page forgets all of these, and also the Snapshot Store, the
@@ -2013,13 +2092,22 @@ it. To remove Python too, do as the documents of python.org say, for
   Bundle. On a computer that others use, remove them with
   **Forget the remembered settings…**.
 - The [marks](#marks-from-220) of the view page (from 2.2.0) hold your own
-  words and events, so they are kept only in the file of the marks,
+  words and events, so this app keeps them only in the file of the marks,
   `gui-marks.json`, never in an output, the Support Bundle, or the text of a
-  report on GitHub. **Forget the remembered settings…** removes them with the
+  report on GitHub (an image you save with [Saving as an
+  image](#saving-as-an-image-from-220) shows them where you put them in, and
+  by race day). **Forget the remembered settings…** removes them with the
   settings.
 - [The activities of a period](#the-activities-of-a-period-from-220) (from
   2.2.0) show the dates and times of the output on the page only, and are
   never written to a file.
+- [Saving as an image](#saving-as-an-image-from-220) (from 2.2.0) writes the
+  dates and values of what you see into an image file and hands it to the
+  browser as a download; this app sends nothing anywhere. With the marks put
+  in, and by race day, the names of the marks show too. The name of the file
+  holds dates (or years) and the keys of the items only. The images you saved
+  are your own files: **Forget the remembered settings…** does not remove
+  them.
 
 See [Security and Privacy Boundary](security_and_privacy_boundary.md).
 
@@ -2073,6 +2161,11 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
 - In **Summary…** (from 2.2.0), the window takes the focus on its title; Tab
   goes to **Close** and to the table, which ↑ and ↓ scroll, and Esc closes it,
   back to its button ([Summary](#summary-from-220)).
+- In **Save as image…** (from 2.2.0), the window takes the focus on its title;
+  Esc, **Close**, or **Cancel** closes it, back to its button, as does handing
+  the file to the browser; where it could not save, the window says why, and
+  the focus stays on **Save** where it can still be pressed ([Saving as an
+  image](#saving-as-an-image-from-220)).
 
 ## The GUI and the command line
 

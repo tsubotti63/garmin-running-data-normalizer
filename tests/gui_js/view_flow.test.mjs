@@ -2320,3 +2320,13 @@ test("the line after a saving of another view goes with what it shows too, and t
   assert.notEqual(view.saveNoticeKey({ ...base, view: "plot", content: ["pace", "hr"] }), view.saveNoticeKey({ ...base, view: "plot", content: ["pace", "cad"] }));
   assert.notEqual(view.saveNoticeKey({ ...base, view: "spread", content: ["pace"] }), view.saveNoticeKey({ ...base, view: "plot", content: ["pace"] }));
 });
+
+test("the names of the files in the guides are those that the page gives (stage R3)", () => {
+  // Codex's review of the plan of R3: the examples of the section of saving
+  // as an image, from the inputs of the tests above, in both guides.
+  const names = [view.saveFileName("2025-10-22", "2026-10-21", ["dist", "pace", "hr"]), view.saveViewFileName("compare", { key: "dist", years: [2025, 2018, 2022] })];
+  for (const guide of ["gui_guide.md", "gui_guide.ja.md"]) {
+    const text = readFileSync(new URL(`../../docs/${guide}`, import.meta.url), "utf8");
+    assert.deepEqual([...text.matchAll(/`(garmin-[^`]*\.svg)`/g)].map((match) => match[1]), names, guide);
+  }
+});

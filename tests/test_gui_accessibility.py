@@ -1708,14 +1708,18 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # after comparing years; from OP2, an item of the other views, after
         # comparing by race day (the checker's answer 1 of the plan of OP2),
         # with a paragraph for each view. Q2: an item of the summary, after the
-        # other views (the checker's answer 2 of the plan of Q2).
-        self.assertEqual(len(sections), 15)
+        # other views (the checker's answer 2 of the plan of Q2). R3: an item of
+        # saving as an image, after the summary (the checker's answer 2 of the
+        # plan of R3).
+        self.assertEqual(len(sections), 16)
         order = [str(section.get("aria-labelledby")) for section in sections]
-        self.assertEqual(order[order.index("help-compare-heading") : order.index("help-compare-heading") + 6], ["help-compare-heading", "help-race-heading", "help-other-heading", "help-recap-heading", "help-marks-heading", "help-list-heading"])
+        self.assertEqual(order[order.index("help-compare-heading") : order.index("help-compare-heading") + 7], ["help-compare-heading", "help-race-heading", "help-other-heading", "help-recap-heading", "help-save-heading", "help-marks-heading", "help-list-heading"])
         other = [element.get("data-i18n") for element in self.elements if (element.get("data-i18n") or "").startswith("view.help.other")]
         self.assertEqual(other, ["view.help.other", "view.help.other_plot", "view.help.other_spread"])
         recap = [element.get("data-i18n") for element in self.elements if (element.get("data-i18n") or "").startswith("view.help.recap")]
         self.assertEqual(recap, ["view.help.recap", "view.help.recap_text"])
+        save = [element.get("data-i18n") for element in self.elements if (element.get("data-i18n") or "").startswith("view.help.save")]
+        self.assertEqual(save, ["view.help.save", "view.help.save_text"])
         for section in sections:
             with self.subTest(section=section.get("aria-labelledby")):
                 self.assertEqual(by_id(self.elements, str(section.get("aria-labelledby"))).tag, "h3")
