@@ -2670,13 +2670,20 @@ export function spreadCount(answer, language) {
   });
 }
 
+// The width of a range in the unit and the form of its item: what the page
+// says where it is wider than that of the item (OP-1 of v2.2.0), and what the
+// line under a picture says always (Codex's review of the plan of R2).
+export function spreadWidthValue(key, answer, language) {
+  const step = answer.width / answer.scale;
+  return spreadEndValue(key, Number.isFinite(step) ? step : null, step, language);
+}
+
 // The words of a wider width than that of the item (OP-1 of v2.2.0), or null.
 export function spreadWide(key, answer, language) {
   if (!answer?.widened) {
     return null;
   }
-  const step = answer.width / answer.scale;
-  return message("view.spread.wide", { max: countText(answer.limit, language) }, { width: spreadEndValue(key, Number.isFinite(step) ? step : null, step, language) });
+  return message("view.spread.wide", { max: countText(answer.limit, language) }, { width: spreadWidthValue(key, answer, language) });
 }
 
 // The range that a key moves to among ``count`` ranges, those of 0 among
@@ -2890,15 +2897,18 @@ export const SAVE_MARKS = [".day-band", ".day-mark", ".day-mark-name"];
 // The attributes that a shape of a picture takes from the styles computed for
 // it in the page: all of them on the outer element; on the others, those that
 // differ from the shape around them, or for opacity from its first value, so
-// that the file stays small and shows the same.
-export function savedAttributes(computed, around = null) {
+// that the file stays small and shows the same. One that the shape has as an
+// attribute of its own (``own``, as a chart draws a dash or a width) is
+// written even so, as the page may override it by a style that the file does
+// not keep (the checker's review of the diff of R1, (a)).
+export function savedAttributes(computed, around = null, own = []) {
   const attributes = [];
   for (const [property, attribute] of SAVE_ATTRIBUTES) {
     const value = computed[property];
     if (typeof value !== "string" || value === "") {
       continue;
     }
-    if (around !== null && value === (Object.hasOwn(SAVE_NOT_INHERITED, property) ? SAVE_NOT_INHERITED[property] : around[property])) {
+    if (around !== null && !own.includes(attribute) && value === (Object.hasOwn(SAVE_NOT_INHERITED, property) ? SAVE_NOT_INHERITED[property] : around[property])) {
       continue;
     }
     attributes.push([attribute, value]);
@@ -3044,6 +3054,105 @@ export function saveFrame(boxes, width, height, pad = 4) {
 // the items of the panels, and the language. A change of any of them takes
 // the line away; a drawing again does not (the checker's review of the plan
 // of R1).
-export function saveNoticeKey({ ticket, period, types, items, language }) {
-  return JSON.stringify([ticket ?? null, period ?? null, types ?? null, items ?? [], language ?? null]);
+export function saveNoticeKey({ ticket, period, types, items, language, view = "panels", content = null }) {
+  const key = [ticket ?? null, period ?? null, types ?? null, items ?? [], language ?? null];
+  // Another view adds what it shows (stage R2 of v2.2.0); the panels keep
+  // the key of R1, which a panel made big does not change (the checker's
+  // review of the handling of Codex's review of the plan of R2).
+  return JSON.stringify(view === "panels" ? key : [...key, view, content ?? null]);
+}
+
+// --- Saving the other views as an image (stage R2 of v2.2.0) ---------------
+
+// What a picture of another view leaves out (the checker's answer 4 of the
+// plan of R2): the cross line and the frame of the day chosen of a
+// comparison, and the point or the range chosen, which lie on top of the
+// points and the bars, so that those stay.
+export const SAVE_LEFT_OUT_VIEWS = {
+  compare: [".cross", ".calendar-cursor"],
+  plot: [".plot-chosen"],
+  spread: [".spread-chosen"],
+};
+
+// Whether the window of the saving shows (Codex's review of the plan of R2,
+// apart from whether it can save): an output shown and the view of the
+// button that opened it showing; for the panels, as in R1, panels and not
+// the graphs only. A view that cannot save yet shows the window with why.
+export function saveWindowShows({ viewing, from, view, items, full }) {
+  return Boolean(viewing && from === view && (view !== "panels" || (items > 0 && !full)));
+}
+
+// Whether another view can be saved now: its answer drawn, not on its way,
+// no stop, not shown as a table, and its charts to copy (Codex's review of
+// the plan of R2).
+export function saveViewReady({ answer, loading, stopped, table, charts }) {
+  return Boolean(answer !== null && answer !== undefined && !loading && !stopped && !table && charts > 0);
+}
+
+// Why a picture cannot be saved now, which the window says (Codex's review of
+// the diff of R2): a view shown as a table, numbers that stopped loading, an
+// answer without values to draw, or a chart without room to be drawn; none
+// while an answer is on its way, which the window says by itself.
+export function saveProblem({ table = false, stopped = false, loading = false, answer = null, empty = false, drawn = 0, parts = 0 }) {
+  if (table) {
+    return "view.save.table";
+  }
+  if (stopped) {
+    return "view.save.stopped";
+  }
+  if (loading || answer === null || answer === undefined) {
+    return null;
+  }
+  if (empty) {
+    return "view.save.empty";
+  }
+  return drawn < parts ? "view.save.undrawn" : null;
+}
+
+// The name of the file of a picture of another view (the checker's R2-2 and
+// answer 2): the years compared, oldest first, as they were chosen, which can
+// skip some, or the days of the races compared, never their names; the
+// period of the points or of the ranges; and the keys of the items. None
+// where any of them is not of its form, as for the panels (saveFileName).
+export function saveViewFileName(view, { key = null, keys = [], years = [], days = [], start = null, end = null } = {}) {
+  const items = view === "plot" ? keys : [key];
+  if (!items.length || !items.every((each) => typeof each === "string" && ITEM_KEY.test(each))) {
+    return null;
+  }
+  if (view === "compare") {
+    if (years.length) {
+      const sorted = years.map(String).sort();
+      return sorted.every((year) => /^\d{4}$/.test(year)) ? `garmin-compare_${sorted.join("-")}_${key}.svg` : null;
+    }
+    const sorted = days.map(String).sort();
+    return sorted.length && sorted.every((day) => ISO_DAY.test(day)) ? `garmin-compare-races_${sorted.join("_")}_${key}.svg` : null;
+  }
+  if (!ISO_DAY.test(String(start)) || !ISO_DAY.test(String(end))) {
+    return null;
+  }
+  if (view === "plot") {
+    return `garmin-plot_${start}_${end}_${items.join("-")}.svg`;
+  }
+  return view === "spread" ? `garmin-spread_${start}_${end}_${key}.svg` : null;
+}
+
+// The pieces of the line under a picture of another view (the checker's R2-2
+// and answer 2): the years compared, oldest first, with the grain of their
+// answer, or the days of the races compared; the period of the points or of
+// the ranges, and for the ranges their width in the unit of the item
+// (Codex's review of the plan of R2); then the activity types that the view
+// asked for and the name and version of the app, as under the panels
+// (saveFooter). ``separator`` is that of a list in the language, and
+// ``daysSeparator`` that of a list of days, whose English words have commas.
+export function saveViewFooter(view, { years = [], days = [], grain = null, start = null, end = null, key = null, answer = null, answerTypes, types, version, language, separator, daysSeparator = separator }) {
+  const counted = Array.isArray(answerTypes) ? answerTypes : defaultTypes(types);
+  const kinds = message("view.save.types", {}, { types: typesSummary(counted, types) });
+  const app = typeof version === "string" && version !== "" ? message("view.save.app", { version }, { app: "app.title" }) : message("app.title");
+  if (view === "compare") {
+    return years.length
+      ? [message("view.save.compare_years", { years: years.map(String).sort().join(separator) }), message("view.save.grain", {}, { grain: GRAIN_KEYS[grain] }), kinds, app]
+      : [message("view.save.compare_races", { days: days.map(String).sort().map((day) => dateText(day, language)).join(daysSeparator) }), kinds, app];
+  }
+  const period = message("view.save.period", { from: dateText(start, language), to: dateText(end, language) });
+  return view === "spread" ? [period, message("view.save.width", {}, { width: spreadWidthValue(key, answer, language) }), kinds, app] : [period, kinds, app];
 }

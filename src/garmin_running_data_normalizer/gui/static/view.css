@@ -2495,9 +2495,11 @@ button.small {
 }
 
 /* Saving as an image (stage R1 of v2.2.0): a window under the row above the
-   panels, where those of the marks and the summary open, one at a time. */
+   panels, where those of the marks and the summary open, one at a time; in
+   the stage, out of that row, so that the bars of the other views open it
+   too, placed by the page under the row of its button (stage R2). */
 .save-pop {
-  top: 100%;
+  top: 0;
   right: 0;
   display: flex;
   flex-direction: column;
@@ -2541,8 +2543,13 @@ button.small {
 
 .save-note,
 .save-file,
-.save-warn p {
+.save-warn p,
+.save-what {
   margin: 0;
+}
+
+.save-what {
+  font-weight: 600;
 }
 
 .save-file code {
@@ -2580,10 +2587,18 @@ button.small {
   font-weight: 600;
 }
 
+/* The title line of a picture of another view (stage R2). */
+.save-title {
+  fill: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+}
+
 .save-unit,
 .save-kind,
 .save-key,
-.save-footer {
+.save-footer,
+.save-caption {
   fill: var(--sub);
   font-size: 12px;
 }
@@ -2620,10 +2635,12 @@ button.small {
   }
 
   .save-name,
+  .save-title,
   .save-unit,
   .save-kind,
   .save-key,
   .save-footer,
+  .save-caption,
   .save-empty {
     fill: CanvasText;
   }

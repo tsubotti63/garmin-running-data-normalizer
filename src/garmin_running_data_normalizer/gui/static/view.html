@@ -251,39 +251,40 @@
           <p class="note recap-note" data-i18n="view.recap.records_note"></p>
           <p id="recap-cut" class="note recap-note"></p>
         </div>
-        <div id="save-pop" class="pop save-pop" role="dialog" aria-labelledby="save-pop-title" hidden>
-          <div class="pop-head"><span id="save-pop-title" class="pop-title" tabindex="-1" data-i18n="view.save.title"></span><button type="button" id="save-pop-close" class="small" data-i18n="help.close"></button></div>
-          <fieldset class="save-field">
-            <legend data-i18n="view.save.scope"></legend>
-            <span class="save-choice"><input type="radio" name="save-scope" id="save-all" value="all" checked><label for="save-all" id="save-all-label"></label></span>
-            <span class="save-one">
-              <span class="save-choice"><input type="radio" name="save-scope" id="save-one" value="one"><label for="save-one" data-i18n="view.save.one"></label></span>
-              <label for="save-panel" class="visually-hidden" data-i18n="view.save.panel"></label>
-              <select id="save-panel"></select>
-            </span>
-            <p id="save-tables" class="note save-note" hidden></p>
-          </fieldset>
-          <fieldset class="save-field">
-            <legend data-i18n="view.save.colors"></legend>
-            <span class="save-choice"><input type="radio" name="save-colors" id="save-light" value="light" checked><label for="save-light" data-i18n="view.save.light"></label></span>
-            <span class="save-choice"><input type="radio" name="save-colors" id="save-screen" value="screen"><label for="save-screen" data-i18n="view.save.screen"></label></span>
-          </fieldset>
-          <fieldset class="save-field">
-            <legend data-i18n="view.save.marks"></legend>
-            <span class="save-choice"><input type="checkbox" id="save-marks"><label for="save-marks" data-i18n="view.save.marks_in"></label></span>
-            <p id="save-marks-none" class="note save-note" data-i18n="view.save.marks_none" hidden></p>
-          </fieldset>
-          <p class="save-file"><span data-i18n="view.save.file"></span> <code id="save-name"></code></p>
-          <p class="note save-note" data-i18n="view.save.format"></p>
-          <div class="part-note save-warn">
-            <svg class="icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M8 1.9l6.5 11.8h-13z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.3v3.4M8 11.6v.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-            <p id="save-warn"></p>
-          </div>
-          <p id="save-problem" class="save-problem" role="status" aria-live="polite"></p>
-          <div class="button-row">
-            <button type="button" id="save-cancel" data-i18n="view.save.cancel"></button>
-            <button type="button" id="save-go" class="primary" data-i18n="view.save.save"></button>
-          </div>
+      </div>
+      <div id="save-pop" class="pop save-pop" role="dialog" aria-labelledby="save-pop-title" hidden>
+        <div class="pop-head"><span id="save-pop-title" class="pop-title" tabindex="-1" data-i18n="view.save.title"></span><button type="button" id="save-pop-close" class="small" data-i18n="help.close"></button></div>
+        <p id="save-what" class="save-what" hidden></p>
+        <fieldset class="save-field" id="save-scope-field">
+          <legend data-i18n="view.save.scope"></legend>
+          <span class="save-choice"><input type="radio" name="save-scope" id="save-all" value="all" checked><label for="save-all" id="save-all-label"></label></span>
+          <span class="save-one">
+            <span class="save-choice"><input type="radio" name="save-scope" id="save-one" value="one"><label for="save-one" data-i18n="view.save.one"></label></span>
+            <label for="save-panel" class="visually-hidden" data-i18n="view.save.panel"></label>
+            <select id="save-panel"></select>
+          </span>
+          <p id="save-tables" class="note save-note" hidden></p>
+        </fieldset>
+        <fieldset class="save-field">
+          <legend data-i18n="view.save.colors"></legend>
+          <span class="save-choice"><input type="radio" name="save-colors" id="save-light" value="light" checked><label for="save-light" data-i18n="view.save.light"></label></span>
+          <span class="save-choice"><input type="radio" name="save-colors" id="save-screen" value="screen"><label for="save-screen" data-i18n="view.save.screen"></label></span>
+        </fieldset>
+        <fieldset class="save-field" id="save-marks-field">
+          <legend data-i18n="view.save.marks"></legend>
+          <span class="save-choice"><input type="checkbox" id="save-marks"><label for="save-marks" data-i18n="view.save.marks_in"></label></span>
+          <p id="save-marks-none" class="note save-note" data-i18n="view.save.marks_none" hidden></p>
+        </fieldset>
+        <p class="save-file"><span data-i18n="view.save.file"></span> <code id="save-name"></code></p>
+        <p class="note save-note" data-i18n="view.save.format"></p>
+        <div class="part-note save-warn">
+          <svg class="icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M8 1.9l6.5 11.8h-13z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.3v3.4M8 11.6v.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <p id="save-warn"></p>
+        </div>
+        <p id="save-problem" class="save-problem" role="status" aria-live="polite"></p>
+        <div class="button-row">
+          <button type="button" id="save-cancel" data-i18n="view.save.cancel"></button>
+          <button type="button" id="save-go" class="primary" data-i18n="view.save.save"></button>
         </div>
       </div>
       <section id="compare" class="compare" aria-labelledby="compare-title" hidden>
@@ -317,6 +318,7 @@
               <select id="compare-series"></select>
             </span>
             <button type="button" id="compare-table" class="small" aria-pressed="false"><span id="compare-table-chart" data-i18n="view.panel.chart" hidden></span><span id="compare-table-calendar" data-i18n="view.compare.table_calendar" hidden></span><span id="compare-table-table" data-i18n="view.panel.table"></span></button>
+            <button type="button" id="compare-save" class="small" aria-expanded="false" aria-controls="save-pop" data-i18n="view.save.button"></button>
             <span class="spacer"></span>
             <button type="button" id="compare-back" class="small" data-i18n="view.panel.unbig"></button>
           </div>
@@ -356,6 +358,7 @@
             <label for="plot-y" class="visually-hidden" data-i18n="view.plot.y"></label>
             <h3 id="plot-title" class="compare-title"><span id="plot-before"></span><select id="plot-x"></select><span id="plot-middle"></span><select id="plot-y"></select><span id="plot-after"></span></h3>
             <button type="button" id="plot-table" class="small" aria-pressed="false"><span id="plot-table-chart" data-i18n="view.panel.chart" hidden></span><span id="plot-table-table" data-i18n="view.panel.table"></span></button>
+            <button type="button" id="plot-save" class="small" aria-expanded="false" aria-controls="save-pop" data-i18n="view.save.button"></button>
             <span class="spacer"></span>
             <button type="button" id="plot-back" class="small" data-i18n="view.panel.unbig"></button>
           </div>
@@ -383,6 +386,7 @@
             <label for="spread-item" class="visually-hidden" data-i18n="view.spread.item"></label>
             <h3 id="spread-title" class="compare-title"><span id="spread-before"></span><select id="spread-item"></select><span id="spread-after"></span></h3>
             <button type="button" id="spread-table" class="small" aria-pressed="false"><span id="spread-table-chart" data-i18n="view.panel.chart" hidden></span><span id="spread-table-table" data-i18n="view.panel.table"></span></button>
+            <button type="button" id="spread-save" class="small" aria-expanded="false" aria-controls="save-pop" data-i18n="view.save.button"></button>
             <span class="spacer"></span>
             <button type="button" id="spread-back" class="small" data-i18n="view.panel.unbig"></button>
           </div>

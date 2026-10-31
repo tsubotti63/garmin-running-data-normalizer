@@ -17,7 +17,7 @@ from tests.test_gui_accessibility import STATIC_ROOT, by_id, page
 SERVER = STATIC_ROOT.parents[0] / "server.py"
 # The classes of the words of a picture, which take their colors as the
 # charts do.
-SAVE_WORDS = {"save-surface", "save-name", "save-unit", "save-kind", "save-key", "save-footer", "save-empty"}
+SAVE_WORDS = {"save-surface", "save-name", "save-title", "save-unit", "save-kind", "save-key", "save-footer", "save-caption", "save-empty"}
 
 
 def function_body(script: str, name: str) -> str:
@@ -48,8 +48,14 @@ class GuiViewSaveTest(unittest.TestCase):
             (button.get("type"), button.get("aria-controls"), button.get("aria-expanded"), button.get("data-i18n")),
             ("button", "save-pop", "false", "view.save.button"),
         )
+        # The window is out of that row, in the stage right after it, so that
+        # the bars of the other views open it too (stage R2; the checker's
+        # R2-1).
         window = by_id(self.elements, "save-pop")
-        self.assertIs(window.parent, row)
+        stage = by_id(self.elements, "stage")
+        self.assertIs(window.parent, stage)
+        order = [element.get("id") or element.get("class") for element in self.elements if element.parent is stage]
+        self.assertEqual(order[order.index("caveat") + 1], "save-pop")
         self.assertEqual((window.get("role"), window.get("aria-labelledby")), ("dialog", "save-pop-title"))
         self.assertIn("hidden", window.attributes)
         self.assertEqual(by_id(self.elements, "save-pop-title").get("tabindex"), "-1")
@@ -99,7 +105,10 @@ class GuiViewSaveTest(unittest.TestCase):
         self.assertEqual(ja["view.save.notice"], "画像のファイルをブラウザーに渡しました。ダウンロードの場所を見てください。")
         self.assertNotIn("saved", en["view.save.notice"].lower())
         body = function_body(self.script, "renderSave")
-        self.assertIn('setText(ui.saveWarn, ui.saveMarks.checked ? `${warn}${state.language === "ja" ? "" : " "}${t("view.save.warn_marks")}` : warn);', body)
+        self.assertIn('setText(ui.saveWarn, (panels ? ui.saveMarks.checked : target.marks) ? `${warn}${state.language === "ja" ? "" : " "}${t("view.save.warn_marks")}` : warn);', body)
+        # By race, always: the names of the races are those of the marks
+        # (the checker's answer 5 of the plan of R2).
+        self.assertIn("marks: race,", function_body(self.script, "saveCompareTarget"))
 
     def test_the_window_opens_with_the_first_choices_one_window_at_a_time(self) -> None:
         held = {
@@ -113,7 +122,8 @@ class GuiViewSaveTest(unittest.TestCase):
                 "state.saveNotice = null;",
                 "state.recapOpen = false;",
                 "  if (state.marksOpen) {\n      state.marksOpen = false;",
-                "(open ? ui.saveTitle : ui.saveOpen).focus();",
+                "state.saveFrom = from;",
+                "(open ? ui.saveTitle : saveButton(state.saveFrom)).focus();",
             ),
             "openRecap": ("    state.saveOpen = false;",),
             "openMarks": ("    state.saveOpen = false;",),
@@ -121,22 +131,34 @@ class GuiViewSaveTest(unittest.TestCase):
             # saving waits for an answer not on its way (Codex's review of
             # the plan of R1).
             "renderSave": (
-                "const showable = recapShowable(viewing);",
+                # The window shows by the view of the button that opened it
+                # (stage R2; for the panels as in R1: the node test of
+                # saveWindowShows).
+                "const showable = saveWindowShows({ viewing, from: state.saveFrom, view, items: state.items.length, full: state.full });",
+                "if (state.saveOpen && state.saveFrom !== view) {\n    state.saveOpen = false;\n  }",
                 "ui.saveOpen.disabled = !viewing || !state.items.length;",
                 "ui.savePop.hidden = !state.saveOpen || !showable;",
-                "const { plan, ready } = saveReady(viewing);",
-                "ui.saveGo.disabled = !ready;",
+                "const target = saveTarget(viewing);",
+                "ui.saveGo.disabled = !target.ready;",
+                'setText(ui.saveName, target.name ?? "—");',
+                "const gone = panels ? renderSavePanels(target.plan) : false;",
+                'const problem = state.saveProblem ?? (gone ? "view.save.gone" : null) ?? target.problem;',
+                "fitSaveWindow();",
+            ),
+            "renderSavePanels": (
                 # No marks chosen where the page draws none, so that their
                 # names never go in as chosen before (Codex's review of the
                 # diff of R1).
                 "  if (!plan.marksDrawn) {\n    // Chosen again where marks show again, so that their names never go in\n    // as chosen before (Codex's review of the diff of R1).\n    state.saveMarks = false;\n  }",
                 "ui.saveMarks.disabled = !plan.marksDrawn;",
                 "ui.saveMarks.checked = plan.marksDrawn && state.saveMarks;",
-                'setText(ui.saveName, plan.name ?? "—");',
                 'const gone = state.saveScope === "one" && plan.chosen !== null && !plan.charts.includes(plan.chosen);',
                 "ui.savePanel.selectedIndex = -1;",
-                'const problem = state.saveProblem ?? (gone ? "view.save.gone" : null);',
-                "fitSaveWindow();",
+                "return gone;",
+            ),
+            "saveTarget": (
+                "const { plan, ready } = saveReady(viewing);",
+                "return { view, plan, ready, name: plan.name, problem, loading: state.loading, marks: false };",
             ),
             "saveReady": (
                 "plan.keys.every((key) => savedChart(key) !== null)",
@@ -162,11 +184,16 @@ class GuiViewSaveTest(unittest.TestCase):
             for line in lines:
                 with self.subTest(function=name, line=line):
                     self.assertIn(line, body)
-        # The window after the panels, as it reads their charts (Codex's
-        # review of the diff of R1).
+        # The window after every view, as it reads their charts (Codex's
+        # reviews of the diff of R1 and of the plan of R2).
         stage = function_body(self.script, "renderStage")
-        self.assertLess(stage.index("    renderPanels();"), stage.index("  renderSave(viewing);\n  renderSaveNotice();"))
-        self.assertEqual(stage.count("renderSave("), 1)
+        self.assertIn("    renderPanels();", stage)
+        self.assertNotIn("renderSave(", stage)
+        drawing = function_body(self.script, "render")
+        for before in ("  renderStage(live);", "  renderCompare(live);", "  renderPlot(live);", "  renderSpread(live);"):
+            with self.subTest(before=before):
+                self.assertLess(drawing.index(before), drawing.index("  renderSave(live && state.view !== null && state.opening === null);\n  renderSaveNotice();"))
+        self.assertEqual(drawing.count("renderSave("), 1)
         # One panel is the panel the list shows when it is chosen, which
         # stays chosen (Codex's review of the diff of R1).
         self.assertIn('ui.saveOne.addEventListener("change", () => changeSave({ saveScope: "one", savePanel: state.savePanel ?? (ui.savePanel.value || null) }));', self.script)
@@ -200,22 +227,27 @@ class GuiViewSaveTest(unittest.TestCase):
                 self.assertNotIn(word, before)
         for line in (
             'new Blob([file], { type: "image/svg+xml;charset=utf-8" })',
-            "link.download = plan.name;",
+            "link.download = target.name;",
             "} finally {\n      stage?.remove();",
             "setTimeout(() => URL.revokeObjectURL(taken), 10000);",
             # Checked again as the window names it; where it cannot be done,
             # the window stays with the reason and the focus on its button
             # (Codex's review of the plan of R1).
-            "plan.name !== ui.saveName.textContent",
+            "target.name !== ui.saveName.textContent",
             'problem = "view.save.gone";',
             'problem = "view.save.changed";',
             'problem = "view.save.failed";',
-            "(problem === null ? ui.saveOpen : ui.saveGo).focus();",
+            "(problem === null ? saveButton(state.saveFrom) : ui.saveGo).focus();",
             "state.saveNotice = saveNoticeNow();",
         ):
             with self.subTest(line=line):
                 self.assertIn(line, body)
-        for name in ("saveImage", "saveFile", "savePart", "saveWords", "writeSaveStyles", "saveStage", "savePlan", "saveReady", "renderSave", "renderSaveNotice", "openSave", "changeSave"):
+        for name in (
+            "saveImage", "saveFile", "savePart", "saveWords", "writeSaveStyles", "saveStage", "savePlan", "saveReady", "renderSave", "renderSaveNotice", "openSave", "changeSave",
+            # Stage R2.
+            "saveTarget", "saveCompareTarget", "compareSaveTitle", "saveComparePart", "saveCalendarLegend", "savePlotTarget", "saveSpreadTarget", "saveNotesOf",
+            "saveContent", "fitSaveWindow", "renderSavePanels", "saveProblemText", "saveViewFile", "saveNotes", "saveBegin", "saveEnd",
+        ):
             part = function_body(self.script, name)
             for word in ("fetch(", "XMLHttpRequest", "sendBeacon", "WebSocket", "callApi", "callWithKey", "innerHTML", "insertAdjacentHTML", "outerHTML", "applyTheme", "rememberTheme", "changeTheme", "writeStorage"):
                 with self.subTest(function=name, word=word):
@@ -227,10 +259,17 @@ class GuiViewSaveTest(unittest.TestCase):
         # styles once (Codex's review of the plan of R1).
         self.assertIn("const marks = state.saveMarks && plan.marksDrawn;", body)
         self.assertIn("marks && index === 0 && key !== namedKey", body)
-        self.assertLess(body.index("appendMarkNames("), body.index("writeSaveStyles(svg);"))
-        self.assertEqual(body.count("writeSaveStyles("), 1)
+        self.assertLess(body.index("appendMarkNames("), body.index("return saveEnd(svg, ground, probe, y, footer, measure);"))
+        # The end that the panels and the other views share writes the
+        # styles once (stage R2).
+        end = function_body(self.script, "saveEnd")
+        self.assertEqual(end.count("writeSaveStyles("), 1)
+        for name in ("saveFile", "saveViewFile"):
+            with self.subTest(function=name):
+                self.assertEqual(function_body(self.script, name).count("writeSaveStyles("), 0)
+                self.assertEqual(function_body(self.script, name).count("return saveEnd(svg, ground, probe, y"), 1)
         self.assertIn("const drop = [...SAVE_LEFT_OUT, ...(marks ? [] : SAVE_MARKS)].join(\", \");", body)
-        self.assertIn('return `<?xml version="1.0" encoding="UTF-8"?>\\n${new XMLSerializer().serializeToString(svg)}`;', body)
+        self.assertIn('return `<?xml version="1.0" encoding="UTF-8"?>\\n${new XMLSerializer().serializeToString(svg)}`;', end)
         self.assertIn("const heading = panelHeading(key, entry.item, entry.panel, answer.grain, entry.mode);", body)
         self.assertIn("answerTypes: state.answerTypes,", body)
         self.assertIn("grain: answer.grain,", body)
@@ -250,11 +289,12 @@ class GuiViewSaveTest(unittest.TestCase):
             "ground.setAttribute(name, String(value));",
         ):
             with self.subTest(line=line):
-                self.assertIn(line, body)
-        self.assertLess(body.index("saveFrame("), body.index("writeSaveStyles(svg);"))
+                self.assertIn(line, end)
+        self.assertLess(end.index("saveFrame("), end.index("writeSaveStyles(svg);"))
         styles = function_body(self.script, "writeSaveStyles")
         for line in (
-            "for (const [attribute, value] of savedAttributes(values, around)) {",
+            "const own = SAVE_ATTRIBUTES.map(([, attribute]) => attribute).filter((attribute) => node.hasAttribute(attribute));",
+            "for (const [attribute, value] of savedAttributes(values, around, own)) {",
             'node.removeAttribute("class");',
             'node.removeAttribute("style");',
             'svg.setAttribute("font-family", font);',
@@ -270,10 +310,25 @@ class GuiViewSaveTest(unittest.TestCase):
         assert block is not None
         written = set(re.findall(r'\["([a-z-]+)", "[a-z-]+"\]', block.group(1)))
         rules = re.sub(r"/\*.*?\*/", "", self.css, flags=re.DOTALL)
+        # And those of every class that the script gives a shape of SVG (the
+        # attributes of svgElement), as those of the other views (Codex's
+        # review of the plan of R2); of a class made in a template, the words
+        # before it is made, as a class made of a number, as y1, goes with one
+        # of them.
+        shapes: set[str] = set()
+        for match in re.finditer(r'\bclass: (?:"([^"]*)"|`([^`]*)`)', self.script):
+            words = match.group(1) if match.group(1) is not None else match.group(2).split("${")[0]
+            parts = words.split()
+            if match.group(2) is not None and "${" in match.group(2) and words and not words[-1].isspace():
+                parts = parts[:-1]
+            shapes.update(parts)
+        # The coverage of the shelf and the overview are never in a picture.
+        shapes -= {name for name in shapes if name.startswith(("coverage", "overview-"))}
+        self.assertLessEqual({"calendar-cell", "calendar-name", "compare-label", "plot-dot", "plot-axis", "key-line"}, shapes)
         used: set[str] = set()
         for selectors, declarations in re.findall(r"([^{}]+)\{([^{}]*)\}", rules):
             classes = re.findall(r"\.([a-z][a-z0-9-]*)", selectors)
-            if any(name.startswith(("chart-", "day-", "axis-", "key-")) or name in SAVE_WORDS for name in classes):
+            if any(name.startswith(("chart-", "day-", "axis-", "key-")) or name in SAVE_WORDS or name in shapes for name in classes):
                 used.update(re.findall(r"(?:^|;)\s*([a-z-]+)\s*:", declarations))
         self.assertEqual(sorted(used - written - {"display"}), [])
         self.assertLessEqual({"fill", "stroke", "paint-order", "font-variant-numeric", "font-weight"}, used)
@@ -286,7 +341,7 @@ class GuiViewSaveTest(unittest.TestCase):
         self.assertLess(self.css.index(".save-surface {\n  fill: var(--surface);\n}"), last)
         forced = self.css[last:]
         self.assertIn(".save-surface {\n    fill: Canvas;\n  }", forced)
-        self.assertRegex(forced, r"\.save-name,\s*\.save-unit,\s*\.save-kind,\s*\.save-key,\s*\.save-footer,\s*\.save-empty \{\s*fill: CanvasText;")
+        self.assertRegex(forced, r"\.save-name,\s*\.save-title,\s*\.save-unit,\s*\.save-kind,\s*\.save-key,\s*\.save-footer,\s*\.save-caption,\s*\.save-empty \{\s*fill: CanvasText;")
         self.assertRegex(self.css, r"\.save-stage \{\s*position: fixed;\s*top: 0;\s*left: -100000px;\s*width: 1200px;\s*pointer-events: none;\s*\}")
 
     def test_only_the_root_of_the_page_and_the_box_of_a_picture_have_data_theme(self) -> None:
@@ -320,6 +375,258 @@ class GuiViewSaveTest(unittest.TestCase):
             '        "base-uri \'none\'; form-action \'none\'",\n',
             SERVER.read_text(encoding="utf-8"),
         )
+
+
+    # --- Saving the other views (stage R2 of v2.2.0) -----------------------
+
+    def test_the_bars_of_the_other_views_open_the_one_window_right_after_their_table_buttons(self) -> None:
+        # The place that the person chose from the sample (A, 2026-10-31):
+        # right after "表で見る" in the first line of each bar.
+        for view in ("compare", "plot", "spread"):
+            with self.subTest(view=view):
+                button = by_id(self.elements, f"{view}-save")
+                line = button.parent
+                self.assertIn("compare-line", line.get("class"))
+                self.assertIn(by_id(self.elements, view), line.ancestors())
+                order = [element.get("id") or element.get("class") for element in self.elements if element.parent is line]
+                self.assertEqual(order[order.index(f"{view}-table") + 1], f"{view}-save")
+                self.assertEqual(
+                    (button.get("type"), button.get("class"), button.get("aria-controls"), button.get("aria-expanded"), button.get("data-i18n")),
+                    ("button", "small", "save-pop", "false", "view.save.button"),
+                )
+        self.assertIn(
+            '  for (const each of ["compare", "plot", "spread"]) {\n    saveButton(each).addEventListener("click", () => openSave(!(state.saveOpen && state.saveFrom === each), each));\n  }',
+            self.script,
+        )
+        self.assertIn('ui.saveOpen.addEventListener("click", () => openSave(!(state.saveOpen && state.saveFrom === "panels"), "panels"));', self.script)
+        # The window says what another view saves in one line, and hides the
+        # choices that the panels only have (the plan of R2).
+        window = by_id(self.elements, "save-pop")
+        what = by_id(self.elements, "save-what")
+        self.assertIs(what.parent, window)
+        self.assertIn("hidden", what.attributes)
+        for name in ("save-scope-field", "save-marks-field"):
+            with self.subTest(field=name):
+                self.assertEqual((by_id(self.elements, name).tag, by_id(self.elements, name).parent), ("fieldset", window))
+        body = function_body(self.script, "renderSave")
+        for line in (
+            "ui.saveScopeField.hidden = !panels;",
+            "ui.saveMarksField.hidden = !panels;",
+            "ui.saveWhat.hidden = panels;",
+            'setText(ui.saveWhat, panels ? "" : t("view.save.what", { name: target.title }));',
+            "  for (const each of [\"compare\", \"plot\", \"spread\"]) {\n    saveButton(each).disabled = !viewing;\n  }",
+            'saveButton(each).setAttribute("aria-expanded", String(state.saveOpen && showable && state.saveFrom === each));',
+            "const button = saveButton(state.saveFrom);",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, body)
+
+    def test_the_window_is_placed_under_the_row_of_its_button_and_follows_it(self) -> None:
+        # Under the row of its button at its right end, as under the row above
+        # the panels in R1, placed again as the page draws, the window
+        # changes its size, or a chart is drawn again; the width of R1
+        # (Codex's review of the plan of R2, 7; the checker).
+        self.assertIn('return view === "panels" ? ui.caveat : saveButton(view).closest(".compare-line");', function_body(self.script, "saveRow"))
+        fit = function_body(self.script, "fitSaveWindow")
+        for line in (
+            "const row = saveRow(state.saveFrom).getBoundingClientRect();",
+            "ui.savePop.style.top = `${row.bottom - stage.top + ui.stage.scrollTop}px`;",
+            "ui.savePop.style.right = `${Math.max(0, right)}px`;",
+            "if (stage.width - right - width < pad) {",
+            # Not wider than the stage, which hides what goes out of it
+            # (Codex's review of the diff of R2).
+            "ui.savePop.style.maxWidth = `${Math.max(0, stage.width - 2 * pad)}px`;",
+            "fitPop(ui.savePop);",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, fit)
+        self.assertLess(fit.index("ui.savePop.style.maxWidth"), fit.index("const width = ui.savePop.getBoundingClientRect().width;"))
+        self.assertIn("fitSaveWindow();", function_body(self.script, "renderSave"))
+        self.assertIn('window.addEventListener("resize", fitSaveWindow);', self.script)
+        self.assertRegex(self.css, r"\.save-pop \{\s*top: 0;\s*right: 0;\s*display: flex;\s*flex-direction: column;\s*gap: 8px;\s*width: 540px;\s*max-width: calc\(100vw - 32px\);")
+
+    def test_the_window_reads_the_charts_after_they_are_drawn_and_never_draws_itself(self) -> None:
+        # After the bodies of every view are drawn again, while it shows only,
+        # so that the focus stays (Codex's review of the plan of R2, 1; the
+        # checker's (i) and (ii)).
+        redraw = function_body(self.script, "scheduleRedraw")
+        self.assertIn("    if (state.saveOpen) {\n      renderSave(viewingNow());\n    }", redraw)
+        for before in ("renderPanels();", "renderCompareBody();", "renderPlotBody(plotAnswerNow());", "renderSpreadBody(spreadAnswerNow());"):
+            with self.subTest(before=before):
+                self.assertLess(redraw.index(before), redraw.index("renderSave(viewingNow());"))
+        for name in ("renderSave", "renderSavePanels", "saveTarget", "saveCompareTarget", "savePlotTarget", "saveSpreadTarget", "fitSaveWindow", "saveProblemText"):
+            body = function_body(self.script, name)
+            for word in ("render()", "scheduleRedraw(", "requestAnimationFrame"):
+                with self.subTest(function=name, word=word):
+                    self.assertNotIn(word, body)
+            # Nothing in the window is made again where it does not change,
+            # so that a drawing again keeps the focus in it (the checker's
+            # (iii)): the list of the panels only where they change (R1).
+            if name != "renderSavePanels":
+                self.assertNotIn("replaceChildren(", body)
+        panels = function_body(self.script, "renderSavePanels")
+        self.assertEqual(panels.count("replaceChildren("), 1)
+        self.assertLess(panels.index("if (ui.savePanel.dataset.signature !== signature) {"), panels.index("ui.savePanel.replaceChildren("))
+        # The window goes with the view of its button.
+        self.assertIn('return comparing() ? "compare" : plotting() ? "plot" : spreading() ? "spread" : "panels";', function_body(self.script, "saveViewNow"))
+
+    def test_another_view_saves_its_answer_drawn_as_a_chart_or_says_why_not(self) -> None:
+        target = function_body(self.script, "saveTarget")
+        for line in (
+            "const charts = target.parts.filter((part) => part.source !== null).length;",
+            "saveViewNow() === view &&",
+            "target.name !== null &&",
+            "charts === target.parts.length &&",
+            "saveViewReady({ answer: target.answer, loading: target.loading, stopped: target.stopped, table: target.table, charts });",
+            # Why it cannot save, also for a stop, an answer without values,
+            # and a chart without room (Codex's review of the diff of R2), and
+            # so for the panels.
+            "  target.problem = saveProblem({\n    table: target.table,\n    stopped: target.stopped,\n    loading: target.loading,\n    answer: target.answer,\n    empty: target.empty,\n    drawn: charts,\n    parts: target.parts.length,\n  });",
+            "const drawn = plan.keys.filter((key) => savedChart(key) !== null).length;",
+            "const problem = saveProblem({ stopped: state.seriesStop !== null, loading: state.loading, answer: state.answer, drawn, parts: plan.keys.length });",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, target)
+        self.assertIn("empty: answer !== null && !answer.points.length,", function_body(self.script, "savePlotTarget"))
+        self.assertIn("empty: answer !== null && !answer.counts.length,", function_body(self.script, "saveSpreadTarget"))
+        # What a picture leaves out is taken out of the copy of a chart
+        # (Codex's review of the diff of R2, 4; on the real page too).
+        self.assertIn('  if (drop !== "") {\n    for (const node of copy.querySelectorAll(drop)) {\n      node.remove();\n    }\n  }', function_body(self.script, "savePart"))
+        # The chart of the answer shown, not of one on its way or of another
+        # pair or item (Codex's review of the plan of R2, 2).
+        self.assertIn("const answer = compare !== null && state.compareAnswer !== null && state.compareAnswer.key === compare.key ? state.compareAnswer : null;", function_body(self.script, "saveCompareTarget"))
+        self.assertIn("parts: shown ? compared.map(saveComparePart) : [],", function_body(self.script, "saveCompareTarget"))
+        self.assertIn("const drawnNow = answer !== null && plotContext !== null && plotContext.answer === answer;", function_body(self.script, "savePlotTarget"))
+        self.assertIn('source: drawnNow ? ui.plotBody.querySelector(".plot-points > svg") : null', function_body(self.script, "savePlotTarget"))
+        self.assertIn("const drawnNow = answer !== null && spreadContext !== null && spreadContext.answer === answer;", function_body(self.script, "saveSpreadTarget"))
+        self.assertIn('source: drawnNow ? ui.spreadBody.querySelector(".spread-bars > svg") : null', function_body(self.script, "saveSpreadTarget"))
+        # The table says how to show the chart again, with the name of its
+        # button.
+        problem = function_body(self.script, "saveProblemText")
+        self.assertIn('const calendar = state.saveFrom === "compare" && compareModeNow() === "calendar";', problem)
+        self.assertIn('return t(problem, { button: t(calendar ? "view.compare.table_calendar" : "view.panel.chart") });', problem)
+        image = function_body(self.script, "saveImage")
+        self.assertIn('const file = target.view === "panels" ? saveFile(stage, target.plan) : saveViewFile(stage, target);', image)
+        self.assertIn("const target = saveTarget(viewingNow());", image)
+
+    def test_a_picture_of_another_view_holds_the_words_of_the_page(self) -> None:
+        # The heads of the rows, the strips, and the one chart as the page
+        # shows them, without the reading of the day chosen; the words of an
+        # empty chart (Codex's review of the plan of R2, 4).
+        part = function_body(self.script, "saveComparePart")
+        for line in (
+            'const head = entry.section.querySelector(entry.kind === "calendar" ? ".calendar-side" : ".panel-head");',
+            'node.matches(".panel-unit, .compare-whole")',
+            'swatch: () => key.querySelector("svg").cloneNode(true)',
+            'source: entry.plot.querySelector(":scope > svg"),',
+            'empty: entry.plot.querySelector(".panel-empty")?.textContent ?? null,',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, part)
+        self.assertNotIn("read", part)
+        # The legend of a calendar without where the page reads the values
+        # (Codex's review of the plan of R2, 5).
+        legend = function_body(self.script, "saveCalendarLegend")
+        self.assertIn('notes.push(node.textContent === t("view.compare.calendar_note") ? t("view.compare.calendar_steps") : node.textContent);', legend)
+        self.assertIn("swatchSize: [12, 12]", legend)
+        # The title in the words of the page (the checker's answer 3).
+        title = function_body(self.script, "compareSaveTitle")
+        for line in (
+            't("view.compare.title_by", { item: itemName(answer.key), by: t(race ? "view.compare.by.race" : "view.compare.by.year") }),',
+            'mode === "rows" && race ? t("view.compare.mode.rows_race") : t(`view.compare.mode.${mode}`),',
+            'race ? t("view.compare.weeks_option", { n: answer.weeks }) : answer.month === null ? t("view.compare.month_all") : describe(compareSlotName(answer.month - 1, "month", null, state.language)),',
+            "if (!ui.compareSeriesField.hidden && ui.compareSeries.selectedIndex >= 0) {",
+            'return words.join(t("view.save.separator"));',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, title)
+        compare = function_body(self.script, "saveCompareTarget")
+        for line in (
+            "const years = answer === null || race ? [] : answer.years;",
+            "const days = answer === null || !race ? [] : answer.races.map((each) => each.day);",
+            'name: answer === null ? null : saveViewFileName("compare", { key: answer.key, years, days }),',
+            "answerTypes: answer.types,",
+            'separator: t("view.spoken_separator"),',
+            'daysSeparator: t("view.save.days_separator"),',
+            'drop: SAVE_LEFT_OUT_VIEWS.compare.join(", "),',
+            'axis: shown && !ui.compareAxis.hidden ? ui.compareAxis.querySelector(":scope > svg") : null,',
+            "marks: race,",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, compare)
+        plot = function_body(self.script, "savePlotTarget")
+        self.assertIn('notes: [...saveNotesOf([ui.plotCount, ui.plotCut]), t("view.plot.caveat")],', plot)
+        self.assertIn("answerTypes: asked.types,", plot)
+        self.assertIn('drop: SAVE_LEFT_OUT_VIEWS.plot.join(", "),', plot)
+        spread = function_body(self.script, "saveSpreadTarget")
+        self.assertIn("notes: saveNotesOf([ui.spreadCount, ui.spreadWide, ui.spreadFaster]),", spread)
+        self.assertIn("answerTypes: asked.types,", spread)
+        self.assertIn('drop: SAVE_LEFT_OUT_VIEWS.spread.join(", "),', spread)
+        self.assertIn('return nodes.filter((node) => node.closest("[hidden]") === null && node.textContent !== "").map((node) => node.textContent);', function_body(self.script, "saveNotesOf"))
+        # The activity types that a comparison asked for go with its answer
+        # (Codex's review of the plan of R2, 6).
+        request = function_body(self.script, "requestCompare")
+        self.assertIn("const types = typesRequest(state.counted, state.view.types);", request)
+        self.assertIn("            wholes: new Map(races.map((race, index) => [race.id, answers[2 * index + 1]])),\n            types,\n          }", request)
+        self.assertIn("wholes: null, types };", request)
+        # The words of a picture: its title, its parts, the lines under it.
+        file = function_body(self.script, "saveViewFile")
+        for line in (
+            'saveLines([{ text: target.title, className: "save-title" }], SAVE_ROOM, SAVE_GAP, measure), SAVE_MARGIN, SAVE_TITLE_LINE, measure) + 8;',
+            "y += savePart(svg, stage, part.source, top, target.drop);",
+            'const empty = svgElement("text", { class: "save-empty", x: SAVE_WIDTH / 2, y: ((top + y) / 2).toFixed(1), "text-anchor": "middle" });',
+            "y = saveNotes(svg, target.notes, y, measure);",
+            # The axis of a comparison under its charts.
+            '  if (target.axis !== null) {\n    y += savePart(svg, stage, target.axis, y, "");\n  }',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, file)
+        # The line after a saving goes with what another view shows (the
+        # checker's review of the handling of Codex's review of the plan of R2).
+        self.assertIn("content: saveContent(view),", function_body(self.script, "saveNoticeNow"))
+        content = function_body(self.script, "saveContent")
+        for line in (
+            'return [state.compare.key, by, by === "race" ? state.compare.races : state.compare.years, compareModeNow(), compareMonthNow(), state.compareWeeks, state.compare.series, state.compare.grain];',
+            "return [state.plotPair.x, state.plotPair.y];",
+            'return view === "spread" ? [state.spreadItem] : null;',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, content)
+        self.assertIn('className: "save-caption"', function_body(self.script, "saveNotes"))
+        # Each piece makes its own swatch, as the page does (Codex 3).
+        words = function_body(self.script, "saveWords")
+        self.assertIn("const swatch = piece.swatch();", words)
+        self.assertIn("const [width, height] = piece.swatchSize ?? [22, 8];", words)
+        self.assertIn('swatch: () => lineSwatch(line.style, heading.points)', function_body(self.script, "saveFile"))
+
+    def test_the_words_of_saving_the_other_views(self) -> None:
+        ja, en = catalog("ja"), catalog("en")
+        for key, ja_words, en_words in (
+            ("view.save.what", "保存する図：{name}", "Picture to save: {name}"),
+            ("view.save.table", "表で見ているあいだは保存できません。「{button}」を押すと保存できます。", "No image can be saved while the table shows. Press “{button}” to save it."),
+            ("view.save.compare_years", "くらべた年 {years}", "Years compared: {years}"),
+            ("view.save.compare_races", "くらべた大会の日 {days}", "Race days compared: {days}"),
+            ("view.save.width", "区切りの幅 {width}", "Width of a range: {width}"),
+            # The days of the races in English have commas of their own.
+            ("view.save.days_separator", "、", "; "),
+            # Why it cannot save (Codex's review of the diff of R2).
+            ("view.save.stopped", "読み込みが止まったので、保存できません。止まった理由と次にすることは、図の上に出ています。", "The numbers stopped loading, so no image can be saved. Why, and what to do next, show above the chart."),
+            ("view.save.empty", "この期間には図にする値がないので、保存できません。", "This period has no values to draw, so no image can be saved."),
+            ("view.save.undrawn", "図を描く広さがないので、保存できません。ウィンドウを広げると保存できます。", "There is no room to draw the chart, so no image can be saved. Make the window larger to save it."),
+        ):
+            with self.subTest(key=key):
+                self.assertEqual((ja[key], en[key]), (ja_words, en_words))
+        # The rule of the steps of a calendar is the words of the page before
+        # where it reads the values, which a picture cannot do (Codex 5; the
+        # checker: in English one space before the next sentence).
+        for catalog_, rest in ((ja, "値は、"), (en, " The values ")):
+            with self.subTest(rest=rest):
+                note, steps = catalog_["view.compare.calendar_note"], catalog_["view.compare.calendar_steps"]
+                self.assertTrue(note.startswith(steps))
+                self.assertTrue(note[len(steps):].startswith(rest))
+        self.assertEqual(en["view.compare.calendar_note"][len(en["view.compare.calendar_steps"]) + 1], "T")
+        self.assertNotIn("表で見る", ja["view.compare.calendar_steps"])
+        self.assertNotIn("table", en["view.compare.calendar_steps"].lower())
 
 
 if __name__ == "__main__":
