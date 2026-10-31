@@ -4,7 +4,12 @@
    blue is now, green is done, yellow is a warning, red is a problem to fix,
    and gray is absent or not yet. Color is never the only signal. */
 
-:root {
+/* The light colors are also those of the box that a picture of the view
+   page is made in, out of the page, where the person saves it in light
+   colors (stage R1 of v2.2.0): there they are read whatever the page shows,
+   and no other element takes them. */
+:root,
+.save-stage[data-theme="light"] {
   color-scheme: light dark;
   --page: #e8ebf0;
   --surface: #ffffff;
@@ -57,7 +62,8 @@
    below. Without a choice, the page follows the browser. The dark colors
    are written twice, for the browser and for the choice, and the tests
    check that the two are the same. */
-:root[data-theme="light"] {
+:root[data-theme="light"],
+.save-stage[data-theme="light"] {
   color-scheme: light;
 }
 

@@ -143,6 +143,10 @@ def is_live(element: Element) -> bool:
 # colors, and where the person chose Dark (stage G3a).
 DARK_FOR_THE_BROWSER = r'@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme="light"\]\) \{(.*?)\}\s*\}'
 DARK_FOR_THE_CHOICE = r'^:root\[data-theme="dark"\] \{(.*?)^\}'
+# The light colors, which are also those of the box that a picture of the
+# view page is made in (stage R1 of v2.2.0), and Light chosen.
+LIGHT_COLORS = r'^:root,\n\.save-stage\[data-theme="light"\] \{(.*?)^\}'
+LIGHT_CHOSEN = r'^:root\[data-theme="light"\],\n\.save-stage\[data-theme="light"\] \{(.*?)^\}'
 
 
 def declarations(block: str) -> dict[str, str]:
@@ -153,7 +157,7 @@ def declarations(block: str) -> dict[str, str]:
 def theme_colors() -> dict[str, dict[str, str]]:
     """Return the color variables of the light theme and the dark theme."""
     source = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
-    light_block = re.search(r"^:root \{(.*?)^\}", source, re.MULTILINE | re.DOTALL)
+    light_block = re.search(LIGHT_COLORS, source, re.MULTILINE | re.DOTALL)
     dark_block = re.search(DARK_FOR_THE_CHOICE, source, re.MULTILINE | re.DOTALL)
     if light_block is None or dark_block is None:
         raise AssertionError("styles.css has no light or dark color variables")
@@ -668,8 +672,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # from M1, whether the marks show, and the date, the last day, the
         # kind, and the name of a mark; from M2, the weeks before a race day;
         # from O1, the two items plotted against each other; from P1, the
-        # item of a distribution.
-        self.assertEqual(len(fields), 23)
+        # item of a distribution; from R1, the panels of a picture (all, or one
+        # and which), its colors (two), and its marks.
+        self.assertEqual(len(fields), 29)
         for field in fields:
             with self.subTest(field=field.get("id")):
                 self.assertTrue(field.get("id") in labelled or field.get("aria-label") or field.get("aria-labelledby"))
@@ -1439,7 +1444,8 @@ class GuiViewPageStructureTest(unittest.TestCase):
                 "ui.recapTitle.focus();",
                 "ui.recapOpen.focus();",
             ),
-            "openMarks": ("  if (open) {\n    // One window opens under the right end of the row at a time (stage Q1).\n    state.recapOpen = false;\n  }",),
+            # The window of the saving, at the same place, closes too (stage R1).
+            "openMarks": ("  if (open) {\n    // One window opens under the right end of the row at a time (stage Q1).\n    state.recapOpen = false;\n    state.saveOpen = false;\n  }",),
             # A low window keeps the heads and two rows or so of its table,
             # and scrolls as a whole (Codex's review of the diff of Q1).
             "fitRecapWindow": (
@@ -1831,12 +1837,38 @@ class GuiStyleTest(unittest.TestCase):
         assert browser is not None and choice is not None
         self.assertEqual(declarations(browser.group(1)), declarations(choice.group(1)))
         self.assertEqual(declarations(choice.group(1))["color-scheme"], "dark")
-        light = re.search(r'^:root\[data-theme="light"\] \{(.*?)^\}', self.source, re.MULTILINE | re.DOTALL)
+        light = re.search(LIGHT_CHOSEN, self.source, re.MULTILINE | re.DOTALL)
         assert light is not None
         self.assertEqual(declarations(light.group(1)), {"color-scheme": "light"})
-        root = re.search(r"^:root \{(.*?)^\}", self.source, re.MULTILINE | re.DOTALL)
+        root = re.search(LIGHT_COLORS, self.source, re.MULTILINE | re.DOTALL)
         assert root is not None
         self.assertEqual(declarations(root.group(1))["color-scheme"], "light dark")
+
+    def test_only_the_box_of_a_picture_takes_the_light_colors_beside_the_page(self) -> None:
+        # Stage R1 of v2.2.0: the box out of the page that a picture of the
+        # view page is made in takes the light colors and their color scheme
+        # with data-theme="light" (Codex's simpler form of the plan); the
+        # attribute on any other element changes no color.
+        view = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        rules = re.sub(r"/\*.*?\*/", "", self.source + view, flags=re.DOTALL)
+        themed = {
+            part.strip()
+            for selectors in re.findall(r"([^{};]+)\{", rules)
+            for part in selectors.split(",")
+            if "data-theme" in part
+        }
+        self.assertEqual(
+            themed,
+            {
+                ':root[data-theme="light"]',
+                '.save-stage[data-theme="light"]',
+                ':root:not([data-theme="light"])',
+                ':root[data-theme="dark"]',
+            },
+        )
+        for pattern in (LIGHT_COLORS, LIGHT_CHOSEN):
+            with self.subTest(pattern=pattern):
+                self.assertIsNotNone(re.search(pattern, self.source, re.MULTILINE | re.DOTALL))
 
     def test_the_chosen_colors_show_without_color_and_with_the_keyboard(self) -> None:
         # Stage G3a: the chosen part is filled and bold, the part that has
