@@ -2043,6 +2043,18 @@ test("a saved picture writes the styles of the page as attributes of SVG, tabula
   const faded = { ...outer, opacity: "0.5" };
   assert.deepEqual(view.savedAttributes(faded, faded), [["opacity", "0.5"]]);
   assert.deepEqual(view.savedAttributes(outer, faded), []);
+  // One that the shape has as an attribute of its own is written even where
+  // it is the same as around it, as the page may override it by a style, as
+  // forced colors do the dash of the lines of the years (the checker's review
+  // of the diff of R1, (a)).
+  const line = { ...outer, "stroke-dasharray": "none" };
+  assert.deepEqual(view.savedAttributes(line, line), []);
+  assert.deepEqual(view.savedAttributes(line, line, ["stroke-dasharray"]), [["stroke-dasharray", "none"]]);
+  assert.deepEqual(view.savedAttributes(outer, outer, ["opacity", "stroke-width"]), [
+    ["stroke-width", "1px"],
+    ["opacity", "1"],
+  ]);
+  assert.deepEqual(view.savedAttributes(outer, outer, ["font-variant"]), [["font-variant", "normal"]]);
 });
 
 test("a saved picture leaves out the cross line and the frame of the list, and the marks unless they go in", () => {
@@ -2135,4 +2147,176 @@ test("the frame of a picture grows to what its parts show out of their frames, w
   assert.deepEqual(view.saveFrame([{ left: 1180, top: 470, right: 1210.2, bottom: 484 }], 1200, 500), { x: 0, y: 0, width: 1215, height: 500 });
   assert.deepEqual(view.saveFrame([{ left: -3, top: 2, right: 40, bottom: 12 }], 1200, 500), { x: -7, y: -2, width: 1207, height: 502 });
   assert.deepEqual(view.saveFrame([{ left: 8, top: 490, right: 100, bottom: 503 }], 1200, 500, 0), { x: 0, y: 0, width: 1200, height: 503 });
+});
+
+// --- Saving the other views as an image (stage R2 of v2.2.0) ---------------
+
+test("the window of the saving shows by the view of its button, and another view saves its answer drawn as a chart", () => {
+  // The panels as in R1: panels, and not the graphs only.
+  const panels = { viewing: true, from: "panels", view: "panels", items: 2, full: false };
+  assert.equal(view.saveWindowShows(panels), true);
+  for (const [name, value] of [["viewing", false], ["items", 0], ["full", true], ["from", "compare"], ["view", "plot"]]) {
+    assert.equal(view.saveWindowShows({ ...panels, [name]: value }), false, name);
+  }
+  // Another view shows the window from its own button only, also while it
+  // cannot save yet, which the window says (Codex's review of the plan of R2).
+  for (const each of ["compare", "plot", "spread"]) {
+    assert.equal(view.saveWindowShows({ viewing: true, from: each, view: each, items: 0, full: false }), true, each);
+    assert.equal(view.saveWindowShows({ viewing: true, from: "panels", view: each, items: 2, full: false }), false, each);
+    assert.equal(view.saveWindowShows({ viewing: true, from: each, view: "panels", items: 2, full: false }), false, each);
+    assert.equal(view.saveWindowShows({ viewing: false, from: each, view: each, items: 2, full: false }), false, each);
+  }
+  const ready = { answer: {}, loading: false, stopped: false, table: false, charts: 1 };
+  assert.equal(view.saveViewReady(ready), true);
+  for (const [name, value] of [["answer", null], ["answer", undefined], ["loading", true], ["stopped", true], ["table", true], ["charts", 0]]) {
+    assert.equal(view.saveViewReady({ ...ready, [name]: value }), false, `${name} ${value}`);
+  }
+});
+
+test("the window says why a picture cannot be saved: a table, a stop, no values, or no room to draw", () => {
+  const ready = { table: false, stopped: false, loading: false, answer: {}, empty: false, drawn: 2, parts: 2 };
+  assert.equal(view.saveProblem(ready), null);
+  assert.equal(view.saveProblem({ ...ready, table: true }), "view.save.table");
+  assert.equal(view.saveProblem({ ...ready, stopped: true }), "view.save.stopped");
+  assert.equal(view.saveProblem({ ...ready, empty: true }), "view.save.empty");
+  assert.equal(view.saveProblem({ ...ready, drawn: 1 }), "view.save.undrawn");
+  // A table first, then a stop; nothing while an answer is on its way, or
+  // before the first one, which the window says by itself.
+  assert.equal(view.saveProblem({ ...ready, table: true, stopped: true, empty: true, drawn: 0 }), "view.save.table");
+  assert.equal(view.saveProblem({ ...ready, stopped: true, drawn: 0 }), "view.save.stopped");
+  assert.equal(view.saveProblem({ ...ready, loading: true, drawn: 0 }), null);
+  assert.equal(view.saveProblem({ ...ready, answer: null, drawn: 0 }), null);
+  assert.equal(view.saveProblem({ ...ready, empty: true, drawn: 0 }), "view.save.empty");
+  // No part to draw is not a chart without room (all the panels as tables).
+  assert.equal(view.saveProblem({ ...ready, drawn: 0, parts: 0 }), null);
+  assert.equal(view.saveProblem({}), null);
+});
+
+test("a picture of another view leaves out the cross, the frame of the day chosen, and the point or the range chosen", () => {
+  assert.deepEqual(view.SAVE_LEFT_OUT_VIEWS, { compare: [".cross", ".calendar-cursor"], plot: [".plot-chosen"], spread: [".spread-chosen"] });
+});
+
+test("the name of a picture of another view has the years or the race days, the period, and the keys, nothing of the person's own", () => {
+  // The years as they were chosen, which can skip some, never as a range,
+  // oldest first (the checker's R2-2).
+  assert.equal(view.saveViewFileName("compare", { key: "dist", years: [2025, 2018, 2022] }), "garmin-compare_2018-2022-2025_dist.svg");
+  // The days of the races, never their names (the checker's answer 2).
+  assert.equal(view.saveViewFileName("compare", { key: "dist", days: ["2026-03-15", "2025-11-02"] }), "garmin-compare-races_2025-11-02_2026-03-15_dist.svg");
+  assert.equal(view.saveViewFileName("plot", { keys: ["pace", "hr"], start: "2025-10-22", end: "2026-10-21" }), "garmin-plot_2025-10-22_2026-10-21_pace-hr.svg");
+  assert.equal(view.saveViewFileName("spread", { key: "pace", start: "2025-10-22", end: "2026-10-21" }), "garmin-spread_2025-10-22_2026-10-21_pace.svg");
+  // No name where a part is not of its form, as for the panels.
+  for (const [kind, options] of [
+    ["compare", { key: "dist", days: ["合成の大会 1"] }],
+    ["compare", { key: "dist", days: ["2025-11-02", "2025/11/03"] }],
+    ["compare", { key: "dist", years: ["25"] }],
+    ["compare", { key: "dist" }],
+    ["compare", { key: "Dist", years: [2025] }],
+    ["compare", { key: null, years: [2025] }],
+    ["compare", { key: "null", years: [] }],
+    ["plot", { keys: ["pace", null], start: "2025-10-22", end: "2026-10-21" }],
+    ["plot", { keys: ["pace", "../x"], start: "2025-10-22", end: "2026-10-21" }],
+    ["plot", { keys: [], start: "2025-10-22", end: "2026-10-21" }],
+    ["spread", { key: "dist", start: "2025年", end: "2026-10-21" }],
+    ["spread", { key: "dist", start: null, end: "2026-10-21" }],
+    ["spread", { key: "けが", start: "2025-10-22", end: "2026-10-21" }],
+    ["panels", { key: "dist", start: "2025-10-22", end: "2026-10-21" }],
+  ]) {
+    assert.equal(view.saveViewFileName(kind, options), null, `${kind} ${JSON.stringify(options)}`);
+  }
+});
+
+test("the width of a range is written in the unit of its item, as the page writes a wider one", () => {
+  for (const [key, answer, ja, en] of [
+    ["dist", { first: 0, width: 1000, scale: 1 }, "1 km", "1 km"],
+    ["pace", { first: 6, width: 10, scale: 1000 }, "0:10 /km", "0:10 /km"],
+    ["time", { first: 0, width: 6000, scale: 1 }, "1:40", "1:40"],
+  ]) {
+    assert.equal(words(view.spreadWidthValue(key, answer, "ja"), "ja"), ja, key);
+    assert.equal(words(view.spreadWidthValue(key, answer, "en"), "en"), en, key);
+  }
+  // The words of a wider width are those of the width (Codex's review of the
+  // plan of R2: one way to write it).
+  const wide = { first: 0, width: 5000, scale: 1, counts: [1], limit: 200, widened: true };
+  assert.equal(words(view.spreadWide("dist", wide, "ja"), "ja"), `区切りが 200 を超えるので、幅を ${words(view.spreadWidthValue("dist", wide, "ja"), "ja")} にしました。`);
+});
+
+test("the line under a picture of another view says the years or the race days compared, the period, the width of a range, the types, and the version", () => {
+  const types = [
+    { name: "running", count: 10, running: true },
+    { name: "trail_running", count: 2, running: true },
+    { name: "cycling", count: 5, running: false },
+  ];
+  const pieces = (kind, options, language = "ja") =>
+    view
+      .saveViewFooter(kind, { answerTypes: null, types, version: "2.2.0", language, separator: language === "ja" ? "、" : ", ", daysSeparator: language === "ja" ? "、" : "; ", ...options })
+      .map((piece) => words(piece, language));
+  // The years as they were chosen, oldest first, with the grain of their
+  // answer (the checker's R2-2).
+  assert.deepEqual(pieces("compare", { years: [2025, 2018, 2022], grain: "week" }), [
+    "くらべた年 2018、2022、2025",
+    "まとめ方 週",
+    "数える種目 ランニングの種目すべて（2 つ）",
+    "Garmin Running Data Normalizer 2.2.0",
+  ]);
+  assert.deepEqual(pieces("compare", { years: [2026, 2025], grain: "day" }, "en"), [
+    "Years compared: 2025, 2026",
+    "Group by Day",
+    "Activity types counted: All running types (2)",
+    "Garmin Running Data Normalizer 2.2.0",
+  ]);
+  // The days of the races, never their names; their weeks are in the title.
+  assert.deepEqual(pieces("compare", { days: ["2026-03-15", "2025-11-02"] }), [
+    "くらべた大会の日 2025年11月2日、2026年3月15日",
+    "数える種目 ランニングの種目すべて（2 つ）",
+    "Garmin Running Data Normalizer 2.2.0",
+  ]);
+  // In English the days of the races are parted by semicolons, as their words
+  // have commas.
+  assert.equal(pieces("compare", { days: ["2026-03-15", "2025-11-02"] }, "en")[0], "Race days compared: November 2, 2025; March 15, 2026");
+  // The period of the points, with the types that the view asked for.
+  assert.deepEqual(pieces("plot", { start: "2025-10-22", end: "2026-10-21", answerTypes: ["cycling"] }), [
+    "期間 2025年10月22日〜2026年10月21日",
+    "数える種目 1 つの種目",
+    "Garmin Running Data Normalizer 2.2.0",
+  ]);
+  // The width of a range in the unit of its item (Codex's review of the plan
+  // of R2), also where it is not wider.
+  const range = { first: 0, width: 1000, scale: 1, counts: [1], limit: 200, widened: false };
+  assert.deepEqual(pieces("spread", { start: "2025-10-22", end: "2026-10-21", key: "dist", answer: range }), [
+    "期間 2025年10月22日〜2026年10月21日",
+    "区切りの幅 1 km",
+    "数える種目 ランニングの種目すべて（2 つ）",
+    "Garmin Running Data Normalizer 2.2.0",
+  ]);
+  assert.equal(pieces("spread", { start: "2025-10-22", end: "2026-10-21", key: "pace", answer: { first: 6, width: 10, scale: 1000 } }, "en")[1], "Width of a range: 0:10 /km");
+  // An output without activities, and no version.
+  assert.deepEqual(pieces("plot", { start: "2025-10-22", end: "2026-10-21", types: [], version: null }).slice(1), ["数える種目 アクティビティの記録がありません", "Garmin Running Data Normalizer"]);
+});
+
+test("the line after a saving of another view goes with what it shows too, and that of the panels with the key of R1", () => {
+  const base = { ticket: "t1", period: "1y", types: null, items: ["dist"], language: "ja" };
+  // The panels keep the key of R1, whatever else is given, so that a panel
+  // made big keeps the line (the checker's review of the handling of Codex's
+  // review of the plan of R2).
+  assert.equal(view.saveNoticeKey({ ...base, view: "panels", content: ["x"] }), view.saveNoticeKey(base));
+  const compare = { ...base, view: "compare", content: ["dist", "year", [2026, 2025], "rows", null, 24, null] };
+  const key = view.saveNoticeKey(compare);
+  assert.notEqual(key, view.saveNoticeKey(base));
+  assert.equal(view.saveNoticeKey({ ...compare }), key);
+  for (const content of [
+    ["hr", "year", [2026, 2025], "rows", null, 24, null],
+    ["dist", "race", ["r1", "r2"], "rows", null, 24, null],
+    ["dist", "year", [2026], "rows", null, 24, null],
+    ["dist", "year", [2026, 2025], "calendar", null, 24, null],
+    ["dist", "year", [2026, 2025], "rows", 3, 24, null],
+    ["dist", "year", [2026, 2025], "rows", null, 12, null],
+    ["dist", "year", [2026, 2025], "rows", null, 24, "max"],
+  ]) {
+    assert.notEqual(view.saveNoticeKey({ ...compare, content }), key, JSON.stringify(content));
+  }
+  for (const [name, value] of [["ticket", "t2"], ["period", "3y"], ["types", ["running"]], ["language", "en"]]) {
+    assert.notEqual(view.saveNoticeKey({ ...compare, [name]: value }), key, name);
+  }
+  assert.notEqual(view.saveNoticeKey({ ...base, view: "plot", content: ["pace", "hr"] }), view.saveNoticeKey({ ...base, view: "plot", content: ["pace", "cad"] }));
+  assert.notEqual(view.saveNoticeKey({ ...base, view: "spread", content: ["pace"] }), view.saveNoticeKey({ ...base, view: "plot", content: ["pace"] }));
 });

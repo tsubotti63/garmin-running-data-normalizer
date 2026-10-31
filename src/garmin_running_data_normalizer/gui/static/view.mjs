@@ -191,6 +191,7 @@ import {
   spreadWide,
   SAVE_ATTRIBUTES,
   SAVE_LEFT_OUT,
+  SAVE_LEFT_OUT_VIEWS,
   SAVE_MARKS,
   saveDays,
   saveFileName,
@@ -198,7 +199,12 @@ import {
   saveFrame,
   saveLines,
   saveNoticeKey,
+  saveProblem,
   saveShowable,
+  saveViewFileName,
+  saveViewFooter,
+  saveViewReady,
+  saveWindowShows,
   savedAttributes,
   savedPanels,
 } from "./view_flow.mjs";
@@ -354,6 +360,7 @@ const ui = {
   stopOther: byId("stop-other"),
   stopCode: byId("stop-code"),
   caveat: byId("caveat"),
+  stage: byId("stage"),
   // The menu of the other views (stage O1 of v2.2.0).
   otherViews: byId("other-views"),
   otherMenu: byId("other-views-menu"),
@@ -400,6 +407,12 @@ const ui = {
   saveProblem: byId("save-problem"),
   saveCancel: byId("save-cancel"),
   saveGo: byId("save-go"),
+  saveWhat: byId("save-what"),
+  saveScopeField: byId("save-scope-field"),
+  saveMarksField: byId("save-marks-field"),
+  compareSave: byId("compare-save"),
+  plotSave: byId("plot-save"),
+  spreadSave: byId("spread-save"),
   // The bar at the bottom of the page, above the windows (stage Q1).
   viewBar: document.querySelector(".view-bar"),
   marksLegend: byId("marks-legend"),
@@ -693,6 +706,8 @@ const state = {
   // choices for this time it opens, why it could not save, and the line
   // after a saving, as what it is said of.
   saveOpen: false,
+  // The view whose button opened the window (stage R2 of v2.2.0).
+  saveFrom: "panels",
   saveScope: "all",
   savePanel: null,
   saveColors: "light",
@@ -2140,6 +2155,7 @@ const SAVE_GAP = 8;
 const SAVE_LINE = 20;
 const SAVE_FOOT_LINE = 16;
 const SAVE_SWATCH = 26;
+const SAVE_TITLE_LINE = 22;
 
 // The chart of the page of a panel, or null where it has none (a table, or a
 // plot too small to draw).
@@ -2190,18 +2206,290 @@ function saveReady(viewing) {
   return { plan, ready };
 }
 
-// What the line after a saving is said of (the checker's R1-3).
+// The view whose picture a saving makes now: the panels, or the view that
+// takes their place (stage R2 of v2.2.0).
+function saveViewNow() {
+  return comparing() ? "compare" : plotting() ? "plot" : spreading() ? "spread" : "panels";
+}
+
+// The button of the saving of a view, and the row under which the window
+// opens from it: the row above the panels, or the first line of the bar.
+function saveButton(view) {
+  return { panels: ui.saveOpen, compare: ui.compareSave, plot: ui.plotSave, spread: ui.spreadSave }[view];
+}
+
+function saveRow(view) {
+  return view === "panels" ? ui.caveat : saveButton(view).closest(".compare-line");
+}
+
+// Whether the page shows an output now, as a saving checks it again.
+function viewingNow() {
+  return state.connected && !state.stopped && !state.quitting && state.view !== null && state.opening === null;
+}
+
+// What a saving from the window does now, which the window, the check at
+// the press, and the picture all go by (Codex's review of the plan of R2):
+// for the panels, the plan of R1; for another view, its title line, its
+// parts, the legend of a calendar, the notes under it, the name of the
+// file, and the line under it; whether it can save now, and why not.
+function saveTarget(viewing) {
+  const view = state.saveFrom;
+  if (view === "panels") {
+    const { plan, ready } = saveReady(viewing);
+    const drawn = plan.keys.filter((key) => savedChart(key) !== null).length;
+    const problem = saveProblem({ stopped: state.seriesStop !== null, loading: state.loading, answer: state.answer, drawn, parts: plan.keys.length });
+    return { view, plan, ready, name: plan.name, problem, loading: state.loading, marks: false };
+  }
+  const target = view === "compare" ? saveCompareTarget() : view === "plot" ? savePlotTarget() : saveSpreadTarget();
+  const charts = target.parts.filter((part) => part.source !== null).length;
+  target.ready =
+    viewing &&
+    saveViewNow() === view &&
+    target.name !== null &&
+    charts === target.parts.length &&
+    saveViewReady({ answer: target.answer, loading: target.loading, stopped: target.stopped, table: target.table, charts });
+  target.problem = saveProblem({
+    table: target.table,
+    stopped: target.stopped,
+    loading: target.loading,
+    answer: target.answer,
+    empty: target.empty,
+    drawn: charts,
+    parts: target.parts.length,
+  });
+  return target;
+}
+
+// A comparison: the answer drawn (a table draws no part), its title in the
+// words of the page, its rows or strips or one chart, the legend of a
+// calendar, and the axis; by race, the names of the races show (the
+// checker's answer 5).
+function saveCompareTarget() {
+  const compare = state.compare;
+  const answer = compare !== null && state.compareAnswer !== null && state.compareAnswer.key === compare.key ? state.compareAnswer : null;
+  const race = answer?.by === "race";
+  const years = answer === null || race ? [] : answer.years;
+  const days = answer === null || !race ? [] : answer.races.map((each) => each.day);
+  const shown = answer !== null && !ui.compareStack.hidden;
+  return {
+    view: "compare",
+    answer,
+    loading: state.compareLoading,
+    stopped: state.compareStop !== null,
+    table: compare?.table ?? false,
+    empty: false,
+    title: answer === null ? "" : compareSaveTitle(answer),
+    parts: shown ? compared.map(saveComparePart) : [],
+    legend: shown && !ui.compareLegend.hidden ? saveCalendarLegend() : null,
+    axis: shown && !ui.compareAxis.hidden ? ui.compareAxis.querySelector(":scope > svg") : null,
+    notes: [],
+    drop: SAVE_LEFT_OUT_VIEWS.compare.join(", "),
+    name: answer === null ? null : saveViewFileName("compare", { key: answer.key, years, days }),
+    footer:
+      answer === null
+        ? []
+        : saveViewFooter("compare", {
+            years,
+            days,
+            grain: answer.grain,
+            answerTypes: answer.types,
+            types: state.view?.types,
+            version: state.productVersion,
+            language: state.language,
+            separator: t("view.spoken_separator"),
+            daysSeparator: t("view.save.days_separator"),
+          }),
+    marks: race,
+  };
+}
+
+// The title of a picture of a comparison in one line, in the words of the
+// page (the checker's answer 3): what is compared by what, how it shows, its
+// month or the weeks before its races, and its line where it has a choice.
+function compareSaveTitle(answer) {
+  const race = answer.by === "race";
+  const mode = compareModeNow();
+  const words = [
+    t("view.compare.title_by", { item: itemName(answer.key), by: t(race ? "view.compare.by.race" : "view.compare.by.year") }),
+    mode === "rows" && race ? t("view.compare.mode.rows_race") : t(`view.compare.mode.${mode}`),
+    race ? t("view.compare.weeks_option", { n: answer.weeks }) : answer.month === null ? t("view.compare.month_all") : describe(compareSlotName(answer.month - 1, "month", null, state.language)),
+  ];
+  if (!ui.compareSeriesField.hidden && ui.compareSeries.selectedIndex >= 0) {
+    words.push(ui.compareSeries.selectedOptions[0].textContent);
+  }
+  return words.join(t("view.save.separator"));
+}
+
+// A part of a picture of a comparison: the words of the head of its row, its
+// strip, or its one chart as the page shows them (the name, the days cut, the
+// value, the unit, the kind, and the keys with their swatches), its chart,
+// and the words that the page shows in place of an empty chart (Codex's
+// review of the plan of R2); the reading of the day chosen is not taken.
+function saveComparePart(entry) {
+  const head = entry.section.querySelector(entry.kind === "calendar" ? ".calendar-side" : ".panel-head");
+  const pieces = [];
+  for (const node of head?.children ?? []) {
+    if (node.matches("h4")) {
+      pieces.push({ text: node.textContent, className: "save-name" });
+    } else if (node.matches(".panel-unit, .compare-whole")) {
+      pieces.push({ text: node.textContent, className: "save-unit" });
+    } else if (node.matches(".panel-kind")) {
+      pieces.push({ text: node.textContent, className: "save-kind" });
+    } else if (node.matches(".panel-keys")) {
+      for (const key of node.querySelectorAll(".key")) {
+        pieces.push({ text: key.textContent, className: "save-key", swatch: () => key.querySelector("svg").cloneNode(true) });
+      }
+    }
+  }
+  return {
+    pieces: pieces.filter((piece) => piece.text !== ""),
+    source: entry.plot.querySelector(":scope > svg"),
+    empty: entry.plot.querySelector(".panel-empty")?.textContent ?? null,
+  };
+}
+
+// The legend of a calendar as the page shows it above its strips, but the
+// rule of its steps without where the page reads the values, which a picture
+// cannot do (Codex's review of the plan of R2).
+function saveCalendarLegend() {
+  const pieces = [];
+  const notes = [];
+  for (const node of ui.compareLegend.children) {
+    if (node.matches(".calendar-key")) {
+      pieces.push({ text: node.textContent, className: "save-key", swatch: () => node.querySelector("svg").cloneNode(true), swatchSize: [12, 12] });
+    } else if (node.matches(".calendar-note")) {
+      notes.push(node.textContent === t("view.compare.calendar_note") ? t("view.compare.calendar_steps") : node.textContent);
+    } else {
+      pieces.push({ text: node.textContent, className: "save-unit" });
+    }
+  }
+  return { pieces: pieces.filter((piece) => piece.text !== ""), notes };
+}
+
+// Two items plotted: the answer drawn as a chart, its title in the words of
+// the page, and the lines under it that the page shows (the points, those
+// cut, and that it shows no relation, which the page never hides).
+function savePlotTarget() {
+  const answer = plotAnswerNow();
+  const asked = state.plotAsked;
+  const drawnNow = answer !== null && plotContext !== null && plotContext.answer === answer;
+  return {
+    view: "plot",
+    answer,
+    loading: state.plotLoading,
+    stopped: state.plotStop !== null,
+    table: state.plot?.table ?? false,
+    empty: answer !== null && !answer.points.length,
+    title: asked === null ? "" : t("view.plot.title", { x: itemName(asked.x), y: itemName(asked.y) }),
+    parts: [{ pieces: [], source: drawnNow ? ui.plotBody.querySelector(".plot-points > svg") : null, empty: null }],
+    legend: null,
+    axis: null,
+    notes: [...saveNotesOf([ui.plotCount, ui.plotCut]), t("view.plot.caveat")],
+    drop: SAVE_LEFT_OUT_VIEWS.plot.join(", "),
+    name: answer === null ? null : saveViewFileName("plot", { keys: [asked.x, asked.y], start: answer.start, end: answer.end }),
+    footer:
+      answer === null
+        ? []
+        : saveViewFooter("plot", { start: answer.start, end: answer.end, answerTypes: asked.types, types: state.view?.types, version: state.productVersion, language: state.language }),
+    marks: false,
+  };
+}
+
+// A distribution, as two items plotted: the lines under it are the
+// activities counted, the wider width, and that a smaller pace is faster.
+function saveSpreadTarget() {
+  const answer = spreadAnswerNow();
+  const asked = state.spreadAsked;
+  const drawnNow = answer !== null && spreadContext !== null && spreadContext.answer === answer;
+  return {
+    view: "spread",
+    answer,
+    loading: state.spreadLoading,
+    stopped: state.spreadStop !== null,
+    table: state.spread?.table ?? false,
+    empty: answer !== null && !answer.counts.length,
+    title: asked === null ? "" : t("view.spread.title", { item: itemName(asked.item) }),
+    parts: [{ pieces: [], source: drawnNow ? ui.spreadBody.querySelector(".spread-bars > svg") : null, empty: null }],
+    legend: null,
+    axis: null,
+    notes: saveNotesOf([ui.spreadCount, ui.spreadWide, ui.spreadFaster]),
+    drop: SAVE_LEFT_OUT_VIEWS.spread.join(", "),
+    name: answer === null ? null : saveViewFileName("spread", { key: asked.item, start: answer.start, end: answer.end }),
+    footer:
+      answer === null
+        ? []
+        : saveViewFooter("spread", {
+            start: answer.start,
+            end: answer.end,
+            key: asked.item,
+            answer,
+            answerTypes: asked.types,
+            types: state.view?.types,
+            version: state.productVersion,
+            language: state.language,
+          }),
+    marks: false,
+  };
+}
+
+// The words of the lines that show under a chart.
+function saveNotesOf(nodes) {
+  return nodes.filter((node) => node.closest("[hidden]") === null && node.textContent !== "").map((node) => node.textContent);
+}
+
+// What the line after a saving is said of (the checker's R1-3); another view
+// adds what it shows (stage R2 of v2.2.0).
 function saveNoticeNow() {
+  const view = saveViewNow();
   return saveNoticeKey({
     ticket: state.view?.view ?? null,
     period: periodRequest(state.period, state.range),
     types: typesRequest(state.counted, state.view?.types),
     items: state.items,
     language: state.language,
+    view,
+    content: saveContent(view),
   });
 }
 
+// What a picture of another view shows, by which the line after its saving
+// goes: the item, what it is compared by, the years or the races, how it
+// shows, the month or the weeks, and the line; the two items plotted; the
+// item of a distribution (the checker's review of the handling of Codex's
+// review of the plan of R2), and the grouping of a comparison (Codex's
+// review of the diff of R2).
+function saveContent(view) {
+  if (view === "compare" && state.compare !== null) {
+    const by = compareByNow();
+    return [state.compare.key, by, by === "race" ? state.compare.races : state.compare.years, compareModeNow(), compareMonthNow(), state.compareWeeks, state.compare.series, state.compare.grain];
+  }
+  if (view === "plot") {
+    return [state.plotPair.x, state.plotPair.y];
+  }
+  return view === "spread" ? [state.spreadItem] : null;
+}
+
+// The window opens under the row of its button, at its right end, as under
+// the row above the panels in R1; placed again each time the page draws, the
+// window changes its size, or a chart is drawn again, as the language or the
+// wrapping of the row may move the row; not out of the left of the stage
+// (Codex's review of the plan of R2). Its width is that of R1, but not wider
+// than the stage, which hides what goes out of it (Codex's review of the diff
+// of R2), and its place in the fractions of a pixel that R1 had (the checker).
 function fitSaveWindow() {
+  if (!ui.savePop.hidden) {
+    const stage = ui.stage.getBoundingClientRect();
+    const row = saveRow(state.saveFrom).getBoundingClientRect();
+    const pad = parseFloat(getComputedStyle(ui.stage).paddingLeft) || 0;
+    ui.savePop.style.maxWidth = `${Math.max(0, stage.width - 2 * pad)}px`;
+    const width = ui.savePop.getBoundingClientRect().width;
+    let right = stage.right - row.right;
+    if (stage.width - right - width < pad) {
+      right = stage.width - pad - width;
+    }
+    ui.savePop.style.top = `${row.bottom - stage.top + ui.stage.scrollTop}px`;
+    ui.savePop.style.right = `${Math.max(0, right)}px`;
+  }
   fitPop(ui.savePop);
 }
 
@@ -2213,20 +2501,65 @@ function renderSave(viewing) {
   if (state.view === null && state.stop !== null) {
     state.saveOpen = false;
   }
-  const showable = recapShowable(viewing);
+  // The window goes with the view of its button (stage R2 of v2.2.0).
+  const view = saveViewNow();
+  if (state.saveOpen && state.saveFrom !== view) {
+    state.saveOpen = false;
+  }
+  const showable = saveWindowShows({ viewing, from: state.saveFrom, view, items: state.items.length, full: state.full });
   ui.saveOpen.disabled = !viewing || !state.items.length;
-  ui.saveOpen.setAttribute("aria-expanded", String(state.saveOpen && showable));
+  for (const each of ["compare", "plot", "spread"]) {
+    saveButton(each).disabled = !viewing;
+  }
+  for (const each of ["panels", "compare", "plot", "spread"]) {
+    saveButton(each).setAttribute("aria-expanded", String(state.saveOpen && showable && state.saveFrom === each));
+  }
   const focused = ui.savePop.contains(document.activeElement);
   ui.savePop.hidden = !state.saveOpen || !showable;
   if (ui.savePop.hidden) {
     if (focused) {
       const shown = (node) => node.closest("[hidden]") === null;
-      const target = !ui.saveOpen.disabled && shown(ui.saveOpen) ? ui.saveOpen : [ui.stopHeading, ui.emptyHeading].find(shown);
+      const button = saveButton(state.saveFrom);
+      const target = !button.disabled && shown(button) ? button : [ui.stopHeading, ui.emptyHeading].find(shown);
       target?.focus();
     }
     return;
   }
-  const { plan, ready } = saveReady(viewing);
+  const target = saveTarget(viewing);
+  const panels = target.view === "panels";
+  // Another view saves its one picture: no panels or marks to choose, and
+  // what it saves in one line (the plan of R2).
+  ui.saveScopeField.hidden = !panels;
+  ui.saveMarksField.hidden = !panels;
+  ui.saveWhat.hidden = panels;
+  setText(ui.saveWhat, panels ? "" : t("view.save.what", { name: target.title }));
+  ui.saveLight.checked = state.saveColors === "light";
+  ui.saveScreen.checked = state.saveColors === "screen";
+  setText(ui.saveName, target.name ?? "—");
+  ui.saveGo.disabled = !target.ready;
+  const warn = t("view.save.warn");
+  const gone = panels ? renderSavePanels(target.plan) : false;
+  // By race, the names of the races, which are those of the marks, show
+  // always (the checker's answer 5 of the plan of R2).
+  setText(ui.saveWarn, (panels ? ui.saveMarks.checked : target.marks) ? `${warn}${state.language === "ja" ? "" : " "}${t("view.save.warn_marks")}` : warn);
+  const problem = state.saveProblem ?? (gone ? "view.save.gone" : null) ?? target.problem;
+  setText(ui.saveProblem, problem !== null ? saveProblemText(problem) : target.loading ? t("view.loading") : "");
+  fitSaveWindow();
+}
+
+// The words of why the window cannot save: of a view shown as a table, with
+// the name of the button that shows its chart again.
+function saveProblemText(problem) {
+  if (problem !== "view.save.table") {
+    return t(problem);
+  }
+  const calendar = state.saveFrom === "compare" && compareModeNow() === "calendar";
+  return t(problem, { button: t(calendar ? "view.compare.table_calendar" : "view.panel.chart") });
+}
+
+// The choices of the panels (stage R1): which panels, and the marks; true
+// where the panel chosen no longer shows.
+function renderSavePanels(plan) {
   setText(ui.saveAllLabel, t("view.save.all", { n: formatNumber(plan.charts.length) }));
   const options = plan.charts.map((key) => [key, itemName(key)]);
   const signature = JSON.stringify(options);
@@ -2254,8 +2587,6 @@ function renderSave(viewing) {
   ui.savePanel.disabled = !plan.charts.length;
   ui.saveTables.hidden = !plan.tables.length;
   setText(ui.saveTables, !plan.tables.length ? "" : plan.charts.length ? t("view.save.tables", { n: formatNumber(plan.tables.length) }) : t("view.save.all_tables"));
-  ui.saveLight.checked = state.saveColors === "light";
-  ui.saveScreen.checked = state.saveColors === "screen";
   if (!plan.marksDrawn) {
     // Chosen again where marks show again, so that their names never go in
     // as chosen before (Codex's review of the diff of R1).
@@ -2264,13 +2595,7 @@ function renderSave(viewing) {
   ui.saveMarks.disabled = !plan.marksDrawn;
   ui.saveMarks.checked = plan.marksDrawn && state.saveMarks;
   ui.saveMarksNone.hidden = plan.marksDrawn;
-  setText(ui.saveName, plan.name ?? "—");
-  const warn = t("view.save.warn");
-  setText(ui.saveWarn, ui.saveMarks.checked ? `${warn}${state.language === "ja" ? "" : " "}${t("view.save.warn_marks")}` : warn);
-  ui.saveGo.disabled = !ready;
-  const problem = state.saveProblem ?? (gone ? "view.save.gone" : null);
-  setText(ui.saveProblem, problem !== null ? t(problem) : state.loading ? t("view.loading") : "");
-  fitSaveWindow();
+  return gone;
 }
 
 // The line after a saving, in the bar at the bottom, until the output, the
@@ -2287,10 +2612,12 @@ function renderSaveNotice() {
 // the first choices, which nothing remembers, so that the names of the marks
 // do not go in as chosen before (the plan of R1); the other windows at its
 // place close, and the line after a saving goes.
-function openSave(open) {
+function openSave(open, from = state.saveFrom) {
   state.saveOpen = open;
   state.saveProblem = null;
   if (open) {
+    // The view of the button, under whose row the window opens (stage R2).
+    state.saveFrom = from;
     state.saveScope = "all";
     state.savePanel = null;
     state.saveColors = "light";
@@ -2304,7 +2631,7 @@ function openSave(open) {
     }
   }
   render();
-  (open ? ui.saveTitle : ui.saveOpen).focus();
+  (open ? ui.saveTitle : saveButton(state.saveFrom)).focus();
 }
 
 // A choice of the window.
@@ -2321,12 +2648,11 @@ function changeSave(change) {
 // the reason and the focus on its button, and the line after a saving does
 // not show (Codex's review of the plan of R1).
 function saveImage() {
-  const viewing = state.connected && !state.stopped && !state.quitting && state.view !== null && state.opening === null;
-  const { plan, ready } = saveReady(viewing);
+  const target = saveTarget(viewingNow());
   let problem = null;
-  if (state.saveScope === "one" && !plan.keys.length) {
+  if (target.view === "panels" && state.saveScope === "one" && !target.plan.keys.length) {
     problem = "view.save.gone";
-  } else if (!ready || plan.name !== ui.saveName.textContent) {
+  } else if (!target.ready || target.name !== ui.saveName.textContent) {
     problem = "view.save.changed";
   }
   if (problem === null) {
@@ -2334,11 +2660,11 @@ function saveImage() {
     let address = null;
     try {
       stage = saveStage(state.saveColors === "light");
-      const file = saveFile(stage, plan);
+      const file = target.view === "panels" ? saveFile(stage, target.plan) : saveViewFile(stage, target);
       address = URL.createObjectURL(new Blob([file], { type: "image/svg+xml;charset=utf-8" }));
       const link = document.createElement("a");
       link.href = address;
-      link.download = plan.name;
+      link.download = target.name;
       stage.append(link);
       link.click();
     } catch {
@@ -2358,7 +2684,7 @@ function saveImage() {
     state.saveNotice = saveNoticeNow();
   }
   render();
-  (problem === null ? ui.saveOpen : ui.saveGo).focus();
+  (problem === null ? saveButton(state.saveFrom) : ui.saveGo).focus();
 }
 
 // The box out of the page that a picture is made in, in the light colors
@@ -2410,8 +2736,11 @@ function saveWords(svg, lines, top, height, measure) {
     for (const piece of line) {
       let x = SAVE_MARGIN + piece.x;
       if (piece.swatch) {
-        const swatch = lineSwatch(piece.swatch, piece.points);
-        for (const [name, value] of [["x", x], ["y", y - 9], ["width", 22], ["height", 8]]) {
+        // Each piece makes its own swatch, as the page does (Codex's review
+        // of the plan of R2), in its size, by the middle of the words.
+        const swatch = piece.swatch();
+        const [width, height] = piece.swatchSize ?? [22, 8];
+        for (const [name, value] of [["x", x], ["y", y - 5 - height / 2], ["width", width], ["height", height]]) {
           swatch.setAttribute(name, String(value));
         }
         svg.append(swatch);
@@ -2432,17 +2761,7 @@ function saveWords(svg, lines, top, height, measure) {
 // and the line under it. Its styles are written in once it holds everything
 // (Codex's review of the plan of R1).
 function saveFile(stage, plan) {
-  const svg = svgElement("svg", { width: SAVE_WIDTH });
-  stage.append(svg);
-  const ground = svgElement("rect", { class: "save-surface", x: 0, y: 0, width: SAVE_WIDTH });
-  svg.append(ground);
-  const probe = svgElement("text");
-  svg.append(probe);
-  const measure = (words, piece) => {
-    probe.setAttribute("class", piece.className);
-    probe.textContent = words;
-    return probe.getComputedTextLength() + (piece.swatch ? SAVE_SWATCH : 0);
-  };
+  const { svg, ground, probe, measure } = saveBegin(stage);
   const answer = state.answer;
   const marks = state.saveMarks && plan.marksDrawn;
   const drop = [...SAVE_LEFT_OUT, ...(marks ? [] : SAVE_MARKS)].join(", ");
@@ -2454,7 +2773,7 @@ function saveFile(stage, plan) {
       { text: heading.name, className: "save-name" },
       { text: heading.unit, className: "save-unit" },
       ...(heading.kind === null ? [] : [{ text: heading.kind, className: "save-kind" }]),
-      ...heading.keys.map((line) => ({ text: line.name, className: "save-key", swatch: line.style, points: heading.points })),
+      ...heading.keys.map((line) => ({ text: line.name, className: "save-key", swatch: () => lineSwatch(line.style, heading.points) })),
     ].filter((piece) => piece.text !== "");
     y = saveWords(svg, saveLines(pieces, SAVE_ROOM, SAVE_GAP, measure), y, SAVE_LINE, measure) + 6;
     const top = y;
@@ -2480,7 +2799,6 @@ function saveFile(stage, plan) {
     y += savePart(svg, stage, axis, y, "");
   }
   const days = saveDays(answer);
-  const separator = t("view.save.separator");
   const footer = saveFooter({
     start: days.start,
     end: days.end,
@@ -2489,9 +2807,75 @@ function saveFile(stage, plan) {
     types: state.view?.types,
     version: state.productVersion,
     language: state.language,
-  }).map((piece) => describe(piece));
-  const footPieces = footer.map((words, index) => ({ text: index < footer.length - 1 ? `${words}${separator}` : words, className: "save-footer" }));
-  y = saveWords(svg, saveLines(footPieces, SAVE_ROOM, 0, measure), y + 6, SAVE_FOOT_LINE, measure) + SAVE_MARGIN + 4;
+  });
+  return saveEnd(svg, ground, probe, y, footer, measure);
+}
+
+// A picture of another view (stage R2 of v2.2.0): its title line; the legend
+// of a calendar; each part with the words of its head, its chart copied from
+// the page without what is left out, and the words of an empty chart; the
+// axis of a comparison; the lines under the chart; and the line under the
+// picture, in the frame of R1 (saveEnd).
+function saveViewFile(stage, target) {
+  const { svg, ground, probe, measure } = saveBegin(stage);
+  let y = saveWords(svg, saveLines([{ text: target.title, className: "save-title" }], SAVE_ROOM, SAVE_GAP, measure), SAVE_MARGIN, SAVE_TITLE_LINE, measure) + 8;
+  if (target.legend !== null) {
+    y = saveWords(svg, saveLines(target.legend.pieces, SAVE_ROOM, SAVE_GAP, measure), y, SAVE_LINE, measure) + 2;
+    y = saveNotes(svg, target.legend.notes, y, measure) + 8;
+  }
+  for (const part of target.parts) {
+    if (part.pieces.length) {
+      y = saveWords(svg, saveLines(part.pieces, SAVE_ROOM, SAVE_GAP, measure), y, SAVE_LINE, measure) + 6;
+    }
+    const top = y;
+    y += savePart(svg, stage, part.source, top, target.drop);
+    if (part.empty !== null) {
+      const empty = svgElement("text", { class: "save-empty", x: SAVE_WIDTH / 2, y: ((top + y) / 2).toFixed(1), "text-anchor": "middle" });
+      empty.textContent = part.empty;
+      svg.append(empty);
+    }
+    y += 10;
+  }
+  if (target.axis !== null) {
+    y += savePart(svg, stage, target.axis, y, "");
+  }
+  y = saveNotes(svg, target.notes, y, measure);
+  return saveEnd(svg, ground, probe, y, target.footer, measure);
+}
+
+// The lines under a chart or a legend, one note a line where it fits.
+function saveNotes(svg, notes, y, measure) {
+  let bottom = y;
+  for (const note of notes) {
+    bottom = saveWords(svg, saveLines([{ text: note, className: "save-caption" }], SAVE_ROOM, 0, measure), bottom, SAVE_FOOT_LINE, measure) + 2;
+  }
+  return bottom;
+}
+
+// The beginning of a picture: its element in the box, its ground, and the
+// measure of its words.
+function saveBegin(stage) {
+  const svg = svgElement("svg", { width: SAVE_WIDTH });
+  stage.append(svg);
+  const ground = svgElement("rect", { class: "save-surface", x: 0, y: 0, width: SAVE_WIDTH });
+  svg.append(ground);
+  const probe = svgElement("text");
+  svg.append(probe);
+  const measure = (words, piece) => {
+    probe.setAttribute("class", piece.className);
+    probe.textContent = words;
+    return probe.getComputedTextLength() + (piece.swatch ? SAVE_SWATCH : 0);
+  };
+  return { svg, ground, probe, measure };
+}
+
+// The end of a picture: the line under it, its frame, and its styles,
+// written once it holds everything (Codex's review of the plan of R1).
+function saveEnd(svg, ground, probe, top, footer, measure) {
+  const separator = t("view.save.separator");
+  const words = footer.map((piece) => describe(piece));
+  const footPieces = words.map((each, index) => ({ text: index < words.length - 1 ? `${each}${separator}` : each, className: "save-footer" }));
+  const y = saveWords(svg, saveLines(footPieces, SAVE_ROOM, 0, measure), top + 6, SAVE_FOOT_LINE, measure) + SAVE_MARGIN + 4;
   probe.remove();
   svg.setAttribute("height", String(Math.ceil(y)));
   svg.setAttribute("viewBox", `0 0 ${SAVE_WIDTH} ${Math.ceil(y)}`);
@@ -2535,7 +2919,8 @@ function writeSaveStyles(svg) {
       continue;
     }
     const around = node === svg ? null : computed.get(node.parentNode)?.values ?? null;
-    for (const [attribute, value] of savedAttributes(values, around)) {
+    const own = SAVE_ATTRIBUTES.map(([, attribute]) => attribute).filter((attribute) => node.hasAttribute(attribute));
+    for (const [attribute, value] of savedAttributes(values, around, own)) {
       node.setAttribute(attribute, value);
     }
     node.removeAttribute("class");
@@ -3703,6 +4088,12 @@ function scheduleRedraw() {
     if (!ui.spread.hidden) {
       renderSpreadBody(spreadAnswerNow());
     }
+    // The window of the saving reads the charts drawn again, while it shows
+    // only, so that the focus stays where it is (Codex's review of the plan
+    // of R2 and the checker's review of its handling).
+    if (state.saveOpen) {
+      renderSave(viewingNow());
+    }
   });
 }
 
@@ -4379,6 +4770,9 @@ async function requestCompare(again = true) {
   const seq = ++state.compareSeq;
   const by = compareByNow();
   const choices = raceChoices();
+  // The activity types asked for, kept with the answer of this generation,
+  // which the line under a picture says (Codex's review of the plan of R2).
+  const types = typesRequest(state.counted, state.view.types);
   compare.races = racesKept(compare.races, choices);
   // Its grouping, where what it compares by changed by another way (an
   // output opened again for a new ticket).
@@ -4423,8 +4817,9 @@ async function requestCompare(again = true) {
             whole,
             answers: new Map(races.map((race, index) => [race.id, answers[2 * index]])),
             wholes: new Map(races.map((race, index) => [race.id, answers[2 * index + 1]])),
+            types,
           }
-        : { seq, key, by, weeks: null, month, grain, years, races: [], whole, answers: new Map(years.map((year, index) => [year, answers[index]])), wholes: null };
+        : { seq, key, by, weeks: null, month, grain, years, races: [], whole, answers: new Map(years.map((year, index) => [year, answers[index]])), wholes: null, types };
     state.compareStop = null;
   } catch (error) {
     if (seq !== state.compareSeq) {
@@ -6053,10 +6448,6 @@ function renderStage(live) {
     drawnSignature = null;
     overviewSignature = null;
   }
-  // The window of the saving after the panels, as it reads their charts
-  // (Codex's review of the diff of R1).
-  renderSave(viewing);
-  renderSaveNotice();
 }
 
 // The items of the first time, by their names.
@@ -7166,6 +7557,10 @@ function render() {
   renderCompare(live);
   renderPlot(live);
   renderSpread(live);
+  // The window of the saving after every view, as it reads their charts
+  // (Codex's reviews of the diff of R1 and of the plan of R2).
+  renderSave(live && state.view !== null && state.opening === null);
+  renderSaveNotice();
   renderFooter(live);
   renderHelp();
 }
@@ -7465,7 +7860,11 @@ function connect() {
     }
   });
   // Saving as an image (stage R1 of v2.2.0): Escape in the window closes it.
-  ui.saveOpen.addEventListener("click", () => openSave(!state.saveOpen));
+  ui.saveOpen.addEventListener("click", () => openSave(!(state.saveOpen && state.saveFrom === "panels"), "panels"));
+  // The bars of the other views (stage R2 of v2.2.0).
+  for (const each of ["compare", "plot", "spread"]) {
+    saveButton(each).addEventListener("click", () => openSave(!(state.saveOpen && state.saveFrom === each), each));
+  }
   ui.saveClose.addEventListener("click", () => openSave(false));
   ui.saveCancel.addEventListener("click", () => openSave(false));
   ui.saveAll.addEventListener("change", () => changeSave({ saveScope: "all" }));
