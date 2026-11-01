@@ -315,6 +315,10 @@ class GuiCatalogTest(unittest.TestCase):
                 ("view.help.other_shoes", "view.other.shoes"),
                 ("view.help.other_shoes", "view.panel.table"),
                 ("view.help.other_shoes", "view.panel.unbig"),
+                # v2.2.0 T2: the help of the conditions names their button
+                # and the activity types, in whose row it is.
+                ("view.help.conditions_text", "view.conditions.button"),
+                ("view.help.conditions_text", "view.types.label"),
                 # v2.2.0 Q2: the help of the summary names its button and a
                 # period of years.
                 ("view.help.recap_text", "view.recap.button"),

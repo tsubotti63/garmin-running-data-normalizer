@@ -203,31 +203,34 @@ person (`view_layouts`: an id that the server gives, a name of 1 to 30
 characters, and one to six items; up to 20), the built-in layouts hidden
 (`view_layouts_hidden`), the layout used last (`view_layout`), the period and
 the grouping (`view_period` and `view_grain`, by the rules of a request of the
-numbers), the activity types counted (`view_types`) when the whole choice
-can be kept: up to 64 names of up to 128 characters, each once, without a
-control or direction character, and from stage L1 how one item is compared by
-year (`view_compare_mode`: rows, overlay, or cumulative) and in which month
-(`view_compare_month`: 1 to 12, an integer; none for the whole year). A request of the numbers takes any choice of
-the types of the output, as 2.1.0 did; a choice that the settings cannot keep
-whole is not remembered, and the one before is forgotten, so that the next
-opening counts the types counted at first, never other types than those
-chosen. A value of another form of one of these keys is left out alone, and
-of the layouts, the one layout. A name of a layout is kept in NFC without the
-spaces around it, without a control character, a separator of lines or
-paragraphs, or a character that changes the direction of the text; two names
-are compared in NFKC and casefold, and a name of the person cannot be that of
-a built-in layout in either language or of another of the person's layouts.
-The layouts change one at a time under the lock of the server: the page sends
-one change (add, rename, overwrite, move, remove, hide, show, or reset), and
-the server reads the file, changes it, and writes it, so that two tabs keep
-both changes. A layout removed or hidden is no longer the one used last.
-Settings whose file would be over 64 KiB are not written (a fix of 2.1.0,
-which wrote such a file and then could not read it): the file before stays,
-and the page is told that they were not remembered. 2.1.0 and 2.0.x take a
-file of format 2 as one of a newer version: they do not use it and never write
-over it, and start as a first launch, so that what 2.2.0 remembers is not lost
-by going back; their "Forget the remembered settings…" removes it, with the
-layouts.
+numbers), the activity types counted (`view_types`) when the whole choice can
+be kept: up to 64 names of up to 128 characters, each once, without a control
+or direction character, and from stage L1 how one item is compared by year
+(`view_compare_mode`: rows, overlay, or cumulative) and in which month
+(`view_compare_month`: 1 to 12, an integer; none for the whole year), and from
+stage T1 the conditions on the activities (`view_conditions`, in the form of a
+request of the numbers: the words of the name as written, the distance in
+whole metres, and the duration in whole minutes, each from and to), kept whole
+or not at all. A request of the numbers takes any choice of the types of the
+output, as 2.1.0 did; a choice that the settings cannot keep whole is not
+remembered, and the one before is forgotten, so that the next opening counts
+the types counted at first, never other types than those chosen. A value of
+another form of one of these keys is left out alone, and of the layouts, the
+one layout. A name of a layout is kept in NFC without the spaces around it,
+without a control character, a separator of lines or paragraphs, or a
+character that changes the direction of the text; two names are compared in
+NFKC and casefold, and a name of the person cannot be that of a built-in
+layout in either language or of another of the person's layouts. The layouts
+change one at a time under the lock of the server: the page sends one change
+(add, rename, overwrite, move, remove, hide, show, or reset), and the server
+reads the file, changes it, and writes it, so that two tabs keep both changes.
+A layout removed or hidden is no longer the one used last. Settings whose file
+would be over 64 KiB are not written (a fix of 2.1.0, which wrote such a file
+and then could not read it): the file before stays, and the page is told that
+they were not remembered. 2.1.0 and 2.0.x take a file of format 2 as one of a
+newer version: they do not use it and never write over it, and start as a
+first launch, so that what 2.2.0 remembers is not lost by going back; their
+"Forget the remembered settings…" removes it, with the layouts.
 
 The Snapshot Store (stage B4a): the second box shows the place of the store
 and its Snapshots, in the order of the times of their Exports, with the
@@ -456,12 +459,13 @@ Local Snapshot Store and new output folders
 - From v2.1.0 the server also opens an output for the view page and answers
   its numbers in its own process (`/api/view/open` and `/api/view/series`),
   and remembers the colors and the items of the view page
-  (`/api/settings/theme` and `/api/settings/view`); see
-  [The view page](#the-view-page-v210). From v2.2.0 `/api/settings/view` also
-  takes the layout used last, the period, the grouping, the activity types,
-  and how one item is compared by year and in which month,
-  `/api/settings/layouts` changes the layouts one change at a time, and
-  `/api/view/open` gives the built-in layouts by their ids and items.
+  (`/api/settings/theme` and `/api/settings/view`); see [The view
+  page](#the-view-page-v210). From v2.2.0 `/api/settings/view` also takes the
+  layout used last, the period, the grouping, the activity types, how one item
+  is compared by year and in which month, and the conditions on the
+  activities, `/api/settings/layouts` changes the layouts one change at a
+  time, and `/api/view/open` gives the built-in layouts by their ids and
+  items.
 - Runs (`run-all`, `snapshot register`, and `snapshot run-all`) run in a child
   process started from an argument list (`sys.executable`, `-P`, `-m`, an
   internal GUI module, and the same arguments that the CLI takes, with absolute
@@ -744,10 +748,11 @@ the page's own folder list without one (stage B4a).
 
 Version 2.1.0 adds a page that shows the numbers of an output that this
 version made, as panels on one time axis (stages G1 to G3b-2, decisions
-20261026-9 to 20261026-11). It reads outputs only, sends nothing, and does
-not interpret the numbers: it does not say what a value means, which item
-causes another, or what to do. The `series` command of the CLI writes the
-same numbers to a CSV file, with the same functions (stage G2).
+20261026-9 to 20261026-11). It reads outputs only, sends nothing, and does not
+interpret the numbers: it does not say what a value means, which item causes
+another, or what to do. The `series` command of the CLI writes the same
+numbers to a CSV file, with the same functions (stage G2); it takes no
+conditions on the activities, which the page has from v2.2.0 (stage T1).
 
 Place and tabs:
 
@@ -795,7 +800,15 @@ Reading an output:
   the items and checked in the same way (one that the manifest leaves out, or
   that changed, stops the reading with `OUTPUT_CHANGED`), within what the
   items leave of those limits: where they do not fit, the shoes alone are left
-  out and the page opens (see By shoes below).
+  out and the page opens (see By shoes below). After the shoes, it reads the
+  file of the names of the activities, `normalized/activities.json`, in the
+  same way: where it does not fit what is left of the limits, the names alone
+  are left out and the page opens; one that the manifest leaves out, of
+  another form, or that changed after the checks stops the reading with
+  `OUTPUT_CHANGED` (a change before them is `HANDOFF_INVALID`; see Conditions
+  on the activities below). The series command parses neither the shoes nor
+  the names (the checks before the reading read every file of the manifest
+  whole).
 - Rows without a date, and rows dated after today in the output's timezone,
   are counted and left out: one date far ahead, from a wrong clock, would
   stretch the time axis and leave the last years empty.
@@ -821,22 +834,24 @@ Items and numbers:
 - 38 items in four groups (Training (per activity), Running form (FIT), Body
   (daily), and Garmin estimates), with the months that have data. Up to six
   panels are shown.
-- The activity types counted are those of running at first, the names that
-  the link between an activity and a FIT session counts as running, and can
-  be chosen again; they apply to every panel.
+- The activity types counted are those of running at first, the names that the
+  link between an activity and a FIT session counts as running, and can be
+  chosen again; they apply to the panels of the training and running-form
+  items, and so, from v2.2.0, do the conditions on the activities (see
+  Conditions on the activities below).
 - The period is all the time, the last 10, 5, 3, or 1 years, a range, or the
   same length before or after. The grouping is Auto, day, week, month, or
   year; Auto groups by month for a period longer than three years, by week
   for one longer than a year, and by day otherwise. The first and the last
   period, cut by the period, are marked as partial.
-- A total (distance, time, count) is that of the recorded activities: a
-  period without one is 0 between the first and the last activity of the
-  types counted, and empty before and after them. 0 means no record, not
-  that there was no run, and it is drawn as a light point. The pace is the
-  total time divided by the total distance of the activities with both; a
-  mean of activities is weighted by their durations; a daily item is the
-  mean of the days with a value, and a sleep counts only on the days that it
-  may be used.
+- A total (distance, time, count) is that of the recorded activities: a period
+  without one is 0 between the first and the last activity of the types
+  counted (that meets the conditions, from v2.2.0), and empty before and after
+  them. 0 means no record, not that there was no run, and it is drawn as a
+  light point. The pace is the total time divided by the total distance of the
+  activities with both; a mean of activities is weighted by their durations; a
+  daily item is the mean of the days with a value, and a sleep counts only on
+  the days that it may be used.
 - An item with several records a day, such as VO2 Max, shows every record at
   the grain of a day, and otherwise the mean of all the records, so that a
   day with more records weighs more; the second line of its panel counts the
@@ -852,11 +867,16 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
 2026-10-27):
 
 - The bar of the app is one row, with the line of what to do next in it. The
-  filters (the output, the period, the grouping, and the activity types)
-  apply to every panel and stay in one row from a width of 1366 in Japanese,
-  so that the panels keep the height.
-- The item shelf at the left lists the items with bars of the months that
-  have data, finds them by name, and folds to a rail.
+  filters (the output, the period, the grouping, and the activity types, with
+  the button of the conditions on the activities in the heading of the types
+  from v2.2.0) stay in one row from a width of 1366 in Japanese, so that the
+  panels keep the height. The period and the grouping apply to every panel;
+  the activity types and the conditions apply to the panels of the training
+  and running-form items.
+- The item shelf at the left lists the items with bars of the months that have
+  data (for the training and running-form items, of the activities of the
+  types counted that meet the conditions, over the whole output), finds them
+  by name, and folds to a rail.
 - Panels of at least 150 pixels stand on one time axis; when they do not fit,
   only the panels scroll. A panel names its item, unit, and kind, gives the
   period and the values at the cross line, a second line of counts and the
@@ -867,18 +887,20 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   training load are both Garmin's values as they are, but two columns of the
   same source, so they share it.
 - The overview under the panels shows the whole output by month, of the first
-  panel or of the one enlarged, and frames the period shown. A drag chooses a
-  period: the frame follows it, with its days in the label, and a drag
+  panel or of the one enlarged (by the activity types and the conditions for a
+  training or running-form item), and frames the period shown. A drag chooses
+  a period: the frame follows it, with its days in the label, and a drag
   shorter than a week changes nothing. Within 8 pixels of an edge of the
   frame, the pointer is a double arrow, and a drag moves that edge as far as
   the pointer moves, never under a week. Escape cancels a drag.
 - Full screen shows the panels and the overview alone, under one line that
-  names the output, the period, and the activity types, filling the screen
-  where the browser allows it and the window where it does not. Escape,
-  Back, or the browser's own end of its full screen goes back, with the focus
-  on the button that went there; in the browser's full screen, the browser
-  takes the first Escape, which also ends a drag. A stop shows the whole page
-  again, with the focus on its heading. Full screen is not remembered.
+  names the output, the period, the activity types, and, from v2.2.0, the
+  words of the conditions (never their counts), filling the screen where the
+  browser allows it and the window where it does not. Escape, Back, or the
+  browser's own end of its full screen goes back, with the focus on the button
+  that went there; in the browser's full screen, the browser takes the first
+  Escape, which also ends a drag. A stop shows the whole page again, with the
+  focus on its heading. Full screen is not remembered.
 - Each chart is an image named by its item and its period, which the
   keyboard can reach. The arrow keys move the cross line by one period,
   PageUp and PageDown by twelve, and Home and End to the ends, and a hidden
@@ -894,41 +916,43 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   the colors of the text, of links, and of gray text, and stay apart.
 - The settings remember the items shown and whether the shelf is open
   (`view_items` and `view_shelf`), by the names of the items only; names that
-  this version does not know, names given twice, and those after the sixth
-  are left out. From v2.2.0 (stage K2) they also remember the period, the
-  grouping, the activity types counted, and the layout used last. Nothing is
-  remembered for each output: the same values apply to every output. The
-  page writes them 0.8 seconds after the last change (a change within that
-  time waits again), at once before it quits the app, and, when the page
-  hides, in a request that outlives it (`keepalive`). Before the
-  normalization page quits the app, it asks the view page on the quit channel
-  to write what waits (`{ flush: true }`) and waits for its answer
-  (`{ flushed: true }`) for 0.5 seconds at most; a value not written by then
-  is given up, and the settings keep what they had. Once the app stopped,
-  nothing more is written. After the other tab forgot the settings, only a
-  change of the person writes them again.
+  this version does not know, names given twice, and those after the sixth are
+  left out. From v2.2.0 (stage K2) they also remember the period, the
+  grouping, the activity types counted, and the layout used last, and from
+  stage T1 the conditions on the activities. Nothing is remembered for each
+  output: the same values apply to every output. The page writes them 0.8
+  seconds after the last change (a change within that time waits again), at
+  once before it quits the app, and, when the page hides, in a request that
+  outlives it (`keepalive`). Before the normalization page quits the app, it
+  asks the view page on the quit channel to write what waits (`{ flush: true
+  }`) and waits for its answer (`{ flushed: true }`) for 0.5 seconds at most;
+  a value not written by then is given up, and the settings keep what they
+  had. Once the app stopped, nothing more is written. After the other tab
+  forgot the settings, only a change of the person writes them again.
 - When an output opens (stage K2), a period such as the last year stays as it
   is. A range goes to the server as it is, which limits it to the days of the
   output as before; a range that does not overlap them at all opens all the
   time. The activity types counted are those remembered that the output has,
-  and its running types, as at first, when it has none of them.
+  and its running types, as at first, when it has none of them. The conditions
+  on the activities stay as they are (stage T1).
 - The layouts (stage K2) are cards above the item shelf, in two columns: the
   built-in layouts not hidden, in their order, then those of the person, in
   theirs. A card shows its name (a name of the person as text), "(changed)"
   once the panels are other items or in another order, and "Items with values
-  n/m" when the output has no value at all for some of its items (counted
-  over the whole output, not the period). Choosing a card shows its items, in
-  its order, and remembers it as the one used last. "Save the panels as a
-  layout…" names a new layout, which becomes the one used last; "Overwrite the
-  layout" puts the panels into a changed layout of the person; "Manage
-  layouts…" opens a small window that renames, moves, overwrites, and removes
-  the person's layouts (a removal asks first, with "Keep it" as the default
-  button), and hides or shows the built-in ones. A layout moves by Up and
-  Down, by the arrow keys on its grip, or by a drag of the grip, which sends
-  one change with the place of the layout (`to`). A change that the server
-  refuses says why in one line where it was asked, and a layout that another
-  tab removed reads the layouts again. On the folded shelf, "Layouts" opens
-  the cards in a small window. The help panel of the view page gives the
+  n/m" when the output has no value at all for some of its items (counted over
+  the whole output, not the period, from the bars of the item shelf, so that
+  the activity types and the conditions count). Choosing a card shows its
+  items, in its order, and remembers it as the one used last. "Save the panels
+  as a layout…" names a new layout, which becomes the one used last;
+  "Overwrite the layout" puts the panels into a changed layout of the person;
+  "Manage layouts…" opens a small window that renames, moves, overwrites, and
+  removes the person's layouts (a removal asks first, with "Keep it" as the
+  default button), and hides or shows the built-in ones. A layout moves by Up
+  and Down, by the arrow keys on its grip, or by a drag of the grip, which
+  sends one change with the place of the layout (`to`). A change that the
+  server refuses says why in one line where it was asked, and a layout that
+  another tab removed reads the layouts again. On the folded shelf, "Layouts"
+  opens the cards in a small window. The help panel of the view page gives the
   layouts in one item, after the item shelf (stage K3).
 - Comparing one item by year (stage L1): each panel has "Compare years" (not
   for an output without days). The comparison shows one item of the output
@@ -988,25 +1012,26 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   answer on its way for the marks before is dropped. The settings remember
   what it compares by and the weeks; the races chosen are not remembered. The
   server keeps the bars of the item shelf with an output (up to eight sets of
-  activity types) and up to 64 connections waiting to be taken.
+  activity types, and from stage T1 of conditions) and up to 64 connections
+  waiting to be taken.
 - The activities of a period (stage M3): a period of a chart of the training
   or the running form opens, by a click or by Enter or Space, the list of its
-  activities under its panel, one at a time
-  (`/api/view/activities`, under the checks of the numbers: the ticket, the
-  activity types of the output, and the size of the answer). The server
-  chooses the rows with the function that counts the panel (the types
-  counted, the days of the period cut to the output, as one period of
-  `range`), up to 500 (more gives their number only), and gives the value of
-  the panel and the count of the activities that it counted, from the same
-  numbers; the page never counts them again. The columns are those of the
-  output: the local date and time as the output writes them (not needed: an
-  output without the column opens), the type, seven values, and the item of
-  the panel where it is none of them. The page orders the rows by a column
-  (rows without a value last either way; the date and time as they show,
-  before their offset), draws the frame of the period on the chart, and
+  activities under its panel, one at a time (`/api/view/activities`, under the
+  checks of the numbers: the ticket, the activity types of the output, and the
+  size of the answer). The server chooses the rows with the function that
+  counts the panel (the types counted, from stage T1 the conditions, the days
+  of the period cut to the output, as one period of `range`), up to 500 (more
+  gives their number only), and gives the value of the panel and the count of
+  the activities that it counted, from the same numbers; the page never counts
+  them again. The columns are those of the output: the local date and time as
+  the output writes them (not needed: an output without the column opens),
+  from stage T1 the name where the names were read, the type, seven values,
+  and the item of the panel where it is none of them. The page orders the rows
+  by a column (rows without a value last either way; the date and time as they
+  show, before their offset), draws the frame of the period on the chart, and
   closes the list when what the panels count or show changes, never while
-  numbers are on their way, with the answer of its last request only. The
-  list is never remembered and never written to a file.
+  numbers are on their way, with the answer of its last request only. The list
+  is never remembered and never written to a file.
 - Comparing years as a calendar (stage N1): a fourth way to compare years,
   for amounts in rows and for the order of the days in a calendar: a strip of
   each year chosen, the weeks across from the week of 1 January (Monday weeks,
@@ -1046,23 +1071,24 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   view takes the place of the panels as a comparison of years does: the item
   shelf, the layouts, and the grouping are not used, with a line that says so;
   the period, its arrows (which go by the answer of the view), a custom range,
-  and the activity types are the page's, and a change of them stays for the
-  panels, which ask again on the way back, the focus on the menu. Each view
-  asks for its answer under the checks of the numbers (the ticket, the
-  activity types of the output, the size of the answer, and an output that
-  changed); its activities are those of the types counted in the days of the
-  period, chosen by the function that chooses the rows of the list of a
-  period, and a value is one that the list writes (the pace by the time over
-  the distance). The items of two items plotted and of a distribution are the
-  15 of one activity (the kinds `act`, but the count, and `fit`); the settings
-  remember those chosen while the page has panels, as the rest of the view
-  (`view_plot`, a pair kept whole or not at all, and `view_spread`); the view
-  by shoes always shows the distance by month, and nothing of it is
-  remembered. The answers are of one generation: an older answer, or one of
-  another pair or item, is never drawn, an output that opens drops those on
-  their way, a ticket that the server no longer keeps opens the output again
-  once, and an output that stops closes the view; while an answer of the same
-  pair or item is on its way, the chart before stays, dimmed.
+  the activity types, and (from stage T1) the conditions are the page's, and a
+  change of them stays for the panels, which ask again on the way back, the
+  focus on the menu. Each view asks for its answer under the checks of the
+  numbers (the ticket, the activity types of the output, the size of the
+  answer, and an output that changed); its activities are those of the types
+  counted that meet the conditions in the days of the period, chosen by the
+  function that chooses the rows of the list of a period, and a value is one
+  that the list writes (the pace by the time over the distance). The items of
+  two items plotted and of a distribution are the 15 of one activity (the
+  kinds `act`, but the count, and `fit`); the settings remember those chosen
+  while the page has panels, as the rest of the view (`view_plot`, a pair kept
+  whole or not at all, and `view_spread`); the view by shoes always shows the
+  distance by month, and nothing of it is remembered. The answers are of one
+  generation: an older answer, or one of another pair or item, is never drawn,
+  an output that opens drops those on their way, a ticket that the server no
+  longer keeps opens the output again once, and an output that stops closes
+  the view; while an answer of the same pair or item is on its way, the chart
+  before stays, dimmed.
 - Two items plotted (stage O1): `/api/view/points` gives each activity with a
   value of both items as a point, the newest `MAX_POINTS` (5,000) at most,
   oldest first in the order of their dates and times as they show, with how
@@ -1117,11 +1143,12 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   output or of a type not known; links to other gear are left out. A name is
   the `display_name`, else the `custom_make_model`, else none. The answers of
   opening and of the numbers say how many pairs link to an activity of the
-  output up to today, of any type, or that their files were too large
-  (`shoe_count`); with none, or too large, the item cannot be chosen, and the
-  page keeps what the answer asked for last says. `POST /api/view/shoes`
-  `{view, period, types}`, checked as the numbers are, answers
-  (`shoe_answer`), for the activities of the period and the types counted, how
+  output up to today, of any type and never by the conditions, or that their
+  files were too large (`shoe_count`); with none, or too large, the item
+  cannot be chosen, and the page keeps what the answer asked for last says.
+  `POST /api/view/shoes` `{view, period, types}` (and from stage T1
+  `conditions`), checked as the numbers are, answers (`shoe_answer`), for the
+  activities of the period and the types counted that meet the conditions, how
   many have shoes (and of those, how many have two or more and how many have
   no distance), are not known, and are without; and for each pair with an
   activity in the period, the newest last use first (then the order of
@@ -1147,24 +1174,24 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   true` (a truth value, with the whole period `RANGE_GRAIN` only) also gives
   the days chosen, before the output cuts them, and whether the output holds
   them, and the panels of the period of the same length just before, counted
-  by `item_series` from the same reading with the same types: the years of
-  `LAST_YEARS` back from the day before the period (the day after the same day
-  n years before, as `period_bounds` counts them), the same number of days
-  before a range, and none for all time; an end before 1 January of the year 1
-  is null, and a period wholly outside the output has no panels. **Summary…**
-  after **Other views** opens a window that is not modal at the place of the
-  window of the marks (one of the two at a time), its title taking the focus:
-  a row for each item of the panels (a row for each series, in the order of
-  the server, named as the lines of a panel), the value of each period, and
-  their difference, that of the two values as written, with a sign only where
-  it does not read as 0, and a dash where a value is missing or the output
-  cuts a period, whose values are marked * with a note. It shows and asks only
-  with panels, outside a comparison of years and the other views, and not in
-  the graphs only; an answer is drawn only for what it was asked for (the
-  ticket, the period, the types, and the items), and the answers on their way
-  are dropped where the window hides and where an output starts opening. The
-  windows under the row above the panels end above the bar at the bottom of
-  the page.
+  by `item_series` from the same reading with the same types and conditions:
+  the years of `LAST_YEARS` back from the day before the period (the day after
+  the same day n years before, as `period_bounds` counts them), the same
+  number of days before a range, and none for all time; an end before 1
+  January of the year 1 is null, and a period wholly outside the output has no
+  panels. **Summary…** after **Other views** opens a window that is not modal
+  at the place of the window of the marks (one of the two at a time), its
+  title taking the focus: a row for each item of the panels (a row for each
+  series, in the order of the server, named as the lines of a panel), the
+  value of each period, and their difference, that of the two values as
+  written, with a sign only where it does not read as 0, and a dash where a
+  value is missing or the output cuts a period, whose values are marked * with
+  a note. It shows and asks only with panels, outside a comparison of years
+  and the other views, and not in the graphs only; an answer is drawn only for
+  what it was asked for (the ticket, the period, the types, the conditions,
+  and the items), and the answers on their way are dropped where the window
+  hides and where an output starts opening. The windows under the row above
+  the panels end above the bar at the bottom of the page.
 - Saving as an image (stages R1 and R2): **Save as image…** after **Summary…**
   in the row above the panels, and after **Show as a table** in the bars of
   comparing years, two items plotted, and a distribution, opens a window that
@@ -1179,19 +1206,23 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   `SAVE_LEFT_OUT_VIEWS`), and makes one SVG file: the headings with the keys
   of their lines, the charts, the axis, the words that the page shows under
   them, and a line of the period or of the years or race days compared, the
-  grouping or the width of a range, the activity types counted, and the name
+  grouping or the width of a range, the activity types counted, the conditions
+  on the activities where there are some (their words as written, that they
+  apply to the training and running-form items only, and, where the names
+  could not be read, that the words of the name were not used), and the name
   and version of this app. The file is handed to the browser as a download
   from a `blob:` address by a link with `download`, in the press of **Save**
   with nothing between; the page cannot know whether or where the browser
   saves it, so the bar at the bottom says that it was handed. The name of the
   file holds dates (or years) and the keys of the items only (`saveFileName`,
-  `saveViewFileName`), never the names of races or marks. The window says why
-  it cannot save (a table, an answer on its way, a stop, two items plotted or
-  a distribution without values, a chart without room, a panel chosen that
-  went), and the press checks again the name and whether it can save. Nothing
-  is sent to the server or anywhere else, and the Content-Security-Policy
-  stays as it is. Only SVG is made; PNG and the other formats are out of
-  scope.
+  `saveViewFileName`), never the names of races or marks or the words of the
+  conditions; where the conditions have words of the name, the window says
+  that they show. The window says why it cannot save (a table, an answer on
+  its way, a stop, two items plotted or a distribution without values, a chart
+  without room, a panel chosen that went), and the press checks again the name
+  and whether it can save. Nothing is sent to the server or anywhere else, and
+  the Content-Security-Policy stays as it is. Only SVG is made; PNG and the
+  other formats are out of scope.
 - The colors of the years compared and a year highlighted (stage L3): the
   lines of the years laid over one another or as running totals take colors of
   their own (`--year1` to `--year6` in styles.css), apart from the six steps
@@ -1230,14 +1261,64 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   saved shows the highlight as the page does (the marks are on the shapes
   themselves, which the box of a picture keeps), with the key of the year in
   bold.
+- Conditions on the activities (stage T1): **Conditions…** at the right of the
+  heading of **Activity types counted** opens a window that is not modal, as
+  that of the types (one of the two at a time; closed by Esc and **Close**,
+  never by a click outside, and when an output opens and when a comparison of
+  years, another view, or the full screen starts), its focus in its first box
+  that can be used: the words of the name, a distance in kilometres (up to
+  three decimals, made into whole metres from the digits), and a duration in
+  whole minutes, each from and to. A box applies on Enter (never while an IME
+  composes) or on a change when it is left, after the page checks it by the
+  rules of the server (`conditionsFromBoxes`): the same conditions ask nothing
+  again, and conditions that cannot be used say why in the window and change
+  nothing. `Conditions` (`view/series.py`) holds the words as written and as
+  compared (`condition_words`: in NFKC, split at `、` and `,`, without the
+  spaces at their ends that `str.strip` takes, case folded, without the empty
+  and the same words; up to 60 code points and 10 words, without a control or
+  direction character), the distance in whole metres (up to 1,000 km), and the
+  duration in whole minutes (up to 6,000). An activity meets them where its
+  name holds one of the words, if there are words and the names were read, and
+  its distance and duration, as the panels count them, are within the bounds,
+  both ends included (the minutes times 60 against the seconds); without a
+  name where the words are used, or without the value of a bound given, it
+  does not. They choose after the activity types in `_activity_rows`, so that
+  every view takes them: the panels, the period before of the summary, the
+  bars of the item shelf (kept by the types and the conditions), the list of a
+  period, the points, the distribution, and the shoes; `series` takes none.
+  The five routes of the views take `"conditions"`, and another form is
+  `CONDITIONS_INVALID` (422, a stop of the numbers, which the page checks
+  before it sends). Each answer with conditions gives them back (`asked`),
+  with the activities of the types counted in its days (`counted`), those of
+  them that meet (`met`), and whether the words of the name were used
+  (`name`); every answer of a view, and the opening, say whether the names
+  were read (`names`). A line under the filters says the conditions as
+  written, that they apply to the training and running-form items only, and
+  the counts of the answer drawn where that answer is of these conditions
+  (none while there is no panel), and where the words of the name were not
+  used; in the full screen, their words go into the line at the top. The list
+  has a column of the names (each in `<bdi>`, wrapping in 16em) where the
+  names were read. The names: after the shoes, the view page (never `series`)
+  reads `normalized/activities.json`, checked as the other files are, within
+  what those leave of the limits (see Reading an output); a file over them is
+  not parsed, and the page opens without the names, where the words are not
+  used and the line says so. Only the declared key of an activity and its name
+  are kept (a text with something besides spaces, cut at 200 code points,
+  which are what the words are compared with, and shown with an ellipsis); a
+  key that two records hold has no name; the memo, the place, and the hash of
+  the same records are never kept. The settings keep the conditions in the
+  form of a request (`view_conditions`), whole or not at all, apart from the
+  layouts. The view page writes the names into no file, and the words of the
+  conditions only into the settings and into a picture that the person saves:
+  never into a log, an error, or a file name.
 - An output that changes while the view page is open is read again at the next
   request (and so is any output when the date changes), so that a comparison,
   a list, the summary, or another view asked right after a new normalization
   can come from another reading than the panels beside it; asking again uses
   the new reading. Back from another view, the panels ask again only where the
-  period or the activity types changed while it showed (`panelsStale`), so
-  that otherwise they show the reading before. The guides say this in one
-  place.
+  period, the activity types, or the conditions changed while it showed
+  (`panelsStale`), so that otherwise they show the reading before. The guides
+  say this in one place.
 
 ## Data handling in 2.0.0
 
@@ -1334,7 +1415,9 @@ Many cases that stop with exit 2 in v1.x finish with exit 0 or 3 in v2.0.0.
 - `series` (v2.1.0, stage G2) writes the numbers of the view page of an output
   to a new CSV file, with the same functions as the page and the rules of a
   new file beside an output that the Support Bundle follows; its stops are in
-  [Stops and next steps](v2_data_handling.md#stops-and-next-steps).
+  [Stops and next steps](v2_data_handling.md#stops-and-next-steps). It takes
+  no conditions on the activities (stage T1 of v2.2.0): its numbers are those
+  of the page without conditions.
 
 Stage A5a applies the rules for the output's name and its existing parent
 folder to `run-all`, `normalize-activities`, `snapshot build-input`, and
@@ -1477,14 +1560,15 @@ Processing:
   before it is shared, and what the Support Bundle contains.
 - Snapshot labels given by users stay out of the Support Bundle and the
   External-safe Pack.
-- The settings of an earlier launch hold the names of places only (stage
-  B4c), stay on this computer, and are never part of the Support Bundle;
-  "Forget the remembered settings…" removes them, as on a shared computer.
-  From v2.1.0 they also hold the colors of the page, and the names of the
-  items that the view page showed and whether its shelf was open. From v2.2.0
-  they also hold the timezone of the last run that made its output, the
-  layouts that the person named, and the period, the grouping, and the
-  activity types of the view page.
+- The settings of an earlier launch hold the names of places only (stage B4c),
+  stay on this computer, and are never part of the Support Bundle; "Forget the
+  remembered settings…" removes them, as on a shared computer. From v2.1.0
+  they also hold the colors of the page, and the names of the items that the
+  view page showed and whether its shelf was open. From v2.2.0 they also hold
+  the timezone of the last run that made its output, the layouts that the
+  person named, and the period, the grouping, the activity types, and the
+  conditions on the activities (with the words of the name as written) of the
+  view page.
 - From v2.2.0 the marks of the view page, the person's own words and events,
   are kept in a file of their own next to the settings (`gui-marks.json`),
   never in an output, the Support Bundle, or the text of a report.
@@ -1503,6 +1587,15 @@ Processing:
   show on the view page and in a picture saved from the view by shoes (its
   window says so before saving); they are written in no file name, log, or
   setting.
+- From v2.2.0 (stage T1) the names of the activities and the words of the
+  conditions on them may be the person's own words. The names show in the list
+  of the activities of a period only, and the view page writes them into no
+  file. The words of the conditions show in the window of the conditions, in
+  the line under the filters, and in the line at the top of the full screen,
+  and go into the settings and into a picture saved (its line under the
+  charts; the window says so before saving); they are never in a log, an
+  answer of an error, a file name, the Support Bundle, or the text of a
+  report.
 - The view page (v2.1.0) writes nothing in an output. The server keeps what
   it read in memory only, under a ticket that holds no place.
 - A Snapshot Store or a folder for the output in a folder that a cloud may
