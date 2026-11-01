@@ -298,10 +298,12 @@ that is open, and then run the same line again.
 
 ## Ways to use it
 
-The steps of twelve common cases. The sections that the links lead to give the
-details of each box. A Snapshot is a copy of one Export, which this app keeps
-in a Snapshot Store, so that the Exports that you import are normalized
-together ([Box 2](#box-2-snapshots)).
+The steps of thirteen common cases. The sections that the links lead to give
+the details of each box. A Snapshot is a copy of one Export, which this app
+keeps in a Snapshot Store, so that the Exports that you import are normalized
+together ([Box 2](#box-2-snapshots)). The steps of the view page are those
+without conditions: where [conditions](#conditions-from-220) set before
+remain, **Clear the conditions** in the line under the filters clears them.
 
 ### Normalize for the first time
 
@@ -459,6 +461,24 @@ last year with the year before.
 
 More: [Summary](#summary-from-220)
 
+### Count only the tempo runs, by name
+
+When: you want the distance and the average pace of only the training that you
+named "Tempo".
+
+1. [Open the view page](#open-the-view-page). Where the line of the conditions
+   shows under the filters, clear them with **Clear the conditions**.
+2. Press **Conditions…** in the heading row of **Activity types counted**.
+3. Type "Tempo" in **Words in the name**, and press Enter.
+4. The line under the filters says how many met the conditions, such as
+   **Activities counted in the period: 120; meeting the conditions: 28.** (the
+   numbers are samples).
+5. The distance, the average pace, and the other training and running-form
+   panels count the activities that meet the conditions only. **Compare
+   years** compares the years with the same conditions too.
+
+More: [Conditions](#conditions-from-220)
+
 ### Keep a comparison of years as an image
 
 When: you want to keep the comparison of years as an image file.
@@ -497,7 +517,9 @@ AI.
 1. In a new window of the terminal, not the one where the GUI runs, run the
    line of `series` that
    [Write the same numbers to a CSV file (command line)](#write-the-same-numbers-to-a-csv-file-command-line)
-   gives, with your own places.
+   gives, with your own places. The [conditions](#conditions-from-220) of the
+   view page do not apply to the CSV file: its numbers are those without
+   conditions.
 2. The CSV file holds your personal data. Before you give it, check who gets
    it and what is in it.
 3. Give the CSV file with the lines that start with `about`, which the
@@ -1042,13 +1064,100 @@ of the period, a step with fewer days is marked "(partial)" and drawn lighter
   output, and tick a type to add it, or untick it to leave it out. The types
   change the training and running-form panels, and the bars of the item shelf.
 
+### Conditions (from 2.2.0)
+
+Conditions choose the activities of the training and running-form items by the
+words of their names, a distance, and a duration (for example, only the runs
+with "Tempo" in their names).
+
+- **Conditions…** at the right of the heading of **Activity types counted**
+  opens a window of conditions. With conditions, the button says **Conditions:
+  2** and so on: how many of the name, the distance, and the duration were
+  given (a least and a most count as one). It cannot be pressed before an
+  output is open.
+- The window has **Words in the name**, **Distance** (**km or more** and **km
+  or less**), and **Duration** (**min or more** and **min or less**). One of
+  them is enough.
+  - The name: an activity whose name has one of the words. The note of the
+    window says **Separate words with a comma to take a name that has any of
+    them. Case, and full and half width, do not matter.** (、 separates them
+    too). An activity without a name does not meet it. The words can be up to
+    60 characters, and 10 words.
+  - The distance and the duration: a value just on a bound meets it. They are
+    compared as the output writes them, never as the panels or the tables
+    round them. The distance can have up to three decimals (1 m) and be up to
+    1000 km; the duration takes whole minutes, up to 6000. The note of the
+    window says **The duration is the value of the panel of the time, not the
+    elapsed or moving time.** An activity without the value does not meet a
+    condition on it.
+  - Only the activities that meet every condition, and that are of the
+    activity types counted, are counted.
+- As the note of the window says, **This applies to the training and
+  running-form items only, not to the daily items or the estimates.** (as for
+  **Activity types counted**).
+- Press Enter in a field, or change its value and leave it, and the conditions
+  apply (never with the Enter that confirms the input of an IME). Where a
+  value cannot be used, the window says why (for example **The least distance
+  is more than the most.**), and the conditions stay as they were. **Clear the
+  conditions** clears them all.
+- **Close** or Esc closes the window; a click outside it does not. It also
+  closes when the window of **Activity types counted** opens, when another
+  view, **Compare years**, or **Full screen** shows, and when another output
+  opens.
+- While there are conditions, a line with **Clear the conditions** shows just
+  under the bar of the filters, such as **Filtered by conditions (training and
+  running-form items only): the name has “Tempo”, 8–12 km. Activities counted
+  in the period: 120; meeting the conditions: 28.** (the numbers are samples).
+  While comparing years (also by race day and as a calendar), it gives the
+  numbers of the whole output, such as **Activities counted in the whole
+  output: 120; meeting the conditions: 28.** It gives no numbers until the
+  answer of the conditions changed comes, and none while there is no panel. On
+  the full screen, the line at the top holds the words of the conditions, not
+  their numbers.
+- The panels count the activities that meet the conditions only. Where none in
+  the period does, the second line of a training or running-form panel says
+  **No activity of this period meets the conditions.**
+- Following the conditions: the training and running-form panels, the
+  overview, the bars of the item shelf and the **Items with values** of the
+  layouts, **Compare years** (also by race day and as a calendar),
+  **Summary…** (also the period before), the activities of a period, two items
+  plotted, the distribution, and the panels, tables, and counts of the shoes.
+- Not following them: the panels of **Body (daily)** and **Garmin estimates**,
+  the first and the last day of the output and the buttons of the period, the
+  years and the races to choose, the counts in the list of the activity types,
+  whether **By shoes** can be chosen, and the CSV file of `series`.
+- The names come from `normalized/activities.json` of the output, which the
+  view page alone reads (`series` does not use the names). A very long name is
+  cut at 200 characters, with an ellipsis, and the words of a condition are
+  compared with those first 200 characters.
+- Where the data of the names of an output is too large, the field of the name
+  is grayed, with **The data of the names is too large, so the names cannot be
+  used.** (the distance and the duration can be used). Words of the name
+  remembered are not used for that output: with a condition on the name only,
+  nothing is filtered by the name. The count of the button and the words of
+  the line still show them, and the line says **The names could not be read,
+  so the words of the name are not used.** (but not while there is no panel,
+  nor in the line at the top of the full screen). A file of the names that is
+  broken stops the reading of the output, as any file does.
+- The conditions are remembered whole, or not at all (remembered conditions of
+  another form are not used at all). They are not part of a layout, and
+  choosing a layout does not change them; another output keeps them too. While
+  no panel shows, a change of the conditions is not remembered until a panel
+  is added ([What is remembered for the next
+  time](#what-is-remembered-for-the-next-time)). **Clear the conditions**
+  clears the filter in use, while **Forget the remembered settings…** forgets
+  the settings.
+
+![Conditions: the window of the conditions open under its button, Conditions: 2, with the words of the name Tempo and a distance of 8 to 12 km; the end of the line under the filters gives the numbers, and the panel of the distance counts the activities that meet the conditions, while those of the resting heart rate and VO2 Max do not change (synthetic data)](assets/gui-guide/view-conditions.en.png)
+
 ### Layouts (from 2.2.0)
 
 A layout is a set of items to show as panels, in their order (six at most).
 The cards of the layouts are in two columns above the item shelf. Press a
-card, and its items become the panels, in its order. The period, the
-grouping, and the activity types are not part of a layout: they are
-remembered apart ([What is remembered for the next time](#what-is-remembered-for-the-next-time)).
+card, and its items become the panels, in its order. The period, the grouping,
+the activity types, and the conditions are not part of a layout: they are
+remembered apart ([What is remembered for the next
+time](#what-is-remembered-for-the-next-time)).
 
 ![The layouts above the item shelf of the view page: the cards of the six built-in layouts in two columns, with the card of Running chosen (synthetic data made for the example)](assets/gui-guide/view-layouts.en.png)
 
@@ -1066,10 +1175,12 @@ remembered apart ([What is remembered for the next time](#what-is-remembered-for
     **Race prediction marathon**, and **Endurance score**
 - The card of the layout in use is filled, with ✓ before its name. Once you
   add, remove, or move a panel after that, "(changed)" shows under its name.
-- An item without a value in the output is a panel too (its second line
-  says "There is no value in this period."). When an item of a layout has
-  no value anywhere in the output, the card says so, as "Items with values
-  2/4" (counted over the whole output, not the period chosen).
+- An item without a value in the output is a panel too (its second line says
+  "There is no value in this period."). When an item of a layout has no value
+  anywhere in the output, the card says so, as "Items with values 2/4"
+  (counted over the whole output, not the period chosen; for the training and
+  running-form items, with the activities of the types counted that meet the
+  conditions).
 - **Save the panels as a layout…** names the panels shown as a layout of
   your own. A name has 1 to 30 characters, without line breaks or invisible
   characters, and the names of the built-in layouts cannot be used, in
@@ -1106,8 +1217,9 @@ remembered apart ([What is remembered for the next time](#what-is-remembered-for
   running-form items, such as vertical oscillation and ground contact time,
   come from the files that the watch records for each activity (FIT files).
   The bar to the right of an item's name shows the months in which the item
-  has data; it is not a bar of a chart. **Find an item** finds an item by its
-  name.
+  has data (for the training and running-form items, the months of the whole
+  output with activities of the types counted that meet the conditions); it is
+  not a bar of a chart. **Find an item** finds an item by its name.
 - The items that you tick stand as panels at the right, from the top. Six can
   be shown: with six, the other items cannot be ticked, so remove one first to
   add another. "3/6" next to the heading of the shelf is the number of items
@@ -1153,11 +1265,11 @@ values are made):
   activity (`duration` in the Export), which is neither the whole time with the
   pauses nor the moving time alone. The count is the number of activities.
 - Only a total is 0 for a step without a record, between the first and the
-  last activity of the types counted, drawn as a light point; before the first
-  and after the last, it is empty, without a point. 0 means that nothing was
-  recorded, which does not always mean that there was no run. The point of a
-  0 is a hollow dot on the base line, which is not the lighter bar of a
-  partial step.
+  last activity of the types counted (meeting the conditions where there are
+  some), drawn as a light point; before the first and after the last, it is
+  empty, without a point. 0 means that nothing was recorded, which does not
+  always mean that there was no run. The point of a 0 is a hollow dot on the
+  base line, which is not the lighter bar of a partial step.
 - The average pace is the total time divided by the total distance. The
   average heart rate, the cadence, the power, and the running-form items are
   means of the activities weighted by their durations (both calculated by this
@@ -1173,7 +1285,8 @@ values are made):
 
 - The overview under the panels shows the whole time of the output by month,
   and frames the period shown. Its item is that of the first panel, or of the
-  panel enlarged.
+  panel enlarged. For a training or running-form item, it counts the
+  activities of the types counted that meet the conditions.
 - Drag across the overview (move the mouse with its button held down) to see
   the period that you drag over. While you drag, the frame follows, and the
   dates of that period show at the top left of the overview. When you let go,
@@ -1200,12 +1313,14 @@ values are made):
 - A click keeps the chart selected, so that ← and → still move the cross
   line (the period of the list stays). Enter takes you to the heading of the
   list. The period of the list has a blue frame on the chart.
-- The columns are **Date and time** and **Type**, then distance, time,
-  average pace, average and maximum heart rate, cadence, and total ascent.
-  The date and time are those of the place, as the output writes them, in a
-  form such as "Fri 10/2 6:30" (their timezone is not changed). A list opened
-  from the panel of power, training load, or the running form has one more
-  column, of that item. A value that an activity does not have is "—".
+- The columns are **Date and time**, **Name**, and **Type**, then distance,
+  time, average pace, average and maximum heart rate, cadence, and total
+  ascent (**Name** only where the names of the output could be read; a long
+  name wraps). The date and time are those of the place, as the output writes
+  them, in a form such as "Fri 10/2 6:30" (their timezone is not changed). A
+  list opened from the panel of power, training load, or the running form has
+  one more column, of that item. A value that an activity does not have is
+  "—".
 - Press the heading of a column to order the list by it; each press turns
   the order up or down, and rows without a value go last either way. The date
   and time are ordered as they show.
@@ -1214,19 +1329,21 @@ values are made):
   activities it counted: the numbers of the reading at the top right of the
   panel. Some activities in the list, such as one without a heart rate, are
   not counted in it.
-- The list holds the **Activity types counted** only, up to 500 a period.
-  For more, it says how many, and the finer grouping that lists them
-  (**Month** for a year, **Week** for a month, **Day** for a week).
+- The list holds the **Activity types counted** only and, where there are
+  conditions, the activities that meet them (a period without one says **No
+  activity of this period meets the conditions.**), up to 500 a period. For
+  more, it says how many, and the finer grouping that lists them (**Month**
+  for a year, **Week** for a month, **Day** for a week).
 - **Close** or Esc closes it, back to the chart. It also closes when the
-  period, the grouping, the activity types, the output, the panels, the marks,
-  **Show as a table**, an enlarged panel, **Full screen**, or **Compare
-  years** change; a change of the language or of **Use the same scale for
-  panels with the same unit** keeps it. The list is not remembered and never
-  written to a file.
+  period, the grouping, the activity types, the conditions, the output, the
+  panels, the marks, **Show as a table**, an enlarged panel, **Full screen**,
+  or **Compare years** change; a change of the language or of **Use the same
+  scale for panels with the same unit** keeps it. The list is not remembered
+  and never written to a file.
 - For a list and panels made from two readings of the output, see
   [When the output changes while you look](#when-the-output-changes-while-you-look-from-220).
 
-![The activities of a period: October 2026 pressed on the panel of the distance, a list of 11 activities opened just under it, a blue frame on that month of the chart, and "Value of the panel: 108.1 km (activities counted: 11)" under the list (synthetic data made for the example)](assets/gui-guide/view-list.en.png)
+![The activities of a period: October 2026 pressed on the panel of the distance, a list of 11 activities opened just under it (made-up names of training in the column of the names), a blue frame on that month of the chart, and "Value of the panel: 108.1 km (activities counted: 11)" under the list (synthetic data made for the example)](assets/gui-guide/view-list.en.png)
 
 ### Marks (from 2.2.0)
 
@@ -1265,10 +1382,11 @@ values are made):
 
 ### Full screen
 
-- **Full screen** above the panels shows the charts and the overview alone:
-  on the whole screen when the browser can show the page in its full screen,
+- **Full screen** above the panels shows the charts and the overview alone: on
+  the whole screen when the browser can show the page in its full screen,
   otherwise in the whole window. A line at the top names the output, the
-  period, and the activity types.
+  period, the activity types, and, where there are conditions, their words
+  (not their numbers).
 - In full screen too, a drag across the overview changes the period (the
   buttons of the period at the top do not show).
 - **Back (Esc)** or Escape returns to the page. In the browser's full screen,
@@ -1335,9 +1453,9 @@ values are made):
 - While comparing, the period, ‹ ›, the days of a custom range, the item
   shelf, the layouts, and the groupings **Auto** and **Year** (and **Month**
   with one month chosen) are not used, and are grayed; a line under the
-  filters says so. The overview is not shown. **Activity types counted**
-  still applies: a change of it also applies to the panels after the way
-  back, and is remembered.
+  filters says so. The overview is not shown. **Activity types counted** and
+  **Conditions…** still apply: a change of them also applies to the panels
+  after the way back, and is remembered.
 - Readings: with **One row per year**, at the top right of each row; with
   **Overlay** and **Running total**, in a box beside the cross line: each
   year's own period (for a week, its days in that year) and its value. Select
@@ -1380,9 +1498,10 @@ values are made):
   value and not its right one (10–20: 10 or more, under 20). A color further
   right in the legend only means a higher value. The steps are the same for
   every year chosen.
-- For a total or a count, a day without a recorded activity (0) is an
-  outline; a day without a value and a day outside the output are not drawn.
-  A recorded 0 (activities of 0 km) takes the first step.
+- For a total or a count, a day without a recorded activity (0) is an outline;
+  a day without a value and a day outside the output are not drawn. A recorded
+  0 (activities of 0 km) takes the first step. With conditions, these are of
+  the activities that meet them.
 - At the left of a strip: the year, a period cut short, the value of the
   year, and the value of the day chosen. The day chosen is the same day of the
   year in every strip (28 February for 29 February in a common year, and the
@@ -1439,9 +1558,9 @@ values are made):
   back to its button. Tab or a click elsewhere closes it too.
 - While one shows, the **Items**, **Layouts**, and **Group by** are not used;
   a line under the filters says so. The **Period**, ‹ ›, the days of a custom
-  range, and **Activity types counted** can be used, and a period or activity
-  types changed here stay for the panels when you go back (while comparing
-  years, the period cannot be changed).
+  range, **Activity types counted**, and **Conditions…** can be used, and a
+  period, activity types, or conditions changed here stay for the panels when
+  you go back (while comparing years, the period cannot be changed).
 - **Show all panels again** goes back, the focus on **Other views**. To go
   from one of these views to another, go back to the panels first. While
   comparing years, **Other views** is not shown.
@@ -1456,10 +1575,11 @@ values are made):
   **Activities**) and **Running form (FIT)**; those of **Body (daily)** and
   **Garmin estimates** cannot be chosen.
 - A line under the title gives the numbers only: the points, the activities of
-  the period, those with both values, and those without. Only the newest 5,000
-  are plotted; where there are more, a line says so (a shorter period shows
-  them all). **This app shows no relation or cause between the two items
-  plotted.** is always under the points.
+  the period, those with both values, and those without (with conditions, all
+  of them of the activities that meet them). Only the newest 5,000 are
+  plotted; where there are more, a line says so (a shorter period shows them
+  all). **This app shows no relation or cause between the two items plotted.**
+  is always under the points.
 - Each scale goes over the values of its item, not from 0. A smaller value of
   the average pace is faster: further down as the item up, and further left as
   the item across.
@@ -1471,8 +1591,8 @@ values are made):
   and the two values), ordered by the buttons of its heads (newest first at
   first); **Show as a chart** goes back.
 - Where an item changes, the points before are not shown until the new ones
-  come; where the period or the activity types change, the points stay,
-  dimmed, until then.
+  come; where the period, the activity types, or the conditions change, the
+  points stay, dimmed, until then.
 
 ![Plot two items: a point an activity for the average pace (across) and the average heart rate (up), the point chosen at the right with its date and time, type, and two values at the top right, and the words under the points that the app shows no relation (synthetic data)](assets/gui-guide/view-plot.en.png)
 
@@ -1510,8 +1630,9 @@ values are made):
   10, ... times as wide that is enough, and a line says so. A range of no
   activity has no bar (0 in the table).
 - A line under the title gives the numbers only: the activities counted, those
-  of the period, and those without a value. For the average pace, **A smaller
-  value is faster (further left in the chart is faster).** is there too.
+  of the period, and those without a value. With conditions, they count the
+  activities that meet them. For the average pace, **A smaller value is faster
+  (further left in the chart is faster).** is there too.
 - Press a bar, or select the chart and use ← and → (one range at a time, those
   of no activity among them) and Home and End (the first and the last): the
   range and its activities are at the top right, as **10 km or more, under 11
@@ -1544,9 +1665,11 @@ values are made):
   first (on the same day, in the order of Garmin's gear). Shoes not used in
   the period have no panel.
 - A line under the title gives the numbers only: the pairs, the activities of
-  the types counted in the period, and those with shoes. Under the panels,
-  **The shoes are as set in Garmin (of Garmin's gear, the shoes only). Their
-  names, start and end dates, and maximum distance are the values set in
+  the types counted in the period, and those with shoes. With conditions, the
+  panels, the tables, and this line count the activities that meet them (also
+  the shoes shown, their first and last use, and their order). Under the
+  panels, **The shoes are as set in Garmin (of Garmin's gear, the shoes only).
+  Their names, start and end dates, and maximum distance are the values set in
   Garmin as they are.** is always shown, and a line for each count of 1 or
   more: the activities without shoes, those not known to have shoes (their
   gear is not in the output, or of a type not known, or they cannot be linked
@@ -1554,8 +1677,9 @@ values are made):
   of the shoes can add up to more than the distance panel), those with shoes
   but without a distance (in the counts, not in the distances), and the shoes
   without an activity in the period. Where no activity of the period and the
-  types has shoes, **No activity of this period and these types has shoes.**
-  shows in the place of the panels.
+  types (and of the conditions, where there are some) has shoes, **No activity
+  of this period and these types has shoes.** shows in the place of the
+  panels.
 - Move the pointer over a panel, or select a panel (Tab) and use ← and → (a
   month) and Home and End (the first and the last month), to choose a month:
   every panel gives its distance at the top right (at first, the last month).
@@ -1566,12 +1690,13 @@ values are made):
   month, a column a pair of shoes, with the distance and the activities),
   whose months stay at the left as it scrolls to the right. **Show as a
   chart** goes back.
-- Where no activity of the output (up to today, of any type) has shoes, **This
-  output has no shoes to show.**, and where the data of the shoes is too
-  large, **The data of the shoes is too large to read.** shows under **By
-  shoes** in the menu, which then cannot be chosen: ↑ and ↓ stop on it, and
-  pressing it does nothing. Where only other periods or types have shoes, it
-  can be chosen, and the line above shows in the place of the panels.
+- Where no activity of the output (up to today, of any type, and without the
+  conditions) has shoes, **This output has no shoes to show.**, and where the
+  data of the shoes is too large, **The data of the shoes is too large to
+  read.** shows under **By shoes** in the menu, which then cannot be chosen: ↑
+  and ↓ stop on it, and pressing it does nothing. Where only other periods or
+  types have shoes, it can be chosen, and the line above shows in the place of
+  the panels.
 - The start, the end, and the maximum distance are the values set in Garmin,
   as they are. This app says nothing from them, such as when to change shoes.
 
@@ -1597,10 +1722,10 @@ values are made):
   before**, and so on), and **Difference**. For **All time**, there are no
   columns of the period before and of the difference.
 - A value is that of the whole period, counted with the same **Activity types
-  counted** as the panels, in the way of its item in this table. Its words are
-  those beside the heading of a panel by week, month, or year; by day, that
-  heading says other words, but the summary counts the same way. A mean of the
-  records weighs a day with several records as many times.
+  counted** and conditions as the panels, in the way of its item in this
+  table. Its words are those beside the heading of a panel by week, month, or
+  year; by day, that heading says other words, but the summary counts the same
+  way. A mean of the records weighs a day with several records as many times.
 
 | How it is counted | Items |
 | --- | --- |
@@ -1615,10 +1740,10 @@ values are made):
 
 - A period without a value says **No value**. An item that is a total or a
   number of recorded activities is 0 for a period without an activity of the
-  types counted where the period reaches between the first and the last
-  activity of the types counted in the output, and then has a difference; a
-  period with activities but none with a value of the item, and one that does
-  not reach between them, says **No value**.
+  types counted (that meets the conditions, where there are some) where the
+  period reaches between the first and the last such activity in the output,
+  and then has a difference; a period with activities but none with a value of
+  the item, and one that does not reach between them, says **No value**.
 - The period before is, for **1 year**, **3 years**, and so on, as many years
   of the calendar up to the day before the period shown; for a range of
   **Custom range…**, the same number of days just before it.
@@ -1668,23 +1793,27 @@ values are made):
   see becomes one picture, without the choices of the panels and the marks. By
   race day, the names of the races, which are the names of the marks, always
   show. By shoes, the window also says **The names of all the shoes show too,
-  also of the rows not on the screen.**
+  also of the rows not on the screen.** With words of the name in the
+  conditions, the window of every view also says **The words of the conditions
+  show too.**
 - The name of the file holds dates (or years) and the keys of the items only
   (for example `garmin-view_2025-10-22_2026-10-21_dist-pace-hr.svg`): the
   years compared, oldest first (`garmin-compare_2018-2022-2025_dist.svg`), the
   days of the races, oldest first (never their names), or the period and the
   keys of two items plotted, of a distribution, or of the shoes (the key of
   the distance, as `garmin-shoes_2024-01-05_2024-12-31_dist.svg`, never the
-  names of the shoes).
+  names of the shoes). The words of the conditions are never in the name of
+  the file either.
 - The picture holds the headings of the panels with the keys of their lines,
   the charts, the time axis, and a line under them (the period, the grouping,
-  the activity types counted, and the name and version of this app); in the
-  other views, a title line, the legend of a calendar (the rule of its steps
-  only), the words that the page shows under the points or the ranges, and a
-  line of the years or race days compared or of the width of a range. A panel
-  or a year without values goes in with the words that the page shows for it.
-  By shoes, every panel goes in, also those scrolled out of the screen, with
-  the time axis and the notes.
+  the activity types counted, the conditions where there are some, and the
+  name and version of this app; where the names could not be read, also that
+  the words of the name were not used); in the other views, a title line, the
+  legend of a calendar (the rule of its steps only), the words that the page
+  shows under the points or the ranges, and a line of the years or race days
+  compared or of the width of a range. A panel or a year without values goes
+  in with the words that the page shows for it. By shoes, every panel goes in,
+  also those scrolled out of the screen, with the time axis and the notes.
 - The overview, the list, the buttons, the name of the folder of the output,
   the cross line, and the frames that show the day, point, or range chosen,
   with the readings of its values, never go in; the points, the bars, and the
@@ -1700,8 +1829,8 @@ values are made):
 - Where it cannot save, the window says why: a view, or every panel, shown as
   a table; an answer on its way; numbers that stopped loading; for two items
   plotted or a distribution, a period without values to draw; by shoes, a
-  period and types without an activity with shoes; a chart without room to be
-  drawn; or a panel chosen that no longer shows.
+  period and types (and conditions) without an activity with shoes; a chart
+  without room to be drawn; or a panel chosen that no longer shows.
 - When, at the press, the picture to save is no longer the one that the window
   showed, or the image could not be made, the window says so, and the focus
   stays on **Save** where it can still be pressed; check the window, and press
@@ -1722,7 +1851,8 @@ values are made):
 - At every request of numbers, the view page checks that the output is as it
   was, and reads it again where it changed (the same output normalized again).
   It also reads it again when the date changes (to leave out records after
-  today).
+  today). A change of the file of the names (`normalized/activities.json`)
+  alone reads it again too.
 - Right after you normalize again, or right after the date changes, the values
   of the years or the races in **Compare years** (also by race day), the
   activities of a period, and the table of **Summary…** can come from another
@@ -1730,9 +1860,9 @@ values are made):
   open the summary again, for the new reading.
 - In the other views (two items plotted, a distribution, and the shoes), the
   values can come from another reading than the panels too. Back from another
-  view, the panels are asked again only where the period or the activity types
-  were changed while it showed; otherwise they stay as they were read before.
-  Choose the period again for the new reading.
+  view, the panels are asked again only where the period, the activity types,
+  or the conditions were changed while it showed; otherwise they stay as they
+  were read before. Choose the period again for the new reading.
 
 ### What is remembered for the next time
 
@@ -1745,20 +1875,22 @@ later one.
   activity types counted, the layouts (those saved, and the one used last),
   the way and the month of [Compare years](#compare-years-from-220), what it
   compares by (the years or the race days) and the weeks of a span, whether
-  **Show marks** is on, and the two items plotted and the item of a
-  distribution of [Other views](#other-views-from-220). The
-  [marks](#marks-from-220) themselves are kept in the file of the marks. While
-  no panel is left, neither that nor the period or another choice changed
-  meanwhile is remembered: what was remembered before stays (the appearance,
-  the layouts saved, and the marks are kept as ever). When another output has
-  no value for an item shown, the second line of its panel says "There is no
-  value in this period."
-- When another output opens (from 2.2.0), a period such as **1 year** stays
-  as it is. A period chosen with **Custom range…** shrinks to the days of the
+  **Show marks** is on, the two items plotted and the item of a distribution
+  of [Other views](#other-views-from-220), and the
+  [conditions](#conditions-from-220). The [marks](#marks-from-220) themselves
+  are kept in the file of the marks. While no panel is left, neither that nor
+  the period, the conditions, or another choice changed meanwhile is
+  remembered: what was remembered before stays (the appearance, the layouts
+  saved, and the marks are kept as ever). When another output has no value for
+  an item shown, the second line of its panel says "There is no value in this
+  period."
+- When another output opens (from 2.2.0), a period such as **1 year** stays as
+  it is. A period chosen with **Custom range…** shrinks to the days of the
   output when it overlaps them in part, and becomes **All time** when it does
   not overlap them at all. The activity types counted are those remembered
   that the output has; when it has none of them, every running type in the
-  output.
+  output. The conditions stay as they are (where the names of the output
+  cannot be read, the words of the name are not used).
 - Not remembered: the output shown, the same scale, a panel enlarged, a table
   shown, full screen, whether years were compared, with the years or races
   chosen and the year highlighted, whether a list of activities was open,
@@ -1770,7 +1902,10 @@ later one.
 - **Forget the remembered settings…** in the bar at the bottom of the
   normalization page forgets all of these, and also the Snapshot Store, the
   folder for the output, and the list of earlier outputs: the next launch goes
-  as a first one ([Later launches](#later-launches)).
+  as a first one ([Later launches](#later-launches)). Where the view page is
+  open while they are forgotten, it shows what it shows (the conditions too),
+  and remembers what it shows again at your next change. **Clear the
+  conditions** is what clears the filter in use.
 
 ### Appearance
 
@@ -1784,10 +1919,11 @@ the setting of the computer.
 
 ### Write the same numbers to a CSV file (command line)
 
-The `series` command writes the numbers of the view page to a CSV file. Run it
-in a new window of the terminal (the Terminal on macOS, PowerShell on Windows),
-not in the one where the GUI runs. For example, the distance and the resting
-heart rate of the last 3 years, by month:
+The `series` command writes the numbers of the view page to a CSV file
+(without the [conditions](#conditions-from-220) of the view page, which do not
+apply to it). Run it in a new window of the terminal (the Terminal on macOS,
+PowerShell on Windows), not in the one where the GUI runs. For example, the
+distance and the resting heart rate of the last 3 years, by month:
 
 macOS:
 
@@ -1885,8 +2021,9 @@ The GUI remembers only these:
   chosen), and the items and the item shelf of the view page; from 2.2.0, also
   its period, grouping, activity types counted, layouts (those saved, and the
   one used last), how years are compared (the way, the month, by year or race
-  day, and the weeks of a span), whether marks show, and the two items plotted
-  and the item of a distribution.
+  day, and the weeks of a span), whether marks show, the two items plotted and
+  the item of a distribution, and the conditions (the words of the name, the
+  distance, and the duration).
 - The timezone of the last run that made its output (from 2.2.0). At later
   launches, box 3 is set with it (**(as last time)**).
 - The marks of the view page (from 2.2.0), in a file of their own.
@@ -1920,11 +2057,12 @@ also forgets the appearance, the items and the item shelf of the view page,
 your layouts, the period, the grouping, the activity types counted, how years
 are compared (the way, the month, by year or race day, and the weeks of a
 span), whether marks show, the two items plotted and the item of a
-distribution, and the timezone of the last run that made its output. It can be
-pressed only while there are remembered settings. The store and the outputs
-stay, and the next launch goes as a first launch; a store that is not in the
-default place must then be opened again. When the file cannot be read, the bar
-says so, and the launch goes as a first one.
+distribution, and the timezone of the last run that made its output. It also
+forgets the conditions of the view page (the words of the name, the distance,
+and the duration). It can be pressed only while there are remembered settings.
+The store and the outputs stay, and the next launch goes as a first launch; a
+store that is not in the default place must then be opened again. When the
+file cannot be read, the bar says so, and the launch goes as a first one.
 
 ## If something is wrong
 
@@ -2182,10 +2320,10 @@ it. To remove Python too, do as the documents of python.org say, for
   file of `series` holds values of the output.
 - The remembered settings hold the names of places and of the items of the
   view page, and from 2.2.0 also the names of the layouts you saved, the days
-  of a period chosen with **Custom range…**, the activity types counted, and
-  the timezone. They stay on this computer, and are never in the Support
-  Bundle. On a computer that others use, remove them with
-  **Forget the remembered settings…**.
+  of a period chosen with **Custom range…**, the activity types counted, the
+  words of the conditions of the view page, and the timezone. They stay on
+  this computer, and are never in the Support Bundle. On a computer that
+  others use, remove them with **Forget the remembered settings…**.
 - The [marks](#marks-from-220) of the view page (from 2.2.0) hold your own
   words and events, so this app keeps them only in the file of the marks,
   `gui-marks.json`, never in an output, the Support Bundle, or the text of a
@@ -2207,6 +2345,16 @@ it. To remove Python too, do as the documents of python.org say, for
   you gave in Garmin. They show on the page and in a picture you save (the
   window says so before saving). This app writes them in no file name, log, or
   remembered setting.
+- The names of the activities and the words of the
+  [conditions](#conditions-from-220) (from 2.2.0) may be your own words. The
+  names show in the list of the activities of a period only, and the view page
+  writes them into no file. The words of the conditions show in the window, in
+  the line under the filters, and in the line at the top of the full screen,
+  and go into the remembered settings and into a picture you save (its line at
+  the bottom; the window says so before saving). They are never in a log, an
+  answer of an error, a file name, the Support Bundle, or the text of a report
+  on GitHub. **Forget the remembered settings…** does not remove a picture you
+  saved.
 
 See [Security and Privacy Boundary](security_and_privacy_boundary.md).
 
@@ -2232,6 +2380,13 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
 - On the view page, click a chart and press ← or → to move the vertical
   line: each panel shows its value at its top right. **Show as a table**
   shows the numbers of a panel as a table.
+- The window of **Conditions…** (from 2.2.0) opens with the focus in **Words
+  in the name** (in the least distance where the names of the output cannot be
+  read). Tab moves from field to field, and Enter, or a value changed in a
+  field that is left, applies them (never the Enter that confirms the input of
+  an IME). Why a value cannot be used is read out in the window. Esc or
+  **Close** goes back to **Conditions…**, as **Clear the conditions** in the
+  line under the filters does ([Conditions](#conditions-from-220)).
 - When comparing years (from 2.2.0), moving the line with ← → and the other
   keys reads out the period and the value of each year
   ([Compare years](#compare-years-from-220)). When comparing by race day, the
@@ -2325,7 +2480,7 @@ garmin-running-data-normalizer doctor --run-output /path/to/output
 garmin-running-data-normalizer support-bundle --run-output /path/to/output --output /path/to/support-bundle.zip
 ```
 
-The view page shows the numbers that this command writes to a CSV file
+Without conditions, the view page shows the numbers that this command writes to a CSV file
 ([Write the same numbers to a CSV file (command line)](#write-the-same-numbers-to-a-csv-file-command-line)):
 
 ```bash
