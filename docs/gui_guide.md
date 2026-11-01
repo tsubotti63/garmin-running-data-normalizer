@@ -298,7 +298,7 @@ that is open, and then run the same line again.
 
 ## Ways to use it
 
-The steps of eleven common cases. The sections that the links lead to give the
+The steps of twelve common cases. The sections that the links lead to give the
 details of each box. A Snapshot is a copy of one Export, which this app keeps
 in a Snapshot Store, so that the Exports that you import are normalized
 together ([Box 2](#box-2-snapshots)).
@@ -473,6 +473,21 @@ When: you want to keep the comparison of years as an image file.
    browser, look in your downloads.
 
 More: [Saving as an image](#saving-as-an-image-from-220)
+
+### See the distance of each pair of shoes by month
+
+When: you want to see how far you ran in each pair of shoes, month by month.
+
+1. [Open the view page](#open-the-view-page).
+2. In **Other views** above the panels, choose **By shoes**.
+3. Choose the period and the activity types (with **All time**, the panels go
+   over the whole output).
+4. Move the pointer over a panel, or select a panel and use ← and →, to choose
+   a month: every panel gives its distance at the top right.
+5. For the numbers, press **Show as a table** (a table of the shoes and one by
+   month).
+
+More: [By shoes](#by-shoes), [Other views](#other-views-from-220)
 
 ### Give the numbers to an AI as a CSV file
 
@@ -1418,8 +1433,8 @@ values are made):
 
 ### Other views (from 2.2.0)
 
-- **Other views** above the panels shows **Plot two items** or
-  **Distribution** in the place of the panels. Enter, Space, or ↓ opens its
+- **Other views** above the panels shows **Plot two items**, **Distribution**,
+  or **By shoes** in the place of the panels. Enter, Space, or ↓ opens its
   menu on the first item; ↑, ↓, Home, and End move in it, and Esc closes it,
   back to its button. Tab or a click elsewhere closes it too.
 - While one shows, the **Items**, **Layouts**, and **Group by** are not used;
@@ -1428,8 +1443,8 @@ values are made):
   types changed here stay for the panels when you go back (while comparing
   years, the period cannot be changed).
 - **Show all panels again** goes back, the focus on **Other views**. To go
-  from one view to the other, go back to the panels first. While comparing
-  years, **Other views** is not shown.
+  from one of these views to another, go back to the panels first. While
+  comparing years, **Other views** is not shown.
 
 #### Plot two items
 
@@ -1507,6 +1522,61 @@ values are made):
 
 ![Distribution: the bars of the distance, a range of 1 km each, with the range chosen, 10 km or more, under 11 km, framed and its activities at the top right (synthetic data)](assets/gui-guide/view-spread.en.png)
 
+#### By shoes
+
+- Each pair of shoes is a panel, with its distance by month as bars (as a line
+  over a period of more than 220 months). Every panel has the same time axis,
+  across the period chosen, and the same scale (one color). As bars, a month
+  that the period cuts is drawn lighter, with an edge. Where there are many
+  panels, scroll through them.
+- A month without an activity with the pair, between the first and the last
+  month that it was used, is 0, a hollow dot on the base line, as is a month
+  whose activities with the pair add up to 0; before the first and after the
+  last, it is empty. A month of 0 does not always mean that the pair was not
+  used (it may not have been set in Garmin).
+- The panels are the gear set on activities in Garmin whose type is shoes
+  (other gear is left out). A name is the one in Garmin; without one, the make
+  and model; without either, **Shoes without a name**. A long name is cut
+  short with an ellipsis. Shoes of one name are told apart by their start date
+  after the name (the day set in Garmin, where it is theirs alone) or by a
+  number, which are never cut.
+- The panels go by the day each pair was last used in the period, the newest
+  first (on the same day, in the order of Garmin's gear). Shoes not used in
+  the period have no panel.
+- A line under the title gives the numbers only: the pairs, the activities of
+  the types counted in the period, and those with shoes. Under the panels,
+  **The shoes are as set in Garmin (of Garmin's gear, the shoes only). Their
+  names, start and end dates, and maximum distance are the values set in
+  Garmin as they are.** is always shown, and a line for each count of 1 or
+  more: the activities without shoes, those not known to have shoes (their
+  gear is not in the output, or of a type not known, or they cannot be linked
+  to gear), those with two or more shoes (they count for each, so the panels
+  of the shoes can add up to more than the distance panel), those with shoes
+  but without a distance (in the counts, not in the distances), and the shoes
+  without an activity in the period. Where no activity of the period and the
+  types has shoes, **No activity of this period and these types has shoes.**
+  shows in the place of the panels.
+- Move the pointer over a panel, or select a panel (Tab) and use ← and → (a
+  month) and Home and End (the first and the last month), to choose a month:
+  every panel gives its distance at the top right (at first, the last month).
+  With the keys, the name of the shoes and the distance are read out.
+- **Show as a table** gives two tables: one of the shoes (the distance and the
+  activities in the period, the days first and last used in it, and the start,
+  the end, and the maximum distance set in Garmin), and one by month (a row a
+  month, a column a pair of shoes, with the distance and the activities),
+  whose months stay at the left as it scrolls to the right. **Show as a
+  chart** goes back.
+- Where no activity of the output (up to today, of any type) has shoes, **This
+  output has no shoes to show.**, and where the data of the shoes is too
+  large, **The data of the shoes is too large to read.** shows under **By
+  shoes** in the menu, which then cannot be chosen: ↑ and ↓ stop on it, and
+  pressing it does nothing. Where only other periods or types have shoes, it
+  can be chosen, and the line above shows in the place of the panels.
+- The start, the end, and the maximum distance are the values set in Garmin,
+  as they are. This app says nothing from them, such as when to change shoes.
+
+![By shoes: the panels of made-up shoes (two of one name told apart by their start dates), the distance of the month chosen by the cross line at the top right, and the notes under the panels (synthetic data)](assets/gui-guide/view-shoes.en.png)
+
 ### Summary (from 2.2.0)
 
 - **Summary…** above the panels opens a window with a table of the items of
@@ -1580,9 +1650,10 @@ values are made):
 
 - Makes what you see one image file in SVG. **Save as image…** is right after
   **Summary…** in the row above the panels, and right after **Show as a
-  table** in the bars of **Compare years**, **Plot two items**, and
-  **Distribution**. It opens a window under the row of the button; only one of
-  the windows of **Marks…**, **Summary…**, and saving opens at a time.
+  table** in the bars of **Compare years**, **Plot two items**,
+  **Distribution**, and **By shoes**. It opens a window under the row of the
+  button; only one of the windows of **Marks…**, **Summary…**, and saving
+  opens at a time.
 - The row above the panels does not show while years are compared, another
   view is shown, or in full screen, where the window hides too and shows again
   after it. Without panels, its **Save as image…** cannot be pressed. When the
@@ -1596,12 +1667,15 @@ values are made):
 - In the other views, the window names in one line what it saves, and what you
   see becomes one picture, without the choices of the panels and the marks. By
   race day, the names of the races, which are the names of the marks, always
-  show.
+  show. By shoes, the window also says **The names of all the shoes show too,
+  also of the rows not on the screen.**
 - The name of the file holds dates (or years) and the keys of the items only
   (for example `garmin-view_2025-10-22_2026-10-21_dist-pace-hr.svg`): the
   years compared, oldest first (`garmin-compare_2018-2022-2025_dist.svg`), the
   days of the races, oldest first (never their names), or the period and the
-  keys of two items plotted or of a distribution.
+  keys of two items plotted, of a distribution, or of the shoes (the key of
+  the distance, as `garmin-shoes_2024-01-05_2024-12-31_dist.svg`, never the
+  names of the shoes).
 - The picture holds the headings of the panels with the keys of their lines,
   the charts, the time axis, and a line under them (the period, the grouping,
   the activity types counted, and the name and version of this app); in the
@@ -1609,6 +1683,8 @@ values are made):
   only), the words that the page shows under the points or the ranges, and a
   line of the years or race days compared or of the width of a range. A panel
   or a year without values goes in with the words that the page shows for it.
+  By shoes, every panel goes in, also those scrolled out of the screen, with
+  the time axis and the notes.
 - The overview, the list, the buttons, the name of the folder of the output,
   the cross line, and the frames that show the day, point, or range chosen,
   with the readings of its values, never go in; the points, the bars, and the
@@ -1623,8 +1699,9 @@ values are made):
   is sent anywhere.
 - Where it cannot save, the window says why: a view, or every panel, shown as
   a table; an answer on its way; numbers that stopped loading; for two items
-  plotted or a distribution, a period without values to draw; a chart without
-  room to be drawn; or a panel chosen that no longer shows.
+  plotted or a distribution, a period without values to draw; by shoes, a
+  period and types without an activity with shoes; a chart without room to be
+  drawn; or a panel chosen that no longer shows.
 - When, at the press, the picture to save is no longer the one that the window
   showed, or the image could not be made, the window says so, and the focus
   stays on **Save** where it can still be pressed; check the window, and press
@@ -1651,6 +1728,11 @@ values are made):
   activities of a period, and the table of **Summary…** can come from another
   reading than the panels beside them. Compare again, open the list again, or
   open the summary again, for the new reading.
+- In the other views (two items plotted, a distribution, and the shoes), the
+  values can come from another reading than the panels too. Back from another
+  view, the panels are asked again only where the period or the activity types
+  were changed while it showed; otherwise they stay as they were read before.
+  Choose the period again for the new reading.
 
 ### What is remembered for the next time
 
@@ -1680,11 +1762,11 @@ later one.
 - Not remembered: the output shown, the same scale, a panel enlarged, a table
   shown, full screen, whether years were compared, with the years or races
   chosen and the year highlighted, whether a list of activities was open,
-  whether another view was shown, with the point or the range chosen, whether
-  the summary was open, and whether the window of saving as an image was open,
-  with its choices. As the output shown is not remembered, the page opened
-  from the bar at the bottom offers the latest output with the button of [Open
-  the view page](#open-the-view-page).
+  whether another view was shown, with the point, the range, or the month of
+  the shoes chosen, whether the summary was open, and whether the window of
+  saving as an image was open, with its choices. As the output shown is not
+  remembered, the page opened from the bar at the bottom offers the latest
+  output with the button of [Open the view page](#open-the-view-page).
 - **Forget the remembered settings…** in the bar at the bottom of the
   normalization page forgets all of these, and also the Snapshot Store, the
   folder for the output, and the list of earlier outputs: the next launch goes
@@ -2121,6 +2203,10 @@ it. To remove Python too, do as the documents of python.org say, for
   holds dates (or years) and the keys of the items only. The images you saved
   are your own files: **Forget the remembered settings…** does not remove
   them.
+- The names of the shoes of [By shoes](#by-shoes) (from 2.2.0) may be names
+  you gave in Garmin. They show on the page and in a picture you save (the
+  window says so before saving). This app writes them in no file name, log, or
+  remembered setting.
 
 See [Security and Privacy Boundary](security_and_privacy_boundary.md).
 
@@ -2173,8 +2259,13 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
   order of the dates and times) and Home and End choose a point and read out
   its date and time, its type, and its two values (and how many more have the
   same values). In **Distribution**, ← and → (those of no activity among them)
-  and Home and End choose a range and read out the range and its activities
-  ([Other views](#other-views-from-220)).
+  and Home and End choose a range and read out the range and its activities.
+  In **By shoes**, select a panel: ← and → (a month) and Home and End choose a
+  month and read out the name of the shoes and the distance of the month.
+  Where **By shoes** cannot be chosen, ↑ and ↓ stop on it and its reason is
+  read out too; Enter and Space do nothing. Tab goes into the box of each
+  table of **Show as a table**, which the arrow keys scroll ([Other
+  views](#other-views-from-220)).
 - In **Summary…** (from 2.2.0), the window takes the focus on its title; Tab
   goes to **Close** and to the table, which ↑ and ↓ scroll, and Esc closes it,
   back to its button ([Summary](#summary-from-220)).

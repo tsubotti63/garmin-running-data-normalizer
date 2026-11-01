@@ -304,7 +304,11 @@ class GuiCatalogTest(unittest.TestCase):
                 ("view.help.other_plot", "view.other.button"),
                 ("view.help.other_plot", "view.other.plot"),
                 ("view.help.other_spread", "view.other.spread"),
-                ("view.help.other_spread", "view.panel.unbig"),
+                # v2.2.0 S2: the view by shoes, its tables, and the way back,
+                # which moved from the distribution to the last paragraph.
+                ("view.help.other_shoes", "view.other.shoes"),
+                ("view.help.other_shoes", "view.panel.table"),
+                ("view.help.other_shoes", "view.panel.unbig"),
                 # v2.2.0 Q2: the help of the summary names its button and a
                 # period of years.
                 ("view.help.recap_text", "view.recap.button"),

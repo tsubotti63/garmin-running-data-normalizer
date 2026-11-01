@@ -72,10 +72,13 @@ output and exit contracts.
 ## Out of scope for 2.1.0
 
 - Laying the years over each other, aligning the starts of periods, and
-  relating two items
+  relating two items (v2.2.0 lays the years over each other, also by race day:
+  see [The view page](#the-view-page-v210))
 - Views by shoe or of personal records, the bands of the training status, and
-  moving averages
-- Saving a chart as a picture or a file
+  moving averages (v2.2.0 adds the view by shoes: see [The view
+  page](#the-view-page-v210))
+- Saving a chart as a picture or a file (v2.2.0 saves a chart as an SVG
+  picture: see [The view page](#the-view-page-v210))
 - Outputs of other versions on the view page
 - Interpreting the numbers, and coaching
 - Any outbound network feature; weather enrichment (Open-Meteo) stays deferred
@@ -783,10 +786,16 @@ Reading an output:
 
 - The server checks the output with the checks of the GUI, and reads only the
   dates and the values of the items, of ten files at most, each compared by
-  size and SHA-256 with the manifest that it read before the checks. A file
-  or a manifest that changed stops the reading with `OUTPUT_CHANGED`. A file
-  over 128 MiB, files over 512 MiB together, or a manifest over 256 MiB are
-  not read, and stop it with `OUTPUT_NOT_AVAILABLE`.
+  size and SHA-256 with the manifest that it read before the checks. A file or
+  a manifest that changed stops the reading with `OUTPUT_CHANGED`. A file over
+  128 MiB, files over 512 MiB together, or a manifest over 256 MiB are not
+  read, and stop it with `OUTPUT_NOT_AVAILABLE`. From v2.2.0 the view page
+  (never the series command) also reads the two files of the shoes,
+  `normalized/gear.json` and `normalized/activity_gear.json`, after those of
+  the items and checked in the same way (one that the manifest leaves out, or
+  that changed, stops the reading with `OUTPUT_CHANGED`), within what the
+  items leave of those limits: where they do not fit, the shoes alone are left
+  out and the page opens (see By shoes below).
 - Rows without a date, and rows dated after today in the output's timezone,
   are counted and left out: one date far ahead, from a wrong clock, would
   stretch the time axis and leave the last years empty.
@@ -1026,29 +1035,34 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   chosen fit), the table is that of comparing years by day, and in forced
   colors the steps are one color by their opacity. The settings remember the
   calendar as a way. No new API.
-- Other views (stages O1 and P1): **Other views** in the row above the panels
-  is a menu: Enter, Space, or Down opens it on its first item, Up and Down
-  (round), Home, and End move in it, Esc closes it to its button, and Tab or a
-  click elsewhere closes it; the row, and the menu with it, is not shown while
-  comparing years or while another view shows. Another view takes the place of
-  the panels as a comparison of years does: the item shelf, the layouts, and
-  the grouping are not used, with a line that says so; the period, its arrows
-  (which go by the answer of the view), a custom range, and the activity types
-  are the page's, and a change of them stays for the panels, which ask again
-  on the way back, the focus on the menu. Each view asks for its answer under
-  the checks of the numbers (the ticket, the activity types of the output, the
-  size of the answer, and an output that changed); its activities are those of
-  the types counted in the days of the period, chosen by the function that
-  chooses the rows of the list of a period, and a value is one that the list
-  writes (the pace by the time over the distance). The items are the 15 of one
-  activity (the kinds `act`, but the count, and `fit`); the settings remember
-  those chosen while the page has panels, as the rest of the view
-  (`view_plot`, a pair kept whole or not at all, and `view_spread`). The
-  answers are of one generation: an older answer, or one of another pair or
-  item, is never drawn, an output that opens drops those on their way, a
-  ticket that the server no longer keeps opens the output again once, and an
-  output that stops closes the view; while an answer of the same pair or item
-  is on its way, the chart before stays, dimmed.
+- Other views (stages O1, P1, and S1): **Other views** in the row above the
+  panels is a menu: Enter, Space, or Down opens it on its first item, Up and
+  Down (round), Home, and End move in it, Esc closes it to its button, and Tab
+  or a click elsewhere closes it; the row, and the menu with it, is not shown
+  while comparing years or while another view shows. An item that cannot be
+  chosen (**By shoes**, where no activity of the output has shoes, or their
+  files were too large to read) says why under its name, stays in the way of
+  the arrow keys (`aria-disabled`), and does nothing when pressed. Another
+  view takes the place of the panels as a comparison of years does: the item
+  shelf, the layouts, and the grouping are not used, with a line that says so;
+  the period, its arrows (which go by the answer of the view), a custom range,
+  and the activity types are the page's, and a change of them stays for the
+  panels, which ask again on the way back, the focus on the menu. Each view
+  asks for its answer under the checks of the numbers (the ticket, the
+  activity types of the output, the size of the answer, and an output that
+  changed); its activities are those of the types counted in the days of the
+  period, chosen by the function that chooses the rows of the list of a
+  period, and a value is one that the list writes (the pace by the time over
+  the distance). The items of two items plotted and of a distribution are the
+  15 of one activity (the kinds `act`, but the count, and `fit`); the settings
+  remember those chosen while the page has panels, as the rest of the view
+  (`view_plot`, a pair kept whole or not at all, and `view_spread`); the view
+  by shoes always shows the distance by month, and nothing of it is
+  remembered. The answers are of one generation: an older answer, or one of
+  another pair or item, is never drawn, an output that opens drops those on
+  their way, a ticket that the server no longer keeps opens the output again
+  once, and an output that stops closes the view; while an answer of the same
+  pair or item is on its way, the chart before stays, dimmed.
 - Two items plotted (stage O1): `/api/view/points` gives each activity with a
   value of both items as a point, the newest `MAX_POINTS` (5,000) at most,
   oldest first in the order of their dates and times as they show, with how
@@ -1090,6 +1104,45 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   high as the chart. The table gives a row a range, those of no activity among
   them. In forced colors, the bars are in the color of the text and the range
   chosen in the highlight.
+- By shoes (stage S1): **By shoes**, the third item of **Other views**, shows
+  a panel for each pair of shoes with its distance by month in the place of
+  the panels, as the rows of comparing years do: one color, one scale for all,
+  on one time axis over the period chosen, as bars up to 220 months and as a
+  line above (`MAX_BARS`). Only the view page reads the shoes (see Reading an
+  output above). The links join as the output declares them: by
+  `garmin_activity_key`, both ends `explicit`, a gear key as a token of
+  `common.identity`, the first record of a key. Gear of the type `shoes` or
+  `running_shoes` (in lower case) are shoes; an activity with no link to shoes
+  is not known to have shoes where it has no key, or links to gear not in the
+  output or of a type not known; links to other gear are left out. A name is
+  the `display_name`, else the `custom_make_model`, else none. The answers of
+  opening and of the numbers say how many pairs link to an activity of the
+  output up to today, of any type, or that their files were too large
+  (`shoe_count`); with none, or too large, the item cannot be chosen, and the
+  page keeps what the answer asked for last says. `POST /api/view/shoes`
+  `{view, period, types}`, checked as the numbers are, answers
+  (`shoe_answer`), for the activities of the period and the types counted, how
+  many have shoes (and of those, how many have two or more and how many have
+  no distance), are not known, and are without; and for each pair with an
+  activity in the period, the newest last use first (then the order of
+  `gear.json`): its distance by month (0 between its first and last use), in
+  the whole period (from its activities, never the sum of the months), its
+  activities by month, its first and last days, what Garmin sets (start, end,
+  and maximum distance in meters), and what tells it from the shoes of the
+  same name (the day of its start where it is theirs alone, else its number).
+  Pairs without an activity in the period are counted only; with no pair in
+  the period, the page says so in the place of the panels and cannot save a
+  picture. A long name is cut with an ellipsis, never what tells it apart. A
+  cross line, moved by the pointer over a row or by Left, Right, Home, and End
+  on a row, reads the month of every row, and the row of the keys says it.
+  **Show as a table** gives a table of the shoes and one by month, whose
+  months stay at the left while it scrolls. The notes say what Garmin sets and
+  each count of 1 or more. A picture saved holds every row, also those
+  scrolled out of the screen, the axis, the notes, and the footer, never the
+  cross line; its file is named by the period and the key of the distance,
+  never by a name, and the window says before saving that the names of all the
+  shoes show. The names are written in no log, setting, or file name. Nothing
+  is said from the values that Garmin sets.
 - The summary of the panels (stage Q1): `/api/view/series` with `"previous":
   true` (a truth value, with the whole period `RANGE_GRAIN` only) also gives
   the days chosen, before the output cuts them, and whether the output holds
@@ -1177,11 +1230,14 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   saved shows the highlight as the page does (the marks are on the shapes
   themselves, which the box of a picture keeps), with the key of the year in
   bold.
-- An output that changes while the view page is open is read again at the
-  next request (and so is any output when the date changes), so that a
-  comparison, a list, or the summary asked right after a new normalization
+- An output that changes while the view page is open is read again at the next
+  request (and so is any output when the date changes), so that a comparison,
+  a list, the summary, or another view asked right after a new normalization
   can come from another reading than the panels beside it; asking again uses
-  the new reading. The guides say this in one place.
+  the new reading. Back from another view, the panels ask again only where the
+  period or the activity types changed while it showed (`panelsStale`), so
+  that otherwise they show the reading before. The guides say this in one
+  place.
 
 ## Data handling in 2.0.0
 
@@ -1443,6 +1499,10 @@ Processing:
   nothing anywhere. The name of its file holds dates (or years) and the keys
   of the items only. A picture saved is the person's own file, which "Forget
   the remembered settings…" does not remove.
+- From v2.2.0 the names of the shoes, which may be the person's own words,
+  show on the view page and in a picture saved from the view by shoes (its
+  window says so before saving); they are written in no file name, log, or
+  setting.
 - The view page (v2.1.0) writes nothing in an output. The server keeps what
   it read in memory only, under a ticket that holds no place.
 - A Snapshot Store or a folder for the output in a folder that a cloud may

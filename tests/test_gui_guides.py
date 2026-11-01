@@ -647,6 +647,7 @@ class GuiGuideTest(unittest.TestCase):
             "view-compare-race",
             "view-plot",
             "view-spread",
+            "view-shoes",
             "view-recap",
             "view-save",
             "view-save-picture",
@@ -655,6 +656,8 @@ class GuiGuideTest(unittest.TestCase):
         # The picture saved is cut above its line at the bottom, under the
         # chart of each language (R3).
         sizes |= {("view-save-picture", "en"): (1200, 532), ("view-save-picture", "ja"): (1200, 598)}
+        # S2: the view by shoes, 860 px high so that the two rows of one name show.
+        sizes |= {("view-shoes", "en"): (1470, 860), ("view-shoes", "ja"): (1470, 860)}
         japanese = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
         for language, path in GUIDES.items():
             with self.subTest(language=language):
@@ -688,9 +691,12 @@ class GuiGuideTest(unittest.TestCase):
         # May of every year, after the past year on the view page; from M4, an
         # eighth compares the 16 weeks before races, after it; from OP2, a ninth
         # gives the distances of the last year as a distribution, after it (the
-        # checker's answer 3 of the plan of OP2). From R3, an eleventh keeps a
-        # comparison of years as an image, after the summary (the checker's
-        # answer 2 of the plan of R3).
+        # checker's answer 3 of the plan of OP2). From R3, a scene keeps a
+        # comparison of years as an image, after the summary, the tenth of
+        # eleven (the checker's answer 2 of the plan of R3); from S2, a scene
+        # sees the distance of each pair of shoes by month, after it, the
+        # eleventh of twelve (answer 2 of the plan of S2); the CSV file stays
+        # last.
         parts = {
             "en": ("How it goes", "Ways to use it", "More: [", "(#start-the-gui)"),
             "ja": ("全体の流れ", "場面ごとの使い方", "くわしくは：[", "(#gui-を起動する)"),
@@ -718,8 +724,8 @@ class GuiGuideTest(unittest.TestCase):
                         if scene.startswith(("Give the numbers to an AI", "数字を CSV にして")):
                             care = {"en": "personal data", "ja": "個人のデータ"}[language]
                             self.assertLess(reads.index(care), reads.index("`about`"))
-        self.assertEqual(len(scenes["en"]), 11)
-        self.assertEqual(len(scenes["ja"]), 11)
+        self.assertEqual(len(scenes["en"]), 12)
+        self.assertEqual(len(scenes["ja"]), 12)
         for language, title, race, spread, recap in (
             ("en", "Compare May of every year", "Compare the 16 weeks before races", "See how often you ran each distance in the last year", "Compare the last year with the year before"),
             ("ja", "毎年の 5 月をくらべる", "大会の前の 16 週をくらべる", "直近 1 年に、どの距離を何回走ったかを見る", "この 1 年と前の 1 年をくらべる"),
@@ -730,8 +736,9 @@ class GuiGuideTest(unittest.TestCase):
                 self.assertTrue(scenes[language][7].startswith(spread))
                 self.assertTrue(scenes[language][8].startswith(recap))
                 self.assertTrue(scenes[language][9].startswith(("Keep a comparison of years as an image", "年でくらべた図を画像にして残す")))
-                self.assertTrue(scenes[language][10].startswith(("Give the numbers to an AI", "数字を CSV にして")))
-        intro = {"en": "The steps of eleven common cases.", "ja": "よくある 11 の場面の手順です。"}
+                self.assertTrue(scenes[language][10].startswith(("See the distance of each pair of shoes by month", "靴ごとに、月ごとの距離を見る")))
+                self.assertTrue(scenes[language][11].startswith(("Give the numbers to an AI", "数字を CSV にして")))
+        intro = {"en": "The steps of twelve common cases.", "ja": "よくある 12 の場面の手順です。"}
         for language, path in GUIDES.items():
             with self.subTest(language=language, part="intro"):
                 self.assertIn(intro[language], path.read_text(encoding="utf-8"))
@@ -856,7 +863,7 @@ class GuiGuideTest(unittest.TestCase):
                 "When another output opens (from 2.2.0), a period such as **1 year** stays as it is.",
                 "A period chosen with **Custom range…** shrinks to the days of the output when it overlaps them in part, and becomes **All time** when it does not overlap them at all.",
                 "The activity types counted are those remembered that the output has; when it has none of them, every running type in the output.",
-                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, full screen, whether years were compared, with the years or races chosen and the year highlighted, whether a list of activities was open, whether another view was shown, with the point or the range chosen, whether the summary was open, and whether the window of saving as an image was open, with its choices.",
+                "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, full screen, whether years were compared, with the years or races chosen and the year highlighted, whether a list of activities was open, whether another view was shown, with the point, the range, or the month of the shoes chosen, whether the summary was open, and whether the window of saving as an image was open, with its choices.",
                 "the names of places and of the items of the view page, and from 2.2.0 also the names of the layouts you saved, the days of a period chosen with **Custom range…**, the activity types counted, and the timezone. They stay on this computer",
             ),
             "ja": (
@@ -869,7 +876,7 @@ class GuiGuideTest(unittest.TestCase):
                 "⤢ の所が「段を並べて見る」（2.1.0 では「元に戻す」）になり、",
                 "「範囲を選ぶ…」で選んだ期間は、その出力の日の範囲と一部だけ重なるときは重なる所に縮まり、まったく重ならないときは「全期間」になります。",
                 "数える種目は、覚えた種目のうち、その出力にある種目です。1 つも無いときは、その出力のランニングの種目すべてです。",
-                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、強調した年、区切りの一覧を開いていたか、ほかの見方を開いていたかと、選んだ点や分かれ方の区切り、まとめの窓を開いていたか、画像で保存の窓を開いていたかと、その選び。",
+                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、強調した年、区切りの一覧を開いていたか、ほかの見方を開いていたかと、選んだ点や分かれ方の区切り、靴ごとで選んだ月、まとめの窓を開いていたか、画像で保存の窓を開いていたかと、その選び。",
                 "2.2.0 からは、保存した表示の型の名前、「範囲を選ぶ…」で選んだ期間の日付、数える種目、タイムゾーンも入ります。",
             ),
         }
@@ -1571,7 +1578,9 @@ class GuiGuideTest(unittest.TestCase):
         before = {"en": "Compare years (from 2.2.0)", "ja": "年でくらべる（2.2.0 から）"}
         # Q2: the summary follows the other views.
         after = {"en": "Summary (from 2.2.0)", "ja": "まとめ（2.2.0 から）"}
-        own = {"en": ("Plot two items", "Distribution"), "ja": ("点で並べる", "分かれ方")}
+        # S2: the view by shoes has its heading after the distribution, and is
+        # read apart from it (its words in test_guides_give_the_shoes_as_the_page_does).
+        own = {"en": ("Plot two items", "Distribution", "By shoes"), "ja": ("点で並べる", "分かれ方", "靴ごと")}
         heads = {"en": ("Item", "Width of a range"), "ja": ("項目", "区切りの幅")}
         scene = {"en": "See how often you ran each distance in the last year", "ja": "直近 1 年に、どの距離を何回走ったかを見る"}
         for language, path in GUIDES.items():
@@ -1584,13 +1593,15 @@ class GuiGuideTest(unittest.TestCase):
             with self.subTest(language=language, part="order"):
                 self.assertEqual(places, sorted(places))
             part = text[places[1] : places[2]]
-            plot_at, spread_at = (part.index(f"\n#### {title}\n") for title in own[language])
+            plot_at, spread_at, shoes_at = (part.index(f"\n#### {title}\n") for title in own[language])
             with self.subTest(language=language, part="headings"):
                 self.assertLess(plot_at, spread_at)
+                self.assertLess(spread_at, shoes_at)
             parts = {
                 "menu": part[:plot_at],
                 "plot": part[plot_at:spread_at],
-                "spread": part[spread_at:],
+                "spread": part[spread_at:shoes_at],
+                "shoes": part[shoes_at:],
             }
             joined = {key: " ".join(value.split()) if language == "en" else re.sub(r"\n *", "", value) for key, value in parts.items()}
             # The widths, as a table of two columns in the order of the page.
@@ -1604,11 +1615,11 @@ class GuiGuideTest(unittest.TestCase):
             if language == "en":
                 phrases = {
                     "menu": (
-                        f"{mark.format(messages['view.other.button'])} above the panels shows {mark.format(messages['view.other.plot'])} or {mark.format(messages['view.other.spread'])} in the place of the panels.",
+                        f"{mark.format(messages['view.other.button'])} above the panels shows {mark.format(messages['view.other.plot'])}, {mark.format(messages['view.other.spread'])}, or {mark.format(messages['view.other.shoes'])} in the place of the panels.",
                         "Enter, Space, or ↓ opens its menu on the first item; ↑, ↓, Home, and End move in it, and Esc closes it, back to its button. Tab or a click elsewhere closes it too.",
                         f"While one shows, the {mark.format(messages['view.shelf.heading'])}, {mark.format(messages['view.layouts.heading'])}, and {mark.format(messages['view.grain.label'])} are not used; a line under the filters says so.",
                         "a period or activity types changed here stay for the panels when you go back (while comparing years, the period cannot be changed).",
-                        f"{mark.format(messages['view.panel.unbig'])} goes back, the focus on {mark.format(messages['view.other.button'])}. To go from one view to the other, go back to the panels first. While comparing years, {mark.format(messages['view.other.button'])} is not shown.",
+                        f"{mark.format(messages['view.panel.unbig'])} goes back, the focus on {mark.format(messages['view.other.button'])}. To go from one of these views to another, go back to the panels first. While comparing years, {mark.format(messages['view.other.button'])} is not shown.",
                     ),
                     "plot": (
                         f"Each activity is one point, one item across and another up, chosen in the lists of the title, {mark.format(messages['view.plot.x'])} and {mark.format(messages['view.plot.y'])}; at first the {name['pace'].lower()} across and the {name['hr'].lower()} up, and later the two chosen last. An item chosen in one list cannot be chosen in the other, and the list says why.",
@@ -1636,18 +1647,18 @@ class GuiGuideTest(unittest.TestCase):
                         "An end of a range of a value too large to write, such as a record of an error, is a dash (—).",
                     ),
                 }
-                keyboard = "In **Other views** (from 2.2.0), Enter, Space, or ↓ opens the menu on its first item, ↑, ↓, Home, and End move in it, and Esc closes it, back to its button. In **Plot two items**, select the chart: ← and → (one point in the order of the dates and times) and Home and End choose a point and read out its date and time, its type, and its two values (and how many more have the same values). In **Distribution**, ← and → (those of no activity among them) and Home and End choose a range and read out the range and its activities ([Other views](#other-views-from-220))."
+                keyboard = "In **Other views** (from 2.2.0), Enter, Space, or ↓ opens the menu on its first item, ↑, ↓, Home, and End move in it, and Esc closes it, back to its button. In **Plot two items**, select the chart: ← and → (one point in the order of the dates and times) and Home and End choose a point and read out its date and time, its type, and its two values (and how many more have the same values). In **Distribution**, ← and → (those of no activity among them) and Home and End choose a range and read out the range and its activities. In **By shoes**, select a panel: ← and → (a month) and Home and End choose a month and read out the name of the shoes and the distance of the month. Where **By shoes** cannot be chosen, ↑ and ↓ stop on it and its reason is read out too; Enter and Space do nothing. Tab goes into the box of each table of **Show as a table**, which the arrow keys scroll ([Other views](#other-views-from-220))."
                 remembered = ("whether **Show marks** is on, and the two items plotted and the item of a distribution of [Other views](#other-views-from-220).", "whether marks show, and the two items plotted and the item of a distribution.")
                 forgets = "the two items plotted and the item of a distribution"
                 steps = (f"2. Press {mark.format(messages['view.period.years1'])} in {mark.format(messages['view.period.label'])} above. Keep {mark.format(messages['view.types.label'])} to running types", f"3. Choose {mark.format(messages['view.other.spread'])} in {mark.format(messages['view.other.button'])} above the panels, and {mark.format(name['dist'])} in the list of its title")
             else:
                 phrases = {
                     "menu": (
-                        f"段の上の{mark.format(messages['view.other.button'])}で、段の代わりに{mark.format(messages['view.other.plot'])}か{mark.format(messages['view.other.spread'])}を出します。",
+                        f"段の上の{mark.format(messages['view.other.button'])}で、段の代わりに{mark.format(messages['view.other.plot'])}{mark.format(messages['view.other.spread'])}か{mark.format(messages['view.other.shoes'])}を出します。",
                         "メニューは、Enter・Space・↓ キーで開いて最初の項目に移り、↑ ↓・Home・End キーで動き、Esc キーでボタンに戻って閉じます。Tab キーか、ほかの所を押しても閉じます。",
                         f"出ている間は{mark.format(messages['view.shelf.heading'])}{mark.format(messages['view.layouts.heading'])}{mark.format(messages['view.grain.label'])}を使いません。フィルターの下に、そのことが 1 行で出ます。",
                         "ここで変えた期間と数える種目は、段に戻ってもそのまま段に効きます（年でくらべる間は、期間を変えられません）。",
-                        f"戻るときは{mark.format(messages['view.panel.unbig'])}を押します。フォーカスは{mark.format(messages['view.other.button'])}に戻ります。点で並べると分かれ方を行き来するときは、いったん段に戻ります。年でくらべる間は、{mark.format(messages['view.other.button'])}は出ません。",
+                        f"戻るときは{mark.format(messages['view.panel.unbig'])}を押します。フォーカスは{mark.format(messages['view.other.button'])}に戻ります。ほかの見方どうしを行き来するときは、いったん段に戻ります。年でくらべる間は、{mark.format(messages['view.other.button'])}は出ません。",
                     ),
                     "plot": (
                         f"1 回のアクティビティを 1 つの点にして、2 つの項目を横と縦に並べます。項目は、題の中の{mark.format(messages['view.plot.x'])}と{mark.format(messages['view.plot.y'])}の一覧で選びます。初めは{name['pace']}（横）と{name['hr']}（縦）で、次に開いたときは前に選んだ 2 つです。もう一方で選んでいる項目は選べず、一覧にそのわけが出ます。",
@@ -1675,7 +1686,7 @@ class GuiGuideTest(unittest.TestCase):
                         "記録の誤りのような、とても大きい値の区切りの端は「—」で書きます。",
                     ),
                 }
-                keyboard = "ほかの見方（2.2.0 から）では、メニューを Enter・Space・↓ キーで開くと最初の項目に移り、↑ ↓・Home・End キーで動き、Esc キーでボタンに戻って閉じます。点で並べるでは、グラフを選んで ← → キー（日時の順に 1 つずつ）と Home・End で点を選ぶと、日時・種目・2 つの値（同じ値の回があればその数も）を読み上げます。分かれ方では、← → キー（回数の無い区切りも通ります）と Home・End で区切りを選ぶと、範囲と回数を読み上げます（[ほかの見方](#ほかの見方220-から)）。"
+                keyboard = "ほかの見方（2.2.0 から）では、メニューを Enter・Space・↓ キーで開くと最初の項目に移り、↑ ↓・Home・End キーで動き、Esc キーでボタンに戻って閉じます。点で並べるでは、グラフを選んで ← → キー（日時の順に 1 つずつ）と Home・End で点を選ぶと、日時・種目・2 つの値（同じ値の回があればその数も）を読み上げます。分かれ方では、← → キー（回数の無い区切りも通ります）と Home・End で区切りを選ぶと、範囲と回数を読み上げます。靴ごとでは、段を選んで ← → キー（1 か月ずつ）と Home・End で月を選ぶと、靴の名前とその月の距離を読み上げます。メニューの「靴ごと」が選べないときは、↑ ↓ キーでそこに止まり、わけも読み上げます。Enter・Space キーでは何もしません。「表で見る」の 2 つの表は、Tab キーで表の枠に入ると、矢印キーで送れます（[ほかの見方](#ほかの見方220-から)）。"
                 remembered = ("「印を出す」かどうか、[ほかの見方](#ほかの見方220-から)の点で並べる 2 つの項目と分かれ方の項目も覚えます。", "「印を出す」かどうか、点で並べる 2 つの項目と分かれ方の項目も。")
                 forgets = "点で並べる 2 つの項目と分かれ方の項目"
                 steps = (f"2. 上の{mark.format(messages['view.period.label'])}で{mark.format(messages['view.period.years1'])}を押します。{mark.format(messages['view.types.label'])}は、ランニングの種目だけにします", f"3. 段の上の{mark.format(messages['view.other.button'])}で{mark.format(messages['view.other.spread'])}を選び、題の一覧で{mark.format(name['dist'])}を選びます")
@@ -1853,8 +1864,8 @@ class GuiGuideTest(unittest.TestCase):
     def test_guides_give_the_saving_as_the_page_does(self) -> None:
         # v2.2.0 R3: saving as an image (stages R1 and R2) has a section of
         # its own after the summary, before the readings of an output that
-        # changes (the checker's answer 1 of the plan of R3), and the eleventh
-        # scene (answer 2). What the guides say of it is what the page does,
+        # changes (the checker's answer 1 of the plan of R3), and a scene, the
+        # tenth (answer 2). What the guides say of it is what the page does,
         # so that a change of either fails here (Codex's review of the plan of
         # R3): the first choices of the window, the row above the panels that
         # hides, what a picture leaves out, the views that cannot save without
@@ -1902,7 +1913,7 @@ class GuiGuideTest(unittest.TestCase):
         after = {"en": "When the output changes while you look (from 2.2.0)", "ja": "見ている間に出力が変わったとき（2.2.0 から）"}
         says = {
             "en": (
-                "**Save as image…** is right after **Summary…** in the row above the panels, and right after **Show as a table** in the bars of **Compare years**, **Plot two items**, and **Distribution**.",
+                "**Save as image…** is right after **Summary…** in the row above the panels, and right after **Show as a table** in the bars of **Compare years**, **Plot two items**, **Distribution**, and **By shoes**.",
                 "The row above the panels does not show while years are compared, another view is shown, or in full screen, where the window hides too and shows again after it. Without panels, its **Save as image…** cannot be pressed. When the view changes, the window closes.",
                 "its choices are the first ones again: all the panels, the light colors, and no marks (nothing is remembered).",
                 "the cross line, and the frames that show the day, point, or range chosen, with the readings of its values, never go in; the points, the bars, and the days themselves do.",
@@ -1914,7 +1925,7 @@ class GuiGuideTest(unittest.TestCase):
                 "Esc, **Close**, or **Cancel** closes it, and the focus goes back to its **Save as image…** then and after the file is handed to the browser.",
             ),
             "ja": (
-                "段の上の行の「まとめ…」の右と、年でくらべる・点で並べる・分かれ方の帯の「表で見る」の右に、「画像で保存…」があります。",
+                "段の上の行の「まとめ…」の右と、年でくらべる・点で並べる・分かれ方・靴ごとの帯の「表で見る」の右に、「画像で保存…」があります。",
                 "年でくらべる・ほかの見方・全画面の間は、段の上の行が隠れます（全画面の間は窓も隠れ、戻ると出ます）。段が無いときは、段の上の「画像で保存…」は押せません。見方が変わると、窓は閉じます。",
                 "窓を開くたびに、選びは初めの形（並べた段すべて・明るい色・印は入れない）に戻ります（覚えません）。",
                 "全体図・一覧・ボタン・出力のフォルダーの名前と、縦の線、選んだ日・点・区切りを示す枠、その値を読む所は入りません（点や棒、カレンダーの日そのものは入ります）。",
@@ -1927,7 +1938,8 @@ class GuiGuideTest(unittest.TestCase):
             ),
         }
         scene = {"en": "Keep a comparison of years as an image", "ja": "年でくらべた図を画像にして残す"}
-        scenes = {"en": ("Compare the last year with the year before", "Give the numbers to an AI as a CSV file"), "ja": ("この 1 年と前の 1 年をくらべる", "数字を CSV にして、AI に渡す")}
+        # S2: the scene of the shoes follows (before that of the CSV file).
+        scenes = {"en": ("Compare the last year with the year before", "See the distance of each pair of shoes by month"), "ja": ("この 1 年と前の 1 年をくらべる", "靴ごとに、月ごとの距離を見る")}
         steps = {
             "en": ("Press **Compare years** in the heading of a panel", "Press **Save as image…** in its bar.", "Choose the colors under **Colors**, and press **Save**.", "look in your downloads.", "More: [Saving as an image](#saving-as-an-image-from-220)"),
             "ja": ("段の見出しの「年でくらべる」を押し", "帯の「画像で保存…」を押します。", "「色」を選び、「保存」を押します。", "ブラウザーのダウンロードの場所を見ます。", "くわしくは：[画像で保存](#画像で保存220-から)"),
@@ -1994,6 +2006,214 @@ class GuiGuideTest(unittest.TestCase):
                 for phrase in {"en": ("hands what you see to the browser as one SVG file to download", "dates (or years) and the keys of the items only", "nothing is sent anywhere"), "ja": ("ブラウザーにダウンロードとして渡します", "日付（または年）と項目の鍵だけ", "どこへも送りません")}[language]:
                     self.assertIn(phrase, help_text)
 
+    def test_guides_give_the_shoes_as_the_page_does(self) -> None:
+        # v2.2.0 S2: the view by shoes of stage S1 has a heading of its own
+        # under the other views, after the distribution and before the summary
+        # (the checker's answer 1 of the plan of S2), and the eleventh of the
+        # twelve scenes (answer 2). What the guides, the help, and the design
+        # say of it is what the page and the server do, so that a change of
+        # either fails here (Codex's review of the plan of S2): bars up to
+        # MAX_BARS months and a line above (1), the picture that cannot be
+        # saved without a pair of shoes in the period (2), the panels asked
+        # again on the way back only after a change in another view (3), the
+        # item that cannot be chosen for the activities of the output of any
+        # type (8), the axis over the period chosen (9), the names, the order,
+        # the notes, the keys, the tables, the name of a file, and what is not
+        # remembered. Each sentence is held whole; every word quoted is a word
+        # of the page, whole (4).
+        flow = (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8")
+        page = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        chart = (STATIC_ROOT / "view_chart.mjs").read_text(encoding="utf-8")
+        server = (ROOT / "src/garmin_running_data_normalizer/view/series.py").read_text(encoding="utf-8")
+        reader = (ROOT / "src/garmin_running_data_normalizer/view/data.py").read_text(encoding="utf-8")
+        settings = (ROOT / "src/garmin_running_data_normalizer/gui/settings.py").read_text(encoding="utf-8")
+        bars = int(re.search(r"^export const MAX_BARS = (\d+);$", chart, re.M).group(1))
+        self.assertEqual(bars, 220)
+        self.assertIn("const bars = zeros && !lineOnly && periods.length <= MAX_BARS;", chart)
+        held = {
+            (flow, "shoeWords"): ('message("view.shoes.unnamed")', 'message("view.shoes.started", { day: dateText(shoe.day, language) })', 'message("view.shoes.number", { n: shoe.number })'),
+            (flow, "shoesNotes"): ('const notes = [message("view.shoes.note_garmin")];', "if (Number.isInteger(answer[name]) && answer[name] > 0) {"),
+            (flow, "shoesWhy"): ('return "view.other.shoes_too_large";', 'return known && Number.isInteger(shoes.count) && shoes.count > 0 ? null : "view.other.shoes_none";'),
+            (flow, "saveViewFileName"): ("return `garmin-shoes_${start}_${end}_${key}.svg`;",),
+            (page, "drawShoePlot"): ("width, height, total: true, shared: context.shared });", 'appendMarks(svg, shapes.lines[0], "c1", null, { outlined: true });'),
+            (page, "renderShoesBody"): ("shoes.cursor = periods.length - 1;",),
+            (page, "shoesKeyDown"): ("const moves = { ArrowLeft: state.shoes.cursor - 1, ArrowRight: state.shoes.cursor + 1, Home: 0, End: last };",),
+            (page, "moveShoesCross"): ("setText(ui.shoesAnnouncer, `${describe(shoeName(answer.shoes[entry.index], state.language))} ${words}`);",),
+            (page, "saveShoesTarget"): ("empty: drawn !== null && !drawn.shoes.length,", 'name: drawn === null ? null : saveViewFileName("shoes", { key: "dist", start: drawn.start, end: drawn.end }),'),
+            (page, "requestShown"): ("state.panelsStale = true;",),
+            (page, "leaveShoes"): ("if (state.panelsStale) {",),
+        }
+        for (script, name), lines in held.items():
+            body = function_body(script, name)
+            for line in lines:
+                with self.subTest(function=name, line=line):
+                    self.assertIn(line, body)
+        # The panels are asked again on the way back only where requestShown
+        # set it, while another view showed (Codex's review of the plan of S2, 3).
+        self.assertEqual(page.count("state.panelsStale = true;"), 1)
+        self.assertIn('ui.shoesPanels.addEventListener("pointermove", shoesPointer);', page)
+        self.assertIn('ui.shoesPanels.addEventListener("keydown", shoesKeyDown);', page)
+        self.assertIn('name=_shoe_text(record.get("display_name")) or _shoe_text(record.get("custom_make_model")),', reader)
+        self.assertIn('keys = {row.marks.get("key") for row in data.rows[ACTIVITIES] if row.marks.get("key")}', server)
+        self.assertIn("chosen.append((own[-1].day, shoe.place, entry))", server)
+        self.assertIn("chosen.sort(key=lambda found: (-found[0], found[1]))", server)
+        # A total of 0 that was recorded is a 0 too, and the dots of 0 are of
+        # any 0; the counts of the shoes: two or more and no distance among
+        # those with shoes, not known only without a link to shoes (Codex's
+        # review of the diff of S2, 1, 3, and 4).
+        self.assertIn("            if counts[index]:\n                values.append(totals[index] if item.kind == SUM else float(counts[index]))", server)
+        self.assertIn("if (value !== 0) {", function_body(chart, "zeroDots"))
+        self.assertIn('        if found:\n            answer["with_shoes"] += 1\n            if len(found) > 1:\n                answer["two_or_more"] += 1\n            if not _has_value(item, row):\n                answer["without_distance"] += 1\n', server)
+        self.assertIn('        elif not key or (gear is not None and key in gear.unknown):\n            answer["not_known"] += 1\n', server)
+        # Nothing of the view by shoes is remembered.
+        self.assertNotIn("view_shoes", settings)
+        shoes_heading = {"en": "By shoes", "ja": "靴ごと"}
+        spread_heading = {"en": "Distribution", "ja": "分かれ方"}
+        summary = {"en": "Summary (from 2.2.0)", "ja": "まとめ（2.2.0 から）"}
+        changes = {"en": "When the output changes while you look (from 2.2.0)", "ja": "見ている間に出力が変わったとき（2.2.0 から）"}
+        saving = {"en": "Saving as an image (from 2.2.0)", "ja": "画像で保存（2.2.0 から）"}
+        scene_title = {"en": "See the distance of each pair of shoes by month", "ja": "靴ごとに、月ごとの距離を見る"}
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            messages = catalog(language)
+            read = (lambda part: " ".join(part.split())) if language == "en" else (lambda part: re.sub(r"\n *", "", part))
+            mark = "**{}**" if language == "en" else "「{}」"
+            places = [text.index(f"\n#### {spread_heading[language]}\n"), text.index(f"\n#### {shoes_heading[language]}\n"), text.index(f"\n### {summary[language]}\n")]
+            with self.subTest(language=language, part="order"):
+                self.assertEqual(places, sorted(places))
+                self.assertEqual(text.index("\n### ", places[0]), places[2])
+            shoes = read(text[places[1] : places[2]])
+            if language == "en":
+                says = (
+                    f"Each pair of shoes is a panel, with its distance by month as bars (as a line over a period of more than {bars} months). Every panel has the same time axis, across the period chosen, and the same scale (one color). As bars, a month that the period cuts is drawn lighter, with an edge.",
+                    "A month without an activity with the pair, between the first and the last month that it was used, is 0, a hollow dot on the base line, as is a month whose activities with the pair add up to 0; before the first and after the last, it is empty. A month of 0 does not always mean that the pair was not used (it may not have been set in Garmin).",
+                    "those with shoes but without a distance (in the counts, not in the distances)",
+                    f"A name is the one in Garmin; without one, the make and model; without either, {mark.format(messages['view.shoes.unnamed'])}. A long name is cut short with an ellipsis. Shoes of one name are told apart by their start date after the name (the day set in Garmin, where it is theirs alone) or by a number, which are never cut.",
+                    "The panels go by the day each pair was last used in the period, the newest first (on the same day, in the order of Garmin's gear). Shoes not used in the period have no panel.",
+                    f"Under the panels, {mark.format(messages['view.shoes.note_garmin'])} is always shown, and a line for each count of 1 or more:",
+                    f"Where no activity of the period and the types has shoes, {mark.format(messages['view.shoes.none'])} shows in the place of the panels.",
+                    "Move the pointer over a panel, or select a panel (Tab) and use ← and → (a month) and Home and End (the first and the last month), to choose a month: every panel gives its distance at the top right (at first, the last month). With the keys, the name of the shoes and the distance are read out.",
+                    f"{mark.format(messages['view.panel.table'])} gives two tables:",
+                    f"whose months stay at the left as it scrolls to the right. {mark.format(messages['view.panel.chart'])} goes back.",
+                    f"Where no activity of the output (up to today, of any type) has shoes, {mark.format(messages['view.other.shoes_none'])}, and where the data of the shoes is too large, {mark.format(messages['view.other.shoes_too_large'])} shows under {mark.format(messages['view.other.shoes'])} in the menu, which then cannot be chosen: ↑ and ↓ stop on it, and pressing it does nothing. Where only other periods or types have shoes, it can be chosen, and the line above shows in the place of the panels.",
+                    "The start, the end, and the maximum distance are the values set in Garmin, as they are. This app says nothing from them, such as when to change shoes.",
+                    "(assets/gui-guide/view-shoes.en.png)",
+                    "(synthetic data)](assets/gui-guide/view-shoes.en.png)",
+                )
+                saves = (
+                    f"By shoes, the window also says {mark.format(messages['view.save.warn_shoes'])}",
+                    "or the period and the keys of two items plotted, of a distribution, or of the shoes (the key of the distance, as `garmin-shoes_2024-01-05_2024-12-31_dist.svg`, never the names of the shoes).",
+                    "By shoes, every panel goes in, also those scrolled out of the screen, with the time axis and the notes.",
+                    "by shoes, a period and types without an activity with shoes;",
+                )
+                again = "In the other views (two items plotted, a distribution, and the shoes), the values can come from another reading than the panels too. Back from another view, the panels are asked again only where the period or the activity types were changed while it showed; otherwise they stay as they were read before. Choose the period again for the new reading."
+                privacy = "The names of the shoes of [By shoes](#by-shoes) (from 2.2.0) may be names you gave in Garmin. They show on the page and in a picture you save (the window says so before saving). This app writes them in no file name, log, or remembered setting."
+                steps = (
+                    f"In {mark.format(messages['view.other.button'])} above the panels, choose {mark.format(messages['view.other.shoes'])}.",
+                    f"(with {mark.format(messages['view.period.all'])}, the panels go over the whole output)",
+                    f"For the numbers, press {mark.format(messages['view.panel.table'])}",
+                    "More: [By shoes](#by-shoes), [Other views](#other-views-from-220)",
+                )
+            else:
+                says = (
+                    f"靴 1 足を 1 段にして、月ごとの距離を棒で並べます（月が {bars} を超える長い期間では、線になります）。どの段も、選んだ期間全体の同じ時間の軸と、同じ目盛りです（色は 1 色）。棒のとき、期間で切れた月の棒は、薄く（縁取りをつけて）出ます。",
+                    "その靴を初めて使った月と最後に使った月のあいだで、その靴の付いた回が無い月は 0 で、底の線の上の白抜きの点です（付いた回の距離の合計が 0 の月も、同じ点です）。初めより前と最後より後は空です。0 の月も、その靴を使わなかったとは限りません（Garmin で付け忘れた回もありえます）。",
+                    "靴の付いた回のうち距離の無い回（回数には入ります）",
+                    f"名前は Garmin の道具の名前のままで、名前が無ければメーカーとモデル、どちらも無ければ{mark.format(messages['view.shoes.unnamed'])}と出ます。長い名前は、終わりを省略記号にして切ります。同じ名前の靴は、名前のあとの使い始めの日（Garmin で決めた日が、その靴だけのとき）か、番号で見分けます。そこは切りません。",
+                    "段は、この期間に最後に使った日の新しい順です（同じ日なら、Garmin の道具の順）。この期間に使った回の無い靴は、段にしません。",
+                    f"段の下には、いつも{mark.format(messages['view.shoes.note_garmin'])}が出て、数が 1 以上のときだけ、",
+                    f"その期間と種目に靴の付いた回が無いときは、段の代わりに{mark.format(messages['view.shoes.none'])}と出ます。",
+                    "段の上でポインターを動かすか、段を選んで（Tab キー）← → キー（1 か月ずつ）と Home・End（最初と最後の月）で月を選ぶと、どの段も右上にその月の距離が出ます（初めは最後の月）。キーで選んだときは、靴の名前とその月の距離を読み上げます。",
+                    f"{mark.format(messages['view.panel.table'])}で、2 つの表になります。",
+                    f"右へ送っても、月の列は左に残ります）です。{mark.format(messages['view.panel.chart'])}で戻ります。",
+                    f"出力のアクティビティ（今日までのもの。種目は問いません）に付いた靴が 1 足も無い出力では{mark.format(messages['view.other.shoes_none'])}、靴のデータが大きすぎる出力では{mark.format(messages['view.other.shoes_too_large'])}が、メニューの{mark.format(messages['view.other.shoes'])}の下に出て、選べません（↑ ↓ キーではそこで止まり、押しても何もしません）。ほかの期間や種目にだけ靴の付いた回があるときは選べ、段の代わりに上の 1 文が出ます。",
+                    "使い始め・使い終わり・上限の距離は、Garmin で決めた値をそのまま出します。このアプリは、それをもとに、いつ替えるかなどを言いません。",
+                    "(assets/gui-guide/view-shoes.ja.png)",
+                    "（合成のデータ）](assets/gui-guide/view-shoes.ja.png)",
+                )
+                saves = (
+                    f"靴ごとでは、窓に{mark.format(messages['view.save.warn_shoes'])}も出ます。",
+                    "点で並べる・分かれ方・靴ごとは、期間と項目の鍵です（靴ごとは距離の鍵で、`garmin-shoes_2024-01-05_2024-12-31_dist.svg` のように。靴の名前は入れません）。",
+                    "靴ごとでは、画面の外へ送った段も含めたすべての段と、時間の軸・注が入ります。",
+                    "靴ごとでその期間と種目に靴の付いた回が無いとき",
+                )
+                again = "ほかの見方（点で並べる・分かれ方・靴ごと）の値も、段と別の読みから作られることがあります。ほかの見方から段に戻ったとき、段を問い合わせ直すのは、ほかの見方の間に期間か数える種目を変えたときだけで、それ以外は前の読みの段のままです。期間などを選び直すと、新しい読みになります。"
+                privacy = "[靴ごと](#靴ごと)（2.2.0 から）の靴の名前は、あなたが Garmin で付けた名前のことがあります。名前はページと、画像で保存した画像に写ります（保存の前に、窓がそのことを言います）。このアプリは、靴の名前を、ファイルの名前・ログ・覚えた設定に書きません。"
+                steps = (
+                    f"段の上の{mark.format(messages['view.other.button'])}で{mark.format(messages['view.other.shoes'])}を選びます。",
+                    f"（{mark.format(messages['view.period.all'])}なら、出力全体の期間で並びます）",
+                    f"数字で見るときは{mark.format(messages['view.panel.table'])}を押します",
+                    "くわしくは：[靴ごと](#靴ごと)、[ほかの見方](#ほかの見方220-から)",
+                )
+            with self.subTest(language=language, part="shoes"):
+                for phrase in says:
+                    self.assertEqual(shoes.count(phrase), 1, phrase)
+            start = text.index(f"\n### {saving[language]}\n")
+            saving_reads = read(text[start : text.index("\n### ", start + 1)])
+            with self.subTest(language=language, part="saving"):
+                for phrase in saves:
+                    self.assertEqual(saving_reads.count(phrase), 1, phrase)
+            start = text.index(f"\n### {changes[language]}\n")
+            with self.subTest(language=language, part="changes"):
+                self.assertEqual(read(text[start : text.index("\n### ", start + 1)]).count(again), 1)
+            with self.subTest(language=language, part="privacy"):
+                self.assertEqual(read(text).count(privacy), 1)
+            start = text.index(f"\n### {scene_title[language]}\n")
+            scene_reads = read(text[start : text.index("\n### ", start + 1)])
+            with self.subTest(language=language, part="scene"):
+                for step in steps:
+                    self.assertIn(step, scene_reads)
+                for word in ("when to change", "替え時", "いつ替える"):
+                    self.assertNotIn(word, scene_reads)
+            # Every word quoted in the scene is a word of the page, whole.
+            words = set(messages.values())
+            patterns = (r"\*\*([^*]+)\*\*", r'"([^"]+)"') if language == "en" else (r"「([^」]+)」",)
+            for pattern in patterns:
+                for word in re.findall(pattern, scene_reads):
+                    with self.subTest(language=language, quoted=word):
+                        self.assertIn(word, words)
+            # The help: the shoes after the distribution, which no longer goes
+            # back; the shoes say the tables and end with the way back.
+            back = f"“{messages['view.panel.unbig']}” goes back." if language == "en" else f"戻るときは{mark.format(messages['view.panel.unbig'])}を押します。"
+            own = f"“{messages['view.other.shoes']}” shows" if language == "en" else f"{mark.format(messages['view.other.shoes'])}では、"
+            table = f"“{messages['view.panel.table']}”" if language == "en" else mark.format(messages["view.panel.table"])
+            with self.subTest(language=language, part="help"):
+                self.assertNotIn(back, messages["view.help.other_spread"])
+                self.assertTrue(messages["view.help.other_shoes"].startswith(own))
+                self.assertTrue(messages["view.help.other_shoes"].endswith(back))
+                self.assertIn(table, messages["view.help.other_shoes"])
+        # The design: the third item of the other views, what is read, what
+        # 2.1.0 left out that 2.2.0 adds, the panels on the way back, privacy.
+        from garmin_running_data_normalizer.view.data import GEAR_FILES
+        from garmin_running_data_normalizer.view.items import DATASETS
+
+        numbers = {2: "two", 10: "ten"}
+        design = " ".join((ROOT / "docs/gui_design.md").read_text(encoding="utf-8").split())
+        for phrase in (
+            "relating two items (v2.2.0 lays the years over each other, also by race day: see [The view page](#the-view-page-v210))",
+            "moving averages (v2.2.0 adds the view by shoes: see [The view page](#the-view-page-v210))",
+            "Saving a chart as a picture or a file (v2.2.0 saves a chart as an SVG picture: see [The view page](#the-view-page-v210))",
+            f"reads only the dates and the values of the items, of {numbers[len(DATASETS)]} files at most,",
+            f"From v2.2.0 the view page (never the series command) also reads the {numbers[len(GEAR_FILES)]} files of the shoes, `normalized/gear.json` and `normalized/activity_gear.json`, after those of the items and checked in the same way (one that the manifest leaves out, or that changed, stops the reading with `OUTPUT_CHANGED`), within what the items leave of those limits: where they do not fit, the shoes alone are left out and the page opens (see By shoes below).",
+            "- Other views (stages O1, P1, and S1):",
+            "An item that cannot be chosen (**By shoes**, where no activity of the output has shoes, or their files were too large to read) says why under its name, stays in the way of the arrow keys (`aria-disabled`), and does nothing when pressed.",
+            "The items of two items plotted and of a distribution are the 15 of one activity (the kinds `act`, but the count, and `fit`);",
+            "the view by shoes always shows the distance by month, and nothing of it is remembered.",
+            "a comparison, a list, the summary, or another view asked right after a new normalization can come from another reading than the panels beside it; asking again uses the new reading. Back from another view, the panels ask again only where the period or the activity types changed while it showed (`panelsStale`), so that otherwise they show the reading before.",
+            "From v2.2.0 the names of the shoes, which may be the person's own words, show on the view page and in a picture saved from the view by shoes (its window says so before saving); they are written in no file name, log, or setting.",
+            "an activity with no link to shoes is not known to have shoes where it has no key, or links to gear not in the output or of a type not known;",
+            "how many have shoes (and of those, how many have two or more and how many have no distance), are not known, and are without;",
+        ):
+            with self.subTest(design=phrase):
+                self.assertEqual(design.count(phrase), 1)
+        start = design.index("- By shoes (stage S1):")
+        self.assertLess(design.index("- The distribution of one item (stage P1):"), start)
+        self.assertEqual(design.index("- ", start + 1), design.index("- The summary of the panels (stage Q1):"))
+        part = design[start : design.index("- The summary of the panels (stage Q1):")]
+        for name in ("(`MAX_BARS`)", "(`shoe_count`)", "(`shoe_answer`)", "`POST /api/view/shoes`", "`garmin_activity_key`", "`running_shoes`", "`display_name`", "`custom_make_model`"):
+            with self.subTest(by_shoes=name):
+                self.assertIn(name, part)
+
     def test_the_design_gives_the_summary(self) -> None:
         # v2.2.0 Q2: the design of the GUI gives the summary of stage Q1 after
         # the distribution, with the names of the code that it is made of, and
@@ -2011,7 +2231,7 @@ class GuiGuideTest(unittest.TestCase):
         for name in ('`/api/view/series` with `"previous": true`', "`RANGE_GRAIN`", "`item_series`", "`LAST_YEARS`", "`period_bounds`", "**Summary…** after **Other views**"):
             with self.subTest(name=name):
                 self.assertIn(name, part)
-        self.assertIn("a comparison, a list, or the summary asked right after a new normalization", flowing)
+        self.assertIn("a comparison, a list, the summary, or another view asked right after a new normalization", flowing)
         server = (ROOT / "src/garmin_running_data_normalizer/view/series.py").read_text(encoding="utf-8")
         self.assertIn("def view_answer(\n    data: ViewData,\n    keys: Collection[str],\n    period: str | tuple[date, date] = \"all\",\n    grain: str = \"auto\",\n    types: Collection[str] | None = None,\n    previous: bool = False,\n)", server)
         self.assertIn('return grain === "day" ? "view.kind.obs_points" : "view.kind.obs_mean";', (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8"))
