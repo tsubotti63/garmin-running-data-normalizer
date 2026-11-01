@@ -31,8 +31,11 @@ from garmin_running_data_normalizer.gui.views import (
     MAX_SHELVES,
     load_view,
     MAX_VIEWS,
+    ConditionsRequestError,
     ViewRequestError,
     Views,
+    conditions_from,
+    conditions_request,
     item_table,
     list_request,
     output_stamp,
@@ -48,6 +51,7 @@ from garmin_running_data_normalizer.view.items import ITEMS
 from garmin_running_data_normalizer.view.series import (
     MAX_TYPE_LENGTH,
     MAX_TYPES,
+    Conditions,
     activity_types,
     coverage,
     default_items,
@@ -57,7 +61,7 @@ from garmin_running_data_normalizer.view.series import (
 )
 from tests.test_gui_server import GuiServerTestCase
 from tests.v1_3_outputs import as_release, as_v1_3
-from tests.view_export import write_view_export
+from tests.view_export import MEMO_MARK, write_view_export
 
 TIMEOUT_SECONDS = 10.0
 _MADE: dict[str, Any] = {}
@@ -69,7 +73,9 @@ def setUpModule() -> None:
     run_all(write_view_export(root / "export"), root / "output")
     # With the synthetic shoes (stage S1 of v2.2.0).
     run_all(write_view_export(root / "shoes-export", gear=True), root / "shoes-output")
-    _MADE.update(directory=directory, output=root / "output", shoes=root / "shoes-output")
+    # With made-up names of training too (stage T1).
+    run_all(write_view_export(root / "names-export", gear=True, names=True), root / "names-output")
+    _MADE.update(directory=directory, output=root / "output", shoes=root / "shoes-output", names=root / "names-output")
 
 
 def tearDownModule() -> None:
@@ -82,6 +88,10 @@ def made_output() -> Path:
 
 def shoe_output() -> Path:
     return _MADE["shoes"]
+
+
+def names_output() -> Path:
+    return _MADE["names"]
 
 
 def as_json(value: Any) -> Any:
@@ -118,8 +128,10 @@ class ViewApiTest(GuiServerTestCase):
         data = load_view_data(output)
         self.assertEqual(
             set(answer),
-            {"view", "name", "version", "partial", "first_day", "last_day", "items", "types", "first_items", "layouts", "coverage", "shoes"},
+            {"view", "name", "version", "partial", "first_day", "last_day", "items", "types", "first_items", "layouts", "coverage", "shoes", "names"},
         )
+        # The names of the activities were read (stage T1 of v2.2.0).
+        self.assertEqual(answer["names"], "read")
         self.assertRegex(answer["view"], r"^[A-Za-z0-9_-]{16,}$")
         self.assertEqual(
             {key: answer[key] for key in ("name", "version", "partial", "first_day", "last_day")},
@@ -176,7 +188,7 @@ class ViewApiTest(GuiServerTestCase):
             with self.subTest(period=period, types=types):
                 status, answer = self.call("/api/view/shoes", {"view": opened["view"], "period": period, "types": types})
                 self.assertEqual(status, 200)
-                self.assertEqual(answer, as_json(shoe_answer(data, chosen, types)))
+                self.assertEqual(answer, as_json({**shoe_answer(data, chosen, types), "names": "read"}))
         status, numbers = self.call("/api/view/series", {"view": opened["view"], "items": ["dist"], "period": "all", "grain": "auto", "types": None})
         self.assertEqual((status, numbers["shoes"]), (200, {"count": 6, "too_large": False}))
 
@@ -225,6 +237,7 @@ class ViewApiTest(GuiServerTestCase):
                 expected = view_answer(data, items, chosen, grain, types)
                 expected["coverage"] = coverage(data, types)
                 expected["shoes"] = shoe_count(load_view(output))
+                expected["names"] = "read"
                 self.assertEqual(answer, as_json(expected))
 
     def test_the_summary_has_the_period_before(self) -> None:
@@ -246,6 +259,7 @@ class ViewApiTest(GuiServerTestCase):
                 expected = view_answer(data, items, chosen, "range", None, True)
                 expected["coverage"] = coverage(data, None)
                 expected["shoes"] = shoe_count(load_view(output))
+                expected["names"] = "read"
                 self.assertEqual(answer, as_json(expected))
                 self.assertIn("previous", answer)
         # Without it, the answer is that of the whole period as before.
@@ -302,6 +316,7 @@ class ViewApiTest(GuiServerTestCase):
         expected = view_answer(data, ["dist"], "all", "auto", names)
         expected["coverage"] = coverage(data, names)
         expected["shoes"] = shoe_count(load_view(output))
+        expected["names"] = "read"
         self.assertEqual(answer, as_json(expected))
 
     def test_a_ticket_that_the_server_does_not_keep_is_refused(self) -> None:
@@ -365,9 +380,9 @@ class ViewApiTest(GuiServerTestCase):
         real = view_series.coverage
         made: list[Any] = []
 
-        def counted(data: Any, types: Any = None) -> Any:
+        def counted(data: Any, types: Any = None, conditions: Any = None) -> Any:
             made.append(None if types is None else sorted(types))
-            return real(data, types)
+            return real(data, types, conditions)
 
         data = load_view_data(output)
         names = [entry["name"] for entry in activity_types(data)]
@@ -472,7 +487,7 @@ class ViewApiTest(GuiServerTestCase):
                 status, answer = self.call("/api/view/activities", {"view": ticket, "item": key, "period": period, "types": types})
                 self.assertEqual(status, 200, answer)
                 chosen = (date.fromisoformat(period["from"]), date.fromisoformat(period["to"]))
-                self.assertEqual(answer, as_json(view_series.activity_list(data, key, chosen, types)))
+                self.assertEqual(answer, as_json({**view_series.activity_list(load_view(output), key, chosen, types), "names": "read"}))
                 self.assertGreater(answer["total"], 0)
                 self.assertEqual(answer["rows"] is not None, total)
         # The item of the panel, when it is none of the columns of the list,
@@ -563,7 +578,7 @@ class ViewApiTest(GuiServerTestCase):
                 status, answer = self.call("/api/view/points", {"view": ticket, "x": x, "y": y, "period": period, "types": types})
                 self.assertEqual(status, 200, answer)
                 chosen = period if isinstance(period, str) else (date.fromisoformat(period["from"]), date.fromisoformat(period["to"]))
-                self.assertEqual(answer, as_json(view_series.activity_points(data, x, y, chosen, types)))
+                self.assertEqual(answer, as_json({**view_series.activity_points(data, x, y, chosen, types), "names": "read"}))
                 self.assertGreater(answer["total"], 0)
                 self.assertEqual(answer["total"], answer["with_values"] + answer["missing"])
                 self.assertEqual(len(answer["points"]), min(answer["with_values"], answer["limit"]))
@@ -644,7 +659,7 @@ class ViewApiTest(GuiServerTestCase):
                 status, answer = self.call("/api/view/spread", {"view": ticket, "item": key, "period": period, "types": types})
                 self.assertEqual(status, 200, answer)
                 chosen = period if isinstance(period, str) else (date.fromisoformat(period["from"]), date.fromisoformat(period["to"]))
-                self.assertEqual(answer, as_json(view_series.activity_spread(data, key, chosen, types)))
+                self.assertEqual(answer, as_json({**view_series.activity_spread(data, key, chosen, types), "names": "read"}))
                 self.assertGreater(answer["total"], 0)
                 self.assertEqual(answer["total"], answer["with_values"] + answer["missing"])
                 self.assertEqual(sum(answer["counts"]), answer["with_values"])
@@ -707,6 +722,157 @@ class ViewApiTest(GuiServerTestCase):
                 handle.write("\n")
             self.assertEqual(self.call("/api/view/spread", {**spread, "view": ticket}), (422, {"error": "HANDOFF_INVALID"}))
             self.assertEqual(self.call("/api/view/spread", {**spread, "view": ticket}), (409, {"error": "VIEW_NOT_OPEN"}))
+
+    def payloads(self, ticket: str) -> dict[str, dict[str, Any]]:
+        """A request of each view that takes conditions (stage T1 of v2.2.0)."""
+        return {
+            "/api/view/series": {"view": ticket, "items": ["dist", "pace"], "period": "all", "grain": "auto", "types": None},
+            "/api/view/activities": {"view": ticket, "item": "dist", "period": {"from": "2024-03-01", "to": "2024-03-31"}, "types": None},
+            "/api/view/points": {"view": ticket, "x": "dist", "y": "pace", "period": "all", "types": None},
+            "/api/view/spread": {"view": ticket, "item": "pace", "period": "all", "types": None},
+            "/api/view/shoes": {"view": ticket, "period": "all", "types": None},
+        }
+
+    def test_the_conditions_choose_in_every_view_and_say_their_counts(self) -> None:
+        # Stage T1 of v2.2.0, with made-up names of training: every view is
+        # that of the functions of the view page with the same conditions,
+        # from one reading, and says how many activities were counted and how
+        # many of them meet; the list counts those that meet, with their names.
+        output = names_output()
+        ticket = self.open(output)
+        data = load_view(output)
+        asked = {"name": " ペース走、tempo ", "distance": [5_000, None], "time": [None, 120]}
+        conditions = conditions_from(asked)
+        year = (date(2024, 1, 1), date(2024, 12, 31))
+        span = {"from": "2024-01-01", "to": "2024-12-31"}
+        for path, payload, expected in (
+            (
+                "/api/view/series",
+                {"items": ["dist", "pace", "rhr"], "period": "all", "grain": "auto", "types": None},
+                {
+                    **view_answer(data, ["dist", "pace", "rhr"], "all", "auto", None, False, conditions),
+                    "coverage": coverage(data, None, conditions),
+                    "shoes": shoe_count(data),
+                },
+            ),
+            (
+                "/api/view/series",
+                {"items": ["dist", "count"], "period": "1y", "grain": "range", "types": None, "previous": True},
+                {
+                    **view_answer(data, ["dist", "count"], "1y", "range", None, True, conditions),
+                    "coverage": coverage(data, None, conditions),
+                    "shoes": shoe_count(data),
+                },
+            ),
+            (
+                "/api/view/activities",
+                {"item": "dist", "period": {"from": "2024-03-01", "to": "2024-03-31"}, "types": None},
+                view_series.activity_list(data, "dist", (date(2024, 3, 1), date(2024, 3, 31)), None, conditions),
+            ),
+            ("/api/view/points", {"x": "dist", "y": "pace", "period": span, "types": None}, view_series.activity_points(data, "dist", "pace", year, None, conditions)),
+            ("/api/view/spread", {"item": "pace", "period": span, "types": None}, view_series.activity_spread(data, "pace", year, None, conditions)),
+            ("/api/view/shoes", {"period": span, "types": None}, shoe_answer(data, year, None, conditions)),
+        ):
+            with self.subTest(path=path, payload=payload):
+                status, answer = self.call(path, {"view": ticket, **payload, "conditions": asked})
+                self.assertEqual(status, 200, answer)
+                self.assertEqual(answer, as_json({**expected, "names": "read"}))
+                if path == "/api/view/activities":
+                    self.assertTrue(answer["rows"] and all(row["name"] for row in answer["rows"]))
+                    continue
+                self.assertEqual(answer["conditions"]["asked"], {"name": "ペース走、tempo", "distance": [5_000, None], "time": [None, 120]})
+                self.assertEqual(answer["conditions"]["name"], "used")
+                self.assertTrue(0 < answer["conditions"]["met"] < answer["conditions"]["counted"], answer["conditions"])
+        # No conditions, or null, are the answer as before, without the line.
+        for extra in ({}, {"conditions": None}):
+            with self.subTest(extra=extra):
+                status, answer = self.call("/api/view/series", {"view": ticket, "items": ["dist"], "period": "all", "grain": "auto", "types": None, **extra})
+                self.assertEqual(status, 200)
+                self.assertEqual(answer, as_json({**view_answer(data, ["dist"], "all", "auto", None), "coverage": coverage(data, None), "shoes": shoe_count(data), "names": "read"}))
+
+    def test_conditions_of_another_form_are_refused_in_every_view(self) -> None:
+        # Stage T1 of v2.2.0: CONDITIONS_INVALID, which the page shows as a
+        # stop of the numbers (it checks the conditions before it sends them),
+        # with no word of them in the answer (and, as every test of the
+        # server, nothing on its standard error).
+        ticket = self.open(names_output())
+        bad = (
+            {}, [], "ペース走", 1, True,
+            {"name": ""}, {"name": "   "}, {"name": 1}, {"name": None}, {"name": "、,"},
+            {"name": "x" * 61}, {"name": "\U0001F600" * 61},
+            {"name": "a\u202eb"}, {"name": "a\nb"}, {"name": "a\u2028b"}, {"name": "a\u061cb"},
+            {"name": "、".join(f"w{number}" for number in range(11))},
+            # Ten words and one of U+FEFF only, which str.strip keeps (the
+            # checker's review of the diff of T1).
+            {"name": ",".join(f"w{number}" for number in range(10)) + "," + chr(0xFEFF)},
+            {"distance": [1]}, {"distance": [1, 2, 3]}, {"distance": [None, None]}, {"distance": [2, 1]}, {"distance": [-1, None]},
+            {"distance": [1.5, None]}, {"distance": [10.0, None]}, {"distance": [True, None]}, {"distance": ["1", None]},
+            {"distance": [None, 1_000_001]}, {"distance": {"from": 1}}, {"distance": None},
+            {"time": [None, 6_001]}, {"time": [False, 1]}, {"time": "1"}, {"time": [90, 60]},
+            {"other": 1}, {"name": "x", "other": 1},
+        )
+        for path, payload in self.payloads(ticket).items():
+            for conditions in bad:
+                with self.subTest(path=path, conditions=conditions):
+                    self.assertEqual(self.call(path, {**payload, "conditions": conditions}), (422, {"error": "CONDITIONS_INVALID"}))
+        # The bounds themselves are of the form; the words are counted after
+        # those that are the same are left out.
+        for conditions in (
+            {"name": "x" * 60},
+            {"name": "\U0001F600" * 60},
+            {"name": "、".join(f"w{number}" for number in range(10))},
+            {"name": "、".join("w" for _ in range(11))},
+            {"distance": [0, 0]},
+            {"distance": [None, 1_000_000]},
+            {"time": [6_000, None]},
+            {"name": " ペース走 ", "distance": [5_000, 10_000], "time": [20, 90]},
+        ):
+            for path, payload in self.payloads(ticket).items():
+                with self.subTest(path=path, conditions=conditions):
+                    self.assertEqual(self.call(path, {**payload, "conditions": conditions})[0], 200)
+
+    def test_every_answer_says_whether_the_names_were_read(self) -> None:
+        # Codex 5 of the plan of T1: any request may read the output again, so
+        # the opening and every answer of a view say it. With the names left
+        # out for the limits, the words choose nothing (the checker's A-3):
+        # conditions of a name only count every activity, the list has no
+        # names, and the other conditions choose alone.
+        output = names_output()
+        for state, names in (("read", None), ("too_large", view_data.Names({}, {}, too_large=True))):
+            with self.subTest(state=state), patch.object(view_data, "_names", wraps=view_data._names) as read:
+                if names is not None:
+                    read.side_effect = None
+                    read.return_value = names
+                status, opened = self.call("/api/view/open", {"output": "chosen", "path": str(output)})
+                self.assertEqual((status, opened["names"]), (200, state))
+                for path, payload in self.payloads(opened["view"]).items():
+                    status, answer = self.call(path, {**payload, "conditions": {"name": "ペース走", "distance": [5_000, None]}})
+                    self.assertEqual((status, answer["names"]), (200, state), path)
+                    if path == "/api/view/activities":
+                        self.assertEqual({row["name"] is None for row in answer["rows"]}, {state == "too_large"})
+                    else:
+                        self.assertEqual(answer["conditions"]["name"], "used" if state == "read" else "unread")
+                status, answer = self.call("/api/view/series", {**self.payloads(opened["view"])["/api/view/series"], "conditions": {"name": "ペース走"}})
+                counts = answer["conditions"]
+                self.assertEqual(counts["met"] == counts["counted"], state == "too_large", counts)
+
+    def test_no_answer_holds_the_memo_the_place_or_the_hash_of_the_names(self) -> None:
+        # Codex 19 of the plan of T1: of activities.json, only the names may
+        # show, and the words of the conditions as they were given.
+        output = names_output()
+        written = json.loads((output / view_data.NAMES).read_text(encoding="utf-8"))
+        hidden = {MEMO_MARK} | {record["source_path"] for record in written} | {record["source_sha256"] for record in written}
+        status, opened = self.call("/api/view/open", {"output": "chosen", "path": str(output)})
+        answers: list[Any] = [opened]
+        for path, payload in self.payloads(opened["view"]).items():
+            for conditions in (None, {"name": "ペース走"}):
+                status, answer = self.call(path, {**payload, "conditions": conditions})
+                self.assertEqual(status, 200, answer)
+                answers.append(answer)
+        shown = json.dumps(answers, ensure_ascii=False)
+        self.assertIn("ﾍﾟｰｽ走 朝", shown)
+        for value in hidden:
+            self.assertNotIn(value, shown)
 
     def test_the_view_page_needs_the_launch_key(self) -> None:
         body = json.dumps({"output": "chosen", "path": str(made_output())}).encode("utf-8")
@@ -785,6 +951,12 @@ class ViewsTest(unittest.TestCase):
             later = shoes.stat().st_mtime_ns + 2_000_000_000
             os.utime(shoes, ns=(later, later))
             self.assertNotEqual(output_stamp(output), stamp, name)
+        # The file of the names alone too (stage T1).
+        stamp = output_stamp(output)
+        names = output / "normalized" / "activities.json"
+        later = names.stat().st_mtime_ns + 2_000_000_000
+        os.utime(names, ns=(later, later))
+        self.assertNotEqual(output_stamp(output), stamp)
 
 
     def test_the_bars_of_the_shelf_are_kept_for_the_reading_of_the_ticket_only(self) -> None:
@@ -793,9 +965,9 @@ class ViewsTest(unittest.TestCase):
         real = gui_views.coverage
         made: list[Any] = []
 
-        def counted(data: Any, types: Any = None) -> Any:
+        def counted(data: Any, types: Any = None, conditions: Any = None) -> Any:
             made.append(types)
-            return real(data, types)
+            return real(data, types, conditions)
 
         views = Views()
         ticket, data = views.open(made_output())
@@ -817,6 +989,53 @@ class ViewsTest(unittest.TestCase):
                 self.assertEqual(views.coverage(ticket, other), real(other))
                 self.assertEqual(views.coverage("gone", data), real(data))
             self.assertEqual(len(made), MAX_SHELVES + 6)
+
+    def test_the_bars_of_the_shelf_are_kept_by_their_conditions_too(self) -> None:
+        # The checker's A-2 of the plan of T1: other conditions with the same
+        # types make other bars; the same conditions, written again, are made
+        # once.
+        real = gui_views.coverage
+        made: list[Any] = []
+
+        def counted(data: Any, types: Any = None, conditions: Any = None) -> Any:
+            made.append((types, conditions))
+            return real(data, types, conditions)
+
+        views = Views()
+        ticket, data = views.open(names_output())
+        bounds = conditions_from({"name": "境目"})
+        far = conditions_from({"distance": [10_000, None]})
+        with patch.object(gui_views, "coverage", counted):
+            plain = views.coverage(ticket, data)
+            chosen = views.coverage(ticket, data, None, bounds)
+            self.assertEqual((chosen["dist"]["months"], chosen, plain), (["2024-06"], real(data, None, bounds), real(data)))
+            self.assertEqual(views.coverage(ticket, data, None, far), real(data, None, far))
+            self.assertEqual(len(made), 3)
+            views.coverage(ticket, data, None, conditions_from({"name": "境目"}))
+            views.coverage(ticket, data)
+            self.assertEqual(len(made), 3)
+            views.coverage(ticket, data, ["running"], bounds)
+            self.assertEqual(len(made), 4)
+            # Another reading of the output, and a ticket that is gone: the
+            # bars are made with the conditions, and not kept.
+            other = load_view(names_output())
+            self.assertEqual(views.coverage(ticket, other, None, bounds), real(other, None, bounds))
+            self.assertEqual(views.coverage("gone", data, None, bounds), real(data, None, bounds))
+            self.assertEqual(made[-2:], [(None, bounds), (None, bounds)])
+
+    def test_conditions_have_their_form(self) -> None:
+        # Stage T1 of v2.2.0: the words as written without the spaces at the
+        # ends, and as compared; null or no conditions are none.
+        self.assertEqual(
+            conditions_from({"name": " ペース走、ﾍﾟｰｽ走 ", "time": [None, 60]}),
+            Conditions("ペース走、ﾍﾟｰｽ走", ("ペース走",), (None, None), (None, 60)),
+        )
+        self.assertEqual(conditions_from({"distance": [None, 5]}).asked(), {"distance": [None, 5]})
+        self.assertIsNone(conditions_request({}))
+        self.assertIsNone(conditions_request({"conditions": None}))
+        with self.assertRaises(ConditionsRequestError):
+            conditions_request({"conditions": {}})
+        self.assertTrue(issubclass(ConditionsRequestError, ViewRequestError))
 
     def test_a_request_for_numbers_has_its_form(self) -> None:
         self.assertEqual(

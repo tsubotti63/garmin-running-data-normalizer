@@ -13,6 +13,7 @@ import sys
 import tempfile
 import unittest
 from collections import defaultdict
+from dataclasses import fields
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -26,12 +27,15 @@ from garmin_running_data_normalizer.run_all import ACTIVITIES_CSV_FIT_SESSION_CO
 from garmin_running_data_normalizer.common.identity import IDENTIFIER, read_identifier
 from garmin_running_data_normalizer.view import data as data_module
 from garmin_running_data_normalizer.view import series_file
-from garmin_running_data_normalizer.view.data import gear_links, load_view_data
+from garmin_running_data_normalizer.view.data import activity_names, gear_links, load_view_data
 from garmin_running_data_normalizer.view.items import ACTIVITIES, DATASETS, ITEMS, dataset_fields
+from garmin_running_data_normalizer.gui.views import conditions_from
+from garmin_running_data_normalizer.view import series as series_module
 from garmin_running_data_normalizer.view.series import activity_types, coverage, item_series, period_bounds
 from tests.test_gui_runs import SYNTHETIC_EXPORT
 from tests.test_local_timezone import EVENING_IN_NEW_YORK, NEW_YORK, activity_row, write_export
 from tests.v1_3_outputs import as_release, as_v1_3
+from tests.view_export import BOUND_ACTIVITIES, FIT_STARTS, MEMO_MARK, TRAINING_NAMES
 from tests.view_export import activities as synthetic_activities
 from tests.view_export import gear_links as synthetic_links
 from tests.view_export import write_view_export
@@ -492,6 +496,82 @@ class ViewOutputRefusalTest(unittest.TestCase):
             read.assert_not_called()
         self.assertFalse(data_module._gear(self.output, entries, 0, largest, data_module.MAX_TOTAL_BYTES).too_large)
 
+    def test_the_names_are_read_for_the_view_page_only(self) -> None:
+        # Stage T1 of v2.2.0: the series command reads none; the view page
+        # keeps the name of each declared key, without the spaces at its ends.
+        self.assertIsNone(load_view_data(self.output, today=TODAY).names)
+        names = load_view_data(self.output, today=TODAY, names=True).names
+        written = json.loads((self.output / data_module.NAMES).read_text(encoding="utf-8"))
+        expected = {
+            record["garmin_activity_key"]: record["name"].strip()
+            for record in written
+            if isinstance(record.get("name"), str) and record["name"].strip()
+        }
+        self.assertEqual((names.names, names.too_large), (expected, False))
+
+    def test_the_file_of_the_names_changed_before_or_after_the_checks(self) -> None:
+        # Codex 9 of the plan of T1: after the checks, it is not read as
+        # checked; before them, the checks stop it, as any file of the output.
+        # The series command does not read it after the checks.
+        names = self.output / data_module.NAMES
+        kept = names.read_bytes()
+        with self.after_the_checks(lambda: names.write_bytes(kept + b" ")):
+            self.assert_code("OUTPUT_CHANGED", names=True)
+        names.write_bytes(kept)
+        with self.after_the_checks(lambda: names.write_bytes(kept + b" ")):
+            load_view_data(self.output, today=TODAY)
+        self.assert_code("HANDOFF_INVALID", names=True)
+        names.write_bytes(kept)
+        load_view_data(self.output, today=TODAY, names=True)
+
+    def test_a_manifest_without_the_file_of_the_names_means_that_the_output_changed(self) -> None:
+        # Every output of this version lists it (Codex 9 of the plan of T1).
+        manifest = json.loads((self.output / "run_manifest.json").read_text(encoding="utf-8"))
+        entries = {entry["path"]: (entry["bytes"], entry["sha256"]) for entry in manifest["outputs"]}
+        self.assertIn(data_module.NAMES, entries)
+        left = {name: value for name, value in entries.items() if name != data_module.NAMES}
+        with self.assertRaises(OutputActionError) as caught:
+            data_module._names(self.output, left, 0, data_module.MAX_FILE_BYTES, data_module.MAX_TOTAL_BYTES)
+        self.assertEqual(caught.exception.code, "OUTPUT_CHANGED")
+
+    def test_names_of_another_form_mean_that_the_output_changed(self) -> None:
+        # Not JSON, not a list of records, or nested too deeply: the file as
+        # the manifest gives it, so that only its form is wrong.
+        names = self.output / data_module.NAMES
+        for data in (b"not json", b"{}", b"[1]", b'[{"name": "a"}, 2]', b"[" * 1000 + b"]" * 1000, b"\xff"):
+            with self.subTest(data=data[:12]):
+                names.write_bytes(data)
+                entries = {data_module.NAMES: (len(data), hashlib.sha256(data).hexdigest())}
+                with self.assertRaises(OutputActionError) as caught:
+                    data_module._names(self.output, entries, 0, data_module.MAX_FILE_BYTES, data_module.MAX_TOTAL_BYTES)
+                self.assertEqual(caught.exception.code, "OUTPUT_CHANGED")
+
+    def test_names_over_the_limits_are_left_out_and_the_page_opens(self) -> None:
+        # Codex 6 and 7 of the plan of T1: the limits are not widened; the file
+        # of the names counts in what the files of the items and the shoes
+        # read leave, and over the limits it is not parsed. Shoes left out for
+        # the limits take nothing.
+        manifest = json.loads((self.output / "run_manifest.json").read_text(encoding="utf-8"))
+        entries = {entry["path"]: (entry["bytes"], entry["sha256"]) for entry in manifest["outputs"]}
+        items = sum(entries[spec.path][0] for spec in DATASETS)
+        shoes = sum(entries[path][0] for path in data_module.GEAR_FILES)
+        names = entries[data_module.NAMES][0]
+        self.assertTrue(0 < shoes < names)
+        whole = items + shoes + names
+        over = load_view_data(self.output, today=date(2030, 6, 1), gear=True, names=True, max_total_bytes=whole - 1)
+        self.assertEqual((over.names.too_large, over.names.names, over.gear.too_large, len(over.rows[ACTIVITIES])), (True, {}, False, 1))
+        self.assertFalse(load_view_data(self.output, today=TODAY, gear=True, names=True, max_total_bytes=whole).names.too_large)
+        # Without the shoes, or with shoes left out, the names have their room.
+        self.assertFalse(load_view_data(self.output, today=TODAY, names=True, max_total_bytes=items + names).names.too_large)
+        self.assertTrue(load_view_data(self.output, today=TODAY, gear=True, names=True, max_total_bytes=items + names).names.too_large)
+        with patch.object(data_module, "_gear", return_value=data_module.Gear((), {}, frozenset(), too_large=True)):
+            self.assertFalse(load_view_data(self.output, today=TODAY, gear=True, names=True, max_total_bytes=items + names).names.too_large)
+        with patch.object(data_module, "_checked_bytes") as read:
+            self.assertTrue(data_module._names(self.output, entries, 0, names - 1, data_module.MAX_TOTAL_BYTES).too_large)
+            self.assertTrue(data_module._names(self.output, entries, items, data_module.MAX_FILE_BYTES, items + names - 1).too_large)
+            read.assert_not_called()
+        self.assertFalse(data_module._names(self.output, entries, items, names, items + names).too_large)
+
     def test_a_file_replaced_by_a_link_after_the_checks(self) -> None:
         if not can_symlink(self.root):
             self.skipTest("symbolic links are not available")
@@ -682,6 +762,143 @@ class GearLinksTest(unittest.TestCase):
                 ("8", "C", None, None, None, 7, None, None),
             ],
         )
+
+
+class NamesOfAnOutputTest(unittest.TestCase):
+    """The names of the activities of the synthetic Export, as the view page
+    reads them (stage T1 of v2.2.0): made-up names of training only."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.directory = tempfile.TemporaryDirectory()
+        root = Path(cls.directory.name)
+        cls.output = root / "output"
+        run_all(write_view_export(root / "export", names=True), cls.output)
+        cls.data = load_view_data(cls.output, names=True)
+        cls.written = json.loads((cls.output / data_module.NAMES).read_text(encoding="utf-8"))
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.directory.cleanup()
+
+    def test_the_names_are_those_of_activities_json_by_their_key(self) -> None:
+        # By garmin_activity_key, as the rows of activities.csv have it (Codex
+        # 8 of the plan of T1): no name, and a name of spaces only, are none.
+        expected = {
+            record["garmin_activity_key"]: record["name"].strip()
+            for record in self.written
+            if isinstance(record.get("name"), str) and record["name"].strip()
+        }
+        self.assertEqual(self.data.names.names, expected)
+        self.assertEqual(self.data.names.folded, {key: data_module.fold(name) for key, name in expected.items()})
+        training = {name.strip() for name in TRAINING_NAMES if name and name.strip()}
+        self.assertEqual(
+            set(expected.values()),
+            training | {bound[4] for bound in BOUND_ACTIVITIES} | {f"Synthetic FIT {number}" for number in range(len(FIT_STARTS))},
+        )
+        keys = {row.marks["key"] for row in self.data.rows[ACTIVITIES]}
+        self.assertEqual(set(expected) - keys, set())
+        self.assertTrue(len(keys - set(expected)) > 0)
+
+    def test_only_the_keys_and_the_names_are_kept(self) -> None:
+        # The checker's B-6 of the plan of T1: the memo, the place, and the
+        # hash of the same records are read and not kept.
+        memos = {record["memo_text_raw"] for record in self.written if record.get("memo_text_raw")}
+        places = {record["source_path"] for record in self.written}
+        hashes = {record["source_sha256"] for record in self.written}
+        self.assertTrue(memos and all(MEMO_MARK in memo for memo in memos))
+        self.assertTrue(places and hashes)
+        kept = repr(self.data)
+        for value in (MEMO_MARK, *places, *hashes):
+            self.assertNotIn(value, kept)
+        self.assertEqual([field.name for field in fields(data_module.Names)], ["names", "folded", "too_large"])
+
+    def test_the_conditions_meet_the_names_and_the_values_of_the_output(self) -> None:
+        # The names in one form: ペース走 and its half width; the bounds of 10
+        # km and 60 minutes as the output writes them, just on and just outside.
+        def chosen(value: dict[str, Any]) -> list[Any]:
+            return series_module._activity_rows(self.data, None, conditions_from(value))
+
+        def names_of(rows: list[Any]) -> set[str | None]:
+            return {self.data.names.names.get(row.marks["key"]) for row in rows}
+
+        self.assertEqual(names_of(chosen({"name": "ペース走"})), {"ペース走", "ﾍﾟｰｽ走 朝"})
+        self.assertEqual(names_of(chosen({"name": "ﾍﾟｰｽ走"})), {"ペース走", "ﾍﾟｰｽ走 朝"})
+        self.assertEqual(names_of(chosen({"name": "tempo、ジョグ"})), {"TEMPO run", "ジョグ"})
+        every = series_module._activity_rows(self.data, None)
+        self.assertEqual(len(chosen({"name": "ペース走"})), sum(1 for row in every if names_of([row]) <= {"ペース走", "ﾍﾟｰｽ走 朝"} and names_of([row]) != {None}))
+        bounds = {row.marks["key"]: row for row in every if row.marks["key"].startswith("garmin_activity:70000")}
+        self.assertEqual(len(bounds), 4)
+        for value, inside in (
+            ({"distance": [10_000, None]}, {"garmin_activity:700001"}),
+            ({"distance": [None, 9_999]}, {"garmin_activity:700004"}),
+            ({"distance": [None, 10_000]}, {"garmin_activity:700001", "garmin_activity:700002", "garmin_activity:700004"}),
+            ({"time": [60, None]}, {"garmin_activity:700001"}),
+            ({"time": [None, 59]}, {"garmin_activity:700003"}),
+            ({"distance": [8, None]}, {"garmin_activity:700001", "garmin_activity:700002", "garmin_activity:700004"}),
+            ({"distance": [0, None], "time": [0, None]}, {"garmin_activity:700001", "garmin_activity:700002"}),
+        ):
+            with self.subTest(value=value):
+                self.assertEqual({row.marks["key"] for row in chosen(value)} & set(bounds), inside)
+
+    def test_the_series_command_reads_no_names_of_the_same_output(self) -> None:
+        # Codex's review of the plan of T1: the command reads the output as
+        # before, and never the file of the names, so that its CSV is the same.
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        first, second = Path(directory.name) / "first.csv", Path(directory.name) / "second.csv"
+        series_file.write_series(self.output, first, items=["dist", "pace", "count"])
+        with patch.object(data_module, "_names", side_effect=AssertionError("the names were read")):
+            series_file.write_series(self.output, second, items=["dist", "pace", "count"])
+            self.assertIsNone(load_view_data(self.output).names)
+        self.assertEqual(second.read_bytes(), first.read_bytes())
+
+
+class ActivityNamesTest(unittest.TestCase):
+    """How the names are read from the records of activities.json (stage T1
+    of v2.2.0)."""
+
+    def test_a_key_is_a_text_that_one_record_holds(self) -> None:
+        # Codex 8 of the plan of T1: joined by the same text only; a key that
+        # two records hold has no name, as no record is chosen over another.
+        found = activity_names(
+            [
+                {"garmin_activity_key": "garmin_activity:1", "name": "A"},
+                {"garmin_activity_key": "garmin_activity:2", "name": "B"},
+                {"garmin_activity_key": "garmin_activity:2", "name": "B again"},
+                {"garmin_activity_key": "", "name": "C"},
+                {"garmin_activity_key": 3, "name": "D"},
+                {"garmin_activity_key": None, "name": "E"},
+                {"name": "F"},
+                {"garmin_activity_key": "garmin_activity_hash:ab", "name": "G"},
+                {"garmin_activity_key": " garmin_activity:1", "name": "H"},
+            ]
+        )
+        self.assertEqual(found.names, {"garmin_activity:1": "A", "garmin_activity_hash:ab": "G", " garmin_activity:1": "H"})
+
+    def test_a_name_is_a_text_with_something_besides_spaces(self) -> None:
+        # The checker's A-1 of the plan of T1, as the names of the shoes: a
+        # number, a truth value, a list or an object, null, and spaces only are
+        # no name.
+        records = [{"garmin_activity_key": f"k{number}", "name": name} for number, name in enumerate((1, 1.5, True, ["A"], {"a": "A"}, None, "", " \u3000 ", "  ペース走 "))]
+        found = activity_names(records + [{"garmin_activity_key": "k9"}])
+        self.assertEqual((found.names, found.folded), ({"k8": "ペース走"}, {"k8": "ペース走"}))
+
+    def test_a_long_name_is_cut_and_compared_as_it_is_cut(self) -> None:
+        # Codex 10 of the plan of T1: up to MAX_NAME_LENGTH code points; a
+        # longer name is cut there and shown with an ellipsis that it is not
+        # compared by. Full and half width and case are folded.
+        self.assertEqual(data_module.MAX_NAME_LENGTH, 200)
+        long = "𝐀" * 199 + "ｱ" + "x"
+        found = activity_names(
+            [
+                {"garmin_activity_key": "a", "name": "Ｔｅｍｐｏ"},
+                {"garmin_activity_key": "b", "name": "x" * 200},
+                {"garmin_activity_key": "c", "name": long},
+            ]
+        )
+        self.assertEqual(found.names, {"a": "Ｔｅｍｐｏ", "b": "x" * 200, "c": "𝐀" * 199 + "ｱ…"})
+        self.assertEqual(found.folded, {"a": "tempo", "b": "x" * 200, "c": "a" * 199 + "ア"})
 
 
 class ViewTimezoneTest(unittest.TestCase):

@@ -69,7 +69,16 @@ from .layouts import BUILT_IN_IDS, kept_hidden, kept_layouts
 from .layouts import change_layouts as _changed_layouts
 from .marks import MARKS_FORMAT, MARKS_FORMAT_PREFIX, MARKS_FORMAT_VERSION, kept_marks
 from .marks import change_marks as _changed_marks
-from .views import compare_by_ok, compare_mode_ok, compare_month_ok, compare_weeks_ok, grain_ok, period_choice, plot_pair_ok
+from .views import (
+    compare_by_ok,
+    compare_mode_ok,
+    compare_month_ok,
+    compare_weeks_ok,
+    conditions_from,
+    grain_ok,
+    period_choice,
+    plot_pair_ok,
+)
 
 SETTINGS_FORMAT = "garmin-running-data-normalizer-gui-settings-v2"
 _FORMAT_PREFIX = "garmin-running-data-normalizer-gui-settings-v"
@@ -215,6 +224,10 @@ def _view_values(data: dict[str, Any]) -> dict[str, Any]:
     # (stage P1).
     if point_item(data.get("view_spread")):
         values["view_spread"] = data["view_spread"]
+    # The conditions on the activities, whole or not at all (stage T1).
+    conditions = conditions_kept(data.get("view_conditions"))
+    if conditions is not None:
+        values["view_conditions"] = conditions
     return values
 
 
@@ -233,6 +246,15 @@ def types_kept(value: Any) -> list[str] | None:
     ):
         return None
     return list(value)
+
+
+def conditions_kept(value: Any) -> dict[str, Any] | None:
+    """The conditions on the activities that the settings keep (stage T1 of
+    v2.2.0): the whole of them in the form of a request, as the requests
+    take them (views.conditions_from), or None, and then the next opening
+    has no conditions, never other conditions than those chosen."""
+    conditions = conditions_from(value)
+    return None if conditions is None else conditions.asked()
 
 
 def timezone_kept(value: Any) -> str | None:
@@ -533,6 +555,8 @@ VIEW_KEYS = {
     "plot": "view_plot",
     # The item of the distribution (stage P1).
     "spread": "view_spread",
+    # The conditions on the activities (stage T1).
+    "conditions": "view_conditions",
 }
 
 
@@ -644,6 +668,7 @@ def launch_answer(
         "view_marks_shown": values.get("view_marks_shown"),
         "view_plot": values.get("view_plot"),
         "view_spread": values.get("view_spread"),
+        "view_conditions": values.get("view_conditions"),
         "view_marks": list(marks or []),
         "marks_notice": marks_notice,
         "timezone": values.get("timezone"),
@@ -759,6 +784,7 @@ __all__ = [
     "remove_settings",
     "settings_present",
     "timezone_kept",
+    "conditions_kept",
     "types_kept",
     "write_marks",
     "write_settings",

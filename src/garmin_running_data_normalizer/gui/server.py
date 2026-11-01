@@ -65,6 +65,7 @@ from .settings import (
 )
 from .stores import check_store, download_time, open_store, store_place, unlock_store
 from .views import (
+    ConditionsRequestError,
     ViewNotOpenError,
     ViewRequestError,
     Views,
@@ -72,6 +73,8 @@ from .views import (
     compare_mode_ok,
     compare_month_ok,
     compare_weeks_ok,
+    conditions_from,
+    conditions_request,
     plot_pair_ok,
     grain_ok,
     item_table,
@@ -259,6 +262,14 @@ def _not_readable(places: Any) -> dict[str, Any] | None:
         return None
     first = places[0]
     return {"place": first if place_can_be_shown(first) else None, "more": len(places) - 1}
+
+
+def _names_state(data: Any) -> str:
+    """Whether the reading of an output that made an answer read the names of
+    its activities (stage T1 of v2.2.0): "read", or "too_large" where they
+    were left out for the limits."""
+    names = data.names
+    return "read" if names is not None and not names.too_large else "too_large"
 
 
 def _iso(day: int | None) -> str | None:
@@ -842,6 +853,13 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             if payload["spread"] is not None and not point_item(payload["spread"]):
                 raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
             view["spread"] = payload["spread"]
+        # The conditions on the activities, whole or not at all (stage T1),
+        # in the form that a request gives them.
+        if "conditions" in payload:
+            conditions = None if payload["conditions"] is None else conditions_from(payload["conditions"])
+            if payload["conditions"] is not None and conditions is None:
+                raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+            view["conditions"] = None if conditions is None else conditions.asked()
         notice = remember_view(items, shelf, view)
         return {"remembered": notice is None, "notice": notice}
 
@@ -903,6 +921,9 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             # Whether the view by shoes has shoes to show (stage S1 of
             # v2.2.0); the answers of the numbers say it again.
             "shoes": shoe_count(data),
+            # Whether the names of the activities were read (stage T1); every
+            # answer of a view says it again, as any can read the output again.
+            "names": _names_state(data),
         }
 
     def _api_view_series(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -915,6 +936,11 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             items, period, grain, types = series_request(payload)
             # The period before, for the summary (stage Q1 of v2.2.0).
             previous = previous_request(payload, grain)
+            conditions = conditions_request(payload)
+        except ConditionsRequestError as exc:
+            # Conditions of another form, which the page checks before it sends
+            # them (stage T1 of v2.2.0).
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "CONDITIONS_INVALID") from exc
         except ViewRequestError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
         try:
@@ -927,11 +953,12 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise _command_failed() from exc
         if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
-        answer = view_answer(data, items, period, grain, types, previous)
-        answer["coverage"] = self.server.views.coverage(ticket, data, types)
+        answer = view_answer(data, items, period, grain, types, previous, conditions)
+        answer["coverage"] = self.server.views.coverage(ticket, data, types, conditions)
         # As the bars of the shelf: an output read again can have other shoes
         # (Codex's review of the plan of S1 of v2.2.0).
         answer["shoes"] = shoe_count(data)
+        answer["names"] = _names_state(data)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer
@@ -945,6 +972,11 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             if not isinstance(ticket, str):
                 raise ViewRequestError("view")
             key, period, types = list_request(payload)
+            conditions = conditions_request(payload)
+        except ConditionsRequestError as exc:
+            # Conditions of another form, which the page checks before it sends
+            # them (stage T1 of v2.2.0).
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "CONDITIONS_INVALID") from exc
         except ViewRequestError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
         try:
@@ -957,7 +989,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise _command_failed() from exc
         if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
-        answer = activity_list(data, key, period, types)
+        answer = activity_list(data, key, period, types, conditions)
+        answer["names"] = _names_state(data)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer
@@ -971,6 +1004,11 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             if not isinstance(ticket, str):
                 raise ViewRequestError("view")
             x, y, period, types = points_request(payload)
+            conditions = conditions_request(payload)
+        except ConditionsRequestError as exc:
+            # Conditions of another form, which the page checks before it sends
+            # them (stage T1 of v2.2.0).
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "CONDITIONS_INVALID") from exc
         except ViewRequestError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
         try:
@@ -983,7 +1021,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise _command_failed() from exc
         if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
-        answer = activity_points(data, x, y, period, types)
+        answer = activity_points(data, x, y, period, types, conditions)
+        answer["names"] = _names_state(data)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer
@@ -997,6 +1036,11 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             if not isinstance(ticket, str):
                 raise ViewRequestError("view")
             key, period, types = spread_request(payload)
+            conditions = conditions_request(payload)
+        except ConditionsRequestError as exc:
+            # Conditions of another form, which the page checks before it sends
+            # them (stage T1 of v2.2.0).
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "CONDITIONS_INVALID") from exc
         except ViewRequestError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
         try:
@@ -1009,7 +1053,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise _command_failed() from exc
         if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
-        answer = activity_spread(data, key, period, types)
+        answer = activity_spread(data, key, period, types, conditions)
+        answer["names"] = _names_state(data)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer
@@ -1024,6 +1069,11 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             if not isinstance(ticket, str):
                 raise ViewRequestError("view")
             period, types = shoes_request(payload)
+            conditions = conditions_request(payload)
+        except ConditionsRequestError as exc:
+            # Conditions of another form, which the page checks before it sends
+            # them (stage T1 of v2.2.0).
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "CONDITIONS_INVALID") from exc
         except ViewRequestError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
         try:
@@ -1036,7 +1086,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise _command_failed() from exc
         if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
-        answer = shoe_answer(data, period, types)
+        answer = shoe_answer(data, period, types, conditions)
+        answer["names"] = _names_state(data)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer

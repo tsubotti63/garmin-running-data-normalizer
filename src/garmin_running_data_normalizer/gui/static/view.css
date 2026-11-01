@@ -283,6 +283,131 @@ button.small {
   font-weight: 700;
 }
 
+/* The heading of the activity types counted with the button of the
+   conditions (stage T1 of v2.2.0): one row that wraps where they do not fit,
+   as the English heading is longer; the bar keeps its height. */
+.filter-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px 8px;
+  margin: 0 0 3px;
+}
+
+.filter-head > .filter-label {
+  margin: 0;
+}
+
+.conditions-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 9px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--surface);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.conditions-button.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+
+.conditions-button:disabled {
+  color: var(--sub);
+  cursor: default;
+}
+
+.conditions-pop {
+  right: 0;
+  left: auto;
+  width: 400px;
+  max-width: calc(100vw - 40px);
+  overflow-y: auto;
+}
+
+.conditions-pop .pop-title {
+  margin: 0 0 4px;
+}
+
+.conditions-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 2px;
+}
+
+.conditions-what {
+  min-width: 4.5em;
+  font-weight: 600;
+}
+
+/* Over the width of every text box (styles.css). */
+.conditions-pop .conditions-text {
+  flex: 1 1 220px;
+  width: auto;
+  min-width: 0;
+}
+
+.conditions-pop .conditions-number {
+  flex: none;
+  width: 5.5em;
+}
+
+/* A box that cannot be used is grey on the window too: styles.css makes it
+   transparent, which shows the white of the window. */
+.conditions-pop .conditions-text:disabled {
+  background: var(--none-soft);
+}
+
+.conditions-pop .note {
+  margin: 2px 0 6px;
+}
+
+/* The line of the conditions under the bar of the filters, in every view
+   while there are conditions (stage T1 of v2.2.0); it wraps where they are
+   long (Codex's review of the plan of T1). */
+.conditions-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 5px 20px 5px 16px;
+  border-bottom: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.conditions-line > svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.conditions-line-text {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.conditions-line-text strong {
+  font-weight: 700;
+}
+
+.conditions-line button {
+  flex: none;
+  margin-left: auto;
+}
+
 .types-list label {
   display: flex;
   align-items: center;
@@ -1436,6 +1561,15 @@ button.small {
 
 .list-table .t td {
   white-space: nowrap;
+}
+
+/* The names of the activities (stage T1 of v2.2.0) wrap in their column, long
+   names without spaces too (Codex's review of the plan of T1). */
+.list-table .t td.list-name {
+  max-width: 16em;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-align: left;
 }
 
 .list-table .t td.empty,

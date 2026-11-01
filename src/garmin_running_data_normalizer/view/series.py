@@ -20,12 +20,18 @@ last cut by the period and marked as partial.
 Values that are missing are never filled, carried, or made 0, and what is
 left out is counted. The numbers are not rounded: the page and the CLI round
 them as they show them.
+
+From stage T1 of v2.2.0, the view page may give conditions on the activities
+(Conditions): words of the name, a distance, and a time. They choose the rows
+of the activities where the activity types counted do, after them, so that
+every view takes them the same way; the CLI gives none.
 """
 
 from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from bisect import bisect_right
 from collections import Counter, defaultdict
 from collections.abc import Collection, Iterator
@@ -38,7 +44,7 @@ from typing import Any
 
 from ..common.names import unsafe_character
 from ..common.sport import sport_group
-from .data import Row, ViewData
+from .data import Names, Row, ViewData, fold
 from .items import (
     ACTIVITIES,
     COUNT,
@@ -118,6 +124,16 @@ NO_TYPE = ""
 # direction character. A request of the numbers takes any names, as 2.1.0 did.
 MAX_TYPES = 64
 MAX_TYPE_LENGTH = 128
+# The conditions on the activities (stage T1 of v2.2.0): the words of a name,
+# of up to MAX_CONDITION_TEXT code points, split at 、 and "," after NFKC (so
+# that the half-width ､ and the full-width ， split too), up to
+# MAX_CONDITION_WORDS different words; a distance in whole metres and a time
+# in whole minutes, from and to, up to their limits.
+MAX_CONDITION_TEXT = 60
+MAX_CONDITION_WORDS = 10
+MAX_DISTANCE_METRES = 1_000_000
+MAX_TIME_MINUTES = 6_000
+CONDITION_SEPARATORS = re.compile("[、,]")
 
 
 @dataclass(frozen=True)
@@ -264,9 +280,110 @@ def default_types(data: ViewData) -> frozenset[str]:
     return frozenset(entry["name"] for entry in activity_types(data) if entry["running"])
 
 
-def _activity_rows(data: ViewData, types: Collection[str] | None) -> list[Row]:
+@dataclass(frozen=True)
+class Conditions:
+    """The conditions on the activities that a request gives (stage T1 of
+    v2.2.0): ``text``, the words of the name as the person wrote them (None
+    without); ``words``, the same words as they are compared
+    (condition_words); ``distance``, the least and the most metres, and
+    ``time``, the least and the most minutes, each None where it has no
+    bound."""
+
+    text: str | None
+    words: tuple[str, ...]
+    distance: tuple[int | None, int | None] = (None, None)
+    time: tuple[int | None, int | None] = (None, None)
+
+    def asked(self) -> dict[str, Any]:
+        """The conditions in the form of a request, as an answer gives them
+        back: the page says and saves what the numbers were made of."""
+        answer: dict[str, Any] = {}
+        if self.text is not None:
+            answer["name"] = self.text
+        if self.distance != (None, None):
+            answer["distance"] = list(self.distance)
+        if self.time != (None, None):
+            answer["time"] = list(self.time)
+        return answer
+
+
+def condition_words(text: str) -> tuple[str, ...]:
+    """The words of the name of conditions as they are compared (stage T1 of
+    v2.2.0): the text in NFKC, split at 、 and ",", each word without the
+    spaces at its ends and case folded (data.fold), without the empty words
+    and the words that are the same as one before. Only the server compares
+    them; the page says the words as they were written."""
+    words: list[str] = []
+    for part in CONDITION_SEPARATORS.split(unicodedata.normalize("NFKC", text)):
+        word = fold(part.strip())
+        if word and word not in words:
+            words.append(word)
+    return tuple(words)
+
+
+def _name_state(data: ViewData, conditions: Conditions) -> str | None:
+    """Whether the words of the name were used ("used"), or not, as the
+    names of the output could not be read ("unread"); None without words."""
+    if not conditions.words:
+        return None
+    return "unread" if data.names is None or data.names.too_large else "used"
+
+
+def _meets(row: Row, conditions: Conditions, names: Names | None) -> bool:
+    """Whether an activity meets the conditions (stage T1 of v2.2.0): its
+    name holds one of the words, where the names were read (an activity
+    without a name does not; without the names, the words are not used);
+    and its distance in metres and its time in seconds are within the
+    bounds, both ends included, compared as the output writes them (an
+    activity without the value does not, where the condition is given)."""
+    if conditions.words and names is not None and not names.too_large:
+        folded = names.folded.get(row.marks.get("key") or "")
+        if folded is None or not any(word in folded for word in conditions.words):
+            return False
+    for value, (low, high), unit in (
+        (row.values[DISTANCE], conditions.distance, 1),
+        (row.values[DURATION], conditions.time, 60),
+    ):
+        if low is None and high is None:
+            continue
+        if value is None or (low is not None and value < low * unit) or (high is not None and value > high * unit):
+            return False
+    return True
+
+
+def _activity_rows(data: ViewData, types: Collection[str] | None, conditions: Conditions | None = None) -> list[Row]:
     counted = default_types(data) if types is None else frozenset(types)
-    return [row for row in data.rows[ACTIVITIES] if row.marks["type"] in counted]
+    rows = [row for row in data.rows[ACTIVITIES] if row.marks["type"] in counted]
+    # The conditions choose after the types (stage T1 of v2.2.0).
+    return rows if conditions is None else [row for row in rows if _meets(row, conditions, data.names)]
+
+
+def condition_counts(
+    data: ViewData,
+    span: tuple[int, int] | None,
+    types: Collection[str] | None,
+    conditions: Conditions,
+) -> dict[str, Any]:
+    """What the line of the conditions says of an answer (stage T1 of
+    v2.2.0): the conditions as they were asked, the activities of the
+    activity types counted in the days of ``span`` (those of the answer),
+    those of them that meet the conditions, and _name_state."""
+    rows = [] if span is None else [row for row in _activity_rows(data, types) if span[0] <= row.day <= span[1]]
+    return {
+        "asked": conditions.asked(),
+        "counted": len(rows),
+        "met": sum(1 for row in rows if _meets(row, conditions, data.names)),
+        "name": _name_state(data, conditions),
+    }
+
+
+def _row_name(data: ViewData, row: Row) -> str | None:
+    """The name of an activity of the list of a period (stage T1 of
+    v2.2.0), where the names were read."""
+    names = data.names
+    if names is None or names.too_large:
+        return None
+    return names.names.get(row.marks.get("key") or "")
 
 
 def _has_value(item: Item, row: Row) -> bool:
@@ -297,18 +414,20 @@ def item_series(
     key: str,
     periods: Periods,
     types: Collection[str] | None = None,
+    conditions: Conditions | None = None,
 ) -> dict[str, Any]:
     """The numbers of one panel: for each line, the value and the count of
     each period, and what was left out. ``types`` are the activity types
     counted by the training and running-form items, the running types when
-    None; the other items do not use them."""
+    None, and ``conditions`` choose among them (stage T1 of v2.2.0); the
+    other items use neither."""
     if key not in ITEMS_BY_KEY:
         raise ValueError(f"unknown item: {key}")
     item = ITEMS_BY_KEY[key]
     dataset = DATASETS_BY_NAME[item.dataset]
     left_out: Counter[str] = Counter()
     if item.dataset == ACTIVITIES:
-        rows = _activity_rows(data, types)
+        rows = _activity_rows(data, types, conditions)
         lines = [_activity_line(item, rows, periods, left_out)]
     else:
         rows = list(data.rows[item.dataset])
@@ -475,11 +594,16 @@ def _at(entry: tuple[float, int] | None) -> dict[str, Any] | None:
     return None if entry is None else {"value": entry[0], "period": entry[1]}
 
 
-def coverage(data: ViewData, types: Collection[str] | None = None) -> dict[str, dict[str, Any]]:
+def coverage(
+    data: ViewData,
+    types: Collection[str] | None = None,
+    conditions: Conditions | None = None,
+) -> dict[str, dict[str, Any]]:
     """For each item, the months with a value on at least one day, and its
     first and last day with a value: the bars of the item shelf. The training
-    and running-form items follow ``types``."""
-    activity_rows = _activity_rows(data, types)
+    and running-form items follow ``types``, and ``conditions`` (stage T1 of
+    v2.2.0)."""
+    activity_rows = _activity_rows(data, types, conditions)
     answer: dict[str, dict[str, Any]] = {}
     for item in ITEMS:
         rows = activity_rows if item.dataset == ACTIVITIES else data.rows[item.dataset]
@@ -556,13 +680,16 @@ def view_answer(
     grain: str = "auto",
     types: Collection[str] | None = None,
     previous: bool = False,
+    conditions: Conditions | None = None,
 ) -> dict[str, Any]:
     """The numbers of a page: its periods, once, and a panel for each item.
     With ``previous`` (the whole period only, stage Q1 of v2.2.0), also the
     days chosen and whether the output holds all of them, and the numbers of
     the period of the same length just before, counted from the same reading
     of the output in the same way: None for "all" and where the period is
-    outside the output."""
+    outside the output. With ``conditions`` (stage T1 of v2.2.0), they choose
+    the activities of the panels and of the period before, and the answer
+    says how many of the activities of its days meet them (condition_counts)."""
     if previous and grain != RANGE_GRAIN:
         raise ValueError("the period before is for the whole period only")
     periods = period_bounds(data, period, grain)
@@ -570,6 +697,8 @@ def view_answer(
         answer: dict[str, Any] = {"start": None, "end": None, "grain": None, "periods": [], "panels": []}
         if previous:
             answer["previous"] = None
+        if conditions is not None:
+            answer["conditions"] = condition_counts(data, None, types, conditions)
         return answer
     answer = {
         "start": date.fromordinal(periods.start).isoformat(),
@@ -579,8 +708,10 @@ def view_answer(
             {"start": date.fromordinal(first).isoformat(), "end": date.fromordinal(last).isoformat(), "partial": partial}
             for first, last, partial in periods.spans
         ],
-        "panels": [item_series(data, key, periods, types) for key in keys],
+        "panels": [item_series(data, key, periods, types, conditions) for key in keys],
     }
+    if conditions is not None:
+        answer["conditions"] = condition_counts(data, (periods.start, periods.end), types, conditions)
     if previous:
         chosen = chosen_span(data, period)
         if chosen is None:
@@ -598,7 +729,10 @@ def view_answer(
                 "whole": whole,
                 "panels": None
                 if cut is None
-                else [item_series(data, key, Periods(cut[0], cut[1], RANGE_GRAIN, ((cut[0], cut[1], False),)), types) for key in keys],
+                else [
+                    item_series(data, key, Periods(cut[0], cut[1], RANGE_GRAIN, ((cut[0], cut[1], False),)), types, conditions)
+                    for key in keys
+                ],
             }
     return answer
 
@@ -608,18 +742,21 @@ def activity_list(
     key: str,
     period: tuple[date, date],
     types: Collection[str] | None = None,
+    conditions: Conditions | None = None,
 ) -> dict[str, Any]:
     """The activities of one period of the panel of an item of the activities
     (stage M3 of v2.2.0): those of the activity types counted in the days of
     ``period``, cut to the output, chosen as the panel chooses them, with the
     value of the panel there and the count of the activities that have it. A
-    period of more than MAX_LIST_ROWS activities gives their number only."""
+    period of more than MAX_LIST_ROWS activities gives their number only.
+    From stage T1 of v2.2.0, ``conditions`` choose among them as among those
+    of the panel, and each row has its name where the names were read."""
     if key not in ITEMS_BY_KEY or ITEMS_BY_KEY[key].dataset != ACTIVITIES:
         raise ValueError(f"not an item of the activities: {key}")
-    periods, chosen = _period_rows(data, period, types)
+    periods, chosen = _period_rows(data, period, types, conditions)
     if periods is None:
         return {"start": None, "end": None, "total": 0, "rows": [], "limit": MAX_LIST_ROWS, "value": None}
-    [line] = item_series(data, key, periods, types)["lines"]
+    [line] = item_series(data, key, periods, types, conditions)["lines"]
     columns = LIST_ITEMS if key in LIST_ITEMS or ITEMS_BY_KEY[key].kind == COUNT else (*LIST_ITEMS, key)
     rows = None
     if len(chosen) <= MAX_LIST_ROWS:
@@ -628,6 +765,7 @@ def activity_list(
                 "day": date.fromordinal(row.day).isoformat(),
                 "datetime": row.marks.get("datetime"),
                 "type": row.marks["type"],
+                "name": _row_name(data, row),
                 "values": {name: _list_value(ITEMS_BY_KEY[name], row) for name in columns},
             }
             for row in chosen
@@ -646,6 +784,7 @@ def _period_rows(
     data: ViewData,
     period: str | tuple[date, date],
     types: Collection[str] | None,
+    conditions: Conditions | None = None,
 ) -> tuple[Periods | None, list[Row]]:
     """The days of ``period`` cut to the output as one period, and the
     activities of the activity types counted in them, chosen as the panels
@@ -654,7 +793,20 @@ def _period_rows(
     periods = period_bounds(data, period, RANGE_GRAIN)
     if periods is None:
         return None, []
-    return periods, [row for row in _activity_rows(data, types) if periods.index(row.day) is not None]
+    return periods, [row for row in _activity_rows(data, types, conditions) if periods.index(row.day) is not None]
+
+
+def _conditions_part(
+    data: ViewData,
+    periods: Periods | None,
+    types: Collection[str] | None,
+    conditions: Conditions | None,
+) -> dict[str, Any]:
+    """The line of the conditions of an answer of the days of ``periods``,
+    where conditions were given (stage T1 of v2.2.0)."""
+    if conditions is None:
+        return {}
+    return {"conditions": condition_counts(data, None if periods is None else (periods.start, periods.end), types, conditions)}
 
 
 def _list_value(item: Item, row: Row) -> float | None:
@@ -697,6 +849,7 @@ def activity_points(
     y: str,
     period: str | tuple[date, date] = "all",
     types: Collection[str] | None = None,
+    conditions: Conditions | None = None,
 ) -> dict[str, Any]:
     """Two items of the activities plotted against each other (stage O1 of
     v2.2.0): the activities of the activity types counted in the days of
@@ -708,7 +861,7 @@ def activity_points(
     and ``missing`` the others."""
     if not point_item(x) or not point_item(y) or x == y:
         raise ValueError(f"not two items of the activities: {x}, {y}")
-    periods, chosen = _period_rows(data, period, types)
+    periods, chosen = _period_rows(data, period, types, conditions)
     with_values = []
     for index, row in enumerate(chosen):
         values = {key: _list_value(ITEMS_BY_KEY[key], row) for key in (x, y)}
@@ -731,6 +884,7 @@ def activity_points(
             }
             for _key, _index, row, values in with_values[-MAX_POINTS:]
         ],
+        **_conditions_part(data, periods, types, conditions),
     }
 
 
@@ -769,6 +923,7 @@ def activity_spread(
     key: str,
     period: str | tuple[date, date] = "all",
     types: Collection[str] | None = None,
+    conditions: Conditions | None = None,
 ) -> dict[str, Any]:
     """The distribution of one item of the activities (stage P1 of v2.2.0):
     the activities of the activity types counted in the days of ``period``,
@@ -785,7 +940,7 @@ def activity_spread(
         raise ValueError(f"not an item of the activities: {key}")
     item = ITEMS_BY_KEY[key]
     scale, width = SPREAD_RANGES[key]
-    periods, chosen = _period_rows(data, period, types)
+    periods, chosen = _period_rows(data, period, types, conditions)
     # Each value once in a range of the width of the item; a wider range only
     # takes those together (Codex's review of the plan of P1).
     counted = Counter(
@@ -818,6 +973,7 @@ def activity_spread(
         "widened": factor > 1,
         "first": first,
         "counts": [] if first is None else [ranges.get(number, 0) for number in range(first, last + 1)],
+        **_conditions_part(data, periods, types, conditions),
     }
 
 
@@ -838,6 +994,7 @@ def shoe_answer(
     data: ViewData,
     period: str | tuple[date, date] = "all",
     types: Collection[str] | None = None,
+    conditions: Conditions | None = None,
 ) -> dict[str, Any]:
     """The view by shoes (stage S1 of v2.2.0): the months of ``period``,
     once; the activities of the activity types counted in it, chosen as the
@@ -857,7 +1014,7 @@ def shoe_answer(
     gear = data.gear
     shoes = () if gear is None else gear.shoes
     months = period_bounds(data, period, "month")
-    whole, rows = _period_rows(data, period, types)
+    whole, rows = _period_rows(data, period, types, conditions)
     answer: dict[str, Any] = {
         "start": None,
         "end": None,
@@ -873,6 +1030,9 @@ def shoe_answer(
         "left_out": len(shoes),
         "available": shoe_count(data),
     }
+    # With conditions, the activities above are those that meet them (M); the
+    # line counts the others before them (Codex's review of the plan of T1).
+    answer.update(_conditions_part(data, whole, types, conditions))
     if months is None or whole is None:
         return answer
     linked: dict[str, list[Row]] = defaultdict(list)
@@ -937,12 +1097,18 @@ def shoe_answer(
 __all__ = [
     "GRAINS",
     "LAST_YEARS",
+    "CONDITION_SEPARATORS",
+    "Conditions",
     "LIST_ITEMS",
     "MAX_ANSWER_BYTES",
+    "MAX_CONDITION_TEXT",
+    "MAX_CONDITION_WORDS",
+    "MAX_DISTANCE_METRES",
     "MAX_LIST_ROWS",
     "MAX_PANELS",
     "MAX_POINTS",
     "MAX_RANGES",
+    "MAX_TIME_MINUTES",
     "MAX_TYPES",
     "MAX_TYPE_LENGTH",
     "NO_TYPE",
@@ -955,6 +1121,8 @@ __all__ = [
     "activity_types",
     "auto_grain",
     "chosen_span",
+    "condition_counts",
+    "condition_words",
     "coverage",
     "default_items",
     "default_types",

@@ -16,7 +16,7 @@ from typing import Any
 from unittest.mock import patch
 
 from garmin_running_data_normalizer.run_all import ACTIVITIES_CSV_COLUMNS
-from garmin_running_data_normalizer.view.data import Gear, Row, Shoe, ViewData
+from garmin_running_data_normalizer.view.data import Gear, Names, Row, Shoe, ViewData, activity_names
 from garmin_running_data_normalizer.view.items import (
     ACTIVITIES,
     DATASETS,
@@ -35,17 +35,23 @@ from garmin_running_data_normalizer.view import series as series_module
 from garmin_running_data_normalizer.view.series import (
     LIST_ITEMS,
     MAX_ANSWER_BYTES,
+    MAX_CONDITION_TEXT,
+    MAX_CONDITION_WORDS,
+    MAX_DISTANCE_METRES,
     MAX_LIST_ROWS,
     MAX_PANELS,
     MAX_POINTS,
     MAX_RANGES,
+    MAX_TIME_MINUTES,
     SPREAD_RANGES,
+    Conditions,
     activity_list,
     activity_points,
     activity_spread,
     activity_types,
     auto_grain,
     chosen_span,
+    condition_words,
     coverage,
     default_items,
     default_types,
@@ -1333,6 +1339,281 @@ class ShoeAnswerTest(unittest.TestCase):
         empty = shoe_answer(replace(view_data([]), gear=Gear((made_shoe("A", "Road A", 0),), {}, frozenset())))
         self.assertEqual((empty["start"], empty["periods"], empty["shoes"], empty["left_out"]), (None, [], [], 1))
         self.assertEqual(shoe_count(replace(view_data([]), gear=Gear((), {}, frozenset(), too_large=True))), {"count": 0, "too_large": True})
+
+
+def named(rows: list[tuple[str, Row]], names: dict[str, Any], *, too_large: bool = False) -> ViewData:
+    """Rows with the names of their activities by their declared key (stage
+    T1 of v2.2.0), as the view page reads them from activities.json, or left
+    out for the limits."""
+    found = Names({}, {}, too_large=True) if too_large else activity_names(
+        [{"garmin_activity_key": key, "name": name} for key, name in names.items()]
+    )
+    return replace(view_data(rows), names=found)
+
+
+def asked(
+    name: str | None = None,
+    distance: tuple[int | None, int | None] = (None, None),
+    time: tuple[int | None, int | None] = (None, None),
+) -> Conditions:
+    """Conditions as a request gives them: whole metres and minutes."""
+    return Conditions(name, () if name is None else condition_words(name), distance, time)
+
+
+class ConditionsTest(unittest.TestCase):
+    """The conditions on the activities (stage T1 of v2.2.0), of rows made by
+    hand: made-up names of training only."""
+
+    def keys(self, data: ViewData, conditions: Conditions | None, types: Any = None) -> list[str]:
+        return [row.marks["key"] for row in series_module._activity_rows(data, types, conditions)]
+
+    def test_the_limits_are_those_of_the_plan(self) -> None:
+        self.assertEqual(
+            (MAX_CONDITION_TEXT, MAX_CONDITION_WORDS, MAX_DISTANCE_METRES, MAX_TIME_MINUTES),
+            (60, 10, 1_000_000, 6_000),
+        )
+
+    def test_the_words_of_a_name_are_compared_in_one_form(self) -> None:
+        # Codex 11 of the plan of T1: NFKC first, so that the half-width ､ and
+        # the full-width ， split too; each word without the spaces at its
+        # ends and case folded; the empty words, and those the same as one
+        # before, are left out.
+        for text, words in (
+            ("ペース走、ジョグ", ("ペース走", "ジョグ")),
+            ("Tempo, tempo ,TEMPO", ("tempo",)),
+            ("ＴＥＭＰＯ，ｲﾝﾀｰﾊﾞﾙ", ("tempo", "インターバル")),
+            ("a､b", ("a", "b")),
+            ("、, a ,、", ("a",)),
+            ("Straße", ("strasse",)),
+            ("ﾍﾟｰｽ走 朝", ("ペース走 朝",)),
+            (" 、 ", ()),
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(condition_words(text), words)
+
+    def test_an_activity_meets_one_of_the_words_held_in_its_name(self) -> None:
+        # In the same form: full and half width and case are the same. An
+        # activity without a name, or without a key, does not meet them.
+        data = named(
+            [
+                keyed("2024-01-01", "k1"),
+                keyed("2024-01-02", "k2"),
+                keyed("2024-01-03", "k3"),
+                keyed("2024-01-04", "k4"),
+                keyed("2024-01-05", ""),
+            ],
+            {"k1": "朝のペース走", "k2": "TEMPO Run", "k3": "ｼﾞｮｸﾞ 10K", "": "No key"},
+        )
+        for name, keys in (
+            ("tempo", ["k2"]),
+            ("ジョグ", ["k3"]),
+            ("ペース走、tempo", ["k1", "k2"]),
+            ("ＲＵＮ", ["k2"]),
+            ("10k", ["k3"]),
+            ("ロング走", []),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(self.keys(data, asked(name)), keys)
+
+    def test_the_words_choose_nothing_where_the_names_were_not_read(self) -> None:
+        # The checker's A-3 of the plan of T1: with the names left out for the
+        # limits, or not read (the series command), the words choose nothing,
+        # and the other conditions choose as they do.
+        rows = [keyed("2024-01-01", "k1", distance_m=5000.0), keyed("2024-01-02", "k2", distance_m=12000.0)]
+        for data in (named(rows, {"k1": "tempo"}, too_large=True), view_data(rows)):
+            with self.subTest(names=data.names):
+                self.assertEqual(self.keys(data, asked("tempo")), ["k1", "k2"])
+                self.assertEqual(self.keys(data, asked("tempo", (10_000, None))), ["k2"])
+
+    def test_a_distance_and_a_time_include_their_bounds(self) -> None:
+        # Whole metres and minutes, compared with the values as the output
+        # writes them: just on a bound meets, and just outside does not, at
+        # both ends; an activity without the value does not meet a condition
+        # on it, and meets where there is none.
+        data = view_data(
+            [
+                keyed("2024-01-01", "a", distance_m=9999.99, duration_sec=3599.999),
+                keyed("2024-01-02", "b", distance_m=10000.0, duration_sec=3600.0),
+                keyed("2024-01-03", "c", distance_m=12000.0, duration_sec=5400.0),
+                keyed("2024-01-04", "d", distance_m=12000.01, duration_sec=5400.001),
+                keyed("2024-01-05", "e"),
+                keyed("2024-01-06", "f", distance_m=0.0, duration_sec=0.0),
+                keyed("2024-01-07", "g", distance_m=11000.0),
+            ]
+        )
+        for distance, time, keys in (
+            ((10_000, 12_000), (None, None), ["b", "c", "g"]),
+            ((10_000, None), (None, None), ["b", "c", "d", "g"]),
+            ((None, 12_000), (None, None), ["a", "b", "c", "f", "g"]),
+            ((None, None), (60, 90), ["b", "c"]),
+            ((None, None), (60, None), ["b", "c", "d"]),
+            ((None, None), (None, 90), ["a", "b", "c", "f"]),
+            ((0, 0), (None, None), ["f"]),
+            ((0, None), (0, None), ["a", "b", "c", "d", "f"]),
+            # Both together.
+            ((10_000, None), (None, 60), ["b"]),
+        ):
+            with self.subTest(distance=distance, time=time):
+                self.assertEqual(self.keys(data, asked(distance=distance, time=time)), keys)
+
+    def test_the_conditions_choose_after_the_types(self) -> None:
+        data = view_data(
+            [
+                keyed("2024-01-01", "r1", distance_m=12000.0),
+                keyed("2024-01-02", "r2", distance_m=5000.0),
+                keyed("2024-01-03", "b1", "road_biking", distance_m=30000.0),
+                keyed("2024-01-04", "b2", "road_biking", distance_m=8000.0),
+            ]
+        )
+        far = asked(distance=(10_000, None))
+        self.assertEqual(self.keys(data, far), ["r1"])
+        self.assertEqual(self.keys(data, far, ["road_biking"]), ["b1"])
+        self.assertEqual(self.keys(data, far, ["running", "road_biking"]), ["r1", "b1"])
+        self.assertEqual(self.keys(data, None, ["running", "road_biking"]), ["r1", "r2", "b1", "b2"])
+
+    def test_the_conditions_are_given_back_as_they_were_asked(self) -> None:
+        # The words as written, and the numbers in metres and minutes; what
+        # has no bound is left out.
+        self.assertEqual(
+            asked("Tempo、ジョグ", (10_000, None), (None, 90)).asked(),
+            {"name": "Tempo、ジョグ", "distance": [10_000, None], "time": [None, 90]},
+        )
+        self.assertEqual(asked(distance=(0, 5)).asked(), {"distance": [0, 5]})
+        self.assertEqual(asked("x").asked(), {"name": "x"})
+
+    def months_data(self) -> ViewData:
+        return named(
+            [
+                keyed("2024-01-10", "k1", distance_m=12000.0, duration_sec=3600.0),
+                keyed("2024-02-10", "k2", distance_m=5000.0, duration_sec=1800.0),
+                keyed("2024-03-10", "k3", distance_m=3000.0, duration_sec=1200.0),
+                keyed("2024-04-10", "k4", distance_m=15000.0, duration_sec=4500.0),
+                keyed("2024-05-10", "k5", distance_m=6000.0, duration_sec=2100.0),
+                keyed("2024-04-11", "b1", "road_biking", distance_m=40000.0, duration_sec=5000.0),
+            ],
+            {"k1": "Tempo A", "k2": "Jog", "k3": "Jog", "k4": "tempo B", "k5": "Jog", "b1": "Tempo ride"},
+        )
+
+    def test_the_panels_count_the_activities_that_meet_and_the_answer_says_how_many(self) -> None:
+        # N: the activities of the types counted in the days of the answer; M:
+        # those of them that meet; the panels count M only, and their periods
+        # of 0 lie between the first and the last that meet.
+        data = self.months_data()
+        tempo = asked("tempo")
+        answer = view_answer(data, ["count", "dist"], "all", "month", None, conditions=tempo)
+        self.assertEqual(answer["conditions"], {"asked": {"name": "tempo"}, "counted": 5, "met": 2, "name": "used"})
+        count, dist = answer["panels"]
+        self.assertEqual(count["lines"][0]["values"], [1.0, 0.0, 0.0, 1.0, None])
+        self.assertEqual(dist["lines"][0]["values"], [12000.0, 0.0, 0.0, 15000.0, None])
+        # A range of days: N and M of its days only; the types counted too.
+        part = view_answer(data, ["dist"], (date(2024, 2, 1), date(2024, 4, 30)), "month", None, conditions=tempo)
+        self.assertEqual((part["conditions"]["counted"], part["conditions"]["met"]), (3, 1))
+        rides = view_answer(data, ["dist"], "all", "month", ["running", "road_biking"], conditions=tempo)
+        self.assertEqual((rides["conditions"]["counted"], rides["conditions"]["met"]), (6, 3))
+        # Without conditions, the answer is as before, without the line.
+        plain = view_answer(data, ["count", "dist"], "all", "month")
+        self.assertNotIn("conditions", plain)
+        self.assertEqual(plain, view_answer(view_data([(ACTIVITIES, row) for row in data.rows[ACTIVITIES]]), ["count", "dist"], "all", "month"))
+        # An output without rows: no days, so nothing is counted.
+        empty = view_answer(view_data([]), ["dist"], "all", "auto", None, conditions=tempo)
+        self.assertEqual(empty["conditions"], {"asked": {"name": "tempo"}, "counted": 0, "met": 0, "name": "unread"})
+
+    def test_the_period_before_meets_the_same_conditions(self) -> None:
+        # Stage Q1 of v2.2.0: the summary compares the period with the one of
+        # the same length just before, chosen in the same way.
+        data = self.months_data()
+        chosen = (date(2024, 4, 1), date(2024, 5, 31))
+        tempo = view_answer(data, ["count"], chosen, "range", None, True, asked("tempo"))
+        plain = view_answer(data, ["count"], chosen, "range", None, True)
+        self.assertEqual(tempo["panels"][0]["lines"][0]["values"], [1.0])
+        self.assertEqual(plain["panels"][0]["lines"][0]["values"], [2.0])
+        self.assertEqual(tempo["previous"]["panels"][0]["lines"][0]["values"], [0.0])
+        self.assertEqual(plain["previous"]["panels"][0]["lines"][0]["values"], [2.0])
+        self.assertEqual((tempo["conditions"]["counted"], tempo["conditions"]["met"]), (2, 1))
+
+    def test_the_name_that_could_not_be_read_leaves_the_other_conditions(self) -> None:
+        # The checker's A-3: with the names left out, conditions of a name
+        # only choose nothing (M = N), and the panels are those without
+        # conditions; with a distance too, the distance chooses alone.
+        rows = [keyed("2024-01-10", "k1", distance_m=12000.0), keyed("2024-02-10", "k2", distance_m=5000.0)]
+        data = named(rows, {}, too_large=True)
+        alone = view_answer(data, ["dist"], "all", "month", None, conditions=asked("tempo"))
+        self.assertEqual(alone["conditions"], {"asked": {"name": "tempo"}, "counted": 2, "met": 2, "name": "unread"})
+        self.assertEqual(alone["panels"], view_answer(data, ["dist"], "all", "month")["panels"])
+        both = view_answer(data, ["dist"], "all", "month", None, conditions=asked("tempo", (10_000, None)))
+        self.assertEqual(
+            both["conditions"],
+            {"asked": {"name": "tempo", "distance": [10_000, None]}, "counted": 2, "met": 1, "name": "unread"},
+        )
+        # Without words, the line says nothing of the names.
+        self.assertIsNone(view_answer(data, ["dist"], "all", "month", None, conditions=asked(distance=(1, None)))["conditions"]["name"])
+
+    def test_the_list_the_points_and_the_distribution_meet_the_same_conditions(self) -> None:
+        data = self.months_data()
+        tempo = asked("tempo")
+        year = (date(2024, 1, 1), date(2024, 12, 31))
+        listed = activity_list(data, "dist", year, None, tempo)
+        self.assertEqual([(row["day"], row["name"]) for row in listed["rows"]], [("2024-01-10", "Tempo A"), ("2024-04-10", "tempo B")])
+        self.assertEqual((listed["total"], listed["value"]), (2, {"value": 27000.0, "count": 2}))
+        # Every row has its name, where the names were read.
+        self.assertEqual([row["name"] for row in activity_list(data, "dist", year)["rows"]], ["Tempo A", "Jog", "Jog", "tempo B", "Jog"])
+        for other in (view_data([(ACTIVITIES, row) for row in data.rows[ACTIVITIES]]), replace(data, names=Names({}, {}, too_large=True))):
+            with self.subTest(names=other.names):
+                self.assertEqual({row["name"] for row in activity_list(other, "dist", year)["rows"]}, {None})
+        points = activity_points(data, "dist", "pace", year, None, tempo)
+        self.assertEqual((points["total"], points["conditions"]), (2, {"asked": {"name": "tempo"}, "counted": 5, "met": 2, "name": "used"}))
+        spread = activity_spread(data, "dist", year, None, tempo)
+        self.assertEqual((spread["total"], spread["conditions"]["counted"], spread["conditions"]["met"]), (2, 5, 2))
+        # Without conditions, no line.
+        for answer in (activity_points(data, "dist", "pace", year), activity_spread(data, "dist", year)):
+            self.assertNotIn("conditions", answer)
+
+    def test_the_other_views_count_the_days_of_their_period(self) -> None:
+        # N and M of the points, the distribution, and the view by shoes are
+        # those of the days chosen, never of the whole output (the partial
+        # guard of T1).
+        data = self.months_data()
+        part = (date(2024, 2, 1), date(2024, 4, 30))
+        tempo = asked("tempo")
+        expected = {"asked": {"name": "tempo"}, "counted": 3, "met": 1, "name": "used"}
+        self.assertEqual(activity_points(data, "dist", "pace", part, None, tempo)["conditions"], expected)
+        self.assertEqual(activity_spread(data, "dist", part, None, tempo)["conditions"], expected)
+        self.assertEqual(shoe_answer(data, part, None, tempo)["conditions"], expected)
+
+    def test_the_view_by_shoes_counts_the_activities_that_meet(self) -> None:
+        # Codex 1 of the plan of T1: the activities of the view by shoes are
+        # those that meet (M); N is counted apart, never from the shoes, as an
+        # activity may have two.
+        rows = [
+            keyed("2024-01-05", "k1", distance_m=10000.0),
+            keyed("2024-01-20", "k2", distance_m=5000.0),
+            keyed("2024-02-10", "k3", distance_m=7000.0),
+            keyed("2024-03-01", "k4", distance_m=3000.0),
+        ]
+        gear = Gear(
+            shoes=(made_shoe("A", "Road A", 0), made_shoe("B", "Road B", 1)),
+            links={"k1": frozenset({"A", "B"}), "k2": frozenset({"A"}), "k3": frozenset({"B"})},
+            unknown=frozenset(),
+        )
+        data = replace(named(rows, {"k1": "Tempo", "k2": "Jog", "k3": "tempo", "k4": "TEMPO"}), gear=gear)
+        answer = shoe_answer(data, "all", None, asked("tempo"))
+        self.assertEqual(answer["conditions"], {"asked": {"name": "tempo"}, "counted": 4, "met": 3, "name": "used"})
+        self.assertEqual(
+            {key: answer[key] for key in ("activities", "with_shoes", "two_or_more", "not_known", "without_shoes")},
+            {"activities": 3, "with_shoes": 2, "two_or_more": 1, "not_known": 0, "without_shoes": 1},
+        )
+        self.assertEqual(answer["activities"], answer["conditions"]["met"])
+        self.assertEqual([(shoe["name"], shoe["activities"], shoe["distance"]) for shoe in answer["shoes"]], [("Road B", 2, 17000.0), ("Road A", 1, 10000.0)])
+        self.assertNotIn("conditions", shoe_answer(data))
+
+    def test_the_bars_of_the_shelf_follow_the_conditions(self) -> None:
+        # The checker's A-2: the training items only; the items of the days
+        # have no activities.
+        months = self.months_data()
+        data = replace(months, rows={**months.rows, "uds_daily": (daily("uds_daily", "2024-02-01", resting_heart_rate=50),)})
+        self.assertEqual(coverage(data, None, asked("tempo"))["dist"]["months"], ["2024-01", "2024-04"])
+        self.assertEqual(coverage(data)["dist"]["months"], ["2024-01", "2024-02", "2024-03", "2024-04", "2024-05"])
+        self.assertEqual(coverage(data, None, asked("tempo"))["rhr"], coverage(data)["rhr"])
 
 
 if __name__ == "__main__":

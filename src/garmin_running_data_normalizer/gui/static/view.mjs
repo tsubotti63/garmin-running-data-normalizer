@@ -30,11 +30,18 @@ import {
   FIRST_COMPARE_WEEKS,
   MAX_COMPARE_RACES,
   RANGE_GRAIN,
+  boxesOfConditions,
   compareByFor,
   compareByToOpen,
   compareGrainFor,
   compareGrainsFor,
   compareRaces,
+  conditionsCount,
+  conditionsCounts,
+  conditionsFromBoxes,
+  conditionsKey,
+  conditionsParts,
+  conditionsToOpen,
   firstCompareRaces,
   raceChip,
   raceData,
@@ -324,6 +331,21 @@ const ui = {
   typesPop: byId("types-pop"),
   typesList: byId("types-list"),
   typesClose: byId("types-close"),
+  conditionsButton: byId("conditions-button"),
+  conditionsButtonText: byId("conditions-button-text"),
+  conditionsPop: byId("conditions-pop"),
+  conditionsName: byId("conditions-name"),
+  conditionsNamesWhy: byId("conditions-names-why"),
+  conditionsDistanceFrom: byId("conditions-distance-from"),
+  conditionsDistanceTo: byId("conditions-distance-to"),
+  conditionsTimeFrom: byId("conditions-time-from"),
+  conditionsTimeTo: byId("conditions-time-to"),
+  conditionsProblem: byId("conditions-problem"),
+  conditionsClear: byId("conditions-clear"),
+  conditionsClose: byId("conditions-close"),
+  conditionsLine: byId("conditions-line"),
+  conditionsLineText: byId("conditions-line-text"),
+  conditionsLineClear: byId("conditions-line-clear"),
   filtersHint: byId("filters-hint"),
   compareOff: byId("compare-off"),
   compareOffRace: byId("compare-off-race"),
@@ -780,6 +802,17 @@ const state = {
   // The activity types sent for the numbers of the panels, which a list asks
   // for (Codex's review of the plan of M3).
   answerTypes: null,
+  // The conditions on the activities (stage T1 of v2.2.0): those in force, in
+  // the form of a request (null for none); whether their window is open, and
+  // the key of the words of why its boxes cannot be used; those sent for the
+  // numbers of the panels, which a list asks for, as the activity types; and
+  // whether the reading of the output that made the last answer read the names
+  // of its activities ("read" or "too_large"; null before an answer).
+  conditions: null,
+  conditionsOpen: false,
+  conditionsProblem: null,
+  answerConditions: null,
+  names: null,
 };
 
 // The numbers of the panels; the count of the answers tells the drawing that
@@ -1103,6 +1136,7 @@ function viewValues() {
     marks_shown: state.marksShown,
     plot: { x: state.plotPair.x, y: state.plotPair.y },
     spread: state.spreadItem,
+    conditions: state.conditions,
   };
 }
 
@@ -1257,6 +1291,7 @@ async function openOutput(target, focus = false) {
   state.stop = null;
   state.seriesStop = null;
   state.typesOpen = false;
+  state.conditionsOpen = false;
   state.pickerOpen = false;
   render();
   try {
@@ -1267,6 +1302,7 @@ async function openOutput(target, focus = false) {
     const remembered = rememberedItems(state.settings, answer.items);
     state.items = itemsToOpen(current, remembered, answer.first_items, answer.items);
     state.view = answer;
+    state.names = answer.names ?? null;
     state.target = target;
     state.opening = null;
     // The activity types and the period as the person chose them last, where
@@ -1453,6 +1489,7 @@ function seriesPayload(items, period, grain) {
     period,
     grain,
     types: typesRequest(state.counted, state.view.types),
+    conditions: state.conditions,
   };
 }
 
@@ -1481,6 +1518,8 @@ async function requestSeries(again = true) {
     }
     setAnswer(answer);
     state.answerTypes = payload.types;
+    state.answerConditions = payload.conditions ?? null;
+    state.names = answer.names ?? state.names;
     state.stop = null;
     if (answer.coverage) {
       state.coverage = answer.coverage;
@@ -1542,6 +1581,7 @@ async function reopen() {
       return false;
     }
     state.view = answer;
+    state.names = answer.names ?? null;
     return true;
   } catch (error) {
     if (seq !== state.openSeq) {
@@ -1570,8 +1610,12 @@ async function requestOverview() {
     render();
     return;
   }
-  const signature = JSON.stringify([state.view.view, key, typesRequest(state.counted, state.view.types)]);
+  const signature = JSON.stringify([state.view.view, key, typesRequest(state.counted, state.view.types), conditionsKey(state.conditions)]);
   if (state.overview?.signature === signature) {
+    // The overview drawn is that of these: an answer on its way for others,
+    // such as conditions changed and changed back, is dropped (Codex's
+    // review of the diff of T1).
+    state.overviewSeq += 1;
     return;
   }
   const seq = ++state.overviewSeq;
@@ -1994,7 +2038,7 @@ function recapShowable(viewing) {
 // types counted, and the items of the panels in their order; a change of
 // any of them asks again (Codex's simpler form).
 function recapKey() {
-  return JSON.stringify([state.view?.view ?? null, periodRequest(state.period, state.range), typesRequest(state.counted, state.view?.types), state.items]);
+  return JSON.stringify([state.view?.view ?? null, periodRequest(state.period, state.range), typesRequest(state.counted, state.view?.types), state.items, conditionsKey(state.conditions)]);
 }
 
 // The window opens with the focus on its title, asking again, and its
@@ -2376,6 +2420,7 @@ function saveCompareTarget() {
             grain: answer.grain,
             answerTypes: answer.types,
             types: state.view?.types,
+            conditions: conditionsSaveText("compare"),
             version: state.productVersion,
             language: state.language,
             separator: t("view.spoken_separator"),
@@ -2439,6 +2484,7 @@ function saveShoesTarget() {
             end: drawn.end,
             answerTypes: state.shoesAsked?.types ?? null,
             types: state.view?.types,
+            conditions: conditionsSaveText("shoes"),
             version: state.productVersion,
             language: state.language,
             separator: t("view.spoken_separator"),
@@ -2515,7 +2561,7 @@ function savePlotTarget() {
     footer:
       answer === null
         ? []
-        : saveViewFooter("plot", { start: answer.start, end: answer.end, answerTypes: asked.types, types: state.view?.types, version: state.productVersion, language: state.language }),
+        : saveViewFooter("plot", { start: answer.start, end: answer.end, answerTypes: asked.types, types: state.view?.types, version: state.productVersion, language: state.language, conditions: conditionsSaveText("plot") }),
     marks: false,
   };
 }
@@ -2552,6 +2598,7 @@ function saveSpreadTarget() {
             types: state.view?.types,
             version: state.productVersion,
             language: state.language,
+            conditions: conditionsSaveText("spread"),
           }),
     marks: false,
   };
@@ -2574,6 +2621,7 @@ function saveNoticeNow() {
     language: state.language,
     view,
     content: saveContent(view),
+    conditions: conditionsKey(state.conditions),
   });
 }
 
@@ -2669,7 +2717,10 @@ function renderSave(viewing) {
   // The view by shoes: the names of all the shoes, also of the rows out of
   // the screen (Codex's review of the plan of S1 of v2.2.0).
   const named = target.view === "shoes" ? t("view.save.warn_shoes") : (panels ? ui.saveMarks.checked : target.marks) ? t("view.save.warn_marks") : null;
-  setText(ui.saveWarn, named !== null ? `${warn}${state.language === "ja" ? "" : " "}${named}` : warn);
+  // The words of the conditions of the answer drawn, which the picture writes
+  // (stage T1 of v2.2.0), add to the others (Codex's review of the plan of T1).
+  const words = typeof drawnConditions(target.view)?.asked?.name === "string" ? t("view.save.warn_conditions") : null;
+  setText(ui.saveWarn, [warn, named, words].filter((part) => part !== null).join(state.language === "ja" ? "" : " "));
   const problem = state.saveProblem ?? (gone ? "view.save.gone" : null) ?? target.problem;
   setText(ui.saveProblem, problem !== null ? saveProblemText(problem) : target.loading ? t("view.loading") : "");
   fitSaveWindow();
@@ -2935,6 +2986,7 @@ function saveFile(stage, plan) {
     types: state.view?.types,
     version: state.productVersion,
     language: state.language,
+    conditions: conditionsSaveText("panels"),
   });
   return saveEnd(svg, ground, probe, y, footer, measure);
 }
@@ -3622,7 +3674,7 @@ function buildPanel({ key, item, panel }, index, count, periods, grain, marksTex
   let notesPop = null;
   if (mode !== "mini") {
     const summary = element("div", "panel-summary");
-    for (const part of summaryMessages(item, panel, periods, grain, state.language)) {
+    for (const part of summaryMessages(item, panel, periods, grain, state.language, noneMet(item))) {
       const span = element("span");
       span.append(...richNodes(part));
       summary.append(span);
@@ -3782,7 +3834,7 @@ function drawChart(entry) {
   appendMarkBands(svg, dayMarks, height);
   if (shapes.empty) {
     appendMarkLines(svg, dayMarks, height);
-    plot.replaceChildren(svg, element("span", "panel-empty", t("view.summary.none")));
+    plot.replaceChildren(svg, element("span", "panel-empty", t(noneMet(item) ? "view.conditions.none_met" : "view.summary.none")));
     if (key === namedKey) {
       appendMarkNames(svg, dayMarks, width);
     }
@@ -4392,6 +4444,7 @@ function openList(key, index, byKey) {
     end: period.end,
     grain: state.answer.grain,
     types: state.answerTypes,
+    conditions: state.answerConditions,
     sort: before !== null && before.key === key ? before.sort : { column: "when", descending: false },
     answer: null,
     stop: null,
@@ -4455,6 +4508,7 @@ async function requestList(again = true) {
       item: list.key,
       period: { from: list.start, to: list.end },
       types: list.types,
+      conditions: list.conditions,
     });
     if (seq !== state.listSeq) {
       return;
@@ -4544,7 +4598,7 @@ function renderList({ top = false } = {}) {
   } else if (answer === null) {
     parts.push(element("p", "list-note", t("view.loading")));
   } else if (answer.total === 0) {
-    parts.push(element("p", "list-note", t("view.list.none")));
+    parts.push(element("p", "list-note", t(list.conditions ? "view.list.none_met" : "view.list.none")));
   } else if (answer.rows === null) {
     parts.push(element("p", "list-note", describe(listLimitMessage(answer.total, answer.limit, list.grain, state.language))));
   } else {
@@ -4584,9 +4638,9 @@ function buildListTable(list, rows, titleText) {
   const caption = element("caption", "visually-hidden", titleText);
   const head = element("thead");
   const headRow = element("tr");
-  const columns = listColumns(list.key);
+  const columns = listColumns(list.key, list.answer?.names === "read");
   for (const column of columns) {
-    const cell = element("th", column === "when" || column === "type" ? "" : "n");
+    const cell = element("th", column === "when" || column === "type" || column === "name" ? "" : "n");
     cell.scope = "col";
     const button = element("button", "list-sort", describe(listHead(column)));
     button.type = "button";
@@ -4613,8 +4667,10 @@ function buildListTable(list, rows, titleText) {
           ? describe(listWhen(row.datetime, state.language)) || null
           : column === "type"
             ? typeName(row.type)
-            : listValueText(column, row.values?.[column], state.language);
-      const cell = element(column === "when" ? "th" : "td", column === "when" || column === "type" ? "" : "n");
+            : column === "name"
+              ? typeof row.name === "string" && row.name !== "" ? row.name : null
+              : listValueText(column, row.values?.[column], state.language);
+      const cell = element(column === "when" ? "th" : "td", column === "when" || column === "type" ? "" : column === "name" ? "list-name" : "n");
       if (column === "when") {
         cell.scope = "row";
       }
@@ -4623,6 +4679,10 @@ function buildListTable(list, rows, titleText) {
         const dash = element("span", "", "\u2014");
         dash.setAttribute("aria-hidden", "true");
         cell.append(dash, element("span", "visually-hidden", t("view.no_value")));
+      } else if (column === "name") {
+        // A name of the output may change the direction of the text around
+        // it (Codex's review of the plan of T1).
+        cell.append(element("bdi", "", text));
       } else {
         cell.textContent = text;
       }
@@ -4868,6 +4928,7 @@ function enterCompare(key) {
   state.compareAnswer = null;
   state.compareStop = null;
   state.typesOpen = false;
+  state.conditionsOpen = false;
   state.pickerOpen = false;
   state.notesOpen = null;
   state.layoutsOpen = false;
@@ -6399,6 +6460,8 @@ function renderFilters(live) {
   if (!ui.typesPop.hidden) {
     renderTypes(types);
   }
+  fitTypesWindow();
+  renderConditions(viewing);
   ui.filtersHint.hidden = !state.hints || !viewing || apart;
   ui.compareOff.hidden = !apart;
   // By race day, its own words of what is not used (stage M2 of v2.2.0).
@@ -6413,6 +6476,216 @@ function renderFilters(live) {
     ui.compareOff.hidden = true;
   }
   ui.compareOffCalendar.hidden = !calendar;
+}
+
+// --- The conditions on the activities (stage T1 of v2.2.0) ----------------
+
+// The answer of the view shown that the line of the conditions counts by: of a
+// comparison, its answer of the whole output (it does not use the period); of
+// another view, its own; of the panels, theirs (none without panels).
+function shownConditions() {
+  if (comparing()) {
+    return { counts: state.compareAnswer?.whole?.conditions ?? null, whole: true };
+  }
+  if (plotting()) {
+    return { counts: state.plotAnswer?.conditions ?? null, whole: false };
+  }
+  if (spreading()) {
+    return { counts: state.spreadAnswer?.conditions ?? null, whole: false };
+  }
+  if (shoesShown()) {
+    return { counts: state.shoesAnswer?.conditions ?? null, whole: false };
+  }
+  return { counts: state.items.length ? (state.answer?.conditions ?? null) : null, whole: false };
+}
+
+// The conditions that the answer drawn of a view was made of, as the server
+// gives them back with their counts (the simpler form of Codex's review of the
+// plan of T1): what a picture of it says; null without conditions.
+function drawnConditions(view) {
+  const counts =
+    view === "compare"
+      ? state.compareAnswer?.whole?.conditions
+      : view === "plot"
+        ? state.plotAnswer?.conditions
+        : view === "spread"
+          ? state.spreadAnswer?.conditions
+          : view === "shoes"
+            ? state.shoesAnswer?.conditions
+            : state.answer?.conditions;
+  return counts ?? null;
+}
+
+// The words of conditions as the page writes them.
+function conditionsText(conditions) {
+  return conditionsParts(conditions).map(describe).join(t("view.conditions.text.separator"));
+}
+
+// What the line under a picture says of the conditions of the answer drawn:
+// their words, and that the words of the name were not used where the names
+// could not be read (Codex's review of the plan of T1); null without them.
+function conditionsSaveText(view) {
+  const drawn = drawnConditions(view);
+  if (drawn === null || drawn.asked === null || typeof drawn.asked !== "object") {
+    return null;
+  }
+  const text = conditionsText(drawn.asked);
+  return drawn.name === "unread" ? t("view.save.conditions_unread", { conditions: text }) : text;
+}
+
+// Whether the names of the activities can be used, as the last answer of the
+// reading of the output says.
+function namesReadable() {
+  return (state.names ?? state.view?.names ?? "read") === "read";
+}
+
+// A panel of an item of the activities without an activity that meets the
+// conditions in its period, apart from one without a value of its item
+// (Codex's review of the plan of T1).
+function noneMet(item) {
+  return (item?.group === "act" || item?.group === "fit") && state.answer?.conditions?.met === 0;
+}
+
+// The button of the conditions, their window, and the line under the bar.
+function renderConditions(viewing) {
+  const count = conditionsCount(state.conditions);
+  ui.conditionsButton.disabled = !viewing;
+  ui.conditionsButton.classList.toggle("on", count > 0);
+  ui.conditionsButton.setAttribute("aria-expanded", String(viewing && state.conditionsOpen));
+  setText(ui.conditionsButtonText, count > 0 ? t("view.conditions.button_some", { n: count }) : t("view.conditions.button"));
+  ui.conditionsPop.hidden = !viewing || !state.conditionsOpen;
+  fitConditionsWindow();
+  const readable = namesReadable();
+  ui.conditionsName.disabled = !readable;
+  ui.conditionsNamesWhy.hidden = readable;
+  setText(ui.conditionsProblem, state.conditionsProblem === null ? "" : t(state.conditionsProblem));
+  const shown = viewing && count > 0;
+  ui.conditionsLine.hidden = !shown;
+  if (!shown) {
+    ui.conditionsLineText.replaceChildren();
+    ui.conditionsLineText.dataset.signature = "";
+    return;
+  }
+  const { counts, whole } = shownConditions();
+  // The counts of an answer of other conditions, on its way, are not put to
+  // these.
+  const current = counts !== null && conditionsKey(counts.asked ?? null) === conditionsKey(state.conditions);
+  const signature = JSON.stringify([state.language, state.conditions, current ? counts : null, whole]);
+  if (ui.conditionsLineText.dataset.signature === signature) {
+    return;
+  }
+  ui.conditionsLineText.dataset.signature = signature;
+  const [before, after = ""] = t("view.conditions.line.after", { conditions: "\u0000" }).split("\u0000");
+  const parts = [element("strong", "", t("view.conditions.line.head")), before, element("bdi", "", conditionsText(state.conditions)), after];
+  for (const line of current ? conditionsCounts(counts, whole) : []) {
+    parts.push(state.language === "ja" ? "" : " ", describe(line));
+  }
+  ui.conditionsLineText.replaceChildren(...parts);
+}
+
+// The boxes of the window show conditions in the form of a request.
+function fillConditionBoxes(conditions) {
+  const boxes = boxesOfConditions(conditions);
+  ui.conditionsName.value = boxes.name;
+  ui.conditionsDistanceFrom.value = boxes.distanceFrom;
+  ui.conditionsDistanceTo.value = boxes.distanceTo;
+  ui.conditionsTimeFrom.value = boxes.timeFrom;
+  ui.conditionsTimeTo.value = boxes.timeTo;
+}
+
+// The windows under the field of the activity types stay inside the window
+// of the browser (the real page of T1 of v2.2.0): that of the types, from the
+// left of the field, is moved to the left where the row of the filters puts
+// the field near the right edge (1470x830 in English and 1366x650 in
+// Japanese, before T1 too); that of the conditions, from the right of the
+// field, is moved to the right where the row wraps the field to its left
+// (1366x650 in English), and reaches down to the bottom of the browser's
+// window, where it scrolls.
+const FILTER_POP_MARGIN = 8;
+
+function fitTypesWindow() {
+  const pop = ui.typesPop;
+  if (pop.hidden) {
+    return;
+  }
+  pop.style.left = "";
+  const box = pop.getBoundingClientRect();
+  const over = box.right - (window.innerWidth - FILTER_POP_MARGIN);
+  if (over > 0) {
+    pop.style.left = `${-Math.ceil(Math.min(over, box.left - FILTER_POP_MARGIN))}px`;
+  }
+}
+
+function fitConditionsWindow() {
+  const pop = ui.conditionsPop;
+  if (pop.hidden) {
+    return;
+  }
+  pop.style.right = "";
+  const box = pop.getBoundingClientRect();
+  if (box.left < FILTER_POP_MARGIN) {
+    pop.style.right = `${Math.floor(box.left - FILTER_POP_MARGIN)}px`;
+  }
+  pop.style.maxHeight = `${Math.max(0, Math.floor(window.innerHeight - box.top - FILTER_POP_MARGIN))}px`;
+}
+
+// The window opens with the conditions in force, the focus in its first box
+// that can be used (Codex's review of the plan of T1); it closes back to its
+// button with them again in its boxes.
+function openConditions(open) {
+  state.conditionsOpen = open;
+  state.conditionsProblem = null;
+  fillConditionBoxes(state.conditions);
+  if (open) {
+    state.typesOpen = false;
+  }
+  render();
+  if (open) {
+    (namesReadable() ? ui.conditionsName : ui.conditionsDistanceFrom).focus();
+  } else {
+    ui.conditionsButton.focus();
+  }
+}
+
+// Conditions in force: the same ask nothing again; others are remembered and
+// asked for in every view, as the activity types are.
+function setConditions(conditions) {
+  if (conditionsKey(conditions) === conditionsKey(state.conditions)) {
+    render();
+    return;
+  }
+  state.conditions = conditions;
+  rememberItems(true);
+  requestShown();
+  requestCompare();
+  render();
+}
+
+// The boxes give their conditions when one is left or Enter is pressed (never
+// at each character, the checker's A-3): words that cannot be used say why,
+// and change nothing. A name that cannot be used, as the names of the output
+// cannot be read, stays as it was.
+function applyConditions() {
+  const { conditions, problem } = conditionsFromBoxes({
+    name: ui.conditionsName.disabled ? (state.conditions?.name ?? "") : ui.conditionsName.value,
+    distanceFrom: ui.conditionsDistanceFrom.value,
+    distanceTo: ui.conditionsDistanceTo.value,
+    timeFrom: ui.conditionsTimeFrom.value,
+    timeTo: ui.conditionsTimeTo.value,
+  });
+  if (problem !== undefined) {
+    state.conditionsProblem = problem;
+    render();
+    return;
+  }
+  state.conditionsProblem = null;
+  setConditions(conditions);
+}
+
+function clearConditions() {
+  state.conditionsProblem = null;
+  fillConditionBoxes(null);
+  setConditions(null);
 }
 
 function renderTypes(types) {
@@ -6687,11 +6960,14 @@ function renderStage(live) {
   if (state.full) {
     setText(
       ui.fullText,
-      t("view.full.text", {
+      // The conditions too, as the bar and its line are hidden (Codex's
+      // review of the plan of T1).
+      t(state.conditions === null ? "view.full.text" : "view.full.text_conditions", {
         name: state.view.name,
         from: dateText(state.answer.start, state.language),
         to: dateText(state.answer.end, state.language),
         types: ui.typesSummary.textContent,
+        conditions: state.conditions === null ? "" : conditionsText(state.conditions),
       }),
     );
   }
@@ -6874,6 +7150,7 @@ function enterPlot() {
   state.plotStop = null;
   state.otherOpen = false;
   state.typesOpen = false;
+  state.conditionsOpen = false;
   state.pickerOpen = false;
   state.notesOpen = null;
   state.layoutsOpen = false;
@@ -6908,6 +7185,7 @@ function plotPayload() {
     y: state.plotPair.y,
     period: periodRequest(state.period, state.range),
     types: typesRequest(state.counted, state.view.types),
+    conditions: state.conditions,
   };
 }
 
@@ -6930,6 +7208,7 @@ async function requestPlot(again = true) {
     }
     state.plotAnswer = answer;
     state.plotAsked = payload;
+    state.names = answer.names ?? state.names;
     state.plotStop = null;
     if (state.plot !== null) {
       state.plot.chosen = null;
@@ -7310,7 +7589,7 @@ function buildPlotTable(drawn, asked) {
   const head = element("thead");
   const headRow = element("tr");
   for (const column of columns) {
-    const cell = element("th", column === "when" || column === "type" ? "" : "n");
+    const cell = element("th", column === "when" || column === "type" || column === "name" ? "" : "n");
     cell.scope = "col";
     const button = element("button", "list-sort", describe(listHead(column)));
     button.type = "button";
@@ -7399,6 +7678,7 @@ function enterSpread() {
   state.spreadStop = null;
   state.otherOpen = false;
   state.typesOpen = false;
+  state.conditionsOpen = false;
   state.pickerOpen = false;
   state.notesOpen = null;
   state.layoutsOpen = false;
@@ -7431,6 +7711,7 @@ function spreadPayload() {
     item: state.spreadItem,
     period: periodRequest(state.period, state.range),
     types: typesRequest(state.counted, state.view.types),
+    conditions: state.conditions,
   };
 }
 
@@ -7454,6 +7735,7 @@ async function requestSpread(again = true) {
     }
     state.spreadAnswer = answer;
     state.spreadAsked = payload;
+    state.names = answer.names ?? state.names;
     state.spreadStop = null;
     if (state.spread !== null) {
       state.spread.chosen = null;
@@ -7837,6 +8119,7 @@ function enterShoes() {
   state.shoesStop = null;
   state.otherOpen = false;
   state.typesOpen = false;
+  state.conditionsOpen = false;
   state.pickerOpen = false;
   state.notesOpen = null;
   state.layoutsOpen = false;
@@ -7868,6 +8151,7 @@ function shoesPayload() {
     view: state.view.view,
     period: periodRequest(state.period, state.range),
     types: typesRequest(state.counted, state.view.types),
+    conditions: state.conditions,
   };
 }
 
@@ -7892,6 +8176,7 @@ async function requestShoes(again = true) {
     }
     state.shoesAnswer = answer;
     state.shoesAsked = payload;
+    state.names = answer.names ?? state.names;
     state.shoesStop = null;
     if (answer.available && asked > state.availableFrom) {
       state.shoesAvailable = answer.available;
@@ -8274,6 +8559,7 @@ function enterFull() {
   state.full = true;
   state.helpOpen = false;
   state.typesOpen = false;
+  state.conditionsOpen = false;
   state.pickerOpen = false;
   render();
   ui.fullBack.focus();
@@ -8533,6 +8819,8 @@ function connect() {
   window.addEventListener("resize", fitMarksWindow);
   window.addEventListener("resize", fitRecapWindow);
   window.addEventListener("resize", fitSaveWindow);
+  window.addEventListener("resize", fitTypesWindow);
+  window.addEventListener("resize", fitConditionsWindow);
   ui.marksOpen.addEventListener("click", () => openMarks(!state.marksOpen));
   ui.marksPopClose.addEventListener("click", () => openMarks(false));
   // The summary of the panels (stage Q1 of v2.2.0).
@@ -8604,6 +8892,7 @@ function connect() {
   }
   ui.typesButton.addEventListener("click", () => {
     state.typesOpen = !state.typesOpen;
+    state.conditionsOpen = false;
     render();
     if (state.typesOpen) {
       ui.typesList.querySelector("input:not(:disabled)")?.focus();
@@ -8626,6 +8915,28 @@ function connect() {
       changeTypes(event.target.dataset.type);
     }
   });
+  // The conditions on the activities (stage T1 of v2.2.0).
+  ui.conditionsButton.addEventListener("click", () => openConditions(!state.conditionsOpen));
+  ui.conditionsClose.addEventListener("click", () => openConditions(false));
+  ui.conditionsClear.addEventListener("click", clearConditions);
+  // The line hides with its button: the focus goes to the button of the
+  // conditions (the checker's review of the diff of T1).
+  ui.conditionsLineClear.addEventListener("click", () => {
+    clearConditions();
+    ui.conditionsButton.focus();
+  });
+  ui.conditionsPop.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      openConditions(false);
+    } else if (event.key === "Enter" && !event.isComposing && event.target instanceof HTMLInputElement) {
+      event.preventDefault();
+      applyConditions();
+    }
+  });
+  for (const box of [ui.conditionsName, ui.conditionsDistanceFrom, ui.conditionsDistanceTo, ui.conditionsTimeFrom, ui.conditionsTimeTo]) {
+    box.addEventListener("change", applyConditions);
+  }
   ui.coverageButton.addEventListener("click", () => {
     state.coverageOpen = !state.coverageOpen;
     render();
@@ -8935,6 +9246,8 @@ async function start() {
     state.plotPair = plotPairToOpen(state.settings);
     state.spreadItem = spreadItemToOpen(state.settings);
     state.wantedTypes = Array.isArray(state.settings.view_types) ? [...state.settings.view_types] : null;
+    // The conditions remembered, whole or none (stage T1 of v2.2.0).
+    state.conditions = conditionsToOpen(state.settings.view_conditions);
     const marks = marksToOpen(state.settings);
     takeMarks(marks.marks);
     state.marksShown = marks.shown;

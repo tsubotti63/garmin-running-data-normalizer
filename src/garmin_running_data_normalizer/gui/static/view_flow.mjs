@@ -474,7 +474,8 @@ export function itemsRemembered(settings) {
 // items, no shelf, no tips, no colors, no layouts, and no period, grouping,
 // activity types, or timezone (stage K2 of v2.2.0), no marks (stage M1), and
 // no two items plotted (stage O1) nor item of a distribution (stage P1), as the files have none now. The page keeps showing what it shows, but the
-// marks, which are gone.
+// marks, which are gone. From stage T1, no conditions on the activities either
+// (Codex's review of the plan of T1); those shown stay shown.
 export function settingsAfterForget(settings) {
   const kept = { ...(settings ?? {}) };
   for (const name of [
@@ -496,6 +497,7 @@ export function settingsAfterForget(settings) {
     "view_marks_shown",
     "view_plot",
     "view_spread",
+    "view_conditions",
     "view_marks",
     "marks_notice",
   ]) {
@@ -779,7 +781,7 @@ export function panelSummary(item, panel) {
 // The second line of a panel: the periods with records or with a value,
 // those of 0, and the lowest, the highest, and the latest value with their
 // periods. The numbers are strong.
-export function summaryMessages(item, panel, periods, grain, language) {
+export function summaryMessages(item, panel, periods, grain, language, noneMet = false) {
   const summary = panelSummary(item, panel);
   const grains = GRAIN_COUNT_KEYS[grain];
   const parts = [];
@@ -788,7 +790,11 @@ export function summaryMessages(item, panel, periods, grain, language) {
       ? { ...message("view.summary.without_records", { n: countText(summary.withoutRecords, language) }, { grain: grains }), strong: ["n"] }
       : null;
   if ((summary.total ? summary.withRecords : summary.withValue) === 0) {
-    return zero === null ? [message("view.summary.none")] : [message("view.summary.none"), zero];
+    // No activity in the period meets the conditions (stage T1 of v2.2.0):
+    // apart from activities without a value of the item (Codex's review of
+    // the plan of T1).
+    const none = message(noneMet ? "view.conditions.none_met" : "view.summary.none");
+    return zero === null ? [none] : [none, zero];
   }
   parts.push({
     ...message(
@@ -2344,9 +2350,11 @@ export function listSorted(sort, column) {
   return sort.column === column ? { column, descending: !sort.descending } : { column, descending: false };
 }
 
-// The columns of the list of the panel of an item.
-export function listColumns(key) {
-  return ["when", "type", ...LIST_ITEMS, ...(LIST_ITEMS.includes(key) || key === "count" ? [] : [key])];
+// The columns of the list of the panel of an item; from stage T1 of v2.2.0,
+// the names of the activities after their date and time, where the answer of
+// the list says that the names were read.
+export function listColumns(key, named = false) {
+  return ["when", ...(named ? ["name"] : []), "type", ...LIST_ITEMS, ...(LIST_ITEMS.includes(key) || key === "count" ? [] : [key])];
 }
 
 // The head of a column: its name, with the short unit of its values.
@@ -2356,6 +2364,9 @@ export function listHead(column) {
   }
   if (column === "type") {
     return message("view.list.type");
+  }
+  if (column === "name") {
+    return message("view.list.name");
   }
   const unit = LIST_UNIT_KEYS[ITEM_FORMATS[column].unit];
   return unit === undefined ? message(ITEM_KEYS[column]) : message("view.list.head", {}, { name: ITEM_KEYS[column], unit });
@@ -2405,13 +2416,20 @@ export function listMomentKey(row) {
 // then in the order of the server. ``typeName`` gives the name of an activity
 // type as the page writes it.
 export function sortedListRows(rows, { column, descending }, typeName, language) {
-  const keyOf = (row) => (column === "when" ? listMomentKey(row) : column === "type" ? typeName(row.type) : row.values?.[column]);
+  const keyOf = (row) =>
+    column === "when"
+      ? listMomentKey(row)
+      : column === "type"
+        ? typeName(row.type)
+        : column === "name"
+          ? typeof row.name === "string" ? row.name : null
+          : row.values?.[column];
   const none = (key) => key === null || key === undefined || (typeof key === "number" && !Number.isFinite(key));
   const compared = (a, b) => {
     if (typeof a === "number") {
       return a - b;
     }
-    if (column === "type") {
+    if (column === "type" || column === "name") {
       return a.localeCompare(b, language);
     }
     return a < b ? -1 : a > b ? 1 : 0;
@@ -2988,12 +3006,15 @@ export function saveShowable({ viewing, apart, full, items, answer, loading, sto
 // answer (not "auto"), the activity types that the answer counts as the field
 // of the types says them (also an output without activities), and the name
 // and version of the app; the page puts its separator between them.
-export function saveFooter({ start, end, grain, answerTypes, types, version, language }) {
+export function saveFooter({ start, end, grain, answerTypes, types, version, language, conditions = null }) {
   const counted = Array.isArray(answerTypes) ? answerTypes : defaultTypes(types);
   return [
     message("view.save.period", { from: dateText(start, language), to: dateText(end, language) }),
     message("view.save.grain", {}, { grain: GRAIN_KEYS[grain] }),
     message("view.save.types", {}, { types: typesSummary(counted, types) }),
+    // The conditions of the answer drawn, as the page says them (stage T1
+    // of v2.2.0; Codex's review of the plan of T1).
+    ...(typeof conditions === "string" && conditions !== "" ? [message("view.save.conditions", {}, { conditions: plain(conditions) })] : []),
     typeof version === "string" && version !== "" ? message("view.save.app", { version }, { app: "app.title" }) : message("app.title"),
   ];
 }
@@ -3082,8 +3103,9 @@ export function saveFrame(boxes, width, height, pad = 4) {
 // the items of the panels, and the language. A change of any of them takes
 // the line away; a drawing again does not (the checker's review of the plan
 // of R1).
-export function saveNoticeKey({ ticket, period, types, items, language, view = "panels", content = null }) {
-  const key = [ticket ?? null, period ?? null, types ?? null, items ?? [], language ?? null];
+export function saveNoticeKey({ ticket, period, types, items, language, view = "panels", content = null, conditions = null }) {
+  // The conditions too (Codex's review of the plan of T1 of v2.2.0).
+  const key = [ticket ?? null, period ?? null, types ?? null, items ?? [], language ?? null, conditions ?? null];
   // Another view adds what it shows (stage R2 of v2.2.0); the panels keep
   // the key of R1, which a panel made big does not change (the checker's
   // review of the handling of Codex's review of the plan of R2).
@@ -3179,21 +3201,23 @@ export function saveViewFileName(view, { key = null, keys = [], years = [], days
 // asked for and the name and version of the app, as under the panels
 // (saveFooter). ``separator`` is that of a list in the language, and
 // ``daysSeparator`` that of a list of days, whose English words have commas.
-export function saveViewFooter(view, { years = [], days = [], grain = null, start = null, end = null, key = null, answer = null, answerTypes, types, version, language, separator, daysSeparator = separator }) {
+export function saveViewFooter(view, { years = [], days = [], grain = null, start = null, end = null, key = null, answer = null, answerTypes, types, version, language, separator, daysSeparator = separator, conditions = null }) {
   const counted = Array.isArray(answerTypes) ? answerTypes : defaultTypes(types);
-  const kinds = message("view.save.types", {}, { types: typesSummary(counted, types) });
+  const typesPiece = message("view.save.types", {}, { types: typesSummary(counted, types) });
+  // The conditions follow the activity types (stage T1 of v2.2.0).
+  const kinds = typeof conditions === "string" && conditions !== "" ? [typesPiece, message("view.save.conditions", {}, { conditions: plain(conditions) })] : [typesPiece];
   const app = typeof version === "string" && version !== "" ? message("view.save.app", { version }, { app: "app.title" }) : message("app.title");
   if (view === "compare") {
     return years.length
-      ? [message("view.save.compare_years", { years: years.map(String).sort().join(separator) }), message("view.save.grain", {}, { grain: GRAIN_KEYS[grain] }), kinds, app]
-      : [message("view.save.compare_races", { days: days.map(String).sort().map((day) => dateText(day, language)).join(daysSeparator) }), kinds, app];
+      ? [message("view.save.compare_years", { years: years.map(String).sort().join(separator) }), message("view.save.grain", {}, { grain: GRAIN_KEYS[grain] }), ...kinds, app]
+      : [message("view.save.compare_races", { days: days.map(String).sort().map((day) => dateText(day, language)).join(daysSeparator) }), ...kinds, app];
   }
   const period = message("view.save.period", { from: dateText(start, language), to: dateText(end, language) });
   if (view === "shoes") {
     // By month, always (stage S1 of v2.2.0).
-    return [period, message("view.save.grain", {}, { grain: GRAIN_KEYS.month }), kinds, app];
+    return [period, message("view.save.grain", {}, { grain: GRAIN_KEYS.month }), ...kinds, app];
   }
-  return view === "spread" ? [period, message("view.save.width", {}, { width: spreadWidthValue(key, answer, language) }), kinds, app] : [period, kinds, app];
+  return view === "spread" ? [period, message("view.save.width", {}, { width: spreadWidthValue(key, answer, language) }), ...kinds, app] : [period, ...kinds, app];
 }
 
 // --- The view by shoes (stage S1 of v2.2.0) ---------------------------------
@@ -3318,4 +3342,235 @@ export function shoesTables(answer, language) {
     ]),
   };
   return { summary, months };
+}
+
+// --- The conditions on the activities (stage T1 of v2.2.0) ----------------
+
+// The limits of the conditions, as view/series.py has them; the server checks
+// them again (CONDITIONS_INVALID).
+export const MAX_CONDITION_TEXT = 60;
+export const MAX_CONDITION_WORDS = 10;
+export const MAX_DISTANCE_METRES = 1_000_000;
+export const MAX_TIME_MINUTES = 6_000;
+// The characters that the words of a name cannot hold, as common/names.py
+// counts them (A-1 of the checker's review of the plan of T1): the controls,
+// the separators of lines and paragraphs, and the characters that change the
+// direction of text.
+export const UNSAFE_CHARACTER = /[\p{Cc}\p{Zl}\p{Zp}\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/u;
+// The spaces at the ends of the words of a name, as Python's str.strip
+// takes them on the server: the trim() of the page takes U+FEFF too, which
+// the server keeps, so that the page counted a word fewer there (the
+// checker's review of the diff of T1).
+export const CONDITION_SPACE = /[\t-\r\x1C-\x20\x85\xA0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]/u;
+const SPACES_AT_THE_ENDS = new RegExp(`^(?:${CONDITION_SPACE.source})+|(?:${CONDITION_SPACE.source})+$`, "gu");
+const CONDITION_SEPARATORS = /[、,]/u;
+const CONDITION_KEYS = ["name", "distance", "time"];
+// The words of why the boxes cannot be used, by the unit of the box and the
+// problem of its number, and of bounds the wrong way, by the condition.
+const CONDITION_PROBLEM_KEYS = {
+  km: { number: "view.conditions.problem.km_number", fine: "view.conditions.problem.km_fine", large: "view.conditions.problem.km_large" },
+  min: { number: "view.conditions.problem.min_number", fine: "view.conditions.problem.min_fine", large: "view.conditions.problem.min_large" },
+};
+const CONDITION_ORDER_KEYS = { distance: "view.conditions.problem.distance_order", time: "view.conditions.problem.time_order" };
+// The words of a distance and of a time, from and to, from only, or to only.
+const CONDITION_TEXT_KEYS = {
+  distance: { range: "view.conditions.text.distance_range", from: "view.conditions.text.distance_from", to: "view.conditions.text.distance_to" },
+  time: { range: "view.conditions.text.time_range", from: "view.conditions.text.time_from", to: "view.conditions.text.time_to" },
+};
+
+// The words of the name of conditions as the page counts them: the text in
+// NFKC (so that the half-width ､ and the full-width ， split too), split at 、
+// and ",", each without the spaces at its ends (stripSpaces), without the
+// empty words and those the same in lower case as one before. Only the server
+// compares names (case folded), so the page counts at least as many words as
+// it does.
+// A text without the spaces at its ends, as the server takes them
+// (CONDITION_SPACE).
+export function stripSpaces(text) {
+  return String(text).replace(SPACES_AT_THE_ENDS, "");
+}
+
+export function conditionWords(text) {
+  const words = [];
+  for (const part of String(text ?? "").normalize("NFKC").split(CONDITION_SEPARATORS)) {
+    const word = stripSpaces(part);
+    if (word !== "" && !words.some((other) => other.toLowerCase() === word.toLowerCase())) {
+      words.push(word);
+    }
+  }
+  return words;
+}
+
+// A number of a box of the conditions (A-2 of the checker's review of the plan
+// of T1): the text in NFKC (full-width digits too) without the spaces at its
+// ends; empty is no bound. Kilometres ("km") take up to three decimals and
+// become whole metres from their digits, never by a multiplication of floating
+// numbers (1.005 km are 1,005 m); minutes ("min") are whole. {value}, null for
+// no bound, or {problem}: "number", "fine", or "large".
+export function conditionNumber(text, unit) {
+  const value = String(text ?? "").normalize("NFKC").trim();
+  if (value === "") {
+    return { value: null };
+  }
+  if (unit === "km") {
+    const found = /^(\d*)(?:\.(\d*))?$/.exec(value);
+    if (found === null || (found[1] === "" && (found[2] ?? "") === "")) {
+      return { problem: "number" };
+    }
+    const decimals = found[2] ?? "";
+    if (decimals.length > 3) {
+      return { problem: "fine" };
+    }
+    const metres = Number(found[1] || "0") * 1000 + Number(decimals.padEnd(3, "0"));
+    return metres > MAX_DISTANCE_METRES ? { problem: "large" } : { value: metres };
+  }
+  if (!/^\d+$/.test(value)) {
+    return { problem: /^\d*\.\d*$/.test(value) && /\d/.test(value) ? "fine" : "number" };
+  }
+  const minutes = Number(value);
+  return minutes > MAX_TIME_MINUTES ? { problem: "large" } : { value: minutes };
+}
+
+// The conditions that the boxes of the window give, in the form of a request:
+// {conditions}, null where they give none; or {problem}, the key of the words
+// that say why, checked before they are sent, so that the server refuses none
+// (A-1 and A-2 of the checker's review of the plan of T1).
+export function conditionsFromBoxes({ name = "", distanceFrom = "", distanceTo = "", timeFrom = "", timeTo = "" } = {}) {
+  const conditions = {};
+  const text = stripSpaces(name ?? "");
+  if (text !== "") {
+    if ([...text].length > MAX_CONDITION_TEXT) {
+      return { problem: "view.conditions.problem.name_long" };
+    }
+    if (UNSAFE_CHARACTER.test(text)) {
+      return { problem: "view.conditions.problem.name_character" };
+    }
+    const words = conditionWords(text);
+    if (words.length > MAX_CONDITION_WORDS) {
+      return { problem: "view.conditions.problem.name_words" };
+    }
+    if (words.length) {
+      conditions.name = text;
+    }
+  }
+  for (const [key, from, to, unit] of [
+    ["distance", distanceFrom, distanceTo, "km"],
+    ["time", timeFrom, timeTo, "min"],
+  ]) {
+    const low = conditionNumber(from, unit);
+    const high = conditionNumber(to, unit);
+    const problem = low.problem ?? high.problem;
+    if (problem !== undefined) {
+      return { problem: CONDITION_PROBLEM_KEYS[unit][problem] };
+    }
+    if (low.value !== null && high.value !== null && low.value > high.value) {
+      return { problem: CONDITION_ORDER_KEYS[key] };
+    }
+    if (low.value !== null || high.value !== null) {
+      conditions[key] = [low.value, high.value];
+    }
+  }
+  return { conditions: Object.keys(conditions).length ? conditions : null };
+}
+
+// Whole metres as kilometres, as the boxes and the words write them: no more
+// decimals than they have (1,005 m are 1.005, 18,000 m are 18).
+export function kmText(metres) {
+  const whole = Math.floor(metres / 1000);
+  const rest = metres % 1000;
+  return rest === 0 ? String(whole) : `${whole}.${String(rest).padStart(3, "0").replace(/0+$/, "")}`;
+}
+
+// The boxes of the window for conditions in the form of a request: what they
+// show when the window opens, or closes with words that cannot be used.
+export function boxesOfConditions(conditions) {
+  const bound = (pair, index, text) => (Array.isArray(pair) && Number.isInteger(pair[index]) ? text(pair[index]) : "");
+  return {
+    name: typeof conditions?.name === "string" ? conditions.name : "",
+    distanceFrom: bound(conditions?.distance, 0, kmText),
+    distanceTo: bound(conditions?.distance, 1, kmText),
+    timeFrom: bound(conditions?.time, 0, String),
+    timeTo: bound(conditions?.time, 1, String),
+  };
+}
+
+// One text for conditions, which the keys of what the page asked and drew take
+// (Codex's review of the plan of T1): "null" for none.
+export function conditionsKey(conditions) {
+  if (conditions === null || conditions === undefined) {
+    return "null";
+  }
+  return JSON.stringify([conditions.name ?? null, conditions.distance ?? null, conditions.time ?? null]);
+}
+
+// The conditions that the settings remember, as the page opens with them: the
+// whole of them in the form of a request, as the boxes would give them, or
+// null, so that the next opening has none, never other conditions than those
+// chosen.
+export function conditionsToOpen(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const keys = Object.keys(value);
+  if (!keys.length || keys.some((key) => !CONDITION_KEYS.includes(key))) {
+    return null;
+  }
+  if ("name" in value && typeof value.name !== "string") {
+    return null;
+  }
+  for (const key of ["distance", "time"]) {
+    if (key in value) {
+      const pair = value[key];
+      if (!Array.isArray(pair) || pair.length !== 2 || pair.some((bound) => bound !== null && (!Number.isInteger(bound) || bound < 0))) {
+        return null;
+      }
+    }
+  }
+  const { conditions, problem } = conditionsFromBoxes(boxesOfConditions(value));
+  return problem === undefined && conditionsKey(conditions) === conditionsKey(value) ? conditions : null;
+}
+
+// How many conditions there are: the name, the distance, and the time.
+export function conditionsCount(conditions) {
+  return conditions ? CONDITION_KEYS.filter((key) => conditions[key] !== undefined).length : 0;
+}
+
+// The pieces of the words of conditions, as the line, the full screen, and a
+// picture say them: the words of the name as they were written (one, or any
+// of several), and the distance and the time from and to.
+export function conditionsParts(conditions) {
+  const parts = [];
+  if (typeof conditions?.name === "string") {
+    const key = conditionWords(conditions.name).length > 1 ? "view.conditions.text.name_any" : "view.conditions.text.name";
+    parts.push(message(key, {}, { words: plain(conditions.name) }));
+  }
+  for (const [key, text] of [
+    ["distance", kmText],
+    ["time", String],
+  ]) {
+    const pair = conditions?.[key];
+    if (!Array.isArray(pair)) {
+      continue;
+    }
+    const [low, high] = pair;
+    const how = low !== null && high !== null ? "range" : low !== null ? "from" : "to";
+    parts.push(message(CONDITION_TEXT_KEYS[key][how], {}, { from: plain(low === null ? "" : text(low)), to: plain(high === null ? "" : text(high)) }));
+  }
+  return parts;
+}
+
+// What the line of the conditions says after their words: how many of the
+// activities counted in the days of the answer drawn meet them ("whole" for
+// the views that do not use the period), and that the words of the name were
+// not used where the names could not be read; nothing without counts (the
+// numbers on their way, or no panels).
+export function conditionsCounts(counts, whole) {
+  if (counts === null || typeof counts !== "object" || !Number.isInteger(counts.counted) || !Number.isInteger(counts.met)) {
+    return [];
+  }
+  const lines = [message(whole ? "view.conditions.line.whole" : "view.conditions.line.period", { n: counts.counted, m: counts.met })];
+  if (counts.name === "unread") {
+    lines.push(message("view.conditions.line.unread"));
+  }
+  return lines;
 }

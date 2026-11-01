@@ -1748,7 +1748,7 @@ class GuiGuideTest(unittest.TestCase):
         # before counts the days of the range; Escape closes the window where
         # the focus is in it.
         server = (ROOT / "src/garmin_running_data_normalizer/view/series.py").read_text(encoding="utf-8")
-        self.assertIn("        rows = _activity_rows(data, types)\n        lines = [_activity_line(item, rows, periods, left_out)]", server)
+        self.assertIn("        rows = _activity_rows(data, types, conditions)\n        lines = [_activity_line(item, rows, periods, left_out)]", server)
         self.assertIn("    # The first and the last activity of the types counted, in the output.\n    first = rows[0].day if rows else None", server)
         self.assertIn("    const days = daysBetween(period.from, period.to) + 1;", flow)
         self.assertIn('  ui.recapPop.addEventListener("keydown", (event) => {\n    if (event.key === "Escape") {', page)
@@ -2233,7 +2233,7 @@ class GuiGuideTest(unittest.TestCase):
                 self.assertIn(name, part)
         self.assertIn("a comparison, a list, the summary, or another view asked right after a new normalization", flowing)
         server = (ROOT / "src/garmin_running_data_normalizer/view/series.py").read_text(encoding="utf-8")
-        self.assertIn("def view_answer(\n    data: ViewData,\n    keys: Collection[str],\n    period: str | tuple[date, date] = \"all\",\n    grain: str = \"auto\",\n    types: Collection[str] | None = None,\n    previous: bool = False,\n)", server)
+        self.assertIn("def view_answer(\n    data: ViewData,\n    keys: Collection[str],\n    period: str | tuple[date, date] = \"all\",\n    grain: str = \"auto\",\n    types: Collection[str] | None = None,\n    previous: bool = False,\n    conditions: Conditions | None = None,\n)", server)
         self.assertIn('return grain === "day" ? "view.kind.obs_points" : "view.kind.obs_mean";', (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8"))
 
     def test_the_design_gives_the_saving(self) -> None:

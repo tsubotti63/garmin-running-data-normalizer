@@ -2476,3 +2476,308 @@ test("a picture of the view by shoes is named by its period and the key of the d
   });
   assert.deepEqual(footer.map((piece) => piece.key), ["view.save.period", "view.save.grain", "view.save.types", "view.save.app"]);
 });
+
+// --- The conditions on the activities (stage T1 of v2.2.0) ----------------
+
+test("the numbers of the boxes of the conditions become whole metres and minutes from their digits", () => {
+  const km = (text) => view.conditionNumber(text, "km");
+  const min = (text) => view.conditionNumber(text, "min");
+  // The checker's A-2 of the plan of T1: never by a multiplication of
+  // floating numbers (1.005 × 1000 is 1004.999…).
+  for (const [text, metres] of [
+    ["1.005", 1005],
+    ["0.001", 1],
+    ["10", 10000],
+    ["10.", 10000],
+    [".5", 500],
+    ["１０", 10000],
+    ["０．５", 500],
+    ["  21.097 ", 21097],
+    ["1000", 1_000_000],
+    ["007", 7000],
+    ["0", 0],
+  ]) {
+    assert.deepEqual(km(text), { value: metres }, text);
+  }
+  for (const text of ["", "   ", null, undefined]) {
+    assert.deepEqual(km(text), { value: null }, String(text));
+    assert.deepEqual(min(text), { value: null }, String(text));
+  }
+  for (const [text, problem] of [
+    ["10.0005", "fine"],
+    ["1.2.3", "number"],
+    ["-1", "number"],
+    ["+1", "number"],
+    ["1e3", "number"],
+    [".", "number"],
+    ["10 km", "number"],
+    ["1,5", "number"],
+    ["1000.001", "large"],
+    ["99999999999999999999", "large"],
+  ]) {
+    assert.deepEqual(km(text), { problem }, text);
+  }
+  for (const [text, minutes] of [["60", 60], ["６０", 60], [" 0 ", 0], ["6000", 6000]]) {
+    assert.deepEqual(min(text), { value: minutes }, text);
+  }
+  for (const [text, problem] of [["1.5", "fine"], ["60.", "fine"], [".5", "fine"], [".", "number"], ["-5", "number"], ["1:30", "number"], ["6001", "large"]]) {
+    assert.deepEqual(min(text), { problem }, text);
+  }
+  assert.deepEqual([view.MAX_CONDITION_TEXT, view.MAX_CONDITION_WORDS, view.MAX_DISTANCE_METRES, view.MAX_TIME_MINUTES], [60, 10, 1_000_000, 6_000]);
+});
+
+test("the boxes of the window give conditions in the form of a request, or why they cannot be used", () => {
+  const from = (boxes) => view.conditionsFromBoxes(boxes);
+  assert.deepEqual(from(), { conditions: null });
+  assert.deepEqual(from({ name: "  ", distanceFrom: " ", timeTo: "" }), { conditions: null });
+  // The words as written, without the spaces at the ends; a name of
+  // separators only is no condition (the checker's A-4).
+  assert.deepEqual(from({ name: " ペース走、ﾍﾟｰｽ走 " }), { conditions: { name: "ペース走、ﾍﾟｰｽ走" } });
+  assert.deepEqual(from({ name: "、," }), { conditions: null });
+  assert.deepEqual(from({ distanceFrom: "10", distanceTo: "12.5", timeTo: "90" }), { conditions: { distance: [10000, 12500], time: [null, 90] } });
+  assert.deepEqual(from({ name: "Tempo", timeFrom: "60" }), { conditions: { name: "Tempo", time: [60, null] } });
+  assert.deepEqual(from({ distanceFrom: "10", distanceTo: "10.000" }), { conditions: { distance: [10000, 10000] } });
+  for (const [boxes, key] of [
+    [{ name: "x".repeat(61) }, "name_long"],
+    [{ name: "😀".repeat(61) }, "name_long"],
+    [{ name: "a\u202eb" }, "name_character"],
+    [{ name: "a\u2066b" }, "name_character"],
+    [{ name: "a\u0007b" }, "name_character"],
+    [{ name: "a\u2028b" }, "name_character"],
+    [{ name: Array.from({ length: 11 }, (_, number) => `w${number}`).join("、") }, "name_words"],
+    [{ distanceFrom: "10.0005" }, "km_fine"],
+    [{ distanceTo: "abc" }, "km_number"],
+    [{ distanceTo: "1000.001" }, "km_large"],
+    [{ timeFrom: "1.5" }, "min_fine"],
+    [{ timeTo: "x" }, "min_number"],
+    [{ timeTo: "6001" }, "min_large"],
+    [{ distanceFrom: "25", distanceTo: "18" }, "distance_order"],
+    [{ timeFrom: "90", timeTo: "60" }, "time_order"],
+  ]) {
+    const key_ = `view.conditions.problem.${key}`;
+    assert.deepEqual(from(boxes), { problem: key_ }, JSON.stringify(boxes));
+    for (const language of ["ja", "en"]) {
+      assert.notEqual(translate(catalogs, language, key_), key_, `${key_} ${language}`);
+    }
+  }
+  // The bounds themselves can be used: 60 code points, and 10 words.
+  assert.deepEqual(from({ name: "😀".repeat(60) }), { conditions: { name: "😀".repeat(60) } });
+  const ten = Array.from({ length: 10 }, (_, number) => `w${number}`).join("、");
+  assert.deepEqual(from({ name: ten }), { conditions: { name: ten } });
+  // The words are counted after those that are the same are left out, in
+  // lower case: never fewer than the server counts (it folds the case).
+  const same = Array.from({ length: 11 }, () => "W").join(",");
+  assert.deepEqual(from({ name: same }), { conditions: { name: same } });
+  assert.deepEqual(view.conditionWords("Tempo、tempo，ＴＥＭＰＯ､ジョグ"), ["Tempo", "ジョグ"]);
+  assert.deepEqual(view.conditionWords("Straße、STRASSE"), ["Straße", "STRASSE"]);
+});
+
+test("the characters that a name of the conditions cannot hold are those of the server", () => {
+  // The controls, the separators of lines and paragraphs, and the twelve
+  // characters of direction of common/names.py (the Python tests tie the
+  // expression to them).
+  const range = (low, high) => Array.from({ length: high - low + 1 }, (_, index) => low + index);
+  const expected = [...range(0, 0x1f), ...range(0x7f, 0x9f), 0x061c, 0x200e, 0x200f, 0x2028, 0x2029, ...range(0x202a, 0x202e), ...range(0x2066, 0x2069)];
+  const found = [];
+  for (let code = 0; code <= 0x10ffff; code += 1) {
+    if ((code < 0xd800 || code > 0xdfff) && view.UNSAFE_CHARACTER.test(String.fromCodePoint(code))) {
+      found.push(code);
+    }
+  }
+  assert.deepEqual(found, expected.sort((a, b) => a - b));
+});
+
+test("the boxes show the conditions as they were given, in kilometres and minutes", () => {
+  for (const [metres, text] of [[1005, "1.005"], [18000, "18"], [500, "0.5"], [10, "0.01"], [0, "0"], [21097, "21.097"], [1_000_000, "1000"]]) {
+    assert.equal(view.kmText(metres), text, String(metres));
+  }
+  assert.deepEqual(view.boxesOfConditions({ name: "ペース走", distance: [10000, null], time: [null, 90] }), {
+    name: "ペース走",
+    distanceFrom: "10",
+    distanceTo: "",
+    timeFrom: "",
+    timeTo: "90",
+  });
+  assert.deepEqual(view.boxesOfConditions(null), { name: "", distanceFrom: "", distanceTo: "", timeFrom: "", timeTo: "" });
+  // The boxes give the same conditions again.
+  for (const conditions of [{ name: "a、b", distance: [1005, 21097] }, { time: [0, 6000] }, { distance: [0, 1_000_000], time: [60, null] }]) {
+    assert.deepEqual(view.conditionsFromBoxes(view.boxesOfConditions(conditions)), { conditions }, JSON.stringify(conditions));
+  }
+});
+
+test("the conditions that the settings remember open whole, or not at all", () => {
+  // Codex's review of the plan of T1: the next opening has the conditions
+  // chosen, or none, never others.
+  for (const value of [{ name: "ペース走" }, { distance: [5000, null], time: [null, 90] }, { name: "x", distance: [0, 1_000_000], time: [6000, null] }]) {
+    assert.deepEqual(view.conditionsToOpen(value), value, JSON.stringify(value));
+  }
+  for (const value of [
+    null,
+    undefined,
+    "x",
+    ["x"],
+    {},
+    { name: "" },
+    { name: " x " },
+    { name: 1 },
+    { name: "a\u202eb" },
+    { name: "x".repeat(61) },
+    { name: "、" },
+    { distance: [2000, 1000] },
+    { distance: [1.5, null] },
+    { distance: [null, null] },
+    { distance: [-1, null] },
+    { distance: [null, 1_000_001] },
+    { distance: [1] },
+    { time: [null, 6001] },
+    { time: ["1", null] },
+    { name: "x", other: 1 },
+  ]) {
+    assert.equal(view.conditionsToOpen(value), null, JSON.stringify(value));
+  }
+});
+
+test("the key of conditions follows each of them, and their count each kind", () => {
+  // Codex 2 of the plan of T1: what the page asked and drew is told apart by
+  // them.
+  assert.equal(view.conditionsKey(null), "null");
+  assert.equal(view.conditionsKey(undefined), "null");
+  assert.equal(view.conditionsKey({ name: "a" }), view.conditionsKey({ name: "a" }));
+  assert.equal(view.conditionsKey({ time: [1, 2], name: "x" }), view.conditionsKey({ name: "x", time: [1, 2] }));
+  for (const [one, other] of [
+    [{ name: "a" }, { name: "A" }],
+    [{ name: "a" }, null],
+    [{ distance: [1000, null] }, { distance: [null, 1000] }],
+    [{ distance: [1000, null] }, { time: [1000, null] }],
+    [{ name: "a", time: [1, null] }, { name: "a" }],
+  ]) {
+    assert.notEqual(view.conditionsKey(one), view.conditionsKey(other), JSON.stringify([one, other]));
+  }
+  assert.deepEqual([null, { name: "a" }, { name: "a", time: [1, null] }, { name: "a", distance: [1, 2], time: [1, null] }].map(view.conditionsCount), [0, 1, 2, 3]);
+});
+
+test("the line of the conditions says their words as written, and how many activities meet them", () => {
+  const said = (conditions, language) => view.conditionsParts(conditions).map((part) => words(part, language));
+  assert.deepEqual(said({ name: "ペース走", distance: [10000, 12500], time: [null, 90] }, "ja"), ["名前に「ペース走」を含む", "距離 10〜12.5 km", "時間 90 分以下"]);
+  assert.deepEqual(said({ name: "ペース走、ジョグ", distance: [1005, null], time: [60, 90] }, "ja"), ["名前に「ペース走、ジョグ」のどれかを含む", "距離 1.005 km 以上", "時間 60〜90 分"]);
+  // Two ways of writing one word are one word.
+  assert.deepEqual(said({ name: "ペース走、ﾍﾟｰｽ走" }, "ja"), ["名前に「ペース走、ﾍﾟｰｽ走」を含む"]);
+  assert.deepEqual(said({ name: "Tempo", distance: [null, 5000], time: [30, null] }, "en"), ["the name has “Tempo”", "5 km or less", "a duration of 30 min or more"]);
+  assert.deepEqual(said(null, "ja"), []);
+  const counted = (counts, whole, language) => view.conditionsCounts(counts, whole).map((part) => words(part, language));
+  // (The page writes the numbers with their separators, as describe does.)
+  assert.deepEqual(counted({ counted: 676, met: 156, name: "used" }, false, "ja"), ["この期間の数えるアクティビティ 676 件のうち 156 件。"]);
+  assert.deepEqual(counted({ counted: 676, met: 156, name: null }, true, "ja"), ["全期間の数えるアクティビティ 676 件のうち 156 件。"]);
+  assert.deepEqual(view.conditionsCounts({ counted: 3428, met: 797, name: null }, true)[0].params, { n: 3428, m: 797 });
+  assert.deepEqual(counted({ counted: 12, met: 12, name: "unread" }, false, "en"), [
+    "Activities counted in the period: 12; meeting the conditions: 12.",
+    "The names could not be read, so the words of the name are not used.",
+  ]);
+  // Nothing while the numbers are on their way, or without panels.
+  for (const counts of [null, undefined, {}, { counted: 1 }, { counted: "1", met: 1 }]) {
+    assert.deepEqual(view.conditionsCounts(counts, false), [], JSON.stringify(counts));
+  }
+});
+
+test("the list has the names of the activities where its answer read them, sorted as text, and no name last", () => {
+  assert.deepEqual(view.listColumns("dist", true), ["when", "name", "type", "dist", "time", "pace", "hr", "mx", "cad", "asc"]);
+  assert.deepEqual(view.listColumns("gct", true), ["when", "name", "type", "dist", "time", "pace", "hr", "mx", "cad", "asc", "gct"]);
+  assert.deepEqual(view.listColumns("dist"), view.listColumns("dist", false));
+  assert.equal(view.listColumns("dist").includes("name"), false);
+  assert.deepEqual(["ja", "en"].map((language) => words(view.listHead("name"), language)), ["名前", "Name"]);
+  const row = (datetime, name) => ({ datetime, day: datetime.slice(0, 10), type: "running", name, values: {} });
+  const upper = row("2026-09-14T07:00:00+09:00", "B run");
+  const lower = row("2026-09-15T07:00:00+09:00", "a run");
+  const none = row("2026-09-13T07:00:00+09:00", null);
+  const twin = row("2026-09-12T07:00:00+09:00", "a run");
+  const type = (name) => name;
+  // By the language, not by the code points (where "B" is before "a"); the
+  // same name by the moment.
+  assert.deepEqual(view.sortedListRows([upper, none, lower, twin], { column: "name", descending: false }, type, "en"), [twin, lower, upper, none]);
+  assert.deepEqual(view.sortedListRows([upper, none, lower, twin], { column: "name", descending: true }, type, "en"), [upper, twin, lower, none]);
+});
+
+test("the line under a picture says the conditions of the answer drawn, after the types", () => {
+  const types = [
+    { name: "running", count: 10, running: true },
+    { name: "trail_running", count: 2, running: true },
+    { name: "cycling", count: 5, running: false },
+  ];
+  const conditions = "名前に「ペース走」を含む・距離 10 km 以上";
+  const panels = (options, language = "ja") =>
+    view.saveFooter({ start: "2025-10-22", end: "2026-10-21", grain: "week", answerTypes: null, types, version: "2.2.0", language, ...options }).map((piece) => words(piece, language));
+  assert.deepEqual(panels({ conditions }), [
+    "期間 2025年10月22日〜2026年10月21日",
+    "まとめ方 週",
+    "数える種目 ランニングの種目すべて（2 つ）",
+    `条件（練習と走りの形の項目だけ） ${conditions}`,
+    "Garmin Running Data Normalizer 2.2.0",
+  ]);
+  assert.equal(panels({ conditions: "the name has “Tempo”" }, "en")[3], "Conditions (training and running-form items only): the name has “Tempo”");
+  // Without conditions, as before.
+  for (const none of [null, ""]) {
+    assert.deepEqual(panels({ conditions: none }), panels({}));
+  }
+  assert.equal(panels({}).length, 4);
+  const other = (kind, options, language = "ja") =>
+    view
+      .saveViewFooter(kind, { answerTypes: null, types, version: "2.2.0", language, separator: language === "ja" ? "、" : ", ", daysSeparator: language === "ja" ? "、" : "; ", ...options })
+      .map((piece) => words(piece, language));
+  assert.deepEqual(other("compare", { years: [2025, 2024], grain: "week", conditions }), [
+    "くらべた年 2024、2025",
+    "まとめ方 週",
+    "数える種目 ランニングの種目すべて（2 つ）",
+    `条件（練習と走りの形の項目だけ） ${conditions}`,
+    "Garmin Running Data Normalizer 2.2.0",
+  ]);
+  for (const kind of ["plot", "spread", "shoes"]) {
+    const options = { start: "2025-10-22", end: "2026-10-21", key: "dist", answer: { width: 1000 }, grain: "month" };
+    const plain = other(kind, options);
+    const chosen = other(kind, { ...options, conditions });
+    assert.deepEqual(chosen, [...plain.slice(0, -1), `条件（練習と走りの形の項目だけ） ${conditions}`, plain.at(-1)], kind);
+  }
+});
+
+test("the line after a saving goes with the conditions too, and forgetting the settings forgets them", () => {
+  const base = { ticket: "t1", period: "1y", types: null, items: ["dist"], language: "ja" };
+  assert.equal(view.saveNoticeKey({ ...base, conditions: null }), view.saveNoticeKey(base));
+  const tempo = view.saveNoticeKey({ ...base, conditions: view.conditionsKey({ name: "tempo" }) });
+  assert.notEqual(tempo, view.saveNoticeKey(base));
+  assert.notEqual(tempo, view.saveNoticeKey({ ...base, conditions: view.conditionsKey({ name: "jog" }) }));
+  assert.equal(tempo, view.saveNoticeKey({ ...base, conditions: view.conditionsKey({ name: "tempo" }) }));
+  assert.equal("view_conditions" in view.settingsAfterForget({ view_conditions: { name: "x" } }), false);
+});
+
+test("a panel without an activity that meets the conditions says so, apart from one without values", () => {
+  // Codex 18 of the plan of T1: only where no activity of the period meets
+  // them; the periods of 0 are said as before.
+  const empty = { lines: [{ values: [null, null], counts: [0, 0], summary: { periods_with_records: 0, periods_without_records: 0, periods_with_value: 0, lowest: null, highest: null, latest: null } }], periods_with_value: 0 };
+  assert.deepEqual(view.summaryMessages(item("dist"), empty, MONTHS, "month", "ja", true).map((part) => words(part, "ja")), ["この期間に、条件に合うアクティビティがありません。"]);
+  assert.deepEqual(view.summaryMessages(item("dist"), empty, MONTHS, "month", "en", true).map((part) => words(part, "en")), ["No activity of this period meets the conditions."]);
+  assert.deepEqual(view.summaryMessages(item("dist"), empty, MONTHS, "month", "ja").map((part) => words(part, "ja")), ["この期間には値がありません。"]);
+});
+
+test("the spaces at the ends of the words are those that the server takes, never U+FEFF", () => {
+  // The checker's review of the diff of T1: the trim() of the page took
+  // U+FEFF, which str.strip on the server keeps, so that the page counted a
+  // word fewer.
+  const range = (low, high) => Array.from({ length: high - low + 1 }, (_, index) => low + index);
+  const expected = [...range(0x9, 0xd), ...range(0x1c, 0x20), 0x85, 0xa0, 0x1680, ...range(0x2000, 0x200a), 0x2028, 0x2029, 0x202f, 0x205f, 0x3000];
+  const found = [];
+  for (let code = 0; code <= 0x10ffff; code += 1) {
+    if (code >= 0xd800 && code <= 0xdfff) {
+      continue;
+    }
+    const character = String.fromCodePoint(code);
+    if (view.stripSpaces(`${character}a${character}`) === "a") {
+      found.push(code);
+    }
+  }
+  assert.deepEqual(found, expected);
+  const bom = String.fromCodePoint(0xfeff);
+  assert.equal(view.stripSpaces(`${bom}a`), `${bom}a`);
+  assert.deepEqual(view.conditionWords(`a,${bom}`), ["a", bom]);
+  // Ten words and one of U+FEFF only: eleven, as the server counts them.
+  const name = `${Array.from({ length: 10 }, (_, number) => `w${number}`).join(",")},${bom}`;
+  assert.deepEqual(view.conditionsFromBoxes({ name }), { problem: "view.conditions.problem.name_words" });
+});

@@ -1577,6 +1577,7 @@ numbers over the limit of the size of an answer.
 | `INPUT_PATH_INVALID` | the entries could not be read | check the entries and press the button again |
 | `OUTPUT_PARENT_INVALID` | the entries could not be read | check the entries and press the button again |
 | `REQUEST_INVALID` | the entries could not be read | check the entries and press the button again |
+| `CONDITIONS_INVALID` | the conditions could not be read | check the words of the name, the distance, and the duration in the window of “Conditions…” |
 | `FOLDER_NOT_FOUND` | the folder does not exist | check the place, or choose the folder with Choose… |
 | `NOT_A_FOLDER` | this is a file, not a folder | choose a folder |
 | `FOLDER_NOT_READABLE` | this app is not allowed to open this folder | on a Mac, allow it when you are asked, or in System Settings > Privacy & Security |

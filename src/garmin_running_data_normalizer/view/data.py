@@ -25,6 +25,14 @@ Gear and its links to the activities, after the files of the items, in the
 same way, within what those leave of the limits; files over them leave the
 shoes out, and the page opens without them. The series command does not
 read them.
+
+It reads the names of the activities too (stage T1 of v2.2.0), from
+normalized/activities.json, after the shoes, in the same way, within what the
+files of the items and the shoes read leave of the limits; a file over them is
+not parsed, and the page opens without the names. Of its records, only the
+declared key of an activity and its name are kept: the memo, the places, and
+the hashes of the same records are not. The checks before the reading read
+every file of the manifest whole, so "not parsed" is not "not read".
 """
 
 from __future__ import annotations
@@ -37,6 +45,8 @@ import math
 import os
 import re
 import stat
+import unicodedata
+from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import date, datetime
 from pathlib import Path, PurePosixPath
@@ -64,6 +74,11 @@ GEAR = "normalized/gear.json"
 ACTIVITY_GEAR = "normalized/activity_gear.json"
 GEAR_FILES = (GEAR, ACTIVITY_GEAR)
 SHOE_TYPES = frozenset({"shoes", "running_shoes"})
+# The file of the names of the activities (stage T1 of v2.2.0), and the
+# length of a name that the page keeps, in code points: a longer name is cut
+# there, so that a list of a period stays within the size of an answer.
+NAMES = "normalized/activities.json"
+MAX_NAME_LENGTH = 200
 DATE_FORM = re.compile(r"\d{4}-\d{2}-\d{2}")
 # What a sleep needs to be used (wellness_metrics.md in the docs).
 SLEEP_USED_STATUS = "available"
@@ -122,13 +137,29 @@ class Gear:
 
 
 @dataclass(frozen=True)
+class Names:
+    """The names of the activities of an output (stage T1 of v2.2.0), by
+    their declared key (garmin_activity_key): the name as the output writes
+    it, without the spaces at its ends and cut at MAX_NAME_LENGTH (then with
+    an ellipsis), and the
+    same name in NFKC and case folded, as the conditions compare names. A key
+    that two records of the output hold has no name. ``too_large`` marks a
+    file left out for the limits."""
+
+    names: dict[str, str]
+    folded: dict[str, str]
+    too_large: bool = False
+
+
+@dataclass(frozen=True)
 class ViewData:
     """The rows of one output that the view page reads, by file, sorted by
     their dates, and the rows that it left out: without a date, and after
     ``today``. The first and last days are those of all the rows kept;
     ``partial`` marks an output normalized with part of the input left out
     (exit code 3), which the view page says (stage G3b). ``gear`` is None
-    where the shoes were not read (stage S1 of v2.2.0)."""
+    where the shoes were not read (stage S1 of v2.2.0), and ``names`` where
+    the names were not asked for (stage T1)."""
 
     version: str
     timezone: str
@@ -140,6 +171,7 @@ class ViewData:
     last_day: int | None
     partial: bool = False
     gear: Gear | None = None
+    names: Names | None = None
 
 
 def load_view_data(
@@ -149,12 +181,14 @@ def load_view_data(
     max_file_bytes: int = MAX_FILE_BYTES,
     max_total_bytes: int = MAX_TOTAL_BYTES,
     gear: bool = False,
+    names: bool = False,
 ) -> ViewData:
     """Check an output as the GUI checks it, and read what the view page
     shows of it. ``today`` is the date of this computer in the output's
     timezone unless given. With ``gear``, which the view page asks and the
-    series command does not, the shoes are read too (stage S1 of v2.2.0). A
-    check that fails raises ``OutputActionError``."""
+    series command does not, the shoes are read too (stage S1 of v2.2.0);
+    with ``names``, as well, the names of the activities (stage T1). A check
+    that fails raises ``OutputActionError``."""
     output = Path(output)
     kept = _plain_bytes(output / MANIFEST, MAX_MANIFEST_BYTES)
     handoff, report, legacy = checked_output(output)
@@ -188,7 +222,13 @@ def load_view_data(
         kept_rows, no_date[dataset.name], after_today[dataset.name] = _rows(dataset, records, day_today)
         rows[dataset.name] = kept_rows
     days = [row.day for kept_rows in rows.values() for row in kept_rows]
-    shoes = _gear(output, entries, sum(sizes), max_file_bytes, max_total_bytes) if gear else None
+    used = sum(sizes)
+    shoes = _gear(output, entries, used, max_file_bytes, max_total_bytes) if gear else None
+    # The names come within what the items and the shoes read leave (Codex's
+    # review of the plan of T1): shoes left out for the limits take nothing.
+    if shoes is not None and not shoes.too_large:
+        used += sum(entries[path][0] for path in GEAR_FILES)
+    named = _names(output, entries, used, max_file_bytes, max_total_bytes) if names else None
     return ViewData(
         version=version,
         timezone=timezone,
@@ -200,6 +240,7 @@ def load_view_data(
         last_day=max(days) if days else None,
         partial=handoff.get("run_status") == "PARTIAL_SUCCESS",
         gear=shoes,
+        names=named,
     )
 
 
@@ -358,6 +399,57 @@ def _shoe_text(value: Any) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
+def _names(output: Path, entries: dict[str, tuple[int, str]], used: int, max_file_bytes: int, max_total_bytes: int) -> Names:
+    """The names of the activities of an output (stage T1 of v2.2.0), read as
+    the files of the items are, after them and the shoes: a file over the
+    limit of one file, or over what the files read leave of the limit of all,
+    is not parsed, and the page opens without the names, as without the
+    shoes. A file that the manifest leaves out, which every output of this
+    version lists, means that the output changed."""
+    if NAMES not in entries:
+        raise OutputActionError("OUTPUT_CHANGED")
+    size = entries[NAMES][0]
+    if size > max_file_bytes or used + size > max_total_bytes:
+        return Names({}, {}, too_large=True)
+    return activity_names(_json_records(_checked_bytes(output, NAMES, *entries[NAMES])))
+
+
+def activity_names(records: list[dict[str, Any]]) -> Names:
+    """The names of the records of activities.json by their declared key
+    (stage T1 of v2.2.0): a key written as a text that is not empty, joined to
+    the rows of analysis/activities.csv by the same text only; a key that two
+    records hold has no name, as no record is chosen over another (Codex's
+    review of the plan of T1). A name is a text with something besides
+    spaces, as the names of the shoes are, cut at MAX_NAME_LENGTH code
+    points, where the name shown ends with an ellipsis that it is not
+    compared by; any other value is no name. Nothing else of the records
+    is kept."""
+    keys: Counter[str] = Counter()
+    for record in records:
+        key = record.get("garmin_activity_key")
+        if isinstance(key, str) and key:
+            keys[key] += 1
+    names: dict[str, str] = {}
+    folded: dict[str, str] = {}
+    for record in records:
+        key = record.get("garmin_activity_key")
+        if not isinstance(key, str) or keys[key] != 1:
+            continue
+        name = _shoe_text(record.get("name"))
+        if name is None:
+            continue
+        kept = name[:MAX_NAME_LENGTH]
+        folded[key] = fold(kept)
+        names[key] = kept if len(name) <= MAX_NAME_LENGTH else f"{kept}…"
+    return Names(names, folded)
+
+
+def fold(text: str) -> str:
+    """A text as the conditions compare it (stage T1 of v2.2.0): in NFKC and
+    case folded, so that full and half width, and case, are the same."""
+    return unicodedata.normalize("NFKC", text).casefold()
+
+
 def _shoe_day(value: Any) -> str | None:
     """The date at the head of a date that Garmin sets, as the output writes
     it (such as 2030-01-01T00:00:00.0), or None where it has none."""
@@ -488,12 +580,17 @@ __all__ = [
     "GEAR_FILES",
     "MANIFEST",
     "MAX_FILE_BYTES",
+    "MAX_NAME_LENGTH",
     "MAX_TOTAL_BYTES",
+    "NAMES",
     "SHOE_TYPES",
     "Gear",
+    "Names",
     "Row",
     "Shoe",
     "ViewData",
+    "activity_names",
+    "fold",
     "gear_links",
     "load_view_data",
     "local_today",
