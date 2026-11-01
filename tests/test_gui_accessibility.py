@@ -1713,6 +1713,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertRegex(view_css, r"\.shoe-own \{\s*min-width: 0;\s*overflow: hidden;\s*text-overflow: ellipsis;\s*white-space: nowrap;\s*\}")
         self.assertRegex(view_css, r"\.shoe-added \{\s*flex: none;\s*white-space: pre;\s*\}")
         self.assertRegex(view_css, r"\.other-menu button\.with-why \{\s*display: flex;\s*flex-direction: column;\s*align-items: flex-start;\s*\}")
+        # Its reason stays on one line, never broken inside a word at the width
+        # of the menu (S1's item 20, stage S2; measured on the real page).
+        self.assertRegex(view_css, r"\.menu-why \{\s*font-size: 0\.8rem;\s*color: var\(--sub\);\s*white-space: nowrap;\s*\}")
         # An item that cannot be chosen stays in the way of the keys, and says
         # why (Codex's review of the diff of S1).
         self.assertNotIn("ui.otherShoes.disabled", self.script)
@@ -2043,7 +2046,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
         order = [str(section.get("aria-labelledby")) for section in sections]
         self.assertEqual(order[order.index("help-compare-heading") : order.index("help-compare-heading") + 7], ["help-compare-heading", "help-race-heading", "help-other-heading", "help-recap-heading", "help-save-heading", "help-marks-heading", "help-list-heading"])
         other = [element.get("data-i18n") for element in self.elements if (element.get("data-i18n") or "").startswith("view.help.other")]
-        self.assertEqual(other, ["view.help.other", "view.help.other_plot", "view.help.other_spread"])
+        self.assertEqual(other, ["view.help.other", "view.help.other_plot", "view.help.other_spread", "view.help.other_shoes"])
         recap = [element.get("data-i18n") for element in self.elements if (element.get("data-i18n") or "").startswith("view.help.recap")]
         self.assertEqual(recap, ["view.help.recap", "view.help.recap_text"])
         save = [element.get("data-i18n") for element in self.elements if (element.get("data-i18n") or "").startswith("view.help.save")]

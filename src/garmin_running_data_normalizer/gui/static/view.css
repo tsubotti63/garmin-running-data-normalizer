@@ -2482,6 +2482,7 @@ button.small {
 .menu-why {
   font-size: 0.8rem;
   color: var(--sub);
+  white-space: nowrap;
 }
 
 /* An item that cannot be chosen stays in the way of the keys, so that why is
