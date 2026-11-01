@@ -73,7 +73,10 @@
       </div>
     </div>
     <div class="filter types-filter">
-      <p id="types-label" class="filter-label" data-i18n="view.types.label"></p>
+      <div class="filter-head">
+        <p id="types-label" class="filter-label" data-i18n="view.types.label"></p>
+        <button type="button" id="conditions-button" class="conditions-button" aria-expanded="false" aria-controls="conditions-pop" disabled><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><path d="M2.5 3h11L9.3 8.2v4.6l-2.6 1.4V8.2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span id="conditions-button-text" data-i18n="view.conditions.button"></span></button>
+      </div>
       <button type="button" id="types-button" class="field-button" aria-expanded="false" aria-controls="types-pop" aria-labelledby="types-label types-summary" disabled><span id="types-summary"></span><svg class="caret" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <div id="types-pop" class="pop types-pop" hidden>
         <fieldset>
@@ -85,7 +88,42 @@
           <button type="button" id="types-close" class="small" data-i18n="help.close"></button>
         </div>
       </div>
+      <div id="conditions-pop" class="pop types-pop conditions-pop" role="dialog" aria-labelledby="conditions-title" hidden>
+        <p id="conditions-title" class="pop-title" data-i18n="view.conditions.title"></p>
+        <div class="conditions-row">
+          <label for="conditions-name" class="conditions-what" data-i18n="view.conditions.name"></label>
+          <input id="conditions-name" class="conditions-text" type="text" autocomplete="off" spellcheck="false" aria-describedby="conditions-name-note conditions-names-why conditions-problem">
+        </div>
+        <p id="conditions-name-note" class="note" data-i18n="view.conditions.name_note"></p>
+        <p id="conditions-names-why" class="note conditions-why" data-i18n="view.conditions.names_too_large" hidden></p>
+        <div class="conditions-row" role="group" aria-labelledby="conditions-distance">
+          <span id="conditions-distance" class="conditions-what" data-i18n="view.conditions.distance"></span>
+          <input id="conditions-distance-from" class="conditions-number" type="text" inputmode="decimal" autocomplete="off" aria-labelledby="conditions-distance conditions-km-from" aria-describedby="conditions-problem">
+          <span id="conditions-km-from" data-i18n="view.conditions.km_from"></span>
+          <input id="conditions-distance-to" class="conditions-number" type="text" inputmode="decimal" autocomplete="off" aria-labelledby="conditions-distance conditions-km-to" aria-describedby="conditions-problem">
+          <span id="conditions-km-to" data-i18n="view.conditions.km_to"></span>
+        </div>
+        <div class="conditions-row" role="group" aria-labelledby="conditions-time">
+          <span id="conditions-time" class="conditions-what" data-i18n="view.conditions.time"></span>
+          <input id="conditions-time-from" class="conditions-number" type="text" inputmode="numeric" autocomplete="off" aria-labelledby="conditions-time conditions-min-from" aria-describedby="conditions-time-note conditions-problem">
+          <span id="conditions-min-from" data-i18n="view.conditions.min_from"></span>
+          <input id="conditions-time-to" class="conditions-number" type="text" inputmode="numeric" autocomplete="off" aria-labelledby="conditions-time conditions-min-to" aria-describedby="conditions-time-note conditions-problem">
+          <span id="conditions-min-to" data-i18n="view.conditions.min_to"></span>
+        </div>
+        <p id="conditions-time-note" class="note" data-i18n="view.conditions.time_note"></p>
+        <p id="conditions-problem" class="range-problem" role="status" aria-live="polite"></p>
+        <p class="note" data-i18n="view.types.note"></p>
+        <div class="button-row">
+          <button type="button" id="conditions-clear" class="small" data-i18n="view.conditions.clear"></button>
+          <button type="button" id="conditions-close" class="small" data-i18n="help.close"></button>
+        </div>
+      </div>
     </div>
+  </div>
+  <div id="conditions-line" class="conditions-line" hidden>
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 3h11L9.3 8.2v4.6l-2.6 1.4V8.2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+    <p id="conditions-line-text" class="conditions-line-text"></p>
+    <button type="button" id="conditions-line-clear" class="small" data-i18n="view.conditions.clear"></button>
   </div>
   <p id="filters-hint" class="hint filters-hint" data-i18n="view.hint.filters" hidden></p>
   <p id="compare-off" class="compare-off" data-i18n="view.compare.off" hidden></p>

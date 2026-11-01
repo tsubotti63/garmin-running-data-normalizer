@@ -118,6 +118,8 @@ export const STOP_KEYS = {
   INPUT_PATH_INVALID: "stop.request_invalid",
   OUTPUT_PARENT_INVALID: "stop.request_invalid",
   REQUEST_INVALID: "stop.request_invalid",
+  // Conditions on the activities of another form (stage T1 of v2.2.0).
+  CONDITIONS_INVALID: "stop.conditions_invalid",
   FOLDER_NOT_FOUND: "stop.folder_not_found",
   NOT_A_FOLDER: "stop.not_a_folder",
   FOLDER_NOT_READABLE: "stop.folder_not_readable",
@@ -224,6 +226,7 @@ export const STOP_NEXT_KEYS = {
   INPUT_PATH_INVALID: "stop_next.request_invalid",
   OUTPUT_PARENT_INVALID: "stop_next.request_invalid",
   REQUEST_INVALID: "stop_next.request_invalid",
+  CONDITIONS_INVALID: "stop_next.conditions_invalid",
   FOLDER_NOT_FOUND: "stop_next.folder_not_found",
   NOT_A_FOLDER: "stop_next.not_a_folder",
   FOLDER_NOT_READABLE: "stop_next.folder_not_readable",

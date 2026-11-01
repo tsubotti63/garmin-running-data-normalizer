@@ -196,6 +196,12 @@ class GuiCatalogTest(unittest.TestCase):
         self.assertIn("the items and the item shelf of the view page", catalogs["en"]["forget.text_also"])
         self.assertIn("見るページで並べた項目の名前と棚の開け閉め", catalogs["ja"]["faq.remember_a"])
         self.assertIn("the names of the items shown on the view page", catalogs["en"]["faq.remember_a"])
+        # And the conditions on the activities (stage T1 of v2.2.0), in a
+        # sentence of their own after the first, which the guides quote.
+        self.assertIn("見るページの条件（名前の言葉・距離・時間）も忘れます。", catalogs["ja"]["forget.text_also"])
+        self.assertIn("It also forgets the conditions of the view page (the words of the name, the distance, and the duration).", catalogs["en"]["forget.text_also"])
+        self.assertIn("数える種目・条件（名前の言葉・距離・時間）・年でくらべる", catalogs["ja"]["faq.remember_a"])
+        self.assertIn("activity types counted, conditions (the words of the name, a distance, and a duration), and", catalogs["en"]["faq.remember_a"])
 
     def test_texts_keep_the_corrections_of_the_first_time_check(self) -> None:
         # Stage D6, after two new AI sessions used the page of v2.0.0rc1 with

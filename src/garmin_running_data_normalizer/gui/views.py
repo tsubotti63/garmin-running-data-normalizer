@@ -13,7 +13,11 @@ when an output is opened and when it is read again, not at every request.
 Nothing is written: no file of settings and no temporary file. At most four
 outputs are kept; the one used longest ago leaves first. With each output,
 the bars of its item shelf are kept by the activity types of the requests,
-at most eight, until the output is read again (stage M2 of v2.2.0).
+at most eight, until the output is read again (stage M2 of v2.2.0), and from
+stage T1 by their conditions on the activities too. The requests may give
+conditions (conditions_request); the server says one of another form with
+CONDITIONS_INVALID. The page checks them by the same rules before it sends
+them, and shows that code as a stop of the numbers.
 """
 
 from __future__ import annotations
@@ -29,10 +33,24 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from ..common.names import unsafe_character
 from ..output_check import OutputActionError
-from ..view.data import GEAR_FILES, MANIFEST, ViewData, load_view_data, local_today
+from ..view.data import GEAR_FILES, MANIFEST, NAMES, ViewData, load_view_data, local_today
 from ..view.items import ACTIVITIES, DATASETS, ITEMS, ITEMS_BY_KEY, Item
-from ..view.series import GRAINS, LAST_YEARS, MAX_PANELS, RANGE_GRAIN, coverage, point_item
+from ..view.series import (
+    GRAINS,
+    LAST_YEARS,
+    MAX_CONDITION_TEXT,
+    MAX_CONDITION_WORDS,
+    MAX_DISTANCE_METRES,
+    MAX_PANELS,
+    MAX_TIME_MINUTES,
+    RANGE_GRAIN,
+    Conditions,
+    condition_words,
+    coverage,
+    point_item,
+)
 
 MAX_VIEWS = 4
 MAX_SHELVES = 8
@@ -48,6 +66,13 @@ class ViewRequestError(ValueError):
     """A request for numbers that is not of its form."""
 
 
+class ConditionsRequestError(ViewRequestError):
+    """Conditions on the activities of another form (stage T1 of v2.2.0):
+    the server says CONDITIONS_INVALID. The page checks the conditions by
+    the same rules before it sends them, so that it shows this stop of the
+    numbers only for a request that it did not make."""
+
+
 Stamp = tuple[tuple[Any, ...], ...]
 
 
@@ -56,9 +81,15 @@ def output_stamp(output: Path) -> Stamp:
     of the files that the view page reads; a file that cannot be looked at,
     or a link in its place, gives another stamp."""
     stamps = []
-    # The files of the shoes too (stage S1 of v2.2.0): a change of them alone
-    # reads the output again.
-    for path in (output, output / MANIFEST, *(output / dataset.path for dataset in DATASETS), *(output / path for path in GEAR_FILES)):
+    # The files of the shoes too (stage S1 of v2.2.0), and of the names of the
+    # activities (stage T1): a change of them alone reads the output again.
+    for path in (
+        output,
+        output / MANIFEST,
+        *(output / dataset.path for dataset in DATASETS),
+        *(output / path for path in GEAR_FILES),
+        output / NAMES,
+    ):
         try:
             status = os.lstat(path)
         except OSError:
@@ -78,13 +109,15 @@ class _View:
     # of v2.2.0): every answer carries them, and they are made from every
     # row of the output, while a comparison by race day asks up to 13 times
     # in a row.
-    shelves: OrderedDict[frozenset[str] | None, dict[str, dict[str, Any]]] = field(default_factory=OrderedDict)
+    # From stage T1, by the conditions on the activities too.
+    shelves: OrderedDict[tuple[frozenset[str] | None, Conditions | None], dict[str, dict[str, Any]]] = field(default_factory=OrderedDict)
 
 
 def load_view(output: Path) -> ViewData:
     """What the view page reads of an output: what the series command reads,
-    and the shoes (stage S1 of v2.2.0)."""
-    return load_view_data(output, gear=True)
+    and the shoes (stage S1 of v2.2.0) and the names of the activities (stage
+    T1)."""
+    return load_view_data(output, gear=True, names=True)
 
 
 class Views:
@@ -145,22 +178,31 @@ class Views:
             view.shelves = OrderedDict()
             return view.data
 
-    def coverage(self, ticket: str, data: ViewData, types: Collection[str] | None = None) -> dict[str, dict[str, Any]]:
-        """The bars of the item shelf of ``data`` for ``types`` (``coverage``),
+    def coverage(
+        self,
+        ticket: str,
+        data: ViewData,
+        types: Collection[str] | None = None,
+        conditions: Conditions | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        """The bars of the item shelf of ``data`` for ``types`` and
+        ``conditions`` (``coverage``),
         made once while the output of ``ticket`` holds ``data``; for a ticket
         that is gone, or an output read again meanwhile, they are made and
         not kept."""
         with self._lock:
             view = self._views.get(ticket)
         if view is None:
-            return coverage(data, types)
-        key = None if types is None else frozenset(types)
+            return coverage(data, types, conditions)
+        # The conditions are a part of the key (the checker's review of the plan
+        # of T1): other conditions make other bars.
+        key = (None if types is None else frozenset(types), conditions)
         with view.lock:
             if view.data is not data:
-                return coverage(data, types)
+                return coverage(data, types, conditions)
             shelf = view.shelves.get(key)
             if shelf is None:
-                shelf = view.shelves[key] = coverage(data, types)
+                shelf = view.shelves[key] = coverage(data, types, conditions)
                 while len(view.shelves) > MAX_SHELVES:
                     view.shelves.popitem(last=False)
             else:
@@ -366,6 +408,60 @@ def plot_pair_ok(pair: Any) -> bool:
     )
 
 
+def conditions_from(value: Any) -> Conditions | None:
+    """The conditions on the activities that ``value`` gives in the form of a
+    request (stage T1 of v2.2.0), or None for another form: an object of
+    one or more of "name", "distance", and "time". The name is a text
+    of 1 to MAX_CONDITION_TEXT code points without the spaces at its ends,
+    without a control or direction character (common.names), of 1 to
+    MAX_CONDITION_WORDS words (condition_words). A distance in whole metres
+    and a time in whole minutes are a list of two values, the least and the
+    most, each null or a whole number from 0 to its limit (never a truth
+    value), not both null, and the least not over the most. The settings
+    keep conditions by the same rule (settings.conditions_kept)."""
+    if not isinstance(value, dict) or not value or set(value) - {"name", "distance", "time"}:
+        return None
+    text: str | None = None
+    words: tuple[str, ...] = ()
+    if "name" in value:
+        if not isinstance(value["name"], str):
+            return None
+        text = value["name"].strip()
+        if not 0 < len(text) <= MAX_CONDITION_TEXT or unsafe_character(text):
+            return None
+        words = condition_words(text)
+        if not 0 < len(words) <= MAX_CONDITION_WORDS:
+            return None
+    bounds: dict[str, tuple[int | None, int | None]] = {}
+    for name, limit in (("distance", MAX_DISTANCE_METRES), ("time", MAX_TIME_MINUTES)):
+        if name not in value:
+            bounds[name] = (None, None)
+            continue
+        pair = value[name]
+        if not isinstance(pair, list) or len(pair) != 2:
+            return None
+        if any(bound is not None and (type(bound) is not int or not 0 <= bound <= limit) for bound in pair):
+            return None
+        low, high = pair
+        if (low is None and high is None) or (low is not None and high is not None and low > high):
+            return None
+        bounds[name] = (low, high)
+    return Conditions(text, words, bounds["distance"], bounds["time"])
+
+
+def conditions_request(payload: dict[str, Any]) -> Conditions | None:
+    """The conditions on the activities of a request (stage T1 of v2.2.0):
+    None where it gives none (no "conditions", or null), and otherwise
+    those of conditions_from, or ConditionsRequestError."""
+    value = payload.get("conditions")
+    if value is None:
+        return None
+    conditions = conditions_from(value)
+    if conditions is None:
+        raise ConditionsRequestError("conditions")
+    return conditions
+
+
 def types_ok(types: Any) -> bool:
     """Whether a request names the activity types that it counts: a list of
     names, each once, as 2.1.0 took them; the limit of the size of a request
@@ -380,6 +476,7 @@ __all__ = [
     "COMPARE_BYS",
     "COMPARE_MODES",
     "COMPARE_WEEKS",
+    "ConditionsRequestError",
     "PERIODS",
     "ViewNotOpenError",
     "ViewRequestError",
@@ -388,6 +485,8 @@ __all__ = [
     "compare_mode_ok",
     "compare_month_ok",
     "compare_weeks_ok",
+    "conditions_from",
+    "conditions_request",
     "grain_ok",
     "item_answer",
     "item_table",

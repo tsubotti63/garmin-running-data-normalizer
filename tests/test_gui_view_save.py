@@ -116,7 +116,10 @@ class GuiViewSaveTest(unittest.TestCase):
         # And the view by shoes: the names of all its shoes (stage S1 of
         # v2.2.0, Codex's review of its plan).
         self.assertIn('const named = target.view === "shoes" ? t("view.save.warn_shoes") : (panels ? ui.saveMarks.checked : target.marks) ? t("view.save.warn_marks") : null;', body)
-        self.assertIn('setText(ui.saveWarn, named !== null ? `${warn}${state.language === "ja" ? "" : " "}${named}` : warn);', body)
+        # From T1, the words of the conditions of the answer drawn add to them
+        # (Codex's review of the plan of T1).
+        self.assertIn('const words = typeof drawnConditions(target.view)?.asked?.name === "string" ? t("view.save.warn_conditions") : null;', body)
+        self.assertIn('setText(ui.saveWarn, [warn, named, words].filter((part) => part !== null).join(state.language === "ja" ? "" : " "));', body)
         # By race, always: the names of the races are those of the marks
         # (the checker's answer 5 of the plan of R2).
         self.assertIn("marks: race,", function_body(self.script, "saveCompareTarget"))

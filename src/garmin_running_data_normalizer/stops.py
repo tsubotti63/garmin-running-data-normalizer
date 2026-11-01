@@ -490,6 +490,11 @@ PAGE_STOPS: dict[str, Stop] = {
     "INPUT_PATH_INVALID": _ENTRIES,
     "OUTPUT_PARENT_INVALID": _ENTRIES,
     "REQUEST_INVALID": _ENTRIES,
+    # Conditions on the activities of another form (stage T1 of v2.2.0).
+    "CONDITIONS_INVALID": Stop(
+        "the conditions could not be read",
+        "check the words of the name, the distance, and the duration in the window of “Conditions…”",
+    ),
     "FOLDER_NOT_FOUND": Stop(
         "the folder does not exist", "check the place, or choose the folder with Choose…"
     ),

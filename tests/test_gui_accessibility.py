@@ -726,11 +726,171 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # kind, and the name of a mark; from M2, the weeks before a race day;
         # from O1, the two items plotted against each other; from P1, the
         # item of a distribution; from R1, the panels of a picture (all, or one
-        # and which), its colors (two), and its marks.
-        self.assertEqual(len(fields), 29)
+        # and which), its colors (two), and its marks; from T1, the words of the
+        # name of the conditions, and their distance and duration, from and to.
+        self.assertEqual(len(fields), 34)
         for field in fields:
             with self.subTest(field=field.get("id")):
                 self.assertTrue(field.get("id") in labelled or field.get("aria-label") or field.get("aria-labelledby"))
+
+    def test_the_window_of_the_conditions_and_its_line(self) -> None:
+        # Stage T1 of v2.2.0: a button in the heading row of the activity
+        # types opens a window of the conditions under it; the line under the
+        # filters says them in every view.
+        head = by_id(self.elements, "conditions-button").parent
+        self.assertEqual(head.get("class"), "filter-head")
+        self.assertIs(by_id(self.elements, "types-label").parent, head)
+        button = by_id(self.elements, "conditions-button")
+        self.assertEqual((button.get("aria-expanded"), button.get("aria-controls")), ("false", "conditions-pop"))
+        self.assertIn("disabled", button.attributes)
+        window = by_id(self.elements, "conditions-pop")
+        self.assertEqual((window.get("role"), window.get("aria-labelledby")), ("dialog", "conditions-title"))
+        self.assertIn("hidden", window.attributes)
+        problem = by_id(self.elements, "conditions-problem")
+        self.assertEqual(problem.get("aria-live"), "polite")
+        for name in ("conditions-name", "conditions-distance-from", "conditions-distance-to", "conditions-time-from", "conditions-time-to"):
+            with self.subTest(box=name):
+                box = by_id(self.elements, name)
+                self.assertIn(window, box.ancestors())
+                self.assertEqual(box.get("type"), "text")
+                self.assertIn("conditions-problem", str(box.get("aria-describedby")).split())
+        self.assertIn("hidden", by_id(self.elements, "conditions-line").attributes)
+        self.assertEqual(by_id(self.elements, "conditions-line-clear").get("data-i18n"), "view.conditions.clear")
+        held = {
+            # The focus goes to the first box that can be used, and back to
+            # the button; one window under the types at a time.
+            "openConditions": (
+                "fillConditionBoxes(state.conditions);",
+                "state.typesOpen = false;",
+                "(namesReadable() ? ui.conditionsName : ui.conditionsDistanceFrom).focus();",
+                "ui.conditionsButton.focus();",
+            ),
+            # The same conditions ask nothing again; others are remembered
+            # and asked in every view.
+            "setConditions": (
+                "if (conditionsKey(conditions) === conditionsKey(state.conditions)) {",
+                "rememberItems(true);",
+                "requestShown();",
+                "requestCompare();",
+            ),
+            # A name that cannot be used, as the names were not read, stays.
+            "applyConditions": (
+                'name: ui.conditionsName.disabled ? (state.conditions?.name ?? "") : ui.conditionsName.value,',
+                "state.conditionsProblem = problem;",
+            ),
+            # The window stays inside the window of the browser (the real
+            # page in English at 1366x650).
+            "fitConditionsWindow": (
+                'pop.style.right = "";',
+                "if (box.left < FILTER_POP_MARGIN) {",
+                "pop.style.right = `${Math.floor(box.left - FILTER_POP_MARGIN)}px`;",
+                "pop.style.maxHeight = `${Math.max(0, Math.floor(window.innerHeight - box.top - FILTER_POP_MARGIN))}px`;",
+            ),
+            # And that of the types, at the right edge (before T1 too).
+            "fitTypesWindow": (
+                'pop.style.left = "";',
+                "const over = box.right - (window.innerWidth - FILTER_POP_MARGIN);",
+                "  if (over > 0) {",
+                "pop.style.left = `${-Math.ceil(Math.min(over, box.left - FILTER_POP_MARGIN))}px`;",
+            ),
+            "renderConditions": (
+                'ui.conditionsButton.setAttribute("aria-expanded", String(viewing && state.conditionsOpen));',
+                "ui.conditionsPop.hidden = !viewing || !state.conditionsOpen;\n  fitConditionsWindow();",
+                "ui.conditionsName.disabled = !readable;",
+                "ui.conditionsNamesWhy.hidden = readable;",
+                # The counts of an answer of other conditions are never put to
+                # these.
+                "const current = counts !== null && conditionsKey(counts.asked ?? null) === conditionsKey(state.conditions);",
+                'element("bdi", "", conditionsText(state.conditions))',
+            ),
+        }
+        for name, lines in held.items():
+            found = re.search(rf"function {name}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
+            assert found is not None, name
+            for line in lines:
+                with self.subTest(function=name, line=line):
+                    self.assertIn(line, found.group(1))
+        for line in (
+            # Esc closes; Enter applies, never while an IME composes.
+            '  ui.conditionsPop.addEventListener("keydown", (event) => {\n    if (event.key === "Escape") {\n      event.preventDefault();\n      openConditions(false);\n    } else if (event.key === "Enter" && !event.isComposing && event.target instanceof HTMLInputElement) {\n      event.preventDefault();\n      applyConditions();\n    }\n  });',
+            "  for (const box of [ui.conditionsName, ui.conditionsDistanceFrom, ui.conditionsDistanceTo, ui.conditionsTimeFrom, ui.conditionsTimeTo]) {\n    box.addEventListener(\"change\", applyConditions);\n  }",
+            # The line hides with its button; the focus goes to the button
+            # of the conditions (the checker's review of the diff of T1).
+            '  ui.conditionsLineClear.addEventListener("click", () => {\n    clearConditions();\n    ui.conditionsButton.focus();\n  });',
+            "    state.typesOpen = !state.typesOpen;\n    state.conditionsOpen = false;",
+            'window.addEventListener("resize", fitConditionsWindow);',
+            'window.addEventListener("resize", fitTypesWindow);',
+            "  if (!ui.typesPop.hidden) {\n    renderTypes(types);\n  }\n  fitTypesWindow();",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+        # The window of the conditions closes where that of the types does:
+        # another output, another view, and the full screen (the checker's
+        # review of the diff of T1).
+        for name in ("openOutput", "enterCompare", "enterPlot", "enterSpread", "enterShoes", "enterFull"):
+            body = re.search(rf"function {name}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
+            assert body is not None, name
+            with self.subTest(function=name):
+                self.assertIn("  state.typesOpen = false;\n  state.conditionsOpen = false;", body.group(1))
+        style = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        rule = re.search(r"\n\.conditions-pop \{(.*?)\n\}", style, re.DOTALL)
+        assert rule is not None
+        self.assertIn("overflow-y: auto;", rule.group(1))
+        # A name box that cannot be used is grey on the white of the window.
+        disabled = re.search(r"\n\.conditions-pop \.conditions-text:disabled \{(.*?)\n\}", style, re.DOTALL)
+        assert disabled is not None
+        self.assertIn("background: var(--none-soft);", disabled.group(1))
+
+    def test_the_names_of_the_list_are_isolated_and_wrap(self) -> None:
+        # Stage T1 of v2.2.0: the column of the names where the answer of the
+        # list read them; each name in <bdi>, so that characters of direction
+        # in a name of the output never turn the text around it (Codex 19 of
+        # the plan of T1); a long name wraps in its column (Codex 10).
+        found = re.search(r"function buildListTable\(.*?\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert found is not None
+        for line in (
+            'const columns = listColumns(list.key, list.answer?.names === "read");',
+            ': column === "name"\n              ? typeof row.name === "string" && row.name !== "" ? row.name : null',
+            'column === "name" ? "list-name" : "n"',
+            '      } else if (column === "name") {\n        // A name of the output may change the direction of the text around\n        // it (Codex\'s review of the plan of T1).\n        cell.append(element("bdi", "", text));',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, found.group(1))
+        style = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        rule = re.search(r"\n\.list-table \.t td\.list-name \{(.*?)\n\}", style, re.DOTALL)
+        assert rule is not None
+        for declaration in ("max-width: 16em;", "overflow-wrap: anywhere;", "white-space: normal;", "text-align: left;"):
+            with self.subTest(declaration=declaration):
+                self.assertIn(declaration, rule.group(1))
+
+    def test_every_view_asks_with_its_conditions(self) -> None:
+        # Stage T1 of v2.2.0: the panels, the two items plotted, the
+        # distribution, and the shoes ask with the conditions in force, which
+        # the page remembers with the view; the list of a period asks with
+        # those of the answer drawn, as with its types; the overview asks
+        # again for other conditions (Codex 2 of the plan of T1).
+        asked = "    types: typesRequest(state.counted, state.view.types),\n    conditions: state.conditions,\n  };"
+        held = {
+            "seriesPayload": (asked,),
+            "plotPayload": (asked,),
+            "spreadPayload": (asked,),
+            "shoesPayload": (asked,),
+            "viewValues": ("    spread: state.spreadItem,\n    conditions: state.conditions,",),
+            "openList": ("    types: state.answerTypes,\n    conditions: state.answerConditions,",),
+            "requestList": ("      types: list.types,\n      conditions: list.conditions,",),
+            "requestOverview": (
+                "const signature = JSON.stringify([state.view.view, key, typesRequest(state.counted, state.view.types), conditionsKey(state.conditions)]);",
+                # An answer on its way for other conditions is dropped when the
+                # overview drawn is that of these (Codex's review of the diff).
+                "  if (state.overview?.signature === signature) {\n    // The overview drawn is that of these: an answer on its way for others,\n    // such as conditions changed and changed back, is dropped (Codex's\n    // review of the diff of T1).\n    state.overviewSeq += 1;\n    return;\n  }",
+            ),
+        }
+        for name, lines in held.items():
+            found = re.search(rf"function {name}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
+            assert found is not None, name
+            for line in lines:
+                with self.subTest(function=name, line=line):
+                    self.assertIn(line, found.group(1))
 
     def test_every_button_has_a_name_in_both_languages(self) -> None:
         # Its words, its name for an icon (data-i18n-label), the words of its
@@ -1768,7 +1928,8 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertEqual(notes, ["view.recap.note", "view.recap.records_note"])
         held = {
             "recapShowable": ("return viewing && !apart() && state.items.length > 0 && !state.full;",),
-            "recapKey": ("JSON.stringify([state.view?.view ?? null, periodRequest(state.period, state.range), typesRequest(state.counted, state.view?.types), state.items])",),
+            # From T1 of v2.2.0, the conditions on the activities too.
+            "recapKey": ("JSON.stringify([state.view?.view ?? null, periodRequest(state.period, state.range), typesRequest(state.counted, state.view?.types), state.items, conditionsKey(state.conditions)])",),
             "openRecap": (
                 "state.recapAsked = null;",
                 "  if (open && state.marksOpen) {\n    state.marksOpen = false;\n    state.markAsk = null;\n    editMark(null, false);\n  }",

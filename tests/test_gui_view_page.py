@@ -8,6 +8,7 @@ how it writes them.
 from __future__ import annotations
 
 import re
+import unicodedata
 import unittest
 from fractions import Fraction
 from pathlib import Path
@@ -15,9 +16,18 @@ from pathlib import Path
 # Import the diagnostics package before modules that import standalone: the
 # other order meets a circular import when this file runs on its own.
 from garmin_running_data_normalizer import diagnostics  # noqa: F401
+from garmin_running_data_normalizer.common.names import DIRECTION_CHARACTERS, unsafe_character
 from garmin_running_data_normalizer.gui.settings import SHELF_STATES
 from garmin_running_data_normalizer.view.items import FIRST_ITEMS, ITEMS
-from garmin_running_data_normalizer.view.series import GRAINS, LAST_YEARS, MAX_PANELS
+from garmin_running_data_normalizer.view.series import (
+    GRAINS,
+    LAST_YEARS,
+    MAX_CONDITION_TEXT,
+    MAX_CONDITION_WORDS,
+    MAX_DISTANCE_METRES,
+    MAX_PANELS,
+    MAX_TIME_MINUTES,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,6 +88,60 @@ def formats() -> dict[str, tuple[str, Fraction, int]]:
 
 
 class ViewPageWordsTest(unittest.TestCase):
+    def test_the_page_checks_the_conditions_by_the_rules_of_the_server(self) -> None:
+        # Stage T1 of v2.2.0: the page checks the boxes before it sends them
+        # (the checker's A-1 (a) of the plan of T1), by the limits of the
+        # server and the characters of common.names, which the server checks
+        # again (CONDITIONS_INVALID).
+        for name, value in (
+            ("MAX_CONDITION_TEXT", MAX_CONDITION_TEXT),
+            ("MAX_CONDITION_WORDS", MAX_CONDITION_WORDS),
+            ("MAX_DISTANCE_METRES", MAX_DISTANCE_METRES),
+            ("MAX_TIME_MINUTES", MAX_TIME_MINUTES),
+        ):
+            match = re.search(rf"^export const {name} = ([\d_]+);$", FLOW, re.MULTILINE)
+            self.assertIsNotNone(match, name)
+            self.assertEqual(int(match.group(1).replace("_", "")), value, name)
+        match = re.search(
+            r"^export const UNSAFE_CHARACTER = /\[\\p\{Cc\}\\p\{Zl\}\\p\{Zp\}((?:\\u[0-9A-F]{4}(?:-\\u[0-9A-F]{4})?)+)\]/u;$",
+            FLOW,
+            re.MULTILINE,
+        )
+        self.assertIsNotNone(match)
+        written: set[str] = set()
+        for low, high in re.findall(r"\\u([0-9A-F]{4})(?:-\\u([0-9A-F]{4}))?", match.group(1)):
+            written.update(chr(code) for code in range(int(low, 16), int(high or low, 16) + 1))
+        self.assertEqual(written, DIRECTION_CHARACTERS)
+        # The categories of the expression are those of unsafe_character, for
+        # every character; the scripts hold none of them as written, only as
+        # escapes.
+        every = [chr(code) for code in range(0x110000)]
+        self.assertEqual(
+            {character for character in every if unsafe_character(character)},
+            {character for character in every if unicodedata.category(character) in ("Cc", "Zl", "Zp")} | DIRECTION_CHARACTERS,
+        )
+        for source in (FLOW, PAGE):
+            self.assertFalse(any(character in DIRECTION_CHARACTERS for character in source))
+        # The spaces at the ends of the words are those that str.strip takes
+        # on the server, never U+FEFF, which the trim() of the page takes too
+        # (the checker's review of the diff of T1).
+        spaces = re.search(r"^export const CONDITION_SPACE = /\[(.*?)\]/u;$", FLOW, re.MULTILINE)
+        self.assertIsNotNone(spaces)
+        tokens = re.findall(r"\\t|\\r|\\x[0-9A-F]{2}|\\u[0-9A-F]{4}|-", spaces.group(1))
+        self.assertEqual("".join(tokens), spaces.group(1))
+        codes = [9 if token == "\\t" else 13 if token == "\\r" else token if token == "-" else int(token[2:], 16) for token in tokens]
+        taken: set[int] = set()
+        index = 0
+        while index < len(codes):
+            if index + 2 < len(codes) and codes[index + 1] == "-":
+                taken.update(range(codes[index], codes[index + 2] + 1))
+                index += 3
+            else:
+                taken.add(codes[index])
+                index += 1
+        self.assertEqual(taken, {code for code in range(0x110000) if chr(code).isspace()})
+        self.assertNotIn(0xFEFF, taken)
+
     def test_the_page_names_and_writes_every_item_of_the_server(self) -> None:
         keys = [item.key for item in ITEMS]
         self.assertEqual(table(FLOW, "ITEM_KEYS"), {key: f"view.item.{key}" for key in keys})

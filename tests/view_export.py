@@ -2,7 +2,10 @@
 
 With ``gear``, it has synthetic shoes too (stage S1 of v2.2.0): made-up names
 only, as every test and picture of the guides has. Without it, it is as it
-was, so that the numbers of the other tests stay.
+was, so that the numbers of the other tests stay. With ``names``, the
+activities have made-up names of training instead (stage T1 of v2.2.0), a
+synthetic memo, and a few activities just on and just outside the bounds of
+the conditions, and without a distance or a time.
 """
 
 from __future__ import annotations
@@ -19,6 +22,20 @@ FIRST = date(2023, 1, 1)
 LAST = date(2025, 6, 30)
 # The activities that FIT sessions link to: their start, 10 km, 3,500 seconds.
 FIT_STARTS = ("2023-03-04T00:00:00Z", "2024-05-06T00:00:00Z", "2025-02-03T00:00:00Z")
+# Made-up names of training (stage T1 of v2.2.0): full and half width, case,
+# no name, and a name of spaces only.
+TRAINING_NAMES = ("ペース走", "ﾍﾟｰｽ走 朝", "TEMPO run", "ジョグ", "インターバル 400m", None, "  ")
+# A synthetic memo, which no answer of the view page may hold (Codex's review
+# of the plan of T1).
+MEMO_MARK = "synthetic-memo-t1"
+# Activities just on and just outside the bounds of 10 km and 60 minutes, and
+# without a distance or a time: id, start, centimetres, milliseconds, name.
+BOUND_ACTIVITIES = (
+    (700_001, "2024-06-01T21:00:00Z", 1_000_000, 3_600_000, "境目 ちょうど"),
+    (700_002, "2024-06-02T21:00:00Z", 999_999, 3_599_999, "境目 すぐ外"),
+    (700_003, "2024-06-03T21:00:00Z", None, 3_000_000, "距離なし"),
+    (700_004, "2024-06-04T21:00:00Z", 800_000, None, "時間なし"),
+)
 
 
 def utc(text: str) -> datetime:
@@ -33,7 +50,7 @@ def days() -> list[date]:
     return [FIRST + timedelta(days=offset) for offset in range((LAST - FIRST).days + 1)]
 
 
-def activities(gear: bool = False) -> list[dict[str, object]]:
+def activities(gear: bool = False, names: bool = False) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for offset, day in enumerate(days()):
         start = datetime(day.year, day.month, day.day, 21, 0, tzinfo=timezone.utc)
@@ -58,6 +75,14 @@ def activities(gear: bool = False) -> list[dict[str, object]]:
                 "activityTrainingLoad": 40 + offset % 50,
                 "name": f"Synthetic {offset}",
             }
+            if names:
+                name = TRAINING_NAMES[(offset + number) % len(TRAINING_NAMES)]
+                if name is None:
+                    row.pop("name")
+                else:
+                    row["name"] = name
+                if offset % 4 == 0:
+                    row["description"] = f"{MEMO_MARK} {offset}"
             # Some activities have no heart rate, power, or cadence.
             if offset % 4:
                 row["avgHr"] = 140 + offset % 17
@@ -78,6 +103,14 @@ def activities(gear: bool = False) -> list[dict[str, object]]:
                 "name": f"Synthetic FIT {number}",
             }
         )
+    if names:
+        for activity_id, text, distance, duration, name in BOUND_ACTIVITIES:
+            row = {"activityId": activity_id, "activityType": "running", "sportType": "RUNNING", "startTimeGmt": epoch_ms(utc(text)), "name": name}
+            if distance is not None:
+                row["distance"] = distance
+            if duration is not None:
+                row["duration"] = duration
+            rows.append(row)
     if gear:
         # Runs with a shoe that the numbers leave out or count apart (stage
         # S1 of v2.2.0): without a distance, after today, and without a date.
@@ -158,7 +191,7 @@ def gear_links(rows: list[dict[str, object]]) -> dict[str, list[int]]:
     return links
 
 
-def write_view_export(root: Path, gear: bool = False) -> Path:
+def write_view_export(root: Path, gear: bool = False, names: bool = False) -> Path:
     fitness = root / "DI-Connect-Fitness"
     metrics = root / "DI-Connect-Metrics"
     sleep_folder = root / "DI-Connect-Wellness"
@@ -166,7 +199,7 @@ def write_view_export(root: Path, gear: bool = False) -> Path:
     for folder in (fitness, metrics, sleep_folder, uploaded):
         folder.mkdir(parents=True)
     (fitness / "synthetic_summarizedActivities.json").write_text(
-        json.dumps([{"summarizedActivitiesExport": activities(gear)}]), encoding="utf-8"
+        json.dumps([{"summarizedActivitiesExport": activities(gear, names)}]), encoding="utf-8"
     )
     if gear:
         links = gear_links(activities(gear))

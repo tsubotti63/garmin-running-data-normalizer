@@ -578,6 +578,47 @@ class SettingsOfVersion220Test(unittest.TestCase):
         self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"spread": None}))
         self.assertNotIn("view_spread", read_settings(self.path)[0])
 
+    def test_the_conditions_are_kept_whole_or_not_at_all(self) -> None:
+        # Stage T1 of v2.2.0: the conditions on the activities, by the rule of
+        # the requests (views.conditions_from), given to the page when it
+        # starts in the form of a request; conditions of another form are left
+        # out whole, so that the next opening has none, never others.
+        for conditions, kept in (
+            ({"name": " ペース走、tempo "}, {"name": "ペース走、tempo"}),
+            ({"distance": [5_000, None], "time": [None, 90]}, {"distance": [5_000, None], "time": [None, 90]}),
+            ({"name": "x", "distance": [0, 1_000_000], "time": [6_000, None]}, {"name": "x", "distance": [0, 1_000_000], "time": [6_000, None]}),
+        ):
+            with self.subTest(conditions=conditions):
+                self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_conditions": conditions})
+                values = read_settings(self.path)[0]
+                self.assertEqual(values["view_conditions"], kept)
+                self.assertEqual(launch_answer(values, None, present=True)["view_conditions"], kept)
+        for conditions in (
+            {},
+            {"name": ""},
+            {"name": "a\u202eb"},
+            {"name": "x" * 61},
+            {"name": "、".join(f"w{number}" for number in range(11))},
+            {"distance": [2, 1]},
+            {"distance": [1.5, None]},
+            {"time": [None, 6_001]},
+            {"name": "x", "other": 1},
+            {"name": "x", "distance": [True, None]},
+            ["x"],
+            "x",
+            None,
+        ):
+            with self.subTest(conditions=conditions):
+                self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_conditions": conditions})
+                values = read_settings(self.path)[0]
+                self.assertEqual(values, {"store": self.store})
+                self.assertIsNone(launch_answer(values, None, present=True)["view_conditions"])
+        # The page writes them with the rest of the view; None takes them away.
+        self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"conditions": {"name": "ペース走"}}))
+        self.assertEqual(read_settings(self.path)[0]["view_conditions"], {"name": "ペース走"})
+        self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"conditions": None}))
+        self.assertNotIn("view_conditions", read_settings(self.path)[0])
+
     def test_the_view_page_changes_only_the_values_that_it_gives(self) -> None:
         self.assertIsNone(write_settings(self.path, {"store": self.store, **self.view_values()}))
         self.assertIsNone(remember_view_at(self.path, ["dist"], "open", {"grain": "month", "period": "5y"}))
@@ -829,6 +870,26 @@ class LayoutsApiTest(GuiServerTestCase):
         for spread in ("count", "rhr", "nope", ["dist"], {"item": "dist"}, 3, True):
             with self.subTest(spread=spread):
                 self.assertEqual(self.post("/api/settings/view", {**base, "spread": spread}), (422, {"error": "REQUEST_INVALID"}))
+
+    def test_the_view_page_remembers_its_conditions(self) -> None:
+        # Stage T1 of v2.2.0: the conditions on the activities, whole, with the
+        # rest of the view, in the form of a request (the words as written,
+        # without the spaces at the ends, never as compared); None takes them
+        # away, and conditions of another form are refused.
+        path = places.settings_file()
+        base = {"items": ["dist"], "shelf": "open"}
+        conditions = {"name": " ペース走、ﾍﾟｰｽ走 ", "distance": [5_000, None]}
+        kept = {"name": "ペース走、ﾍﾟｰｽ走", "distance": [5_000, None]}
+        self.assertEqual(self.post("/api/settings/view", {**base, "conditions": conditions}), (200, {"remembered": True, "notice": None}))
+        self.assertEqual(read_settings(path)[0]["view_conditions"], kept)
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["view_conditions"], kept)
+        self.assertEqual(self.post("/api/status")[1]["settings"]["view_conditions"], kept)
+        self.assertEqual(self.post("/api/settings/view", {**base, "conditions": None})[0], 200)
+        self.assertNotIn("view_conditions", read_settings(path)[0])
+        for bad in ({}, {"name": ""}, {"name": "a\u202eb"}, {"distance": [2, 1]}, {"time": [None, 6_001]}, ["x"], "x", 1):
+            with self.subTest(conditions=bad):
+                self.assertEqual(self.post("/api/settings/view", {**base, "conditions": bad}), (422, {"error": "REQUEST_INVALID"}))
+        self.assertNotIn("view_conditions", read_settings(path)[0])
 
     def test_a_choice_of_types_that_cannot_be_kept_whole_is_not_remembered(self) -> None:
         # The page may count types that the settings cannot keep (the checker,
