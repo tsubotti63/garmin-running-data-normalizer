@@ -651,7 +651,10 @@ test("the remembered view is written once the person stops changing it, and at o
   assert.deepEqual(sent, [{ grain: "year" }]);
   // Changed and quit at once: what waits is written before the app stops.
   sender.push({ layout: "run" });
-  assert.equal(sender.waiting(), true);
+  // A peek gives what waits and leaves it (stage U2 of v2.2.0).
+  assert.deepEqual(sender.peek(), { layout: "run" });
+  assert.deepEqual(sender.peek(), { layout: "run" });
+  assert.equal(timers.filter((timer) => timer.live).length, 1);
   await sender.flush();
   assert.deepEqual(sent, [{ grain: "year" }, { layout: "run" }]);
   assert.equal(timers.filter((timer) => timer.live).length, 0);
@@ -661,10 +664,23 @@ test("the remembered view is written once the person stops changing it, and at o
   // The page hides: what waits is taken to be sent apart, and not sent here.
   sender.push({ period: "1y" });
   assert.deepEqual(sender.take(), { period: "1y" });
-  assert.equal(sender.waiting(), false);
+  assert.equal(sender.peek(), null);
   assert.equal(sender.take(), null);
   assert.equal(timers.filter((timer) => timer.live).length, 0);
   assert.equal(sent.length, 2);
+});
+
+test("a page keeps the layout in use that the layouts still offer (stage U2 of v2.2.0)", () => {
+  // Codex's review of the diff of U2: as the settings change under the page,
+  // it keeps what it shows, also a layout chosen while it read them.
+  const builtIns = [{ id: "run" }, { id: "load" }];
+  const mine = [{ id: "u-0000000a" }];
+  assert.equal(view.layoutKept("run", builtIns, [], []), "run");
+  assert.equal(view.layoutKept("run", builtIns, [], ["run"]), null);
+  assert.equal(view.layoutKept("u-0000000a", builtIns, mine, []), "u-0000000a");
+  assert.equal(view.layoutKept("u-0000000a", builtIns, [], []), null);
+  assert.equal(view.layoutKept(null, builtIns, mine, []), null);
+  assert.equal(view.layoutKept("run", null, null, null), null);
 });
 
 test("a dragged layout goes after each other one whose middle is above the pointer", () => {

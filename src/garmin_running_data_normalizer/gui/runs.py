@@ -17,9 +17,9 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import IO, Any
+from typing import IO, Any, TypeVar
 
 from ..common.time import MAX_TIMEZONE_LENGTH
 from ..diagnostics.contracts import SAFE_WARNING_CODES
@@ -68,6 +68,7 @@ FINISHED_STATES = ("finished", "finished_after_cancel")
 CODE = re.compile(r"[A-Z0-9_]{1,64}")
 FAMILY_NAME = re.compile(r"[a-z0-9_]{1,40}")
 FAMILY_STATUS = re.compile(r"[A-Z_]{1,40}")
+_Done = TypeVar("_Done")
 
 
 class RunRequestError(ValueError):
@@ -491,6 +492,17 @@ class RunManager:
     def active(self) -> bool:
         with self._lock:
             return self._run is not None and self._run.active
+
+    def when_idle(self, action: Callable[[], _Done]) -> _Done:
+        """Do ``action`` while no run is active, and start none until it is
+        done (stage U2 of v2.2.0): forgetting the settings, in which a run
+        remembers its places as it ends. RunActiveError, and ``action`` is not
+        done, while a run is active. This lock is taken before that of the
+        settings, never after it."""
+        with self._lock:
+            if self._run is not None and self._run.active:
+                raise RunActiveError()
+            return action()
 
     def finished_output(self) -> Path | None:
         """Return the output folder of the last run if that run published it."""

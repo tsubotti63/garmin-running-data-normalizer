@@ -48,6 +48,16 @@ was left when one of them cannot be removed. As for the settings, the lock
 holds for the threads of one server only: two GUIs that change the marks at
 the same moment can keep only one of the two changes (each change reads the
 file again first, so that changes one after another are all kept).
+
+From stage U2 the settings have a generation, which this launch keeps from 0
+under the same lock and never in a file. Forgetting moves it on, also when a
+file is left, and each change of a page names the generation that it was made
+at: a change made before the settings were forgotten is not written after
+them, and the page is told that it is stale, which is no error. A run that
+ends remembers its places without one: the settings are not forgotten while
+a run is active, and a run does not start while they are being forgotten, as
+the server forgets them under the lock of the runs (that lock is taken before
+this one, never after it). As the lock, the generation holds for one GUI.
 """
 from __future__ import annotations
 
@@ -97,6 +107,27 @@ SHELF_STATES = ("open", "closed")
 # One change of the settings at a time: each reads the file and writes it
 # whole, so that two at once would keep only one of them.
 _CHANGE_LOCK = threading.Lock()
+# The generation of the settings (stage U2 of v2.2.0), under _CHANGE_LOCK:
+# forgetting moves it on.
+_generation = 0
+
+
+class SettingsStale(Exception):
+    """A change asked at a generation of the settings other than the one now
+    (stage U2 of v2.2.0): it was made before the settings were forgotten, and
+    nothing is written. ``generation`` is the one now."""
+
+    def __init__(self, generation: int) -> None:
+        super().__init__("SETTINGS_STALE")
+        self.generation = generation
+
+
+def _check_generation(generation: int | None) -> None:
+    # Under _CHANGE_LOCK, before the files are read, so that a stale change
+    # is told before what the change itself could not do. None is a change
+    # that names none: a run that ends, and the tests of the files.
+    if generation is not None and generation != _generation:
+        raise SettingsStale(_generation)
 
 # What the settings tell the page, codes only.
 SETTINGS_INVALID = "SETTINGS_INVALID"
@@ -469,22 +500,30 @@ def _remove_file(path: Path) -> bool:
     return True
 
 
-def remove_settings(path: Path, others: tuple[Path, ...] = ()) -> str | None:
+def remove_settings(path: Path, others: tuple[Path, ...] = ()) -> tuple[str | None, bool, int]:
     """Forget the settings: remove the file at ``path`` and those of
     ``others`` in the same folder (the marks, from stage M1 of v2.2.0), each
     tried even when another cannot be removed, and this app's folder when
-    nothing else is in it. None when no file is there now,
+    nothing else is in it. What to tell: None when no file is there now,
     SETTINGS_NOT_REMOVED when the file of the settings is left, and
-    MARKS_NOT_REMOVED when only another is."""
+    MARKS_NOT_REMOVED when only another is; whether there was anything to
+    forget (stage C1); and from stage U2 the generation of the settings, which
+    this moves on whatever it could remove, so that no change asked before is
+    written after it. All under the lock, so that what it tells is of the
+    files that it removed."""
+    global _generation
+    places_to_forget = (path, *others)
     with _CHANGE_LOCK:
-        removed = [_remove_file(place) for place in (path, *others)]
+        present = any(settings_present(place) for place in places_to_forget)
+        _generation += 1
+        removed = [_remove_file(place) for place in places_to_forget]
         try:
             os.rmdir(path.parent)
         except OSError:
             pass
         if not removed[0]:
-            return SETTINGS_NOT_REMOVED
-        return None if all(removed) else MARKS_NOT_REMOVED
+            return SETTINGS_NOT_REMOVED, present, _generation
+        return (None if all(removed) else MARKS_NOT_REMOVED), present, _generation
 
 
 def remember_run_at(
@@ -514,19 +553,28 @@ def remember_run_at(
         return write_settings(path, values, makeable)
 
 
-def remember_hints_at(path: Path, on: bool, makeable: tuple[Path, ...] = ()) -> str | None:
-    """Remember whether the tips show, as the person switched them."""
+def remember_hints_at(
+    path: Path, on: bool, makeable: tuple[Path, ...] = (), *, generation: int | None = None
+) -> str | None:
+    """Remember whether the tips show, as the person switched them. Each
+    change of a page names its generation (stage U2 of v2.2.0): one of
+    another raises SettingsStale, and nothing is written."""
     with _CHANGE_LOCK:
+        _check_generation(generation)
         current, notice = read_settings(path)
         if notice == SETTINGS_NEWER:
             return SETTINGS_NEWER
         return write_settings(path, {**current, "hints": on}, makeable)
 
 
-def remember_theme_at(path: Path, theme: str | None, makeable: tuple[Path, ...] = ()) -> str | None:
+def remember_theme_at(
+    path: Path, theme: str | None, makeable: tuple[Path, ...] = (), *, generation: int | None = None
+) -> str | None:
     """Remember the colors that the person chose (stage G3a): one of THEMES,
-    or None to follow the colors that the browser reports."""
+    or None to follow the colors that the browser reports; of a generation as
+    remember_hints_at."""
     with _CHANGE_LOCK:
+        _check_generation(generation)
         current, notice = read_settings(path)
         if notice == SETTINGS_NEWER:
             return SETTINGS_NEWER
@@ -566,13 +614,16 @@ def remember_view_at(
     shelf: str,
     view: dict[str, Any] | None = None,
     makeable: tuple[Path, ...] = (),
+    *,
+    generation: int | None = None,
 ) -> str | None:
     """Remember the items that the view page shows and whether its item shelf
     is open (stage G3b), by the names of the items only; and from v2.2.0 the
     values of ``view`` that are given (VIEW_KEYS): None takes a value away (no
     layout used last, or the activity types counted at first), and a value not
-    given stays as it is."""
+    given stays as it is. Of a generation as remember_hints_at."""
     with _CHANGE_LOCK:
+        _check_generation(generation)
         current, notice = read_settings(path)
         if notice == SETTINGS_NEWER:
             return SETTINGS_NEWER
@@ -587,14 +638,17 @@ def remember_view_at(
 
 
 def change_layouts_at(
-    path: Path, change: Any, makeable: tuple[Path, ...] = ()
+    path: Path, change: Any, makeable: tuple[Path, ...] = (), *, generation: int | None = None
 ) -> tuple[dict[str, Any], str | None]:
     """Change the layouts of the person once (stage K1 of v2.2.0): read the
     file, change, and write it under one lock. The layouts after the change
     and None when they are written; otherwise the layouts as they were, and a
     code (SETTINGS_NEWER or SETTINGS_NOT_WRITTEN). A change that cannot be made
-    raises layouts.LayoutChangeError, and nothing is written."""
+    raises layouts.LayoutChangeError, and nothing is written. Of a generation
+    as remember_hints_at: a stale change is told before a layout that it
+    names is looked for (stage U2)."""
     with _CHANGE_LOCK:
+        _check_generation(generation)
         current, notice = read_settings(path)
         before = {
             "layouts": current.get("view_layouts", []),
@@ -613,15 +667,18 @@ def change_layouts_at(
 
 
 def change_marks_at(
-    path: Path, change: Any, makeable: tuple[Path, ...] = ()
+    path: Path, change: Any, makeable: tuple[Path, ...] = (), *, generation: int | None = None
 ) -> tuple[list[dict[str, Any]] | None, str | None]:
     """Change the marks once (stage M1 of v2.2.0): read the file, change, and
     write it under the lock of the settings. The marks after the change and
     None when they are written; the marks as they were and MARKS_NOT_WRITTEN
     when they are not; and None and MARKS_UNREADABLE or MARKS_NEWER for a file
     that is not used, which is never written over. A change that cannot be
-    made raises marks.MarkChangeError, and nothing is written."""
+    made raises marks.MarkChangeError, and nothing is written. Of a generation
+    as remember_hints_at: a stale change is told before its file is read or a
+    mark that it names is looked for (stage U2)."""
     with _CHANGE_LOCK:
+        _check_generation(generation)
         before, notice = read_marks(path)
         if notice is not None:
             return None, notice
@@ -637,13 +694,15 @@ def launch_answer(
     present: bool,
     marks: list[dict[str, Any]] | None = None,
     marks_notice: str | None = None,
+    generation: int = 0,
 ) -> dict[str, Any]:
     """What the page takes from the settings when it starts: a later launch
     when a place is remembered (the tips alone do not make one), the places,
     the tips, the colors (stage G3a), the items and the shelf of the view page
     (stage G3b), what to tell of the file, whether there is a file to forget
-    (stage C1), and from stage M1 of v2.2.0 the marks and what to tell of
-    their file."""
+    (stage C1), from stage M1 of v2.2.0 the marks and what to tell of their
+    file, and from stage U2 the generation of the settings, which the page's
+    changes name."""
     store = values.get("store")
     parent = values.get("output_parent")
     return {
@@ -674,6 +733,7 @@ def launch_answer(
         "timezone": values.get("timezone"),
         "notice": notice,
         "present": present,
+        "generation": generation,
     }
 
 
@@ -686,10 +746,16 @@ def _target() -> tuple[Path, tuple[Path, ...]]:
 def launch_settings() -> dict[str, Any]:
     path, _makeable = _target()
     marks_path = places.marks_file()
-    values, notice = read_settings(path)
-    marks, marks_notice = read_marks(marks_path)
-    present = settings_present(path) or settings_present(marks_path)
-    return launch_answer(values, notice, present=present, marks=marks, marks_notice=marks_notice)
+    # Read at once, with the generation (stage U2 of v2.2.0): no answer tells
+    # the settings of before a forgetting with the generation after it.
+    with _CHANGE_LOCK:
+        values, notice = read_settings(path)
+        marks, marks_notice = read_marks(marks_path)
+        present = settings_present(path) or settings_present(marks_path)
+        generation = _generation
+    return launch_answer(
+        values, notice, present=present, marks=marks, marks_notice=marks_notice, generation=generation
+    )
 
 
 def launch_theme() -> str | None:
@@ -712,38 +778,40 @@ def remember_run(output: Path, store: Path | None, timezone: str | None = None) 
     return remember_run_at(path, output, store, timezone, makeable)
 
 
-def remember_hints(on: bool) -> str | None:
+# The changes of a page name their generation (stage U2 of v2.2.0).
+def remember_hints(on: bool, *, generation: int) -> str | None:
     path, makeable = _target()
-    return remember_hints_at(path, on, makeable)
+    return remember_hints_at(path, on, makeable, generation=generation)
 
 
-def remember_theme(theme: str | None) -> str | None:
+def remember_theme(theme: str | None, *, generation: int) -> str | None:
     path, makeable = _target()
-    return remember_theme_at(path, theme, makeable)
+    return remember_theme_at(path, theme, makeable, generation=generation)
 
 
-def remember_view(items: list[str], shelf: str, view: dict[str, Any] | None = None) -> str | None:
+def remember_view(
+    items: list[str], shelf: str, view: dict[str, Any] | None = None, *, generation: int
+) -> str | None:
     path, makeable = _target()
-    return remember_view_at(path, items, shelf, view, makeable)
+    return remember_view_at(path, items, shelf, view, makeable, generation=generation)
 
 
-def change_layouts(change: Any) -> tuple[dict[str, Any], str | None]:
+def change_layouts(change: Any, *, generation: int) -> tuple[dict[str, Any], str | None]:
     path, makeable = _target()
-    return change_layouts_at(path, change, makeable)
+    return change_layouts_at(path, change, makeable, generation=generation)
 
 
-def change_marks(change: Any) -> tuple[list[dict[str, Any]] | None, str | None]:
+def change_marks(change: Any, *, generation: int) -> tuple[list[dict[str, Any]] | None, str | None]:
     _path, makeable = _target()
-    return change_marks_at(places.marks_file(), change, makeable)
+    return change_marks_at(places.marks_file(), change, makeable, generation=generation)
 
 
-def forget_settings() -> tuple[str | None, bool]:
+def forget_settings() -> tuple[str | None, bool, int]:
     """Forget the settings and the marks: what to tell (None when no file is
-    left), and whether there was anything to forget (stage C1)."""
+    left), whether there was anything to forget (stage C1), and the
+    generation of the settings after it (stage U2 of v2.2.0)."""
     path, _makeable = _target()
-    marks_path = places.marks_file()
-    present = settings_present(path) or settings_present(marks_path)
-    return remove_settings(path, (marks_path,)), present
+    return remove_settings(path, (places.marks_file(),))
 
 
 __all__ = [
@@ -760,6 +828,7 @@ __all__ = [
     "SETTINGS_NOT_REMOVED",
     "SETTINGS_NOT_WRITTEN",
     "SHELF_STATES",
+    "SettingsStale",
     "THEMES",
     "VIEW_KEYS",
     "change_layouts",

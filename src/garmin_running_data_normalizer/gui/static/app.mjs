@@ -45,6 +45,7 @@ import {
   forgetOutcome,
   formatElapsed,
   foundChoices,
+  generationOf,
   helpReturnTarget,
   helpSteps,
   hintsShown,
@@ -82,11 +83,13 @@ import {
   runSummary,
   sameContentNoted,
   sendLatest,
+  settingsFollower,
   settingsMessages,
   settingsPresentAfterRun,
   shouldFocusResult,
   signedChange,
   snapshotRows,
+  staleAnswer,
   stalledSeconds,
   stepRows,
   stoppedMessage,
@@ -2696,19 +2699,63 @@ function quitHeard(event) {
   }
 }
 
-// The person switched the tips: the next launch shows them so too
-// (stage B4c).
-async function changeHints() {
-  state.hintsOn = ui.hintsToggle.checked;
-  state.forget.key = null;
-  render();
+// The generation of the settings that this page follows (stage U2 of
+// v2.2.0), as the view page does: each change names the generation of the
+// moment that the person made it, and what was asked before the settings
+// were forgotten is dropped, without an error.
+const follower = settingsFollower(readSettings, { moved: settingsMoved });
+
+// The settings of the status now; null when they could not be read.
+async function readSettings() {
   try {
-    const answer = await callApi("/api/settings/hints", { on: state.hintsOn });
+    const status = await callApi("/api/status");
+    return status.settings !== null && typeof status.settings === "object" ? status.settings : null;
+  } catch (error) {
+    connectionFailure(error);
+    return null;
+  }
+}
+
+// The settings as the server holds them after the page moved on: whether
+// there is a file to forget, and the colors that a reload takes; the page
+// keeps what it shows, as after its own forgetting.
+function settingsMoved(settings) {
+  if (settings !== null) {
+    state.settingsPresent = settings.present === true;
+    writeStorage(THEME_STORAGE, settings.theme === "light" || settings.theme === "dark" ? settings.theme : "auto");
+  }
+  render();
+}
+
+// What a change of the settings answered: nothing when it was stale, or
+// asked before the settings were forgotten.
+function settingsChanged(answer, generation) {
+  if (staleAnswer(answer)) {
+    follower.heard(answer.generation);
+  } else if (generation === follower.generation()) {
     state.settingsNotice = answer?.remembered === true ? null : { code: answer?.notice, writing: true };
     // The file of the settings is there to forget now (stage C1).
     if (answer?.remembered === true) {
       state.settingsPresent = true;
     }
+  }
+}
+
+// The person switched the tips: the next launch shows them so too
+// (stage B4c). The change goes with the generation of its stamp, not at all
+// where it is of before (stage U2 of v2.2.0).
+async function changeHints() {
+  const stamp = follower.stamp();
+  state.hintsOn = ui.hintsToggle.checked;
+  state.forget.key = null;
+  render();
+  const generation = await follower.current(stamp);
+  if (generation === null) {
+    render();
+    return;
+  }
+  try {
+    settingsChanged(await callApi("/api/settings/hints", { on: state.hintsOn, generation }), generation);
   } catch (error) {
     connectionFailure(error);
   }
@@ -2722,29 +2769,33 @@ function changeTheme(event) {
   state.forget.key = null;
   themeChannel?.postMessage({ theme: state.theme });
   render();
-  rememberTheme(state.theme);
+  rememberTheme({ theme: state.theme, stamp: follower.stamp() });
 }
 
-const rememberTheme = sendLatest(async (choice) => {
+// A choice of before is not sent.
+const rememberTheme = sendLatest(async ({ theme, stamp }) => {
+  const generation = await follower.current(stamp);
+  if (generation === null) {
+    return;
+  }
   try {
-    const answer = await callApi("/api/settings/theme", { theme: choice });
-    state.settingsNotice = answer?.remembered === true ? null : { code: answer?.notice, writing: true };
-    // The file of the settings is there to forget now (stage C1).
-    if (answer?.remembered === true) {
-      state.settingsPresent = true;
-    }
+    settingsChanged(await callApi("/api/settings/theme", { theme, generation }), generation);
   } catch (error) {
     connectionFailure(error);
   }
   render();
 });
 
-// Another tab of this launch chose the colors, or forgot the settings.
+// Another tab of this launch chose the colors, or forgot the settings: the
+// page moves on to the generation after it (stage U2 of v2.2.0).
 function themeHeard(event) {
   const message = themeMessage(event.data);
-  if (message?.forgotten === true) {
-    writeStorage(THEME_STORAGE, "auto");
-  } else if (message !== null) {
+  if (message === null) {
+    return;
+  }
+  if (Object.hasOwn(message, "generation")) {
+    follower.heard(message.generation);
+  } else {
     applyTheme(message.theme);
     render();
   }
@@ -2777,7 +2828,13 @@ async function forgetSettings() {
     // another tab, follows the browser (stage G3a).
     if (!outcome.present) {
       writeStorage(THEME_STORAGE, "auto");
-      themeChannel?.postMessage({ forgotten: true });
+    }
+    // The generation after the forgetting, also one that left a file: the
+    // other tabs and this one move on to it, and drop what they asked before
+    // (stage U2 of v2.2.0).
+    if (generationOf(answer?.generation) !== null) {
+      themeChannel?.postMessage({ generation: answer.generation });
+      follower.heard(answer.generation);
     }
   } catch (error) {
     if (!connectionFailure(error) && error.code !== "RUN_ACTIVE") {
@@ -2948,6 +3005,18 @@ function connect() {
   }
   darkScheme.addEventListener("change", render);
   themeChannel?.addEventListener("message", themeHeard);
+  // As the page comes forward it reads the settings again, as another tab
+  // may have forgotten them unheard (stage U2 of v2.2.0).
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && state.connected) {
+      follower.sync();
+    }
+  });
+  window.addEventListener("focus", () => {
+    if (state.connected) {
+      follower.sync();
+    }
+  });
   ui.helpButton.addEventListener("click", toggleHelp);
   ui.helpClose.addEventListener("click", closeHelp);
   ui.helpPanel.addEventListener("keydown", (event) => {
@@ -3021,6 +3090,7 @@ async function start() {
     state.launch = settings.launch;
     state.remembered = { store: settings.store, outputParent: settings.outputParent };
     state.settingsPresent = settings.present;
+    follower.start(status.settings?.generation);
     state.settingsNotice = settings.notice === null ? null : { code: settings.notice, writing: false };
     state.hintsOn = hintsShown(settings);
     // The colors that the settings remember win over this tab's (stage G3a).

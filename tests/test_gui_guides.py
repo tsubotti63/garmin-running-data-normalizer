@@ -867,7 +867,11 @@ class GuiGuideTest(unittest.TestCase):
                 "or **Dark** is chosen); from 2.2.0, also the period, the grouping, the activity types counted, the layouts (those saved, and the one used last), the way and the month of [Compare years](#compare-years-from-220), what it compares by (the years or the race days) and the weeks of a span, whether **Show marks** is on, the two items plotted and the item of a distribution of [Other views](#other-views-from-220), and the [conditions](#conditions-from-220). The [marks](#marks-from-220) themselves are kept in the file of the marks.",
                 "While no panel is left, neither that nor the period, the conditions, or another choice changed meanwhile is remembered: what was remembered before stays (the appearance, the layouts saved, and the marks are kept as ever).",
                 "When another output opens (from 2.2.0), a period such as **1 year** stays as it is.",
-                "A period chosen with **Custom range…** shrinks to the days of the output when it overlaps them in part, and becomes **All time** when it does not overlap them at all.",
+                # From stage U2 of v2.2.0, as the design and the code have it: the
+                # days chosen stay, and the values count the days of the output.
+                "A period chosen with **Custom range…** keeps its days when it overlaps those of the output in part: the values and the charts count only the days of the output in it, and in **Summary…** the period before has as many days as the range chosen, and the values of a period that the output cuts are marked *, with a dash (—) for the difference.",
+                "It becomes **All time** when it does not overlap them at all.",
+                "A range that overlaps them in part keeps the days chosen, and the values and the charts count only the days of the output in it.",
                 "The activity types counted are those remembered that the output has; when it has none of them, every running type in the output.",
                 "Not remembered: the output shown, the same scale, a panel enlarged, a table shown, full screen, whether years were compared, with the years or races chosen and the year highlighted, whether a list of activities was open, whether another view was shown, with the point, the range, or the month of the shoes chosen, whether the summary was open, and whether the window of saving as an image was open, with its choices.",
                 "the names of places and of the items of the view page, and from 2.2.0 also the names of the layouts you saved, the days of a period chosen with **Custom range…**, the activity types counted, the words of the conditions of the view page, and the timezone. They stay on this computer",
@@ -880,7 +884,8 @@ class GuiGuideTest(unittest.TestCase):
                 # The words of the button of an enlarged panel changed in 2.2.0 (the
                 # checker's K3-2); the English words are those of 2.1.0.
                 "⤢ の所が「段を並べて見る」（2.1.0 では「元に戻す」）になり、",
-                "「範囲を選ぶ…」で選んだ期間は、その出力の日の範囲と一部だけ重なるときは重なる所に縮まり、まったく重ならないときは「全期間」になります。",
+                "「範囲を選ぶ…」で選んだ期間は、その出力の日の範囲と一部だけ重なるときは選んだ日付のままで、値とグラフは、その中の出力の日だけで数えます。「まとめ…」の前の期間は選んだ範囲と同じ日数で、出力で切れた期間の値には「*」が付き、差は「—」です。まったく重ならないときは「全期間」になります。",
+                "出力の日の範囲と一部だけ重なる範囲は、選んだ日付のままで、値とグラフは、その中の出力の日だけで数えます。",
                 "数える種目は、覚えた種目のうち、その出力にある種目です。1 つも無いときは、その出力のランニングの種目すべてです。",
                 "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、強調した年、区切りの一覧を開いていたか、ほかの見方を開いていたかと、選んだ点や分かれ方の区切り、靴ごとで選んだ月、まとめの窓を開いていたか、画像で保存の窓を開いていたかと、その選び。",
                 "2.2.0 からは、保存した表示の型の名前、「範囲を選ぶ…」で選んだ期間の日付、数える種目、見るページの条件の言葉、タイムゾーンも入ります。",
@@ -2104,7 +2109,7 @@ class GuiGuideTest(unittest.TestCase):
             if language == "en":
                 says = (
                     f"Each pair of shoes is a panel, with its distance by month as bars (as a line over a period of more than {bars} months). Every panel has the same time axis, across the period chosen, and the same scale (one color). As bars, a month that the period cuts is drawn lighter, with an edge.",
-                    "A month without an activity with the pair, between the first and the last month that it was used, is 0, a hollow dot on the base line, as is a month whose activities with the pair add up to 0; before the first and after the last, it is empty. A month of 0 does not always mean that the pair was not used (it may not have been set in Garmin).",
+                    "A month without an activity with the pair, between the first and the last month that it was used in the output (by an activity of the types counted that meets the conditions, where there are some, also outside the period chosen), is 0, a hollow dot on the base line, as is a month whose activities with the pair add up to 0; before the first and after the last, it is empty. A month of 0 does not always mean that the pair was not used (it may not have been set in Garmin).",
                     "those with shoes but without a distance (in the counts, not in the distances)",
                     f"A name is the one in Garmin; without one, the make and model; without either, {mark.format(messages['view.shoes.unnamed'])}. A long name is cut short with an ellipsis. Shoes of one name are told apart by their start date after the name (the day set in Garmin, where it is theirs alone) or by a number, which are never cut.",
                     "The panels go by the day each pair was last used in the period, the newest first (on the same day, in the order of Garmin's gear). Shoes not used in the period have no panel.",
@@ -2135,7 +2140,7 @@ class GuiGuideTest(unittest.TestCase):
             else:
                 says = (
                     f"靴 1 足を 1 段にして、月ごとの距離を棒で並べます（月が {bars} を超える長い期間では、線になります）。どの段も、選んだ期間全体の同じ時間の軸と、同じ目盛りです（色は 1 色）。棒のとき、期間で切れた月の棒は、薄く（縁取りをつけて）出ます。",
-                    "その靴を初めて使った月と最後に使った月のあいだで、その靴の付いた回が無い月は 0 で、底の線の上の白抜きの点です（付いた回の距離の合計が 0 の月も、同じ点です）。初めより前と最後より後は空です。0 の月も、その靴を使わなかったとは限りません（Garmin で付け忘れた回もありえます）。",
+                    "出力の中でその靴を初めて使った月と最後に使った月（数える種目のアクティビティで、条件があるときは条件に合うもの。選んだ期間の外も含めます）のあいだで、その靴の付いた回が無い月は 0 で、底の線の上の白抜きの点です（付いた回の距離の合計が 0 の月も、同じ点です）。初めより前と最後より後は空です。0 の月も、その靴を使わなかったとは限りません（Garmin で付け忘れた回もありえます）。",
                     "靴の付いた回のうち距離の無い回（回数には入ります）",
                     f"名前は Garmin の道具の名前のままで、名前が無ければメーカーとモデル、どちらも無ければ{mark.format(messages['view.shoes.unnamed'])}と出ます。長い名前は、終わりを省略記号にして切ります。同じ名前の靴は、名前のあとの使い始めの日（Garmin で決めた日が、その靴だけのとき）か、番号で見分けます。そこは切りません。",
                     "段は、この期間に最後に使った日の新しい順です（同じ日なら、Garmin の道具の順）。この期間に使った回の無い靴は、段にしません。",
@@ -2467,6 +2472,54 @@ class GuiGuideTest(unittest.TestCase):
         privacy = " ".join(section(design, "Privacy").split())
         self.assertIn("From v2.2.0 a picture saved from the view page shows the dates and values of its charts, and the names of the marks where they are put in and by race day;", privacy)
         self.assertIn("A picture saved is the person's own file, which \"Forget the remembered settings…\" does not remove.", privacy)
+
+    def test_the_design_gives_the_generation_of_the_settings(self) -> None:
+        # v2.2.0 U2: the design gives the generation of the settings, each part
+        # tied to the code that does it (the plan of U2 and the checker's A and
+        # B): forgetting moves it on, a stale change writes nothing, a run that
+        # ends needs none, the order of the locks, the pages that follow it and
+        # read the settings again as they come forward, and one GUI only; the
+        # messages between the tabs carry it; and the months of 0 of the shoes.
+        design = " ".join((ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        for line in (
+            "From stage U2 of v2.2.0 the settings have a generation: a whole number that the server keeps from 0 for its launch, never in a file, under the lock of the settings, and gives in `/api/status`, read at once with the settings and the marks.",
+            "Forgetting the settings moves it on by one, also when a file is left, and its answer tells it;",
+            "The server writes a change of the generation now only.",
+            '`{"stale": true, "generation": n}` (200, which the page takes for no error), before a file is read or a layout or a mark that the change names is looked for, and one without a generation is refused (`REQUEST_INVALID`).',
+            "A run that ends remembers its places without a generation: the settings are not forgotten while a run is active, and the server forgets them under the lock of the runs, so that no run starts meanwhile (that lock is taken before the lock of the settings, never after it).",
+            "As a page comes forward (`visibilitychange` and `focus`), it reads `/api/status` again, so that a tab that did not hear the message moves on before the person changes anything there.",
+            # Codex's review of the diff of U2: the stamp of a change, the
+            # reading that gives no answer, and what the page keeps.
+            "A change of the person takes a stamp as it is made: it goes with the generation that the reading on its way then reads, or else with that of its moment, and not at all where the page heard of a forgetting by a message since, as it was made before that forgetting; a reading that gives no answer in 10 seconds is one that could not read.",
+            "it keeps the layout in use where the layouts still offer it, and whether the marks show",
+            'So "only a change of the person writes them again" holds in every tab.',
+            # The way that is left (the checker's review of the handling of
+            # Codex's review of the diff).
+            "One way is left: in a tab that did not hear the message, a change made right after the page came forward can be written with the generation after a forgetting done in another window while the reading of the page waits on the server for seconds; by hand, the reading ends first.",
+            "The generation holds for one GUI, as the lock does: the page of another launch cannot ask this server (its key is another), and two GUIs of two processes are outside it.",
+            "which carries the colors, and the generation of the settings after a forgetting (from stage U2 of v2.2.0; until then, the notice that they were forgotten), only; never the key.",
+            "carry the colors, the generation of the settings after a forgetting (from stage U2 of v2.2.0; until then, the notice that they were forgotten), and the notice that the app stopped; never the key.",
+            "its distance by month (0 between its first and last use in the output, of the types counted that meet the conditions, also outside the period, as on the panels: stage U2)",
+            "its activities by month, its first and last days in the period,",
+        ):
+            with self.subTest(line=line[:60]):
+                self.assertIn(line, design)
+        gui = ROOT / "src" / "garmin_running_data_normalizer" / "gui"
+        settings = (gui / "settings.py").read_text(encoding="utf-8")
+        self.assertIn("    with _CHANGE_LOCK:\n        present = any(settings_present(place) for place in places_to_forget)\n        _generation += 1\n", settings)
+        self.assertIn("    with _CHANGE_LOCK:\n        values, notice = read_settings(path)\n        marks, marks_notice = read_marks(marks_path)\n        present = settings_present(path) or settings_present(marks_path)\n        generation = _generation\n", settings)
+        self.assertIn("        notice, present, generation = self.server.runs.when_idle(forget_settings)\n", (gui / "server.py").read_text(encoding="utf-8"))
+        self.assertIn("        with self._lock:\n            if self._run is not None and self._run.active:\n                raise RunActiveError()\n            return action()\n", (gui / "runs.py").read_text(encoding="utf-8"))
+        # The lock of the settings is never held while that of the runs is
+        # taken: the settings, the marks, and the layouts know no runs.
+        for name in ("settings.py", "marks.py", "layouts.py"):
+            with self.subTest(name=name):
+                code = (gui / name).read_text(encoding="utf-8")
+                self.assertNotIn("from .runs", code)
+                self.assertNotIn("from . import runs", code)
+        flow = (STATIC_ROOT / "flow.mjs").read_text(encoding="utf-8")
+        self.assertIn("export function settingsFollower(\n  read,\n  { moving = () => {}, moved = () => {}, wait = SETTINGS_READ_WAIT_MS, setTimer = setTimeout, clearTimer = clearTimeout } = {},\n) {", flow)
+        self.assertIn("export const SETTINGS_READ_WAIT_MS = 10000;", flow)
 
     def test_readme_puts_the_gui_first(self) -> None:
         # v2.1.0 H1 (the whole flow): the README gives the GUI right after who

@@ -189,6 +189,15 @@ class MarksFileTest(unittest.TestCase):
         self.path = places.marks_file()
         self.settings_path = places.settings_file()
 
+    def forgotten(self) -> tuple[str | None, bool]:
+        """Forget the settings and the marks: what to tell, and whether there
+        was anything; each forgetting moves the generation of the settings on
+        by one (stage U2 of v2.2.0), whatever it could remove."""
+        generation = launch_settings()["generation"]
+        notice, present, after = forget_settings()
+        self.assertEqual(after, generation + 1)
+        return notice, present
+
     def test_the_marks_are_a_file_of_their_own_next_to_the_settings(self) -> None:
         self.assertEqual(self.path, self.settings_path.with_name("gui-marks.json"))
         self.assertEqual(read_marks(self.path), ([], None))
@@ -261,7 +270,7 @@ class MarksFileTest(unittest.TestCase):
                 self.path.parent.mkdir(exist_ok=True)
                 self.path.write_bytes(content)
                 self.assertIs(launch_settings()["present"], True)
-                self.assertEqual(forget_settings(), (None, True))
+                self.assertEqual(self.forgotten(), (None, True))
                 self.assertFalse(os.path.lexists(self.path))
 
     @REAL_SYMLINKS
@@ -313,16 +322,16 @@ class MarksFileTest(unittest.TestCase):
     def test_forgetting_removes_both_files_and_the_folder(self) -> None:
         self.assertIsNone(write_settings(self.settings_path, {"hints": True}))
         self.assertIsNone(write_marks(self.path, added([], "Race H", "2030-04-01")))
-        self.assertEqual(forget_settings(), (None, True))
+        self.assertEqual(self.forgotten(), (None, True))
         self.assertFalse(os.path.lexists(self.path))
         self.assertFalse(os.path.lexists(self.settings_path))
         self.assertFalse(self.path.parent.exists())
-        self.assertEqual(forget_settings(), (None, False))
+        self.assertEqual(self.forgotten(), (None, False))
 
     def test_the_marks_alone_are_settings_to_forget(self) -> None:
         self.assertIsNone(write_marks(self.path, added([], "Race I", "2030-04-01")))
         self.assertIs(launch_settings()["present"], True)
-        self.assertEqual(forget_settings(), (None, True))
+        self.assertEqual(self.forgotten(), (None, True))
         self.assertFalse(self.path.parent.exists())
         self.assertIs(launch_settings()["present"], False)
 
@@ -332,7 +341,7 @@ class MarksFileTest(unittest.TestCase):
         # marks are left.
         self.assertIsNone(write_settings(self.settings_path, {"hints": True}))
         self.path.mkdir()
-        self.assertEqual(forget_settings(), (MARKS_NOT_REMOVED, True))
+        self.assertEqual(self.forgotten(), (MARKS_NOT_REMOVED, True))
         self.assertFalse(os.path.lexists(self.settings_path))
         self.assertTrue(self.path.is_dir())
         self.assertIs(launch_settings()["present"], True)
@@ -343,7 +352,7 @@ class MarksFileTest(unittest.TestCase):
         self.settings_path.parent.mkdir()
         self.settings_path.mkdir()
         self.assertIsNone(write_marks(self.path, added([], "Race N", "2030-04-01")))
-        self.assertEqual(forget_settings(), (SETTINGS_NOT_REMOVED, True))
+        self.assertEqual(self.forgotten(), (SETTINGS_NOT_REMOVED, True))
         self.assertFalse(os.path.lexists(self.path))
         self.assertTrue(self.settings_path.is_dir())
 
@@ -380,7 +389,7 @@ class MarksFileTest(unittest.TestCase):
 
 class MarksApiTest(GuiServerTestCase):
     def post(self, path: str, payload: Any = None) -> tuple[int, dict[str, Any]]:
-        body = json.dumps({} if payload is None else payload).encode("utf-8")
+        body = json.dumps(self.at_generation(path, {} if payload is None else payload)).encode("utf-8")
         status, _, answer = self.post_api(path, body=body)
         return status, json.loads(answer)
 
@@ -430,14 +439,15 @@ class MarksApiTest(GuiServerTestCase):
 
     def test_forgetting_removes_the_marks(self) -> None:
         self.assertEqual(self.post("/api/settings/marks", {"op": "add", "kind": "race", "name": "A", "day": "2030-04-01"})[0], 200)
-        self.assertEqual(self.post("/api/settings/forget"), (200, {"forgotten": True, "had_settings": True, "notice": None}))
+        generation = self.settings_generation()
+        self.assertEqual(self.post("/api/settings/forget"), (200, {"forgotten": True, "had_settings": True, "notice": None, "generation": generation + 1}))
         self.assertFalse(os.path.lexists(places.marks_file()))
         self.assertEqual(self.post("/api/status")[1]["settings"]["view_marks"], [])
         # A file of the marks that cannot be removed is told apart from the
         # settings, which are removed.
         self.assertIsNone(write_settings(places.settings_file(), {"hints": True}))
         places.marks_file().mkdir()
-        self.assertEqual(self.post("/api/settings/forget"), (200, {"forgotten": False, "had_settings": True, "notice": MARKS_NOT_REMOVED}))
+        self.assertEqual(self.post("/api/settings/forget"), (200, {"forgotten": False, "had_settings": True, "notice": MARKS_NOT_REMOVED, "generation": generation + 2}))
         self.assertFalse(os.path.lexists(places.settings_file()))
 
 
@@ -457,13 +467,20 @@ class MarksPageScriptTest(unittest.TestCase):
         return found.group(1)
 
     def test_an_answer_asked_before_the_other_tab_forgot_is_dropped(self) -> None:
-        heard = self.body("themeHeard")
-        self.assertLess(heard.index("state.marksGen += 1;"), heard.index("takeMarks([]);"))
-        for name in ("changeMarks", "readMarks"):
-            with self.subTest(name=name):
-                body = self.body(name)
-                self.assertIn("const gen = state.marksGen;", body)
-                self.assertIn("if (gen !== state.marksGen) {", body)
+        # From stage U2 of v2.2.0 the generation of the settings: a change
+        # goes with the generation of its stamp, not at all where it is of
+        # before, and its answer is dropped when it was stale or when the page
+        # moved on meanwhile, without telling a problem; so is an error where
+        # the marks read again moved the page on (Codex's review of the diff).
+        body = self.body("changeMarks")
+        self.assertIn("  const gen = await follower.current(follower.stamp());\n  if (gen === null) {\n    state.marksWaiting = false;\n    render();\n    return;\n  }\n", body)
+        self.assertIn('callApi("/api/settings/marks", { ...change, generation: gen })', body)
+        self.assertIn("if (staleAnswer(answer) || gen !== follower.generation()) {", body)
+        self.assertIn("if (!connectionFailure(error) && gen === follower.generation()) {", body)
+        self.assertIn("        await readMarks();\n", body)
+        self.assertIn("      if (gen === follower.generation()) {\n        state.markProblem", body)
+        # Marks read of another generation are not those of now.
+        self.assertIn("if (settings === null || !follower.ofNow(settings)) {", self.body("readMarks"))
 
     def test_a_file_that_is_not_used_shows_no_marks(self) -> None:
         self.assertIn("    } else if (marksLocked()) {\n      // The file is not used now: no mark shows, as at a launch.\n      takeMarks([]);", self.body("changeMarks"))

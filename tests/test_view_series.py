@@ -1328,6 +1328,58 @@ class ShoeAnswerTest(unittest.TestCase):
         [shoe] = shoe_answer(replace(view_data(rows), gear=gear))["shoes"]
         self.assertEqual((shoe["values"], shoe["distance"], shoe["without_distance"], shoe["activities"]), ([None, 0.0, None], None, 2, 2))
 
+    def test_the_months_of_0_of_a_pair_are_those_of_its_activities_in_the_output(self) -> None:
+        # Stage U2 of v2.2.0 (Codex's review of the release candidate): as on
+        # the panel of the distance, a month without an activity of the pair
+        # is 0 between its first and last activities in the output, whatever
+        # the period; its first and last days, its distance, and its
+        # activities stay those of the period.
+        rows = [keyed("2024-01-05", "k1", distance_m=1000.0), keyed("2024-03-05", "k2", distance_m=3000.0), keyed("2024-05-05", "k3", distance_m=5000.0)]
+        gear = Gear((made_shoe("A", "Road A", 0),), {key: frozenset({"A"}) for key in ("k1", "k2", "k3")}, frozenset())
+        data = replace(view_data(rows), gear=gear)
+        [part] = shoe_answer(data, (date(2024, 2, 1), date(2024, 4, 30)))["shoes"]
+        self.assertEqual(
+            (part["values"], part["activities_by_month"], part["distance"], part["activities"], part["first"], part["last"]),
+            ([0.0, 3000.0, 0.0], [0, 1, 0], 3000.0, 1, "2024-03-05", "2024-03-05"),
+        )
+        # The months of the same days have the same value in all the output.
+        [whole] = shoe_answer(data)["shoes"]
+        self.assertEqual(whole["values"], [1000.0, 0.0, 3000.0, 0.0, 5000.0])
+        self.assertEqual(whole["values"][1:4], part["values"])
+        # A pair without an activity in the period is not shown.
+        self.assertEqual(shoe_answer(data, (date(2024, 2, 1), date(2024, 2, 29)))["shoes"], [])
+
+    def test_activities_that_are_not_counted_do_not_widen_the_months_of_0(self) -> None:
+        # A ride is of a type not counted, and a run that does not meet the
+        # conditions is left out too, as on the panels.
+        rows = [
+            keyed("2024-01-05", "k1", "road_biking", distance_m=20000.0),
+            keyed("2024-03-05", "k2", distance_m=3000.0),
+            keyed("2024-05-05", "k3", distance_m=500.0),
+        ]
+        gear = Gear((made_shoe("A", "Road A", 0),), {key: frozenset({"A"}) for key in ("k1", "k2", "k3")}, frozenset())
+        data = replace(view_data(rows), gear=gear)
+        part = (date(2024, 2, 1), date(2024, 4, 30))
+        self.assertEqual(shoe_answer(data, part)["shoes"][0]["values"], [None, 3000.0, 0.0])
+        self.assertEqual(shoe_answer(data, part, ["running", "road_biking"])["shoes"][0]["values"], [0.0, 3000.0, 0.0])
+        self.assertEqual(shoe_answer(data, part, None, asked(distance=(1000, None)))["shoes"][0]["values"], [None, 3000.0, None])
+
+    def test_an_activity_without_a_distance_bounds_the_months_of_0_and_leaves_its_month_without_a_value(self) -> None:
+        rows = [keyed("2024-01-05", "k1"), keyed("2024-03-05", "k2", distance_m=3000.0)]
+        gear = Gear((made_shoe("A", "Road A", 0),), {"k1": frozenset({"A"}), "k2": frozenset({"A"})}, frozenset())
+        data = replace(view_data(rows), gear=gear)
+        self.assertEqual(shoe_answer(data)["shoes"][0]["values"], [None, 0.0, 3000.0])
+        self.assertEqual(shoe_answer(data, (date(2024, 2, 1), date(2024, 3, 31)))["shoes"][0]["values"], [0.0, 3000.0])
+        # Codex's example: a period cut in the middle of a month has a month
+        # of other days, which is 0 where the whole month has its activity
+        # without a distance; only months of the same days are compared.
+        rows = [keyed("2024-01-10", "k1"), keyed("2024-02-10", "k2", distance_m=2000.0)]
+        data = replace(view_data(rows), gear=gear)
+        whole = shoe_answer(data)
+        self.assertEqual(([period["start"] for period in whole["periods"]], whole["shoes"][0]["values"]), (["2024-01-10", "2024-02-01"], [None, 2000.0]))
+        cut = shoe_answer(data, (date(2024, 1, 15), date(2024, 2, 29)))
+        self.assertEqual(([period["start"] for period in cut["periods"]], cut["shoes"][0]["values"]), (["2024-01-15", "2024-02-01"], [0.0, 2000.0]))
+
     def test_pairs_of_the_same_last_day_keep_the_order_of_gear_json(self) -> None:
         rows = [keyed("2024-01-05", "k1", distance_m=1.0)]
         gear = Gear((made_shoe("B", "Second", 0), made_shoe("A", "First", 1)), {"k1": frozenset({"A", "B"})}, frozenset())

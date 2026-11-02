@@ -767,7 +767,7 @@ class ViewRequestTypesTest(unittest.TestCase):
 
 class LayoutsApiTest(GuiServerTestCase):
     def post(self, path: str, payload: Any = None) -> tuple[int, dict[str, Any]]:
-        body = json.dumps({} if payload is None else payload).encode("utf-8")
+        body = json.dumps(self.at_generation(path, {} if payload is None else payload)).encode("utf-8")
         status, _, answer = self.post_api(path, body=body)
         return status, json.loads(answer)
 

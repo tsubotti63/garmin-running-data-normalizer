@@ -1035,9 +1035,10 @@ the next time ([What is remembered for the next time](#what-is-remembered-for-th
   activity. Records dated after today are left out (the panel counts them in
   **About this panel**), so that it is never after today.
 - **Custom range…** takes the first and the last day, in **From** and **To**,
-  limited to the days of the output. Next to the period, ‹
-  (**Previous period of the same length**) and ›
-  (**Next period of the same length**) move any period back or forward,
+  which offer the days of the output. A range that overlaps them in part keeps
+  the days chosen, and the values and the charts count only the days of the
+  output in it. Next to the period, ‹ (**Previous period of the same length**)
+  and › (**Next period of the same length**) move any period back or forward,
   keeping its length; the period moved becomes a custom range. They cannot be
   pressed at the first or the last day of the output.
 - Group by: **Auto**, **Day**, **Week**, **Month**, and **Year**. The time that
@@ -1656,10 +1657,12 @@ values are made):
   that the period cuts is drawn lighter, with an edge. Where there are many
   panels, scroll through them.
 - A month without an activity with the pair, between the first and the last
-  month that it was used, is 0, a hollow dot on the base line, as is a month
-  whose activities with the pair add up to 0; before the first and after the
-  last, it is empty. A month of 0 does not always mean that the pair was not
-  used (it may not have been set in Garmin).
+  month that it was used in the output (by an activity of the types counted
+  that meets the conditions, where there are some, also outside the period
+  chosen), is 0, a hollow dot on the base line, as is a month whose activities
+  with the pair add up to 0; before the first and after the last, it is empty.
+  A month of 0 does not always mean that the pair was not used (it may not
+  have been set in Garmin).
 - The panels are the gear set on activities in Garmin whose type is shoes
   (other gear is left out). A name is the one in Garmin; without one, the make
   and model; without either, **Shoes without a name**. A long name is cut
@@ -1896,12 +1899,15 @@ later one.
   an item shown, the second line of its panel says "There is no value in this
   period."
 - When another output opens (from 2.2.0), a period such as **1 year** stays as
-  it is. A period chosen with **Custom range…** shrinks to the days of the
-  output when it overlaps them in part, and becomes **All time** when it does
-  not overlap them at all. The activity types counted are those remembered
-  that the output has; when it has none of them, every running type in the
-  output. The conditions stay as they are (where the names of the output
-  cannot be read, the words of the name are not used).
+  it is. A period chosen with **Custom range…** keeps its days when it
+  overlaps those of the output in part: the values and the charts count only
+  the days of the output in it, and in **Summary…** the period before has as
+  many days as the range chosen, and the values of a period that the output
+  cuts are marked *, with a dash (—) for the difference. It becomes **All
+  time** when it does not overlap them at all. The activity types counted are
+  those remembered that the output has; when it has none of them, every
+  running type in the output. The conditions stay as they are (where the names
+  of the output cannot be read, the words of the name are not used).
 - Not remembered: the output shown, the same scale, a panel enlarged, a table
   shown, full screen, whether years were compared, with the years or races
   chosen and the year highlighted, whether a list of activities was open,
