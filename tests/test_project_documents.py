@@ -144,3 +144,48 @@ def test_a_release_candidate_says_how_to_try_it_beside_the_stable_release() -> N
         "2 つの GUI を止めてから戻してください。2 つの GUI を同時に開かないでください。",
     ):
         assert sentence in japanese, sentence
+
+
+def test_the_readme_says_whether_the_candidate_is_published_as_the_contract_does() -> None:
+    # v2.2.0 K4c: the output contract marks the candidate "(not published)"
+    # until its publication and "(TestPyPI only)" after it, and the README and
+    # its Japanese entry say the same, so that the record of the publication
+    # leaves none of the words of before (Codex's objection 13 to the plan of
+    # K4: the public checks pass with either mark).
+    from garmin_running_data_normalizer import __version__
+    from scripts.validate_public_product_state import CURRENT_STABLE_VERSION
+
+    rc = __version__
+    if rc == CURRENT_STABLE_VERSION:
+        return
+    contract = (ROOT / "docs/output_contract.md").read_text(encoding="utf-8")
+    published = f"- Implementation candidate: v{rc} (TestPyPI only)" in contract
+    assert published or f"- Implementation candidate: v{rc} (not published)" in contract
+    before = {
+        "README.md": (
+            "for TestPyPI; Production PyPI",
+            "says how to try it once it is published.",
+            "Once it is published on TestPyPI, install it",
+        ),
+        "README.ja.md": (
+            f"試しのバージョン **v{rc}** は TestPyPI 向け",
+            f"試しのバージョン v{rc} は、TestPyPI に公開したあとに入れられます。",
+        ),
+    }
+    after = {
+        "README.md": (
+            "published on TestPyPI; Production PyPI",
+            "**Install** below says how to try it.",
+            "It is published on TestPyPI. Install it",
+        ),
+        "README.ja.md": (
+            f"試しのバージョン **v{rc}** を TestPyPI に公開しました。",
+            f"試しのバージョン v{rc} は、TestPyPI から入れられます。",
+        ),
+    }
+    for name in ("README.md", "README.ja.md"):
+        text = flowing(name)
+        for words in (after if published else before)[name]:
+            assert words in text, (name, words)
+        for words in (before if published else after)[name]:
+            assert words not in text, (name, words)
