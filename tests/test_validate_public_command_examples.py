@@ -143,7 +143,7 @@ def _add_install_line(root: Path, relative: str, line: str) -> None:
 # A release candidate after this release, which is installed from TestPyPI
 # (stage D2); the stable release is installed from Production PyPI only
 # (stage E2b).
-CANDIDATE = "2.1.1rc1"
+CANDIDATE = "2.2.0rc1"
 
 
 def _as_candidate(root: Path) -> None:

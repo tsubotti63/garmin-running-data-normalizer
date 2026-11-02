@@ -81,3 +81,66 @@ def test_a_release_candidate_sends_its_readers_to_the_stable_release() -> None:
         or f"試しのバージョン **v{__version__}** を TestPyPI に公開しました" in japanese
     )
     assert "ふつうは、上の安定版を入れてください" in japanese
+
+
+def test_a_release_candidate_says_how_to_try_it_beside_the_stable_release() -> None:
+    # v2.2.0 K4a: while the source is a release candidate, the README and the
+    # Japanese entry say how to try it once it is published (a virtual
+    # environment of its own, started by its Python, no icon; the Japanese
+    # entry by a link, since it stays short), what the two
+    # versions share and what each one's Forget removes, and how far the
+    # candidate is the same as the stable release (the checker's reviews and
+    # Codex's objections 3, 6, 7, and 8 to the plan of K4).
+    from garmin_running_data_normalizer import __version__
+    from scripts.validate_public_product_state import CURRENT_STABLE_VERSION as stable
+
+    if __version__ == stable:
+        return
+    rc = __version__
+    mac = (
+        "python3 -m venv ~/garmin-normalizer-rc && ~/garmin-normalizer-rc/bin/python -m pip install "
+        "--index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "
+        f"garmin-running-data-normalizer=={rc} && ~/garmin-normalizer-rc/bin/python -m garmin_running_data_normalizer gui"
+    )
+    windows = (
+        'py -m venv "$HOME\\garmin-normalizer-rc"; if ($?) { & "$HOME\\garmin-normalizer-rc\\Scripts\\python.exe" -m pip '
+        "install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "
+        f'garmin-running-data-normalizer=={rc}; if ($?) {{ & "$HOME\\garmin-normalizer-rc\\Scripts\\python.exe" '
+        "-m garmin_running_data_normalizer gui } }"
+    )
+    readme = flowing("README.md")
+    japanese = flowing("README.ja.md")
+    # The Japanese entry, which stays short, gives the lines by a link to
+    # Install of the README.
+    assert mac in readme and windows in readme
+    for name in ("README.md", "README.ja.md"):
+        lines = (ROOT / name).read_text(encoding="utf-8").splitlines()
+        assert not [line for line in lines if "garmin-normalizer-rc" in line and "--create-shortcut" in line], name
+    for sentence in (
+        f"for the same input, timezone, and options, the normalization, its outputs, and the Snapshot Store are those of v{stable}.",
+        "make no icon from this environment: those lines work on `garmin-normalizer`,",
+        "Both versions use one settings file, `gui-settings.json` in the folder `garmin-running-data-normalizer`",
+        "The lines give Production PyPI too, so that pip finds the dependencies that TestPyPI may not provide, "
+        "such as `tzdata` on Windows; pip looks for each package on both.",
+        f"Once v{rc} saves its settings, v{stable} does not use them and starts as at a first launch, without writing over them; "
+        f"v{rc} also remembers the timezone of the last run that made an output.",
+        f"**Forget the remembered settings…** of v{stable} removes that file, with what v{rc} remembered; that of v{rc} "
+        "also removes the marks, which cannot be restored. Neither removes the Snapshot Store or the outputs.",
+        f"To keep the settings of v{stable} as they are, copy the file before you try it, and put it back with both GUIs "
+        "stopped; do not open the two GUIs at the same time.",
+    ):
+        assert sentence in readme, sentence
+    for sentence in (
+        f"同じ入力・タイムゾーン・オプションなら、正規化・出力・保管場所は v{stable} と同じです。",
+        "この環境からアイコンも作らないで",
+        "その 1 行 （Mac と Windows PowerShell）は、英語の README の [Install](README.md#install) にあります。",
+        "2 つのバージョンは、設定のファイルを 1 つ使います",
+        f"v{rc} が設定を保存すると、v{stable} はその設定を使わず、初めての起動のように始まります。",
+        f"上書きはしません。v{rc} は、出力を作れた最後の正規化のタイムゾーンも覚えます。",
+        f"v{stable} の「覚えた設定を消す…」はそのファイルを消し、v{rc} が覚えたものも消えます。",
+        f"v{rc} のものは見るページの印も消し、印は元に戻せません。",
+        "保管場所と出力は消しません。",
+        f"v{stable} の設定を残したいときは、試す前にそのファイルの写しを取り、",
+        "2 つの GUI を止めてから戻してください。2 つの GUI を同時に開かないでください。",
+    ):
+        assert sentence in japanese, sentence
