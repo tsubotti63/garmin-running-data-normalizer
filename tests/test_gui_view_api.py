@@ -99,6 +99,15 @@ def as_json(value: Any) -> Any:
     return json.loads(json.dumps(value))
 
 
+def apart_from_reading(answer: Any) -> Any:
+    """An answer of the panels or of another view without the number of the
+    reading that it is of (stage U1 of v2.2.0), which it has, a whole number
+    of 1 or more; ViewsTest holds how the numbers are given."""
+    if not isinstance(answer, dict) or type(answer.get("read")) is not int or answer["read"] < 1:
+        raise AssertionError(f"an answer without the number of its reading: {str(answer)[:120]}")
+    return {key: value for key, value in answer.items() if key != "read"}
+
+
 class ViewApiTest(GuiServerTestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -188,7 +197,7 @@ class ViewApiTest(GuiServerTestCase):
             with self.subTest(period=period, types=types):
                 status, answer = self.call("/api/view/shoes", {"view": opened["view"], "period": period, "types": types})
                 self.assertEqual(status, 200)
-                self.assertEqual(answer, as_json({**shoe_answer(data, chosen, types), "names": "read"}))
+                self.assertEqual(apart_from_reading(answer), as_json({**shoe_answer(data, chosen, types), "names": "read"}))
         status, numbers = self.call("/api/view/series", {"view": opened["view"], "items": ["dist"], "period": "all", "grain": "auto", "types": None})
         self.assertEqual((status, numbers["shoes"]), (200, {"count": 6, "too_large": False}))
 
@@ -238,7 +247,7 @@ class ViewApiTest(GuiServerTestCase):
                 expected["coverage"] = coverage(data, types)
                 expected["shoes"] = shoe_count(load_view(output))
                 expected["names"] = "read"
-                self.assertEqual(answer, as_json(expected))
+                self.assertEqual(apart_from_reading(answer), as_json(expected))
 
     def test_the_summary_has_the_period_before(self) -> None:
         # Stage Q1 of v2.2.0: the whole period with the period of the same
@@ -260,7 +269,7 @@ class ViewApiTest(GuiServerTestCase):
                 expected["coverage"] = coverage(data, None)
                 expected["shoes"] = shoe_count(load_view(output))
                 expected["names"] = "read"
-                self.assertEqual(answer, as_json(expected))
+                self.assertEqual(apart_from_reading(answer), as_json(expected))
                 self.assertIn("previous", answer)
         # Without it, the answer is that of the whole period as before.
         status, answer = self.call("/api/view/series", {"view": ticket, "items": ["dist"], "period": "1y", "grain": "range", "previous": False})
@@ -317,7 +326,7 @@ class ViewApiTest(GuiServerTestCase):
         expected["coverage"] = coverage(data, names)
         expected["shoes"] = shoe_count(load_view(output))
         expected["names"] = "read"
-        self.assertEqual(answer, as_json(expected))
+        self.assertEqual(apart_from_reading(answer), as_json(expected))
 
     def test_a_ticket_that_the_server_does_not_keep_is_refused(self) -> None:
         payload = {"view": "not-a-ticket-of-this-server", "items": ["dist"], "period": "all", "grain": "auto", "types": None}
@@ -424,11 +433,15 @@ class ViewApiTest(GuiServerTestCase):
             first = self.call("/api/view/series", payload)
             self.assertEqual(self.call("/api/view/series", payload), first)
             self.assertEqual(len(loads), 1)
-            # A file whose time of change moved is read again, and checked.
+            # A file whose time of change moved is read again, and checked;
+            # the answer is the same but of a new reading (stage U1 of v2.2.0).
             activities = output / "analysis" / "activities.csv"
             later = activities.stat().st_mtime_ns + 2_000_000_000
             os.utime(activities, ns=(later, later))
-            self.assertEqual(self.call("/api/view/series", payload), first)
+            again = self.call("/api/view/series", payload)
+            self.assertEqual((again[0], apart_from_reading(again[1])), (first[0], apart_from_reading(first[1])))
+            self.assertGreater(again[1]["read"], first[1]["read"])
+            self.assertEqual(self.call("/api/view/series", payload), again)
             self.assertEqual(len(loads), 2)
             # A file whose contents changed fails the check of the output,
             # which compares it with the manifest: the code of the check, and
@@ -578,7 +591,7 @@ class ViewApiTest(GuiServerTestCase):
                 status, answer = self.call("/api/view/points", {"view": ticket, "x": x, "y": y, "period": period, "types": types})
                 self.assertEqual(status, 200, answer)
                 chosen = period if isinstance(period, str) else (date.fromisoformat(period["from"]), date.fromisoformat(period["to"]))
-                self.assertEqual(answer, as_json({**view_series.activity_points(data, x, y, chosen, types), "names": "read"}))
+                self.assertEqual(apart_from_reading(answer), as_json({**view_series.activity_points(data, x, y, chosen, types), "names": "read"}))
                 self.assertGreater(answer["total"], 0)
                 self.assertEqual(answer["total"], answer["with_values"] + answer["missing"])
                 self.assertEqual(len(answer["points"]), min(answer["with_values"], answer["limit"]))
@@ -659,7 +672,7 @@ class ViewApiTest(GuiServerTestCase):
                 status, answer = self.call("/api/view/spread", {"view": ticket, "item": key, "period": period, "types": types})
                 self.assertEqual(status, 200, answer)
                 chosen = period if isinstance(period, str) else (date.fromisoformat(period["from"]), date.fromisoformat(period["to"]))
-                self.assertEqual(answer, as_json({**view_series.activity_spread(data, key, chosen, types), "names": "read"}))
+                self.assertEqual(apart_from_reading(answer), as_json({**view_series.activity_spread(data, key, chosen, types), "names": "read"}))
                 self.assertGreater(answer["total"], 0)
                 self.assertEqual(answer["total"], answer["with_values"] + answer["missing"])
                 self.assertEqual(sum(answer["counts"]), answer["with_values"])
@@ -776,7 +789,10 @@ class ViewApiTest(GuiServerTestCase):
             with self.subTest(path=path, payload=payload):
                 status, answer = self.call(path, {"view": ticket, **payload, "conditions": asked})
                 self.assertEqual(status, 200, answer)
-                self.assertEqual(answer, as_json({**expected, "names": "read"}))
+                # The list of a period gives no number of a reading, which the
+                # page does not use (stage U1 of v2.2.0).
+                shown = answer if path == "/api/view/activities" else apart_from_reading(answer)
+                self.assertEqual(shown, as_json({**expected, "names": "read"}))
                 if path == "/api/view/activities":
                     self.assertTrue(answer["rows"] and all(row["name"] for row in answer["rows"]))
                     continue
@@ -788,7 +804,7 @@ class ViewApiTest(GuiServerTestCase):
             with self.subTest(extra=extra):
                 status, answer = self.call("/api/view/series", {"view": ticket, "items": ["dist"], "period": "all", "grain": "auto", "types": None, **extra})
                 self.assertEqual(status, 200)
-                self.assertEqual(answer, as_json({**view_answer(data, ["dist"], "all", "auto", None), "coverage": coverage(data, None), "shoes": shoe_count(data), "names": "read"}))
+                self.assertEqual(apart_from_reading(answer), as_json({**view_answer(data, ["dist"], "all", "auto", None), "coverage": coverage(data, None), "shoes": shoe_count(data), "names": "read"}))
 
     def test_conditions_of_another_form_are_refused_in_every_view(self) -> None:
         # Stage T1 of v2.2.0: CONDITIONS_INVALID, which the page shows as a
@@ -929,6 +945,49 @@ class ViewsTest(unittest.TestCase):
             views.open(output)
         self.assertEqual(raised.exception.code, "OUTPUT_CHANGED")
         self.assertEqual(len(views._views), 0)
+
+    def test_each_reading_has_a_number_of_one_count_for_the_server(self) -> None:
+        # Stage U1 of v2.2.0: the number of a reading, which the answers of the
+        # panels and of the other views give, comes with its data, and is new
+        # as an output is opened, read again, also for another date of today,
+        # and opened again; two outputs never share one (the checker's review
+        # of the plan of U1, small point 2, and Codex's review of it, 5).
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        output = Path(directory.name).resolve() / "output"
+        shutil.copytree(made_output(), output)
+        today = [date(2026, 10, 18)]
+        views = Views(load=lambda place: load_view_data(place, today=today[0], gear=True, names=True), today=lambda timezone: today[0])
+        first, data = views.open(output)
+        self.assertEqual(views.reading(first), (data, 1))
+        self.assertIs(views.data(first), data)
+        self.assertEqual(views.reading(first), (data, 1))
+        other, other_data = views.open(made_output())
+        self.assertEqual(views.reading(other), (other_data, 2))
+        # Read again where the output changed: the data and the number of
+        # that reading.
+        vo2max = output / "normalized" / "vo2max_daily.json"
+        later = vo2max.stat().st_mtime_ns + 2_000_000_000
+        os.utime(vo2max, ns=(later, later))
+        again = views.data(first)
+        self.assertIsNot(again, data)
+        self.assertEqual(views.reading(first), (again, 3))
+        self.assertIs(views.data(first), again)
+        self.assertEqual(views.reading(other), (other_data, 2))
+        # Read again for another date of today, each output at its turn.
+        today[0] = date(2026, 10, 19)
+        self.assertEqual(views.reading(other)[1], 4)
+        self.assertEqual(views.reading(first)[1], 5)
+        self.assertEqual(views.reading(first)[1], 5)
+        # Opened again under a new ticket: a new number, and the first ticket
+        # keeps its own.
+        third, _ = views.open(output)
+        self.assertEqual(views.reading(third)[1], 6)
+        self.assertEqual(views.reading(first)[1], 5)
+        # The number is counted in the lock of the outputs, after the reading
+        # (test_reading_takes_no_lock_of_the_server holds that it is free while
+        # an output is read).
+        self.assertEqual(views._reads, 6)
 
     def test_the_stamp_follows_the_files_that_the_view_page_reads(self) -> None:
         directory = tempfile.TemporaryDirectory()

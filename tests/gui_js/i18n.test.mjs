@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 
 import {
   DEFAULT_LANGUAGE,
+  ONE_KEYS,
   chooseLanguage,
+  countKey,
   formatMessage,
   translate,
 } from "../../src/garmin_running_data_normalizer/gui/static/i18n.mjs";
@@ -67,4 +69,22 @@ test("the page script parses as a module", () => {
   );
   const result = spawnSync(process.execPath, ["--check", appPath], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
+});
+
+test("a count of the whole number 1 takes the words for one, and any other count the key itself (stage U1 of v2.2.0)", () => {
+  assert.equal(countKey("rerun.chosen", 1), "rerun.chosen_one");
+  for (const count of [0, 2, 11, "1", null, undefined, 1.5, -1]) {
+    assert.equal(countKey("rerun.chosen", count), "rerun.chosen", String(count));
+  }
+  // A key without words for one, also one that ends as they do.
+  assert.equal(countKey("view.recap.days", 1), "view.recap.days");
+  assert.equal(countKey("view.recap.days_one", 1), "view.recap.days_one");
+  assert.equal(countKey("toString", 1), "toString");
+  // Each key for one is the key with "_one" after it, and the table cannot
+  // be changed.
+  for (const [key, one] of Object.entries(ONE_KEYS)) {
+    assert.equal(one, `${key}_one`);
+  }
+  assert.equal(Object.keys(ONE_KEYS).length, 25);
+  assert.ok(Object.isFrozen(ONE_KEYS));
 });

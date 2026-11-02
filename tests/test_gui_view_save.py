@@ -154,10 +154,26 @@ class GuiViewSaveTest(unittest.TestCase):
                 "ui.savePop.hidden = !state.saveOpen || !showable;",
                 "const target = saveTarget(viewing);",
                 "ui.saveGo.disabled = !target.ready;",
+                # Save that had the focus and can no longer be pressed, after a
+                # drawing again, gives it to the title of the window (Codex's
+                # review of the diff of U1, 2).
+                "const pressed = document.activeElement === ui.saveGo;",
+                "if (pressed && ui.saveGo.disabled) {\n    ui.saveTitle.focus();\n  }",
                 'setText(ui.saveName, target.name ?? "—");',
                 "const gone = panels ? renderSavePanels(target.plan) : false;",
-                'const problem = state.saveProblem ?? (gone ? "view.save.gone" : null) ?? target.problem;',
+                # A reason that a press kept, or what the window says by itself,
+                # which a press goes by too (stage U1 of v2.2.0).
+                "const problem = state.saveProblem ?? saveSaysNow(target, gone).line;",
+                'setText(ui.saveProblem, problem !== null ? saveProblemText(problem) : "");',
                 "fitSaveWindow();",
+            ),
+            "saveSaysNow": (
+                "gone,",
+                "problem: target.problem,",
+                "loading: target.loading,",
+                # Every panel shown a table, which their own line says (Codex's
+                # review of the plan of U1, 1).
+                "allTables: panels && !target.plan.charts.length && target.plan.tables.length > 0,",
             ),
             "renderSavePanels": (
                 # No marks chosen where the page draws none, so that their
@@ -166,7 +182,7 @@ class GuiViewSaveTest(unittest.TestCase):
                 "  if (!plan.marksDrawn) {\n    // Chosen again where marks show again, so that their names never go in\n    // as chosen before (Codex's review of the diff of R1).\n    state.saveMarks = false;\n  }",
                 "ui.saveMarks.disabled = !plan.marksDrawn;",
                 "ui.saveMarks.checked = plan.marksDrawn && state.saveMarks;",
-                'const gone = state.saveScope === "one" && plan.chosen !== null && !plan.charts.includes(plan.chosen);',
+                "const gone = savePanelGone(plan);",
                 "ui.savePanel.selectedIndex = -1;",
                 "return gone;",
             ),
@@ -245,14 +261,22 @@ class GuiViewSaveTest(unittest.TestCase):
             "} finally {\n      stage?.remove();",
             "setTimeout(() => URL.revokeObjectURL(taken), 10000);",
             # Checked again as the window names it; where it cannot be done,
-            # the window stays with the reason and the focus on its button
-            # (Codex's review of the plan of R1).
-            "target.name !== ui.saveName.textContent",
-            'problem = "view.save.gone";',
-            'problem = "view.save.changed";',
+            # the window stays with the reason (Codex's review of the plan of
+            # R1), none kept that the window says by itself, and the focus on
+            # its button, or on its title where the button cannot be pressed,
+            # while the window shows (stage U1 of v2.2.0, savePress).
+            "const press = savePress({",
+            'gone: panels && state.saveScope === "one" && !target.plan.keys.length,',
+            "ready: target.ready,",
+            "said: saveSaysNow(target, panels && savePanelGone(target.plan)).said,",
+            "shown: ui.saveName.textContent,",
+            "let problem = press.keep;",
+            "if (press.save) {",
             'problem = "view.save.failed";',
-            "(problem === null ? saveButton(state.saveFrom) : ui.saveGo).focus();",
+            "const saved = press.save && problem === null;",
             "state.saveNotice = saveNoticeNow();",
+            "if (saved) {\n    saveButton(state.saveFrom).focus();\n  } else if (!ui.savePop.hidden) {",
+            "(ui.saveGo.disabled ? ui.saveTitle : ui.saveGo).focus();",
         ):
             with self.subTest(line=line):
                 self.assertIn(line, body)

@@ -38,6 +38,8 @@ import {
   compareRaces,
   conditionsCount,
   conditionsCounts,
+  conditionsUnread,
+  fullDays,
   conditionsFromBoxes,
   conditionsKey,
   conditionsParts,
@@ -208,7 +210,9 @@ import {
   saveFrame,
   saveLines,
   saveNoticeKey,
+  savePress,
   saveProblem,
+  saveSays,
   saveShowable,
   saveViewFileName,
   shoeName,
@@ -223,6 +227,7 @@ import {
   saveWindowShows,
   savedAttributes,
   savedPanels,
+  sameReading,
   yearDrawn,
 } from "./view_flow.mjs";
 import {
@@ -2709,7 +2714,14 @@ function renderSave(viewing) {
   ui.saveLight.checked = state.saveColors === "light";
   ui.saveScreen.checked = state.saveColors === "screen";
   setText(ui.saveName, target.name ?? "—");
+  // Save that had the focus and can no longer be pressed, as when a drawing
+  // again leaves a chart without room, gives it to the title of the window,
+  // as a press does (Codex's review of the diff of U1, 2).
+  const pressed = document.activeElement === ui.saveGo;
   ui.saveGo.disabled = !target.ready;
+  if (pressed && ui.saveGo.disabled) {
+    ui.saveTitle.focus();
+  }
   const warn = t("view.save.warn");
   const gone = panels ? renderSavePanels(target.plan) : false;
   // By race, the names of the races, which are those of the marks, show
@@ -2721,9 +2733,29 @@ function renderSave(viewing) {
   // (stage T1 of v2.2.0), add to the others (Codex's review of the plan of T1).
   const words = typeof drawnConditions(target.view)?.asked?.name === "string" ? t("view.save.warn_conditions") : null;
   setText(ui.saveWarn, [warn, named, words].filter((part) => part !== null).join(state.language === "ja" ? "" : " "));
-  const problem = state.saveProblem ?? (gone ? "view.save.gone" : null) ?? target.problem;
-  setText(ui.saveProblem, problem !== null ? saveProblemText(problem) : target.loading ? t("view.loading") : "");
+  // A reason that a press kept, or what the window says by itself, which a
+  // press goes by too (stage U1 of v2.2.0).
+  const problem = state.saveProblem ?? saveSaysNow(target, gone).line;
+  setText(ui.saveProblem, problem !== null ? saveProblemText(problem) : "");
   fitSaveWindow();
+}
+
+// What the window says by itself of why it cannot save now (stage U1 of
+// v2.2.0): for the panels, the panel chosen that is gone, and every panel
+// shown a table, which their own line says.
+function saveSaysNow(target, gone) {
+  const panels = target.view === "panels";
+  return saveSays({
+    gone,
+    problem: target.problem,
+    loading: target.loading,
+    allTables: panels && !target.plan.charts.length && target.plan.tables.length > 0,
+  });
+}
+
+// Whether the one panel chosen to save no longer shows.
+function savePanelGone(plan) {
+  return state.saveScope === "one" && plan.chosen !== null && !plan.charts.includes(plan.chosen);
 }
 
 // The words of why the window cannot save: of a view shown as a table, with
@@ -2754,7 +2786,7 @@ function renderSavePanels(plan) {
   }
   // The panel chosen that no longer shows is not chosen in the list, and the
   // window says so (Codex's review of the plan of R1).
-  const gone = state.saveScope === "one" && plan.chosen !== null && !plan.charts.includes(plan.chosen);
+  const gone = savePanelGone(plan);
   if (plan.charts.includes(plan.chosen)) {
     ui.savePanel.value = plan.chosen;
   } else {
@@ -2825,16 +2857,22 @@ function changeSave(change) {
 // browser may not save a download that comes later (the checker's R1-4).
 // Nothing is sent anywhere. Where it cannot be done, the window stays with
 // the reason and the focus on its button, and the line after a saving does
-// not show (Codex's review of the plan of R1).
+// not show (Codex's review of the plan of R1); a reason that the window says
+// by itself is not kept, so that it goes as the window stops saying it, and
+// where the button cannot be pressed, the focus goes to the title of the
+// window (stage U1 of v2.2.0).
 function saveImage() {
   const target = saveTarget(viewingNow());
-  let problem = null;
-  if (target.view === "panels" && state.saveScope === "one" && !target.plan.keys.length) {
-    problem = "view.save.gone";
-  } else if (!target.ready || target.name !== ui.saveName.textContent) {
-    problem = "view.save.changed";
-  }
-  if (problem === null) {
+  const panels = target.view === "panels";
+  const press = savePress({
+    gone: panels && state.saveScope === "one" && !target.plan.keys.length,
+    ready: target.ready,
+    said: saveSaysNow(target, panels && savePanelGone(target.plan)).said,
+    name: target.name,
+    shown: ui.saveName.textContent,
+  });
+  let problem = press.keep;
+  if (press.save) {
     let stage = null;
     let address = null;
     try {
@@ -2858,12 +2896,19 @@ function saveImage() {
     }
   }
   state.saveProblem = problem;
-  if (problem === null) {
+  const saved = press.save && problem === null;
+  if (saved) {
     state.saveOpen = false;
     state.saveNotice = saveNoticeNow();
   }
   render();
-  (problem === null ? saveButton(state.saveFrom) : ui.saveGo).focus();
+  if (saved) {
+    saveButton(state.saveFrom).focus();
+  } else if (!ui.savePop.hidden) {
+    // A window that the drawing hid leaves the focus where what hid it put it
+    // (Codex's review of the plan of U1, 3).
+    (ui.saveGo.disabled ? ui.saveTitle : ui.saveGo).focus();
+  }
 }
 
 // The box out of the page that a picture is made in, in the light colors
@@ -6521,6 +6566,15 @@ function conditionsText(conditions) {
   return conditionsParts(conditions).map(describe).join(t("view.conditions.text.separator"));
 }
 
+// The words of the conditions at the top of the full screen, where the bar
+// and its line are hidden, and that the words of the name were not used, as
+// the line under the bar and the line under a picture say (stage U1 of
+// v2.2.0): the panels only show there, so their answer.
+function fullConditionsText() {
+  const text = conditionsText(state.conditions);
+  return conditionsUnread(state.answer?.conditions ?? null, state.conditions) ? t("view.save.conditions_unread", { conditions: text }) : text;
+}
+
 // What the line under a picture says of the conditions of the answer drawn:
 // their words, and that the words of the name were not used where the names
 // could not be read (Codex's review of the plan of T1); null without them.
@@ -6958,16 +7012,17 @@ function renderStage(live) {
   ui.fullBar.hidden = !state.full;
   ui.fullEnter.disabled = !showPanels;
   if (state.full) {
+    const days = fullDays(state.answer, state.language);
     setText(
       ui.fullText,
       // The conditions too, as the bar and its line are hidden (Codex's
       // review of the plan of T1).
       t(state.conditions === null ? "view.full.text" : "view.full.text_conditions", {
         name: state.view.name,
-        from: dateText(state.answer.start, state.language),
-        to: dateText(state.answer.end, state.language),
+        from: days.from,
+        to: days.to,
         types: ui.typesSummary.textContent,
-        conditions: state.conditions === null ? "" : conditionsText(state.conditions),
+        conditions: state.conditions === null ? "" : fullConditionsText(),
       }),
     );
   }
@@ -7058,6 +7113,17 @@ function apart() {
 // while it shows (Codex's reviews of the plans of O1 and P1).
 function shownAnswer() {
   return plotting() ? state.plotAnswer : spreading() ? state.spreadAnswer : shoesShown() ? state.shoesAnswer : state.answer;
+}
+
+// The panels are asked again on the way back where another view took an
+// answer of another reading of the output than theirs, or of no known one
+// (stage U1 of v2.2.0): only an answer taken after the check of its
+// generation marks them, and only the way back puts the mark down (Codex's
+// review of the plan of U1, 4).
+function otherReading(answer) {
+  if (!sameReading(state.answer, answer)) {
+    state.panelsStale = true;
+  }
 }
 
 // Ask for what shows: the other view while it shows, and the panels on the
@@ -7207,6 +7273,7 @@ async function requestPlot(again = true) {
       return;
     }
     state.plotAnswer = answer;
+    otherReading(answer);
     state.plotAsked = payload;
     state.names = answer.names ?? state.names;
     state.plotStop = null;
@@ -7734,6 +7801,7 @@ async function requestSpread(again = true) {
       return;
     }
     state.spreadAnswer = answer;
+    otherReading(answer);
     state.spreadAsked = payload;
     state.names = answer.names ?? state.names;
     state.spreadStop = null;
@@ -8175,6 +8243,7 @@ async function requestShoes(again = true) {
       return;
     }
     state.shoesAnswer = answer;
+    otherReading(answer);
     state.shoesAsked = payload;
     state.names = answer.names ?? state.names;
     state.shoesStop = null;

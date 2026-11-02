@@ -9,6 +9,7 @@
 // translates.
 
 import { errorMessages } from "./flow.mjs";
+import { countKey } from "./i18n.mjs";
 
 export const MAX_PANELS = 6;
 export const PERIODS = ["all", "10y", "5y", "3y", "1y", "custom"];
@@ -958,16 +959,16 @@ export function panelNotes(item, panel, periods, grain, language) {
   }
   if (isActivityItem(item)) {
     if (count("disagree") > 0) {
-      notes.push(message("view.note.activity_disagree", { n: n(count("disagree")) }));
+      notes.push(message(countKey("view.note.activity_disagree", count("disagree")), { n: n(count("disagree")) }));
     }
     if (count("no_value") > 0) {
-      notes.push(message(item.from_fit ? "view.note.fit_missing" : "view.note.activity_missing", { n: n(count("no_value")) }));
+      notes.push(message(countKey(item.from_fit ? "view.note.fit_missing" : "view.note.activity_missing", count("no_value")), { n: n(count("no_value")) }));
     }
     if (count("no_duration") > 0) {
-      notes.push(message("view.note.no_duration", { n: n(count("no_duration")) }));
+      notes.push(message(countKey("view.note.no_duration", count("no_duration")), { n: n(count("no_duration")) }));
     }
   } else if (count("disagree") > 0) {
-    notes.push(message(item.kind === "obs" ? "view.note.record_disagree" : "view.note.day_disagree", { n: n(count("disagree")) }));
+    notes.push(message(countKey(item.kind === "obs" ? "view.note.record_disagree" : "view.note.day_disagree", count("disagree")), { n: n(count("disagree")) }));
   }
   if (item.kind === "tw" || item.kind === "pace") {
     notes.push({ ...message("view.note.calculated"), help: "calculated" });
@@ -987,7 +988,7 @@ export function panelNotes(item, panel, periods, grain, language) {
   }
   if (item.kind === "obs" && count("days_with_several_records") > 0) {
     notes.push({
-      ...message(grain === "day" ? "view.note.several_points" : "view.note.several_mean", { n: n(count("days_with_several_records")) }),
+      ...message(countKey(grain === "day" ? "view.note.several_points" : "view.note.several_mean", count("days_with_several_records")), { n: n(count("days_with_several_records")) }),
       help: "records",
     });
   }
@@ -1010,10 +1011,10 @@ export function panelNotes(item, panel, periods, grain, language) {
     notes.push(message("view.note.partial"));
   }
   if (count("after_today") > 0) {
-    notes.push(message("view.note.after_today", { n: n(count("after_today")) }));
+    notes.push(message(countKey("view.note.after_today", count("after_today")), { n: n(count("after_today")) }));
   }
   if (count("no_date") > 0) {
-    notes.push(message("view.note.no_date", { n: n(count("no_date")) }));
+    notes.push(message(countKey("view.note.no_date", count("no_date")), { n: n(count("no_date")) }));
   }
   return notes;
 }
@@ -1051,6 +1052,13 @@ export function tableHeads(item, panel, grain, language) {
 }
 
 // --- The page --------------------------------------------------------------
+
+// Whether two answers are of one reading of the output, as the numbers of
+// their readings say (stage U1 of v2.2.0): an answer without one, or with
+// one that is not a whole number, is of no reading known, and so of another.
+export function sameReading(first, second) {
+  return Number.isInteger(first?.read) && first.read === second?.read;
+}
 
 // What the page offers before an output is open: the latest output, which is
 // the output of this launch's run or else the newest earlier one, with the
@@ -2167,7 +2175,7 @@ export function raceData({ races, weeks, mode, series, answers, wholes, language
 // The name of a place of the axis of the races: the weeks before the week of
 // the race, and that week.
 export function raceSlotName(slot, weeks) {
-  return slot >= weeks ? message("view.compare.race_week") : message("view.compare.weeks_before", { n: weeks - slot });
+  return slot >= weeks ? message("view.compare.race_week") : message(countKey("view.compare.weeks_before", weeks - slot), { n: weeks - slot });
 }
 
 // Where the axis under the races is marked: every fourth week before the
@@ -2971,6 +2979,18 @@ export function saveDays(answer) {
   return typeof answer?.start === "string" && typeof answer?.end === "string" ? { start: answer.start, end: answer.end } : null;
 }
 
+// The days of the period in the line at the top of the full screen (stage U1
+// of v2.2.0): those of the answer of the panels, in the words of the language,
+// or a dash where an answer of a period that the output does not reach has
+// none, whose days stopped the drawing of the page before (Codex's review of
+// the diff of U1, 1).
+export function fullDays(answer, language) {
+  if (!ISO_DAY.test(String(answer?.start)) || !ISO_DAY.test(String(answer?.end))) {
+    return { from: "—", to: "—" };
+  }
+  return { from: dateText(answer.start, language), to: dateText(answer.end, language) };
+}
+
 // The name of a saved picture: the days of the period shown (those of the
 // answer, which ‹ › move, not the ends of its weeks or months) and the keys of
 // the items of its panels in the order shown; nothing of the person's own,
@@ -3161,6 +3181,35 @@ export function saveProblem({ table = false, stopped = false, loading = false, a
   return drawn < parts ? "view.save.undrawn" : null;
 }
 
+// What the window of the saving says by itself of why it cannot save now
+// (stage U1 of v2.2.0), which its line shows and a press goes by, so that the
+// two never part (the checker's review of the handling of Codex's review of
+// the plan of U1, 2): the line of the panel chosen that no longer shows, of
+// the reason of the view (saveProblem), or of an answer on its way; and
+// whether it says why at all, as it does in a line of its own where every
+// panel shown is a table (Codex's review of the plan of U1, 1).
+export function saveSays({ gone = false, problem = null, loading = false, allTables = false }) {
+  const line = gone ? "view.save.gone" : problem ?? (loading ? "view.loading" : null);
+  return { line, said: line !== null || allTables };
+}
+
+// What a press of the button of the saving does (stage U1 of v2.2.0): it
+// saves, or it keeps a reason in the window until a choice of the window;
+// none where the window says why by itself, so that the reason goes with
+// what it says (the checker's review of the plan of U1, B). The panel chosen
+// that is gone keeps its reason, as before; a picture that cannot be saved
+// keeps that it changed only where the window says no reason, as does a name
+// of the file that is not the one shown.
+export function savePress({ gone = false, ready = false, said = false, name = null, shown = null }) {
+  if (gone) {
+    return { save: false, keep: "view.save.gone" };
+  }
+  if (!ready) {
+    return { save: false, keep: said ? null : "view.save.changed" };
+  }
+  return name === shown ? { save: true, keep: null } : { save: false, keep: "view.save.changed" };
+}
+
 // The name of the file of a picture of another view (the checker's R2-2 and
 // answer 2): the years compared, oldest first, as they were chosen, which can
 // skip some, or the days of the races compared, never their names; the
@@ -3211,6 +3260,12 @@ export function saveViewFooter(view, { years = [], days = [], grain = null, star
     return years.length
       ? [message("view.save.compare_years", { years: years.map(String).sort().join(separator) }), message("view.save.grain", {}, { grain: GRAIN_KEYS[grain] }), ...kinds, app]
       : [message("view.save.compare_races", { days: days.map(String).sort().map((day) => dateText(day, language)).join(daysSeparator) }), ...kinds, app];
+  }
+  // An answer without its days, of a period that the output does not reach,
+  // has no line, as it has no picture to save and no name of a file (stage U1
+  // of v2.2.0; Codex's review of the plan of U1, 2).
+  if (!ISO_DAY.test(String(start)) || !ISO_DAY.test(String(end))) {
+    return [];
   }
   const period = message("view.save.period", { from: dateText(start, language), to: dateText(end, language) });
   if (view === "shoes") {
@@ -3273,7 +3328,7 @@ export function shoesNotes(answer) {
   const notes = [message("view.shoes.note_garmin")];
   for (const [name, key] of SHOES_NOTES) {
     if (Number.isInteger(answer[name]) && answer[name] > 0) {
-      notes.push(message(key, { n: answer[name] }));
+      notes.push(message(countKey(key, answer[name]), { n: answer[name] }));
     }
   }
   return notes;
@@ -3573,4 +3628,13 @@ export function conditionsCounts(counts, whole) {
     lines.push(message("view.conditions.line.unread"));
   }
   return lines;
+}
+
+// Whether the answer drawn, of the conditions of the page, did not use the
+// words of the name, as the names could not be read (stage U1 of v2.2.0):
+// what the line at the top of the full screen says too, as the line under the
+// bar does, and never of an answer of other conditions, as one on its way is
+// (the checker's review of the plan of U1, 6).
+export function conditionsUnread(counts, conditions) {
+  return counts !== null && typeof counts === "object" && conditionsKey(counts.asked ?? null) === conditionsKey(conditions) && counts.name === "unread";
 }

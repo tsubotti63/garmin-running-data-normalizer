@@ -4,7 +4,7 @@
 // catalogs. The page changes text with textContent only, never with HTML, so
 // that a path or a name from the computer is never read as markup.
 
-import { DEFAULT_LANGUAGE, chooseLanguage, translate } from "./i18n.mjs";
+import { DEFAULT_LANGUAGE, chooseLanguage, countKey, translate } from "./i18n.mjs";
 import { ApiError, callWithKey, readLaunchKey, readStorage, writeStorage } from "./launch.mjs";
 import {
   ACTIVE_STATES,
@@ -977,7 +977,7 @@ function renderImport(current) {
 function renderRerun(current) {
   const rerun = current.how === "rerun";
   ui.rerunArea.hidden = !(rerun || (state.store.answer?.state === "store" && current.snapshotCount > 0));
-  setText(ui.rerunText, rerun ? t("rerun.chosen", { count: formatNumber(current.snapshotCount) }) : t("rerun.help"));
+  setText(ui.rerunText, rerun ? t(countKey("rerun.chosen", current.snapshotCount), { count: formatNumber(current.snapshotCount) }) : t("rerun.help"));
   setText(ui.rerunToggle, t(rerun ? "rerun.back" : "rerun.button"));
 }
 

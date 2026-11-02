@@ -944,7 +944,7 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         except ViewRequestError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
         try:
-            data = self.server.views.data(ticket)
+            data, read = self.server.views.reading(ticket)
         except ViewNotOpenError as exc:
             raise ApiError(HTTPStatus.CONFLICT, "VIEW_NOT_OPEN") from exc
         except OutputActionError as exc:
@@ -959,6 +959,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         # (Codex's review of the plan of S1 of v2.2.0).
         answer["shoes"] = shoe_count(data)
         answer["names"] = _names_state(data)
+        # The reading that the answer is of (stage U1 of v2.2.0).
+        answer["read"] = read
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer
@@ -1012,7 +1014,7 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         except ViewRequestError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
         try:
-            data = self.server.views.data(ticket)
+            data, read = self.server.views.reading(ticket)
         except ViewNotOpenError as exc:
             raise ApiError(HTTPStatus.CONFLICT, "VIEW_NOT_OPEN") from exc
         except OutputActionError as exc:
@@ -1023,6 +1025,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
         answer = activity_points(data, x, y, period, types, conditions)
         answer["names"] = _names_state(data)
+        # The reading that the answer is of (stage U1 of v2.2.0).
+        answer["read"] = read
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer
@@ -1044,7 +1048,7 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         except ViewRequestError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
         try:
-            data = self.server.views.data(ticket)
+            data, read = self.server.views.reading(ticket)
         except ViewNotOpenError as exc:
             raise ApiError(HTTPStatus.CONFLICT, "VIEW_NOT_OPEN") from exc
         except OutputActionError as exc:
@@ -1055,6 +1059,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
         answer = activity_spread(data, key, period, types, conditions)
         answer["names"] = _names_state(data)
+        # The reading that the answer is of (stage U1 of v2.2.0).
+        answer["read"] = read
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer
@@ -1077,7 +1083,7 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         except ViewRequestError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
         try:
-            data = self.server.views.data(ticket)
+            data, read = self.server.views.reading(ticket)
         except ViewNotOpenError as exc:
             raise ApiError(HTTPStatus.CONFLICT, "VIEW_NOT_OPEN") from exc
         except OutputActionError as exc:
@@ -1088,6 +1094,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
         answer = shoe_answer(data, period, types, conditions)
         answer["names"] = _names_state(data)
+        # The reading that the answer is of (stage U1 of v2.2.0).
+        answer["read"] = read
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer

@@ -1136,9 +1136,11 @@ with "Tempo" in their names).
   remembered are not used for that output: with a condition on the name only,
   nothing is filtered by the name. The count of the button and the words of
   the line still show them, and the line says **The names could not be read,
-  so the words of the name are not used.** (but not while there is no panel,
-  nor in the line at the top of the full screen). A file of the names that is
-  broken stops the reading of the output, as any file does.
+  so the words of the name are not used.** (but not while there is no panel);
+  the line at the top of the full screen ends the words of the conditions with
+  **(the names could not be read, so the words of the name are not used)**. A
+  file of the names that is broken stops the reading of the output, as any
+  file does.
 - The conditions are remembered whole, or not at all (remembered conditions of
   another form are not used at all). They are not part of a layout, and
   choosing a layout does not change them; another output keeps them too. While
@@ -1266,10 +1268,11 @@ values are made):
   pauses nor the moving time alone. The count is the number of activities.
 - Only a total is 0 for a step without a record, between the first and the
   last activity of the types counted (meeting the conditions where there are
-  some), drawn as a light point; before the first and after the last, it is
-  empty, without a point. 0 means that nothing was recorded, which does not
-  always mean that there was no run. The point of a 0 is a hollow dot on the
-  base line, which is not the lighter bar of a partial step.
+  some), drawn as a light point, as is a step whose recorded values add up to
+  0; before the first and after the last, it is empty, without a point. The 0
+  of a step without a record does not always mean that there was no run. The
+  point of a 0 is a hollow dot on the base line, which is not the lighter bar
+  of a partial step.
 - The average pace is the total time divided by the total distance. The
   average heart rate, the cadence, the power, and the running-form items are
   means of the activities weighted by their durations (both calculated by this
@@ -1386,7 +1389,9 @@ values are made):
   the whole screen when the browser can show the page in its full screen,
   otherwise in the whole window. A line at the top names the output, the
   period, the activity types, and, where there are conditions, their words
-  (not their numbers).
+  (not their numbers); where the names of the output could not be read and
+  there are words of the name, the words end with **(the names could not be
+  read, so the words of the name are not used)**.
 - In full screen too, a drag across the overview changes the period (the
   buttons of the period at the top do not show).
 - **Back (Esc)** or Escape returns to the page. In the browser's full screen,
@@ -1832,9 +1837,12 @@ values are made):
   period and types (and conditions) without an activity with shoes; a chart
   without room to be drawn; or a panel chosen that no longer shows.
 - When, at the press, the picture to save is no longer the one that the window
-  showed, or the image could not be made, the window says so, and the focus
-  stays on **Save** where it can still be pressed; check the window, and press
-  **Save** again when it can save.
+  showed, or the image could not be made, the window says so. Where it can no
+  longer save at the press, it says the reason that it shows by itself, such
+  as an answer on its way, which goes with that reason. The focus stays on
+  **Save** where it can still be pressed, and goes to the title of the window
+  where it cannot; check the window, and press **Save** again when it can
+  save.
 - With **As on the screen** on a dark screen, the picture is dark. In forced
   colors (a contrast theme of Windows, for example), the picture takes the
   colors of the screen, whichever **Colors** gives.
@@ -1860,9 +1868,12 @@ values are made):
   open the summary again, for the new reading.
 - In the other views (two items plotted, a distribution, and the shoes), the
   values can come from another reading than the panels too. Back from another
-  view, the panels are asked again only where the period, the activity types,
-  or the conditions were changed while it showed; otherwise they stay as they
-  were read before. Choose the period again for the new reading.
+  view, the panels are asked again where the period, the activity types, or
+  the conditions were changed while it showed, and where an answer of that
+  view was of another reading than the panels (for example, of the output read
+  again after them); otherwise they stay as they were read before, also where
+  the output changed after the last answer of that view. Choose the period
+  again for the new reading.
 
 ### What is remembered for the next time
 
@@ -2427,7 +2438,8 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
 - In **Save as image…** (from 2.2.0), the window takes the focus on its title;
   Esc, **Close**, or **Cancel** closes it, back to its button, as does handing
   the file to the browser; where it could not save, the window says why, and
-  the focus stays on **Save** where it can still be pressed ([Saving as an
+  the focus stays on **Save** where it can still be pressed, or goes to the
+  title of the window where it cannot ([Saving as an
   image](#saving-as-an-image-from-220)).
 
 ## The GUI and the command line

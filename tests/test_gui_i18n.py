@@ -23,6 +23,7 @@ from garmin_running_data_normalizer.gui.stores import ANSWER_CODES
 from garmin_running_data_normalizer.run_all import PROGRESS_STAGES, PROGRESS_STEPS, run_all
 from garmin_running_data_normalizer.snapshot.lifecycle import SNAPSHOT_PROGRESS_STAGES
 from garmin_running_data_normalizer.stops import NEXT_ACTIONS, PAGE_MIX_WORDING, PAGE_STOPS, PAGE_WORDING, STOPS
+from tests.test_gui_view_save import function_body
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,6 +36,155 @@ DOUBLE_QUOTED = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
 
 def load_catalog(language: str) -> dict[str, str]:
     return json.loads((STATIC_ROOT / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
+
+
+# The placeholders of the English words, by kind (stage U1 of v2.2.0): whole
+# numbers of things counted, values measured, and dates and words, which take
+# names, dates and periods, units, codes and places, other messages, and
+# numbers that name a thing rather than count things, such as an order. A
+# name is of one kind, but where a message gives it another (Codex's review of
+# the plan of U1, 7).
+COUNT_PLACEHOLDERS = frozenset(
+    {
+        "activities", "all", "count", "datasets", "done", "families", "files", "fit", "kinds", "m", "max", "missing",
+        "more", "n", "other", "points", "relationships", "review", "seconds", "shoes", "snapshots", "total", "warnings",
+        "with",
+    }
+)
+MEASURE_PLACEHOLDERS = frozenset({"value", "values", "width", "xValue", "yValue"})
+WORD_PLACEHOLDERS = frozenset(
+    {
+        "added", "app", "before", "beforeDays", "box", "boxes", "button", "by", "code", "conditions", "current", "date",
+        "day", "days", "end", "folder", "from", "grain", "headline", "item", "items", "kind", "line", "mode", "name",
+        "names", "note", "now", "nowDays", "number", "order", "parent", "part", "partial", "path", "period", "place",
+        "race", "races", "same", "series", "shoe", "span", "sport", "start", "step", "summary", "table", "text", "time",
+        "title", "to", "type", "types", "unit", "until", "version", "weekday", "when", "words", "x", "y", "year", "years",
+    }
+)
+PLACEHOLDER_KINDS = {
+    # The words of a button.
+    ("view.empty.first_text", "other"): "word",
+    # A time that a run took.
+    ("run.elapsed", "time"): "measure",
+    # The bounds of a range of values, and of the conditions.
+    **{
+        (key, name): "measure"
+        for key in (
+            "view.spread.range", "view.spread.reading", "view.conditions.text.distance_range", "view.conditions.text.distance_from",
+            "view.conditions.text.distance_to", "view.conditions.text.time_range", "view.conditions.text.time_from",
+            "view.conditions.text.time_to",
+        )
+        for name in ("from", "to")
+    },
+}
+LABEL = "the count after the name of what is counted and a colon, right with 1"
+IN_PARENTHESES = "the count in parentheses after the words of what is counted, right with 1"
+OF = "the count of the form 1 of 2 or 1/2, right with 1"
+MORE = "the count of the form 1 more, right with 1"
+NAMES = "a number that names, not one that counts"
+THREE = "three counts after their names (stage U1 of v2.2.0), as the line of the conditions of stage T1"
+# The English messages with a count that take no words for one, and why: a
+# count that the code never fills with 1, or words that are right with 1 too.
+NO_WORDS_FOR_ONE = {
+    "browser.truncated": "the folders shown are MAX_FOLDERS (2000) where they are cut (gui/folders.py)",
+    "browser.truncated_export": "the folders and ZIP files shown are MAX_FOLDERS (2000) where they are cut (gui/folders.py)",
+    "bundle.saved": "a bundle always holds the same 6 files (diagnostics/support_bundle.py)",
+    "change.activities_down": LABEL,
+    "change.activities_up": LABEL,
+    "check.counts": LABEL,
+    "check.found_count": "only an input of two or more Exports that differ (intake/roots.py open_export) gives the Exports found",
+    "check.found_more": MORE,
+    "check.zip_ready": LABEL,
+    "error.place_more": MORE,
+    "finding.files_left_out_count": LABEL,
+    "lock.made_days": LABEL,
+    "lock.made_hours": LABEL,
+    "lock.made_minutes": LABEL,
+    "output_check.handoff_pass": "an output of this version has 17 datasets and 6 relationships (output_experience.py RELATIONSHIP_CONTRACTS), which the check counts",
+    "progress.importing": OF,
+    "progress.reading_export": OF,
+    "progress.reading_fit": OF,
+    "result.import_done": OF,
+    "result.total_warnings": "a sum written as numbers, right with 1",
+    "run.stalled": "a run is stalled from STALL_SECONDS (30) on (flow.mjs)",
+    "run.sub_running": OF,
+    "steps.build_count": "one Snapshot has steps.read_snapshot (flow.mjs)",
+    "store.checked": LABEL,
+    "store.count": LABEL,
+    "view.add.heading": OF,
+    "view.count.activities": LABEL,
+    "view.count.days": LABEL,
+    "view.count.records": LABEL,
+    "view.layouts.valued": OF,
+    "view.compare.week_number": NAMES,
+    "view.compare.weeks_option": "the weeks of a comparison by race day are 8 to 24 (COMPARE_WEEKS)",
+    "view.compare.race_days": "the weeks of a comparison by race day are 8 to 24 (COMPARE_WEEKS)",
+    "view.recap.before.days": "one day has view.recap.before.day (view_flow.mjs)",
+    "view.save.all": IN_PARENTHESES,
+    "view.save.tables": IN_PARENTHESES,
+    "view.plot.count": LABEL,
+    "view.plot.count_cut": LABEL,
+    "view.plot.cut": "the points shown are MAX_POINTS (5000) where they are cut (view/series.py)",
+    "view.plot.same": MORE,
+    "view.spread.count": LABEL,
+    "view.spread.wide": "the ranges are more than MAX_RANGES (200) where they are wider (view/series.py)",
+    "view.spread.reading": LABEL,
+    "view.shoes.count": THREE,
+    "view.shoes.number": NAMES,
+    "view.shoes.times": "the count alone, right with 1",
+    "view.shoes.month_cell": IN_PARENTHESES,
+    "view.shoes.note_two": IN_PARENTHESES,
+    "view.marks.title": IN_PARENTHESES,
+    "view.marks.crowded": "two marks or more joined (view_chart.mjs markLabels)",
+    "view.marks.spoken": LABEL,
+    "view.marks.spoken_count": LABEL,
+    "view.marks.spoken_more": MORE,
+    "view.list.from": LABEL,
+    "view.list.value": LABEL,
+    "view.list.limit": "a period of more activities than MAX_LIST_ROWS (500) (view/series.py)",
+    "view.list.limit_day": "a day of more activities than MAX_LIST_ROWS (500) (view/series.py)",
+    "view.note.sleep_unused": THREE,
+    "view.note.zero": LABEL,
+    "view.panel.notes": IN_PARENTHESES,
+    "view.shelf.chosen": "the count of the form 1 selected, right with 1",
+    "view.shelf.count": OF,
+    "view.summary.with_records": LABEL,
+    "view.summary.with_value": LABEL,
+    "view.summary.without_records": LABEL,
+    "view.types.running_all": IN_PARENTHESES,
+    "view.types.some": LABEL,
+    "view.conditions.button_some": LABEL,
+    "view.conditions.line.period": LABEL,
+    "view.conditions.line.whole": LABEL,
+    **{
+        f"warning.{name}": IN_PARENTHESES
+        for name in (
+            "activity_fit_link_ambiguous", "daily_metrics_review", "data_file_left_out", "data_row_left_out", "data_value_invalid",
+            "fit_parse_incomplete", "lactate_candidates", "records_not_in_latest_snapshot", "relationship_invalid_link",
+            "relationship_unresolved", "values_disagree", "values_updated",
+        )
+    },
+}
+
+
+def one_keys() -> dict[str, str]:
+    """The keys of the words for a count of one, by the keys of the words for
+    several, as i18n.mjs writes them out (stage U1 of v2.2.0)."""
+    source = (STATIC_ROOT / "i18n.mjs").read_text(encoding="utf-8")
+    table = re.search(r"^export const ONE_KEYS = Object\.freeze\(\{\n(.*?)\n\}\);$", source, re.M | re.S)
+    if table is None:
+        raise AssertionError("i18n.mjs has no table ONE_KEYS")
+    return dict(re.findall(r'^  "([^"]+)": "([^"]+)",$', table.group(1), re.M))
+
+
+def placeholder_kind(key: str, name: str) -> str | None:
+    """The kind of a placeholder of a message: count, measure, or word."""
+    if (key, name) in PLACEHOLDER_KINDS:
+        return PLACEHOLDER_KINDS[(key, name)]
+    for kind, names in (("count", COUNT_PLACEHOLDERS), ("measure", MEASURE_PLACEHOLDERS), ("word", WORD_PLACEHOLDERS)):
+        if name in names:
+            return kind
+    return None
 
 
 # The pages of the GUI: the normalization page, and the view page (stage G3b).
@@ -160,6 +310,101 @@ class GuiCatalogTest(unittest.TestCase):
                         sorted(PLACEHOLDER.findall(english[key])),
                         key,
                     )
+
+    def test_every_english_count_has_words_for_one_or_says_why_not(self) -> None:
+        # Stage U1 of v2.2.0: an English message with a whole number of things
+        # counted says one of them as one, as a page chooses its words for one
+        # by ONE_KEYS of i18n.mjs, or is one that needs none (the checker's
+        # review of the plan of U1, C, and Codex's review of the plan, 7).
+        english, japanese = load_catalog("en"), load_catalog("ja")
+        ones = one_keys()
+        self.assertEqual(len(ones), 25)
+        self.assertFalse(set(ones) & set(ones.values()))
+        self.assertFalse((set(ones) | set(ones.values())) & set(NO_WORDS_FOR_ONE))
+        self.assertFalse(COUNT_PLACEHOLDERS & MEASURE_PLACEHOLDERS or COUNT_PLACEHOLDERS & WORD_PLACEHOLDERS or MEASURE_PLACEHOLDERS & WORD_PLACEHOLDERS)
+        counted = set()
+        for key, text in english.items():
+            for name in set(PLACEHOLDER.findall(text)):
+                kind = placeholder_kind(key, name)
+                with self.subTest(key=key, placeholder=name):
+                    self.assertIsNotNone(kind, "a placeholder of no kind: give it one")
+                if kind == "count":
+                    counted.add(key)
+        for key in sorted(counted):
+            with self.subTest(key=key):
+                # The words for one themselves need none.
+                self.assertTrue(key in ones or key in ones.values() or key in NO_WORDS_FOR_ONE, "a count without words for one, or why it needs none")
+        for key in sorted(set(ones) | set(NO_WORDS_FOR_ONE)):
+            with self.subTest(key=key):
+                self.assertIn(key, counted)
+        for key, one in ones.items():
+            with self.subTest(key=key):
+                self.assertEqual(one, f"{key}_one")
+                # The same placeholders as the words for several, in both
+                # languages, and in Japanese the same words.
+                for catalog in (english, japanese):
+                    self.assertEqual(sorted(PLACEHOLDER.findall(catalog[one])), sorted(PLACEHOLDER.findall(catalog[key])))
+                self.assertEqual(japanese[one], japanese[key])
+                self.assertNotEqual(english[one], english[key])
+        # A key of another kind that ends as they do (Codex's review of the
+        # plan of U1, 7, as found in the review of it).
+        self.assertNotIn("view.recap.days_one", ones.values())
+        self.assertNotIn("view.recap.days_one", counted)
+        # The English of three counts, after their names.
+        self.assertEqual(english["view.note.sleep_unused"], "Days not used: {n} (with a sleep that needs review: {review}; with excluded sleeps only: {other}).")
+        self.assertEqual(english["view.shoes.count"], "Pairs of shoes: {shoes} (activities of the types counted in this period: {all}; with shoes: {with})")
+
+    def test_each_place_of_a_count_chooses_the_words_for_one(self) -> None:
+        # Stage U1 of v2.2.0: every place that fills a count of a message that
+        # has words for one chooses them by countKey, with the whole number
+        # before it is written with separators (the checker's review of the
+        # plan of U1, small point 5); the node tests hold what they choose,
+        # and this the places, also of the page scripts that node does not run.
+        held = {
+            ("view_flow.mjs", "panelNotes"): (
+                'notes.push(message(countKey("view.note.activity_disagree", count("disagree")), { n: n(count("disagree")) }));',
+                'notes.push(message(countKey(item.from_fit ? "view.note.fit_missing" : "view.note.activity_missing", count("no_value")), { n: n(count("no_value")) }));',
+                'notes.push(message(countKey("view.note.no_duration", count("no_duration")), { n: n(count("no_duration")) }));',
+                'notes.push(message(countKey(item.kind === "obs" ? "view.note.record_disagree" : "view.note.day_disagree", count("disagree")), { n: n(count("disagree")) }));',
+                '...message(countKey(grain === "day" ? "view.note.several_points" : "view.note.several_mean", count("days_with_several_records")), { n: n(count("days_with_several_records")) }),',
+                'notes.push(message(countKey("view.note.after_today", count("after_today")), { n: n(count("after_today")) }));',
+                'notes.push(message(countKey("view.note.no_date", count("no_date")), { n: n(count("no_date")) }));',
+            ),
+            ("view_flow.mjs", "shoesNotes"): ("notes.push(message(countKey(key, answer[name]), { n: answer[name] }));",),
+            ("view_flow.mjs", "raceSlotName"): ('message(countKey("view.compare.weeks_before", weeks - slot), { n: weeks - slot })',),
+            ("flow.mjs", "progressMessage"): ("return { key: countKey(STAGE_KEYS.building_snapshots, progress.snapshots), params: { snapshots: progress.snapshots }, keyParams: {} };",),
+            ("flow.mjs", "warningMessages"): ('const messages = [message(countKey("output_check.warnings", totals.kinds), { ...totals })];',),
+            ("flow.mjs", "nextLine"): (
+                'return message(countKey("next_line.done_partial", result.warning_count ?? 0), { warnings: result.warning_count ?? 0 });',
+                'return message(countKey("next_line.done_warnings", result.warning_count), { warnings: result.warning_count });',
+            ),
+            ("flow.mjs", "runSummary"): ('sub: message(countKey(lookup(RESULT_SUB_KEYS, result.status, "result.sub_pass"), result.warning_count ?? 0), {',),
+            ("flow.mjs", "confirmedWords"): (
+                'return message(countKey("summary.snapshot_rerun_done", used), { count: used });',
+                'message(countKey("summary.snapshot_done", used), { count: used });',
+                'return message(countKey("summary.snapshot_rerun", count), { count });',
+                'message(countKey("summary.snapshot_import", count), { count });',
+            ),
+            ("app.mjs", "renderRerun"): ('t(countKey("rerun.chosen", current.snapshotCount), { count: formatNumber(current.snapshotCount) })',),
+        }
+        for (script, name), lines in held.items():
+            body = function_body((STATIC_ROOT / script).read_text(encoding="utf-8"), name)
+            for line in lines:
+                with self.subTest(function=name, line=line[:60]):
+                    self.assertIn(line, body)
+        # Each key of ONE_KEYS is chosen at one of them, or by the table of its
+        # place (the notes of the shoes, the stages, the lines of a result).
+        chosen = "\n".join(line for lines in held.values() for line in lines)
+        tables = {
+            "view.shoes.note_without", "view.shoes.note_unknown", "view.shoes.note_no_distance", "view.shoes.note_left_out",
+            "progress.building_snapshots", "result.sub_pass_with_warnings",
+        }
+        for key in one_keys():
+            with self.subTest(key=key):
+                self.assertTrue(f'"{key}"' in chosen or key in tables, key)
+        self.assertIn('  ["without_shoes", "view.shoes.note_without"],', (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8"))
+        self.assertIn('  building_snapshots: "progress.building_snapshots",', (STATIC_ROOT / "flow.mjs").read_text(encoding="utf-8"))
+        self.assertIn('  PASS_WITH_WARNINGS: "result.sub_pass_with_warnings",', (STATIC_ROOT / "flow.mjs").read_text(encoding="utf-8"))
 
     def test_every_used_key_exists_and_every_key_is_used(self) -> None:
         used = page_keys() | script_keys()

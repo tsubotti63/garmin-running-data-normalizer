@@ -847,8 +847,9 @@ Items and numbers:
 - A total (distance, time, count) is that of the recorded activities: a period
   without one is 0 between the first and the last activity of the types
   counted (that meets the conditions, from v2.2.0), and empty before and after
-  them. 0 means no record, not that there was no run, and it is drawn as a
-  light point. The pace is the total time divided by the total distance of the
+  them; it is drawn as a light point, as is a period whose recorded values add
+  up to 0. The 0 of a period without a record does not always mean that there
+  was no run. The pace is the total time divided by the total distance of the
   activities with both; a mean of activities is weighted by their durations; a
   daily item is the mean of the days with a value, and a sleep counts only on
   the days that it may be used.
@@ -895,12 +896,13 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   the pointer moves, never under a week. Escape cancels a drag.
 - Full screen shows the panels and the overview alone, under one line that
   names the output, the period, the activity types, and, from v2.2.0, the
-  words of the conditions (never their counts), filling the screen where the
-  browser allows it and the window where it does not. Escape, Back, or the
-  browser's own end of its full screen goes back, with the focus on the button
-  that went there; in the browser's full screen, the browser takes the first
-  Escape, which also ends a drag. A stop shows the whole page again, with the
-  focus on its heading. Full screen is not remembered.
+  words of the conditions (never their counts), and from v2.2.0 (stage U1) a
+  dash for the period of an answer without its days (`fullDays`), filling the
+  screen where the browser allows it and the window where it does not. Escape,
+  Back, or the browser's own end of its full screen goes back, with the focus
+  on the button that went there; in the browser's full screen, the browser
+  takes the first Escape, which also ends a drag. A stop shows the whole page
+  again, with the focus on its heading. Full screen is not remembered.
 - Each chart is an image named by its item and its period, which the
   keyboard can reach. The arrow keys move the cross line by one period,
   PageUp and PageDown by twelve, and Home and End to the ends, and a hidden
@@ -1219,10 +1221,16 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   conditions; where the conditions have words of the name, the window says
   that they show. The window says why it cannot save (a table, an answer on
   its way, a stop, two items plotted or a distribution without values, a chart
-  without room, a panel chosen that went), and the press checks again the name
-  and whether it can save. Nothing is sent to the server or anywhere else, and
-  the Content-Security-Policy stays as it is. Only SVG is made; PNG and the
-  other formats are out of scope.
+  without room, a panel chosen that went, every panel a table), and the press
+  checks again the name and whether it can save. From v2.2.0 (stage U1), a
+  press that can no longer save keeps no reason that the window says by itself
+  (`saveSays`, `savePress`), so that the reason goes with what the window
+  says, and the focus goes to the title of the window where **Save** cannot be
+  pressed, while the window shows; an answer without its days (a period that
+  the output does not reach) has no line under its picture and no name of a
+  file. Nothing is sent to the server or anywhere else, and the
+  Content-Security-Policy stays as it is. Only SVG is made; PNG and the other
+  formats are out of scope.
 - The colors of the years compared and a year highlighted (stage L3): the
   lines of the years laid over one another or as running totals take colors of
   their own (`--year1` to `--year6` in styles.css), apart from the six steps
@@ -1296,7 +1304,9 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   written, that they apply to the training and running-form items only, and
   the counts of the answer drawn where that answer is of these conditions
   (none while there is no panel), and where the words of the name were not
-  used; in the full screen, their words go into the line at the top. The list
+  used; in the full screen, their words go into the line at the top, and from
+  v2.2.0 (stage U1) that the words of the name were not used where the answer
+  of the panels, of these conditions, says so (`conditionsUnread`). The list
   has a column of the names (each in `<bdi>`, wrapping in 16em) where the
   names were read. The names: after the shoes, the view page (never `series`)
   reads `normalized/activities.json`, checked as the other files are, within
@@ -1315,10 +1325,17 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   request (and so is any output when the date changes), so that a comparison,
   a list, the summary, or another view asked right after a new normalization
   can come from another reading than the panels beside it; asking again uses
-  the new reading. Back from another view, the panels ask again only where the
+  the new reading. Back from another view, the panels ask again where the
   period, the activity types, or the conditions changed while it showed
-  (`panelsStale`), so that otherwise they show the reading before. The guides
-  say this in one place.
+  (`panelsStale`), and from v2.2.0 (stage U1) where an answer of that view was
+  of another reading than the panels, so that otherwise they show the reading
+  before. Each reading of an output has a number of one count for the whole
+  server, given with its data in the answers of `/api/view/series`,
+  `/api/view/points`, `/api/view/spread`, and `/api/view/shoes` (`read`; not
+  in those of `/api/view/activities`, which the page does not compare); the
+  page compares that of the panels with that of an answer of another view
+  taken after the check of its generation, and a number missing counts as
+  another reading. The guides say this in one place.
 
 ## Data handling in 2.0.0
 
@@ -1641,8 +1658,13 @@ Processing:
   正規化のしかた, 問い合わせ用ファイル (the English term Support Bundle appears
   only inside its explanation), 目印のファイル (`.single-writer.lock`), 出力の確認
   and 確認済み, このアプリ, and バージョン. It does not use 貯めた, 道具, or 版.
-- Tests check that every catalog has the same keys and placeholders and that no
-  key is unused.
+- Tests check that every catalog has the same keys and placeholders and that
+  no key is unused. From v2.2.0 (stage U1), an English message with a whole
+  number of things counted has words for a count of one (`ONE_KEYS` and
+  `countKey` of `i18n.mjs`, the same Japanese), chosen by the number before it
+  is written with separators, or is one that needs none, which a test lists
+  with why: a count that the code never fills with 1, or words that are right
+  with 1, such as a count after a label.
 - CLI output and the generated Run-All documents stay in English.
 - The GUI guide is written in English and Japanese:
   [GUI Guide](gui_guide.md) and [GUI の手引き](gui_guide.ja.md).
