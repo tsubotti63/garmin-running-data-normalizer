@@ -22,6 +22,7 @@ import {
   progressMessage,
   stalledSeconds,
 } from "../../src/garmin_running_data_normalizer/gui/static/flow.mjs";
+import { formatMessage } from "../../src/garmin_running_data_normalizer/gui/static/i18n.mjs";
 // Read through the module, so that a test of a function that a version lacks
 // fails on its own.
 import * as flow from "../../src/garmin_running_data_normalizer/gui/static/flow.mjs";
@@ -2674,4 +2675,40 @@ test("the line of a stop's report is kept apart from the stop's lines", () => {
   assert.deepEqual(flow.apartReport(lines), { lines: ["What happened.", { text: "Code: A", className: "m-error" }], report: [report] });
   assert.deepEqual(flow.apartReport([]), { lines: [], report: [] });
   assert.deepEqual(flow.apartReport(null), { lines: [], report: [] });
+});
+
+// --- Stage U1 of v2.2.0: the words for a count of one -----------------------
+
+test("a count of one has the words for one on the first page, whole (stage U1 of v2.2.0)", () => {
+  const said = (message) => formatMessage(english(message.key), message.params);
+  // The warnings of a run.
+  const line = (result) => flow.nextLine({ ...READY, runState: "finished", result }, boxStates({ ...READY, runState: "finished", result }));
+  assert.equal(
+    said(line({ exit_code: 3, warning_count: 1 })),
+    "Open the output with “Show the output folder”, and before you use it, check what was left out and what the 1 warning says.",
+  );
+  assert.equal(said(line({ exit_code: 0, warning_count: 1 })), "Open the output with “Show the output folder”. Before you use it, read the 1 warning below.");
+  assert.equal(line({ exit_code: 0, warning_count: 2 }).key, "next_line.done_warnings");
+  const sub = (count) => flow.runSummary({ ...FINISHED, result: { ...FINISHED.result, warning_count: count } }, null, {}).sub;
+  assert.equal(said(sub(1)), "Nothing was left out. There is 1 warning.");
+  assert.equal(said(sub(3)), "Nothing was left out. There are 3 warnings.");
+  // The Snapshots: one alone is never used "together".
+  const ran = { runState: "finished", editedSinceRun: false, runHow: "snapshots", how: "snapshots", inputPath: "/path/to/e.zip", snapshotCount: 1, result: { snapshot_count: 1 }, imported: { order: 1, same_content: true, snapshot_count: 1 } };
+  assert.equal(said(flow.boxSummary("snapshot", ran)), "Used the 1 Snapshot");
+  assert.equal(said(flow.boxSummary("snapshot", { ...ran, how: "rerun", runHow: "rerun", imported: null })), "Normalized the 1 existing Snapshot again");
+  assert.equal(said(flow.boxSummary("snapshot", { runState: "idle", how: "snapshots", snapshotCount: 1 })), "Imports into the Snapshots and normalizes them with the 1 existing one");
+  assert.equal(said(flow.boxSummary("snapshot", { runState: "idle", how: "rerun", snapshotCount: 1 })), "Normalizes the 1 existing Snapshot again");
+  assert.equal(flow.boxSummary("snapshot", { runState: "idle", how: "rerun", snapshotCount: 2 }).key, "summary.snapshot_rerun");
+  assert.equal(said(flow.progressMessage({ stage: "building_snapshots", snapshots: 1 })), "Building the 1 Snapshot into one input.");
+  assert.equal(flow.progressMessage({ stage: "building_snapshots", snapshots: 3 }).key, "progress.building_snapshots");
+  // The warnings of the output check: by the number of the families with
+  // warnings, not of the warnings (Codex's review of the plan of U1, 8).
+  const warned = (families, other) => ({
+    warning_count: Object.values(families).reduce((sum, count) => sum + count, 0) + other,
+    families: Object.fromEntries(Object.entries(families).map(([name, count]) => [name, { warning_count: count }])),
+    other_warning_counts: { relationships: other },
+  });
+  assert.equal(said(flow.warningMessages(warned({ fit: 3, gear: 0 }, 1))[0]), "Warnings: 4 (3 in 1 family, and 1 of no family)");
+  assert.equal(flow.warningMessages(warned({ fit: 1, gear: 1 }, 0))[0].key, "output_check.warnings");
+  assert.equal(flow.warningMessages(warned({ fit: 0 }, 1))[0].key, "output_check.warnings");
 });

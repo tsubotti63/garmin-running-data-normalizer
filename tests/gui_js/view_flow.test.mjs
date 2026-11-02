@@ -442,7 +442,8 @@ test("the notes of a panel say what is left out and what the values are", () => 
     ["view.note.zero", "zero"],
     ["view.note.activity_disagree", null],
     ["view.note.activity_missing", null],
-    ["view.note.after_today", null],
+    // A count of 1 has its words for one (stage U1 of v2.2.0).
+    ["view.note.after_today_one", null],
     ["view.note.no_date", null],
   ]);
   assert.deepEqual(keys("asc", { no_value: 3 }).map(([key]) => key), ["view.note.zero", "view.note.fit_missing"]);
@@ -452,11 +453,11 @@ test("the notes of a panel say what is left out and what the values are", () => 
     ["view.note.calculated", "calculated"],
     ["view.note.faster_lower", null],
   ]);
-  assert.deepEqual(keys("sleep", { sleep_review_days: 2, sleep_other_days: 1, disagree: 1 }).map(([key]) => key), ["view.note.day_disagree", "view.note.sleep_unused"]);
+  assert.deepEqual(keys("sleep", { sleep_review_days: 2, sleep_other_days: 1, disagree: 1 }).map(([key]) => key), ["view.note.day_disagree_one", "view.note.sleep_unused"]);
   assert.deepEqual(keys("hrv", {}).map(([key]) => key), ["view.note.hrv_reference"]);
   assert.deepEqual(keys("vo2", { days_with_several_records: 3 }, "day").map(([key, help]) => [key, help]), [["view.note.several_points", "records"]]);
   assert.deepEqual(keys("p5k", { days_with_several_records: 3, disagree: 1 }).map(([key]) => key), [
-    "view.note.record_disagree",
+    "view.note.record_disagree_one",
     "view.note.faster_lower",
     "view.note.several_mean",
     "view.note.prediction",
@@ -2402,12 +2403,13 @@ test("the notes of the view by shoes show a count of 1 or more only, and what Ga
   // The checker's review of the counts of S1: both ways, each count alone.
   const counts = { without_shoes: 4, not_known: 3, two_or_more: 2, without_distance: 1, left_out: 5 };
   const keys = (answer) => view.shoesNotes(answer).map((note) => note.key);
-  assert.deepEqual(keys(counts), ["view.shoes.note_garmin", "view.shoes.note_without", "view.shoes.note_unknown", "view.shoes.note_two", "view.shoes.note_no_distance", "view.shoes.note_left_out"]);
+  // A count of 1 has its words for one (stage U1 of v2.2.0).
+  assert.deepEqual(keys(counts), ["view.shoes.note_garmin", "view.shoes.note_without", "view.shoes.note_unknown", "view.shoes.note_two", "view.shoes.note_no_distance_one", "view.shoes.note_left_out"]);
   const named = {
     without_shoes: "view.shoes.note_without",
     not_known: "view.shoes.note_unknown",
     two_or_more: "view.shoes.note_two",
-    without_distance: "view.shoes.note_no_distance",
+    without_distance: "view.shoes.note_no_distance_one",
     left_out: "view.shoes.note_left_out",
   };
   for (const [name, key] of Object.entries(named)) {
@@ -2780,4 +2782,135 @@ test("the spaces at the ends of the words are those that the server takes, never
   // Ten words and one of U+FEFF only: eleven, as the server counts them.
   const name = `${Array.from({ length: 10 }, (_, number) => `w${number}`).join(",")},${bom}`;
   assert.deepEqual(view.conditionsFromBoxes({ name }), { problem: "view.conditions.problem.name_words" });
+});
+
+// --- Stage U1 of v2.2.0: the fixes before the release candidate ------------
+
+test("a press of the saving keeps no reason that the window says by itself (stage U1 of v2.2.0)", () => {
+  // Each way that the window can stop saving between its drawing and the
+  // press (Codex's review of the plan of U1, 1), and what the window says by
+  // itself: its line, and whether it says why.
+  assert.deepEqual(view.saveSays({ loading: true }), { line: "view.loading", said: true });
+  assert.deepEqual(view.saveSays({ problem: "view.save.stopped" }), { line: "view.save.stopped", said: true });
+  assert.deepEqual(view.saveSays({ problem: "view.save.table", loading: true }), { line: "view.save.table", said: true });
+  // Every panel a table says so in a line of its own.
+  assert.deepEqual(view.saveSays({ allTables: true }), { line: null, said: true });
+  assert.deepEqual(view.saveSays({ gone: true, problem: "view.save.undrawn" }), { line: "view.save.gone", said: true });
+  assert.deepEqual(view.saveSays({ problem: "view.save.empty" }), { line: "view.save.empty", said: true });
+  assert.deepEqual(view.saveSays({ problem: "view.save.undrawn" }), { line: "view.save.undrawn", said: true });
+  assert.deepEqual(view.saveSays({}), { line: null, said: false });
+  // None kept where the window says why, so that the reason goes as the
+  // window stops saying it (the checker's review of the plan of U1, B): an
+  // answer on its way that comes leaves no reason in the window.
+  for (const said of [{ loading: true }, { problem: "view.save.stopped" }, { problem: "view.save.table" }, { allTables: true }, { problem: "view.save.empty" }, { problem: "view.save.undrawn" }]) {
+    assert.deepEqual(view.savePress({ ready: false, said: view.saveSays(said).said }), { save: false, keep: null }, JSON.stringify(said));
+  }
+  const kept = view.savePress({ ready: false, said: view.saveSays({ loading: true }).said }).keep;
+  assert.equal(kept ?? view.saveSays({}).line, null);
+  assert.deepEqual(view.savePress({ ready: false, said: false }), { save: false, keep: "view.save.changed" });
+  // The panel chosen that is gone keeps its reason, as before.
+  assert.deepEqual(view.savePress({ gone: true, ready: true, said: true, name: "a.svg", shown: "a.svg" }), { save: false, keep: "view.save.gone" });
+  // A name of the file that is not the one shown keeps that it changed.
+  assert.deepEqual(view.savePress({ ready: true, said: false, name: "a.svg", shown: "b.svg" }), { save: false, keep: "view.save.changed" });
+  assert.deepEqual(view.savePress({ ready: true, said: false, name: "a.svg", shown: "a.svg" }), { save: true, keep: null });
+  assert.deepEqual(view.savePress({}), { save: false, keep: "view.save.changed" });
+});
+
+test("an answer without its days has no line under its picture and no name (stage U1 of v2.2.0)", () => {
+  // An answer of a period that the output does not reach has no days, which
+  // the line made of before, and failed (Codex's review of the plan of U1, 2).
+  const pieces = { answerTypes: null, types: [], version: "2.1.0", language: "en", separator: ", " };
+  for (const shown of ["plot", "spread", "shoes"]) {
+    assert.deepEqual(view.saveViewFooter(shown, { ...pieces, start: null, end: null }), [], shown);
+    assert.deepEqual(view.saveViewFooter(shown, { ...pieces, start: "2024-01-01" }), [], shown);
+  }
+  assert.equal(view.saveViewFooter("plot", { ...pieces, start: "2024-01-01", end: "2024-03-31" }).length, 3);
+  assert.equal(view.saveViewFileName("plot", { keys: ["dist", "pace"], start: null, end: null }), null);
+  assert.equal(view.saveViewFileName("shoes", { key: "dist", start: null, end: null }), null);
+});
+
+test("another view is of another reading where the numbers of the readings are not the same (stage U1 of v2.2.0)", () => {
+  assert.equal(view.sameReading({ read: 4 }, { read: 4 }), true);
+  assert.equal(view.sameReading({ read: 4 }, { read: 5 }), false);
+  // An answer without a number of a reading, or with one that is not a whole
+  // number, is of no reading known (Codex's review of the plan of U1, 4).
+  assert.equal(view.sameReading({ read: 4 }, {}), false);
+  assert.equal(view.sameReading({}, { read: 4 }), false);
+  assert.equal(view.sameReading(null, { read: 4 }), false);
+  assert.equal(view.sameReading({ read: "4" }, { read: "4" }), false);
+  assert.equal(view.sameReading({ read: 4.5 }, { read: 4.5 }), false);
+});
+
+test("the full screen says the words of the name were not used where the line under the bar does (stage U1 of v2.2.0)", () => {
+  const page = { name: "Tempo" };
+  const unread = (counts) => view.conditionsUnread(counts, page);
+  // Of an answer of the conditions of the page whose names could not be read,
+  // also while the next of the same conditions is on its way.
+  assert.equal(unread({ counted: 12, met: 3, name: "unread", asked: { name: "Tempo" } }), true);
+  // Not of an answer of the conditions before, on its way after a change
+  // (Codex's review of the plan of U1, 11), nor of one without them.
+  assert.equal(unread({ counted: 12, met: 3, name: "unread", asked: { name: "Easy" } }), false);
+  assert.equal(unread({ counted: 12, met: 3, name: "unread", asked: null }), false);
+  // Not where the names were read, or without words of a name.
+  assert.equal(unread({ counted: 12, met: 3, name: "used", asked: { name: "Tempo" } }), false);
+  assert.equal(view.conditionsUnread({ counted: 12, met: 3, name: null, asked: { distance: [null, 5000] } }, { distance: [null, 5000] }), false);
+  assert.equal(unread(null), false);
+  assert.equal(unread(undefined), false);
+  // In the words of the line under a picture.
+  assert.equal(
+    translate(catalogs, "en", "view.save.conditions_unread", { conditions: "the name has “Tempo”" }),
+    "the name has “Tempo” (the names could not be read, so the words of the name are not used)",
+  );
+});
+
+test("a count of one has the words for one, whole, and a count of 0 no note (stage U1 of v2.2.0)", () => {
+  const notes = (key, left, grain = "month") =>
+    view.panelNotes(item(key), { ...panelOf([1, 0], [1, 0], { periods_with_records: 1, periods_without_records: 1 }), left_out: left }, MONTHS.slice(1, 3), grain, "en");
+  const said = (key, left, grain) => notes(key, left, grain).map((note) => words(note, "en"));
+  // The verbs and the pronouns too (Codex's review of the plan of U1, 8, and
+  // the checker's review of the plan, 5).
+  assert.ok(said("dist", { disagree: 1 }).includes("1 activity whose values disagreed and were left empty is not included."));
+  assert.ok(said("dist", { disagree: 2 }).includes("2 activities whose values disagreed and were left empty are not included."));
+  assert.ok(said("dist", { no_value: 1 }).includes("1 activity without a value is not included."));
+  assert.ok(said("asc", { no_value: 1 }).includes("1 activity is not included: it has no linked FIT file, or its FIT file has no such value."));
+  assert.ok(said("hr", { no_duration: 1 }).includes("1 activity without a time is not in the mean."));
+  assert.ok(said("p5k", { disagree: 1 }).includes("1 record whose values disagreed and were left empty is not included."));
+  assert.ok(said("sleep", { disagree: 1 }).includes("1 day whose values disagreed and were left empty is not included."));
+  assert.ok(said("p5k", { days_with_several_records: 1 }).includes("1 day has two or more records. All records of that day are in the mean."));
+  assert.ok(said("vo2", { days_with_several_records: 1 }, "day").includes("1 day has two or more records. Every point is shown."));
+  assert.ok(said("dist", { after_today: 1 }).includes("1 record dated after today is not included. This can happen when a watch's clock was wrong."));
+  assert.ok(said("dist", { no_date: 1 }).includes("1 record without a date is not included."));
+  // The days of the sleeps, as their names in English, never "1 days"
+  // (Codex's review of the plan of U1, 8: they are days, not sleeps).
+  assert.ok(said("sleep", { sleep_review_days: 1, sleep_other_days: 0 }).includes("Days not used: 1 (with a sleep that needs review: 1; with excluded sleeps only: 0)."));
+  // A count of 0 has no note, rather than the words for several.
+  const keys = notes("dist", { disagree: 0, no_value: 0, after_today: 0, no_date: 0 }).map((note) => note.key);
+  assert.deepEqual(keys.filter((key) => key.startsWith("view.note.") && key !== "view.note.zero" && key !== "view.note.partial"), []);
+  // The view by shoes.
+  const shoes = (answer) => view.shoesNotes(answer).slice(1).map((note) => words(note, "en"));
+  assert.deepEqual(shoes({ without_shoes: 1, not_known: 1, without_distance: 1, left_out: 1 }), [
+    "1 activity without shoes is not included.",
+    "1 activity not known to have shoes is not included (its gear is not in the output, or of a type not known, or it cannot be linked to gear).",
+    "1 activity without a distance is not in the distances (it is in the counts).",
+    "1 pair of shoes without an activity in this period is not included.",
+  ]);
+  assert.deepEqual(shoes({ without_shoes: 0, not_known: 0, without_distance: 0, left_out: 0 }), []);
+  assert.equal(words(view.shoesCount({ shoes: [{}], with_shoes: 1, activities: 1 }), "en"), "Pairs of shoes: 1 (activities of the types counted in this period: 1; with shoes: 1)");
+  assert.equal(words(view.shoesCount({ shoes: [{}, {}], with_shoes: 9, activities: 12 }), "ja"), "靴 2 足（この期間の数える種目の 12 回のうち、靴の付いた回 9 回）");
+  // The week right before the week of a race, in the rows of the table and
+  // in what the keyboard says; the marks of the axis are every fourth week.
+  assert.equal(words(view.raceSlotName(11, 12), "en"), "1 week before");
+  assert.equal(words(view.raceSlotName(10, 12), "en"), "2 weeks before");
+  assert.equal(words(view.raceSlotName(11, 12), "ja"), "1 週前");
+  assert.ok(view.raceTicks(8).every((tick) => !tick.text.key.endsWith("_one")));
+});
+
+test("the line at the top of the full screen writes a dash for an answer without its days (stage U1 of v2.2.0)", () => {
+  // An answer of a period that the output does not reach has no days, which
+  // stopped the drawing of the page before (Codex's review of the diff of U1, 1).
+  assert.deepEqual(view.fullDays({ start: null, end: null }, "en"), { from: "—", to: "—" });
+  assert.deepEqual(view.fullDays({ start: "2024-01-01" }, "ja"), { from: "—", to: "—" });
+  assert.deepEqual(view.fullDays(null, "en"), { from: "—", to: "—" });
+  assert.deepEqual(view.fullDays({ start: "2024-01-01", end: "2024-03-31" }, "en"), { from: "January 1, 2024", to: "March 31, 2024" });
+  assert.deepEqual(view.fullDays({ start: "2024-01-01", end: "2024-03-31" }, "ja"), { from: "2024年1月1日", to: "2024年3月31日" });
 });

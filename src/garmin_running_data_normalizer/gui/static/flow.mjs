@@ -2,6 +2,8 @@
 // them. Message keys appear here only as literal strings, so that tests can
 // check them against the catalogs.
 
+import { countKey } from "./i18n.mjs";
+
 export const ACTIVE_STATES = ["running", "cancelling"];
 export const TERMINAL_STATES = ["finished", "finished_after_cancel", "cancelled", "failed"];
 // States in which the run published a complete output folder.
@@ -462,7 +464,7 @@ export function progressMessage(progress) {
     };
   }
   if (stage === "building_snapshots") {
-    return { key: STAGE_KEYS.building_snapshots, params: { snapshots: progress.snapshots }, keyParams: {} };
+    return { key: countKey(STAGE_KEYS.building_snapshots, progress.snapshots), params: { snapshots: progress.snapshots }, keyParams: {} };
   }
   return { key: STAGE_KEYS[stage], params: {}, keyParams: {} };
 }
@@ -1569,7 +1571,7 @@ export function warningMessages(result) {
   if (totals.total === 0) {
     return [];
   }
-  const messages = [message("output_check.warnings", { ...totals })];
+  const messages = [message(countKey("output_check.warnings", totals.kinds), { ...totals })];
   const items = Array.isArray(result?.warning_items) ? result.warning_items : [];
   const rank = (item) => OTHER_GROUP_ORDER.indexOf(item.family ?? null) + 1;
   const sorted = [...items].sort(
@@ -1808,10 +1810,10 @@ export function nextLine(view, states) {
   if (runState === "finished" && !view.editedSinceRun) {
     const result = view.result ?? {};
     if (result.exit_code === 3) {
-      return message("next_line.done_partial", { warnings: result.warning_count ?? 0 });
+      return message(countKey("next_line.done_partial", result.warning_count ?? 0), { warnings: result.warning_count ?? 0 });
     }
     if ((result.warning_count ?? 0) > 0) {
-      return message("next_line.done_warnings", { warnings: result.warning_count });
+      return message(countKey("next_line.done_warnings", result.warning_count), { warnings: result.warning_count });
     }
     return message("next_line.done");
   }
@@ -2012,7 +2014,7 @@ export function runSummary(status, states, view = {}) {
     return {
       headline: done,
       exitCode: result.exit_code,
-      sub: message(lookup(RESULT_SUB_KEYS, result.status, "result.sub_pass"), {
+      sub: message(countKey(lookup(RESULT_SUB_KEYS, result.status, "result.sub_pass"), result.warning_count ?? 0), {
         warnings: result.warning_count ?? 0,
       }),
     };
@@ -2112,15 +2114,15 @@ function confirmedWords(box, view) {
     if (ran && (view.runHow === "snapshots" || view.runHow === "rerun")) {
       const used = Number.isInteger(view.result?.snapshot_count) ? view.result.snapshot_count : count;
       if (view.runHow === "rerun") {
-        return message("summary.snapshot_rerun_done", { count: used });
+        return message(countKey("summary.snapshot_rerun_done", used), { count: used });
       }
-      return view.madeStore ? message("summary.snapshot_new_done") : message("summary.snapshot_done", { count: used });
+      return view.madeStore ? message("summary.snapshot_new_done") : message(countKey("summary.snapshot_done", used), { count: used });
     }
     if (view.how === "rerun") {
-      return message("summary.snapshot_rerun", { count });
+      return message(countKey("summary.snapshot_rerun", count), { count });
     }
     if (view.how === "snapshots") {
-      return view.newStore ? message("summary.snapshot_new") : message("summary.snapshot_import", { count });
+      return view.newStore ? message("summary.snapshot_new") : message(countKey("summary.snapshot_import", count), { count });
     }
     return message("summary.snapshot_single");
   }

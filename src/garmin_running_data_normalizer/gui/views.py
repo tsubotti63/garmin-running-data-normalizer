@@ -18,6 +18,11 @@ stage T1 by their conditions on the activities too. The requests may give
 conditions (conditions_request); the server says one of another form with
 CONDITIONS_INVALID. The page checks them by the same rules before it sends
 them, and shows that code as a stop of the numbers.
+
+Each reading of an output, as it is opened and as it is read again, has a
+number of one count for the whole server (stage U1 of v2.2.0), which the
+answers of the panels and of the other views give as ``read``, so that the
+page can tell another view answered from another reading than its panels.
 """
 
 from __future__ import annotations
@@ -105,6 +110,8 @@ class _View:
     stamp: Stamp
     data: ViewData
     lock: threading.Lock
+    # The number of the reading of ``data`` (stage U1 of v2.2.0).
+    read: int = 0
     # The bars of the item shelf of ``data`` by the activity types (stage M2
     # of v2.2.0): every answer carries them, and they are made from every
     # row of the output, while a comparison by race day asks up to 13 times
@@ -134,6 +141,16 @@ class Views:
         self._max_views = max_views
         self._lock = threading.Lock()
         self._views: OrderedDict[str, _View] = OrderedDict()
+        self._reads = 0
+
+    def _number(self) -> int:
+        # The number of a new reading, one count for the whole server, kept by
+        # the lock of the outputs for a moment, after the reading only, as the
+        # lock of one output does not keep it from another (Codex's review of
+        # the plan of U1, 5).
+        with self._lock:
+            self._reads += 1
+            return self._reads
 
     def _read(self, output: Path) -> tuple[ViewData, Stamp]:
         # The stamp before and after the reading: an output that changed
@@ -149,9 +166,10 @@ class Views:
         reading takes no lock of the server, so that other requests are
         answered meanwhile."""
         data, stamp = self._read(output)
+        read = self._number()
         ticket = secrets.token_urlsafe(16)
         with self._lock:
-            self._views[ticket] = _View(output, stamp, data, threading.Lock())
+            self._views[ticket] = _View(output, stamp, data, threading.Lock(), read)
             while len(self._views) > self._max_views:
                 self._views.popitem(last=False)
         return ticket, data
@@ -160,6 +178,13 @@ class Views:
         """What the output of ``ticket`` holds now: what was read, when its
         stamp and the date of today are the same; otherwise it is checked and
         read again, and a ticket whose output fails is forgotten."""
+        return self.reading(ticket)[0]
+
+    def reading(self, ticket: str) -> tuple[ViewData, int]:
+        """What the output of ``ticket`` holds now, as ``data`` gives it, with
+        the number of its reading (stage U1 of v2.2.0), given in the same lock
+        as the data, so that an answer made of it says the reading that it is
+        of; a reading again, also for another date of today, has a new one."""
         with self._lock:
             view = self._views.get(ticket)
             if view is None:
@@ -167,7 +192,7 @@ class Views:
             self._views.move_to_end(ticket)
         with view.lock:
             if output_stamp(view.output) == view.stamp and self._today(view.data.timezone).toordinal() == view.data.today:
-                return view.data
+                return view.data, view.read
             try:
                 view.data, view.stamp = self._read(view.output)
             except Exception:
@@ -175,8 +200,9 @@ class Views:
                     if self._views.get(ticket) is view:
                         del self._views[ticket]
                 raise
+            view.read = self._number()
             view.shelves = OrderedDict()
-            return view.data
+            return view.data, view.read
 
     def coverage(
         self,

@@ -1887,10 +1887,12 @@ class GuiGuideTest(unittest.TestCase):
             "openSave": ('state.saveScope = "all";', 'state.saveColors = "light";', "state.saveMarks = false;", "(open ? ui.saveTitle : saveButton(state.saveFrom)).focus();"),
             "renderSave": ("if (state.saveOpen && state.saveFrom !== view) {\n    state.saveOpen = false;", "ui.saveOpen.disabled = !viewing || !state.items.length;", "ui.saveGo.disabled = !target.ready;"),
             "saveImage": (
-                '} else if (!target.ready || target.name !== ui.saveName.textContent) {\n    problem = "view.save.changed";',
+                # Stage U1 of v2.2.0: none kept that the window says by itself,
+                # and the focus on the title where the button cannot be pressed.
+                "said: saveSaysNow(target, panels && savePanelGone(target.plan)).said,",
                 'problem = "view.save.failed";',
                 "link.download = target.name;",
-                "(problem === null ? saveButton(state.saveFrom) : ui.saveGo).focus();",
+                "(ui.saveGo.disabled ? ui.saveTitle : ui.saveGo).focus();",
             ),
             "saveTarget": ("const problem = saveProblem({ stopped: state.seriesStop !== null, loading: state.loading, answer: state.answer, drawn, parts: plan.keys.length });",),
         }
@@ -1926,7 +1928,7 @@ class GuiGuideTest(unittest.TestCase):
                 "for two items plotted or a distribution, a period without values to draw;",
                 "A panel or a year without values goes in with the words that the page shows for it.",
                 "**Save** hands the file to the browser as a download, which the browser saves where its settings say (usually your downloads, or where you choose if it asks each time). This app cannot know that it was saved,",
-                "the window says so, and the focus stays on **Save** where it can still be pressed; check the window, and press **Save** again when it can save.",
+                "the window says so. Where it can no longer save at the press, it says the reason that it shows by itself, such as an answer on its way, which goes with that reason. The focus stays on **Save** where it can still be pressed, and goes to the title of the window where it cannot; check the window, and press **Save** again when it can save.",
                 "In forced colors (a contrast theme of Windows, for example), the picture takes the colors of the screen, whichever **Colors** gives.",
                 "Esc, **Close**, or **Cancel** closes it, and the focus goes back to its **Save as image…** then and after the file is handed to the browser.",
             ),
@@ -1938,7 +1940,7 @@ class GuiGuideTest(unittest.TestCase):
                 "点で並べると分かれ方で期間に図にする値が無いとき",
                 "値の無い段や年も、ページに出ている言葉のまま入ります。",
                 "窓の「保存」を押すと、画像のファイルをブラウザーにダウンロードとして渡します。保存する場所は、ブラウザーの設定のとおりです（ふつうはダウンロードの場所。毎回聞く設定なら、そのとき選んだ場所）。このアプリは、保存できたかを知らないので、",
-                "押したときに、保存する図が窓に出ていたものから変わっていたときと、画像を作れなかったときも、窓がわけを言います。「保存」が押せるときは、フォーカスは「保存」に残ります。窓を見直して、保存できるようになったら、もう一度「保存」を押してください。",
+                "押したときに、保存する図が窓に出ていたものから変わっていたときと、画像を作れなかったときも、窓がわけを言います。押したときに保存できなくなっていたときは、窓がそのとき言っているわけ（読み込み中など）を出し、わけが無くなれば一緒に消えます。「保存」が押せるときは、フォーカスは「保存」に残り、押せないときは窓の題に移ります。窓を見直して、保存できるようになったら、もう一度「保存」を押してください。",
                 "強制カラーの画面（Windows のコントラスト テーマなど）では、どちらの「色」を選んでも、画像はその画面の色になります。",
                 "Esc キー・「閉じる」・「やめる」で閉じたときと、ファイルをブラウザーに渡したあとは、押した「画像で保存…」に戻ります。",
             ),
@@ -1960,7 +1962,7 @@ class GuiGuideTest(unittest.TestCase):
                 "so this app keeps them only in the file of the marks, `gui-marks.json`, never in an output, the Support Bundle, or the text of a report on GitHub (an image you save with [Saving as an image](#saving-as-an-image-from-220) shows them where you put them in, and by race day).",
                 "hands it to the browser as a download; this app sends nothing anywhere. With the marks put in, and by race day, the names of the marks show too.",
                 "The images you saved are your own files: **Forget the remembered settings…** does not remove them.",
-                "In **Save as image…** (from 2.2.0), the window takes the focus on its title; Esc, **Close**, or **Cancel** closes it, back to its button, as does handing the file to the browser; where it could not save, the window says why, and the focus stays on **Save** where it can still be pressed",
+                "In **Save as image…** (from 2.2.0), the window takes the focus on its title; Esc, **Close**, or **Cancel** closes it, back to its button, as does handing the file to the browser; where it could not save, the window says why, and the focus stays on **Save** where it can still be pressed, or goes to the title of the window where it cannot",
             ),
             "ja": (
                 "印は、このアプリが、このパソコンの GUI の設定のフォルダーの `gui-marks.json` にだけ残します",
@@ -1968,7 +1970,7 @@ class GuiGuideTest(unittest.TestCase):
                 "このアプリは、印のファイル `gui-marks.json` にだけ残します。出力・問い合わせ用ファイル・GitHub への報告の文には入りません（[画像で保存](#画像で保存220-から)で印を入れたときと、大会の日でくらべた図は、あなたが保存する画像に写ります）。",
                 "ブラウザーにダウンロードとして渡すだけで、このアプリはどこへも送りません。印を入れたときと、大会の日でくらべた図は、印の名前も写ります。",
                 "保存した画像はあなたのファイルなので、「覚えた設定を消す…」では消えません。",
-                "画像で保存（2.2.0 から）は、窓を開くと窓の題にフォーカスが移ります。Esc キー・「閉じる」・「やめる」で閉じたときと、ファイルをブラウザーに渡したあとは、押した「画像で保存…」に戻ります。保存できなかったときは、窓がわけを言い、「保存」が押せるときは、フォーカスは「保存」に残ります",
+                "画像で保存（2.2.0 から）は、窓を開くと窓の題にフォーカスが移ります。Esc キー・「閉じる」・「やめる」で閉じたときと、ファイルをブラウザーに渡したあとは、押した「画像で保存…」に戻ります。保存できなかったときは、窓がわけを言い、「保存」が押せるときは、フォーカスは「保存」に残り、押せないときは窓の題に移ります",
             ),
         }
         for language, path in GUIDES.items():
@@ -2048,6 +2050,12 @@ class GuiGuideTest(unittest.TestCase):
             (page, "saveShoesTarget"): ("empty: drawn !== null && !drawn.shoes.length,", 'name: drawn === null ? null : saveViewFileName("shoes", { key: "dist", start: drawn.start, end: drawn.end }),'),
             (page, "requestShown"): ("state.panelsStale = true;",),
             (page, "leaveShoes"): ("if (state.panelsStale) {",),
+            # Stage U1 of v2.2.0: another view of another reading than the
+            # panels marks them too, only after the check of its generation.
+            (page, "otherReading"): ("if (!sameReading(state.answer, answer)) {\n    state.panelsStale = true;",),
+            (page, "requestPlot"): ("if (seq !== state.plotSeq) {\n      return;\n    }\n    state.plotAnswer = answer;\n    otherReading(answer);",),
+            (page, "requestSpread"): ("if (seq !== state.spreadSeq) {\n      return;\n    }\n    state.spreadAnswer = answer;\n    otherReading(answer);",),
+            (page, "requestShoes"): ("if (seq !== state.shoesSeq) {\n      return;\n    }\n    state.shoesAnswer = answer;\n    otherReading(answer);",),
         }
         for (script, name), lines in held.items():
             body = function_body(script, name)
@@ -2055,8 +2063,12 @@ class GuiGuideTest(unittest.TestCase):
                 with self.subTest(function=name, line=line):
                     self.assertIn(line, body)
         # The panels are asked again on the way back only where requestShown
-        # set it, while another view showed (Codex's review of the plan of S2, 3).
-        self.assertEqual(page.count("state.panelsStale = true;"), 1)
+        # set it, while another view showed (Codex's review of the plan of S2, 3),
+        # or where another view took an answer of another reading (stage U1 of
+        # v2.2.0): the two places that set it are those two functions.
+        self.assertEqual(page.count("state.panelsStale = true;"), 2)
+        self.assertEqual(sum(function_body(page, name).count("state.panelsStale = true;") for name in ("requestShown", "otherReading")), 2)
+        self.assertEqual(page.count("otherReading(answer);"), 3)
         self.assertIn('ui.shoesPanels.addEventListener("pointermove", shoesPointer);', page)
         self.assertIn('ui.shoesPanels.addEventListener("keydown", shoesKeyDown);', page)
         self.assertIn('name=_shoe_text(record.get("display_name")) or _shoe_text(record.get("custom_make_model")),', reader)
@@ -2112,7 +2124,7 @@ class GuiGuideTest(unittest.TestCase):
                     "By shoes, every panel goes in, also those scrolled out of the screen, with the time axis and the notes.",
                     "by shoes, a period and types (and conditions) without an activity with shoes;",
                 )
-                again = "In the other views (two items plotted, a distribution, and the shoes), the values can come from another reading than the panels too. Back from another view, the panels are asked again only where the period, the activity types, or the conditions were changed while it showed; otherwise they stay as they were read before. Choose the period again for the new reading."
+                again = "In the other views (two items plotted, a distribution, and the shoes), the values can come from another reading than the panels too. Back from another view, the panels are asked again where the period, the activity types, or the conditions were changed while it showed, and where an answer of that view was of another reading than the panels (for example, of the output read again after them); otherwise they stay as they were read before, also where the output changed after the last answer of that view. Choose the period again for the new reading."
                 privacy = "The names of the shoes of [By shoes](#by-shoes) (from 2.2.0) may be names you gave in Garmin. They show on the page and in a picture you save (the window says so before saving). This app writes them in no file name, log, or remembered setting."
                 steps = (
                     f"In {mark.format(messages['view.other.button'])} above the panels, choose {mark.format(messages['view.other.shoes'])}.",
@@ -2143,7 +2155,7 @@ class GuiGuideTest(unittest.TestCase):
                     "靴ごとでは、画面の外へ送った段も含めたすべての段と、時間の軸・注が入ります。",
                     "靴ごとでその期間と種目（と条件）に靴の付いた回が無いとき",
                 )
-                again = "ほかの見方（点で並べる・分かれ方・靴ごと）の値も、段と別の読みから作られることがあります。ほかの見方から段に戻ったとき、段を問い合わせ直すのは、ほかの見方の間に期間か数える種目か条件を変えたときだけで、それ以外は前の読みの段のままです。期間などを選び直すと、新しい読みになります。"
+                again = "ほかの見方（点で並べる・分かれ方・靴ごと）の値も、段と別の読みから作られることがあります。ほかの見方から段に戻ったとき、段を問い合わせ直すのは、ほかの見方の間に期間か数える種目か条件を変えたときと、ほかの見方の答えの読みが段の読みと違ったとき（たとえば、段のあとで出力を読み直したとき）です。それ以外は、前の読みの段のままです（ほかの見方の最後の答えのあとに出力が変わったときも）。期間などを選び直すと、新しい読みになります。"
                 privacy = "[靴ごと](#靴ごと)（2.2.0 から）の靴の名前は、あなたが Garmin で付けた名前のことがあります。名前はページと、画像で保存した画像に写ります（保存の前に、窓がそのことを言います）。このアプリは、靴の名前を、ファイルの名前・ログ・覚えた設定に書きません。"
                 steps = (
                     f"段の上の{mark.format(messages['view.other.button'])}で{mark.format(messages['view.other.shoes'])}を選びます。",
@@ -2205,7 +2217,7 @@ class GuiGuideTest(unittest.TestCase):
             "An item that cannot be chosen (**By shoes**, where no activity of the output has shoes, or their files were too large to read) says why under its name, stays in the way of the arrow keys (`aria-disabled`), and does nothing when pressed.",
             "The items of two items plotted and of a distribution are the 15 of one activity (the kinds `act`, but the count, and `fit`);",
             "the view by shoes always shows the distance by month, and nothing of it is remembered.",
-            "a comparison, a list, the summary, or another view asked right after a new normalization can come from another reading than the panels beside it; asking again uses the new reading. Back from another view, the panels ask again only where the period, the activity types, or the conditions changed while it showed (`panelsStale`), so that otherwise they show the reading before.",
+            "a comparison, a list, the summary, or another view asked right after a new normalization can come from another reading than the panels beside it; asking again uses the new reading. Back from another view, the panels ask again where the period, the activity types, or the conditions changed while it showed (`panelsStale`), and from v2.2.0 (stage U1) where an answer of that view was of another reading than the panels, so that otherwise they show the reading before.",
             "From v2.2.0 the names of the shoes, which may be the person's own words, show on the view page and in a picture saved from the view by shoes (its window says so before saving); they are written in no file name, log, or setting.",
             "an activity with no link to shoes is not known to have shoes where it has no key, or links to gear not in the output or of a type not known;",
             "how many have shoes (and of those, how many have two or more and how many have no distance), are not known, and are without;",
@@ -2806,6 +2818,89 @@ class GuiGuideTest(unittest.TestCase):
         for source, name, fragment in found:
             with self.subTest(source=source, link=f"{name}#{fragment}"):
                 self.assertIn(fragment, anchors[name])
+
+    def test_guides_give_the_fixes_before_the_release_candidate_as_the_page_does(self) -> None:
+        # Stage U1 of v2.2.0: the zero dot of a total recorded as 0, the words of
+        # the name not used in the line at the top of the full screen, and the
+        # focus of a press that cannot save, each tied to the code that does it
+        # (the press and the way back from another view are held with the
+        # saving and the shoes above).
+        flow = (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8")
+        page = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        chart = (STATIC_ROOT / "view_chart.mjs").read_text(encoding="utf-8")
+        design = " ".join((ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        says = {
+            "en": (
+                "drawn as a light point, as is a step whose recorded values add up to 0; before the first and after the last, it is empty, without a point. The 0 of a step without a record does not always mean that there was no run.",
+                "where there are conditions, their words (not their numbers); where the names of the output could not be read and there are words of the name, the words end with **(the names could not be read, so the words of the name are not used)**.",
+                "(but not while there is no panel); the line at the top of the full screen ends the words of the conditions with **(the names could not be read, so the words of the name are not used)**.",
+                "the focus stays on **Save** where it can still be pressed, or goes to the title of the window where it cannot",
+            ),
+            "ja": (
+                "記録の無い区切りが 0 になり、薄い点で出ます。記録された値の合計が 0 の区切りも、同じ点です。最初より前と最後より後は空で、点は出ません。記録の無い区切りの 0 は、「走らなかった」とは限りません。",
+                "条件があれば条件の言葉が出ます（件数は出ません）。名前を読めない出力で名前の条件があるときは、条件の言葉のあとに「（名前を読めないので、名前の条件は使っていません）」と出ます。",
+                "（段が 1 つも無いあいだは出ません）。全画面の上の 1 行では、条件の言葉のあとに「（名前を読めないので、名前の条件は使っていません）」と出ます。",
+                "「保存」が押せるときは、フォーカスは「保存」に残り、押せないときは窓の題に移ります（[画像で保存](#画像で保存220-から)）。",
+            ),
+        }
+        # What they said before, which is no longer so (Codex's review of the
+        # plan of U1, 10: an assertion is rewritten, not added to).
+        gone = {
+            "en": ("0 means that nothing was recorded", "nor in the line at the top of the full screen"),
+            "ja": ("0 は「記録が無い」ことで", "全画面の上の 1 行には出ません"),
+        }
+        quoted = {"en": "**{}**", "ja": "「{}」"}
+        for language in ("en", "ja"):
+            text = GUIDES[language].read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            for phrase in says[language]:
+                with self.subTest(language=language, phrase=phrase[:40]):
+                    self.assertEqual(reads.count(phrase), 1)
+            for phrase in gone[language]:
+                with self.subTest(language=language, gone=phrase):
+                    self.assertNotIn(phrase, reads)
+            # The words quoted are those of the line under a picture, after the
+            # words of the conditions, which the full screen shows too.
+            words = catalog(language)
+            unread = words["view.save.conditions_unread"].replace("{conditions}", "").strip()
+            with self.subTest(language=language, part="quoted"):
+                self.assertIn(quoted[language].format(unread), reads)
+            # The help says the same of the zero dots.
+            with self.subTest(language=language, part="help"):
+                self.assertIn(
+                    "; so is a period whose recorded activities add up to 0." if language == "en" else "記録されたアクティビティの合計が 0 の期間も、同じ点です。",
+                    words["view.help.zero_text"],
+                )
+        # Every total of 0 is the same dot, recorded or not.
+        self.assertIn("if (value !== 0) {\n      return;\n    }", function_body(chart, "zeroDots"))
+        # The full screen: the line under a picture's words, for the answer of
+        # the panels of the conditions of the page whose names were not read.
+        self.assertIn(
+            'return conditionsUnread(state.answer?.conditions ?? null, state.conditions) ? t("view.save.conditions_unread", { conditions: text }) : text;',
+            function_body(page, "fullConditionsText"),
+        )
+        self.assertIn('conditions: state.conditions === null ? "" : fullConditionsText(),', page)
+        # Its days, a dash where the answer has none (Codex's review of the diff
+        # of U1, 1).
+        self.assertIn("const days = fullDays(state.answer, state.language);", page)
+        self.assertIn("        from: days.from,\n        to: days.to,\n", page)
+        self.assertIn('return { from: "—", to: "—" };', function_body(flow, "fullDays"))
+        self.assertIn(
+            'return counts !== null && typeof counts === "object" && conditionsKey(counts.asked ?? null) === conditionsKey(conditions) && counts.name === "unread";',
+            function_body(flow, "conditionsUnread"),
+        )
+        # The design document.
+        for phrase in (
+            "it is drawn as a light point, as is a period whose recorded values add up to 0. The 0 of a period without a record does not always mean that there was no run.",
+            "(`read`; not in those of `/api/view/activities`, which the page does not compare)",
+            "(`ONE_KEYS` and `countKey` of `i18n.mjs`, the same Japanese)",
+            "that the words of the name were not used where the answer of the panels, of these conditions, says so (`conditionsUnread`).",
+            "a press that can no longer save keeps no reason that the window says by itself (`saveSays`, `savePress`)",
+            "and from v2.2.0 (stage U1) a dash for the period of an answer without its days (`fullDays`)",
+        ):
+            with self.subTest(design=phrase[:40]):
+                self.assertEqual(design.count(phrase), 1)
+        self.assertNotIn("0 means no record", design)
 
 
 if __name__ == "__main__":
