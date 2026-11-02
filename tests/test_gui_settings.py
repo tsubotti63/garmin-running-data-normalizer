@@ -223,7 +223,7 @@ class SettingsFileTest(unittest.TestCase):
         self.assertEqual(remember_theme_at(self.path, "dark"), SETTINGS_NEWER)
         self.assertEqual(self.path.read_bytes(), newer)
         # Forgetting removes it.
-        self.assertIsNone(remove_settings(self.path))
+        self.assertIsNone(remove_settings(self.path)[0])
         self.assertFalse(self.path.exists())
 
     def test_a_file_that_is_not_used_is_replaced_by_the_next_settings(self) -> None:
@@ -399,17 +399,21 @@ class SettingsFileTest(unittest.TestCase):
 
     def test_forgetting_removes_the_file_and_the_empty_folder(self) -> None:
         self.assertFalse(settings_present(self.path))
-        self.assertIsNone(remove_settings(self.path))
+        notice, present, generation = remove_settings(self.path)
+        self.assertEqual((notice, present), (None, False))
         self.assertIsNone(write_settings(self.path, {"hints": True}))
         self.assertTrue(settings_present(self.path))
-        self.assertIsNone(remove_settings(self.path))
+        # Each forgetting moves the generation of the settings on by one
+        # (stage U2 of v2.2.0), with no file to forget too.
+        self.assertEqual(remove_settings(self.path), (None, True, generation + 1))
         self.assertFalse(settings_present(self.path))
         self.assertFalse(self.path.parent.exists())
         self.assertTrue(self.base.is_dir())
-        # A folder in its place is there to report (stage C1).
+        # A folder in its place is there to report (stage C1); the
+        # generation moves on also when the file is left.
         self.path.mkdir(parents=True)
         self.assertTrue(settings_present(self.path))
-        self.assertEqual(remove_settings(self.path), SETTINGS_NOT_REMOVED)
+        self.assertEqual(remove_settings(self.path), (SETTINGS_NOT_REMOVED, True, generation + 2))
         self.assertTrue(self.path.is_dir())
 
     def test_a_place_that_cannot_be_looked_at_counts_as_present(self) -> None:
@@ -425,7 +429,7 @@ class SettingsFileTest(unittest.TestCase):
         self.path.parent.mkdir()
         self.path.symlink_to(target)
         self.assertTrue(settings_present(self.path))
-        self.assertIsNone(remove_settings(self.path))
+        self.assertIsNone(remove_settings(self.path)[0])
         self.assertFalse(os.path.lexists(self.path))
         self.assertEqual(target.read_bytes(), b"{}")
 
@@ -459,8 +463,11 @@ class SettingsFileTest(unittest.TestCase):
                 "timezone": None,
                 "notice": None,
                 "present": False,
+                # The generation of the settings (stage U2 of v2.2.0).
+                "generation": 0,
             },
         )
+        self.assertEqual(launch_answer({}, None, present=False, generation=3)["generation"], 3)
         self.assertEqual(launch_answer({"hints": False}, None, present=True)["launch"], "first")
         self.assertEqual(launch_answer({"store": self.store}, None, present=True)["launch"], "later")
         self.assertEqual(launch_answer({"output_parent": self.parent}, None, present=True)["launch"], "later")
@@ -471,7 +478,7 @@ class SettingsFileTest(unittest.TestCase):
 
 class SettingsApiTest(GuiServerTestCase):
     def post(self, path: str, payload: dict[str, Any] | None = None) -> tuple[int, dict[str, Any]]:
-        body = json.dumps(payload or {}).encode("utf-8")
+        body = json.dumps(self.at_generation(path, payload or {})).encode("utf-8")
         status, _, answer = self.post_api(path, body=body)
         return status, json.loads(answer)
 
@@ -511,6 +518,7 @@ class SettingsApiTest(GuiServerTestCase):
                     "timezone": None,
                     "notice": None,
                     "present": True,
+                    "generation": self.settings_generation(),
                 },
             ),
         )
@@ -589,21 +597,34 @@ class SettingsApiTest(GuiServerTestCase):
 
     def test_the_settings_are_forgotten_on_request_and_never_while_a_run_is_active(self) -> None:
         path = places.settings_file()
+        generation = self.settings_generation()
         # Nothing to forget: no file is left, and the answer says that there
-        # was none (stage C1).
+        # was none (stage C1); and from stage U2 of v2.2.0 the generation of
+        # the settings after it, one more.
         self.assertIs(self.post("/api/status")[1]["settings"]["present"], False)
         self.assertEqual(
             self.post("/api/settings/forget"),
-            (200, {"forgotten": True, "had_settings": False, "notice": None}),
+            (200, {"forgotten": True, "had_settings": False, "notice": None, "generation": generation + 1}),
         )
         self.assertIsNone(remember_hints_at(path, False))
         self.assertIs(self.post("/api/status")[1]["settings"]["present"], True)
-        with patch.object(self.server.runs, "active", return_value=True):
+        # A run that is active (a child that waits until it is cancelled):
+        # the settings stay, and so does their generation.
+        parent = path.parent.parent / "outputs"
+        parent.mkdir()
+        manager = stub_manager("wait", cancel_grace=60.0)
+        self.addCleanup(manager.stop)
+        with patch.object(self.server, "runs", manager):
+            self.assertEqual(self.post("/api/run/start", request(SYNTHETIC_EXPORT, parent, "o1"))[0], 200)
             self.assertEqual(self.post("/api/settings/forget"), (409, {"error": "RUN_ACTIVE"}))
-        self.assertTrue(path.exists())
+            self.assertTrue(path.exists())
+            self.assertEqual(self.settings_generation(), generation + 1)
+            self.assertTrue(wait_until(lambda: bool(manager.status()["progress"])))
+            manager.cancel()
+            self.assertTrue(wait_until(lambda: not manager.active(), 120))
         self.assertEqual(
             self.post("/api/settings/forget"),
-            (200, {"forgotten": True, "had_settings": True, "notice": None}),
+            (200, {"forgotten": True, "had_settings": True, "notice": None, "generation": generation + 2}),
         )
         self.assertFalse(path.exists())
         self.assertEqual(self.post("/api/status")[1]["settings"]["launch"], "first")
@@ -611,8 +632,214 @@ class SettingsApiTest(GuiServerTestCase):
         path.mkdir(parents=True)
         self.assertEqual(
             self.post("/api/settings/forget"),
-            (200, {"forgotten": False, "had_settings": True, "notice": SETTINGS_NOT_REMOVED}),
+            (200, {"forgotten": False, "had_settings": True, "notice": SETTINGS_NOT_REMOVED, "generation": generation + 3}),
         )
+
+
+# A change of each of the five requests that change the settings (stage U2
+# of v2.2.0).
+CHANGES = {
+    "/api/settings/hints": {"on": True},
+    "/api/settings/theme": {"theme": "dark"},
+    "/api/settings/view": {"items": ["dist"], "shelf": "open"},
+    "/api/settings/layouts": {"op": "add", "name": "Mine", "items": ["dist", "pace"]},
+    "/api/settings/marks": {"op": "add", "kind": "race", "name": "Race U", "day": "2030-04-01"},
+}
+
+
+class SettingsGenerationTest(GuiServerTestCase):
+    """The generation of the settings (stage U2 of v2.2.0): forgetting moves
+    it on, and a change asked at another one is stale and writes nothing, in
+    whichever order the two take the lock of the settings."""
+
+    def post(self, path: str, payload: Any = None) -> tuple[int, dict[str, Any]]:
+        # The generation as each test names it.
+        body = json.dumps({} if payload is None else payload).encode("utf-8")
+        status, _, answer = self.post_api(path, body=body)
+        return status, json.loads(answer)
+
+    def in_thread(self, path: str, payload: Any = None) -> tuple[threading.Thread, list[tuple[int, dict[str, Any]]]]:
+        answers: list[tuple[int, dict[str, Any]]] = []
+        thread = threading.Thread(target=lambda: answers.append(self.post(path, payload)), daemon=True)
+        thread.start()
+        return thread, answers
+
+    def held(self, name: str, inside: Any = None) -> tuple[Any, threading.Event, threading.Event]:
+        """settings.<name>, which is called under the lock of the settings,
+        stopped there until ``release`` is set: the patcher, ``entered``, and
+        ``release``."""
+        entered, release = threading.Event(), threading.Event()
+        # A request that a broken test leaves stopped goes on at its end.
+        self.addCleanup(release.set)
+        real = getattr(settings, name)
+
+        def stopping(*args: Any, **kwargs: Any) -> Any:
+            if inside is not None:
+                inside()
+            entered.set()
+            release.wait(10)
+            return real(*args, **kwargs)
+
+        return patch.object(settings, name, stopping), entered, release
+
+    def files(self) -> tuple[bool, bool]:
+        return os.path.lexists(places.settings_file()), os.path.lexists(places.marks_file())
+
+    def test_a_change_names_a_generation_of_its_form(self) -> None:
+        generation = self.settings_generation()
+        for path, change in CHANGES.items():
+            for value in (None, True, False, 1.0, -1, "0", [generation]):
+                with self.subTest(path=path, value=value):
+                    payload = {**change, "generation": value}
+                    self.assertEqual(self.post(path, payload), (422, {"error": "REQUEST_INVALID"}))
+            with self.subTest(path=path, value="none"):
+                self.assertEqual(self.post(path, change), (422, {"error": "REQUEST_INVALID"}))
+        self.assertEqual(self.files(), (False, False))
+        for path, change in CHANGES.items():
+            with self.subTest(path=path):
+                status, answer = self.post(path, {**change, "generation": generation})
+                self.assertEqual((status, answer["remembered"]), (200, True))
+        self.assertEqual(self.files(), (True, True))
+
+    def test_a_change_of_another_generation_is_stale_and_writes_nothing(self) -> None:
+        before = self.settings_generation()
+        self.assertEqual(self.post("/api/settings/forget")[1]["generation"], before + 1)
+        for path, change in CHANGES.items():
+            for asked in (before, before + 2):
+                with self.subTest(path=path, asked=asked):
+                    self.assertEqual(
+                        self.post(path, {**change, "generation": asked}),
+                        (200, {"stale": True, "generation": before + 1}),
+                    )
+        self.assertEqual(self.files(), (False, False))
+        # The generation now writes again.
+        for path, change in CHANGES.items():
+            with self.subTest(path=path):
+                self.assertIs(self.post(path, {**change, "generation": before + 1})[1]["remembered"], True)
+        self.assertEqual(self.files(), (True, True))
+        self.assertEqual(self.settings_generation(), before + 1)
+
+    def test_a_stale_change_is_told_before_a_mark_or_a_layout_that_it_names_is_looked_for(self) -> None:
+        before = self.settings_generation()
+        self.post("/api/settings/forget")
+        stale = (200, {"stale": True, "generation": before + 1})
+        self.assertEqual(self.post("/api/settings/marks", {"op": "remove", "id": "m-0000000a", "generation": before}), stale)
+        self.assertEqual(self.post("/api/settings/layouts", {"op": "rename", "id": "u-0000000a", "name": "B", "generation": before}), stale)
+        self.assertEqual(self.post("/api/settings/layouts", {"op": "nothing", "generation": before}), stale)
+        # And before a file of the marks that is not used.
+        places.marks_file().parent.mkdir(parents=True, exist_ok=True)
+        places.marks_file().write_bytes(b"{not json")
+        self.assertEqual(self.post("/api/settings/marks", {**CHANGES["/api/settings/marks"], "generation": before}), stale)
+        self.assertEqual(
+            self.post("/api/settings/marks", {"op": "remove", "id": "m-0000000a", "generation": before + 1}),
+            (200, {"remembered": False, "notice": "MARKS_UNREADABLE", "marks": None}),
+        )
+        self.assertEqual(places.marks_file().read_bytes(), b"{not json")
+
+    def test_a_change_that_holds_the_lock_first_is_written_and_then_forgotten(self) -> None:
+        for path, change in CHANGES.items():
+            with self.subTest(path=path):
+                generation = self.settings_generation()
+                patcher, entered, release = self.held("read_marks" if path.endswith("marks") else "read_settings")
+                with patcher:
+                    writing, written = self.in_thread(path, {**change, "generation": generation})
+                    self.assertTrue(entered.wait(10))
+                    forgetting, forgotten = self.in_thread("/api/settings/forget")
+                    forgetting.join(0.3)
+                    self.assertTrue(forgetting.is_alive(), "forgetting waits for the change")
+                    release.set()
+                    writing.join(10)
+                    forgetting.join(10)
+                self.assertEqual((written[0][0], written[0][1]["remembered"]), (200, True))
+                self.assertEqual(forgotten[0], (200, {"forgotten": True, "had_settings": True, "notice": None, "generation": generation + 1}))
+                self.assertEqual(self.files(), (False, False))
+
+    def test_a_change_after_a_forgetting_that_holds_the_lock_first_is_stale(self) -> None:
+        for path, change in CHANGES.items():
+            with self.subTest(path=path):
+                generation = self.settings_generation()
+                self.assertIs(self.post(path, {**change, "generation": generation})[1]["remembered"], True)
+                patcher, entered, release = self.held("_remove_file")
+                with patcher:
+                    forgetting, forgotten = self.in_thread("/api/settings/forget")
+                    self.assertTrue(entered.wait(10))
+                    writing, written = self.in_thread(path, {**change, "generation": generation})
+                    writing.join(0.3)
+                    self.assertTrue(writing.is_alive(), "the change waits for the forgetting")
+                    release.set()
+                    forgetting.join(10)
+                    writing.join(10)
+                self.assertEqual(forgotten[0][1]["generation"], generation + 1)
+                self.assertEqual(written[0], (200, {"stale": True, "generation": generation + 1}))
+                self.assertEqual(self.files(), (False, False))
+
+    def test_the_status_tells_the_settings_and_their_generation_of_one_reading(self) -> None:
+        generation = self.settings_generation()
+        self.assertIs(self.post("/api/settings/hints", {"on": False, "generation": generation})[1]["remembered"], True)
+        # A forgetting that holds the lock first: the status waits for it,
+        # and tells no settings of before with the generation after.
+        patcher, entered, release = self.held("_remove_file")
+        with patcher:
+            forgetting, _forgotten = self.in_thread("/api/settings/forget")
+            self.assertTrue(entered.wait(10))
+            reading, read = self.in_thread("/api/status")
+            reading.join(0.3)
+            self.assertTrue(reading.is_alive(), "the status waits for the forgetting")
+            release.set()
+            forgetting.join(10)
+            reading.join(10)
+        settings_now = read[0][1]["settings"]
+        self.assertEqual((settings_now["generation"], settings_now["present"], settings_now["hints"]), (generation + 1, False, None))
+        # A status that holds the lock first: the settings of before, with the
+        # generation of before.
+        self.assertIs(self.post("/api/settings/hints", {"on": False, "generation": generation + 1})[1]["remembered"], True)
+        patcher, entered, release = self.held("read_marks")
+        with patcher:
+            reading, read = self.in_thread("/api/status")
+            self.assertTrue(entered.wait(10))
+            forgetting, _forgotten = self.in_thread("/api/settings/forget")
+            forgetting.join(0.3)
+            self.assertTrue(forgetting.is_alive(), "forgetting waits for the status")
+            release.set()
+            reading.join(10)
+            forgetting.join(10)
+        settings_now = read[0][1]["settings"]
+        self.assertEqual((settings_now["generation"], settings_now["present"], settings_now["hints"]), (generation + 1, True, False))
+        self.assertEqual(self.settings_generation(), generation + 2)
+
+    def test_no_run_starts_while_the_settings_are_forgotten(self) -> None:
+        parent = places.settings_file().parent.parent / "outputs"
+        parent.mkdir()
+        manager = stub_manager("wait", cancel_grace=60.0)
+        self.addCleanup(manager.stop)
+        held_runs: list[bool] = []
+        patcher, entered, release = self.held("_remove_file", inside=lambda: held_runs.append(manager._lock.locked()))
+        with patch.object(self.server, "runs", manager), patcher:
+            forgetting, forgotten = self.in_thread("/api/settings/forget")
+            self.assertTrue(entered.wait(10))
+            starting, started = self.in_thread("/api/run/start", request(SYNTHETIC_EXPORT, parent, "o1"))
+            starting.join(0.3)
+            self.assertTrue(starting.is_alive(), "the run waits for the forgetting")
+            release.set()
+            forgetting.join(10)
+            starting.join(30)
+            self.assertEqual((forgotten[0][0], started[0][0]), (200, 200))
+            # The settings and the marks were removed under the lock of the
+            # runs.
+            self.assertEqual(held_runs, [True, True])
+            self.assertTrue(wait_until(lambda: bool(manager.status()["progress"])))
+            manager.cancel()
+            self.assertTrue(wait_until(lambda: not manager.active(), 120))
+        # A run that is active refuses the forgetting before the lock of the
+        # settings is taken: the generation stays.
+        generation = self.settings_generation()
+        with patch.object(self.server, "runs", manager):
+            self.assertEqual(self.post("/api/run/start", request(SYNTHETIC_EXPORT, parent, "o2"))[0], 200)
+            self.assertEqual(self.post("/api/settings/forget"), (409, {"error": "RUN_ACTIVE"}))
+            self.assertEqual(self.settings_generation(), generation)
+            self.assertTrue(wait_until(lambda: bool(manager.status()["progress"])))
+            manager.cancel()
+            self.assertTrue(wait_until(lambda: not manager.active(), 120))
 
 
 class LaunchThemeTest(unittest.TestCase):

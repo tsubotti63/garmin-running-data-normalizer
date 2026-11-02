@@ -87,6 +87,15 @@ EXPECTED_CONTENT_TYPES = {
 
 Headers = list[tuple[str, str]]
 Response = tuple[int, http.client.HTTPMessage, bytes]
+# The changes of the settings, which name their generation (stage U2 of
+# v2.2.0).
+SETTINGS_CHANGES = (
+    "/api/settings/hints",
+    "/api/settings/theme",
+    "/api/settings/view",
+    "/api/settings/layouts",
+    "/api/settings/marks",
+)
 
 _REAL_CONNECT = socket.socket.connect
 _REAL_CONNECT_EX = socket.socket.connect_ex
@@ -202,6 +211,20 @@ class GuiServerTestCase(unittest.TestCase):
             "POST", path, self.api_headers(body) if headers is None else headers, body
         )
 
+    def settings_generation(self) -> int:
+        """The generation of the settings now, as the page reads it (stage U2
+        of v2.2.0)."""
+        _status, _headers, answer = self.post_api("/api/status")
+        return json.loads(answer)["settings"]["generation"]
+
+    def at_generation(self, path: str, payload: Any) -> Any:
+        """A change of the settings as the page asks it: at the generation
+        now, unless the test names one (stage U2 of v2.2.0), so that a change
+        refused for another reason is refused for that reason."""
+        if path in SETTINGS_CHANGES and isinstance(payload, dict) and "generation" not in payload:
+            return {**payload, "generation": self.settings_generation()}
+        return payload
+
     def raw_request(self, data: bytes) -> bytes:
         with socket.create_connection((HOST, self.port), timeout=10) as connection:
             connection.sendall(data)
@@ -314,12 +337,18 @@ class GuiApiRequestTest(GuiServerTestCase):
         with patch.object(places, "home", lambda: home):
             status, _, body = self.post_api("/api/status")
         self.assertEqual(status, 200)
+        answer = json.loads(body)
+        # The generation of the settings (stage U2 of v2.2.0), which the
+        # forgetting of an earlier test of this process may have moved on.
+        generation = answer["settings"].pop("generation")
+        self.assertIs(type(generation), int)
+        self.assertGreaterEqual(generation, 0)
         # The page takes the product's default timezone from here (stage A5a),
         # the default places, which only the GUI has (stage B4a), the
         # settings of an earlier launch, none in a test's own place (stage
         # B4c), and this computer's values of the GitHub report (stage B5c).
         self.assertEqual(
-            json.loads(body),
+            answer,
             {
                 "default_output_parent": str(home / "GarminRunningData"),
                 "default_store": str(home / "GarminRunningData" / "snapshots"),
@@ -745,12 +774,21 @@ class GuiPageScriptTest(unittest.TestCase):
         # it remembered, and writes its items and its shelf again only when
         # the person changes them, not when an output opens.
         source = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        # From stage U2 of v2.2.0 the page moves on to the generation of the
+        # settings after the forgetting, which the notice tells, and takes
+        # the settings as the server holds them then.
         heard = re.search(r"function themeHeard\(event\) \{(.*?)\n\}", source, re.DOTALL)
         assert heard is not None
-        self.assertIn("state.settings = settingsAfterForget(state.settings);", heard.group(1))
-        self.assertIn("state.forgotten = true;", heard.group(1))
-        # From v2.2.0 (stage M1), the marks are gone with their file.
-        self.assertIn("takeMarks([]);", heard.group(1))
+        self.assertIn("follower.heard(heard.generation);", heard.group(1))
+        moving = re.search(r"function settingsMoving\(\) \{(.*?)\n\}", source, re.DOTALL)
+        assert moving is not None
+        self.assertEqual(moving.group(1).strip(), "state.forgotten = true;")
+        moved = re.search(r"function settingsMoved\(settings\) \{(.*?)\n\}", source, re.DOTALL)
+        assert moved is not None
+        self.assertIn("state.settings = settings.present === true ? settings : settingsAfterForget(state.settings);", moved.group(1))
+        # From v2.2.0 (stage M1), the marks are gone with their file, and
+        # from stage U2 those of a file that is left stay.
+        self.assertIn("takeMarks(marks.marks);", moved.group(1))
         remember = re.search(r"function rememberItems\(byPerson = false\) \{(.*?)\n\}", source, re.DOTALL)
         assert remember is not None
         self.assertIn("if (byPerson) {\n    state.forgotten = false;\n  }", remember.group(1))
@@ -776,6 +814,75 @@ class GuiPageScriptTest(unittest.TestCase):
                 assert body is not None
                 self.assertIn("rememberItems(true);", body.group(1))
 
+    def test_each_change_of_the_settings_names_their_generation(self) -> None:
+        # Stage U2 of v2.2.0, in the page scripts, which no test runs (the
+        # node tests check settingsFollower): each change of the settings
+        # takes a stamp as the person makes it, and goes with the generation
+        # that its stamp gives, not at all where it is of before (Codex's
+        # review of the diff of U2); a stale answer, and one asked before the
+        # page moved on, tell nothing; and each page reads the settings again
+        # as it comes forward.
+        def body(source: str, name: str) -> str:
+            found = re.search(rf"\n(?:async )?function {name}\([^)]*\) \{{(.*?)\n\}}", source, re.DOTALL)
+            assert found is not None, name
+            return found.group(1)
+
+        dropped = "\n  if (generation === null) {\n    render();\n    return;\n  }\n"
+        view = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        app = (STATIC_ROOT / "app.mjs").read_text(encoding="utf-8")
+        for name, source in (("view", view), ("app", app)):
+            with self.subTest(page=name):
+                self.assertIn("rememberTheme({ theme: state.theme, stamp: follower.stamp() });", body(source, "changeTheme"))
+                sender = re.search(r"\nconst rememberTheme = sendLatest\(async \(\{ theme, stamp \}\) => \{(.*?)\n\}\);", source, re.DOTALL)
+                assert sender is not None
+                self.assertTrue(sender.group(1).startswith("\n  const generation = await follower.current(stamp);\n  if (generation === null) {\n    return;\n  }"))
+                hints = body(source, "changeHints")
+                self.assertTrue(hints.startswith("\n  const stamp = follower.stamp();\n"))
+                self.assertIn("  const generation = await follower.current(stamp);" + dropped, hints)
+                self.assertIn("follower.heard(", body(source, "themeHeard"))
+                self.assertIn('window.addEventListener("focus", () => {', source)
+                self.assertEqual(source.count("follower.sync();"), 2)
+                self.assertNotIn("follower.settled(", source)
+        # The view page: the view, the keepalive, the layouts, the marks.
+        self.assertIn("follower.start(state.settings.generation);", body(view, "start"))
+        remember = body(view, "rememberItems")
+        self.assertIn("  const stamp = byPerson ? follower.stamp() : follower.stampNow();\n  viewLater.push({ view: viewValues(), stamp });\n", remember)
+        self.assertIn("  if (stamp.read !== null) {\n    follower.current(stamp).then((generation) => {\n      if (generation !== null) {\n        state.forgotten = false;\n", remember)
+        write = body(view, "writeView")
+        self.assertIn("    const generation = await follower.current(value.stamp);\n    if (generation === null) {\n      return;\n    }\n", write)
+        self.assertIn('callApi("/api/settings/view", { ...value.view, generation })', write)
+        self.assertLess(write.index("if (staleAnswer(answer)) {"), write.index("state.settingsNotice = noticeOf(answer);"))
+        hide = body(view, "rememberOnHide")
+        self.assertIn("  const generation = value === null ? null : follower.currentNow(value.stamp);\n  if (generation !== null && state.launchKey) {\n", hide)
+        self.assertIn("viewLater.push({ view: viewValues(), stamp: waiting.stamp });", body(view, "takeLayouts"))
+        layouts = body(view, "changeLayouts")
+        self.assertIn("  const generation = await follower.current(follower.stamp());" + dropped, layouts)
+        self.assertIn('callApi("/api/settings/layouts", { ...change, generation })', layouts)
+        self.assertLess(layouts.index("if (staleAnswer(answer)) {"), layouts.index("takeLayouts(answer.layouts, answer.hidden, answer.layout);"))
+        self.assertIn("    } else if (generation === follower.generation()) {\n      takeLayouts(answer.layouts, answer.hidden, answer.layout);\n", layouts)
+        self.assertIn("if (!connectionFailure(error) && generation === follower.generation()) {", layouts)
+        # An error is of before where the layouts read again moved the page on.
+        self.assertIn("        await readLayouts();\n      }\n", layouts)
+        self.assertIn("      if (generation === follower.generation()) {\n        state.layoutProblem", layouts)
+        self.assertIn("if (settings === null || !follower.ofNow(settings)) {", body(view, "readLayouts"))
+        self.assertIn('callApi("/api/settings/hints", { on: state.hints, generation })', body(view, "changeHints"))
+        # As it moves on, the page keeps the layout in use that the layouts
+        # still offer, and whether the marks show.
+        moved = body(view, "settingsMoved")
+        self.assertIn("layoutKept(state.layouts.current, state.layouts.builtIns, settings.view_layouts, settings.view_layouts_hidden),", moved)
+        self.assertNotIn("state.marksShown", moved)
+        # The normalization page: the tips, and its forgetting, whose
+        # generation goes to the other tabs, also when a file is left.
+        self.assertIn("follower.start(status.settings?.generation);", body(app, "start"))
+        self.assertIn('settingsChanged(await callApi("/api/settings/hints", { on: state.hintsOn, generation }), generation);', body(app, "changeHints"))
+        changed = body(app, "settingsChanged")
+        self.assertLess(changed.index("if (staleAnswer(answer)) {"), changed.index("state.settingsNotice"))
+        self.assertIn("  } else if (generation === follower.generation()) {\n    state.settingsNotice", changed)
+        # As it moves on, the page takes whether there is a file to forget.
+        self.assertIn("    state.settingsPresent = settings.present === true;\n", body(app, "settingsMoved"))
+        forget = body(app, "forgetSettings")
+        self.assertIn("themeChannel?.postMessage({ generation: answer.generation });\n      follower.heard(answer.generation);", forget)
+        self.assertNotIn("forgotten: true", forget)
 
 class GuiServerLifecycleTest(GuiServerTestCase):
     idle_timeout = None

@@ -16,6 +16,7 @@ import shutil
 import tempfile
 import threading
 import unittest
+from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -60,6 +61,8 @@ from garmin_running_data_normalizer.view.series import (
     view_answer,
 )
 from tests.test_gui_server import GuiServerTestCase
+from tests.test_view_series import keyed, made_shoe
+from tests.test_view_series import view_data as made_view_data
 from tests.v1_3_outputs import as_release, as_v1_3
 from tests.view_export import MEMO_MARK, write_view_export
 
@@ -222,6 +225,25 @@ class ViewApiTest(GuiServerTestCase):
         # The answer has the limit of the others (the partial guard of S1).
         with patch.object(gui_server, "MAX_ANSWER_BYTES", 100):
             self.assertEqual(self.call("/api/view/shoes", {"view": ticket, "period": "all"}), (422, {"error": "VIEW_ANSWER_TOO_LARGE"}))
+
+    def test_the_view_by_shoes_answers_the_months_of_0_of_the_output(self) -> None:
+        # Stage U2 of v2.2.0, by its values (the synthetic shoes are used
+        # every month): a pair used in January, March, and May, asked of
+        # February to April, has 0 in February and April, as the panel of the
+        # distance counts them, and its first and last days in the range.
+        rows = [keyed("2024-01-05", "k1", distance_m=1000.0), keyed("2024-03-05", "k2", distance_m=3000.0), keyed("2024-05-05", "k3", distance_m=5000.0)]
+        gear = view_data.Gear((made_shoe("A", "Road A", 0),), {key: frozenset({"A"}) for key in ("k1", "k2", "k3")}, frozenset())
+        data = replace(made_view_data(rows), gear=gear)
+        with patch.object(self.server, "views", gui_views.Views(load=lambda place: data)):
+            ticket = self.open(made_output())
+            status, answer = self.call("/api/view/shoes", {"view": ticket, "period": {"from": "2024-02-01", "to": "2024-04-30"}})
+        self.assertEqual(status, 200)
+        self.assertEqual([period["start"] for period in answer["periods"]], ["2024-02-01", "2024-03-01", "2024-04-01"])
+        [shoe] = answer["shoes"]
+        self.assertEqual(
+            (shoe["values"], shoe["activities_by_month"], shoe["distance"], shoe["first"], shoe["last"]),
+            ([0.0, 3000.0, 0.0], [0, 1, 0], 3000.0, "2024-03-05", "2024-03-05"),
+        )
 
 
     def test_the_numbers_are_those_of_the_view_page(self) -> None:

@@ -17,7 +17,9 @@ import {
   normalizePageAddress,
   quitAfterWriting,
   sendLatest,
+  settingsFollower,
   settingsMessages,
+  staleAnswer,
   stoppedMessage,
   themeAttribute,
   themeMessage,
@@ -123,6 +125,7 @@ import {
   laterSender,
   dropPlace,
   layoutCards,
+  layoutKept,
   layoutNotes,
   lineNames,
   lineStyles,
@@ -764,9 +767,6 @@ const state = {
   // id), the mark asked to be removed, and what was wrong with a change.
   marks: [],
   marksSeq: 0,
-  // Forgetting in the other tab makes a new generation: an answer asked
-  // before it is dropped.
-  marksGen: 0,
   marksShown: true,
   marksNotice: null,
   marksWaiting: false,
@@ -1056,9 +1056,72 @@ function noticeOf(answer) {
   return answer?.remembered === true ? null : { code: answer?.notice, writing: true };
 }
 
-const rememberTheme = sendLatest(async (choice) => {
+// The generation of the settings that this page follows (stage U2 of
+// v2.2.0): each change names the generation of the moment that the person
+// made it, and what was asked before the settings were forgotten is dropped,
+// without an error.
+const follower = settingsFollower(readSettings, { moving: settingsMoving, moved: settingsMoved });
+
+// The settings of the status now; null when they could not be read.
+async function readSettings() {
   try {
-    state.settingsNotice = noticeOf(await callApi("/api/settings/theme", { theme: choice }));
+    const status = await callApi("/api/status");
+    return status.settings !== null && typeof status.settings === "object" ? status.settings : null;
+  } catch (error) {
+    connectionFailure(error);
+    return null;
+  }
+}
+
+// The page moves on to a newer generation: after the settings were
+// forgotten, only a change of the person writes them again.
+function settingsMoving() {
+  state.forgotten = true;
+}
+
+// The settings as the server holds them after the page moved on. The page
+// keeps what it shows; what it remembered is gone with their file (stage K2
+// of v2.2.0), and the layouts and the marks are those of the files left, none
+// when they are gone (stage M1). The layout in use, where the layouts still
+// offer it, and whether the marks show, are what the page shows, also where
+// the person chose them while the page read the settings (Codex's review of
+// the diff of U2).
+function settingsMoved(settings) {
+  if (settings !== null) {
+    writeStorage(THEME_STORAGE, settings.theme === "light" || settings.theme === "dark" ? settings.theme : "auto");
+    state.settings = settings.present === true ? settings : settingsAfterForget(state.settings);
+    takeLayouts(
+      settings.view_layouts,
+      settings.view_layouts_hidden,
+      layoutKept(state.layouts.current, state.layouts.builtIns, settings.view_layouts, settings.view_layouts_hidden),
+    );
+    const marks = marksToOpen(settings);
+    takeMarks(marks.marks);
+    state.marksNotice = marks.notice;
+    if (!state.marks.some((mark) => mark.id === state.markEditing)) {
+      state.markEditing = null;
+    }
+    if (!state.marks.some((mark) => mark.id === state.markAsk)) {
+      state.markAsk = null;
+    }
+  }
+  render();
+}
+
+// The colors, with the stamp of the person's choice; a choice of before is
+// not sent.
+const rememberTheme = sendLatest(async ({ theme, stamp }) => {
+  const generation = await follower.current(stamp);
+  if (generation === null) {
+    return;
+  }
+  try {
+    const answer = await callApi("/api/settings/theme", { theme, generation });
+    if (staleAnswer(answer)) {
+      follower.heard(answer.generation);
+    } else if (generation === follower.generation()) {
+      state.settingsNotice = noticeOf(answer);
+    }
   } catch (error) {
     connectionFailure(error);
   }
@@ -1069,38 +1132,40 @@ function changeTheme(event) {
   applyTheme(event.target.value);
   themeChannel?.postMessage({ theme: state.theme });
   render();
-  rememberTheme(state.theme);
+  rememberTheme({ theme: state.theme, stamp: follower.stamp() });
 }
 
 function themeHeard(event) {
   const heard = themeMessage(event.data);
-  if (heard?.forgotten === true) {
-    writeStorage(THEME_STORAGE, "auto");
-    // The page keeps what it shows; what it remembered is gone, with the
-    // layouts of the person (stage K2 of v2.2.0).
-    state.settings = settingsAfterForget(state.settings);
-    state.forgotten = true;
-    viewLater.take();
-    takeLayouts([], [], null);
-    // The marks are gone with their file (stage M1 of v2.2.0).
-    state.marksGen += 1;
-    takeMarks([]);
-    state.marksShown = true;
-    state.marksNotice = null;
-    state.markEditing = null;
-    state.markAsk = null;
-    render();
-  } else if (heard !== null) {
+  if (heard === null) {
+    return;
+  }
+  if (Object.hasOwn(heard, "generation")) {
+    // The other tab forgot the settings, or tried to: the page moves on to
+    // the generation after it (stage U2 of v2.2.0).
+    follower.heard(heard.generation);
+  } else {
     applyTheme(heard.theme);
     render();
   }
 }
 
 async function changeHints() {
+  const stamp = follower.stamp();
   state.hints = ui.hintsToggle.checked;
   render();
+  const generation = await follower.current(stamp);
+  if (generation === null) {
+    render();
+    return;
+  }
   try {
-    state.settingsNotice = noticeOf(await callApi("/api/settings/hints", { on: state.hints }));
+    const answer = await callApi("/api/settings/hints", { on: state.hints, generation });
+    if (staleAnswer(answer)) {
+      follower.heard(answer.generation);
+    } else if (generation === follower.generation()) {
+      state.settingsNotice = noticeOf(answer);
+    }
   } catch (error) {
     connectionFailure(error);
   }
@@ -1110,12 +1175,23 @@ async function changeHints() {
 // The items and the shelf are remembered, by their names only (stage G3b),
 // and from v2.2.0 (stage K2) the layout used last, the period, the grouping,
 // and the activity types: once the person stops changing them for a moment,
-// one request after the other, so that the last one stays.
+// one request after the other, so that the last one stays. A view goes with
+// the generation of its stamp, not at all where it is of before, and an
+// answer of before is dropped (stage U2).
 let viewWriting = Promise.resolve();
 function writeView(value) {
   viewWriting = viewWriting.then(async () => {
+    const generation = await follower.current(value.stamp);
+    if (generation === null) {
+      return;
+    }
     try {
-      state.settingsNotice = noticeOf(await callApi("/api/settings/view", value));
+      const answer = await callApi("/api/settings/view", { ...value.view, generation });
+      if (staleAnswer(answer)) {
+        follower.heard(answer.generation);
+      } else if (generation === follower.generation()) {
+        state.settingsNotice = noticeOf(answer);
+      }
     } catch (error) {
       connectionFailure(error);
     }
@@ -1147,7 +1223,10 @@ function viewValues() {
 
 // The view is remembered when an output opens and when the person changes
 // it; after the other tab forgot the settings, only a change of the person
-// writes it again.
+// writes it again. It waits with its stamp (stage U2 of v2.2.0): a change of
+// the person may wait for the reading of the settings on its way, one that
+// the page makes by itself never does; where the reading moved the page on,
+// the change of the person still writes again.
 function rememberItems(byPerson = false) {
   if (byPerson) {
     state.forgotten = false;
@@ -1155,7 +1234,15 @@ function rememberItems(byPerson = false) {
   if (state.forgotten || !state.items.length) {
     return;
   }
-  viewLater.push(viewValues());
+  const stamp = byPerson ? follower.stamp() : follower.stampNow();
+  viewLater.push({ view: viewValues(), stamp });
+  if (stamp.read !== null) {
+    follower.current(stamp).then((generation) => {
+      if (generation !== null) {
+        state.forgotten = false;
+      }
+    });
+  }
 }
 
 // What waits to be remembered is written at once, before the app quits from
@@ -1167,11 +1254,13 @@ function rememberNow() {
 }
 
 // When the page hides or closes, what waits goes in a request that outlives
-// the page.
+// the page, whose answer is not read, with the generation of its moment; one
+// of before does not.
 function rememberOnHide() {
   const value = viewLater.take();
-  if (value !== null && state.launchKey) {
-    callWithKey(state.launchKey, "/api/settings/view", value, { keepalive: true }).catch(() => {});
+  const generation = value === null ? null : follower.currentNow(value.stamp);
+  if (generation !== null && state.launchKey) {
+    callWithKey(state.launchKey, "/api/settings/view", { ...value.view, generation }, { keepalive: true }).catch(() => {});
   }
 }
 
@@ -1758,13 +1847,15 @@ function chooseLayout(id) {
 }
 
 // The layouts as the server answers them now; a view that waits to be
-// remembered takes the layout used last as it is now.
+// remembered takes the layout used last as it is now, and keeps the stamp of
+// the change that it waits for (stage U2 of v2.2.0).
 function takeLayouts(mine, hidden, current) {
   state.layouts.mine = Array.isArray(mine) ? mine : [];
   state.layouts.hidden = Array.isArray(hidden) ? hidden : [];
   state.layouts.current = typeof current === "string" ? current : null;
-  if (viewLater.waiting()) {
-    viewLater.push(viewValues());
+  const waiting = viewLater.peek();
+  if (waiting !== null) {
+    viewLater.push({ view: viewValues(), stamp: waiting.stamp });
   }
 }
 
@@ -1812,19 +1903,16 @@ function marksLocked() {
 
 // The marks as the server reads them now, as another tab may have changed
 // them; whether they show is the person's choice on this page, and stays.
+// Marks of another generation are taken as the page moves on, or are of
+// before (stage U2 of v2.2.0).
 async function readMarks() {
-  const gen = state.marksGen;
-  try {
-    const status = await callApi("/api/status");
-    if (gen !== state.marksGen) {
-      return;
-    }
-    const read = marksToOpen(status.settings ?? {});
-    takeMarks(read.marks);
-    state.marksNotice = read.notice;
-  } catch (error) {
-    connectionFailure(error);
+  const settings = await readSettings();
+  if (settings === null || !follower.ofNow(settings)) {
+    return;
   }
+  const read = marksToOpen(settings);
+  takeMarks(read.marks);
+  state.marksNotice = read.notice;
 }
 
 // One change of the marks on the server (add, change, remove), one at a time:
@@ -1832,19 +1920,30 @@ async function readMarks() {
 // controls stay as they are, so that the focus stays where it was. The marks
 // of the answer are those that the server keeps, and a change that cannot be
 // made says why in the window, with the focus on the field that it is about.
-// A mark that another tab removed reads the marks again.
+// A mark that another tab removed reads the marks again. A change goes with
+// the generation of its stamp, not at all where it is of before (stage U2 of
+// v2.2.0).
 async function changeMarks(change, done = null) {
   if (state.marksWaiting || marksLocked()) {
     return;
   }
   state.marksWaiting = true;
   state.markProblem = null;
-  const gen = state.marksGen;
+  const gen = await follower.current(follower.stamp());
+  if (gen === null) {
+    state.marksWaiting = false;
+    render();
+    return;
+  }
   let field = null;
   try {
-    const answer = await callApi("/api/settings/marks", change);
-    // The other tab forgot the marks meanwhile: this answer is of before.
-    if (gen !== state.marksGen) {
+    const answer = await callApi("/api/settings/marks", { ...change, generation: gen });
+    // Stale, or the other tab forgot the marks meanwhile: this answer is of
+    // before, and tells no problem.
+    if (staleAnswer(answer) || gen !== follower.generation()) {
+      if (staleAnswer(answer)) {
+        follower.heard(answer.generation);
+      }
       state.marksWaiting = false;
       render();
       return;
@@ -1860,7 +1959,7 @@ async function changeMarks(change, done = null) {
       done?.();
     }
   } catch (error) {
-    if (!connectionFailure(error)) {
+    if (!connectionFailure(error) && gen === follower.generation()) {
       if (error.code === "MARK_NOT_FOUND") {
         await readMarks();
         state.markAsk = null;
@@ -1868,8 +1967,12 @@ async function changeMarks(change, done = null) {
           editMark(null, false);
         }
       }
-      state.markProblem = MARK_PROBLEM_KEYS[error.code] ?? "view.marks.error.other";
-      field = { MARK_NAME_INVALID: ui.markName, MARK_DAY_INVALID: ui.markDay }[error.code] ?? null;
+      // The marks read again may have moved the page on: the problem is then
+      // of before (Codex's review of the diff of U2).
+      if (gen === follower.generation()) {
+        state.markProblem = MARK_PROBLEM_KEYS[error.code] ?? "view.marks.error.other";
+        field = { MARK_NAME_INVALID: ui.markName, MARK_DAY_INVALID: ui.markDay }[error.code] ?? null;
+      }
     }
   }
   state.marksWaiting = false;
@@ -3266,33 +3369,47 @@ function renderMarksList(live, locked) {
   }
 }
 
-// The layouts as the settings hold them now, when another tab changed them.
+// The layouts as the settings hold them now, when another tab changed them;
+// of another generation, as the marks (stage U2 of v2.2.0).
 async function readLayouts() {
-  try {
-    const status = await callApi("/api/status");
-    const settings = status.settings ?? {};
-    takeLayouts(settings.view_layouts, settings.view_layouts_hidden, settings.view_layout);
-  } catch (error) {
-    connectionFailure(error);
+  const settings = await readSettings();
+  if (settings === null || !follower.ofNow(settings)) {
+    return;
   }
+  takeLayouts(settings.view_layouts, settings.view_layouts_hidden, settings.view_layout);
 }
 
 // One change of the layouts on the server (add, rename, overwrite, move,
 // remove, hide, show, reset); a change that cannot be made says why, where
-// it was asked.
+// it was asked. A change goes with the generation of its stamp, not at all
+// where it is of before, and a stale one, or an answer asked before the other
+// tab forgot the settings, tells nothing (stage U2).
 async function changeLayouts(change, done = null) {
   state.layoutProblem = null;
+  const generation = await follower.current(follower.stamp());
+  if (generation === null) {
+    render();
+    return;
+  }
   try {
-    const answer = await callApi("/api/settings/layouts", change);
-    takeLayouts(answer.layouts, answer.hidden, answer.layout);
-    state.settingsNotice = noticeOf(answer);
-    done?.();
+    const answer = await callApi("/api/settings/layouts", { ...change, generation });
+    if (staleAnswer(answer)) {
+      follower.heard(answer.generation);
+    } else if (generation === follower.generation()) {
+      takeLayouts(answer.layouts, answer.hidden, answer.layout);
+      state.settingsNotice = noticeOf(answer);
+      done?.();
+    }
   } catch (error) {
-    if (!connectionFailure(error)) {
+    if (!connectionFailure(error) && generation === follower.generation()) {
       if (error.code === "LAYOUT_NOT_FOUND") {
         await readLayouts();
       }
-      state.layoutProblem = LAYOUT_PROBLEM_KEYS[error.code] ?? "view.layouts.error.other";
+      // The layouts read again may have moved the page on: the problem is
+      // then of before (Codex's review of the diff of U2).
+      if (generation === follower.generation()) {
+        state.layoutProblem = LAYOUT_PROBLEM_KEYS[error.code] ?? "view.layouts.error.other";
+      }
     }
   }
   render();
@@ -9269,11 +9386,19 @@ function connect() {
   }
   window.addEventListener("hashchange", addressChanged);
   // A normalization of the other tab adds an output: the list follows when
-  // this tab is shown again.
+  // this tab is shown again. And the page reads the settings again as it
+  // comes forward, as the other tab may have forgotten them unheard (stage
+  // U2 of v2.2.0).
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState === "visible" && state.connected && !state.stopped) {
+      follower.sync();
       await loadOutputs();
       render();
+    }
+  });
+  window.addEventListener("focus", () => {
+    if (state.connected && !state.stopped) {
+      follower.sync();
     }
   });
 }
@@ -9294,6 +9419,7 @@ async function start() {
     const status = await callApi("/api/status");
     state.productVersion = typeof status.product_version === "string" ? status.product_version : null;
     state.settings = status.settings !== null && typeof status.settings === "object" ? status.settings : {};
+    follower.start(state.settings.generation);
     state.hints = viewHintsShown(state.settings);
     state.shelf = shelfOpen(state.settings) ? "open" : "closed";
     // The layouts and the view as the settings remember them (stage K2 of

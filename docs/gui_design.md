@@ -232,6 +232,46 @@ newer version: they do not use it and never write over it, and start as a
 first launch, so that what 2.2.0 remembers is not lost by going back; their
 "Forget the remembered settings…" removes it, with the layouts.
 
+From stage U2 of v2.2.0 the settings have a generation: a whole number that
+the server keeps from 0 for its launch, never in a file, under the lock of the
+settings, and gives in `/api/status`, read at once with the settings and the
+marks. Forgetting the settings moves it on by one, also when a file is left,
+and its answer tells it; each change that a page asks (of the tips, the
+colors, the view, the layouts, and the marks) names the generation of the
+moment that the person made it. The server writes a change of the generation
+now only. One of another generation, made before the settings were forgotten,
+is answered `{"stale": true, "generation": n}` (200, which the page takes for
+no error), before a file is read or a layout or a mark that the change names
+is looked for, and one without a generation is refused (`REQUEST_INVALID`). So
+a change that arrives after a forgetting writes nothing: one of the view sent
+after its pause, one waiting for another, one with keepalive as the page
+hides, and one of the normalization page around its own forgetting. A run that
+ends remembers its places without a generation: the settings are not forgotten
+while a run is active, and the server forgets them under the lock of the runs,
+so that no run starts meanwhile (that lock is taken before the lock of the
+settings, never after it). The two pages follow the generation alike
+(`settingsFollower` in `flow.mjs`). A page moves on to a newer generation
+once, at the first of what tells it (the message of another tab, a stale
+answer, its own forgetting, or `/api/status`), takes the settings as the
+server holds them then (the layouts and the marks of the files left, none
+where they are gone; it keeps the layout in use where the layouts still offer
+it, and whether the marks show), drops the answers of the changes asked
+before, and does not send a change of before. As a page comes forward
+(`visibilitychange` and `focus`), it reads `/api/status` again, so that a tab
+that did not hear the message moves on before the person changes anything
+there. A change of the person takes a stamp as it is made: it goes with the
+generation that the reading on its way then reads, or else with that of its
+moment, and not at all where the page heard of a forgetting by a message
+since, as it was made before that forgetting; a reading that gives no answer
+in 10 seconds is one that could not read. So "only a change of the person
+writes them again" holds in every tab. One way is left: in a tab that did not
+hear the message, a change made right after the page came forward can be
+written with the generation after a forgetting done in another window while
+the reading of the page waits on the server for seconds; by hand, the reading
+ends first. The generation holds for one GUI, as the lock does: the page of
+another launch cannot ask this server (its key is another), and two GUIs of
+two processes are outside it.
+
 The Snapshot Store (stage B4a): the second box shows the place of the store
 and its Snapshots, in the order of the times of their Exports, with the
 number of files of each. At launch the page looks at the default place,
@@ -421,8 +461,9 @@ so that 2.0.x still reads the file and leaves the colors out.
   set every color. Light keeps the light colors also where the browser is
   dark.
 - A change is told to the other tabs of the launch with a `BroadcastChannel`,
-  which carries the colors, and the notice that the settings were forgotten,
-  only; never the key.
+  which carries the colors, and the generation of the settings after a
+  forgetting (from stage U2 of v2.2.0; until then, the notice that they were
+  forgotten), only; never the key.
 - Where the system forces its own colors, the page takes the system's colors,
   and the radio buttons of Appearance still show.
 - While the page has no connection to the server, the choice cannot be
@@ -1154,9 +1195,11 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   many have shoes (and of those, how many have two or more and how many have
   no distance), are not known, and are without; and for each pair with an
   activity in the period, the newest last use first (then the order of
-  `gear.json`): its distance by month (0 between its first and last use), in
-  the whole period (from its activities, never the sum of the months), its
-  activities by month, its first and last days, what Garmin sets (start, end,
+  `gear.json`): its distance by month (0 between its first and last use in
+  the output, of the types counted that meet the conditions, also outside the
+  period, as on the panels: stage U2), in the whole period (from its
+  activities, never the sum of the months), its activities by month, its
+  first and last days in the period, what Garmin sets (start, end,
   and maximum distance in meters), and what tells it from the shoes of the
   same name (the day of its start where it is theirs alone, else its number).
   Pairs without an activity in the period are counted only; with no pair in
@@ -1551,10 +1594,11 @@ Processing:
   checks the places that the page sends. They are written whole through a
   temporary file in an owner-only folder and file. Only the tests' own place
   is used by the tests.
-- The messages between the tabs of a launch (`BroadcastChannel`, v2.1.0)
-  carry the colors, the notice that the settings were forgotten, and the
-  notice that the app stopped; never the key. The view page reads outputs
-  through the server only, and opens nothing outside the page.
+- The messages between the tabs of a launch (`BroadcastChannel`, v2.1.0) carry
+  the colors, the generation of the settings after a forgetting (from stage U2
+  of v2.2.0; until then, the notice that they were forgotten), and the notice
+  that the app stopped; never the key. The view page reads outputs through the
+  server only, and opens nothing outside the page.
 
 ## Privacy
 

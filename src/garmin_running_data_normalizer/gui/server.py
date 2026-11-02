@@ -54,6 +54,7 @@ from .marks import MarkChangeError
 from .settings import (
     SHELF_STATES,
     THEMES,
+    SettingsStale,
     change_layouts,
     change_marks,
     forget_settings,
@@ -309,6 +310,23 @@ def _json_object(body: bytes) -> dict[str, Any] | None:
         # digits, the same on every version of Python (stage E2d).
         return None
     return value if isinstance(value, dict) else None
+
+
+def _asked_generation(payload: dict[str, Any]) -> int:
+    """The generation of the settings that a change of the page names (stage
+    U2 of v2.2.0): a whole number from 0, as /api/status gave it; a change
+    without one is not valid."""
+    generation = payload.get("generation")
+    if isinstance(generation, bool) or not isinstance(generation, int) or generation < 0:
+        raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+    return generation
+
+
+def _stale_answer(stale: SettingsStale) -> dict[str, Any]:
+    # A change asked before the settings were forgotten (stage U2 of v2.2.0):
+    # nothing is written, and the page, told the generation now, drops it
+    # without an error.
+    return {"stale": True, "generation": stale.generation}
 
 
 class GuiServer(ThreadingHTTPServer):
@@ -776,20 +794,30 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
     def _api_settings_hints(self, payload: dict[str, Any]) -> dict[str, Any]:
         # The person switched the tips; the next launch shows them so too
         # (stage B4c).
+        # Each change of the settings names its generation (stage U2 of
+        # v2.2.0), and one asked before they were forgotten is stale.
+        generation = _asked_generation(payload)
         on = payload.get("on")
         if not isinstance(on, bool):
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
-        notice = remember_hints(on)
+        try:
+            notice = remember_hints(on, generation=generation)
+        except SettingsStale as stale:
+            return _stale_answer(stale)
         return {"remembered": notice is None, "notice": notice}
 
     def _api_settings_theme(self, payload: dict[str, Any]) -> dict[str, Any]:
         # The person chose the colors of the page, and the next launch opens
         # in them (stage G3a); "auto" follows the colors that the browser
         # reports, and is remembered as no choice.
+        generation = _asked_generation(payload)
         theme = payload.get("theme")
         if theme != "auto" and theme not in THEMES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
-        notice = remember_theme(None if theme == "auto" else theme)
+        try:
+            notice = remember_theme(None if theme == "auto" else theme, generation=generation)
+        except SettingsStale as stale:
+            return _stale_answer(stale)
         return {"remembered": notice is None, "notice": notice}
 
     def _api_settings_view(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -801,6 +829,7 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         # numbers; from stage L1, how one item is compared by year and in
         # which month (None for rows and for the whole year); and from stage
         # M1, whether the marks show.
+        generation = _asked_generation(payload)
         items, shelf = payload.get("items"), payload.get("shelf")
         if (
             not isinstance(items, list)
@@ -860,15 +889,22 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             if payload["conditions"] is not None and conditions is None:
                 raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
             view["conditions"] = None if conditions is None else conditions.asked()
-        notice = remember_view(items, shelf, view)
+        try:
+            notice = remember_view(items, shelf, view, generation=generation)
+        except SettingsStale as stale:
+            return _stale_answer(stale)
         return {"remembered": notice is None, "notice": notice}
 
     def _api_settings_layouts(self, payload: dict[str, Any]) -> dict[str, Any]:
         # One change of the layouts of the view page (stage K1 of v2.2.0):
         # the layouts after it, or as they were when it was not written; a
-        # change that cannot be made answers its code.
+        # change that cannot be made answers its code, after a stale one
+        # (stage U2).
+        generation = _asked_generation(payload)
         try:
-            layouts, notice = change_layouts(payload)
+            layouts, notice = change_layouts(payload, generation=generation)
+        except SettingsStale as stale:
+            return _stale_answer(stale)
         except LayoutChangeError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
         return {
@@ -883,9 +919,13 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         # One change of the marks of the view page (stage M1 of v2.2.0): the
         # marks after it; or as they were when they were not written, and
         # none when their file is not used (it is never written over); a
-        # change that cannot be made answers its code.
+        # change that cannot be made answers its code, after a stale one
+        # (stage U2).
+        generation = _asked_generation(payload)
         try:
-            marks, notice = change_marks(payload)
+            marks, notice = change_marks(payload, generation=generation)
+        except SettingsStale as stale:
+            return _stale_answer(stale)
         except MarkChangeError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
         return {"remembered": notice is None, "notice": notice, "marks": marks}
@@ -1102,14 +1142,17 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
 
     def _api_settings_forget(self, payload: dict[str, Any]) -> dict[str, Any]:
         # Forget the remembered settings (stage B4c): never while a run of
-        # this page is active, which remembers its places when it ends. The
-        # stores and the outputs stay.
-        if self.server.runs.active():
-            raise ApiError(HTTPStatus.CONFLICT, "RUN_ACTIVE")
+        # this page is active, which remembers its places when it ends; and no
+        # run starts until they are forgotten (stage U2 of v2.2.0). The stores
+        # and the outputs stay.
+        try:
+            notice, present, generation = self.server.runs.when_idle(forget_settings)
+        except RunActiveError as exc:
+            raise ApiError(HTTPStatus.CONFLICT, exc.code) from exc
         # Whether there was anything to forget tells the page what to say
-        # (stage C1); "forgotten" says that no file is left.
-        notice, present = forget_settings()
-        return {"forgotten": notice is None, "had_settings": present, "notice": notice}
+        # (stage C1); "forgotten" says that no file is left; and the
+        # generation after it, which the pages take (stage U2).
+        return {"forgotten": notice is None, "had_settings": present, "notice": notice, "generation": generation}
 
     def _method_not_allowed(self, allow: str) -> None:
         self._send_json(

@@ -1165,6 +1165,23 @@ export function layoutChanged(layoutItems, items) {
   return first.length !== second.length || first.some((key, index) => key !== second[index]);
 }
 
+// The layout in use that the page keeps as the settings change under it
+// (stage U2 of v2.2.0, after Codex's review of its diff): one that the
+// layouts still offer, a built-in one that is not hidden or one of the
+// person's; else none. The page keeps what it shows, also a layout chosen
+// while it read the settings.
+export function layoutKept(current, builtIns, mine, hidden) {
+  if (typeof current !== "string") {
+    return null;
+  }
+  const hiddenIds = new Set(Array.isArray(hidden) ? hidden : []);
+  const offered = [
+    ...(Array.isArray(builtIns) ? builtIns : []).filter((layout) => !hiddenIds.has(layout?.id)),
+    ...(Array.isArray(mine) ? mine : []),
+  ];
+  return offered.some((layout) => layout?.id === current) ? current : null;
+}
+
 // The cards of the layouts above the item shelf: the built-in layouts that
 // are not hidden, in their order, then the person's in the order that they
 // keep. Each says whether it is the one used last, whether the items shown
@@ -1267,8 +1284,9 @@ export function grainToOpen(grain) {
 // sent once, after the wait without another change; a flush sends what
 // waits at once (when the app quits) and tells when it is sent, and a take
 // gives what waits without sending it (when the page hides, to send it in a
-// request that outlives the page). The timer functions are given, so that
-// the tests move the time.
+// request that outlives the page); a peek gives what waits and leaves it
+// (stage U2 of v2.2.0). The timer functions are given, so that the tests
+// move the time.
 export function laterSender(send, wait, { setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
   let pending = null;
   let timer = null;
@@ -1302,8 +1320,8 @@ export function laterSender(send, wait, { setTimer = setTimeout, clearTimer = cl
       pending = null;
       return value;
     },
-    waiting() {
-      return pending !== null;
+    peek() {
+      return pending;
     },
   };
 }

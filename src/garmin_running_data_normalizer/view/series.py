@@ -1003,13 +1003,14 @@ def shoe_answer(
     no key; the rest without); and for each pair of shoes with an activity in
     it, in the order of its last one, newest first (then of gear.json): its
     distance by month, as the panel of the distance counts it (0 in the
-    months between its first and last activities without one), and in the
-    whole period, from its activities, never added up from the months; the
-    activities of each month; the number of its activities and of those
-    without a distance; the days of the first and the last; what Garmin sets
-    of it; and what tells it from the shoes of the same name. An activity
-    with two shoes counts for each. The pairs without an activity in the
-    period are counted only."""
+    months without one between its first and last activities in the output,
+    of the activity types counted that meet the conditions, whatever the
+    period: stage U2), and in the whole period, from its activities, never
+    added up from the months; the activities of each month; the number of
+    its activities and of those without a distance; the days of the first and
+    the last in the period; what Garmin sets of it; and what tells it from
+    the shoes of the same name. An activity with two shoes counts for each.
+    The pairs without an activity in the period are counted only."""
     item = ITEMS_BY_KEY["dist"]
     gear = data.gear
     shoes = () if gear is None else gear.shoes
@@ -1050,12 +1051,20 @@ def shoe_answer(
         elif not key or (gear is not None and key in gear.unknown):
             answer["not_known"] += 1
     answer["without_shoes"] = len(rows) - answer["with_shoes"] - answer["not_known"]
+    # The months of 0 of a pair lie between its first and last activities in
+    # the output, as those of the panel do (stage U2 of v2.2.0): of the same
+    # types and conditions, also outside the period.
+    in_output: dict[str, list[Row]] = defaultdict(list)
+    for row in _activity_rows(data, types, conditions):
+        key = row.marks.get("key") or ""
+        for shoe in gear.links.get(key, frozenset()) if gear is not None and key else ():
+            in_output[shoe].append(row)
     chosen = []
     for shoe in shoes:
         own = linked.get(shoe.key)
         if not own:
             continue
-        line = _activity_line(item, own, months, Counter())
+        line = _activity_line(item, in_output[shoe.key], months, Counter())
         [distance] = _activity_line(item, own, whole, Counter())["values"]
         activities = [0] * len(months.spans)
         for row in own:

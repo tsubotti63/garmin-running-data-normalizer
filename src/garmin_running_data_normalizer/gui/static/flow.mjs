@@ -1351,15 +1351,204 @@ export function themeNowKey(dark) {
 
 // What another tab of this launch said of the colors (stage G3a): a choice,
 // or that the settings were forgotten; null for anything else. Nothing more
-// goes between the tabs: never the key, never a remembered place.
+// goes between the tabs: never the key, never a remembered place. From stage
+// U2 of v2.2.0 a forgetting, also one that left a file, tells the generation
+// of the settings after it, and the tab that hears it reads what is left.
 export function themeMessage(data) {
   if (data === null || typeof data !== "object" || Object.keys(data).length !== 1) {
     return null;
   }
-  if (data.forgotten === true) {
-    return { forgotten: true };
+  if (Object.hasOwn(data, "generation")) {
+    return generationOf(data.generation) === null ? null : { generation: data.generation };
   }
   return THEME_CHOICES.includes(data.theme) ? { theme: data.theme } : null;
+}
+
+// The generation of the settings (stage U2 of v2.2.0): a whole number from
+// 0, as the server tells it; null for anything else.
+export function generationOf(value) {
+  return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+// How a generation that a page hears stands to the one that it knows: a
+// newer one moves the page on, the same one is of now, and an older one, or
+// what is no generation, is of before. A generation only goes forward.
+export function generationHeard(known, value) {
+  const heard = generationOf(value);
+  if (heard === null || heard < known) {
+    return "older";
+  }
+  return heard === known ? "same" : "newer";
+}
+
+// Whether the answer of a change of the settings says that it was stale:
+// asked before the settings were forgotten, it wrote nothing, and the answer
+// tells the generation now. No error is told of it.
+export function staleAnswer(answer) {
+  return answer?.stale === true && generationOf(answer.generation) !== null;
+}
+
+// How long a page waits for a reading of the settings (stage U2 of v2.2.0):
+// one that gives no answer by then could not read them, so that a change
+// never waits for good (Codex's review of the diff of U2).
+export const SETTINGS_READ_WAIT_MS = 10000;
+
+// The generation of the settings that a page follows (stage U2 of v2.2.0),
+// the same on both pages. The page moves on to a newer generation once, at
+// the first of what tells it (the message of another tab, a stale answer,
+// its own forgetting, the status), and then takes the settings as the server
+// holds them: those of the status that told it, or of a status read again.
+// As the page comes forward it reads the status again, so that a tab that did
+// not hear the message moves on before the person changes anything there.
+// The readings go one after the other.
+//
+// A change takes a stamp as it is made: the generation of its moment, the
+// reading on its way then, if any, and the forgettings that the page heard of
+// by a message until then. It is sent with the generation that the reading
+// reads (the checker's A: a change made as the page comes forward is not of
+// before), or, without a reading or where it could not read, with that of its
+// moment; and not at all where the page heard of a forgetting by a message
+// since, or moved on otherwise: it was made before them (Codex's review of the
+// diff of U2). ``read`` gives the settings of the status, or null when it
+// could not read them; ``moving`` is called as the page moves on, and
+// ``moved`` with the settings that it takes (null when they could not be
+// read); neither waits for a reading.
+export function settingsFollower(
+  read,
+  { moving = () => {}, moved = () => {}, wait = SETTINGS_READ_WAIT_MS, setTimer = setTimeout, clearTimer = clearTimeout } = {},
+) {
+  let known = 0;
+  // The generation whose settings the page took: behind the one that it
+  // knows while a reading could not read them.
+  let taken = 0;
+  let messages = 0;
+  let reading = null;
+  // The readings that ended, with the generation that each read (null where
+  // it could not read), for a change that cannot wait for its reading.
+  const ended = new WeakMap();
+  const readNow = () =>
+    new Promise((resolve) => {
+      const timer = setTimer(() => resolve(null), wait);
+      Promise.resolve()
+        .then(read)
+        .then(
+          (now) => resolve(now ?? null),
+          () => resolve(null),
+        )
+        .finally(() => clearTimer(timer));
+    });
+  // A reading after those on their way; it ends with the generation that it
+  // read, null where it could not read.
+  function queued(step) {
+    const next = (reading ?? Promise.resolve()).then(async () => {
+      const now = await readNow();
+      try {
+        step(now);
+      } catch {
+        // The page tells its own failures.
+      }
+      return now === null ? null : generationOf(now.generation);
+    });
+    reading = next;
+    next.then((read) => {
+      ended.set(next, read);
+      if (reading === next) {
+        reading = null;
+      }
+    });
+    return next;
+  }
+  function take(now) {
+    if (now === null) {
+      moved(null);
+      return;
+    }
+    // A status read meanwhile may tell a generation newer still; one older
+    // was read before another move, which reads its own.
+    const order = generationHeard(known, now.generation);
+    if (order === "older") {
+      return;
+    }
+    if (order === "newer") {
+      known = now.generation;
+      moving();
+    }
+    taken = known;
+    moved(now);
+  }
+  function heard(value, settings = null) {
+    if (generationHeard(known, value) !== "newer") {
+      return reading ?? Promise.resolve(null);
+    }
+    known = value;
+    moving();
+    if (settings !== null) {
+      taken = known;
+      moved(settings);
+      return reading ?? Promise.resolve(null);
+    }
+    messages += 1;
+    return queued(take);
+  }
+  // Whether the settings of a status that the page read are of the
+  // generation now: a newer one moves the page on with them, and an older one
+  // is of before. Those of the generation now are taken where a reading could
+  // not read them before.
+  function ofNow(settings) {
+    const order = generationHeard(known, settings?.generation);
+    if (order === "newer") {
+      heard(settings.generation, settings);
+    } else if (order === "same" && taken < known) {
+      taken = known;
+      moved(settings);
+    }
+    return order === "same";
+  }
+  return {
+    generation: () => known,
+    // The generation of the status that the page took as it started, which
+    // goes forward only: where the page heard a newer one meanwhile (the
+    // message of another tab), the settings that it took are of before, and
+    // it takes those of now (the checker's review of the diff of U2).
+    start(value) {
+      const first = generationOf(value) ?? 0;
+      if (first >= known) {
+        known = first;
+        taken = first;
+        return reading ?? Promise.resolve(null);
+      }
+      return queued(take);
+    },
+    heard,
+    ofNow,
+    // The stamp of a change of the person, and of one that the page makes by
+    // itself, which never waits for a reading.
+    stamp: () => ({ at: known, messages, read: reading }),
+    stampNow: () => ({ at: known, messages, read: null }),
+    // The generation to send a change with, once the reading that it waits for
+    // ended; null where the change is of before.
+    async current(stamp) {
+      const read = stamp.read === null ? stamp.at : (await stamp.read) ?? stamp.at;
+      return read === known && messages === stamp.messages ? read : null;
+    },
+    // The same at once, for a request that cannot wait (with keepalive, as the
+    // page hides): the generation that the reading read where it ended already
+    // (the checker's review of the handling of Codex's review of the diff),
+    // else that of the moment of the change.
+    currentNow(stamp) {
+      const read = stamp.read !== null && ended.has(stamp.read) ? (ended.get(stamp.read) ?? stamp.at) : stamp.at;
+      return read === known && messages === stamp.messages ? read : null;
+    },
+    // The page came forward: it reads the status again, unless a reading is
+    // on its way, after which the page is as the server holds it.
+    sync() {
+      return reading ?? queued((now) => {
+        if (now !== null) {
+          ofNow(now);
+        }
+      });
+    },
+  };
 }
 
 // The addresses of the two pages of a launch (stage G3b), with the key and

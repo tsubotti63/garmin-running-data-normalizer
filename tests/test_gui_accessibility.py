@@ -934,7 +934,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
             "const REMEMBER_WAIT_MS = 800;",
             "const viewLater = laterSender(writeView, REMEMBER_WAIT_MS);",
             'window.addEventListener("pagehide", rememberOnHide);',
-            'callWithKey(state.launchKey, "/api/settings/view", value, { keepalive: true })',
+            'callWithKey(state.launchKey, "/api/settings/view", { ...value.view, generation }, { keepalive: true })',
             "if (answerFlush(event.data, rememberNow, quitChannel)) {",
             # What the page takes of the settings when it starts, and of an
             # output that opens (view_flow.mjs, which the node tests check),

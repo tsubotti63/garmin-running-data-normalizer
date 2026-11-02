@@ -1802,10 +1802,13 @@ test("the key and the colors of the fragment of the address are read apart", () 
   }
 });
 
-test("another tab tells a choice of the colors or that the settings were forgotten, and nothing else", () => {
+test("another tab tells a choice of the colors or the generation after a forgetting, and nothing else", () => {
   assert.deepEqual(flow.themeMessage({ theme: "dark" }), { theme: "dark" });
   assert.deepEqual(flow.themeMessage({ theme: "auto" }), { theme: "auto" });
-  assert.deepEqual(flow.themeMessage({ forgotten: true }), { forgotten: true });
+  // From stage U2 of v2.2.0 a forgetting, also one that left a file, tells
+  // the generation of the settings after it.
+  assert.deepEqual(flow.themeMessage({ generation: 0 }), { generation: 0 });
+  assert.deepEqual(flow.themeMessage({ generation: 7 }), { generation: 7 });
   for (const data of [
     null,
     undefined,
@@ -1815,11 +1818,298 @@ test("another tab tells a choice of the colors or that the settings were forgott
     {},
     { theme: "blue" },
     { theme: "dark", key: "k" },
+    // The notice before stage U2, without a generation.
+    { forgotten: true },
     { forgotten: "yes" },
     { forgotten: true, theme: "dark" },
+    { generation: -1 },
+    { generation: 1.5 },
+    { generation: "3" },
+    { generation: true },
+    { generation: null },
+    { generation: Number.MAX_SAFE_INTEGER + 1 },
+    { generation: 3, theme: "dark" },
+    { generation: 3, forgotten: true },
   ]) {
     assert.equal(flow.themeMessage(data), null, JSON.stringify(data));
   }
+});
+
+test("a generation of the settings only goes forward, and a stale answer tells the one now (stage U2 of v2.2.0)", () => {
+  for (const value of [0, 1, 41]) {
+    assert.equal(flow.generationOf(value), value);
+  }
+  for (const value of [-1, 1.5, "1", true, null, undefined, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, [1]]) {
+    assert.equal(flow.generationOf(value), null, String(value));
+  }
+  assert.equal(flow.generationHeard(3, 4), "newer");
+  assert.equal(flow.generationHeard(3, 9), "newer");
+  assert.equal(flow.generationHeard(3, 3), "same");
+  assert.equal(flow.generationHeard(3, 2), "older");
+  for (const value of [null, undefined, "4", -1, 4.5]) {
+    assert.equal(flow.generationHeard(3, value), "older", String(value));
+  }
+  assert.equal(flow.staleAnswer({ stale: true, generation: 2 }), true);
+  for (const answer of [null, undefined, {}, { stale: true }, { stale: "yes", generation: 2 }, { stale: true, generation: -1 }, { remembered: true, notice: null }]) {
+    assert.equal(flow.staleAnswer(answer), false, JSON.stringify(answer));
+  }
+});
+
+// The readings of a status that a test answers when it wants, with the
+// settings that each gives (stage U2 of v2.2.0).
+function statusReads() {
+  const asked = [];
+  return { asked, read: () => new Promise((resolve) => asked.push(resolve)) };
+}
+const settled = () => new Promise((resolve) => setImmediate(resolve));
+
+test("a page moves on to a newer generation once, and takes the settings as the server holds them then", async () => {
+  const { asked, read } = statusReads();
+  const events = [];
+  const follower = flow.settingsFollower(read, {
+    moving: () => events.push(["moving", follower.generation()]),
+    moved: (settings) => events.push(["moved", follower.generation(), settings?.present ?? null]),
+  });
+  follower.start(3);
+  assert.equal(follower.generation(), 3);
+  // The message of another tab tells a newer generation: the page moves on
+  // at once, and reads the status.
+  const heard = follower.heard(4);
+  assert.equal(follower.generation(), 4);
+  assert.deepEqual(events, [["moving", 4]]);
+  // A stale answer of the same generation, and one older, move it no more.
+  follower.heard(4);
+  follower.heard(2);
+  await settled();
+  assert.equal(asked.length, 1);
+  asked.shift()({ generation: 4, present: false });
+  assert.equal(await heard, 4);
+  assert.deepEqual(events, [["moving", 4], ["moved", 4, false]]);
+  // A status that the page read: of the generation now, of before, and of a
+  // newer one, which moves the page on with its settings, without a reading.
+  assert.equal(follower.ofNow({ generation: 4 }), true);
+  assert.equal(follower.ofNow({ generation: 3 }), false);
+  assert.equal(follower.ofNow({ generation: 6, present: true }), false);
+  assert.equal(follower.generation(), 6);
+  assert.deepEqual(events.slice(2), [["moving", 6], ["moved", 6, true]]);
+  assert.equal(asked.length, 0);
+  // A start with what is no generation, or one of before, keeps the
+  // generation that the page knows, and reads the settings of now.
+  const start = follower.start("7");
+  assert.equal(follower.generation(), 6);
+  await settled();
+  asked.shift()({ generation: 6, present: true });
+  await start;
+  assert.deepEqual(events.at(-1), ["moved", 6, true]);
+});
+
+test("a page that hears a newer generation as it starts keeps it, and takes the settings of now", async () => {
+  // The checker's review of the diff of U2: the message of another tab may
+  // come before the status that the page reads as it starts.
+  const { asked, read } = statusReads();
+  const moved = [];
+  const follower = flow.settingsFollower(read, { moved: (settings) => moved.push(settings?.generation ?? null) });
+  const heard = follower.heard(2);
+  await settled();
+  asked.shift()({ generation: 2 });
+  await heard;
+  assert.deepEqual(moved, [2]);
+  // The status of the start was read before the forgetting: the page stays at
+  // 2, and reads the settings of now after the ones that it took.
+  const again = follower.start(1);
+  assert.equal(follower.generation(), 2);
+  await settled();
+  assert.equal(asked.length, 1);
+  asked.shift()({ generation: 2 });
+  await again;
+  assert.deepEqual(moved, [2, 2]);
+  // A start of the same or a newer generation reads nothing.
+  follower.start(2);
+  follower.start(3);
+  assert.equal(follower.generation(), 3);
+  await settled();
+  assert.equal(asked.length, 0);
+  assert.deepEqual(moved, [2, 2]);
+});
+
+test("a reading that tells a generation newer still moves the page on again, and one of before is dropped", async () => {
+  const { asked, read } = statusReads();
+  const moved = [];
+  const follower = flow.settingsFollower(read, { moved: (settings) => moved.push(settings?.generation ?? null) });
+  const one = follower.heard(1);
+  await settled();
+  // Another forgetting before the status was read.
+  asked.shift()({ generation: 2, present: false });
+  await one;
+  assert.equal(follower.generation(), 2);
+  assert.deepEqual(moved, [2]);
+  // Two moves one after the other: the status read before the second one
+  // reached the server is dropped, and that of the second one is taken. The
+  // readings go one after the other.
+  follower.heard(3);
+  const fourth = follower.heard(4);
+  await settled();
+  assert.equal(asked.length, 1);
+  asked.shift()({ generation: 3 });
+  await settled();
+  asked.shift()({ generation: 4 });
+  await fourth;
+  assert.deepEqual(moved, [2, 4]);
+  // A reading that fails: the page moved on, and keeps what it shows.
+  const fifth = follower.heard(5);
+  await settled();
+  asked.shift()(null);
+  assert.equal(await fifth, null);
+  assert.deepEqual(moved, [2, 4, null]);
+  assert.equal(follower.generation(), 5);
+  // The settings of that generation are taken once a reading reads them
+  // (Codex's review of the diff of U2), and only once.
+  const forward = follower.sync();
+  await settled();
+  asked.shift()({ generation: 5, present: false });
+  await forward;
+  assert.deepEqual(moved, [2, 4, null, 5]);
+  assert.equal(follower.ofNow({ generation: 5 }), true);
+  assert.deepEqual(moved, [2, 4, null, 5]);
+});
+
+test("a read that throws is one that could not read, at once", { timeout: 5000 }, async () => {
+  // The time does not run out here: the reading ends by the failure itself.
+  const moved = [];
+  const failing = flow.settingsFollower(() => Promise.reject(new Error("lost")), {
+    moved: (settings) => moved.push(settings),
+    setTimer: () => 0,
+    clearTimer: () => {},
+  });
+  assert.equal(await failing.heard(1), null);
+  assert.deepEqual(moved, [null]);
+});
+
+test("a reading that gives no answer ends as one that could not read, so that no change waits for good", async () => {
+  // Codex's review of the diff of U2: the page waits SETTINGS_READ_WAIT_MS.
+  assert.equal(flow.SETTINGS_READ_WAIT_MS, 10000);
+  const timers = [];
+  const moved = [];
+  const follower = flow.settingsFollower(() => new Promise(() => {}), {
+    moved: (settings) => moved.push(settings),
+    wait: 50,
+    setTimer: (fire, wait) => timers.push({ fire, wait }),
+    clearTimer: () => {},
+  });
+  const reading = follower.sync();
+  const stamp = follower.stamp();
+  const sent = follower.current(stamp);
+  await settled();
+  assert.deepEqual(timers.map((timer) => timer.wait), [50]);
+  timers[0].fire();
+  assert.equal(await reading, null);
+  // The change goes with the generation of its moment.
+  assert.equal(await sent, 0);
+  assert.deepEqual(moved, []);
+});
+
+test("a change goes with the generation that the reading on its way reads, and not at all where it is of before", async () => {
+  // The checker's A, and Codex's review of the diff of U2.
+  const { asked, read } = statusReads();
+  const follower = flow.settingsFollower(read, {});
+  follower.start(5);
+  // Without a reading: the generation of the moment, at once too.
+  const now = follower.stamp();
+  assert.equal(now.read, null);
+  assert.equal(await follower.current(now), 5);
+  assert.equal(follower.currentNow(now), 5);
+  // The page comes forward, and the person changes before the status is read
+  // (a press that brings the window forward): the change goes with the
+  // generation that the reading reads, where the other tab forgot unheard.
+  const reading = follower.sync();
+  const change = follower.stamp();
+  const byItself = follower.stampNow();
+  assert.equal(follower.sync(), reading);
+  // As the page hides before the reading ends, the change goes at once with
+  // the generation of its moment.
+  assert.equal(follower.currentNow(change), 5);
+  const sent = follower.current(change);
+  await settled();
+  asked.shift()({ generation: 6 });
+  assert.equal(await sent, 6);
+  assert.equal(follower.generation(), 6);
+  // As it hides after the reading ended, with the generation that it read
+  // (the checker's A of the handling of Codex's review).
+  assert.equal(follower.currentNow(change), 6);
+  // What the page makes by itself names the generation of its moment, and is
+  // of before.
+  assert.equal(await follower.current(byItself), null);
+  assert.equal(follower.currentNow(byItself), null);
+  // A change made while a reading is on its way is of before where the page
+  // hears of a forgetting by a message meanwhile: the reading gives 6, but
+  // the message moved the page on to 7 (Codex 1 and 2).
+  const again = follower.sync();
+  const before = follower.stamp();
+  const dropped = follower.current(before);
+  follower.heard(7);
+  await settled();
+  asked.shift()({ generation: 6 });
+  await again;
+  await settled();
+  asked.shift()({ generation: 7 });
+  assert.equal(await dropped, null);
+  assert.equal(follower.generation(), 7);
+  // So is a change without a reading.
+  const later = follower.stamp();
+  follower.heard(8);
+  assert.equal(await follower.current(later), null);
+  assert.equal(follower.currentNow(later), null);
+  await settled();
+  asked.shift()({ generation: 8 });
+  await settled();
+  // A reading that could not read: the change goes with the generation of
+  // its moment.
+  const failed = follower.sync();
+  const lost = follower.stamp();
+  const sentLost = follower.current(lost);
+  await settled();
+  asked.shift()(null);
+  await failed;
+  assert.equal(await sentLost, 8);
+});
+
+test("a change made while a reading is on its way is of before where the page hears of a forgetting by a message, also where the reading reads that generation", async () => {
+  // The checker's B of the handling of Codex's review: the other tab forgets
+  // before the reading reaches the server, the page hears its message, and
+  // the reading reads the generation after it; the change was made before.
+  const { asked, read } = statusReads();
+  const follower = flow.settingsFollower(read, {});
+  follower.start(5);
+  const reading = follower.sync();
+  const change = follower.stamp();
+  follower.heard(6);
+  await settled();
+  asked.shift()({ generation: 6 });
+  assert.equal(await reading, 6);
+  assert.equal(follower.generation(), 6);
+  assert.equal(await follower.current(change), null);
+  assert.equal(follower.currentNow(change), null);
+  // A change made after the message goes.
+  await settled();
+  asked.shift()({ generation: 6 });
+  await settled();
+  const after = follower.stamp();
+  assert.equal(await follower.current(after), 6);
+  assert.equal(follower.currentNow(after), 6);
+});
+
+test("a change made while the page moves on goes with the generation that the move reads", async () => {
+  const { asked, read } = statusReads();
+  const follower = flow.settingsFollower(read, {});
+  follower.heard(1);
+  const change = follower.stamp();
+  const sent = follower.current(change);
+  // The page comes forward meanwhile: the reading on its way is the one.
+  assert.equal(follower.sync(), change.read);
+  await settled();
+  asked.shift()({ generation: 1 });
+  assert.equal(await sent, 1);
+  assert.equal(asked.length, 0);
 });
 
 test("the two pages give each other the key and the colors in the fragment (stage G3b)", () => {
