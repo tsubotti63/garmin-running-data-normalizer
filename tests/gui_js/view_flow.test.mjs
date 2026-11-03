@@ -1121,6 +1121,26 @@ test("the races offered are those whose longest span meets the output, newest fi
   assert.equal(view.compareByFor("race", null), "year");
 });
 
+test("a race is offered when its days from the Monday 24 weeks before its week meet the output (the words of U3)", () => {
+  // Wednesday 10 April 2024: its week starts on Monday the 8th, and 24 weeks
+  // before that Monday is Monday 23 October 2023, not 168 days before the race.
+  assert.deepEqual(view.raceRange("2024-04-10", 24), { from: "2023-10-23", to: "2024-04-10" });
+  const offered = (first, last) => view.compareRaces([madeUp("m-w", "2024-04-10")], first, last).map((race) => race.id);
+  // That Monday is the first day that counts: an output that ends on it meets
+  // the race, one that ends the day before does not.
+  assert.deepEqual(offered("2023-01-02", "2023-10-23"), ["m-w"]);
+  assert.deepEqual(offered("2023-01-02", "2023-10-22"), []);
+  // The race day is the last: an output that starts on it meets the race,
+  // one that starts the day after does not.
+  assert.deepEqual(offered("2024-04-10", "2024-12-31"), ["m-w"]);
+  assert.deepEqual(offered("2024-04-11", "2024-12-31"), []);
+  // Always 24 weeks, whatever span is chosen: an output that ends 20 weeks
+  // before the week of the race is outside a span of 8 weeks, and the race is
+  // offered all the same.
+  assert.deepEqual(offered("2023-01-02", "2023-11-20"), ["m-w"]);
+  assert.ok(view.raceRange("2024-04-10", 8).from > "2023-11-20");
+});
+
 test("the races chosen are four at first, one at least, six at most, in their order", () => {
   const races = view.compareRaces(RACE_MARKS, FIRST_DAY, LAST_DAY);
   assert.deepEqual(view.firstCompareRaces(races), ["m-b", "m-c", "m-h", "m-a"]);
@@ -1575,6 +1595,19 @@ test("a calendar says a day with its day of the week and its value, a day withou
   // The days without a recorded activity, in the note of the legend.
   assert.equal(view.calendarZeroDays(dist, [entry, entry]), 2);
   assert.match(words(view.calendarZeroNote(2, "ja"), "ja"), /^記録の無い日（0）が 2 あります。/);
+});
+
+test("the notes of the legend of a calendar: the rule of its steps, and the days without a record of a total (stage U3)", () => {
+  const keys = (notes) => notes.map((note) => note.key);
+  assert.deepEqual(keys(view.calendarNotes({ zeroDays: 2, ticks: [0, 10] }, true, "ja")), ["view.compare.calendar_note", "view.note.zero"]);
+  assert.deepEqual(keys(view.calendarNotes({ zeroDays: 0, ticks: [0, 10] }, true, "ja")), ["view.compare.calendar_note"]);
+  // A mean has no days without a record to say, and no value to color
+  // keeps the rule of the steps.
+  assert.deepEqual(keys(view.calendarNotes({ zeroDays: 5, ticks: [0, 10] }, false, "ja")), ["view.compare.calendar_note"]);
+  assert.deepEqual(keys(view.calendarNotes({ zeroDays: 0, ticks: null }, true, "en")), ["view.compare.calendar_note"]);
+  // A picture says the rule without where the page reads the values.
+  assert.deepEqual(keys(view.calendarNotes({ zeroDays: 2, ticks: [0, 10] }, true, "en", true)), ["view.compare.calendar_steps", "view.note.zero"]);
+  assert.match(words(view.calendarNotes({ zeroDays: 2, ticks: [0, 10] }, true, "ja")[1], "ja"), /^記録の無い日（0）が 2 あります。/);
 });
 
 test("a calendar compares years by day, never an estimate of several records a day, and uses no month", () => {

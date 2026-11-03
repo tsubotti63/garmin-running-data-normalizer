@@ -825,7 +825,7 @@ class GuiGuideTest(unittest.TestCase):
         # and P1 remember them).
         forgotten = {
             "en": "It also forgets the appearance, the items and the item shelf of the view page, your layouts, the period, the grouping, the activity types counted, how years are compared (the way, the month, by year or race day, and the weeks of a span), whether marks show, the two items plotted and the item of a distribution, and the timezone of the last run that made its output.",
-            "ja": "画面の色と、見るページで並べた項目と棚の開け閉め、自分の表示の型、期間とまとめ方と数える種目、年でくらべるのしかた（見せ方・月・くらべ方・範囲の週の数）、「印を出す」かどうか、点で並べる 2 つの項目と分かれ方の項目、前に出力を作った正規化のタイムゾーンも忘れます。",
+            "ja": "画面の色と、見るページで並べた項目と棚の開け閉め、自分のレイアウト、期間とまとめ方と数える種目、年でくらべるのしかた（見せ方・月・くらべ方・範囲の週の数）、「印を出す」かどうか、点で並べる 2 つの項目と分かれ方の項目、前に出力を作った正規化のタイムゾーンも忘れます。",
         }
         removed = {"en": "The marks of the view page are removed too, and cannot be brought back.", "ja": "見るページの印も消えます（戻せません）。"}
         gone = {"en": "removes the file of the settings only", "ja": "設定のファイルだけを消します"}
@@ -878,8 +878,8 @@ class GuiGuideTest(unittest.TestCase):
             ),
             "ja": (
                 "期間とまとめ方は、はじめは「全期間」と「自動」です。2.2.0 からは、選んだものを覚えていて、次に開いたときもそのままです",
-                "画面の色（「ライト」か「ダーク」を選んだとき）。2.2.0 からは、期間、まとめ方、数える種目、表示の型（保存した型と、最後に使った型）、[年でくらべる](#年でくらべる220-から)の見せ方と月、くらべ方（年か大会の日か）と範囲の週の数、「印を出す」かどうか、[ほかの見方](#ほかの見方220-から)の点で並べる 2 つの項目と分かれ方の項目と、[条件](#条件で絞る220-から)も覚えます。[印](#印220-から)そのものは、印のファイルに残ります。",
-                "段を全部外して 1 つも無い間は、そのことも、その間に変えた期間・条件などのしかたも覚えず、前に覚えたもののままです（画面の色、保存した表示の型、印は覚えます）。",
+                "画面の色（「ライト」か「ダーク」を選んだとき）。2.2.0 からは、期間、まとめ方、数える種目、レイアウト（保存したレイアウトと、最後に使ったレイアウト）、[年でくらべる](#年でくらべる220-から)の見せ方と月、くらべ方（年か大会の日か）と範囲の週の数、「印を出す」かどうか、[ほかの見方](#ほかの見方220-から)の点で並べる 2 つの項目と分かれ方の項目と、[条件](#条件で絞る220-から)も覚えます。[印](#印220-から)そのものは、印のファイルに残ります。",
+                "段を全部外して 1 つも無い間は、そのことも、その間に変えた期間・条件などのしかたも覚えず、前に覚えたもののままです（画面の色、保存したレイアウト、印は覚えます）。",
                 "ほかの出力を開いたとき（2.2.0 から）：「1 年」などの期間は、そのままです。",
                 # The words of the button of an enlarged panel changed in 2.2.0 (the
                 # checker's K3-2); the English words are those of 2.1.0.
@@ -888,7 +888,7 @@ class GuiGuideTest(unittest.TestCase):
                 "出力の日の範囲と一部だけ重なる範囲は、選んだ日付のままで、値とグラフは、その中の出力の日だけで数えます。",
                 "数える種目は、覚えた種目のうち、その出力にある種目です。1 つも無いときは、その出力のランニングの種目すべてです。",
                 "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、強調した年、区切りの一覧を開いていたか、ほかの見方を開いていたかと、選んだ点や分かれ方の区切り、靴ごとで選んだ月、まとめの窓を開いていたか、画像で保存の窓を開いていたかと、その選び。",
-                "2.2.0 からは、保存した表示の型の名前、「範囲を選ぶ…」で選んだ期間の日付、数える種目、見るページの条件の言葉、タイムゾーンも入ります。",
+                "2.2.0 からは、保存したレイアウトの名前、「範囲を選ぶ…」で選んだ期間の日付、数える種目、見るページの条件の言葉、タイムゾーンも入ります。",
             ),
         }
         before = {
@@ -955,6 +955,37 @@ class GuiGuideTest(unittest.TestCase):
         self.assertNotRegex(function_body(page, "viewValues"), r"\blit\b")
         self.assertIn('const className = key.getAttribute("aria-pressed") === "true" ? "save-key lit" : "save-key";', function_body(page, "saveComparePart"))
 
+    def test_guides_say_where_the_item_compared_is_chosen(self) -> None:
+        # v2.2.0 U3 (a new AI looked for a field of the name of the label of
+        # that list, which is only for the ear): the guides say the list of
+        # items in the title, as the page does.
+        sentences = {
+            "en": "The list of items in the title (where the item compared is named): to compare another item.",
+            "ja": "題の中の項目の一覧（いまの項目の名前が出ている所）：ほかの項目に替えられます。",
+        }
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            with self.subTest(language=language):
+                self.assertEqual(reads.count(sentences[language]), 1)
+                self.assertNotIn("**Item**:" if language == "en" else "「項目」：", reads)
+
+    def test_guides_say_where_the_notes_of_a_calendar_open(self) -> None:
+        # v2.2.0 U3 (the person's hand check of the release candidate): the
+        # notes of the legend of a calendar open under its info button,
+        # named as the page names it.
+        sentences = {
+            "en": "**About the legend**, at the right of the legend, opens the rule of the steps and, for a total or a count with days without a recorded activity (0), their number.",
+            "ja": "色の区切りの説明と、記録の無い日（0）の数（合計や回数の項目で、その日があるとき）は、凡例の右の「凡例の見方」を押すと開きます。",
+        }
+        quote = {"en": "**{}**", "ja": "「{}」"}
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            with self.subTest(language=language):
+                self.assertEqual(reads.count(sentences[language]), 1)
+                self.assertIn(quote[language].format(catalog(language)["view.compare.legend_about"]), sentences[language])
+
     def test_guides_give_the_layouts_of_the_view_page(self) -> None:
         # v2.2.0 K3: the section of the layouts comes before the item shelf
         # and gives the rules of the page: the items of each built-in layout
@@ -964,7 +995,7 @@ class GuiGuideTest(unittest.TestCase):
         # that a click outside the window does not close it (the checker's
         # opinion 2 of K2).
         catalogs = {language: catalog(language) for language in GUIDES}
-        heading = {"en": "Layouts (from 2.2.0)", "ja": "表示の型（2.2.0 から）"}
+        heading = {"en": "Layouts (from 2.2.0)", "ja": "レイアウト（2.2.0 から）"}
         shelf = {"en": "The item shelf and the panels", "ja": "項目の棚と段"}
         phrases = {
             "en": (
@@ -978,14 +1009,14 @@ class GuiGuideTest(unittest.TestCase):
                 "Here, **Overwrite the layout** puts the panels shown into that layout, also when it is not the one in use.",
             ),
             "ja": (
-                "期間・まとめ方・数える種目・条件は、型に入りません",
+                "期間・まとめ方・数える種目・条件は、レイアウトに入りません",
                 "その出力に値の無い項目も、段として出ます",
                 "名前は 1〜30 字で、改行や見えない文字は使えません。",
-                "自分の型は 20 までです。",
+                "自分のレイアウトは 20 までです。",
                 "左のつまみ（⋮⋮）をなぞっても並べ替えられ、つまみを選んで ↑ ↓ キーでも動かせます。",
                 "選ばれているのは「消さない」です。",
                 "枠の外を押しても閉じません",
-                "ここの「型を上書き」は、使っている型でなくても、いまの段でその型を書き換えます。",
+                "ここの「レイアウトを上書き」は、使っているレイアウトでなくても、いまの段でそのレイアウトを書き換えます。",
             ),
         }
         for language, path in GUIDES.items():
@@ -1060,7 +1091,6 @@ class GuiGuideTest(unittest.TestCase):
         quoted = (
             "view.compare.button",
             "view.panel.unbig",
-            "view.compare.item",
             "view.compare.show",
             "view.compare.mode.rows",
             "view.compare.mode.overlay",
@@ -1337,22 +1367,40 @@ class GuiGuideTest(unittest.TestCase):
         self.assertTrue(race_week(sunday, date(2026, 3, 12)))
         phrases = {
             "en": (
-                f"[**Race**](#marks-from-220)) whose days from {longest} weeks before to the race day meet the days of the output;",
+                f"[**Race**](#marks-from-220)) whose days from the Monday {longest} weeks before the week of the race to the race day overlap the days of the output, from its first to its last (always {longest} weeks, whatever **Span** is, and whether or not those days have activities);",
                 "Where the race is not on a Sunday (or the output ends within that week), it is a period cut short,",
                 "The overview gives each mark only a short line at its top, whatever its kind (a span at its first day).",
                 "The newest races, up to four, are in rows.",
             ),
             "ja": (
-                f"大会の日の {longest} 週前から大会の日までのどこかが出力の日にかかるものが 2 つ以上あるときに押せます。",
+                f"大会の週の {longest} 週前の月曜から大会の日までが、出力の最初の日から最後の日までと少しでも重なるものが 2 つ以上あるときに押せます（「範囲」の週の数によらず {longest} 週で数え、記録のある日かどうかは見ません）。",
                 "大会が日曜でないとき（や、出力がその週の途中で終わるとき）は、年の端の週と同じく途中の区切りです",
                 "全体図には、種類にかかわらず、印ごとに上の端の短い線だけが出ます（期間の印は最初の日に）。",
                 "新しい大会が 4 つまで、大会ごとに並びます。",
             ),
         }
-        helps = {
-            "en": f"With two race marks or more whose days from {longest} weeks before to the race day meet the days of the output,",
-            "ja": f"大会の日の {longest} 週前から大会の日までが出力の日にかかる大会の印が 2 つ以上あると、",
+        # The rule of the races offered, as the help and the guides say it,
+        # in its four parts: from the Monday of the week some weeks before,
+        # the days of the output from the first to the last, always the
+        # longest span whatever the span chosen, and whether or not the days
+        # have records; the note beside the title is short and leads to the
+        # help by the names of the page (stage U3, the checker's answer to
+        # the plan of U3).
+        rules = {
+            "en": (
+                f"from the Monday {longest} weeks before the week of the race to the race day overlap the days of the output",
+                "from its first to its last",
+                f"always {longest} weeks, whatever",
+                "whether or not those days have activities",
+            ),
+            "ja": (
+                f"大会の週の {longest} 週前の月曜から大会の日までが",
+                "出力の最初の日から最後の日までと少しでも重なる",
+                f"週の数によらず {longest} 週で数え",
+                "記録のある日かどうかは見ません",
+            ),
         }
+        page_quote = {"en": "“{}”", "ja": "「{}」"}
         remembered = {
             "en": ("how years are compared (the way, the month, by year or race day, and the weeks of a span)", "whether marks show"),
             "ja": ("年でくらべるのしかた（見せ方・月・くらべ方・範囲の週の数）", "「印を出す」かどうか"),
@@ -1365,10 +1413,23 @@ class GuiGuideTest(unittest.TestCase):
             for phrase in phrases[language]:
                 with self.subTest(language=language, phrase=phrase):
                     self.assertEqual(reads.count(phrase), 1)
-            with self.subTest(language=language, part="help"):
-                self.assertTrue(messages["view.help.race_text"].startswith(helps[language]))
+            for rule in rules[language]:
+                with self.subTest(language=language, part="help", rule=rule):
+                    self.assertIn(rule, messages["view.help.race_text"])
+                    self.assertEqual(reads.count(rule), 1)
+                    self.assertNotIn(rule, messages["view.compare.race_needed"])
             with self.subTest(language=language, part="race needed"):
-                self.assertTrue(messages["view.compare.race_needed"].startswith(helps[language]))
+                self.assertIn(messages["help.button"], messages["view.compare.race_needed"])
+                self.assertIn(page_quote[language].format(messages["view.help.race"]), messages["view.compare.race_needed"])
+            # Where the weeks of a span are chosen, the help names the span in
+            # the words of the page, with the weeks that the page offers; the
+            # rule above names the span too, which would hide a name of it not
+            # quoted here (the partial guard of U3).
+            chosen = ("Choose {} to {} weeks in {}." if language == "en" else "{2}で {0}〜{1} 週を選びます。").format(
+                weeks[0], longest, page_quote[language].format(messages["view.compare.weeks"])
+            )
+            with self.subTest(language=language, part="weeks chosen"):
+                self.assertEqual(messages["view.help.race_text"].count(chosen), 1)
             # The note of the table is in the note of the guides as a whole,
             # not as words that the guides also have elsewhere ("outside the
             # output"; the partial guard of M4).
@@ -2267,7 +2328,7 @@ class GuiGuideTest(unittest.TestCase):
         self.assertNotIn("conditions", series_file)
         heads = {
             "en": ("### Period, grouping, and activity types", "### Conditions (from 2.2.0)", "### Layouts (from 2.2.0)"),
-            "ja": ("### 期間・まとめ方・数える種目", "### 条件で絞る（2.2.0 から）", "### 表示の型（2.2.0 から）"),
+            "ja": ("### 期間・まとめ方・数える種目", "### 条件で絞る（2.2.0 から）", "### レイアウト（2.2.0 から）"),
         }
         samples = {"en": ("Tempo", "8", "12"), "ja": ("ペース走", "8", "12")}
         for language, path in GUIDES.items():
@@ -2355,7 +2416,7 @@ class GuiGuideTest(unittest.TestCase):
                     "Not following them: the panels of **{body}** and **{estimates}**, the first and the last day of the output and the buttons of the period, the years and the races to choose, the counts in the list of the activity types, whether **{shoes}** can be chosen, and the CSV file of `series`.",
                 ),
                 "ja": (
-                    "条件に従うもの：練習と走りの形の段、全体図、項目の棚の横棒と表示の型の「{valued}」、{compare}（大会の日でくらべる・カレンダーも）、まとめ（前の期間も）、区切りの一覧、点で並べる、分かれ方、{shoes}の段と表と数。",
+                    "条件に従うもの：練習と走りの形の段、全体図、項目の棚の横棒とレイアウトの「{valued}」、{compare}（大会の日でくらべる・カレンダーも）、まとめ（前の期間も）、区切りの一覧、点で並べる、分かれ方、{shoes}の段と表と数。",
                     "条件に従わないもの：{body}と {estimates}の段、出力の最初と最後の日と期間のボタン、年と大会の候補、数える種目の一覧の件数、「{shoes}」を選べるかどうか、`series` の CSV。",
                 ),
             }[language]

@@ -1040,9 +1040,11 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   folder of the settings stay after "Forget the remembered settings…" of
   2.1.0.
 - Comparing by race day (stage M2): within the comparison, "Compare [item] by
-  [year | race day]"; race day with two race marks or more whose days from 24
-  weeks before to the race day meet the days of the output (a race after its
-  last day too). Each race asks from the Monday of the week some weeks (8, 12,
+  [year | race day]"; race day with two race marks or more whose days from the
+  Monday 24 weeks before the week of the race to the race day overlap the days
+  of the output, from its first to its last (a race after its last day too;
+  always 24 weeks, whatever the span chosen, and whether or not those days
+  have activities). Each race asks from the Monday of the week some weeks (8, 12,
   16 at first, 20, or 24) before its week to its day, so that every race has
   as many weeks, placed by their order to the week of the race, which ends on
   the race day: a period cut short (as a year's ends are) where the race is

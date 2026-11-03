@@ -63,6 +63,17 @@
   --year4: #127f73;
   --year5: #dd5a13;
   --year6: #6250d6;
+  /* The words of the years in the keys of a panel, in the colors of their
+     lines (stage U3 of v2.2.0, the person's hand check of the release
+     candidate): the color of the line where it is 4.5:1 or more on the
+     surface, and where it is not, the same hue farther from the surface
+     (darker here, lighter in dark). */
+  --year1-ink: #007db0;
+  --year2-ink: #201a97;
+  --year3-ink: #202b3d;
+  --year4-ink: #127f73;
+  --year5-ink: #cc4a00;
+  --year6-ink: #6250d6;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
     "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo UI", "Noto Sans CJK JP", sans-serif;
   font-size: 14px;
@@ -122,6 +133,12 @@
     --year4: #2ec4b0;
     --year5: #ff8a4c;
     --year6: #9085e9;
+    --year1-ink: #f4e300;
+    --year2-ink: #dc614b;
+    --year3-ink: #e5e7eb;
+    --year4-ink: #2ec4b0;
+    --year5-ink: #ff8a4c;
+    --year6-ink: #9085e9;
   }
 }
 
@@ -167,6 +184,12 @@
   --year4: #2ec4b0;
   --year5: #ff8a4c;
   --year6: #9085e9;
+  --year1-ink: #f4e300;
+  --year2-ink: #dc614b;
+  --year3-ink: #e5e7eb;
+  --year4-ink: #2ec4b0;
+  --year5-ink: #ff8a4c;
+  --year6-ink: #9085e9;
 }
 
 [hidden] {

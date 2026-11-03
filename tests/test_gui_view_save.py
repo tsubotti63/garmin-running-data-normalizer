@@ -380,12 +380,20 @@ class GuiViewSaveTest(unittest.TestCase):
         # picture changed (Codex's review of the plan, 2).
         part = function_body(self.script, "saveComparePart")
         self.assertIn('const className = key.getAttribute("aria-pressed") === "true" ? "save-key lit" : "save-key";', part)
-        self.assertIn('pieces.push({ text: keyWords(key), className, swatch: () => key.querySelector("svg").cloneNode(true) });', part)
+        # Stage U3 of v2.2.0: the words of a year in the color of its line,
+        # stood out too, and in the colors of the system where they are forced.
+        self.assertIn('const step = [...key.classList].find((name) => /^y[1-6]$/.test(name));', part)
+        self.assertIn('pieces.push({ text: keyWords(key), className: step ? `${className} ${step}` : className, swatch: () => key.querySelector("svg").cloneNode(true) });', part)
         self.assertIn('.filter((node) => !node.classList?.contains("visually-hidden"))', function_body(self.script, "keyWords"))
         self.assertIn('const group = one ? svgElement("g", { class: "compare-marks" }) : svg;', function_body(self.script, "drawComparePlot"))
         self.assertRegex(self.css, r"\.save-key\.lit \{\s*fill: var\(--text\);\s*font-weight: 600;\s*\}")
         last = self.css.rindex("@media (forced-colors: active) {")
-        self.assertIn(".save-key.lit {\n    fill: CanvasText;\n  }", self.css[last:])
+        self.assertIn(".save-key.lit,\n" + "".join(f"  .save-key.y{step},\n" for step in range(1, 6)) + "  .save-key.y6 {\n    fill: CanvasText;\n  }", self.css[last:])
+        lit = self.css.index(".save-key.lit {")
+        for step in range(1, 7):
+            with self.subTest(step=step):
+                rule = f".save-key.y{step} {{\n  fill: var(--year{step}-ink);\n}}"
+                self.assertGreater(self.css.index(rule), lit)
         self.assertNotRegex(function_body(self.script, "saveImage"), r"\blit\b")
 
     def test_the_words_of_a_picture_take_the_colors_of_the_system_after_their_own(self) -> None:
@@ -604,7 +612,14 @@ class GuiViewSaveTest(unittest.TestCase):
         # The legend of a calendar without where the page reads the values
         # (Codex's review of the plan of R2, 5).
         legend = function_body(self.script, "saveCalendarLegend")
-        self.assertIn('notes.push(node.textContent === t("view.compare.calendar_note") ? t("view.compare.calendar_steps") : node.textContent);', legend)
+        # Stage U3 of v2.2.0: its unit and its keys by name, never the button
+        # of the notes or what it opens (the notes are under an info button
+        # on the page), and the notes from what the calendar shows, under the
+        # conditions of the page (calendarNotes, tested in gui_js).
+        self.assertIn('} else if (node.matches(".calendar-unit")) {', legend)
+        self.assertNotIn("} else {", legend)
+        self.assertNotIn("calendar-note", legend)
+        self.assertIn("const notes = steps === null ? [] : calendarNotes(steps, compareContext.total, state.language, true).map((note) => describe(note));", legend)
         self.assertIn("swatchSize: [12, 12]", legend)
         # The title in the words of the page (the checker's answer 3).
         title = function_body(self.script, "compareSaveTitle")

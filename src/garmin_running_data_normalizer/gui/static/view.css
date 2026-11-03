@@ -1359,8 +1359,34 @@ button.small {
 
 .panel-keys button.key[aria-pressed="true"] {
   border-color: var(--text);
-  color: var(--text);
   font-weight: 600;
+}
+
+/* The words of a year in the color of its line (stage U3 of v2.2.0, the
+   person's hand check of the release candidate), stood out or not: the
+   colors for words of styles.css (--year1-ink to --year6-ink). */
+.panel-keys .key.y1 {
+  color: var(--year1-ink);
+}
+
+.panel-keys .key.y2 {
+  color: var(--year2-ink);
+}
+
+.panel-keys .key.y3 {
+  color: var(--year3-ink);
+}
+
+.panel-keys .key.y4 {
+  color: var(--year4-ink);
+}
+
+.panel-keys .key.y5 {
+  color: var(--year5-ink);
+}
+
+.panel-keys .key.y6 {
+  color: var(--year6-ink);
 }
 
 .panel-read {
@@ -1716,6 +1742,13 @@ button.small {
   white-space: nowrap;
 }
 
+/* Each year (or race) of a table of comparing years apart from the one
+   before, by a line on its left (stage U3 of v2.2.0, the person's hand
+   check of the release candidate); the tables by shoes keep their form. */
+.years-table .year-start {
+  border-left: 2px solid var(--edge);
+}
+
 /* The races stay beside their label, and wrap within their group. */
 .compare-line .compare-races {
   flex: 1 1 24em;
@@ -1854,7 +1887,10 @@ button.small {
   font-size: 11px;
 }
 
-.calendar-legend {
+/* The legend of a calendar, with the button of its notes at its end (stage
+   U3 of v2.2.0, the person's hand check of the release candidate): the
+   notes open under it, so that more strips show. */
+.compare-legend-line {
   display: flex;
   flex: none;
   flex-wrap: wrap;
@@ -1862,6 +1898,18 @@ button.small {
   gap: 4px 14px;
   padding: 6px 12px 4px;
   border-bottom: 1px solid var(--line);
+}
+
+.compare-legend-line .info-button {
+  margin-top: 0;
+  font-size: 0.8rem;
+}
+
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
   color: var(--sub);
   font-size: 0.8rem;
 }
@@ -1879,8 +1927,12 @@ button.small {
   overflow: visible;
 }
 
-.calendar-legend .calendar-note {
-  flex-basis: 100%;
+.compare-legend-about-text {
+  flex: none;
+  margin: 4px 12px 6px;
+}
+
+.compare-legend-about-text .calendar-note {
   margin: 0;
 }
 
@@ -2899,6 +2951,32 @@ button.small {
   font-weight: 600;
 }
 
+/* The words of a year in the color of its line, as on the page (stage U3
+   of v2.2.0), stood out too: after .save-key.lit. */
+.save-key.y1 {
+  fill: var(--year1-ink);
+}
+
+.save-key.y2 {
+  fill: var(--year2-ink);
+}
+
+.save-key.y3 {
+  fill: var(--year3-ink);
+}
+
+.save-key.y4 {
+  fill: var(--year4-ink);
+}
+
+.save-key.y5 {
+  fill: var(--year5-ink);
+}
+
+.save-key.y6 {
+  fill: var(--year6-ink);
+}
+
 .save-empty {
   fill: var(--muted);
   font-size: 12px;
@@ -2930,7 +3008,13 @@ button.small {
     fill: Canvas;
   }
 
-  .save-key.lit {
+  .save-key.lit,
+  .save-key.y1,
+  .save-key.y2,
+  .save-key.y3,
+  .save-key.y4,
+  .save-key.y5,
+  .save-key.y6 {
     fill: CanvasText;
   }
 

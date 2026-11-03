@@ -384,7 +384,11 @@
           <p id="compare-stop-code" class="stop-code"></p>
         </div>
         <div id="compare-stack" class="stack compare-stack">
-          <div id="compare-legend" class="calendar-legend" hidden></div>
+          <div id="compare-legend-line" class="compare-legend-line" hidden>
+            <div id="compare-legend" class="calendar-legend" hidden></div>
+            <button type="button" id="compare-legend-about" class="info-button" aria-expanded="false" aria-controls="compare-legend-about-text" data-i18n="view.compare.legend_about"></button>
+          </div>
+          <div id="compare-legend-about-text" class="info-text compare-legend-about-text" hidden></div>
           <div id="compare-panels" class="panels"></div>
           <div id="compare-axis" class="time-axis" aria-hidden="true"></div>
           <p id="compare-announcer" class="visually-hidden" aria-live="polite"></p>

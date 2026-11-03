@@ -576,7 +576,7 @@ class GuiCatalogTest(unittest.TestCase):
                 self.assertIn(quote.format(mark), catalog["view.note.partial"])
             # v2.2.0 L1: what is not used while comparing years, and where the
             # item is chosen; and the items that a running total is for.
-            for named in ("view.period.label", "view.shelf.heading", "view.layouts.heading", "view.grain.auto", "view.grain.year", "view.grain.month", "view.compare.item"):
+            for named in ("view.period.label", "view.shelf.heading", "view.layouts.heading", "view.grain.auto", "view.grain.year", "view.grain.month"):
                 with self.subTest(language=language, key="view.compare.off", named=named):
                     self.assertIn(quote.format(catalog[named]), catalog["view.compare.off"])
             for item in ("dist", "time", "count", "load", "asc"):
@@ -585,7 +585,7 @@ class GuiCatalogTest(unittest.TestCase):
             # v2.2.0 M2: what is not used while comparing by race day, where
             # the item is chosen, and the button that two race marks make
             # usable; the page puts the item before what it compares by.
-            for named in ("view.period.label", "view.shelf.heading", "view.layouts.heading", "view.grain.week", "view.compare.item"):
+            for named in ("view.period.label", "view.shelf.heading", "view.layouts.heading", "view.grain.week"):
                 with self.subTest(language=language, key="view.compare.off_race", named=named):
                     self.assertIn(quote.format(catalog[named]), catalog["view.compare.off_race"])
             with self.subTest(language=language, key="view.compare.race_needed"):
@@ -602,9 +602,16 @@ class GuiCatalogTest(unittest.TestCase):
             # which names where the values are read and never "darker" or
             # "lighter" (the checker's N0-1: the steps go the other way in the
             # dark appearance).
-            for named in ("view.period.label", "view.shelf.heading", "view.layouts.heading", "view.compare.month", "view.grain.day", "view.compare.item"):
+            for named in ("view.period.label", "view.shelf.heading", "view.layouts.heading", "view.compare.month", "view.grain.day"):
                 with self.subTest(language=language, key="view.compare.off_calendar", named=named):
                     self.assertIn(quote.format(catalog[named]), catalog["view.compare.off_calendar"])
+            # v2.2.0 U3: the item is chosen in the list of the title, as the
+            # other views say it; the label of that list is only for the ear.
+            chosen = {"en": "Choose the item to compare in the list in the title.", "ja": "くらべる項目は、題の一覧で選びます。"}[language]
+            for key in ("view.compare.off", "view.compare.off_race", "view.compare.off_calendar"):
+                with self.subTest(language=language, key=key, part="item"):
+                    self.assertTrue(catalog[key].endswith(chosen))
+                    self.assertNotIn(quote.format(catalog["view.compare.item"]), catalog[key])
             with self.subTest(language=language, key="view.compare.off_race", named="view.compare.mode.calendar"):
                 self.assertIn(quote.format(catalog["view.compare.mode.calendar"]), catalog["view.compare.off_race"])
             for item in ("vo2", "tr", "acute", "chronic", "acwr"):
@@ -631,6 +638,22 @@ class GuiCatalogTest(unittest.TestCase):
             ):
                 with self.subTest(language=language, key=key):
                     self.assertIn(quote.format(name), catalog[key])
+
+    def test_the_layouts_have_one_name_in_each_language(self) -> None:
+        # v2.2.0 U3 (the person's hand check of the release candidate): the
+        # layouts are レイアウト in every Japanese text that names them, where
+        # 表示の型 and 型 were; the English keeps Layouts.
+        catalogs = {language: load_catalog(language) for language in LANGUAGES}
+        ja, en = catalogs["ja"], catalogs["en"]
+        self.assertEqual([key for key, text in ja.items() if "型" in text], [])
+        keys = [key for key, text in ja.items() if "レイアウト" in text]
+        self.assertEqual(len(keys), 25)
+        for key in keys:
+            with self.subTest(key=key):
+                self.assertIn("layout", en[key].lower())
+        for key in ("view.layouts.heading", "view.help.layouts", "view.layouts.rail"):
+            with self.subTest(key=key):
+                self.assertEqual((ja[key], en[key]), ("レイアウト", "Layouts"))
 
     def test_two_items_plotted_say_no_relation_and_quote_the_page(self) -> None:
         # v2.2.0 O1 (the checker's review of the plan): what is not used while

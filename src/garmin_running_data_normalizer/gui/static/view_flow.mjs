@@ -2009,6 +2009,18 @@ export function calendarZeroNote(count, language) {
   return message("view.note.zero", { n: countText(count, language) }, { grain: GRAIN_COUNT_KEYS.day });
 }
 
+// The notes of the legend of a calendar, under its info button (stage U3 of
+// v2.2.0): the rule of its steps, and the days without a record (0) where
+// the item is a total and there are some; a picture says the rule without
+// where the page reads the values (Codex's review of the plan of R2).
+export function calendarNotes(steps, total, language, picture = false) {
+  const notes = [message(picture ? "view.compare.calendar_steps" : "view.compare.calendar_note")];
+  if (total && steps.zeroDays > 0) {
+    notes.push(calendarZeroNote(steps.zeroDays, language));
+  }
+  return notes;
+}
+
 // --- Comparing one item by race day (stage M2 of v2.2.0) -------------------
 
 // What a comparison compares by: the years, or the race marks, each from some
