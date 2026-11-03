@@ -83,6 +83,28 @@ def test_a_release_candidate_sends_its_readers_to_the_stable_release() -> None:
     assert "ふつうは、上の安定版を入れてください" in japanese
 
 
+def test_the_readme_says_which_release_candidate_it_is() -> None:
+    # v2.2.0 K4d: the paragraph of the candidate says which release candidate
+    # of its version it is ("the first", "the second"), as the number after rc
+    # does, so that the words of one candidate cannot stay in the next one
+    # (Codex's objection 2 to the plan of 2.2.0rc2). It names the ordinals up
+    # to the tenth, and says so for a later one (Codex's review of the diff).
+    import re
+
+    from garmin_running_data_normalizer import __version__
+    from scripts.validate_public_product_state import CURRENT_STABLE_VERSION
+
+    if __version__ == CURRENT_STABLE_VERSION:
+        return
+    match = re.fullmatch(r"(\d+\.\d+\.\d+)rc(\d+)", __version__)
+    assert match, __version__
+    ordinals = ("first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth")
+    number = int(match.group(2))
+    assert 1 <= number <= len(ordinals), f"name the ordinal of rc{number} in this test"
+    ordinal = ordinals[number - 1]
+    assert f"**v{__version__}** (the {ordinal} release candidate of v{match.group(1)}," in flowing("README.md")
+
+
 def test_a_release_candidate_says_how_to_try_it_beside_the_stable_release() -> None:
     # v2.2.0 K4a: while the source is a release candidate, the README and the
     # Japanese entry say how to try it once it is published (a virtual
