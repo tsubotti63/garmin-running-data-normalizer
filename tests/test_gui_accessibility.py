@@ -49,6 +49,14 @@ TEXT_PAIRS = (
     ("surface", "ng"),  # the mark in a red box's number
     ("surface", "text"),  # the open part of the help panel, and Help while it is open
     ("text", "warn-soft"),  # the note of an output with part of its input left out (stage G3b)
+    # The words of the years in the keys of a panel of comparing years, in
+    # the colors of their lines (stage U3 of v2.2.0): all six, as words.
+    ("year1-ink", "surface"),
+    ("year2-ink", "surface"),
+    ("year3-ink", "surface"),
+    ("year4-ink", "surface"),
+    ("year5-ink", "surface"),
+    ("year6-ink", "surface"),
 )
 # The bar beside a warning row is decoration: the icon and the words carry
 # the meaning, so it is not a pair here.
@@ -1223,7 +1231,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
                     'keys.setAttribute("role", "group");',
                     'keys.setAttribute("aria-label", t(context.by === "race" ? "view.compare.lit_races" : "view.compare.lit_years"));',
                     "const drawn = yearDrawn(entry);",
-                    'const key = element(drawn ? "button" : "span", "key");',
+                    'const key = element(drawn ? "button" : "span", `key y${entry.step}`);',
                     'key.type = "button";',
                     "key.dataset.lit = entry.id;",
                     'key.setAttribute("aria-pressed", String(lit !== null && lit.id === entry.id));',
@@ -1309,11 +1317,42 @@ class GuiViewPageStructureTest(unittest.TestCase):
         normal, after = css.split("@media (forced-colors: active) {", 1)
         forced = after.split("\n}\n", 1)[0]
         self.assertRegex(normal, r"\.panel-keys button\.key \{[^}]*border: 1px solid transparent;[^}]*\}")
-        self.assertRegex(normal, r'\.panel-keys button\.key\[aria-pressed="true"\] \{\s*border-color: var\(--text\);\s*color: var\(--text\);\s*font-weight: 600;\s*\}')
+        self.assertRegex(normal, r'\.panel-keys button\.key\[aria-pressed="true"\] \{\s*border-color: var\(--text\);\s*font-weight: 600;\s*\}')
+        # Stage U3 of v2.2.0: the words of each key in the color of its
+        # line, stood out or not, by the step of the year in its class.
+        for step in range(1, 7):
+            with self.subTest(step=step):
+                self.assertRegex(normal, rf"\.panel-keys \.key\.y{step} \{{\s*color: var\(--year{step}-ink\);\s*\}}")
+        self.assertIn('const key = element(drawn ? "button" : "span", `key y${entry.step}`);', (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8"))
         self.assertRegex(normal, r"\.compare-label\.lit \{\s*fill: var\(--text\);\s*font-weight: 600;\s*\}")
         self.assertRegex(forced, r"\.compare-label,\s*\.compare-label\.newest,\s*\.compare-label\.lit \{\s*fill: CanvasText;\s*\}")
         self.assertRegex(forced, r"\.panel-keys button\.key \{\s*border-color: Canvas;\s*\}")
         self.assertRegex(forced, r'\.panel-keys button\.key\[aria-pressed="true"\] \{\s*border-color: Highlight;\s*\}')
+
+    def test_the_years_of_a_table_of_comparing_years_are_apart(self) -> None:
+        # v2.2.0 U3 (the person's hand check of the release candidate): in a
+        # table of comparing years (or races), each year begins with a line on
+        # its left, its value after the count of the one before, or each
+        # column without counts (running totals), in the color of the edges
+        # (3:1 on the surface, CONTROL_PAIRS); the tables by shoes, which share
+        # the class compare-table, keep their form.
+        from tests.test_gui_view_save import function_body
+
+        script = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        table = function_body(script, "buildCompareTable")
+        for line in (
+            'const table = element("table", "t years-table");',
+            "const starts = (index) => index > 0 && (!counts || index % 2 === 1);",
+            'const cell = element("th", index === 0 ? "" : starts(index) ? "n year-start" : "n", describe(entry));',
+            'tr.append(element("td", cell.value === null ? "n empty year-start" : "n year-start", text));',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, table)
+        self.assertRegex(css, r"\.years-table \.year-start \{\s*border-left: 2px solid var\(--edge\);\s*\}")
+        shoes = function_body(script, "buildShoesTable")
+        self.assertNotIn("year-start", shoes)
+        self.assertNotIn("years-table", shoes)
 
     def test_a_calendar_compares_years_by_day_in_strips_of_its_own(self) -> None:
         # v2.2.0 N1, in the page and its script, which no test runs: the
@@ -1334,7 +1373,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertEqual((about.get("aria-controls"), about.get("aria-expanded"), about.get("data-i18n")), ("compare-calendar-about-text", "false", "view.compare.calendar_about"))
         reason = next(element for element in self.elements if element.parent is by_id(self.elements, "compare-calendar-about-text"))
         self.assertEqual(reason.get("data-i18n"), "view.compare.calendar_only")
-        for hidden in ("compare-calendar-about", "compare-calendar-about-text", "compare-off-calendar", "compare-legend", "compare-table-calendar"):
+        for hidden in ("compare-calendar-about", "compare-calendar-about-text", "compare-off-calendar", "compare-legend", "compare-legend-line", "compare-legend-about-text", "compare-table-calendar"):
             with self.subTest(hidden=hidden):
                 self.assertIn("hidden", by_id(self.elements, hidden).attributes)
         self.assertEqual(by_id(self.elements, "compare-off-calendar").get("data-i18n"), "view.compare.off_calendar")
@@ -1342,8 +1381,18 @@ class GuiViewPageStructureTest(unittest.TestCase):
         stack = by_id(self.elements, "compare-stack")
         legend = by_id(self.elements, "compare-legend")
         panels = by_id(self.elements, "compare-panels")
-        self.assertIs(legend.parent, stack)
+        # Stage U3 of v2.2.0: the legend in a line with the button of its
+        # notes at its end, and the notes under it, before the strips.
+        line = by_id(self.elements, "compare-legend-line")
+        notes = by_id(self.elements, "compare-legend-about-text")
+        button = by_id(self.elements, "compare-legend-about")
+        self.assertIs(line.parent, stack)
+        self.assertIs(legend.parent, line)
+        self.assertIs(button.parent, line)
+        self.assertIs(notes.parent, stack)
+        self.assertEqual((button.get("aria-controls"), button.get("aria-expanded"), button.get("data-i18n")), ("compare-legend-about-text", "false", "view.compare.legend_about"))
         self.assertLess(self.elements.index(legend), self.elements.index(panels))
+        self.assertLess(self.elements.index(notes), self.elements.index(panels))
         for line in (
             # Greyed for an estimate and by race day; the month greyed, and kept.
             'button.disabled = (way === "cumulative" && !total) || (way === "calendar" && (!calendar || race));',
@@ -1356,6 +1405,15 @@ class GuiViewPageStructureTest(unittest.TestCase):
             "ui.compareOffCalendar.hidden = !calendar;",
             'ui.compareTableCalendar.hidden = !compare.table || mode !== "calendar";',
             'ui.compareLegend.hidden = !ready || compare.table || mode !== "calendar";',
+            # Stage U3 of v2.2.0: the notes of the legend under its info
+            # button, with the legend, open as the person left them; the
+            # button stays through a drawing, outside the legend.
+            "ui.compareLegendLine.hidden = ui.compareLegend.hidden;",
+            'ui.compareLegendAbout.setAttribute("aria-expanded", String(compare.legendAbout && !ui.compareLegend.hidden));',
+            "ui.compareLegendAboutText.hidden = !compare.legendAbout || ui.compareLegend.hidden;",
+            "state.compare.legendAbout = !state.compare.legendAbout;",
+            "Object.assign(state.compare, { key, series: null, about: false, calendarAbout: false, legendAbout: false });",
+            'ui.compareLegendAboutText.replaceChildren(...calendarNotes(steps, context.total, state.language).map((note) => element("p", "calendar-note", describe(note))));',
             # A strip a year, in its own size, its legend above them.
             "compared = data.map((entry, index) => buildCompareCalendar(compareContext, entry, lines[index], name));",
             'ui.compareAxis.hidden = compare.table || calendar;',
@@ -1441,6 +1499,21 @@ class GuiViewPageStructureTest(unittest.TestCase):
             with self.subTest(forced=step):
                 self.assertRegex(forced, rf"\.calendar-cell\.s{step} \{{\s*fill-opacity: {opacity};\s*\}}")
         self.assertRegex(forced, r"\.calendar-cell\.zero \{\s*stroke: CanvasText;\s*\}")
+
+    def test_the_info_buttons_of_comparing_years_start_closed(self) -> None:
+        # Each info button of comparing years (what a running total is, why a
+        # calendar cannot be, and the legend of a calendar) says aria-expanded
+        # from its state, which a comparison begins with as false; without it
+        # the first drawing would say "undefined" (Codex's review of the diff
+        # of U3). No test runs the page: the state is held to the function
+        # that begins a comparison, and the real page was checked.
+        from tests.test_gui_view_save import function_body
+
+        script = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        begin = function_body(script, "enterCompare")
+        for name in ("about", "calendarAbout", "legendAbout"):
+            with self.subTest(name=name):
+                self.assertIn(f"\n    {name}: false,\n", begin)
 
     def test_the_list_of_a_period_is_named_and_goes_back_to_its_chart(self) -> None:
         # Stage M3 of v2.2.0: a chart of the activities with values says by a

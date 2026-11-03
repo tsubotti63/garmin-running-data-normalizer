@@ -1411,7 +1411,7 @@ values are made):
   the period, and the grouping are as they were before. An output without
   days has no years to compare, and the button is grayed.
 - The bar above the panels has the choices:
-  - **Item**: the list in the title, to compare another item.
+  - The list of items in the title (where the item compared is named): to compare another item.
   - **Show as**: **One row per year** (a row a year, with one scale for all
     the rows), **Overlay** (a line a year on one panel, with the year at the
     end of each line), **Running total** (see below), or **Calendar** (see
@@ -1504,6 +1504,9 @@ values are made):
   value and not its right one (10–20: 10 or more, under 20). A color further
   right in the legend only means a higher value. The steps are the same for
   every year chosen.
+- **About the legend**, at the right of the legend, opens the rule of the
+  steps and, for a total or a count with days without a recorded activity
+  (0), their number.
 - For a total or a count, a day without a recorded activity (0) is an outline;
   a day without a value and a day outside the output are not drawn. A recorded
   0 (activities of 0 km) takes the first step. With conditions, these are of
@@ -1527,9 +1530,11 @@ values are made):
 
 - In the title of the bar, choose **year** or **race day** to compare by.
   **race day** can be pressed with two race marks or more (marks of the kind
-  [**Race**](#marks-from-220)) whose days from 24 weeks before to the race
-  day meet the days of the output; otherwise it is grayed, and a line beside
-  it says why.
+  [**Race**](#marks-from-220)) whose days from the Monday 24 weeks before the
+  week of the race to the race day overlap the days of the output, from its
+  first to its last (always 24 weeks, whatever **Span** is, and whether or not
+  those days have activities); otherwise it is grayed, and a line beside it
+  says why.
 - The races show as buttons in the place of the years, newest first: the
   newest four at first, and up to six. A race after the last day of the
   output can be chosen too: its weeks so far show.

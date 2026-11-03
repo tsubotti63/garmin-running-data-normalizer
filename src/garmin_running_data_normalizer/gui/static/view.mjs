@@ -62,6 +62,7 @@ import {
   calendarItem,
   calendarLegend,
   calendarMove,
+  calendarNotes,
   calendarPlace,
   calendarReading,
   calendarStep,
@@ -578,6 +579,9 @@ const ui = {
   compareStopCode: byId("compare-stop-code"),
   compareStack: byId("compare-stack"),
   compareLegend: byId("compare-legend"),
+  compareLegendLine: byId("compare-legend-line"),
+  compareLegendAbout: byId("compare-legend-about"),
+  compareLegendAboutText: byId("compare-legend-about-text"),
   comparePanels: byId("compare-panels"),
   compareAxis: byId("compare-axis"),
   compareAnnouncer: byId("compare-announcer"),
@@ -2616,7 +2620,10 @@ function saveComparePart(entry) {
         // The key of a year stood out is bold, as on the page (stage L3 of
         // v2.2.0).
         const className = key.getAttribute("aria-pressed") === "true" ? "save-key lit" : "save-key";
-        pieces.push({ text: keyWords(key), className, swatch: () => key.querySelector("svg").cloneNode(true) });
+        // The words of a year in the color of its line, as on the page
+        // (stage U3 of v2.2.0).
+        const step = [...key.classList].find((name) => /^y[1-6]$/.test(name));
+        pieces.push({ text: keyWords(key), className: step ? `${className} ${step}` : className, swatch: () => key.querySelector("svg").cloneNode(true) });
       }
     }
   }
@@ -2632,16 +2639,18 @@ function saveComparePart(entry) {
 // cannot do (Codex's review of the plan of R2).
 function saveCalendarLegend() {
   const pieces = [];
-  const notes = [];
+  // Its unit and its keys by name, never the button of its notes or what it
+  // opens; the notes from what the calendar shows, under the same conditions
+  // as on the page (stage U3 of v2.2.0).
   for (const node of ui.compareLegend.children) {
     if (node.matches(".calendar-key")) {
       pieces.push({ text: node.textContent, className: "save-key", swatch: () => node.querySelector("svg").cloneNode(true), swatchSize: [12, 12] });
-    } else if (node.matches(".calendar-note")) {
-      notes.push(node.textContent === t("view.compare.calendar_note") ? t("view.compare.calendar_steps") : node.textContent);
-    } else {
+    } else if (node.matches(".calendar-unit")) {
       pieces.push({ text: node.textContent, className: "save-unit" });
     }
   }
+  const steps = compareContext?.calendar ?? null;
+  const notes = steps === null ? [] : calendarNotes(steps, compareContext.total, state.language, true).map((note) => describe(note));
   return { pieces: pieces.filter((piece) => piece.text !== ""), notes };
 }
 
@@ -5081,6 +5090,7 @@ function enterCompare(key) {
     table: false,
     about: false,
     calendarAbout: false,
+    legendAbout: false,
     cursor: null,
     cursorAxis: null,
     // The year (or the race) stood out on one panel, never remembered
@@ -5220,7 +5230,7 @@ function chooseCompareItem() {
     return;
   }
   const before = compareModeNow();
-  Object.assign(state.compare, { key, series: null, about: false, calendarAbout: false });
+  Object.assign(state.compare, { key, series: null, about: false, calendarAbout: false, legendAbout: false });
   const mode = compareModeNow();
   if (mode !== before) {
     state.compare.grain = compareGrainFor(compareByNow(), mode, compareMonthNow());
@@ -5400,6 +5410,11 @@ function renderCompare(live) {
   ui.compareStack.classList.toggle("waiting", state.compareLoading);
   ui.compareNote.hidden = !ready || !compare.table;
   ui.compareLegend.hidden = !ready || compare.table || mode !== "calendar";
+  // The notes of the legend under its info button, with the legend, open
+  // as the person left them while the item is compared (stage U3 of v2.2.0).
+  ui.compareLegendLine.hidden = ui.compareLegend.hidden;
+  ui.compareLegendAbout.setAttribute("aria-expanded", String(compare.legendAbout && !ui.compareLegend.hidden));
+  ui.compareLegendAboutText.hidden = !compare.legendAbout || ui.compareLegend.hidden;
   if (ready) {
     renderCompareBody();
   } else {
@@ -5738,7 +5753,9 @@ function buildCompareOne(context, name) {
     // A year with nothing to draw stays words; a race says its whole name and
     // its days to the ear, as its button in the bar does.
     const drawn = yearDrawn(entry);
-    const key = element(drawn ? "button" : "span", "key");
+    // The step of the year in the class too, for the color of its words
+    // (stage U3 of v2.2.0).
+    const key = element(drawn ? "button" : "span", `key y${entry.step}`);
     if (drawn) {
       key.type = "button";
       key.dataset.lit = entry.id;
@@ -5793,12 +5810,16 @@ function buildCompareTable(context, name) {
   wrap.setAttribute("role", "region");
   const race = context.by === "race";
   wrap.setAttribute("aria-label", race ? t("view.compare.race_table_label", { name }) : t("view.compare.table_label", { name }));
-  const table = element("table", "t");
+  const table = element("table", "t years-table");
   const caption = element("caption", "visually-hidden", race ? t("view.compare.race_table_caption", { name, kind }) : t("view.compare.table_caption", { name, kind }));
   const { heads, rows, last, counts } = compareTable(context.item, context.data, context.grain, context.month, context.span, state.language, context.mode, context.names);
   const headRow = element("tr");
+  // Each year (or race) begins with a line on its left: its value, after
+  // the period and the count of the one before, or each column without
+  // counts (stage U3 of v2.2.0).
+  const starts = (index) => index > 0 && (!counts || index % 2 === 1);
   heads.forEach((entry, index) => {
-    const cell = element("th", index === 0 ? "" : "n", describe(entry));
+    const cell = element("th", index === 0 ? "" : starts(index) ? "n year-start" : "n", describe(entry));
     cell.scope = "col";
     headRow.append(cell);
   });
@@ -5812,7 +5833,7 @@ function buildCompareTable(context, name) {
     tr.append(period);
     for (const cell of row.cells) {
       const text = cell.outside ? "—" : cell.value === null ? t("view.no_value") : `${describe(cell.value)}${cell.partial ? "*" : ""}`;
-      tr.append(element("td", cell.value === null ? "n empty" : "n", text));
+      tr.append(element("td", cell.value === null ? "n empty year-start" : "n year-start", text));
       if (counts) {
         tr.append(element("td", "n", cell.count ?? ""));
       }
@@ -6263,10 +6284,11 @@ function renderCalendarLegend(context) {
   const steps = context?.calendar ?? null;
   if (steps === null) {
     ui.compareLegend.replaceChildren();
+    ui.compareLegendAboutText.replaceChildren();
     return;
   }
   const unit = unitKey(context.key);
-  const nodes = [element("span", "", unit ? t("view.compare.calendar_legend_unit", { unit: t(unit) }) : t("view.compare.calendar_legend"))];
+  const nodes = [element("span", "calendar-unit", unit ? t("view.compare.calendar_legend_unit", { unit: t(unit) }) : t("view.compare.calendar_legend"))];
   if (context.total) {
     nodes.push(calendarSwatch("zero", t("view.compare.calendar_zero_key")));
   }
@@ -6275,11 +6297,10 @@ function renderCalendarLegend(context) {
       nodes.push(calendarSwatch(`s${entry.step}`, describe(entry.words)));
     }
   }
-  nodes.push(element("p", "calendar-note", t("view.compare.calendar_note")));
-  if (context.total && steps.zeroDays > 0) {
-    nodes.push(element("p", "calendar-note", describe(calendarZeroNote(steps.zeroDays, state.language))));
-  }
   ui.compareLegend.replaceChildren(...nodes);
+  // The notes under the info button of the legend, so that more strips show
+  // (stage U3 of v2.2.0).
+  ui.compareLegendAboutText.replaceChildren(...calendarNotes(steps, context.total, state.language).map((note) => element("p", "calendar-note", describe(note))));
 }
 
 // A strip of a year: at its left its name, the days that the output cuts,
@@ -9315,6 +9336,11 @@ function connect() {
   });
   ui.compareCalendarAbout.addEventListener("click", () => {
     state.compare.calendarAbout = !state.compare.calendarAbout;
+    render();
+  });
+  // The notes of the legend of a calendar (stage U3 of v2.2.0).
+  ui.compareLegendAbout.addEventListener("click", () => {
+    state.compare.legendAbout = !state.compare.legendAbout;
     render();
   });
   ui.panels.addEventListener("click", panelAction);
