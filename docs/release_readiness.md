@@ -25,9 +25,12 @@ and Chrome. The fonts, display scaling, contrast themes, and Edge of Windows
 were not checked again for v2.2.0rc2. From v2.2.0rc2, only the version and
 the documents change.
 
-The release source is the `main` commit that merges the v2.2.0 release
-preparation pull request. Its annotated tag, GitHub Release, and publish
-workflow evidence are recorded in this section after publication.
+The release source is `4546a1b58b519291e153aacb8320acb78bd39f5c` (#208). The
+annotated `v2.2.0` tag (tag object
+`881873a0697ac7b0c780a7d8b884486eb4c4a938`), the latest stable GitHub Release
+published on 2026-11-04 JST, Production PyPI publication through Trusted
+Publishing/OIDC, and the publish workflow's exact-version PyPI install
+verification are complete.
 
 ## v2.2.0rc2 release candidate
 
@@ -960,10 +963,10 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Latest GitHub Release: `v2.2.0`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
-- TestPyPI `2.2.0`: Not used; the release publishes directly to Production
-  PyPI through the protected `pypi` Environment
-- Production PyPI `2.2.0`: Published through Trusted Publishing; the publish
-  workflow verifies the exact-version install
+- TestPyPI `2.2.0`: Not used; the publish workflow's TestPyPI jobs were
+  skipped
+- Production PyPI `2.2.0`: Published and exact-version install verified by the
+  publish workflow
 - TestPyPI `2.1.0`: Not used; the publish workflow's TestPyPI jobs were
   skipped
 - Production PyPI `2.1.0`: Published and exact-version install verified by the
@@ -1013,10 +1016,10 @@ are historical releases. The v2.2.0rc2, v2.2.0rc1, v2.1.0rc1, v2.0.1rc1,
 v2.0.0rc5, v2.0.0rc4, v2.0.0rc3, v2.0.0rc2, and v2.0.0rc1 tag and TestPyPI
 publication evidence was recorded only after the corresponding external
 state was observed.
-The v2.1.0, v2.0.1, v2.0.0, v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0,
-and v1.3.3 tag, GitHub Release, and Production PyPI publication evidence was
-recorded only after the corresponding external state was observed; the
-v2.2.0 publication evidence is added to this document after it is observed.
+The v2.2.0, v2.1.0, v2.0.1, v2.0.0, v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1,
+v1.4.0, and v1.3.3 tag, GitHub Release, and Production PyPI publication
+evidence was recorded only after the corresponding external state was
+observed.
 
 ## Windows CI correction
 
@@ -1038,8 +1041,43 @@ Releases, Production PyPI files, and release notes are unchanged.
 
 ## Current release assessment
 
-The v2.2.0 release assessment is recorded here after publication, from the
-release source's main CI run and the Production publish workflow run.
+The v2.2.0 release source passed main CI run `41823696700` (`test` and
+`test-python-3-15` on Ubuntu, `macos-python-3-15`, and `windows-runtime` and
+`windows-python-3-15`) and CodeQL run `41823696195`. A build-only publish
+workflow run (`41829891373`) on the release source passed with every upload
+job skipped. Production publish workflow run `41837445186` then built and
+validated the exact source, published to Production PyPI, and verified the
+exact-version PyPI install; the TestPyPI jobs were skipped. The tag, the
+GitHub Release, and the Production publication ran under one Human approval
+given after their values were shown. The `pypi` Environment deployment was
+Human-authorized, and the approval was submitted through the GitHub API on the
+Human's instruction.
+
+The SHA-256 checksums recorded by that run match Production PyPI: wheel
+`bd9d3079bf732bdaa9c40cba41bd8709a13a4421cfdc3a1f721167d413a3b674` and source
+distribution
+`fa16960a49f0c6daf3e45d43207a6b98ebf2ac1b44201247b6c584aab8b00e00`. Each file
+carries a PEP 740 publish attestation from `publish-pypi.yml` in the `pypi`
+Environment. The build-only run produced different checksums because the
+distributions are not byte-reproducible across runs; only the production run's
+artifacts were published. `PYPI_PUBLISH_APPROVED` was returned to `false`
+after the upload. A clean install from Production PyPI on macOS, with a home
+folder of its own and synthetic data only, held the files of the tag,
+completed the Synthetic Run-All (`PASS_WITH_WARNINGS`, exit 0) with the run
+digest of the README figures, and its output passed `validate-handoff`,
+`doctor --run-output`, and `support-bundle`. The macOS line of the GUI Guide,
+run as written with `--no-browser` at its end, installed 2.2.0 from Production
+PyPI, made the icon, and served the page, twice.
+
+The publish workflow runs the Python tests, builds the distributions, and
+checks that there is one wheel and one source distribution of the version,
+their metadata, and the version and the command line of what it installs from
+each; it does not run the tests of the pages or the public checks, and it does
+not read the pages and catalogs from the distributions. The main CI run above
+ran those on the release source, and the clean install above served the page;
+running them in the publish workflow too is left for a release after v2.2.0.
+
+### v2.1.0 release assessment (historical)
 
 The v2.1.0 release source passed main CI run `40591156433` (`test` and
 `test-python-3-15` on Ubuntu, `macos-python-3-15`, and `windows-runtime` and
