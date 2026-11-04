@@ -781,14 +781,14 @@ class GuiGuideTest(unittest.TestCase):
             "en": (
                 "The timezone of the last run that made its output (from 2.2.0). At later launches, box 3 is set with it (**(as last time)**).",
                 "The place of an Export, **Name of the new folder** in box 3, the language, and the way to normalize are not remembered.",
-                "it does not use the settings that 2.2.0 remembered, and starts as a first launch; it does not write over their file.",
-                "**Forget the remembered settings…** of the earlier version forgets what 2.2.0 remembered too",
+                "it does not use the settings that 2.2.0 remembered, and starts as a first launch. It does not write over their file, so it does not remember what you choose while you use it; back in 2.2.0, what 2.2.0 remembered is used as before.",
+                "**Forget the remembered settings…** of the earlier version removes that file, so that it forgets what 2.2.0 remembered too, such as the timezone of Box 3",
             ),
             "ja": (
                 "前に出力を作った正規化のタイムゾーン（2.2.0 から）。2 回目からは、3 の箱がこのタイムゾーンで決まります（「（前回のまま）」）。",
                 "エクスポートの場所、3 の箱の「新しく作るフォルダーの名前」、言語、正規化のしかたは覚えません。",
-                "2.2.0 が覚えた設定は使われず、初めての起動として始まります。設定のファイルは書き換えません。",
-                "「覚えた設定を消す…」を押すと、2.2.0 が覚えたもの（タイムゾーンや、見るページで覚えたものなど）も消えます。",
+                "2.2.0 が覚えた設定は使われず、初めての起動として始まります。戻したバージョンは、2.2.0 の設定のファイルを書き換えないので、戻している間に選んだことは覚えません。2.2.0 にまた戻すと、2.2.0 が覚えていたものが、そのまま使われます。",
+                "「覚えた設定を消す…」を押すと、そのファイルを消すので、2.2.0 が覚えたもの（3 の箱のタイムゾーンや、見るページで覚えたものなど）も消えます。",
             ),
         }
         before = {"en": "The timezone is not remembered", "ja": "タイムゾーンは覚えません"}
@@ -799,6 +799,141 @@ class GuiGuideTest(unittest.TestCase):
                 with self.subTest(language=language, phrase=phrase):
                     self.assertIn(phrase, reads)
             self.assertNotIn(before[language], reads)
+
+    def test_guides_answer_the_reading_after_the_stable_version(self) -> None:
+        # v2.2.0 V1, after the stable version: what the third new reader of
+        # K6a asked of the chapter that installs this app and of the 2.2.0
+        # sections of the view page, and the two things found before the
+        # publication (what stays as the output opened until it opens again,
+        # and the mark of 2.2.0 on the parts of the section of an output that
+        # changes, not on its heading). Each sentence is said once, in the
+        # words of the page as the catalogs write them, and the words that V1
+        # takes away do not come back.
+        names = {language: [catalog(language)[f"view.layout.{layout}"] for layout, _ in BUILT_IN_LAYOUTS] for language in GUIDES}
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            messages = catalog(language)
+            mark = "**{}**" if language == "en" else "「{}」"
+
+            def word(key: str) -> str:
+                return mark.format(messages[key])
+
+            if language == "en":
+                phrases = (
+                    "The output is one folder: files that hold the Activities, Gear, Personal Records, FIT Sessions and Laps, and daily records of the Export in fixed forms, the records of its checks and sources, and context for analysis that people and AI tools can read ([Box 3: Output](#box-3-output)).",
+                    "Request a complete Account Data Export on Garmin's official [Data Management page](https://www.garmin.com/account/datamanagement/): Garmin prepares the download later, so follow the instructions that Garmin shows then, and keep its notification until you have downloaded the archive. This app does not sign in to Garmin or request the Export for you.",
+                    "the Python install manager is the app of python.org that installs Python on Windows, and it brings the commands `py` and `pymanager` of these steps; before it, `py` was the command of the Python Launcher that came with Python.",
+                    "when such a Python is installed already, or you do not know whether it is, you may still install the install manager and go on",
+                    "its steps are `pymanager install default`, uninstalling the Python Launcher, and uninstalling Python 3.10 and earlier, in this order, and **Installed apps** shows whether something is still installed.",
+                    "makes the icon that starts the GUI (on the desktop on macOS, and on the desktop and in the Start menu on Windows; [Start the GUI from an icon](#start-the-gui-from-an-icon)), and opens the GUI.",
+                    'which runs the Python of the virtual environment: `~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui` on macOS, or `& "$HOME\\garmin-normalizer\\Scripts\\python.exe" -m garmin_running_data_normalizer gui` on Windows.',
+                    "**Exit code**: the number that the command that stopped returned (its exit code); on macOS, `echo $?` right after it stopped shows it.",
+                    f"When the GUI does not open, so that you cannot use {word('tools.report')} on its page, fill in the fields in this way:",
+                    "You need an account of GitHub, which you can make for free; GitHub is the only place to tell us. The fields of the form are in English, and you may write in English or in Japanese.",
+                    "Write what happened yourself (in English or in Japanese), choose whether the synthetic data shows the problem, and tick the four checks that no personal data is in it.",
+                    "The line installs the new version into the same virtual environment `garmin-normalizer`, and makes the icon again.",
+                    f"stop the GUI first: choose {word('quit.button')} at the bottom of the page ([Stop the GUI](#stop-the-gui)).",
+                    "as [Remove this app](#remove-this-app) says ([Later launches](#later-launches) says where the folder is).",
+                    "[Later launches](#later-launches) says where it is): the marks in it are gone then.",
+                    f"The training and running-form items are those of the groups {word('view.group.act')} and {word('view.group.fit')} of the item shelf; the daily items and the estimates are those of {word('view.group.body')} and {word('view.group.est')}.",
+                    "(The time of the panels is the duration in the record of Garmin: the time of the activity as recorded, which is neither the whole time with the pauses nor the moving time alone.)",
+                    "Press Enter in a field, or change its value and then press elsewhere or move on with Tab, and the conditions apply",
+                    "Tab moves from field to field, and Enter, or a value changed in a field before Tab moves on, applies them",
+                    f"{word('view.conditions.clear')} clears the filter in use, and that is remembered too (the next time, there are no conditions)",
+                    "Where the data of the names is too large, the page goes on in this way, without the names only.",
+                    f"A file of the names that is broken stops the output, as any broken file does, and {word('view.stop.heading')} shows.",
+                    f"it gives the numbers of the whole output (the days of {word('view.period.all')}), not of the period chosen",
+                    f"{word('view.item.hrv')}, and {word('view.item.rhr')} (the HRV is a reference value read from FIT files, which can differ from Garmin's HRV status)",
+                    "(the Japanese names are " + ", ".join(names["ja"][:-1]) + ", and " + names["ja"][-1] + "), nor the name of another of your layouts; names that differ only in case or in full or half width are the same name.",
+                    "the panels, the period, and the grouping are then as they were before (the grouping while comparing is chosen apart from that of the panels).",
+                    f"December (not the grouping {word('view.grain.month')}).",
+                    "such as VO2 Max (it has a line for each activity type, and its lines also split on the day when the records of Garmin that its values come from change from the activity records to the MaxMet records, as the note of its panel says), by the names of the key of its panel.",
+                    f"each year with a column of values and one of counts ({word('view.table.activities')}, {word('view.table.days')}, or {word('view.table.records')}, by the item)",
+                    f"The years chosen are not remembered: each time, the newest four. {word('view.compare.show')} and {word('view.compare.month')} are remembered for the next time",
+                    f"({word('view.grain.day')} or {word('view.grain.week')} with one month chosen in {word('view.compare.month')} of the bar).",
+                    f"the item shelf, and the layouts are not used, and are grayed; so are the groupings {word('view.grain.auto')} and {word('view.grain.year')}, and the grouping {word('view.grain.month')} too where one month is chosen in {word('view.compare.month')} of the bar.",
+                    f"Where the numbers cannot be shown, {word('view.stop.series_heading')} shows under the bar above the panels, with the reason and its code, in the words of a stop of the panels.",
+                    "For another reason that shows again when you try again, tell us the reason and the code ([Report a problem on GitHub](#report-a-problem-on-github)).",
+                    f"Where the output can no longer be read (where it is broken, for example), {word('view.compare.button')} closes too, and {word('view.stop.heading')} shows.",
+                    "(for a race mark with an end day, the race day is its first day, and the days after it are left out).",
+                    "The races show as cards in the place of the years, newest first",
+                    "The card of a race shows the head of its name and its date",
+                    "In the table, 0:10 is hours and minutes for the time (10 minutes), and minutes and seconds for the average pace (10 seconds a kilometer).",
+                    f"numbers being read (the window says {word('view.loading')})",
+                    "open a comparison of years, a list, or the summary (all from 2.2.0) again as below",
+                    f"Pressing the button of the period again does not renew the overview under the panels, the years that {word('view.compare.button')} can choose, the days that {word('view.period.custom')} can choose, the list of the activity types, and the like.",
+                    f"To make them of the output as it is now after you normalize again, choose the same output folder with {word('target.other')}, which opens the output again (choosing the same output again in {word('view.output.label')} does not open it again).",
+                    f"The years and the races chosen in {word('view.compare.button')} are then the first ones again.",
+                )
+                gone = (
+                    "Without the GUI, fill in",
+                    "The line installs into the same virtual environment",
+                    "change its value and leave it",
+                    "field that is left",
+                    "[What is remembered for the next time](#what-is-remembered-for-the-next-time) says where it is",
+                    "The races show as buttons",
+                    "The button of a race",
+                    "an answer on its way",
+                    "numbers on their way",
+                )
+            else:
+                phrases = (
+                    "出力は 1 つのフォルダーで、Garmin のアクティビティ・ギア・自己ベスト・FIT のセッションとラップ・毎日の記録を決まった形にそろえたファイルと、確かめと出どころの記録、人と AI が読む分析の手がかりが入ります（[3 の箱：出力](#3-の箱出力)）。",
+                    "Garmin の公式の [Data Management のページ](https://www.garmin.com/account/datamanagement/)で、Account Data Export をまるごとリクエストします。Garmin はダウンロードをあとで用意するので、Garmin がそのときに出す手順に従い、ダウンロードし終えるまで、Garmin からの知らせを残しておいてください。このアプリは、Garmin にサインインしたり、代わりにリクエストしたりはしません。",
+                    "（python.org の、Windows に Python を入れるためのアプリです。この手順の `py` と `pymanager` のコマンドは、これが入れます。前は、Python と一緒に入る Python Launcher が、`py` のコマンドでした）。",
+                    "それがもう入っているときや、入っているかどうか分からないときも、そのまま install manager を入れて進めてかまいません",
+                    "（その手は、`pymanager install default`、Python Launcher のアンインストール、3.10 以前の Python のアンインストールの順です。アンインストールしたかは、「インストールされているアプリ」に残っているかで分かります）。",
+                    "（macOS ではデスクトップに、Windows ではデスクトップとスタートメニューにできます。[アイコンから起動する](#アイコンから起動する)）、GUI を開きます。",
+                    'アイコンなしで起動してください（macOS は `~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui`、Windows は `& "$HOME\\garmin-normalizer\\Scripts\\python.exe" -m garmin_running_data_normalizer gui`）。',
+                    "Exit code：止まったコマンドが返した数（終了コード）です。macOS では、止まったすぐあとに `echo $?` を動かすと出ます。",
+                    f"GUI を開けないとき（画面の{word('tools.report')}を使えないとき）は、書式の欄に次のように書きます。",
+                    "知らせる所は GitHub だけです。書式の欄の名前は英語ですが、日本語で書いてかまいません。",
+                    "何が起きたかは自分で書き（日本語でかまいません）、合成データで起きるかを選び、",
+                    "1 行は、新しいバージョンを同じ仮想環境 `garmin-normalizer` に入れ、アイコンも作り直します。",
+                    f"先に GUI を終えてください（画面の下の{word('quit.button')}を押します。[GUI を終える](#gui-を終える)）。",
+                    "設定のフォルダーごとごみ箱へ入れてください（設定のフォルダーの場所は、[2 回目からの起動](#2-回目からの起動)にあります）。",
+                    "（ファイルの場所は[2 回目からの起動](#2-回目からの起動)にあります。その中の印は無くなります）。",
+                    f"練習と走りの形の項目は、項目の棚の{word('view.group.act')}と{word('view.group.fit')}の組の項目で、毎日の項目と推定値は、{word('view.group.body')}と{word('view.group.est')}の組の項目です。",
+                    "（段の「時間」は、Garmin の記録の duration で、記録した活動の時間です。一時停止を含む全体の時間でも、動いていた時間だけでもありません）。",
+                    "欄で Enter キーを押すか、欄の値を変えてから、ほかの所を押すか Tab キーで移ると効きます",
+                    "Tab キーで欄を移り、Enter キーを押すか、欄の値を変えてから Tab キーで移ると効きます",
+                    f"{word('view.conditions.clear')}は今の絞りを外し、外したことも覚えます（次に開いたときも、条件はありません）。",
+                    "名前のデータが大きすぎるときは、このように名前だけを使わずに続けます。",
+                    f"名前のファイルが壊れているときは、ほかのファイルが壊れているときと同じく、出力を開けずに止まり、{word('view.stop.heading')}と出ます。",
+                    f"のように、選んだ期間によらず、出力の全体（期間の{word('view.period.all')}と同じ）の数です。",
+                    f"{word('view.item.hrv')}{word('view.item.rhr')}（HRV は、FIT から読んだ参考の値で、Garmin の HRV ステータスと同じとは限りません）",
+                    "（英語の名前は " + "、".join(names["en"]) + " です）。自分のほかのレイアウトと同じ名前も使えません。大文字と小文字、全角と半角の違いだけの名前は、同じ名前です。",
+                    "戻ると、段・期間・まとめ方は、くらべる前のとおりです（くらべる間のまとめ方は、段のまとめ方とは別に選びます）。",
+                    f"並びます（まとめ方の{word('view.grain.month')}とは別のものです）。",
+                    "（VO2 Max は種目ごとに線があり、値の元の Garmin の記録が、活動の記録から MaxMet の記録に変わった日でも、線が分かれます。段の注にも出ます）。",
+                    f"（年ごとに、値の列と件数の列。件数は、項目によって{word('view.table.activities')}{word('view.table.days')}{word('view.table.records')}です）。",
+                    "選んだ年は覚えず、開くたびに新しい 4 年です。見せ方と月は、次に開いたときも覚えています（[次に開いたときに覚えるもの](#次に開いたときに覚えるもの)）。",
+                    f"から選びます（帯の{word('view.compare.month')}で月を選んだときは{word('view.grain.day')}か{word('view.grain.week')}）。",
+                    f"数字を出せなかったとき：段の上の帯の下に{word('view.stop.series_heading')}と出て、段と同じ言葉で、そのわけとコードが出ます。",
+                    "ほかのわけで、もう一度してもまた出るときは、そのわけとコードを書いて知らせてください（[GitHub で報告する](#github-で報告する)）。",
+                    f"出力が読めなくなったとき（壊れたときなど）は、年でくらべるも閉じて、{word('view.stop.heading')}と出ます。",
+                    "（終わりの日もある大会の印では、始まりの日が大会の日で、そのあとの日は入りません）。",
+                    "表の 0:10 は、時間では時と分（10 分）、平均ペースでは分と秒（1 km あたり 10 秒）です。",
+                    f"・数字を読んでいる間（窓に{word('view.loading')}と出ます）・",
+                    "2.2.0 からの年でくらべる・区切りの一覧・まとめの窓は、下のとおり開き直します（年でくらべる間は、期間のボタンは灰色です）。",
+                    f"期間のボタンを押し直しても、段の下の全体図、年でくらべるで選べる年、{word('view.period.custom')}で選べる日付、数える種目の一覧などは、新しくなりません。",
+                    f"正規化し直したあとに、これらも今の出力にするには、{word('target.other')}で同じ出力のフォルダーを選び、出力を開き直します（{word('view.output.label')}の欄で同じ出力を選び直しても、開き直しません）。",
+                    "開き直すと、年でくらべるで選んだ年や大会は、初めのものに戻ります。",
+                )
+                gone = (
+                    "GUI が無いときは",
+                    "同じ仮想環境 `garmin-normalizer` に入り、",
+                    "欄の値を変えて離れると",
+                    "[次に開いたときに覚えるもの](#次に開いたときに覚えるもの)にあります。その中の",
+                    "読み込み中",
+                )
+            for phrase in phrases:
+                with self.subTest(language=language, phrase=phrase):
+                    self.assertEqual(reads.count(phrase), 1)
+            for phrase in gone:
+                with self.subTest(language=language, gone=phrase):
+                    self.assertNotIn(phrase, reads)
 
     def test_guides_say_that_forgetting_removes_the_marks_too(self) -> None:
         # v2.2.0 M1: forgetting the settings also removes the file of the
@@ -916,13 +1051,13 @@ class GuiGuideTest(unittest.TestCase):
         # a sentence, and each says what the page does.
         phrases = {
             "en": (
-                "With **Overlay** and **Running total**, each year has a color of its own: of the years chosen, newest first, the purple of the page, orange, teal, and navy (a light gray on a dark screen), and the 5th and 6th years are dashed too. Taking a year out colors the years left again, newest first.",
+                "With **Overlay** and **Running total**, each year has a color of its own: of the years chosen, newest first, the purple of the page, orange, teal, navy, dark blue, and light blue (on a dark screen, navy becomes a light gray, dark blue a brick red, and light blue a yellow), and the 5th and 6th years are dashed too. Taking a year out colors the years left again, newest first.",
                 "With **Overlay** and **Running total**, press a year in the legend, a line, a point, or the year at the end of a line to highlight that year: its line gets thicker and goes on top, and the other years fade. Press it again, or press Esc on the chart or on a year in the legend, to go back. A press away from the lines and the points changes nothing. The year highlighted is not remembered. Comparing by race day works the same way. In forced colors (a contrast theme of Windows, for example), the other years do not fade; the year highlighted only gets thicker.",
                 "The years in the legend of **Overlay** and **Running total** (from 2.2.0) are reached with Tab; Enter or Space highlights one, and pressing it again, or Esc on the chart or on a year in the legend, goes back",
                 "A year highlighted when comparing years goes in as it shows: the other years faint, and its name bold in the legend.",
             ),
             "ja": (
-                "「重ねる」と「累積」では、年ごとに色がちがいます。選んだ年のうち新しい順に、ページの紫・オレンジ・青緑・紺（暗い画面では白に近い灰）で、5 年めと 6 年めは破線にもなります。年を外すと、残った年を新しい順に塗り直します。",
+                "「重ねる」と「累積」では、年ごとに色がちがいます。選んだ年のうち新しい順に、ページの紫・オレンジ・青緑・紺・濃い青・水色（暗い画面では、紺が白に近い灰、濃い青が赤茶、水色が黄）で、5 年めと 6 年めは破線にもなります。年を外すと、残った年を新しい順に塗り直します。",
                 "「重ねる」と「累積」で、凡例の年・線・点・線の端の年を押すと、その年を強調します（線が太くなっていちばん上になり、ほかの年は薄くなります）。もう一度押すか、グラフか凡例の年で Esc キーを押すと戻ります。線や点から離れた所を押しても変わりません。強調した年は覚えません。大会の日でくらべるときも同じです。強制カラーの画面（Windows のコントラスト テーマなど）では、ほかの年は薄くならず、強調した年が太くなるだけです。",
                 "「重ねる」と「累積」の凡例の年（2.2.0 から）は、Tab キーで移り、Enter キーか Space キーで強調します。もう一度押すか、グラフか凡例の年で Esc キーを押すと戻ります",
                 "年でくらべるで強調した年は、そのまま写ります（ほかの年は薄く、凡例ではその年の名前が太字になります）。",
@@ -1003,7 +1138,7 @@ class GuiGuideTest(unittest.TestCase):
                 "The period, the grouping, the activity types, and the conditions are not part of a layout",
                 "An item without a value in the output is a panel too",
                 "A name has 1 to 30 characters, without line breaks or invisible characters",
-                "You can keep up to 20 layouts.",
+                "You can keep up to 20 layouts of your own (the built-in layouts are not counted).",
                 "A drag of the grip (⋮⋮) at the left moves a layout too, and so do ↑ and ↓ on the grip. Escape during a drag puts it back.",
                 "**Remove** asks first, with **Keep it** chosen.",
                 "A click outside it does not close it",
@@ -1071,7 +1206,7 @@ class GuiGuideTest(unittest.TestCase):
                 "29 February has a value only in a leap year.",
                 "With one month chosen, the days go to the last day of that month in the years chosen.",
                 "A period without a record (0) adds nothing, and a period without a value breaks the line; the total goes on from what it was, so that the running total at the end of a year is its",
-                "Its table has no counts.",
+                "Its table has no columns of counts, which the tables of the other ways have.",
                 "**Activity types counted** and **Conditions…** still apply: a change of them also applies to the panels after the way back, and is remembered.",
                 "press ← or → to move by one period, Page Up or Page Down by 12, and Home or End to an end",
                 # v2.2.0 K6a: where the readings stand at first (the first new
@@ -1090,15 +1225,15 @@ class GuiGuideTest(unittest.TestCase):
                 "2 月 29 日は、うるう年にだけ値があります。",
                 "月を選んだときの日は、選んだ年のその月の日数までです。",
                 "記録の無い区切り（0）はそのまま足し、値の無い区切りでは線が切れます。合計はそれまでから続くので、年の終わりの累積は、その年の",
-                "表には件数の列がありません。",
+                "表には件数の列がありません（ほかの見せ方の表にはあります）。",
                 "「数える種目」と「条件…」は使えます。変えると、戻ったあとの段にも効き、次に開いたときにも覚えています。",
                 "← → キーで 1 つずつ、Page Up と Page Down で 12 ずつ、Home と End で端へ動かすと",
                 "開いた直後と、まとめ方か月を変えたあとは、いちばん新しい年の最後の区切りの値で、十字線もそこに立ちます。",
                 # The days of a custom range, told from the Span of a race day,
                 # which the Japanese page also names 範囲 (the second reader of
                 # K6a).
-                "くらべる間は、期間・‹ ›・「範囲を選ぶ…」の日付の欄・項目の棚・レイアウトと、まとめ方の「自動」「年」（月を選んだときは「月」も）は使わず、灰色になります。",
-                "まとめ方を「週」か「月」に（月を選んだときは「週」に）してください。",
+                "くらべる間は、期間・‹ ›・「範囲を選ぶ…」の日付の欄・項目の棚・レイアウトは使わず、灰色になります。まとめ方の「自動」と「年」も灰色で、帯の「月」で月を選んだときは、まとめ方の「月」も灰色です。",
+                "まとめ方を「週」か「月」に（帯の「月」で月を選んだときは「週」に）してください。",
                 "年でくらべるを開いている間は、見せ方を替えても「表で見る」のままです。図（凡例を含む）に戻すには「グラフで見る」か「カレンダーで見る」を押します。",
             ),
         }
@@ -1179,8 +1314,8 @@ class GuiGuideTest(unittest.TestCase):
         # (the checker's M4-1).
         catalogs = {language: catalog(language) for language in GUIDES}
         headings = {
-            "en": ("The overview", "The activities of a period (from 2.2.0)", "Marks (from 2.2.0)", "Full screen", "Compare years (from 2.2.0)", "When the output changes while you look (from 2.2.0)", "What is remembered for the next time"),
-            "ja": ("全体図", "区切りのアクティビティの一覧（2.2.0 から）", "印（2.2.0 から）", "全画面で見る", "年でくらべる（2.2.0 から）", "見ている間に出力が変わったとき（2.2.0 から）", "次に開いたときに覚えるもの"),
+            "en": ("The overview", "The activities of a period (from 2.2.0)", "Marks (from 2.2.0)", "Full screen", "Compare years (from 2.2.0)", "When the output changes while you look", "What is remembered for the next time"),
+            "ja": ("全体図", "区切りのアクティビティの一覧（2.2.0 から）", "印（2.2.0 から）", "全画面で見る", "年でくらべる（2.2.0 から）", "見ている間に出力が変わったとき", "次に開いたときに覚えるもの"),
         }
         race = {"en": "\n#### Compare by race day\n", "ja": "\n#### 大会の日でくらべる\n"}
         phrases = {
@@ -1243,8 +1378,8 @@ class GuiGuideTest(unittest.TestCase):
         }
         race_quoted = ("view.compare.by.year", "view.compare.by.race", "view.compare.weeks", "view.compare.mode.rows_race", "view.compare.race_week", "view.marks.kind.race")
         links = {
-            "en": "(#when-the-output-changes-while-you-look-from-220)",
-            "ja": "(#見ている間に出力が変わったとき220-から)",
+            "en": "(#when-the-output-changes-while-you-look)",
+            "ja": "(#見ている間に出力が変わったとき)",
         }
         for language, path in GUIDES.items():
             text = path.read_text(encoding="utf-8")
@@ -1550,13 +1685,13 @@ class GuiGuideTest(unittest.TestCase):
                     f"Each holds its left value and not its right one {example[language]}. {right[language]}",
                     f"For a total or a count, a {zero[0].lower()}{zero[1:]} is an outline; a day without a value and a day outside the output are not drawn.",
                     "A recorded 0 (activities of 0 km) takes the first step.",
-                    "(28 February for 29 February in a common year, and the nearest day of the output outside it)",
+                    "The day chosen is the same day of the year in every strip where it can be: 28 February for 29 February in a common year, and, for a day outside the output in that year, the nearest day of the output in that year.",
                     f"use ← and → (a week), ↑ and ↓ (a day), and Home and End (the first and last day of the year in the output). The arrows move otherwise than with {rows}, where ← and → move one period.",
                     f"{words['table']} gives the days in rows and the years in columns; {words['table_calendar']} goes back.",
-                    "In forced colors the steps can be hard to tell apart; the values are at the left of a strip and in the table.",
+                    "In forced colors (a contrast theme of Windows, for example) the steps can be hard to tell apart; the values are at the left of a strip and in the table.",
                 )
                 keyboard = "In a calendar (from 2.2.0), Tab goes from strip to strip, and ← → (a week), ↑ ↓ (a day), and Home and End (the first and last day of the year in the output) read out the date, the day of the week, and the value; so does a strip that the focus comes to ([Calendar](#calendar))."
-                race_ways = f"The ways to show are those of the years without {calendar}, with"
+                race_ways = f"The ways to show are those of the years without {calendar}; {rows} becomes {mark.format(messages['view.compare.mode.rows_race'])}, which is the way at first."
                 shades = ("dark", "light", "pale", "deep")
                 rest = re.search(r"\brest\b", own_reads)
             else:
@@ -1569,13 +1704,13 @@ class GuiGuideTest(unittest.TestCase):
                     f"色の区切りは左の値を含み、右の値を含みません{example[language]}。{right[language]}",
                     f"合計や回数の項目で{zero}は枠だけ、値の無い日と出力の外の日は何も描きません。",
                     "記録された 0（距離 0 km のアクティビティの日など）は、凡例のいちばん左の色です。",
-                    "平年の帯では 2 月 29 日の代わりに 2 月 28 日、出力の外なら出力の中のいちばん近い日",
+                    "選んだ日は、どの帯でも、できるだけ同じ月日です。平年の帯では 2 月 29 日の代わりに 2 月 28 日、その年の出力の外の日なら、その年の出力の中でいちばん近い日です。",
                     f"← → キー（1 週）、↑ ↓ キー（1 日）、Home と End（その年の出力の最初と最後の日）で日を選びます。{rows}の ← →（1 区切り）とは動き方が違います。",
                     f"{words['table']}で日ごとの表（月日 × 年）になり、{words['table_calendar']}で戻ります。",
-                    "強制カラーの画面では色の段階が見分けにくいことがあるので、値は帯の左と表で読めます。",
+                    "強制カラーの画面（Windows のコントラスト テーマなど）では色の段階が見分けにくいことがあるので、値は帯の左と表で読めます。",
                 )
                 keyboard = "カレンダー（2.2.0 から）では、帯ごとに Tab キーで移り、← → キーで 1 週、↑ ↓ キーで 1 日、Home と End でその年の出力の最初と最後の日へ動かすと、日付・曜日・値を読み上げます。帯に移ったときも読み上げます（[カレンダー](#カレンダー)）。"
-                race_ways = f"見せ方は、年の見せ方から{calendar}を除いた {len(modes) - 1} つで、初めは"
+                race_ways = f"見せ方は、年の見せ方から{calendar}を除いた {len(modes) - 1} つで、{rows}は{mark.format(messages['view.compare.mode.rows_race'])}になります（初めは{mark.format(messages['view.compare.mode.rows_race'])}）。"
                 shades = ("濃い", "淡い", "明るい", "暗い", "薄い")
                 rest = re.search("休み", own_reads)
             for phrase in phrases:
@@ -1705,7 +1840,7 @@ class GuiGuideTest(unittest.TestCase):
                         "Enter, Space, or ↓ opens its menu on the first item; ↑, ↓, Home, and End move in it, and Esc closes it, back to its button. Tab or a click elsewhere closes it too.",
                         f"While one shows, the {mark.format(messages['view.shelf.heading'])}, {mark.format(messages['view.layouts.heading'])}, and {mark.format(messages['view.grain.label'])} are not used; a line under the filters says so.",
                         "a period, activity types, or conditions changed here stay for the panels when you go back.",
-                        f"{mark.format(messages['view.panel.unbig'])} goes back, the focus (where the keys act) on {mark.format(messages['view.other.button'])}. To go from one of these views to another, go back to the panels first. While comparing years, {mark.format(messages['view.other.button'])} is not shown.",
+                        f"{mark.format(messages['view.panel.unbig'])} goes back, the focus (where the keys act) on {mark.format(messages['view.other.button'])}. To go from one of these views to another, go back to the panels first with {mark.format(messages['view.panel.unbig'])}, and then choose it in {mark.format(messages['view.other.button'])}. While comparing years, {mark.format(messages['view.other.button'])} is not shown.",
                     ),
                     "plot": (
                         f"Each activity is one point, one item across and another up, chosen in the lists of the title, {mark.format(messages['view.plot.x'])} and {mark.format(messages['view.plot.y'])}; at first the {name['pace'].lower()} across and the {name['hr'].lower()} up, and later the two chosen last. An item chosen in one list cannot be chosen in the other, and the list says why.",
@@ -1744,7 +1879,7 @@ class GuiGuideTest(unittest.TestCase):
                         "メニューは、Enter・Space・↓ キーで開いて最初の項目に移り、↑ ↓・Home・End キーで動き、Esc キーでボタンに戻って閉じます。Tab キーか、ほかの所を押しても閉じます。",
                         f"出ている間は{mark.format(messages['view.shelf.heading'])}{mark.format(messages['view.layouts.heading'])}{mark.format(messages['view.grain.label'])}を使いません。フィルターの下に、そのことが 1 行で出ます。",
                         "ここで変えた期間と数える種目と条件は、段に戻ってもそのまま段に効きます。",
-                        f"戻るときは{mark.format(messages['view.panel.unbig'])}を押します。フォーカス（キーで操作する先）は{mark.format(messages['view.other.button'])}に戻ります。ほかの見方どうしを行き来するときは、いったん段に戻ります。年でくらべる間は、{mark.format(messages['view.other.button'])}は出ません。",
+                        f"戻るときは{mark.format(messages['view.panel.unbig'])}を押します。フォーカス（キーで操作する先）は{mark.format(messages['view.other.button'])}に戻ります。ほかの見方どうしを行き来するときは、{mark.format(messages['view.panel.unbig'])}でいったん段に戻ってから、{mark.format(messages['view.other.button'])}で選びます。年でくらべる間は、{mark.format(messages['view.other.button'])}は出ません。",
                     ),
                     "plot": (
                         f"1 回のアクティビティを 1 つの点にして、2 つの項目を横と縦に並べます。項目は、題の中の{mark.format(messages['view.plot.x'])}と{mark.format(messages['view.plot.y'])}の一覧で選びます。初めは{name['pace']}（横）と{name['hr']}（縦）で、次に開いたときは前に選んだ 2 つです。もう一方で選んでいる項目は選べず、一覧にそのわけが出ます。",
@@ -1863,7 +1998,7 @@ class GuiGuideTest(unittest.TestCase):
         self.assertEqual(date.fromordinal(before[1]) + timedelta(days=1), date.fromordinal(now[0]))
         heading = {"en": "Summary (from 2.2.0)", "ja": "まとめ（2.2.0 から）"}
         before_heading = {"en": "Other views (from 2.2.0)", "ja": "ほかの見方（2.2.0 から）"}
-        after = {"en": "When the output changes while you look (from 2.2.0)", "ja": "見ている間に出力が変わったとき（2.2.0 から）"}
+        after = {"en": "When the output changes while you look", "ja": "見ている間に出力が変わったとき"}
         heads = {"en": ("How it is counted", "Items"), "ja": ("数え方", "項目")}
         joiner = {"en": "; ", "ja": "・"}
         scene = {"en": "Compare the last year with the year before", "ja": "この 1 年と前の 1 年をくらべる"}
@@ -1998,7 +2133,7 @@ class GuiGuideTest(unittest.TestCase):
         )
         heading = {"en": "Saving as an image (from 2.2.0)", "ja": "画像で保存（2.2.0 から）"}
         before = {"en": "Summary (from 2.2.0)", "ja": "まとめ（2.2.0 から）"}
-        after = {"en": "When the output changes while you look (from 2.2.0)", "ja": "見ている間に出力が変わったとき（2.2.0 から）"}
+        after = {"en": "When the output changes while you look", "ja": "見ている間に出力が変わったとき"}
         says = {
             "en": (
                 "**Save as image…** is right after **Summary…** in the row above the panels, and right after **Show as a table** in the bars of **Compare years**, **Plot two items**, **Distribution**, and **By shoes**.",
@@ -2009,9 +2144,9 @@ class GuiGuideTest(unittest.TestCase):
                 "for two items plotted or a distribution, a period without values to draw;",
                 "A panel or a year without values goes in with the words that the page shows for it.",
                 "**Save** hands the file to the browser as a download, which the browser saves where its settings say (usually your downloads, or where you choose if it asks each time). This app cannot know that it was saved,",
-                "the window says so. Where it can no longer save at the press, it says the reason that it would show by itself, such as numbers on their way; those words go when the reason does. The focus stays on **Save** where it can still be pressed, and goes to the title of the window where it cannot; check the window, and press **Save** again when it can save.",
+                "the window says so. Where it can no longer save at the press, it says the reason that it would show by itself, such as **Reading…**; those words go when the reason does. The focus stays on **Save** where it can still be pressed, and goes to the title of the window where it cannot; check the window, and press **Save** again when it can save.",
                 "In forced colors (a contrast theme of Windows, for example), the picture takes the colors of the screen, whichever **Colors** gives.",
-                "Esc, **Close**, or **Cancel** closes it, and the focus goes back to its **Save as image…** then and after the file is handed to the browser.",
+                "Once **Save** hands the file to the browser, the window closes (where it cannot, the window stays open and says why). Esc, **Close**, or **Cancel** closes it without saving (**Close** and **Cancel** do the same). The focus then goes back to its **Save as image…**.",
             ),
             "ja": (
                 "段の上の行の「まとめ…」の右と、年でくらべる・点で並べる・分かれ方・靴ごとの帯の「表で見る」の右に、「画像で保存…」があります。",
@@ -2022,9 +2157,9 @@ class GuiGuideTest(unittest.TestCase):
                 "点で並べると分かれ方で期間に図にする値が無いとき",
                 "値の無い段や年も、ページに出ている言葉のまま入ります。",
                 "窓の「保存」を押すと、画像のファイルをブラウザーにダウンロードとして渡します。保存する場所は、ブラウザーの設定のとおりです（ふつうはダウンロードの場所。毎回聞く設定なら、そのとき選んだ場所）。このアプリは、保存できたかを知らないので、",
-                "押したときに、保存する図が窓に出ていたものから変わっていたときと、画像を作れなかったときも、窓がわけを言います。押したときに保存できなくなっていたときは、窓は、そのときの保存できないわけ（読み込み中など）を出します。この言葉は、そのわけが無くなると消えます。「保存」が押せるときは、フォーカスは「保存」に残り、押せないときは窓の題に移ります。窓を見直して、保存できるようになったら、もう一度「保存」を押してください。",
+                "押したときに、保存する図が窓に出ていたものから変わっていたときと、画像を作れなかったときも、窓がわけを言います。押したときに保存できなくなっていたときは、窓は、そのときの保存できないわけ（「読んでいます…」など）を出します。この言葉は、そのわけが無くなると消えます。「保存」が押せるときは、フォーカスは「保存」に残り、押せないときは窓の題に移ります。窓を見直して、保存できるようになったら、もう一度「保存」を押してください。",
                 "強制カラーの画面（Windows のコントラスト テーマなど）では、どちらの「色」を選んでも、画像はその画面の色になります。",
-                "Esc キー・「閉じる」・「やめる」で閉じたときと、ファイルをブラウザーに渡したあとは、押した「画像で保存…」に戻ります。",
+                "「保存」でファイルをブラウザーに渡すと、窓は閉じます（渡せなかったときは、窓は開いたままで、わけを言います）。Esc キー・「閉じる」・「やめる」は、どれも保存せずに窓を閉じます（「閉じる」と「やめる」は同じ働きです）。閉じたあとは、フォーカスは押した「画像で保存…」に戻ります。",
             ),
         }
         scene = {"en": "Keep a comparison of years as an image", "ja": "年でくらべた図を画像にして残す"}
@@ -2170,7 +2305,7 @@ class GuiGuideTest(unittest.TestCase):
         shoes_heading = {"en": "By shoes", "ja": "靴ごと"}
         spread_heading = {"en": "Distribution", "ja": "分かれ方"}
         summary = {"en": "Summary (from 2.2.0)", "ja": "まとめ（2.2.0 から）"}
-        changes = {"en": "When the output changes while you look (from 2.2.0)", "ja": "見ている間に出力が変わったとき（2.2.0 から）"}
+        changes = {"en": "When the output changes while you look", "ja": "見ている間に出力が変わったとき"}
         saving = {"en": "Saving as an image (from 2.2.0)", "ja": "画像で保存（2.2.0 から）"}
         scene_title = {"en": "See the distance of each pair of shoes by month", "ja": "靴ごとに、月ごとの距離を見る"}
         for language, path in GUIDES.items():
@@ -2206,7 +2341,7 @@ class GuiGuideTest(unittest.TestCase):
                     "By shoes, every panel goes in, also those scrolled out of the screen, with the time axis and the notes.",
                     "by shoes, a period and types (and conditions) without an activity with shoes;",
                 )
-                again = "The other views (two items plotted, a distribution, and the shoes) may not agree with the panels in the same way. Back from another view, the panels are counted again where the period, the activity types, or the conditions were changed while it showed, and where that view gave numbers of an output read again after the panels; otherwise the panels keep their numbers, also where the output changed after the last numbers of that view. Where the numbers of the panels look old, press the button of the period again (the same period will do), and the panels count again from the output as it is now."
+                again = "The other views from 2.2.0 (two items plotted, a distribution, and the shoes) may not agree with the panels in the same way. Back from another view, whether the panels are counted again goes as follows: - Where the period, the activity types, or the conditions were changed while it showed: they are counted again. - Where that view gave numbers of an output read again after the panels: they are counted again. - Otherwise: the panels keep their numbers, also where the output changed after the last numbers of that view. Where the numbers of the panels look old, press the button of the period again (the same period will do), and the panels count again from the output as it is now."
                 privacy = "The names of the shoes of [By shoes](#by-shoes) (from 2.2.0) may be names you gave in Garmin. They show on the page and in a picture you save (the window says so before saving). This app writes them in no file name, log, or remembered setting."
                 steps = (
                     f"In {mark.format(messages['view.other.button'])} above the panels, choose {mark.format(messages['view.other.shoes'])}.",
@@ -2237,7 +2372,7 @@ class GuiGuideTest(unittest.TestCase):
                     "靴ごとでは、画面の外へ送った段も含めたすべての段と、時間の軸・注が入ります。",
                     "靴ごとでその期間と種目（と条件）に靴の付いた回が無いとき",
                 )
-                again = "ほかの見方（点で並べる・分かれ方・靴ごと）でも、同じように段と数が合わないことがあります。ほかの見方から段に戻ったとき、段を数え直すのは、ほかの見方の間に期間か数える種目か条件を変えたときと、ほかの見方が、段よりあとに読み直した出力の数を出していたときです。それ以外は、段は前の数のままです（ほかの見方の最後の数のあとに出力が変わったときも）。段の数が古いと思ったら、期間のボタンを押し直すと（同じ期間でもかまいません）、段も今の出力で数え直します。"
+                again = "2.2.0 からのほかの見方（点で並べる・分かれ方・靴ごと）でも、同じように段と数が合わないことがあります。ほかの見方から段に戻ったときに、段を数え直すかどうかは、次のとおりです。- ほかの見方の間に、期間か数える種目か条件を変えたとき：数え直します。- ほかの見方が、段よりあとに読み直した出力の数を出していたとき：数え直します。- それ以外のとき：段は前の数のままです（ほかの見方の最後の数のあとに出力が変わったときも）。段の数が古いと思ったら、期間のボタンを押し直すと（同じ期間でもかまいません）、段も今の出力で数え直します。"
                 privacy = "[靴ごと](#靴ごと)（2.2.0 から）の靴の名前は、あなたが Garmin で付けた名前のことがあります。名前はページと、画像で保存した画像に写ります（保存の前に、窓がそのことを言います）。このアプリは、靴の名前を、ファイルの名前・ログ・覚えた設定に書きません。"
                 steps = (
                     f"段の上の{mark.format(messages['view.other.button'])}で{mark.format(messages['view.other.shoes'])}を選びます。",
@@ -2379,7 +2514,7 @@ class GuiGuideTest(unittest.TestCase):
                 messages["view.conditions.clear"],
                 messages["help.close"],
                 head + space + messages["view.conditions.line.period"].format(n="120", m="28"),
-                messages["view.conditions.line.whole"].format(n="120", m="28"),
+                messages["view.conditions.line.whole"].format(n="860", m="190"),
                 messages["view.conditions.none_met"],
                 messages["view.conditions.names_too_large"],
                 messages["view.conditions.line.unread"],

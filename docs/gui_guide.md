@@ -13,6 +13,10 @@ browser. By default it keeps each Export as a Snapshot and normalizes the
 Snapshots together, so that the output also holds what earlier Exports held;
 it can also normalize one Export alone. It uses the same processing as the
 command line: for the same input and options, it writes the same output.
+The output is one folder: files that hold the Activities, Gear, Personal
+Records, FIT Sessions and Laps, and daily records of the Export in fixed
+forms, the records of its checks and sources, and context for analysis that
+people and AI tools can read ([Box 3: Output](#box-3-output)).
 Everything stays on your computer.
 
 ## How it goes
@@ -39,8 +43,13 @@ Adding a new Export later, and the other cases, are in
 ## What you need
 
 - A Garmin Account Data Export: the ZIP file downloaded from Garmin, or the
-  folder extracted from it. **How to use** in the help panel of the GUI says how to get
-  one; see also steps 1 and 2 of
+  folder extracted from it. Request a complete Account Data Export on Garmin's
+  official [Data Management page](https://www.garmin.com/account/datamanagement/):
+  Garmin prepares the download later, so follow the instructions that Garmin
+  shows then, and keep its notification until you have downloaded the
+  archive. This app does not sign in to Garmin or request the Export for you.
+  **How to use** in the help panel of the GUI says how to get one too; see
+  also steps 1 and 2 of
   [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
   Garmin may take some time after your request before you can download the
   Export, so request it early. You may also install this app first and read
@@ -90,9 +99,13 @@ Start menu, and open **Windows PowerShell**.
      closed, the file is in the folder named like **Python 3.14** in
      **Applications** of the Finder.
    - Windows: use **Download Python install manager**, open the downloaded
-     file, and choose **Install**. This app is not checked with Python
-     installed from the Microsoft Store; when such a Python is installed
-     already, you may still install the install manager and go on (when
+     file, and choose **Install**: the Python install manager is the app of
+     python.org that installs Python on Windows, and it brings the commands
+     `py` and `pymanager` of these steps; before it, `py` was the command of
+     the Python Launcher that came with Python. This app is not checked with
+     Python installed from the Microsoft Store; when such a Python is installed
+     already, or you do not know whether it is, you may still install the
+     install manager and go on (when
      `py --version` shows 3.11 or later in step 3, go on to step 4). Then, as
      step 1 showed:
      - When no Python is installed yet, as when step 1 said that `py` is not
@@ -125,7 +138,10 @@ Start menu, and open **Windows PowerShell**.
    terminal (on macOS, quit the Terminal with **Terminal** > **Quit Terminal**
    in its menu), open it again, and see the version again. When it is still
    old on Windows, go on with the item above for an older Python that is
-   installed already, from what you have not done yet. When you have done it
+   installed already, from what you have not done yet: its steps are
+   `pymanager install default`, uninstalling the Python Launcher, and
+   uninstalling Python 3.10 and earlier, in this order, and **Installed apps**
+   shows whether something is still installed. When you have done it
    all, when the command is still not found, or when it is still old on
    macOS, tell us
    ([Tell us when the GUI does not open](#tell-us-when-the-gui-does-not-open)).
@@ -133,9 +149,10 @@ Start menu, and open **Windows PowerShell**.
    in your home folder (the place of the Python for this app; moving it to
    the Trash leaves the Snapshot Store, the outputs, and the remembered
    settings as they are), installs v2.2.0 in it, makes the icon that starts the
-   GUI ([Start the GUI from an icon](#start-the-gui-from-an-icon)), and opens
-   the GUI. Each part runs only after the one before it has succeeded. When
-   the line makes the icon, macOS may ask whether the Terminal may use the
+   GUI (on the desktop on macOS, and on the desktop and in the Start menu on
+   Windows; [Start the GUI from an icon](#start-the-gui-from-an-icon)), and
+   opens the GUI. Each part runs only after the one before it has succeeded.
+   When the line makes the icon, macOS may ask whether the Terminal may use the
    desktop; choose **Allow**. Keep the terminal window open while you use the
    GUI. The line is long: copy it with the copy button at the top right of its
    box (it shows when you read this guide on GitHub; elsewhere, select the
@@ -210,7 +227,7 @@ the left column in the lines that it showed.
 | `Requires-Python` | Python is too old (3.10 or earlier). | Install Python 3.11 or later, open the terminal again, move the folder `garmin-normalizer` in your home folder to the Trash (the Recycle Bin on Windows), and run the line again. On Windows, when an older Python is installed already, follow its steps in [Install Python and this app](#install-python-and-this-app) until `py --version` shows 3.11 or later. |
 | `Retrying` and `connection` | The computer cannot reach the internet, or the network of your company stops it. | Check the connection; on a computer of your company, check its rules too. |
 | `No matching distribution found`, without `Requires-Python` and `Retrying` | Python is too old (an old pip does not show the line of `Requires-Python`), or this version is not found. | Run `python3 --version` (on Windows, `py --version`). When it is 3.10 or earlier, do as for `Requires-Python` above. When it is 3.11 or later, copy the line of the guide, paste it, and run it again. |
-| A line that starts with `ERROR [SHORTCUT_` | The icon could not be made; this app is installed. | Do what [When the icon could not be made](#when-the-icon-could-not-be-made) says for the code, or start the GUI without the icon with the command for macOS or Windows in [Start the GUI](#start-the-gui), which runs the Python of the virtual environment. |
+| A line that starts with `ERROR [SHORTCUT_` | The icon could not be made; this app is installed. | Do what [When the icon could not be made](#when-the-icon-could-not-be-made) says for the code, or start the GUI without the icon with the command for macOS or Windows in [Start the GUI](#start-the-gui), which runs the Python of the virtual environment: `~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui` on macOS, or `& "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui` on Windows. |
 
 After you set it right, run the same line again. When it stops at the same
 place again, move the folder `garmin-normalizer` in your home folder to the
@@ -225,9 +242,12 @@ When the GUI does not open, or a step above asks you to tell us, tell us
 with the Bug report form: choose **New issue** in
 [Issues](https://github.com/tsubotti63/garmin-running-data-normalizer/issues)
 of the page of this app on GitHub, and then **Bug report**. You need an
-account of GitHub, which you can make for free.
+account of GitHub, which you can make for free; GitHub is the only place
+to tell us. The fields of the form are in English, and you may write in
+English or in Japanese.
 [Report a problem on GitHub](#report-a-problem-on-github) also says how to
-fill in the form. Without the GUI, fill in its fields in this way:
+fill in the form. When the GUI does not open, so that you cannot use
+**Report on GitHub…** on its page, fill in the fields in this way:
 
 - **Problem**: what happened.
 - **Guide or command**: the part of this guide, such as step 4 of
@@ -243,7 +263,9 @@ fill in the form. Without the GUI, fill in its fields in this way:
   installing, 2.2.0.
 - **Sanitized reproduction**: the line that you ran. The line of this
   guide holds no name, so you may paste it as it is.
-- **Exit code**: write that you do not know it, when you do not.
+- **Exit code**: the number that the command that stopped returned (its exit
+  code); on macOS, `echo $?` right after it stopped shows it. Write that you
+  do not know it, when you do not.
 - **Does the tracked synthetic fixture reproduce the problem?**: choose
   **Not tested**.
 - **Public-safe logs**: the line of the error and a few lines before it.
@@ -292,17 +314,18 @@ list of files, **Current stable release** names the latest version, and the
 latest one marked **Latest**. When it is newer than the version that you
 have:
 
-1. On macOS as on Windows, stop the GUI first
-   ([Stop the GUI](#stop-the-gui)). When the icon started it, close the
-   terminal window that the icon opened too (on Windows, it closes by itself).
+1. On macOS as on Windows, stop the GUI first: choose **Quit** at the bottom
+   of the page ([Stop the GUI](#stop-the-gui)). When the icon started it,
+   close the terminal window that the icon opened too (on Windows, it closes
+   by itself).
    When more than one GUI is open, stop them all (each GUI has its own
    terminal window, the one that showed its address).
 2. Open the guide of the new version, and run the line of the guide of that
    version in the same way. The link to the GUI Guide in the README on the
    page of this app on GitHub
    (https://github.com/tsubotti63/garmin-running-data-normalizer) opens that
-   guide. The line installs into the same virtual environment
-   `garmin-normalizer` and makes the icon again.
+   guide. The line installs the new version into the same virtual
+   environment `garmin-normalizer`, and makes the icon again.
 3. The Snapshot Store, the outputs, and the settings that the GUI remembers
    are outside the virtual environment, and stay as they are.
 
@@ -310,14 +333,17 @@ To go back to an earlier version, run the line of the guide of that version
 too, after you stop the GUI as in step 1 (the guide of 2.1.0 is
 [gui_guide.md of v2.1.0](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v2.1.0/docs/gui_guide.md)).
 When you go back from 2.2.0 to an earlier version, such as 2.1.0, it does not
-use the settings that 2.2.0 remembered, and starts as a first launch; it does
-not write over their file. **Forget the remembered settings…** of the earlier
-version forgets what 2.2.0 remembered too, such as the timezone and what the
-view page remembered. The file of the marks of the view page,
+use the settings that 2.2.0 remembered, and starts as a first launch. It does
+not write over their file, so it does not remember what you choose while you
+use it; back in 2.2.0, what 2.2.0 remembered is used as before. But
+**Forget the remembered settings…** of the earlier version removes that file,
+so that it forgets what 2.2.0 remembered too, such as the timezone of Box 3
+and what the view page remembered. The file of the marks of the view page,
 `gui-marks.json`, stays in the folder of the settings:
 **Forget the remembered settings…** of 2.2.0 removes it, and to remove this
 app without going back to 2.2.0, move that folder to the Trash (the Recycle
-Bin on Windows) as [Remove this app](#remove-this-app) says.
+Bin on Windows) as [Remove this app](#remove-this-app) says
+([Later launches](#later-launches) says where the folder is).
 
 When you run the line while the GUI is open, the earlier GUI keeps running,
 and one more GUI opens. On Windows, a line in English that starts with
@@ -1100,7 +1126,10 @@ of the period, a step with fewer days is marked "(partial)" and drawn lighter
 
 Conditions choose the activities of the training and running-form items by the
 words of their names, a distance, and a duration (for example, only the runs
-with "Tempo" in their names).
+with "Tempo" in their names). The training and running-form items are those
+of the groups **Training (per activity)** and **Running form (FIT)** of the
+item shelf; the daily items and the estimates are those of **Body (daily)**
+and **Garmin estimates**.
 
 - **Conditions…** at the right of the heading of **Activity types counted**
   opens a window of conditions. With conditions, the button says **Conditions:
@@ -1122,15 +1151,16 @@ with "Tempo" in their names).
     1000 km; the duration takes whole minutes, up to 6000. The note of the
     window says **The duration is the value of the panel of the time, not the
     elapsed or moving time.** (The time of the panels is the duration in the
-    record of Garmin: the time of the activity as recorded.) An activity
+    record of Garmin: the time of the activity as recorded, which is neither
+    the whole time with the pauses nor the moving time alone.) An activity
     without the value does not meet a condition on it.
   - Only the activities that meet every condition, and that are of the
     activity types counted, are counted.
 - As the note of the window says, **This applies to the training and
   running-form items only, not to the daily items or the estimates.** (as for
   **Activity types counted**).
-- Press Enter in a field, or change its value and leave it, and the conditions
-  apply (never with the Enter that confirms the input of an IME). Where a
+- Press Enter in a field, or change its value and then press elsewhere or move
+  on with Tab, and the conditions apply (never with the Enter that confirms the input of an IME). Where a
   value cannot be used, the window says why (for example **The least distance
   is more than the most.**), and the conditions stay as they were. **Clear the
   conditions** clears them all.
@@ -1143,8 +1173,9 @@ with "Tempo" in their names).
   running-form items only): the name has “Tempo”, 8–12 km. Activities counted
   in the period: 120; meeting the conditions: 28.** (the numbers are samples).
   While comparing years (also by race day and as a calendar), it gives the
-  numbers of the whole output, such as **Activities counted in the whole
-  output: 120; meeting the conditions: 28.** It gives no numbers until the
+  numbers of the whole output (the days of **All time**), not of the period
+  chosen, such as **Activities counted in the whole output: 860; meeting the
+  conditions: 190.** It gives no numbers until the
   numbers of the conditions changed are counted, and none while there is no
   panel. On
   the full screen, the line at the top holds the words of the conditions, not
@@ -1176,17 +1207,20 @@ with "Tempo" in their names).
   the line still show them, and the line says **The names could not be read,
   so the words of the name are not used.** (but not while there is no panel);
   the line at the top of the full screen ends the words of the conditions with
-  **(the names could not be read, so the words of the name are not used)**. A
-  file of the names that is broken stops the reading of the output, as any
-  file does.
+  **(the names could not be read, so the words of the name are not used)**.
+  Where the data of the names is too large, the page goes on in this way,
+  without the names only. A file of the names that is broken stops the
+  output, as any broken file does, and **The output could not be opened**
+  shows.
 - The conditions are remembered together, as one set (when the remembered
   conditions are of a form that cannot be read, none of them is used). They are not part of a layout, and
   choosing a layout does not change them; another output keeps them too. While
   no panel shows, a change of the conditions is not remembered until a panel
   is added ([What is remembered for the next
   time](#what-is-remembered-for-the-next-time)). **Clear the conditions**
-  clears the filter in use, while **Forget the remembered settings…** forgets
-  the settings.
+  clears the filter in use, and that is remembered too (the next time, there
+  are no conditions), while **Forget the remembered settings…** forgets the
+  settings.
 
 ![Conditions: the window of the conditions open under its button, Conditions: 2, with the words of the name Tempo and a distance of 8 to 12 km; the end of the line under the filters gives the numbers, and the panel of the distance counts the activities that meet the conditions, while those of the resting heart rate and VO2 Max do not change (synthetic data)](assets/gui-guide/view-conditions.en.png)
 
@@ -1205,7 +1239,9 @@ time](#what-is-remembered-for-the-next-time)).
 - There are six built-in layouts:
   - **Running**: **Distance**, **Average pace**, and **Average heart rate**
   - **Sleep and heart rate**: **Sleep time**, **Sleep score**,
-    **HRV (reference value)**, and **Resting heart rate**
+    **HRV (reference value)**, and **Resting heart rate** (the HRV is a
+    reference value read from FIT files, which can differ from Garmin's HRV
+    status)
   - **Running volume**: **Distance**, **Time**, **Activities**, and
     **Total ascent**
   - **Running form**: **Cadence**, **Stride length**,
@@ -1225,8 +1261,12 @@ time](#what-is-remembered-for-the-next-time)).
 - **Save the panels as a layout…** names the panels shown as a layout of
   your own. A name has 1 to 30 characters, without line breaks or invisible
   characters, and the names of the built-in layouts cannot be used, in
-  English or in Japanese. You can keep up to 20 layouts. When one cannot be
-  saved, one line says why, where you asked.
+  English or in Japanese (the Japanese names are ランの指標, 睡眠と心拍,
+  ランの量, 走りの形, 負荷, and Garmin の推定), nor the name of another of your
+  layouts; names that differ only in case or in full or half width are the
+  same name. You can keep up to 20 layouts of your own (the built-in layouts
+  are not counted). When one cannot be saved, one line says why, where you
+  asked.
 - **Overwrite the layout** shows only when you changed the panels of a
   layout of your own, and puts the panels shown into it. A built-in layout
   cannot be overwritten: save it as a new layout.
@@ -1384,7 +1424,7 @@ values are made):
   scale for panels with the same unit** keeps it. The list is not remembered
   and never written to a file.
 - Where the numbers of a list and of the panels do not agree, see
-  [When the output changes while you look](#when-the-output-changes-while-you-look-from-220).
+  [When the output changes while you look](#when-the-output-changes-while-you-look).
 
 ![The activities of a period: October 2026 pressed on the panel of the distance, a list of 11 activities opened just under it (made-up names of training in the column of the names), a blue frame on that month of the chart, and "Value of the panel: 108.1 km (activities counted: 11)" under the list (synthetic data made for the example)](assets/gui-guide/view-list.en.png)
 
@@ -1428,7 +1468,7 @@ values are made):
   hand, put it back as it was; if it was not, tell us
   ([Report a problem on GitHub](#report-a-problem-on-github)). To start anew,
   stop the GUI, and move that file to the Trash (the Recycle Bin on Windows;
-  [What is remembered for the next time](#what-is-remembered-for-the-next-time)
+  [Later launches](#later-launches)
   says where it is): the marks in it are gone then.
 
 ![Marks: **Show marks** and **Marks…** above the panels, the lines of the marks on every panel (a race as a full line, an injury as a band), their names on the top chart, and the window of the marks on the right (marks made up for the example)](assets/gui-guide/view-marks.en.png)
@@ -1457,7 +1497,8 @@ values are made):
 
 - Each panel has **Compare years** in its heading. It compares the item of
   that panel year by year. **Show all panels again** goes back; the panels,
-  the period, and the grouping are as they were before. An output without
+  the period, and the grouping are then as they were before (the grouping
+  while comparing is chosen apart from that of the panels). An output without
   any dated record has no years to compare, and the button is grayed.
 - The bar above the panels has the choices:
   - The list of items in the title (where the item compared is named): to compare another item.
@@ -1466,14 +1507,18 @@ values are made):
     end of each line), **Running total** (see below), or **Calendar** (see
     [Calendar](#calendar)). At first, **One row per year**.
   - **Month**: **Whole year**, or one month of each year, from January to
-    December.
-  - **Line**: only for an item of several lines, such as VO2 Max, by the
+    December (not the grouping **Month**).
+  - **Line**: only for an item of several lines, such as VO2 Max (it has a
+    line for each activity type, and its lines also split on the day when the
+    records of Garmin that its values come from change from the activity
+    records to the MaxMet records, as the note of its panel says), by the
     names of the key of its panel. At first, the line whose records start the
     latest; where a line with the same date in its name in the key is a
     running line, that running line (of the lines Until April 30, 2023 and
     From May 1, 2023, mostly the second one).
-  - **Show as a table**: the periods in rows and the years in columns; the
-    last row has the value of the year (or of the month). * marks a period
+  - **Show as a table**: the periods in rows and the years in columns, each
+    year with a column of values and one of counts (**Activities**, **Days
+    with a value**, or **Records**, by the item); the last row has the value of the year (or of the month). * marks a period
     cut short (by an end of the output, of the year or month, or by the race
     day), and — a period that the year does not have (outside the output, or
     a day such as 29 February that the year lacks). While **Compare years**
@@ -1481,15 +1526,18 @@ values are made):
     chart, with its legend, press **Show as a chart** or
     **Show as a calendar**.
   - **Years**: the years of the output. At first the newest four, and
-    **Up to 6 years**.
+    **Up to 6 years**. The years chosen are not remembered: each time, the
+    newest four. **Show as** and **Month** are remembered for the next time
+    ([What is remembered for the next
+    time](#what-is-remembered-for-the-next-time)).
 
 ![Compare years as it opens: the distance in one row per year, four rows from 2026 to 2023 with bars by month and the total of each year, the bar of the item, the way, the month, and the years above, and the line of what is not used under the filters (synthetic data made for the example)](assets/gui-guide/view-compare-rows.en.png)
 
 ![Compare years with Overlay: the lines of four years of the distance on one panel, the year at the end of each line, and the box of the values of October beside the cross line (synthetic data made for the example)](assets/gui-guide/view-compare-overlay.en.png)
 
 - The grouping is chosen in **Group by**: **Day**, **Week**, or **Month**
-  (**Day** or **Week** with one month chosen). At first **Month**; **Day** for
-  a running total and with one month chosen.
+  (**Day** or **Week** with one month chosen in **Month** of the bar). At
+  first **Month**; **Day** for a running total and with one month chosen.
 - How the periods are placed:
   - A week is placed by its order from the week of 1 January (with one month
     chosen, of the first day of that month), the weeks running from Monday;
@@ -1508,12 +1556,13 @@ values are made):
   Total ascent only. A period without a record (0) adds nothing, and a period
   without a value breaks the line; the total goes on from what it was, so
   that the running total at the end of a year is its "Total of the year".
-  Its table has no counts. For any other item, **Running total** is grayed,
+  Its table has no columns of counts, which the tables of the other ways have.
+  For any other item, **Running total** is grayed,
   and **About running totals** says why.
 - While comparing, the period, ‹ ›, the days of a custom range, the item
-  shelf, the layouts, and the groupings **Auto** and **Year** (and **Month**
-  with one month chosen) are not used, and are grayed; a line under the
-  filters says so. The overview is not shown. **Activity types counted** and
+  shelf, and the layouts are not used, and are grayed; so are the groupings
+  **Auto** and **Year**, and the grouping **Month** too where one month is
+  chosen in **Month** of the bar. A line under the filters says so. The overview is not shown. **Activity types counted** and
   **Conditions…** still apply: a change of them also applies to the panels
   after the way back, and is remembered.
 - Readings: with **One row per year**, at the top right of each row; with
@@ -1525,9 +1574,10 @@ values are made):
   → to move by one period, Page Up or Page Down by 12, and Home or End to an
   end; the periods and the values of the years are then read aloud.
 - With **Overlay** and **Running total**, each year has a color of its own: of
-  the years chosen, newest first, the purple of the page, orange, teal, and
-  navy (a light gray on a dark screen), and the 5th and 6th years are dashed
-  too. Taking a year out colors the years left again, newest first.
+  the years chosen, newest first, the purple of the page, orange, teal, navy,
+  dark blue, and light blue (on a dark screen, navy becomes a light gray, dark
+  blue a brick red, and light blue a yellow), and the 5th and 6th years are
+  dashed too. Taking a year out colors the years left again, newest first.
 - With **Overlay** and **Running total**, press a year in the legend, a line,
   a point, or the year at the end of a line to highlight that year: its line
   gets thicker and goes on top, and the other years fade. Press it again, or
@@ -1536,12 +1586,18 @@ values are made):
   remembered. Comparing by race day works the same way. In forced colors (a
   contrast theme of Windows, for example), the other years do not fade; the
   year highlighted only gets thicker.
-- A stop shows under the bar above the panels, in the words of a stop of the
-  panels. Where it says **There are too many numbers to show at once.**, group
-  by **Week** or **Month** (by **Week** with one month chosen).
+- Where the numbers cannot be shown, **The numbers could not be shown** shows
+  under the bar above the panels, with the reason and its code, in the words
+  of a stop of the panels. Where it says **There are too many numbers to show
+  at once.**, group by **Week** or **Month** (by **Week** with one month
+  chosen). For another reason that shows again when you try again, tell us
+  the reason and the code ([Report a problem on
+  GitHub](#report-a-problem-on-github)). Where the output can no longer be
+  read (where it is broken, for example), **Compare years** closes too, and
+  **The output could not be opened** shows.
 - Where the values of the years or races and the numbers of the panels do not
   agree, see
-  [When the output changes while you look](#when-the-output-changes-while-you-look-from-220).
+  [When the output changes while you look](#when-the-output-changes-while-you-look).
 
 #### Calendar
 
@@ -1573,17 +1629,19 @@ values are made):
   the activities that meet them.
 - At the left of a strip: the year (with its days where it is cut short,
   such as **(to October 21)**), the value of the year, and the value of the
-  day chosen. The day chosen is the same day of the
-  year in every strip (28 February for 29 February in a common year, and the
-  nearest day of the output outside it).
+  day chosen. The day chosen is the same day of the year in every strip
+  where it can be: 28 February for 29 February in a common year, and, for a
+  day outside the output in that year, the nearest day of the output in that
+  year.
 - Press a square, or select a strip and use ← and → (a week), ↑ and ↓ (a
   day), and Home and End (the first and last day of the year in the output).
   The arrows move otherwise than with **One row per year**, where ← and → move
   one period. Tab goes to the next strip. The date, the day of the week, and
   the value of the day chosen are read out too.
 - **Show as a table** gives the days in rows and the years in columns;
-  **Show as a calendar** goes back. In forced colors the steps can be hard to
-  tell apart; the values are at the left of a strip and in the table.
+  **Show as a calendar** goes back. In forced colors (a contrast theme of
+  Windows, for example) the steps can be hard to tell apart; the values are
+  at the left of a strip and in the table.
 
 ![Compare years as a calendar: the strips of the distance from 2026 to 2023, each day in up to six steps of color and a day without a recorded activity as an outline, with the legend above the strips and the year, the total of the year, and the value of the day chosen at their left (synthetic data)](assets/gui-guide/view-compare-calendar.en.png)
 
@@ -1596,14 +1654,17 @@ values are made):
   first to its last (always 24 weeks, whatever **Span** is, and whether or not
   those days have activities); otherwise it is grayed, and a line beside it
   says why.
-- The races show as buttons in the place of the years, newest first: the
+- The races show as cards in the place of the years, newest first: the
   newest four at first, and up to six. A race after the last day of the
   output can be chosen too: its weeks so far show.
 - **Span**, in the place of the month, goes from 8, 12, 16 (at first), 20, or
-  24 weeks before to the race day. It counts back from the Monday of the week
+  24 weeks before to the race day (for a race mark with an end day, the race
+  day is its first day, and the days after it are left out). It counts back
+  from the Monday of the week
   of the race, so that every race has as many weeks. The grouping is **Week**
   only, also for a running total. The ways to show are those of the years
-  without **Calendar**, with **One row per race** at first.
+  without **Calendar**; **One row per year** becomes **One row per race**,
+  which is the way at first.
 - **Race week (to the race day)**, a period of the readings and the table,
   goes from the Monday of the week of the race to the race day. Where the race is not on a Sunday (or the output ends
   within that week), it is a period cut short, as the ends of a year are (a
@@ -1611,7 +1672,7 @@ values are made):
   heading of a row gives the value of the whole span counted at once, such as
   "Total of this span"; the last row of the table is the span itself, such as
   "Total of the days from 16 weeks before to the race day".
-- The button of a race shows the head of its name and its date (for example,
+- The card of a race shows the head of its name and its date (for example,
   Spring marathon 3/15/2026), and tells a screen reader its whole name and its
   days (for a mark of a span, its first and last day).
 - Where removing or changing marks (also forgetting the settings in the other
@@ -1634,7 +1695,9 @@ values are made):
   period, activity types, or conditions changed here stay for the panels when
   you go back.
 - **Show all panels again** goes back, the focus (where the keys act) on
-  **Other views**. To go from one of these views to another, go back to the panels first. While
+  **Other views**. To go from one of these views to another, go back to the
+  panels first with **Show all panels again**, and then choose it in
+  **Other views**. While
   comparing years, **Other views** is not shown.
 
 #### Plot two items
@@ -1694,6 +1757,8 @@ values are made):
 | Vertical ratio | 0.5% |
 | Stride length | 0.05 m |
 
+- In the table, 0:10 is hours and minutes for the time (10 minutes), and
+  minutes and seconds for the average pace (10 seconds a kilometer).
 - The ranges count the values before they are rounded. The list and the points
   show rounded values, so an activity near the end of a range can look as if
   it were in the next one: 10,999.6 m shows as 11.0 km, and is in the range
@@ -1925,7 +1990,8 @@ values are made):
   downloads." The picture shows dates and values (your personal data); nothing
   is sent anywhere.
 - Where it cannot save, the window says why: a view, or every panel, shown as
-  a table; an answer on its way; numbers that stopped loading; for two items
+  a table; numbers being read (the window says **Reading…**); numbers that
+  stopped loading; for two items
   plotted or a distribution, a period without values to draw; by shoes, a
   period and types (and conditions) without an activity with shoes; a chart
   without room to be drawn (widen the window of the browser); or a panel
@@ -1933,22 +1999,24 @@ values are made):
 - When, at the press, the picture to save is no longer the one that the window
   showed, or the image could not be made, the window says so. Where it can no
   longer save at the press, it says the reason that it would show by itself,
-  such as numbers on their way; those words go when the reason does. The focus stays on
+  such as **Reading…**; those words go when the reason does. The focus stays on
   **Save** where it can still be pressed, and goes to the title of the window
   where it cannot; check the window, and press **Save** again when it can
   save.
 - With **As on the screen** on a dark screen, the picture is dark. In forced
   colors (a contrast theme of Windows, for example), the picture takes the
   colors of the screen, whichever **Colors** gives.
-- The window takes the focus on its title; Esc, **Close**, or **Cancel**
-  closes it, and the focus goes back to its **Save as image…** then and after
-  the file is handed to the browser.
+- The window takes the focus on its title. Once **Save** hands the file to
+  the browser, the window closes (where it cannot, the window stays open and
+  says why). Esc, **Close**, or **Cancel** closes it without saving (**Close**
+  and **Cancel** do the same). The focus then goes back to its **Save as
+  image…**.
 
 ![Saving as an image: the window of Save as image… above the panels, with all the panels and the light colors chosen (synthetic data)](assets/gui-guide/view-save.en.png)
 
 ![A picture saved: the overlay of a comparison of years, saved as an SVG file and opened in a browser (this picture leaves out the line at the bottom of the image saved; synthetic data)](assets/gui-guide/view-save-picture.en.png)
 
-### When the output changes while you look (from 2.2.0)
+### When the output changes while you look
 
 - Each time it gives numbers, the view page checks that the output is as it
   was, and reads the output again where it changed (where the same output
@@ -1960,23 +2028,33 @@ values are made):
   Where you normalize again while the view page is open, or the date
   changes, press the button of the period again on the panels (the same
   period will do), and they are of the output as it is now; open a comparison
-  of years, a list, or the summary again as below (while comparing years, the
-  buttons of the period are grayed).
+  of years, a list, or the summary (all from 2.2.0) again as below (while
+  comparing years, the buttons of the period are grayed).
 - So right after you normalize again, or right after the date changes, the
   numbers of the panels and those of the years or the races in **Compare
   years** (also by race day), of the activities of a period, and of the table
   of **Summary…** may not agree: one of them was counted before the output
   changed. Open the comparison again, open the list again, or open the
   summary again, and each counts again from the output as it is now.
-- The other views (two items plotted, a distribution, and the shoes) may not
-  agree with the panels in the same way. Back from another view, the panels
-  are counted again where the period, the activity types, or the conditions
-  were changed while it showed, and where that view gave numbers of an output
-  read again after the panels; otherwise the panels keep their numbers, also
-  where the output changed after the last numbers of that view. Where the
-  numbers of the panels look old, press the button of the period again (the
-  same period will do), and the panels count again from the output as it is
-  now.
+- The other views from 2.2.0 (two items plotted, a distribution, and the
+  shoes) may not agree with the panels in the same way. Back from another
+  view, whether the panels are counted again goes as follows:
+  - Where the period, the activity types, or the conditions were changed
+    while it showed: they are counted again.
+  - Where that view gave numbers of an output read again after the panels:
+    they are counted again.
+  - Otherwise: the panels keep their numbers, also where the output changed
+    after the last numbers of that view. Where the numbers of the panels look
+    old, press the button of the period again (the same period will do), and
+    the panels count again from the output as it is now.
+- Pressing the button of the period again does not renew the overview under
+  the panels, the years that **Compare years** can choose, the days that
+  **Custom range…** can choose, the list of the activity types, and the like.
+  To make them of the output as it is now after you normalize again, choose
+  the same output folder with **Choose another output…**, which opens the
+  output again (choosing the same output again in **Output to view** does not
+  open it again). The years and the races chosen in **Compare years** are
+  then the first ones again.
 
 ### What is remembered for the next time
 
@@ -2233,9 +2311,9 @@ reach GitHub then, and they are public only when you submit the report. If
 you are not signed in to GitHub, its sign-in page comes first. When you
 paste lines of the terminal in what happened, write other words in place of
 names, as [Tell us when the GUI does not open](#tell-us-when-the-gui-does-not-open)
-says. Write what happened yourself, choose whether the synthetic data shows
-the problem, and tick the four checks that no personal data is in it. Do not
-attach any file.
+says. Write what happened yourself (in English or in Japanese), choose
+whether the synthetic data shows the problem, and tick the four checks that
+no personal data is in it. Do not attach any file.
 Tell a vulnerability through the private channel instead, as
 [Security](../SECURITY.md) says. When the GUI does not open, do as
 [Tell us when the GUI does not open](#tell-us-when-the-gui-does-not-open)
@@ -2500,7 +2578,7 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
 - The window of **Conditions…** (from 2.2.0) opens with the focus in **Words
   in the name** (in the least distance where the names of the output cannot be
   read). Tab moves from field to field, and Enter, or a value changed in a
-  field that is left, applies them (never the Enter that confirms the input of
+  field before Tab moves on, applies them (never the Enter that confirms the input of
   an IME). Why a value cannot be used is read out in the window. Esc or
   **Close** goes back to **Conditions…**, as **Clear the conditions** in the
   line under the filters does ([Conditions](#conditions-from-220)).
