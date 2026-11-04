@@ -119,13 +119,13 @@ and the
 [GUI Guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md).
 
 Implementation candidate: **v2.2.0rc2** (the second release candidate of
-v2.2.0, for TestPyPI; Production PyPI and the latest GitHub Release stay
-v2.1.0). It is a test version, for checking v2.2.0 before its release: for
-normal use, install the stable release v2.1.0. It adds layouts, comparisons
-of years, marks, a calendar, other views, a summary, conditions, and saving
-as a picture to the view page; for the same input, timezone, and options,
-the normalization, its outputs, and the Snapshot Store are those of v2.1.0.
-**Install** below says how to try it once it is published.
+v2.2.0, published on TestPyPI; Production PyPI and the latest GitHub Release
+stay v2.1.0). It is a test version, for checking v2.2.0 before its release:
+for normal use, install the stable release v2.1.0. It adds layouts,
+comparisons of years, marks, a calendar, other views, a summary, conditions,
+and saving as a picture to the view page; for the same input, timezone, and
+options, the normalization, its outputs, and the Snapshot Store are those of
+v2.1.0. **Install** below says how to try it.
 
 v1.7.1 fixes `snapshot run-all`, which had produced no Hill Score, Endurance
 Score, or VO2Max rows since v1.3.0, because Run-All did not recognize the
@@ -260,8 +260,8 @@ gives one line for macOS and one for Windows PowerShell that make a virtual
 environment, install this app in it, and make the icon.
 
 The release candidate v2.2.0rc2 is a test version, for checking v2.2.0 before
-its release; for normal use, install the stable release as above. Once it is
-published on TestPyPI, install it in a virtual environment of its own, and
+its release; for normal use, install the stable release as above. It is
+published on TestPyPI. Install it in a virtual environment of its own, and
 start the GUI with the Python of that environment, without an icon. The
 lines give Production PyPI too, so that pip finds the dependencies that
 TestPyPI may not provide, such as `tzdata` on Windows; pip looks for each
