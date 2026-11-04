@@ -4,7 +4,7 @@
 
 - Current stable contract: v2.1.0
 - Compatibility family: stable 2.x
-- Implementation candidate: v2.2.0rc2 (not published)
+- Implementation candidate: v2.2.0rc2 (TestPyPI only)
 
 This document describes the current stable contract, v2.1.0, which keeps the
 Run-All contract of v2.0.0, the first of the `2.x` family, and adds the CSV
