@@ -7,7 +7,7 @@ Platform maintains its own separate changelog.
 ## v2.2.0 — stable Production release of the views
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a
-verified Production PyPI distribution.
+verified Production PyPI distribution on 2026-11-04 JST.
 
 - Adds to the view page layouts of items, comparisons of years (also by race
   day, and as a calendar), marks and the list of the activities of a period,
