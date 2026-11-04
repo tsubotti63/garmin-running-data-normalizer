@@ -271,11 +271,11 @@ class GuiGuideTest(unittest.TestCase):
         for language, row, action in (
             ("en", "| `'&&'` and `is not a valid statement separator` (Windows) | The line for macOS was pasted in "
                    "Windows PowerShell 5.1, which has no `&&`. PowerShell ran no part of it, and nothing changed. |",
-             "Run the line for Windows PowerShell in [What you need](#what-you-need) instead. There is nothing to "
-             "move to the Recycle Bin."),
+             "Run the line for Windows PowerShell in [Install Python and this app](#install-python-and-this-app) "
+             "instead. There is nothing to move to the Recycle Bin."),
             ("ja", "| `'&&'` と、`有効なステートメント区切りではありません` か `is not a valid statement separator`（Windows） | "
                    "macOS の 1 行を Windows PowerShell 5.1 に貼りました。",
-             "[用意するもの](#用意するもの)の Windows PowerShell の 1 行を、代わりに動かしてください。ごみ箱へ入れる物はありません。"),
+             "[Python とこのアプリを入れる](#python-とこのアプリを入れる)の Windows PowerShell の 1 行を、代わりに動かしてください。ごみ箱へ入れる物はありません。"),
         ):
             with self.subTest(language=language):
                 text = flowing(language, WHAT_YOU_NEED[language])
@@ -477,22 +477,22 @@ class GuiGuideTest(unittest.TestCase):
             "en": (
                 "**Download Python install manager**", "choose **Install**",
                 "as `py --version` does, installs the latest Python by itself",
-                "add a folder to `PATH`", "the line below uses `py`",
+                "add a folder to `PATH`", "The line of step 4 uses `py`",
                 "When an older Python is installed already, `py` starts that one",
                 "run `pymanager install default` in PowerShell",
-                "remove the Python Launcher in **Installed apps**",
+                "uninstall the Python Launcher in **Installed apps**",
                 "[python.org describes](https://docs.python.org/3/using/windows.html)",
                 "Keep the Python install manager and Python 3.11 and later.",
-                "When it still shows the older Python, remove Python 3.10 and earlier too",
+                "When it still shows the older Python, uninstall Python 3.10 and earlier too",
             ),
             "ja": (
                 "「Download Python install manager」", "「Install」を押して",
-                "いちばん新しい Python が自動で入ります", "`PATH` にフォルダーを足すか", "下の 1 行は `py` を",
+                "いちばん新しい Python が自動で入ります", "`PATH` にフォルダーを足すか", "4 の 1 行は `py` を",
                 "`py` はその古い Python を起動する", "`pymanager install default` を動かして",
-                "「インストールされているアプリ」で Python Launcher を外し",
+                "「インストールされているアプリ」で Python Launcher をアンインストールし",
                 "[python.org の説明](https://docs.python.org/3/using/windows.html)",
                 "Python install manager と 3.11 以降の Python は残します",
-                "それでも古い Python が出るときは、3.10 以前の Python も外して",
+                "それでも古い Python が出るときは、3.10 以前の Python もアンインストールして",
             ),
         }
         for language, wanted in phrases.items():
@@ -531,7 +531,7 @@ class GuiGuideTest(unittest.TestCase):
                     "an old pip does not show the line of `Requires-Python`",
                     "[Report a problem on GitHub](#report-a-problem-on-github)",
                     "see the version again with `python3 --version` (on Windows, `py --version`)",
-                    "follow its steps in [What you need](#what-you-need) until `py --version` shows 3.11 or later",
+                    "follow its steps in [Install Python and this app](#install-python-and-this-app) until `py --version` shows 3.11 or later",
                 ),
                 "Start the GUI from an icon": ("**Show all filename extensions**", "the icon starts the new version"),
                 "Go back to the GUI that is open": (
@@ -560,7 +560,7 @@ class GuiGuideTest(unittest.TestCase):
                     "Windows では PowerShell の窓のことです", "% で終わる行", "そのフォルダーが無ければ",
                     "古い pip は `Requires-Python` の行を出しません", "[GitHub で報告する](#github-で報告する)",
                     "もう一度 `python3 --version`（Windows では `py --version`）で", "パス（ファイルやフォルダーの場所）",
-                    "[用意するもの](#用意するもの)の Windows の手順で、`py --version` が 3.11 以降と出るまで",
+                    "[Python とこのアプリを入れる](#python-とこのアプリを入れる)の Windows の手順で、`py --version` が 3.11 以降と出るまで",
                 ),
                 "アイコンから起動する": ("「すべてのファイル名拡張子を表示」", "アイコンから新しいバージョンが起動します"),
                 "開いている GUI に戻る": (
@@ -657,8 +657,9 @@ class GuiGuideTest(unittest.TestCase):
         )
         sizes = {"next-steps": (315, 213), "view-layouts": (371, 193), "view-layouts-manage": (440, 438)}
         # The picture saved is cut above its line at the bottom, under the
-        # chart of each language (R3).
-        sizes |= {("view-save-picture", "en"): (1200, 532), ("view-save-picture", "ja"): (1200, 598)}
+        # chart of each language (R3); taken again with 2.2.0, the English one
+        # is cut lower, under its taller chart (K6a).
+        sizes |= {("view-save-picture", "en"): (1200, 564), ("view-save-picture", "ja"): (1200, 598)}
         # S2: the view by shoes, 860 px high so that the two rows of one name show.
         sizes |= {("view-shoes", "en"): (1470, 860), ("view-shoes", "ja"): (1470, 860)}
         japanese = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
@@ -916,13 +917,13 @@ class GuiGuideTest(unittest.TestCase):
         phrases = {
             "en": (
                 "With **Overlay** and **Running total**, each year has a color of its own: of the years chosen, newest first, the purple of the page, orange, teal, and navy (a light gray on a dark screen), and the 5th and 6th years are dashed too. Taking a year out colors the years left again, newest first.",
-                "With **Overlay** and **Running total**, press a year in the legend, a line, a point, or the year at the end of a line to highlight that year: its line gets thicker and goes on top, and the other years fade. Press it again, or press Esc on the chart or on a year in the legend, to go back. A press away from the lines and the points changes nothing. The year highlighted is not remembered. Comparing by race day works the same way. In forced colors, the other years do not fade; the year highlighted only gets thicker.",
+                "With **Overlay** and **Running total**, press a year in the legend, a line, a point, or the year at the end of a line to highlight that year: its line gets thicker and goes on top, and the other years fade. Press it again, or press Esc on the chart or on a year in the legend, to go back. A press away from the lines and the points changes nothing. The year highlighted is not remembered. Comparing by race day works the same way. In forced colors (a contrast theme of Windows, for example), the other years do not fade; the year highlighted only gets thicker.",
                 "The years in the legend of **Overlay** and **Running total** (from 2.2.0) are reached with Tab; Enter or Space highlights one, and pressing it again, or Esc on the chart or on a year in the legend, goes back",
                 "A year highlighted when comparing years goes in as it shows: the other years faint, and its name bold in the legend.",
             ),
             "ja": (
                 "「重ねる」と「累積」では、年ごとに色がちがいます。選んだ年のうち新しい順に、ページの紫・オレンジ・青緑・紺（暗い画面では白に近い灰）で、5 年めと 6 年めは破線にもなります。年を外すと、残った年を新しい順に塗り直します。",
-                "「重ねる」と「累積」で、凡例の年・線・点・線の端の年を押すと、その年を強調します（線が太くなっていちばん上になり、ほかの年は薄くなります）。もう一度押すか、グラフか凡例の年で Esc キーを押すと戻ります。線や点から離れた所を押しても変わりません。強調した年は覚えません。大会の日でくらべるときも同じです。強制カラーの画面では、ほかの年は薄くならず、強調した年が太くなるだけです。",
+                "「重ねる」と「累積」で、凡例の年・線・点・線の端の年を押すと、その年を強調します（線が太くなっていちばん上になり、ほかの年は薄くなります）。もう一度押すか、グラフか凡例の年で Esc キーを押すと戻ります。線や点から離れた所を押しても変わりません。強調した年は覚えません。大会の日でくらべるときも同じです。強制カラーの画面（Windows のコントラスト テーマなど）では、ほかの年は薄くならず、強調した年が太くなるだけです。",
                 "「重ねる」と「累積」の凡例の年（2.2.0 から）は、Tab キーで移り、Enter キーか Space キーで強調します。もう一度押すか、グラフか凡例の年で Esc キーを押すと戻ります",
                 "年でくらべるで強調した年は、そのまま写ります（ほかの年は薄く、凡例ではその年の名前が太字になります）。",
             ),
@@ -1015,7 +1016,7 @@ class GuiGuideTest(unittest.TestCase):
                 "自分のレイアウトは 20 までです。",
                 "左のつまみ（⋮⋮）をなぞっても並べ替えられ、つまみを選んで ↑ ↓ キーでも動かせます。",
                 "選ばれているのは「消さない」です。",
-                "枠の外を押しても閉じません",
+                "窓の外を押しても閉じません",
                 "ここの「レイアウトを上書き」は、使っているレイアウトでなくても、いまの段でそのレイアウトを書き換えます。",
             ),
         }
@@ -1073,7 +1074,14 @@ class GuiGuideTest(unittest.TestCase):
                 "Its table has no counts.",
                 "**Activity types counted** and **Conditions…** still apply: a change of them also applies to the panels after the way back, and is remembered.",
                 "press ← or → to move by one period, Page Up or Page Down by 12, and Home or End to an end",
+                # v2.2.0 K6a: where the readings stand at first (the first new
+                # reader of 2.2.0rc1, k5f 1, which the Human maintainer took
+                # for the stable release on 2026-11-03).
+                "At first, and after a change of the grouping or of the month, they are of the last period of the newest year, where the cross line stands too.",
                 "group by **Week** or **Month** (by **Week** with one month chosen).",
+                # v2.2.0 K6a: the table stays while the same comparison is
+                # open, whatever the way to show (the hand checks of rc2).
+                "While **Compare years** is open, the table stays when you change **Show as**: to bring back the chart, with its legend, press **Show as a chart** or **Show as a calendar**.",
             ),
             "ja": (
                 "54 週まである年もあります",
@@ -1085,7 +1093,13 @@ class GuiGuideTest(unittest.TestCase):
                 "表には件数の列がありません。",
                 "「数える種目」と「条件…」は使えます。変えると、戻ったあとの段にも効き、次に開いたときにも覚えています。",
                 "← → キーで 1 つずつ、Page Up と Page Down で 12 ずつ、Home と End で端へ動かすと",
+                "開いた直後と、まとめ方か月を変えたあとは、いちばん新しい年の最後の区切りの値で、十字線もそこに立ちます。",
+                # The days of a custom range, told from the Span of a race day,
+                # which the Japanese page also names 範囲 (the second reader of
+                # K6a).
+                "くらべる間は、期間・‹ ›・「範囲を選ぶ…」の日付の欄・項目の棚・レイアウトと、まとめ方の「自動」「年」（月を選んだときは「月」も）は使わず、灰色になります。",
                 "まとめ方を「週」か「月」に（月を選んだときは「週」に）してください。",
+                "年でくらべるを開いている間は、見せ方を替えても「表で見る」のままです。図（凡例を含む）に戻すには「グラフで見る」か「カレンダーで見る」を押します。",
             ),
         }
         quoted = (
@@ -1172,42 +1186,42 @@ class GuiGuideTest(unittest.TestCase):
         phrases = {
             "en": {
                 1: (
-                    "You can also select the chart, choose a period with ← or →, and press Enter (or Space).",
+                    "With the keys only, select the chart (Tab), choose a period with ← or →, and press Enter (or Space).",
                     "A click keeps the chart selected, so that ← and → still move the cross line (the period of the list stays). Enter takes you to the heading of the list.",
                     "(their timezone is not changed)",
-                    "each press turns the order up or down, and rows without a value go last either way. The date and time are ordered as they show.",
+                    "each press switches between smallest first and largest first, and rows without a value go last either way. The date and time are ordered as they show.",
                     "\"Value of the panel: 108.1 km (activities counted: 11)\"",
                     "up to 500 a period. For more, it says how many, and the finer grouping that lists them (**Month** for a year, **Week** for a month, **Day** for a week).",
                     "The list is not remembered and never written to a file.",
                 ),
                 2: (
-                    "a race a full line (in the color of the text), shoes a dotted line, another mark a dashed line, and an injury a line of dashes and dots. A span is a light band whose edges, its first and last day, are the line of its kind.",
+                    "a race a full line (in the color of the text), shoes a dotted line, another mark a dashed line, and an injury a dash-dot line (long dashes and dots in turn). A span is a light band whose edges, its first and last day, are the line of its kind.",
                     "Marks never change the numbers.",
                     "They are your own words, so they never go into an output, the Support Bundle, or the text of a report on GitHub.",
                     "the marks do not show and the file is never written over",
                 ),
                 5: (
-                    "Right after you normalize again, or right after the date changes, the values of the years or the races in **Compare years** (also by race day), the activities of a period, and the table of **Summary…** can come from another reading than the panels beside them.",
+                    "So right after you normalize again, or right after the date changes, the numbers of the panels and those of the years or the races in **Compare years** (also by race day), of the activities of a period, and of the table of **Summary…** may not agree: one of them was counted before the output changed.",
                 ),
             },
             "ja": {
                 1: (
-                    "グラフを押して ← → キーで区切りを選び、Enter キー（か Space キー）を押しても開きます。",
+                    "キーだけで開くときは、グラフを選んで（Tab キー）← → キーで区切りを選び、Enter キー（か Space キー）を押します。",
                     "押して開いたときは、グラフが選ばれたままなので、← → キーで十字線を動かせます（一覧の区切りは変わりません）。Enter キーで開いたときは、一覧の見出しへ移ります。",
                     "（タイムゾーンは直しません）",
-                    "押すたびに上りと下りが入れ替わり、値の無い行はどちらでも最後です。日時は、見えている日付と時刻の順です。",
+                    "押すたびに小さい順と大きい順が入れ替わり、値の無い行はどちらでも最後です。日時は、見えている日付と時刻の順です。",
                     "「段の値：108.1 km（この値に数えた 11 件）」",
                     "1 つの区切りで 500 件までで、それより多いときは件数と、細かいまとめ方（年なら「月」、月なら「週」、週なら「日」）を案内します。",
                     "一覧は覚えず、ファイルにも書きません。",
                 ),
                 2: (
-                    "大会は実線（文字の色）、靴は点線、ほかは破線、けがは一点鎖線です。期間の印は薄い帯で、最初と最後の日のふちが、その種類の線です。",
+                    "大会は実線（文字の色）、靴は点線、ほかは破線、けがは一点鎖線（長い線と点のくり返し）です。期間の印は、その期間を薄く塗った帯で、最初と最後の日のふちが、その種類の線です。",
                     "印は数字を変えません。",
                     "自分の言葉なので、出力・問い合わせ用ファイル・GitHub への報告の文には入りません。",
                     "印を出さず、ファイルも書き換えません",
                 ),
                 5: (
-                    "正規化し直した直後や日付が変わった直後は、年でくらべる（大会の日でくらべるも）の年ごと・大会ごとの値と、区切りのアクティビティの一覧と、まとめの表が、並んでいる段と別の読みから作られることがあります。",
+                    "そのため、正規化し直した直後や日付が変わった直後は、並んでいる段の数と、年でくらべる（大会の日でくらべるも）の年ごと・大会ごとの値、区切りのアクティビティの一覧、まとめの表の数が、合わないことがあります。どちらかが、出力が変わる前の数だからです。",
                 ),
             },
         }
@@ -1529,8 +1543,8 @@ class GuiGuideTest(unittest.TestCase):
             if language == "en":
                 phrases = (
                     f"To compare amounts, use {rows}; to see the days in their order (when you ran, and where days without a recorded activity ran on), use {calendar}.",
-                    f"{calendar} in {words['show']} makes a strip of each year: the weeks across (from the week of 1 January) and the days of the week down,",
-                    f"It goes by {words['day']} only, and uses no {words['month']} (the month chosen stays, and comes back with the other ways).",
+                    f"{calendar} in {words['show']} makes a strip of each year: the weeks across (from the week of 1 January) and the days of the week down, Monday to Sunday,",
+                    f"It goes by {words['day']} only, and the choice of the {words['month']} is not used and grayed (the month chosen stays, and comes back with the other ways).",
                     f"It cannot be used while comparing by race day. Nor can it be used for an item that can have several records a day ({names}); for such an item, {words['calendar_about']} says why.",
                     "The legend above the strips gives up to six steps.",
                     f"Each holds its left value and not its right one {example[language]}. {right[language]}",
@@ -1542,26 +1556,26 @@ class GuiGuideTest(unittest.TestCase):
                     "In forced colors the steps can be hard to tell apart; the values are at the left of a strip and in the table.",
                 )
                 keyboard = "In a calendar (from 2.2.0), Tab goes from strip to strip, and ← → (a week), ↑ ↓ (a day), and Home and End (the first and last day of the year in the output) read out the date, the day of the week, and the value; so does a strip that the focus comes to ([Calendar](#calendar))."
-                race_ways = f"The ways to show are those of the years but {calendar}, with"
+                race_ways = f"The ways to show are those of the years without {calendar}, with"
                 shades = ("dark", "light", "pale", "deep")
                 rest = re.search(r"\brest\b", own_reads)
             else:
                 phrases = (
                     f"量をくらべるときは{rows}、日の並び（いつ走ったか・記録の無い日が続いた所）を見るときは{calendar}です。",
-                    f"{words['show']}の{calendar}で、1 年を 1 本の帯にします。横に週（1 月 1 日の週から）、縦に曜日（月〜日）で、",
-                    f"まとめ方は{words['day']}だけで、{words['month']}は使いません（選んでいた月は覚えていて、ほかの見せ方に戻すとその月で出ます）。",
+                    f"{words['show']}の{calendar}で、1 年を 1 本の横長の帯（年の帯）にします。横に週（1 月 1 日の週から）、縦に曜日（月〜日）で、",
+                    f"まとめ方は{words['day']}だけです。月の選び（{words['month']}）は使わず、灰色になります（選んでいた月は覚えていて、ほかの見せ方に戻すとその月で出ます）。",
                     f"大会の日でくらべる間は使えません。1 日に記録がいくつもある項目（{names}）でも使えず、そのわけは{words['calendar_about']}で開きます。",
-                    "色は 6 段までで、帯の上の凡例に区切りが出ます。",
-                    f"区切りは左の値を含み、右の値を含みません{example[language]}。{right[language]}",
+                    "色は 6 つの段階までで、年の帯の上の凡例に、色の区切りが出ます。",
+                    f"色の区切りは左の値を含み、右の値を含みません{example[language]}。{right[language]}",
                     f"合計や回数の項目で{zero}は枠だけ、値の無い日と出力の外の日は何も描きません。",
-                    "記録された 0（距離 0 km のアクティビティの日など）は、いちばん下の段の色です。",
+                    "記録された 0（距離 0 km のアクティビティの日など）は、凡例のいちばん左の色です。",
                     "平年の帯では 2 月 29 日の代わりに 2 月 28 日、出力の外なら出力の中のいちばん近い日",
                     f"← → キー（1 週）、↑ ↓ キー（1 日）、Home と End（その年の出力の最初と最後の日）で日を選びます。{rows}の ← →（1 区切り）とは動き方が違います。",
                     f"{words['table']}で日ごとの表（月日 × 年）になり、{words['table_calendar']}で戻ります。",
-                    "強制カラーの画面では段が見分けにくいことがあるので、値は帯の左と表で読めます。",
+                    "強制カラーの画面では色の段階が見分けにくいことがあるので、値は帯の左と表で読めます。",
                 )
                 keyboard = "カレンダー（2.2.0 から）では、帯ごとに Tab キーで移り、← → キーで 1 週、↑ ↓ キーで 1 日、Home と End でその年の出力の最初と最後の日へ動かすと、日付・曜日・値を読み上げます。帯に移ったときも読み上げます（[カレンダー](#カレンダー)）。"
-                race_ways = f"見せ方は{calendar}のほかの、年と同じ {len(modes) - 1} つで、初めは"
+                race_ways = f"見せ方は、年の見せ方から{calendar}を除いた {len(modes) - 1} つで、初めは"
                 shades = ("濃い", "淡い", "明るい", "暗い", "薄い")
                 rest = re.search("休み", own_reads)
             for phrase in phrases:
@@ -1690,15 +1704,15 @@ class GuiGuideTest(unittest.TestCase):
                         f"{mark.format(messages['view.other.button'])} above the panels shows {mark.format(messages['view.other.plot'])}, {mark.format(messages['view.other.spread'])}, or {mark.format(messages['view.other.shoes'])} in the place of the panels.",
                         "Enter, Space, or ↓ opens its menu on the first item; ↑, ↓, Home, and End move in it, and Esc closes it, back to its button. Tab or a click elsewhere closes it too.",
                         f"While one shows, the {mark.format(messages['view.shelf.heading'])}, {mark.format(messages['view.layouts.heading'])}, and {mark.format(messages['view.grain.label'])} are not used; a line under the filters says so.",
-                        "a period, activity types, or conditions changed here stay for the panels when you go back (while comparing years, the period cannot be changed).",
-                        f"{mark.format(messages['view.panel.unbig'])} goes back, the focus on {mark.format(messages['view.other.button'])}. To go from one of these views to another, go back to the panels first. While comparing years, {mark.format(messages['view.other.button'])} is not shown.",
+                        "a period, activity types, or conditions changed here stay for the panels when you go back.",
+                        f"{mark.format(messages['view.panel.unbig'])} goes back, the focus (where the keys act) on {mark.format(messages['view.other.button'])}. To go from one of these views to another, go back to the panels first. While comparing years, {mark.format(messages['view.other.button'])} is not shown.",
                     ),
                     "plot": (
                         f"Each activity is one point, one item across and another up, chosen in the lists of the title, {mark.format(messages['view.plot.x'])} and {mark.format(messages['view.plot.y'])}; at first the {name['pace'].lower()} across and the {name['hr'].lower()} up, and later the two chosen last. An item chosen in one list cannot be chosen in the other, and the list says why.",
                         "A line under the title gives the numbers only: the points, the activities of the period, those with both values, and those without (with conditions, all of them of the activities that meet them).",
                         "Press a point, or select the chart and use ← and → (one point in the order of the dates and times) and Home and End (the first and the last): its date and time with the year, its type, its two values,",
                         f"{mark.format(messages['view.panel.table'])} gives one row an activity (the date and time, the type, and the two values), ordered by the buttons of its heads (newest first at first); {mark.format(messages['view.panel.chart'])} goes back.",
-                        f"The items are the {len(keys)} of {mark.format(messages['view.group.act'])} (but {mark.format(messages['view.item.count'])}) and {mark.format(messages['view.group.fit'])}; those of {mark.format(messages['view.group.body'])} and {mark.format(messages['view.group.est'])} cannot be chosen.",
+                        f"The items are the {len(keys)} of {mark.format(messages['view.group.act'])} (without {mark.format(messages['view.item.count'])}) and {mark.format(messages['view.group.fit'])}; those of {mark.format(messages['view.group.body'])} and {mark.format(messages['view.group.est'])} cannot be chosen.",
                         f"Only the newest {MAX_POINTS:,} are plotted; where there are more, a line says so (a shorter period shows them all).",
                         f"{mark.format(messages['view.plot.caveat'])} is always under the points.",
                         "Each scale goes over the values of its item, not from 0. A smaller value of the average pace is faster: further down as the item up, and further left as the item across.",
@@ -1710,13 +1724,13 @@ class GuiGuideTest(unittest.TestCase):
                         "A range of no activity has no bar (0 in the table).",
                         "A line under the title gives the numbers only: the activities counted, those of the period, and those without a value.",
                         "Press a bar, or select the chart and use ← and → (one range at a time, those of no activity among them) and Home and End (the first and the last):",
-                        f"{mark.format(messages['view.panel.table'])} gives the activities of each range; {mark.format(messages['view.panel.chart'])} goes back.",
+                        f"{mark.format(messages['view.panel.table'])} gives the number of activities of each range; {mark.format(messages['view.panel.chart'])} goes back.",
                         f"A range holds its left value and not its right one ({range_words}: 10 km or more, under 11 km).",
                         f"The ranges count the values before they are rounded. The list and the points show rounded values, so an activity near the end of a range can look as if it were in the next one: 10,999.6 m shows as {shown_value}, and is in the range {range_words}.",
                         f"Where there would be more than {MAX_RANGES} ranges, each range is the first of 2, 5, 10, ... times as wide that is enough, and a line says so.",
                         f"For the average pace, {mark.format(messages['view.spread.faster_left'])} is there too.",
                         f"the range and its activities are at the top right, as {mark.format(reading)}, and are read out too.",
-                        "An end of a range of a value too large to write, such as a record of an error, is a dash (—).",
+                        "An end of a range (its left or its right value) that is too large to write, as a record of an error can make it, is a dash (—).",
                     ),
                 }
                 keyboard = "In **Other views** (from 2.2.0), Enter, Space, or ↓ opens the menu on its first item, ↑, ↓, Home, and End move in it, and Esc closes it, back to its button. In **Plot two items**, select the chart: ← and → (one point in the order of the dates and times) and Home and End choose a point and read out its date and time, its type, and its two values (and how many more have the same values). In **Distribution**, ← and → (those of no activity among them) and Home and End choose a range and read out the range and its activities. In **By shoes**, select a panel: ← and → (a month) and Home and End choose a month and read out the name of the shoes and the distance of the month. Where **By shoes** cannot be chosen, ↑ and ↓ stop on it and its reason is read out too; Enter and Space do nothing. Tab goes into the box of each table of **Show as a table**, which the arrow keys scroll ([Other views](#other-views-from-220))."
@@ -1729,15 +1743,15 @@ class GuiGuideTest(unittest.TestCase):
                         f"段の上の{mark.format(messages['view.other.button'])}で、段の代わりに{mark.format(messages['view.other.plot'])}{mark.format(messages['view.other.spread'])}か{mark.format(messages['view.other.shoes'])}を出します。",
                         "メニューは、Enter・Space・↓ キーで開いて最初の項目に移り、↑ ↓・Home・End キーで動き、Esc キーでボタンに戻って閉じます。Tab キーか、ほかの所を押しても閉じます。",
                         f"出ている間は{mark.format(messages['view.shelf.heading'])}{mark.format(messages['view.layouts.heading'])}{mark.format(messages['view.grain.label'])}を使いません。フィルターの下に、そのことが 1 行で出ます。",
-                        "ここで変えた期間と数える種目と条件は、段に戻ってもそのまま段に効きます（年でくらべる間は、期間を変えられません）。",
-                        f"戻るときは{mark.format(messages['view.panel.unbig'])}を押します。フォーカスは{mark.format(messages['view.other.button'])}に戻ります。ほかの見方どうしを行き来するときは、いったん段に戻ります。年でくらべる間は、{mark.format(messages['view.other.button'])}は出ません。",
+                        "ここで変えた期間と数える種目と条件は、段に戻ってもそのまま段に効きます。",
+                        f"戻るときは{mark.format(messages['view.panel.unbig'])}を押します。フォーカス（キーで操作する先）は{mark.format(messages['view.other.button'])}に戻ります。ほかの見方どうしを行き来するときは、いったん段に戻ります。年でくらべる間は、{mark.format(messages['view.other.button'])}は出ません。",
                     ),
                     "plot": (
                         f"1 回のアクティビティを 1 つの点にして、2 つの項目を横と縦に並べます。項目は、題の中の{mark.format(messages['view.plot.x'])}と{mark.format(messages['view.plot.y'])}の一覧で選びます。初めは{name['pace']}（横）と{name['hr']}（縦）で、次に開いたときは前に選んだ 2 つです。もう一方で選んでいる項目は選べず、一覧にそのわけが出ます。",
                         "題の下に、数だけの行が出ます（点の数、この期間の回、両方の値がある回、値の無い回。条件があるときは、どれも条件に合う回で数えます）。",
                         "点を押すか、グラフを選んで ← → キー（日時の順に 1 つずつ）、Home と End（最初と最後）で点を選ぶと、右上に日時（年つき）・種目・2 つの値と、",
                         f"{mark.format(messages['view.panel.table'])}で 1 回ごとの表（日時・種目・2 つの値）になり、列の見出しのボタンで並べ替えられます（初めは新しい順）。{mark.format(messages['view.panel.chart'])}で戻ります。",
-                        f"選べるのは{mark.format(messages['view.group.act'])}（{mark.format(messages['view.item.count'])}のほか）と{mark.format(messages['view.group.fit'])}の {len(keys)} の項目で、{mark.format(messages['view.group.body'])}と{mark.format(messages['view.group.est'])}の項目は選べません。",
+                        f"選べるのは{mark.format(messages['view.group.act'])}（{mark.format(messages['view.item.count'])}を除く）と{mark.format(messages['view.group.fit'])}の {len(keys)} の項目で、{mark.format(messages['view.group.body'])}と{mark.format(messages['view.group.est'])}の項目は選べません。",
                         f"点にするのは新しい {MAX_POINTS:,} 回までで、それより多いときは、そのことが 1 文で出ます（期間をしぼると、全部を出せます）。",
                         f"点の下には、いつも{mark.format(messages['view.plot.caveat'])}が出ます。",
                         "目盛りは、それぞれの項目の値の範囲です（0 からではありません）。平均ペースは、値が小さいほど速い回です。縦の項目なら下ほど、横の項目なら左ほど速くなります。",
@@ -1745,7 +1759,7 @@ class GuiGuideTest(unittest.TestCase):
                         "項目を替えると、新しい点が届くまで、前の点は出しません。期間や数える種目・条件を変えたときは、届くまで今の点を薄く残します。",
                     ),
                     "spread": (
-                        f"1 つの項目の 1 回ごとの値が、どの区切りに何回あるかを、棒で見ます。項目は題の中の一覧で選びます。初めは{name['dist']}で、次に開いたときは前に選んだ項目です。選べる項目は点で並べると同じ {len(keys)} です。",
+                        f"1 つの項目の 1 回ごとの値が、どの区切りに何回あるかを、棒で見ます。項目は題の中の一覧で選びます。初めは{name['dist']}で、次に開いたときは前に選んだ項目です。選べる項目は、点で並べるのと同じ {len(keys)} です。",
                         "回数の無い区切りは、棒を描きません（表では 0）。",
                         "題の下に、数だけの行（数えた回・この期間の回・値の無い回）が出ます。",
                         "棒を押すか、グラフを選んで ← → キー（1 つずつ。回数の無い区切りも通ります）、Home と End（最初と最後）で区切りを選ぶと、",
@@ -1755,7 +1769,7 @@ class GuiGuideTest(unittest.TestCase):
                         f"区切りが {MAX_RANGES} を超えるときは、幅を 2 倍・5 倍・10 倍…のうち足りるいちばん小さい幅に広げ、そのことを 1 行で言います。",
                         f"平均ペースのときは{mark.format(messages['view.spread.faster_left'])}も出ます。",
                         f"右上に{mark.format(reading)}のように、範囲と回数が出ます。読み上げでも聞けます。",
-                        "記録の誤りのような、とても大きい値の区切りの端は「—」で書きます。",
+                        "区切りの端（左の値か右の値）が、記録の誤りのように書き表せないほど大きいときは、その端を「—」で書きます。",
                     ),
                 }
                 keyboard = "ほかの見方（2.2.0 から）では、メニューを Enter・Space・↓ キーで開くと最初の項目に移り、↑ ↓・Home・End キーで動き、Esc キーでボタンに戻って閉じます。点で並べるでは、グラフを選んで ← → キー（日時の順に 1 つずつ）と Home・End で点を選ぶと、日時・種目・2 つの値（同じ値の回があればその数も）を読み上げます。分かれ方では、← → キー（回数の無い区切りも通ります）と Home・End で区切りを選ぶと、範囲と回数を読み上げます。靴ごとでは、段を選んで ← → キー（1 か月ずつ）と Home・End で月を選ぶと、靴の名前とその月の距離を読み上げます。メニューの「靴ごと」が選べないときは、↑ ↓ キーでそこに止まり、わけも読み上げます。Enter・Space キーでは何もしません。「表で見る」の 2 つの表は、Tab キーで表の枠に入ると、矢印キーで送れます（[ほかの見方](#ほかの見方220-から)）。"
@@ -1877,36 +1891,36 @@ class GuiGuideTest(unittest.TestCase):
                 self.assertEqual(sorted(key for keys in groups.values() for key in keys), sorted(item.key for item in ITEMS))
             if language == "en":
                 phrases = (
-                    f"{mark.format(messages['view.recap.button'])} above the panels opens a window with a table of the items of the panels: the value of each in the period shown and in the period of the same length just before it, and their difference.",
-                    f"It opens where the window of {mark.format(messages['view.marks.button'])} opens, so that only one of the two is open. {mark.format(messages['help.close'])}, or the Esc key in the window, closes it (a press outside it does not). Whether it was open is not remembered.",
-                    "It can be used with panels, while years are not compared, no other view shows, and the graphs are not shown alone.",
+                    f"{mark.format(messages['view.recap.button'])} above the panels opens a window with a table of the items of the panels: the value of each in the period shown and in the period of the same length just before it (for {mark.format(messages['view.period.years1'])} and the like, years counted by the dates, so that the days can differ by one; see below), and their difference.",
+                    f"It opens where the window of {mark.format(messages['view.marks.button'])} opens; only one of the windows of {mark.format(messages['view.marks.button'])}, {mark.format(messages['view.recap.button'])}, and saving opens at a time. {mark.format(messages['help.close'])}, or the Esc key in the window, closes it (a press outside it does not). Whether it was open is not remembered.",
+                    "It can be used with panels, while years are not compared, no other view shows, and the page is not in **Full screen**.",
                     f"Its columns are {mark.format(messages['view.recap.item'])}, the period shown ({mark.format(messages['view.recap.now.years1'])}, {mark.format(messages['view.recap.now.custom'])}, and so on), the period before ({mark.format(messages['view.recap.before.years1'])}, {mark.format(days[31])}, and so on), and {mark.format(messages['view.recap.difference'])}.",
                     f"counted with the same {mark.format(messages['view.types.label'])} and conditions as the panels",
                     f"A period without a value says {mark.format(messages['view.recap.none'])}. An item that is a total or a number of recorded activities is 0 for a period without an activity of the types counted (that meets the conditions, where there are some) where the period reaches between the first and the last such activity in the output, and then has a difference",
-                    f"The period before is, for {mark.format(messages['view.period.years1'])}, {mark.format(messages['view.period.years3'])}, and so on, as many years of the calendar up to the day before the period shown; for a range of {mark.format(messages['view.period.custom'])}, the same number of days just before it.",
+                    f"The period before is, for {mark.format(messages['view.period.years1'])}, {mark.format(messages['view.period.years3'])}, and so on, as many years, counted by the dates, up to the day before the period shown; for a range of {mark.format(messages['view.period.custom'])}, the same number of days just before it, and the column gives the days, such as {mark.format(messages['view.recap.before.days'].format(n=31))}.",
                     "‹ moves by the same number of days, so where the year shown has 29 February, the period it moves to and the year before differ by a day",
                     f"‹ and › make the period a range, and the columns then say {mark.format(messages['view.recap.now.custom'])} and the days of the range moved ({mark.format(days[365])} from {mark.format(messages['view.period.years1'])}, or 366 for a year with 29 February).",
                     "A difference is the value now minus the value before, as a sign and a number only, that of the two values as the table writes them",
                     f"the line under the title says {mark.format(messages['view.recap.outside'])}.",
-                    f"The window takes the focus on its title. Tab goes to {mark.format(messages['help.close'])} and to the table, which ↑ and ↓ scroll (its heads stay).",
+                    f"The window takes the focus on its title. Tab goes to {mark.format(messages['help.close'])} and to the table, which ↑ and ↓ scroll (its row of headings stays in place).",
                 )
                 keyboard = f"In {mark.format(messages['view.recap.button'])} (from 2.2.0), the window takes the focus on its title; Tab goes to {mark.format(messages['help.close'])} and to the table, which ↑ and ↓ scroll, and Esc closes it, back to its button ([Summary](#summary-from-220))."
                 steps = (f"2. Press {mark.format(messages['view.period.years1'])} in {mark.format(messages['view.period.label'])} above.", f"3. Press {mark.format(messages['view.recap.button'])} above the panels", f"5. ‹ and › make the period a range: the columns then say {mark.format(messages['view.recap.now.custom'])} and {mark.format(days[365])} (366 for a year with 29 February).")
                 link = "(#summary-from-220)"
             else:
                 phrases = (
-                    f"段の上の行の{mark.format(messages['view.recap.button'])}で、並べた段の項目を表にした窓を開きます。今の期間と、その前の同じ長さの期間の値と、その差が並びます。",
-                    f"窓は{mark.format(messages['view.marks.button'])}の窓と同じ所に開くので、どちらか 1 つだけが開きます。閉じるときは{mark.format(messages['help.close'])}を押すか、窓の中で Esc キーを押します（窓の外を押しても閉じません）。開いていたかは覚えません。",
+                    f"段の上の行の{mark.format(messages['view.recap.button'])}で、並べた段の項目を表にした窓を開きます。今の期間と、その前の同じ長さの期間（「1 年」などは日付で数えた年なので、日数が 1 日違うことがあります。下を見てください）の値と、その差が並びます。",
+                    f"窓は{mark.format(messages['view.marks.button'])}の窓と同じ所に開きます。{mark.format(messages['view.marks.button'])}{mark.format(messages['view.recap.button'])}と画像で保存の窓は、どれか 1 つだけが開きます。閉じるときは{mark.format(messages['help.close'])}を押すか、窓の中で Esc キーを押します（窓の外を押しても閉じません）。開いていたかは覚えません。",
                     "段が 1 つ以上あり、年でくらべる・ほかの見方・全画面でないときに使えます。",
                     f"列は{mark.format(messages['view.recap.item'])}、今の期間（{mark.format(messages['view.recap.now.years1'])}{mark.format(messages['view.recap.now.custom'])}など）、前の期間（{mark.format(messages['view.recap.before.years1'])}{mark.format(days[31])}など）、{mark.format(messages['view.recap.difference'])}です。",
                     f"段と同じ{mark.format(messages['view.types.label'])}と条件で数えます。",
                     f"値が無いときは{mark.format(messages['view.recap.none'])}です。記録されたアクティビティの合計と数の項目は、その期間に数える種目のアクティビティ（条件があるときは、条件に合うもの）が 1 回も無くても、期間が、出力の中のそのアクティビティの最初と最後のあいだにかかるなら 0 で、差も出ます。",
-                    f"前の期間は、{mark.format(messages['view.period.years1'])}{mark.format(messages['view.period.years3'])}などなら、今の期間の始まりの前の日までの同じ年数（暦の年）です。{mark.format(messages['view.period.custom'])}の範囲なら、同じ日数のすぐ前です。",
-                    "‹ は同じ日数だけ動かすので、今の 1 年に 2 月 29 日があると 1 日ずれます。",
+                    f"前の期間は、{mark.format(messages['view.period.years1'])}{mark.format(messages['view.period.years3'])}などなら、今の期間の始まりの前の日までの、日付で数えた同じ年数です。{mark.format(messages['view.period.custom'])}の範囲なら、同じ日数のすぐ前で、列は{mark.format(messages['view.recap.before.days'].format(n=31))}のように日数で出ます。",
+                    "‹ は同じ日数だけ動かすので、今の 1 年に 2 月 29 日があると、‹ で動かした先の期間と、前の 1 年が 1 日違います。",
                     f"‹ › を押すと期間は範囲になり、列の見出しは{mark.format(messages['view.recap.now.custom'])}と、動かした範囲の日数の見出しに変わります（{mark.format(messages['view.period.years1'])}からなら{mark.format(days[365])}、2 月 29 日を含む 1 年なら 366 日）。",
                     "差は、表に書いた今の値から前の値を引いた数で、符号と数だけです",
                     f"題の下の行は{mark.format(messages['view.recap.outside'])}です。",
-                    f"窓を開くと、窓の題にフォーカスが移ります。Tab キーで{mark.format(messages['help.close'])}と表へ進み、表は ↑ ↓ キーで送れます（見出しの行は止まります）。",
+                    f"窓を開くと、窓の題にフォーカスが移ります。Tab キーで{mark.format(messages['help.close'])}と表へ進み、表は ↑ ↓ キーで送れます（見出しの行は動かずに残ります）。",
                 )
                 keyboard = f"まとめ（2.2.0 から）は、窓を開くと窓の題にフォーカスが移り、Tab キーで{mark.format(messages['help.close'])}と表へ進みます。表は ↑ ↓ キーで送れ、Esc キーで{mark.format(messages['view.recap.button'])}に戻って閉じます（[まとめ](#まとめ220-から)）。"
                 steps = (f"2. 上の{mark.format(messages['view.period.label'])}で{mark.format(messages['view.period.years1'])}を押します。", f"3. 段の上の{mark.format(messages['view.recap.button'])}を押します。", f"5. ‹ › を押すと期間は範囲になり、列の見出しは{mark.format(messages['view.recap.now.custom'])}と{mark.format(days[365])}（2 月 29 日を含む 1 年なら 366 日）に変わります。")
@@ -1988,25 +2002,27 @@ class GuiGuideTest(unittest.TestCase):
         says = {
             "en": (
                 "**Save as image…** is right after **Summary…** in the row above the panels, and right after **Show as a table** in the bars of **Compare years**, **Plot two items**, **Distribution**, and **By shoes**.",
-                "The row above the panels does not show while years are compared, another view is shown, or in full screen, where the window hides too and shows again after it. Without panels, its **Save as image…** cannot be pressed. When the view changes, the window closes.",
+                "The row above the panels does not show while years are compared, another view is shown, or in full screen. Without panels, its **Save as image…** cannot be pressed.",
+                "The window closes when you go from the view it opened in (the panels, **Compare years**, or another view) to another view. In full screen it does not close but hides, and shows again after it (the window of **Summary…** hides while years are compared, another view is shown, or in full screen, and shows again after them).",
                 "its choices are the first ones again: all the panels, the light colors, and no marks (nothing is remembered).",
-                "the cross line, and the frames that show the day, point, or range chosen, with the readings of its values, never go in; the points, the bars, and the days themselves do.",
+                "the cross line (the vertical line at the period whose values are read), and the frames that show the day, point, or range chosen, with the readings of its values, never go in; the points, the bars, and the days themselves do, and the lines of the marks do where **Marks** puts them in.",
                 "for two items plotted or a distribution, a period without values to draw;",
                 "A panel or a year without values goes in with the words that the page shows for it.",
                 "**Save** hands the file to the browser as a download, which the browser saves where its settings say (usually your downloads, or where you choose if it asks each time). This app cannot know that it was saved,",
-                "the window says so. Where it can no longer save at the press, it says the reason that it shows by itself, such as an answer on its way, which goes with that reason. The focus stays on **Save** where it can still be pressed, and goes to the title of the window where it cannot; check the window, and press **Save** again when it can save.",
+                "the window says so. Where it can no longer save at the press, it says the reason that it would show by itself, such as numbers on their way; those words go when the reason does. The focus stays on **Save** where it can still be pressed, and goes to the title of the window where it cannot; check the window, and press **Save** again when it can save.",
                 "In forced colors (a contrast theme of Windows, for example), the picture takes the colors of the screen, whichever **Colors** gives.",
                 "Esc, **Close**, or **Cancel** closes it, and the focus goes back to its **Save as image…** then and after the file is handed to the browser.",
             ),
             "ja": (
                 "段の上の行の「まとめ…」の右と、年でくらべる・点で並べる・分かれ方・靴ごとの帯の「表で見る」の右に、「画像で保存…」があります。",
-                "年でくらべる・ほかの見方・全画面の間は、段の上の行が隠れます（全画面の間は窓も隠れ、戻ると出ます）。段が無いときは、段の上の「画像で保存…」は押せません。見方が変わると、窓は閉じます。",
+                "年でくらべる・ほかの見方・全画面の間は、段の上の行が隠れます。段が無いときは、段の上の「画像で保存…」は押せません。",
+                "窓は、開いたときの見方（段を並べて見る・年でくらべる・ほかの見方）から別の見方に移ると閉じます。全画面の間は閉じずに隠れ、戻ると出ます（「まとめ…」の窓は、年でくらべる・ほかの見方・全画面の間は隠れ、戻ると出ます）。",
                 "窓を開くたびに、選びは初めの形（並べた段すべて・明るい色・印は入れない）に戻ります（覚えません）。",
-                "全体図・一覧・ボタン・出力のフォルダーの名前と、縦の線、選んだ日・点・区切りを示す枠、その値を読む所は入りません（点や棒、カレンダーの日そのものは入ります）。",
+                "全体図・一覧・ボタン・出力のフォルダーの名前と、十字線（値を読む区切りに立つ縦の線）、選んだ日・点・区切りを示す枠、その値を読む所は入りません（点や棒、カレンダーの日そのものは入ります。印の線は、「印」で選んだときに入ります）。",
                 "点で並べると分かれ方で期間に図にする値が無いとき",
                 "値の無い段や年も、ページに出ている言葉のまま入ります。",
                 "窓の「保存」を押すと、画像のファイルをブラウザーにダウンロードとして渡します。保存する場所は、ブラウザーの設定のとおりです（ふつうはダウンロードの場所。毎回聞く設定なら、そのとき選んだ場所）。このアプリは、保存できたかを知らないので、",
-                "押したときに、保存する図が窓に出ていたものから変わっていたときと、画像を作れなかったときも、窓がわけを言います。押したときに保存できなくなっていたときは、窓がそのとき言っているわけ（読み込み中など）を出し、わけが無くなれば一緒に消えます。「保存」が押せるときは、フォーカスは「保存」に残り、押せないときは窓の題に移ります。窓を見直して、保存できるようになったら、もう一度「保存」を押してください。",
+                "押したときに、保存する図が窓に出ていたものから変わっていたときと、画像を作れなかったときも、窓がわけを言います。押したときに保存できなくなっていたときは、窓は、そのときの保存できないわけ（読み込み中など）を出します。この言葉は、そのわけが無くなると消えます。「保存」が押せるときは、フォーカスは「保存」に残り、押せないときは窓の題に移ります。窓を見直して、保存できるようになったら、もう一度「保存」を押してください。",
                 "強制カラーの画面（Windows のコントラスト テーマなど）では、どちらの「色」を選んでも、画像はその画面の色になります。",
                 "Esc キー・「閉じる」・「やめる」で閉じたときと、ファイルをブラウザーに渡したあとは、押した「画像で保存…」に戻ります。",
             ),
@@ -2024,7 +2040,7 @@ class GuiGuideTest(unittest.TestCase):
         elsewhere = {
             "en": (
                 "This app keeps the marks only in `gui-marks.json`",
-                "An image you save shows their names where you put them in with [Saving as an image](#saving-as-an-image-from-220), and by race day.",
+                "An image you save shows them where you choose **Put in the lines and names of the marks** in [Saving as an image](#saving-as-an-image-from-220) while the page shows the marks, and when you save a comparison by race day.",
                 "so this app keeps them only in the file of the marks, `gui-marks.json`, never in an output, the Support Bundle, or the text of a report on GitHub (an image you save with [Saving as an image](#saving-as-an-image-from-220) shows them where you put them in, and by race day).",
                 "hands it to the browser as a download; this app sends nothing anywhere. With the marks put in, and by race day, the names of the marks show too.",
                 "The images you saved are your own files: **Forget the remembered settings…** does not remove them.",
@@ -2032,7 +2048,7 @@ class GuiGuideTest(unittest.TestCase):
             ),
             "ja": (
                 "印は、このアプリが、このパソコンの GUI の設定のフォルダーの `gui-marks.json` にだけ残します",
-                "[画像で保存](#画像で保存220-から)で「印の線と名前を入れる」を選んだときと、大会の日でくらべた図を保存したときは、保存した画像に写ります。",
+                "[画像で保存](#画像で保存220-から)で「印の線と名前を入れる」を選んだとき（ページで印を出しているとき）と、大会の日でくらべた図を保存したときは、保存した画像に写ります。",
                 "このアプリは、印のファイル `gui-marks.json` にだけ残します。出力・問い合わせ用ファイル・GitHub への報告の文には入りません（[画像で保存](#画像で保存220-から)で印を入れたときと、大会の日でくらべた図は、あなたが保存する画像に写ります）。",
                 "ブラウザーにダウンロードとして渡すだけで、このアプリはどこへも送りません。印を入れたときと、大会の日でくらべた図は、印の名前も写ります。",
                 "保存した画像はあなたのファイルなので、「覚えた設定を消す…」では消えません。",
@@ -2179,7 +2195,7 @@ class GuiGuideTest(unittest.TestCase):
                     "Move the pointer over a panel, or select a panel (Tab) and use ← and → (a month) and Home and End (the first and the last month), to choose a month: every panel gives its distance at the top right (at first, the last month). With the keys, the name of the shoes and the distance are read out.",
                     f"{mark.format(messages['view.panel.table'])} gives two tables:",
                     f"whose months stay at the left as it scrolls to the right. {mark.format(messages['view.panel.chart'])} goes back.",
-                    f"Where no activity of the output (up to today, of any type, and without the conditions) has shoes, {mark.format(messages['view.other.shoes_none'])}, and where the data of the shoes is too large, {mark.format(messages['view.other.shoes_too_large'])} shows under {mark.format(messages['view.other.shoes'])} in the menu, which then cannot be chosen: ↑ and ↓ stop on it, and pressing it does nothing. Where only other periods or types have shoes, it can be chosen, and the line above shows in the place of the panels.",
+                    f"Where no activity of the output (up to today, of any type, and without the conditions) has shoes, {mark.format(messages['view.other.shoes_none'])}, and where the data of the shoes is too large, {mark.format(messages['view.other.shoes_too_large'])} shows under {mark.format(messages['view.other.shoes'])} in the menu, which then cannot be chosen: ↑ and ↓ stop on it, and pressing it does nothing. Where only other periods or types have shoes, it can be chosen, and {mark.format(messages['view.shoes.none'])} shows in the place of the panels.",
                     "The start, the end, and the maximum distance are the values set in Garmin, as they are. This app says nothing from them, such as when to change shoes.",
                     "(assets/gui-guide/view-shoes.en.png)",
                     "(synthetic data)](assets/gui-guide/view-shoes.en.png)",
@@ -2190,7 +2206,7 @@ class GuiGuideTest(unittest.TestCase):
                     "By shoes, every panel goes in, also those scrolled out of the screen, with the time axis and the notes.",
                     "by shoes, a period and types (and conditions) without an activity with shoes;",
                 )
-                again = "In the other views (two items plotted, a distribution, and the shoes), the values can come from another reading than the panels too. Back from another view, the panels are asked again where the period, the activity types, or the conditions were changed while it showed, and where an answer of that view was of another reading than the panels (for example, of the output read again after them); otherwise they stay as they were read before, also where the output changed after the last answer of that view. Choose the period again for the new reading."
+                again = "The other views (two items plotted, a distribution, and the shoes) may not agree with the panels in the same way. Back from another view, the panels are counted again where the period, the activity types, or the conditions were changed while it showed, and where that view gave numbers of an output read again after the panels; otherwise the panels keep their numbers, also where the output changed after the last numbers of that view. Where the numbers of the panels look old, press the button of the period again (the same period will do), and the panels count again from the output as it is now."
                 privacy = "The names of the shoes of [By shoes](#by-shoes) (from 2.2.0) may be names you gave in Garmin. They show on the page and in a picture you save (the window says so before saving). This app writes them in no file name, log, or remembered setting."
                 steps = (
                     f"In {mark.format(messages['view.other.button'])} above the panels, choose {mark.format(messages['view.other.shoes'])}.",
@@ -2205,12 +2221,12 @@ class GuiGuideTest(unittest.TestCase):
                     "靴の付いた回のうち距離の無い回（回数には入ります）",
                     f"名前は Garmin の道具の名前のままで、名前が無ければメーカーとモデル、どちらも無ければ{mark.format(messages['view.shoes.unnamed'])}と出ます。長い名前は、終わりを省略記号にして切ります。同じ名前の靴は、名前のあとの使い始めの日（Garmin で決めた日が、その靴だけのとき）か、番号で見分けます。そこは切りません。",
                     "段は、この期間に最後に使った日の新しい順です（同じ日なら、Garmin の道具の順）。この期間に使った回の無い靴は、段にしません。",
-                    f"段の下には、いつも{mark.format(messages['view.shoes.note_garmin'])}が出て、数が 1 以上のときだけ、",
+                    f"段の下には、いつも{mark.format(messages['view.shoes.note_garmin'])}が出て、次の数は 1 以上のときだけ、1 つずつ 1 行で出ます：",
                     f"その期間と種目に、靴の付いた回が無いとき（条件があるときは、条件に合う回のうち）は、段の代わりに{mark.format(messages['view.shoes.none'])}と出ます。",
                     "段の上でポインターを動かすか、段を選んで（Tab キー）← → キー（1 か月ずつ）と Home・End（最初と最後の月）で月を選ぶと、どの段も右上にその月の距離が出ます（初めは最後の月）。キーで選んだときは、靴の名前とその月の距離を読み上げます。",
                     f"{mark.format(messages['view.panel.table'])}で、2 つの表になります。",
                     f"右へ送っても、月の列は左に残ります）です。{mark.format(messages['view.panel.chart'])}で戻ります。",
-                    f"出力のアクティビティ（今日までのもの。種目と条件は問いません）に付いた靴が 1 足も無い出力では{mark.format(messages['view.other.shoes_none'])}、靴のデータが大きすぎる出力では{mark.format(messages['view.other.shoes_too_large'])}が、メニューの{mark.format(messages['view.other.shoes'])}の下に出て、選べません（↑ ↓ キーではそこで止まり、押しても何もしません）。ほかの期間や種目にだけ靴の付いた回があるときは選べ、段の代わりに上の 1 文が出ます。",
+                    f"出力のアクティビティ（今日までのもの。種目と条件は問いません）に付いた靴が 1 足も無い出力では{mark.format(messages['view.other.shoes_none'])}、靴のデータが大きすぎる出力では{mark.format(messages['view.other.shoes_too_large'])}が、メニューの{mark.format(messages['view.other.shoes'])}の下に出て、選べません（↑ ↓ キーではそこで止まり、押しても何もしません）。ほかの期間や種目にだけ靴の付いた回があるときは選べ、段の代わりに{mark.format(messages['view.shoes.none'])}が出ます。",
                     "使い始め・使い終わり・上限の距離は、Garmin で決めた値をそのまま出します。このアプリは、それをもとに、いつ替えるかなどを言いません。",
                     "(assets/gui-guide/view-shoes.ja.png)",
                     "（合成のデータ）](assets/gui-guide/view-shoes.ja.png)",
@@ -2221,7 +2237,7 @@ class GuiGuideTest(unittest.TestCase):
                     "靴ごとでは、画面の外へ送った段も含めたすべての段と、時間の軸・注が入ります。",
                     "靴ごとでその期間と種目（と条件）に靴の付いた回が無いとき",
                 )
-                again = "ほかの見方（点で並べる・分かれ方・靴ごと）の値も、段と別の読みから作られることがあります。ほかの見方から段に戻ったとき、段を問い合わせ直すのは、ほかの見方の間に期間か数える種目か条件を変えたときと、ほかの見方の答えの読みが段の読みと違ったとき（たとえば、段のあとで出力を読み直したとき）です。それ以外は、前の読みの段のままです（ほかの見方の最後の答えのあとに出力が変わったときも）。期間などを選び直すと、新しい読みになります。"
+                again = "ほかの見方（点で並べる・分かれ方・靴ごと）でも、同じように段と数が合わないことがあります。ほかの見方から段に戻ったとき、段を数え直すのは、ほかの見方の間に期間か数える種目か条件を変えたときと、ほかの見方が、段よりあとに読み直した出力の数を出していたときです。それ以外は、段は前の数のままです（ほかの見方の最後の数のあとに出力が変わったときも）。段の数が古いと思ったら、期間のボタンを押し直すと（同じ期間でもかまいません）、段も今の出力で数え直します。"
                 privacy = "[靴ごと](#靴ごと)（2.2.0 から）の靴の名前は、あなたが Garmin で付けた名前のことがあります。名前はページと、画像で保存した画像に写ります（保存の前に、窓がそのことを言います）。このアプリは、靴の名前を、ファイルの名前・ログ・覚えた設定に書きません。"
                 steps = (
                     f"段の上の{mark.format(messages['view.other.button'])}で{mark.format(messages['view.other.shoes'])}を選びます。",
@@ -2376,8 +2392,8 @@ class GuiGuideTest(unittest.TestCase):
                 with self.subTest(language=language, words=words):
                     self.assertIn(mark.format(words), joined)
             numbers = {
-                "en": ("up to 60 characters, and 10 words", "up to 1000 km", "up to 6000", "cut at 200 characters", "`normalized/activities.json`", "(、 separates them too)", "with a comma", "(a least and a most count as one)"),
-                "ja": ("言葉は 60 字・10 個までです", "1000 km まで", "6000 分までです", "200 字で切って", "`normalized/activities.json`", "（「,」でも区切れます）", "「、」で区切ると", "（下と上は合わせて 1 つです）"),
+                "en": ("up to 60 characters in all, commas included, and 10 words (a word given twice counts once)", "up to 1000 km", "up to 6000", "cut at 200 characters", "`normalized/activities.json`", "(、 separates them too)", "with a comma", "(a least and a most count as one)"),
+                "ja": ("言葉は、「、」も含めて全部で 60 字まで、10 個までです（同じ言葉は 1 つに数えます）", "1000 km まで", "6000 分までです", "200 字で切って", "`normalized/activities.json`", "（「,」でも区切れます）", "「、」で区切ると", "（下と上は合わせて 1 つです）"),
             }[language]
             for words in numbers:
                 with self.subTest(language=language, number=words):
@@ -2591,8 +2607,8 @@ class GuiGuideTest(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         order = (
             "### Who this is for\n", "### Use it with the GUI\n", "### What you get\n", "### Try it\n",
-            "(#what-v210-adds)", "## Why this project\n", "### Built from a runner's own workflow\n",
-            "## Install\n", "## Non-goals\n", "## What v2.1.0 adds\n", "## What v1.3.0 adds\n",
+            "(#what-v220-adds)", "## Why this project\n", "### Built from a runner's own workflow\n",
+            "## Install\n", "## Non-goals\n", "## What v2.2.0 adds\n", "## What v2.1.0 adds\n", "## What v1.3.0 adds\n",
             "### Evidence-backed observation contracts\n", "## Community\n",
         )
         places = [readme.index(part) for part in order]
@@ -2607,7 +2623,7 @@ class GuiGuideTest(unittest.TestCase):
         # the steps of the GUI begin with the request of the Export, which
         # takes time.
         self.assertIn(
-            "What each release added and changed is in [What v2.1.0 adds](#what-v210-adds)",
+            "What each release added and changed is in [What v2.2.0 adds](#what-v220-adds)",
             section(readme, "Start here"),
         )
         steps = readme[readme.index("### Use it with the GUI\n") : readme.index("### What you get\n")]
@@ -2670,7 +2686,7 @@ class GuiGuideTest(unittest.TestCase):
                     "the Command Prompt of Windows does not take them",
                     "double-click **Install Certificates.command**",
                     f"[python.org describes]({mac_doc})",
-                    "`Ctrl+C` in that window can stop the GUI, and cancel a normalization that runs",
+                    "`Ctrl+C` in either window can stop the GUI, and when it does, a normalization that runs is canceled too",
                     "| A line that starts with `ERROR [SHORTCUT_` | The icon could not be made; this app is installed. |",
                     "right after `/Users` on macOS or `C:\\Users` on Windows",
                     "write `USER` in its place",
@@ -2704,7 +2720,7 @@ class GuiGuideTest(unittest.TestCase):
                     "Windows のコマンドプロンプトでは動きません",
                     "「Install Certificates.command」をダブルクリックして、入れるのを終えます",
                     f"[python.org の説明]({mac_doc})",
-                    "その窓で Ctrl+C を押すと、GUI が止まり、実行中の正規化も取り消されることがあります",
+                    "どちらの窓でも、Ctrl+C を押すと GUI が止まることがあり、そのときは実行中の正規化も取り消されます",
                     "| `ERROR [SHORTCUT_` で始まる行 | アイコンを作れませんでした。このアプリは入っています。 |",
                     "macOS では `/Users`、Windows では `C:\\Users` のすぐあと",
                     "`USER` に書き換えます",
@@ -2723,7 +2739,7 @@ class GuiGuideTest(unittest.TestCase):
                     "実行中の正規化も、最後まで動きます",
                     "実行中の正規化があれば、そのページに出ます",
                     "前の GUI でしていることは出ません",
-                    "ブラウザの履歴からも開けません",
+                    "ブラウザーの履歴からも開けません",
                     "その正規化が終わるまでは、✓ を入れて「目印のファイルを消す」を押さないでください",
                 ),
                 "GUI を終える": ("130 は取り消した実行のコードで、このアプリのエラーではありません",),
@@ -2763,12 +2779,12 @@ class GuiGuideTest(unittest.TestCase):
                 "What you need": (
                     "You may also install this app first and read **How to use** before you request it",
                     "(on Windows, the line says that it is not recognized)",
-                    "do not install them in that window (do not choose **Install** there), and go on to step 2",
+                    "do not choose **Install** in that window, choose the button that closes it without doing anything, and go on to step 2",
                     "it installs the certificates that Python uses for secure connections",
                     "the folder named like **Python 3.14** in **Applications** of the Finder",
                     "open a new PowerShell window, and run `py --version`",
                     "**Installed apps** is under **Apps** in the Settings of Windows (**Apps & features** on Windows 10)",
-                    "when you do not know whether you may remove it, keep it",
+                    "when you do not know whether you may uninstall it, leave it installed",
                     "close every window of the terminal (on macOS, quit the Terminal with **Terminal** > **Quit Terminal**"
                     " in its menu), open it again",
                     "copy it with the copy button at the top right of its box",
@@ -2832,14 +2848,14 @@ class GuiGuideTest(unittest.TestCase):
                 "用意するもの": (
                     "このアプリを先に入れて、画面の「使い方」を見てからリクエストしてもかまいません",
                     "（Windows では「認識されません」か「is not recognized」）",
-                    "その窓では入れずに（そこで「インストール」を押さずに）、2 に進みます",
+                    "その窓では「インストール」を押さずに、何もしないで窓を閉じるボタンを押してから、2 に進みます",
                     "Python が安全なつながりに使う証明書を入れます",
                     "「Python 3.14」のような名前のフォルダーにあります",
                     "新しい PowerShell の窓を開いて、`py --version` を動かします",
                     "「インストールされているアプリ」は、Windows の設定の「アプリ」の中にあります（Windows 10 では「アプリと機能」）",
-                    "外してよいか分からないときは、外さずに知らせてください",
+                    "アンインストールしてよいか分からないときは、そのままにして知らせてください",
                     "ターミナルの窓をすべて閉じてから（macOS では、メニューの「ターミナル」→「ターミナルを終了」で終えてから）開き直して",
-                    "枠の右上のコピーのボタンで写してから",
+                    "枠の右上のコピーのボタン（GitHub でこの手引きを見ているときに出ます。ほかで見ているときは、1 行を選んで写します）で写してから",
                     "どのバージョンでも、この 1 行を使えます",
                     "`ERROR [SHORTCUT_` で止まったときは、ごみ箱へ入れる要はありません",
                     "| Python 3.11 以降を入れてターミナルを開き直し、",

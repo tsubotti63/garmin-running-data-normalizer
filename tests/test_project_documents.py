@@ -83,6 +83,60 @@ def test_a_release_candidate_sends_its_readers_to_the_stable_release() -> None:
     assert "ふつうは、上の安定版を入れてください" in japanese
 
 
+def test_the_stable_release_keeps_no_paragraph_of_a_candidate() -> None:
+    # v2.2.0 K6a (the checker's opinion on the partial guard of K6a): the tests
+    # of a release candidate here return early for the stable release, so the
+    # stable release checks that the README and its Japanese entry keep no
+    # paragraph of a release candidate and no line that installs from TestPyPI.
+    from garmin_running_data_normalizer import __version__
+    from scripts.validate_public_product_state import CURRENT_STABLE_VERSION
+
+    if __version__ != CURRENT_STABLE_VERSION:
+        return
+    readme = flowing("README.md")
+    japanese = flowing("README.ja.md")
+    for text in (readme, japanese):
+        assert "test.pypi.org" not in text
+        assert "TestPyPI" not in text
+    assert "Implementation candidate" not in readme
+    assert "試しのバージョン" not in japanese
+
+
+def test_the_lines_that_install_a_version_install_the_current_stable_release() -> None:
+    # v2.2.0 K6a (the checker's opinion A on the second run of the partial
+    # guard of K6a): the lines of the READMEs, the guides, Getting Started,
+    # and the Quick Start that install a version of this app install the
+    # current stable release, so that a user is not given an earlier one; the
+    # history of the migration notes is not read. While the source is a
+    # release candidate, the README installs that candidate from TestPyPI too
+    # (stage K4), and only its line is left out: any other candidate is wrong
+    # (Codex's review of the diff of K6a). The whole version is read, up to a
+    # space, a mark of Markdown, or the end of a statement, so that 2.2.0-rc2
+    # or 2.2.0+local is never read as 2.2.0 (its second review).
+    import re
+
+    from garmin_running_data_normalizer import __version__
+    from scripts.validate_public_product_state import CURRENT_STABLE_VERSION
+
+    found = []
+    for name in (
+        "README.md",
+        "README.ja.md",
+        "docs/gui_guide.md",
+        "docs/gui_guide.ja.md",
+        "docs/getting_started_from_garmin_export.md",
+        "docs/product_quick_start.md",
+    ):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        for version in re.findall(r"garmin-running-data-normalizer==([^\s`'\"<>()\[\]{}|,;&]+)", text):
+            version = version.rstrip(".")
+            if version == __version__ and version != CURRENT_STABLE_VERSION:
+                continue
+            found.append((name, version))
+    assert found
+    assert [item for item in found if item[1] != CURRENT_STABLE_VERSION] == []
+
+
 def test_the_readme_says_which_release_candidate_it_is() -> None:
     # v2.2.0 K4d: the paragraph of the candidate says which release candidate
     # of its version it is ("the first", "the second"), as the number after rc
@@ -144,27 +198,38 @@ def test_a_release_candidate_says_how_to_try_it_beside_the_stable_release() -> N
         "Both versions use one settings file, `gui-settings.json` in the folder `garmin-running-data-normalizer`",
         "The lines give Production PyPI too, so that pip finds the dependencies that TestPyPI may not provide, "
         "such as `tzdata` on Windows; pip looks for each package on both.",
+        f"To keep the settings of v{stable} as they are, copy the file before you try it, and put it back with both GUIs "
+        "stopped; do not open the two GUIs at the same time.",
+    ):
+        assert sentence in readme, sentence
+    # The settings file of format 2 and the marks are new in 2.2.0, so that
+    # only a candidate of 2.2.0 says what v2.1.0 does with them; a later
+    # candidate that keeps the format says otherwise (Codex's review of the
+    # diff of K6a).
+    first_of_format_2 = rc.startswith("2.2.0rc")
+    for sentence in (
         f"Once v{rc} saves its settings, v{stable} does not use them and starts as at a first launch, without writing over them; "
         f"v{rc} also remembers the timezone of the last run that made an output.",
         f"**Forget the remembered settings…** of v{stable} removes that file, with what v{rc} remembered; that of v{rc} "
         "also removes the marks, which cannot be restored. Neither removes the Snapshot Store or the outputs.",
-        f"To keep the settings of v{stable} as they are, copy the file before you try it, and put it back with both GUIs "
-        "stopped; do not open the two GUIs at the same time.",
-    ):
+    ) if first_of_format_2 else ():
         assert sentence in readme, sentence
     for sentence in (
         f"同じ入力・タイムゾーン・オプションなら、正規化・出力・保管場所は v{stable} と同じです。",
         "この環境からアイコンも作らないで",
         "その 1 行 （Mac と Windows PowerShell）は、英語の README の [Install](README.md#install) にあります。",
         "2 つのバージョンは、設定のファイルを 1 つ使います",
-        f"v{rc} が設定を保存すると、v{stable} はその設定を使わず、初めての起動のように始まります。",
-        f"上書きはしません。v{rc} は、出力を作れた最後の正規化のタイムゾーンも覚えます。",
-        f"v{stable} の「覚えた設定を消す…」はそのファイルを消し、v{rc} が覚えたものも消えます。",
-        f"v{rc} のものは見るページの印も消し、印は元に戻せません。",
         "保管場所と出力は消しません。",
         f"v{stable} の設定を残したいときは、試す前にそのファイルの写しを取り、",
         "2 つの GUI を止めてから戻してください。2 つの GUI を同時に開かないでください。",
     ):
+        assert sentence in japanese, sentence
+    for sentence in (
+        f"v{rc} が設定を保存すると、v{stable} はその設定を使わず、初めての起動のように始まります。",
+        f"上書きはしません。v{rc} は、出力を作れた最後の正規化のタイムゾーンも覚えます。",
+        f"v{stable} の「覚えた設定を消す…」はそのファイルを消し、v{rc} が覚えたものも消えます。",
+        f"v{rc} のものは見るページの印も消し、印は元に戻せません。",
+    ) if first_of_format_2 else ():
         assert sentence in japanese, sentence
 
 

@@ -1,5 +1,43 @@
 # Migration Notes
 
+## v2.1.0 to v2.2.0
+
+v2.2.0 does not require data migration. Existing Snapshot Stores load and
+verify as before, with the same Snapshot lifecycle contract, policy registry,
+and store format. For the same input, timezone, and options, the processing
+and the outputs are those of v2.1.0, apart from `product_version` `2.2.0`,
+`parser_version` `2.2.0` in what is made from a Snapshot Store, and the values
+that include them.
+
+- Update as [Update to a new version](gui_guide.md#update-to-a-new-version)
+  of the GUI Guide says: stop the GUI first, on macOS as on Windows, and run
+  the line of the guide of v2.2.0, which installs into the same virtual
+  environment and makes the icon again. The Snapshot Store and the outputs
+  stay as they are.
+- The view page and `series` open only outputs made by this version.
+  `validate-handoff`, `doctor --run-output`, `support-bundle`, and `series` of
+  v2.2.0, and the view page, stop for an output of v2.1.0 with
+  `OUTPUT_OTHER_VERSION` and name the version that made it; for an output of
+  v1.3, which passes the checks, `series` and the view page stop with
+  `SERIES_OUTPUT_OTHER_VERSION`. The GUI shows the change since an earlier
+  output only for an output of the same version. The files of an earlier
+  output stay as they are and can still be read; to look at its numbers,
+  normalize its Export again with v2.2.0 into a new folder.
+- The settings file of the GUI becomes format 2: v2.2.0 reads a file of
+  format 1 and writes it again as format 2, with the layouts, the view of the
+  view page, and the timezone of the last run that made an output. The marks
+  of the view page are in a file of their own next to it, `gui-marks.json`.
+- Going back to v2.1.0: v2.1.0 does not use a file of format 2 and starts as
+  at a first launch, without writing over it, so that what v2.2.0 remembers is
+  kept for a later return to v2.2.0. **Forget the remembered settings…** of
+  v2.1.0 removes the settings file, and the marks stay; that of v2.2.0 removes
+  both. See [Update to a new version](gui_guide.md#update-to-a-new-version)
+  in the GUI Guide.
+- The commands and options of the CLI are unchanged. `series` takes no
+  conditions on the activities, which the view page has from v2.2.0.
+
+See the [v2.2.0 Release Notes](release_notes/v2.2.0.md).
+
 ## v2.0.1 to v2.1.0
 
 v2.1.0 does not require data migration. Existing Snapshot Stores load and

@@ -2,8 +2,10 @@
 
 - Status: design revised on 2026-10-11; implemented in v2.0.0, whose `gui`
   command opens the GUI. The view page and the colors of the page are added
-  in v2.1.0; the sections marked v2.1.0 describe them.
-- Applies to: stable v2.1.0
+  in v2.1.0; the sections marked v2.1.0 describe them. What v2.2.0 adds to
+  the view page, and the timezone that the settings remember, are described
+  where the text says v2.2.0.
+- Applies to: stable v2.2.0
 - Authority: maintainer design record agreed by the Human maintainer on
   2026-10-10 and revised by the Human maintainer's decisions of 2026-10-11.
   Product contracts, tests, and the stable release remain the behavior
@@ -53,6 +55,7 @@ output and exit contracts.
 | Architecture | A browser page served by the installed package on the loopback address `127.0.0.1`. Processing runs in the local Python with the same functions as the CLI, and results are written directly to local folders. |
 | Scope of 2.0.0 | The single-page GUI with Snapshots and ZIP input, and the data-handling and CLI changes in this document. |
 | Scope of 2.1.0 | The view page in the tab next to the normalization page, which shows the numbers of an output that this version made as panels on one time axis; the `series` command, which writes the same numbers to a CSV file; and the colors of the page. Nothing is sent, and the numbers are not interpreted (decisions 20261026-9, 20261026-10, and 20261026-11). |
+| Scope of 2.2.0 | What the view page adds: layouts of items; comparing years in rows, overlaid, as running totals, as a calendar, and as a table, also by race day; marks and the list of activities; the other views (points, spread, a summary, by shoes); saving a chart as an SVG picture; and conditions on the activities. The view and the timezone of the normalization are remembered. Nothing is sent, and the numbers are not interpreted. |
 | CLI | `gui` is the new command. `run-all`, `doctor --input`, and `snapshot register` also accept a ZIP file. Errors, pre-run checks, warning totals, and cancellation are aligned with the GUI. |
 | Languages | English and Japanese at first, from message catalogs; more languages can be added as catalogs. CLI messages and generated output stay in English. |
 | Dependencies | No new runtime dependency. The GUI uses the standard library, its own static files, a web browser on the same machine, and the operating system's own file dialog. |
@@ -1783,10 +1786,18 @@ alone, and reduced motion.
 - The help panel is a complementary landmark, not a dialog, because it does
   not cover the page. Opening it, or one of its parts, moves focus to the
   heading of that part; Escape inside it closes it (stage B1b).
-- An information button is a disclosure. Its name starts with its visible
-  word and adds what it explains, such as "About Timezone for local dates and
-  times". When it opens, a hidden live region says the text of its
-  explanation once, and focus stays on the button (stage C1).
+- An information button of the normalization page is a disclosure. Its name
+  starts with its visible word and adds what it explains, such as "About
+  Timezone for local dates and times". When it opens, a hidden live region
+  says the text of its explanation once, and focus stays on the button
+  (stage C1).
+- An information button of the view page is a disclosure too, without that
+  live region: opening or closing it changes `aria-expanded` and shows or
+  hides its text, so a screen reader says the state of the button, and the
+  text is read where it opens, after the button. The live regions of the
+  view page speak for the cross line, the list, loading, and the states of
+  the page, never for an explanation that opens (this design follows the
+  page in v2.2.0).
 - The view page (v2.1.0) names each chart and moves its cross line with the
   keys, and a hidden live region speaks only when the keys move the line (see
   [The view page](#the-view-page-v210)). Its buttons that show only an icon
@@ -1900,6 +1911,8 @@ alone, and reduced motion.
 | E | Stable 2.0.0 release: the documents of v2.0.0; the icon and the line that installs this app (v2.0.0rc3); the pictures of the icon and of the tab of the browser, and the guides that answer what a first reader asked (v2.0.0rc4, also checked on a physical Windows machine); the answers of the guides, Python 3.15 in the CI, and the limit of the nesting of JSON (v2.0.0rc5); and the version 2.0.0 |
 | G0–G4 (v2.1.0) | The view page: its design and texts (G0), its numbers (G1, #165), the `series` command (G2, #166), the colors of the page (G3a, #167), its server (G3b-1, #168) and its page (G3b-2, #169), and this design (G4) |
 | G5–G7 (v2.1.0) | An hour before the server stops by itself, after a check in Safari (G5p); a release candidate on TestPyPI, checked on macOS and a physical Windows machine and read by a new AI session; then the documents that users read, the version 2.1.0, its publication, and its record |
+| K1–U3 (v2.2.0) | What the view page adds, in pull requests #177 to #202 and #205: the layouts, comparing years and the calendar, marks, race days, and the list of activities, the other views and the summary, saving a picture, by shoes, conditions on the activities, and the words and looks that the checks of the release candidate found |
+| K4–K7 (v2.2.0) | Two release candidates on TestPyPI: 2.2.0rc1, checked on macOS and a physical Windows machine and read and used by new AI sessions, and 2.2.0rc2, with those words and looks, checked on macOS; then the documents that users read, the version 2.2.0, its publication, and its record |
 
 Installing a release candidate from TestPyPI used Production PyPI as an
 extra index for dependencies, such as `tzdata` on Windows, that TestPyPI may

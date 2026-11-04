@@ -4,6 +4,25 @@ This file records factual Garmin Running Data Normalizer product changes. The
 Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
 Platform maintains its own separate changelog.
 
+## v2.2.0 — stable Production release of the views
+
+Status: published as the annotated tag, the latest stable GitHub Release, and a
+verified Production PyPI distribution.
+
+- Adds to the view page layouts of items, comparisons of years (also by race
+  day, and as a calendar), marks and the list of the activities of a period,
+  other views of the same numbers, a summary, conditions on the activities,
+  and saving what it shows as an SVG image.
+- Remembers the view and the timezone of the last run that made an output,
+  in a settings file of format 2, which v2.1.0 does not use.
+- Fixes three problems of 2.1.0 in the GUI: the timezone of a later launch,
+  a settings file over 64 KiB, and refused connections under a heavy load.
+- Preserves the processing, the 17 datasets, 247 fields, stable keys, the
+  Snapshot lifecycle contract and policy registry `v1.0`, and the
+  `0 / 0 / 3 / 2` Product exit mapping. Outputs of v2.1.0 are refused by the
+  checks of v2.2.0, as for every other version; the view page and `series`
+  read only outputs of this version.
+
 ## v2.1.0 — stable Production view release
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a
