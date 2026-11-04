@@ -16,7 +16,9 @@ The source Synthetic Run-All completed with `PASS_WITH_WARNINGS`, exit code 0,
 one detected/processed Activity and one Activity record, three warnings, zero
 errors, 17 dataset inventory entries, and 50 generated files. Its deterministic
 output digest was
-`7befbd87574e0d6fffd45302d5f065b99c7f90f2a8eb9c5135a18f238162b380`.
+`7befbd87574e0d6fffd45302d5f065b99c7f90f2a8eb9c5135a18f238162b380`
+when this file last recorded it, in stage A3d-2b of the work towards v2.0.0
+(the package version was then 1.7.1); it is kept as the record of that run.
 A repeated run produced byte-identical output.
 
 The tracked fictional chart input aggregates to:
@@ -39,7 +41,9 @@ python scripts/generate_first_user_conversion_assets.py --run-all-output workspa
 
 The generator uses only the completed Synthetic Run-All handoff and the tracked
 fictional analysis CSV. Re-running it from the same inputs produces identical
-SVG bytes.
+SVG bytes. A Run-All of a later version records that version, so its digest
+differs from the one above, and the generator checks the digest of the
+current version; the SVG files come out the same.
 
 ## Accessibility and safety
 

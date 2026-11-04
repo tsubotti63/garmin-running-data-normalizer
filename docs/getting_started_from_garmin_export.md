@@ -2,7 +2,7 @@
 
 This guide takes a first-time user from an official Garmin Account Data Export
 to a completed local Run-All handoff with the CLI. It applies to the current
-stable v2.1.0 Garmin Running Data Normalizer release published on GitHub and
+stable v2.2.0 Garmin Running Data Normalizer release published on GitHub and
 Production PyPI. To normalize from a page in the browser instead, see the
 [GUI Guide](gui_guide.md).
 
@@ -64,17 +64,17 @@ baseline from Production PyPI:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install garmin-running-data-normalizer==2.1.0
+.venv/bin/python -m pip install garmin-running-data-normalizer==2.2.0
 .venv/bin/python -m garmin_running_data_normalizer --version
 ```
 
-The version command for this guide should report `2.1.0`.
+The version command for this guide should report `2.2.0`.
 
 ### Windows PowerShell
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer==2.1.0
+.\.venv\Scripts\python.exe -m pip install garmin-running-data-normalizer==2.2.0
 .\.venv\Scripts\python.exe -m garmin_running_data_normalizer --version
 ```
 
@@ -86,7 +86,7 @@ The remaining commands in this guide call the environment's Python directly,
 so activating the environment is not required. Run them from the directory
 that contains `.venv`.
 
-The v2.1.0 release installs `tzdata` automatically on Windows. Confirm both the
+The v2.2.0 release installs `tzdata` automatically on Windows. Confirm both the
 package version and the existing IANA timezone contract with:
 
 ```powershell
@@ -95,8 +95,8 @@ package version and the existing IANA timezone contract with:
 
 Earlier maintainer-owned physical Windows validation from Production PyPI
 confirmed automatic `tzdata` installation and successful `Asia/Tokyo`
-resolution without any manual dependency install. Current v2.1.0 CI covers the
-packaged Windows path and the published v2.1.0 package retains this contract.
+resolution without any manual dependency install. Current v2.2.0 CI covers the
+packaged Windows path and the published v2.2.0 package retains this contract.
 Both remain bounded evidence rather than a universal compatibility claim.
 
 ## 4. Run one-shot normalization first
@@ -274,7 +274,8 @@ before adoption. The bounded public-safe validation is documented in
 
 Starting with v2.1.0, `series` writes the numbers that the view page of the
 GUI shows to a new CSV file, for a spreadsheet or another tool. It reads a
-completed Run-All output of this version and changes nothing in it:
+completed Run-All output of this version and changes nothing in it, and it
+takes no conditions on the activities, which the view page has from v2.2.0:
 
 ### macOS / Linux
 

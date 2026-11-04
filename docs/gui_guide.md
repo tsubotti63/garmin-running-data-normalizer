@@ -1,7 +1,8 @@
 # GUI Guide
 
-> **This guide is for v2.1.0.** v1.7.1 and earlier releases do not have the
-> GUI. [What you need](#what-you-need) says how to install v2.1.0. If you keep
+> **This guide is for v2.2.0.** v1.7.1 and earlier releases do not have the
+> GUI; the releases after v1.7.1 have it. [What you need](#what-you-need) says
+> how to install v2.2.0. If you keep
 > using v1.7.1 or an earlier release, use the command line as described in
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
 
@@ -44,32 +45,38 @@ Adding a new Export later, and the other cases, are in
   Garmin may take some time after your request before you can download the
   Export, so request it early. You may also install this app first and read
   **How to use** before you request it.
-- Python 3.11 or later, and this app, v2.1.0, which the steps below
+- Python 3.11 or later, and this app, v2.2.0, which the steps below
   install. Nothing else needs to be installed for the GUI.
 - A web browser on the same computer, in a window of a desktop or laptop
   computer. The page is not made for phones or tablets.
 - Free space for the Snapshot Store, which keeps a copy of the files of each
   Export (a file that an earlier Export had is kept once), and for a new
-  output folder.
+  output folder. You choose where the Snapshot Store is in
+  [Box 2](#box-2-snapshots), the second of the four boxes of the page of the
+  GUI.
 
 ### Install Python and this app
 
 In this guide, the terminal is the window of PowerShell on Windows, whose
 lines start with PS, and the Terminal on macOS. Paste the commands of this
-guide there: the Command Prompt of Windows does not take them.
+guide there: the Command Prompt of Windows does not take them. On macOS, the
+Terminal is in **Utilities** in **Applications** of the Finder (typing
+`Terminal` in Spotlight opens it too). On Windows, type `PowerShell` in the
+Start menu, and open **Windows PowerShell**.
 
 1. See whether Python 3.11 or later is installed: run `python3 --version` in
    the Terminal on macOS, or `py --version` in PowerShell on Windows. When the
    number after "3." is 11 or more, as in "Python 3.11.9" or "Python 3.14.0",
    you can use it: go on to step 4. When it is 10 or less, as in
-   "Python 3.9.6" or "Python 3.10.12", it is too old, and when the command is
-   not found (on Windows, the line says that it is not recognized), Python is
-   not installed: go on to step 2. When macOS opens a window that asks whether
-   to install the developer tools as you check (the terminal shows a line
-   that starts with `xcode-select`), Python is not installed either: do not
-   install them in that window (do not choose **Install** there), and go on
-   to step 2. The Python that those tools bring, such as 3.9, can be too old
-   for this app. When you installed them already, see the version again
+   "Python 3.9.6" or "Python 3.10.12", it is too old: go on to step 2. When
+   the command is not found (on Windows, the line says that it is not
+   recognized), Python is not installed: go on to step 2 too. When macOS
+   opens a window that asks whether to install the developer tools as you
+   check (the terminal shows a line that starts with `xcode-select`), Python
+   is not installed either: do not choose **Install** in that window, choose
+   the button that closes it without doing anything, and go on to step 2. The
+   Python that those tools bring, such as 3.9, can be too old for this app.
+   When you installed them already, see the version again
    with `python3 --version` once they are installed.
 2. Install Python from the page of
    [python.org](https://www.python.org/downloads/):
@@ -84,27 +91,32 @@ guide there: the Command Prompt of Windows does not take them.
      **Applications** of the Finder.
    - Windows: use **Download Python install manager**, open the downloaded
      file, and choose **Install**. This app is not checked with Python
-     installed from the Microsoft Store. Then:
+     installed from the Microsoft Store; when such a Python is installed
+     already, you may still install the install manager and go on (when
+     `py --version` shows 3.11 or later in step 3, go on to step 4). Then, as
+     step 1 showed:
      - When no Python is installed yet, as when step 1 said that `py` is not
        recognized: open a new PowerShell window, and run `py --version`.
        Starting Python with `py`, as `py --version` does, installs the latest
        Python by itself. On the way, you may be asked in English whether to
        add a folder to `PATH`, the list of folders where commands are looked
-       for; the line below uses `py`, so either answer works.
+       for: type `y` or `n`, and press Enter. The line of step 4 uses `py`,
+       so either answer works.
      - When an older Python is installed already, `py` starts that one, as
        when step 1 showed 3.10 or earlier: then run
        `pymanager install default` in PowerShell, which installs the latest
        Python. Then open a new PowerShell window and run `py --version` again.
        When it still shows the older Python, it is usually because the Python
-       Launcher that came with the older Python takes the `py` command: remove
+       Launcher that came with the older Python takes the `py` command: uninstall
        the Python Launcher in **Installed apps**, as
        [python.org describes](https://docs.python.org/3/using/windows.html),
        open a new PowerShell window, and check again. **Installed apps** is
        under **Apps** in the Settings of Windows (**Apps & features** on
        Windows 10). Keep the Python install manager and Python 3.11 and later.
-       When it still shows the older Python, remove Python 3.10 and earlier
-       too, and check again. Other apps may use the older Python: when you do
-       not know whether you may remove it, keep it, and tell us
+       When it still shows the older Python, uninstall Python 3.10 and
+       earlier too, and check again. Other apps may use the older Python:
+       when you do not know whether you may uninstall it, leave it installed,
+       and tell us
        ([Tell us when the GUI does not open](#tell-us-when-the-gui-does-not-open)).
 3. Open the terminal again (on Windows, open a new PowerShell window), and
    see the version again with `python3 --version` (on Windows,
@@ -118,25 +130,31 @@ guide there: the Command Prompt of Windows does not take them.
    macOS, tell us
    ([Tell us when the GUI does not open](#tell-us-when-the-gui-does-not-open)).
 4. Run the line below. It makes the virtual environment `garmin-normalizer`
-   in your home folder, installs v2.1.0 in it, makes the icon that starts the
+   in your home folder (the place of the Python for this app; moving it to
+   the Trash leaves the Snapshot Store, the outputs, and the remembered
+   settings as they are), installs v2.2.0 in it, makes the icon that starts the
    GUI ([Start the GUI from an icon](#start-the-gui-from-an-icon)), and opens
    the GUI. Each part runs only after the one before it has succeeded. When
    the line makes the icon, macOS may ask whether the Terminal may use the
    desktop; choose **Allow**. Keep the terminal window open while you use the
    GUI. The line is long: copy it with the copy button at the top right of its
-   box, and paste it in the terminal.
+   box (it shows when you read this guide on GitHub; elsewhere, select the
+   line and copy it), and paste it in the terminal: press Command-V in the
+   Terminal of macOS; in the window of PowerShell, press Ctrl+V, or
+   right-click with nothing selected (a right-click with a selection copies
+   it).
 
    macOS:
 
    ```bash
-   python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.1.0 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
+   python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.2.0 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
    ```
 
    Windows PowerShell, in any version (version 5.1 has no `&&`, so that the
    parts are joined with `if ($?)`, one inside the other):
 
    ```powershell
-   py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.1.0; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
+   py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.2.0; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
    ```
 
    - When the line succeeds, the terminal shows three lines at its end, and
@@ -144,24 +162,31 @@ guide there: the Command Prompt of Windows does not take them.
      do not share it):", the address, and "Stop with Ctrl+C or the Quit button
      on the page.". The terminal then seems to stand still, because the GUI is
      running; that is as it should be. On the way, pip may say that a new
-     release of pip is available; you need not mind it. In the window of
-     PowerShell, select the address and right-click to copy it: `Ctrl+C` in
-     that window can stop the GUI, and cancel a normalization that runs.
+     release of pip is available; you need not mind it. When no browser
+     opens, copy the address on the second line and paste it into the address
+     bar of your browser ([Go back to the GUI that is open](#go-back-to-the-gui-that-is-open)).
+     In the Terminal of macOS, select the address and press Command-C; in the
+     window of PowerShell, select it and right-click. `Ctrl+C` in either
+     window can stop the GUI, and when it does, a normalization that runs is
+     canceled too.
    - When the line stops on the way, with a line of an error, no page, and the
      prompt for the next command, see
      [When the line stops on the way](#when-the-line-stops-on-the-way), set it
-     right, and then run the same line again. When you ran the line before you
-     installed Python, or with an old Python, or when it stops at the same
-     place again, first move the folder `garmin-normalizer` that it made in
-     your home folder to the Trash (the Recycle Bin on Windows), and then run
-     it again. When there is no such folder, there is nothing to move. How to
+     right, and then run the same line again. When you ran the line with an
+     old Python, or when it stops at the same place again, first move the
+     folder `garmin-normalizer` that it made in your home folder to the Trash
+     (the Recycle Bin on Windows), and then run it again. When there is no such
+     folder, there is nothing to move (a line run before Python was installed
+     has mostly made none). How to
      open your home folder follows these steps. After `ERROR [SHORTCUT_`, you
      need not move the folder.
    - To update to a new version, see
      [Update to a new version](#update-to-a-new-version).
 
-On Linux, which has no icon, leave out `--create-shortcut`. When you no
-longer use this app, see [Remove this app](#remove-this-app).
+On Linux, which has no icon, run the line for macOS, and leave out
+`--create-shortcut` (install Python 3.11 or later in the way of your Linux;
+nobody has checked the GUI on Linux by using it). When you no longer use this app,
+see [Remove this app](#remove-this-app).
 
 To open your home folder on macOS, choose **Go** > **Home** in the menu of
 the Finder. On Windows, type `%USERPROFILE%` in the address bar of File
@@ -179,10 +204,10 @@ the left column in the lines that it showed.
 
 | A line that says | The usual reason | What to do |
 |---|---|---|
-| `command not found` (macOS), or `is not recognized` (Windows) | Python is not installed, or the terminal was not opened again after you installed it. | Install Python from python.org, and open the terminal again. |
-| `'&&'` and `is not a valid statement separator` (Windows) | The line for macOS was pasted in Windows PowerShell 5.1, which has no `&&`. PowerShell ran no part of it, and nothing changed. | Run the line for Windows PowerShell in [What you need](#what-you-need) instead. There is nothing to move to the Recycle Bin. |
-| `xcode-select` (macOS) | Python is not installed, and macOS asks whether to install the developer tools. | Do not install them in that window (do not choose **Install** there); install Python from python.org, and open the Terminal again. |
-| `Requires-Python` | Python is too old (3.10 or earlier). | Install Python 3.11 or later, open the terminal again, move the folder `garmin-normalizer` in your home folder to the Trash, and run the line again. On Windows, when an older Python is installed already, follow its steps in [What you need](#what-you-need) until `py --version` shows 3.11 or later. |
+| `command not found` (macOS), or `is not recognized` (Windows) | Python is not installed, or the terminal was not opened again after you installed it. | When you have not installed Python, install it from python.org, and open the terminal again. When you have, just open the terminal again. There is nothing to move to the Trash (the Recycle Bin on Windows). |
+| `'&&'` and `is not a valid statement separator` (Windows) | The line for macOS was pasted in Windows PowerShell 5.1, which has no `&&`. PowerShell ran no part of it, and nothing changed. | Run the line for Windows PowerShell in [Install Python and this app](#install-python-and-this-app) instead. There is nothing to move to the Recycle Bin. |
+| `xcode-select` (macOS) | Python is not installed, and macOS asks whether to install the developer tools. | Do not choose **Install** in that window: choose the button that closes it without doing anything, install Python from python.org, and open the Terminal again. There is nothing to move to the Trash. |
+| `Requires-Python` | Python is too old (3.10 or earlier). | Install Python 3.11 or later, open the terminal again, move the folder `garmin-normalizer` in your home folder to the Trash (the Recycle Bin on Windows), and run the line again. On Windows, when an older Python is installed already, follow its steps in [Install Python and this app](#install-python-and-this-app) until `py --version` shows 3.11 or later. |
 | `Retrying` and `connection` | The computer cannot reach the internet, or the network of your company stops it. | Check the connection; on a computer of your company, check its rules too. |
 | `No matching distribution found`, without `Requires-Python` and `Retrying` | Python is too old (an old pip does not show the line of `Requires-Python`), or this version is not found. | Run `python3 --version` (on Windows, `py --version`). When it is 3.10 or earlier, do as for `Requires-Python` above. When it is 3.11 or later, copy the line of the guide, paste it, and run it again. |
 | A line that starts with `ERROR [SHORTCUT_` | The icon could not be made; this app is installed. | Do what [When the icon could not be made](#when-the-icon-could-not-be-made) says for the code, or start the GUI without the icon with the command for macOS or Windows in [Start the GUI](#start-the-gui), which runs the Python of the virtual environment. |
@@ -215,7 +240,7 @@ fill in the form. Without the GUI, fill in its fields in this way:
 - **Package version**: the line that `--version` shows
   ([Update to a new version](#update-to-a-new-version)); when the line
   stopped before this app was installed, the version that you were
-  installing, 2.1.0.
+  installing, 2.2.0.
 - **Sanitized reproduction**: the line that you ran. The line of this
   guide holds no name, so you may paste it as it is.
 - **Exit code**: write that you do not know it, when you do not.
@@ -223,7 +248,7 @@ fill in the form. Without the GUI, fill in its fields in this way:
   **Not tested**.
 - **Public-safe logs**: the line of the error and a few lines before it.
   When no line of an error showed, as when you do not know whether you may
-  remove an older Python, paste what `python3 --version` or `py --version`
+  uninstall an older Python, paste what `python3 --version` or `py --version`
   showed, and write what you did.
 - **Privacy confirmation**: tick the four checks once you have written
   other words in place of names.
@@ -244,7 +269,7 @@ Do not paste the address of the GUI either: it holds the key of the launch.
 ### Update to a new version
 
 The page shows the version of this app at its bottom, for example
-Version 2.1.0, and this command shows it in a new window of the terminal,
+Version 2.2.0, and this command shows it in a new window of the terminal,
 not the one where the GUI runs:
 
 macOS:
@@ -268,8 +293,10 @@ latest one marked **Latest**. When it is newer than the version that you
 have:
 
 1. On macOS as on Windows, stop the GUI first
-   ([Stop the GUI](#stop-the-gui)). When the icon started it, close the window
-   that the icon opened too. When more than one GUI is open, stop them all.
+   ([Stop the GUI](#stop-the-gui)). When the icon started it, close the
+   terminal window that the icon opened too (on Windows, it closes by itself).
+   When more than one GUI is open, stop them all (each GUI has its own
+   terminal window, the one that showed its address).
 2. Open the guide of the new version, and run the line of the guide of that
    version in the same way. The link to the GUI Guide in the README on the
    page of this app on GitHub
@@ -279,6 +306,9 @@ have:
 3. The Snapshot Store, the outputs, and the settings that the GUI remembers
    are outside the virtual environment, and stay as they are.
 
+To go back to an earlier version, run the line of the guide of that version
+too, after you stop the GUI as in step 1 (the guide of 2.1.0 is
+[gui_guide.md of v2.1.0](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v2.1.0/docs/gui_guide.md)).
 When you go back from 2.2.0 to an earlier version, such as 2.1.0, it does not
 use the settings that 2.2.0 remembered, and starts as a first launch; it does
 not write over their file. **Forget the remembered settings…** of the earlier
@@ -286,7 +316,8 @@ version forgets what 2.2.0 remembered too, such as the timezone and what the
 view page remembered. The file of the marks of the view page,
 `gui-marks.json`, stays in the folder of the settings:
 **Forget the remembered settings…** of 2.2.0 removes it, and to remove this
-app without going back to 2.2.0, remove that folder.
+app without going back to 2.2.0, move that folder to the Trash (the Recycle
+Bin on Windows) as [Remove this app](#remove-this-app) says.
 
 When you run the line while the GUI is open, the earlier GUI keeps running,
 and one more GUI opens. On Windows, a line in English that starts with
@@ -1083,14 +1114,16 @@ with "Tempo" in their names).
     window says **Separate words with a comma to take a name that has any of
     them. Case, and full and half width, do not matter.** (、 separates them
     too). An activity without a name does not meet it. The words can be up to
-    60 characters, and 10 words.
+    60 characters in all, commas included, and 10 words (a word given twice
+    counts once).
   - The distance and the duration: a value just on a bound meets it. They are
     compared as the output writes them, never as the panels or the tables
     round them. The distance can have up to three decimals (1 m) and be up to
     1000 km; the duration takes whole minutes, up to 6000. The note of the
     window says **The duration is the value of the panel of the time, not the
-    elapsed or moving time.** An activity without the value does not meet a
-    condition on it.
+    elapsed or moving time.** (The time of the panels is the duration in the
+    record of Garmin: the time of the activity as recorded.) An activity
+    without the value does not meet a condition on it.
   - Only the activities that meet every condition, and that are of the
     activity types counted, are counted.
 - As the note of the window says, **This applies to the training and
@@ -1106,13 +1139,14 @@ with "Tempo" in their names).
   view, **Compare years**, or **Full screen** shows, and when another output
   opens.
 - While there are conditions, a line with **Clear the conditions** shows just
-  under the bar of the filters, such as **Filtered by conditions (training and
+  under the filters, such as **Filtered by conditions (training and
   running-form items only): the name has “Tempo”, 8–12 km. Activities counted
   in the period: 120; meeting the conditions: 28.** (the numbers are samples).
   While comparing years (also by race day and as a calendar), it gives the
   numbers of the whole output, such as **Activities counted in the whole
   output: 120; meeting the conditions: 28.** It gives no numbers until the
-  answer of the conditions changed comes, and none while there is no panel. On
+  numbers of the conditions changed are counted, and none while there is no
+  panel. On
   the full screen, the line at the top holds the words of the conditions, not
   their numbers.
 - The panels count the activities that meet the conditions only. Where none in
@@ -1123,6 +1157,8 @@ with "Tempo" in their names).
   layouts, **Compare years** (also by race day and as a calendar),
   **Summary…** (also the period before), the activities of a period, two items
   plotted, the distribution, and the panels, tables, and counts of the shoes.
+- Even in those, only the training and running-form items follow the
+  conditions.
 - Not following them: the panels of **Body (daily)** and **Garmin estimates**,
   the first and the last day of the output and the buttons of the period, the
   years and the races to choose, the counts in the list of the activity types,
@@ -1135,15 +1171,16 @@ with "Tempo" in their names).
   is grayed, with **The data of the names is too large, so the names cannot be
   used.** (the distance and the duration can be used). Words of the name
   remembered are not used for that output: with a condition on the name only,
-  nothing is filtered by the name. The count of the button and the words of
+  nothing is filtered by the name, so that the numbers are those without
+  conditions. The count of the button and the words of
   the line still show them, and the line says **The names could not be read,
   so the words of the name are not used.** (but not while there is no panel);
   the line at the top of the full screen ends the words of the conditions with
   **(the names could not be read, so the words of the name are not used)**. A
   file of the names that is broken stops the reading of the output, as any
   file does.
-- The conditions are remembered whole, or not at all (remembered conditions of
-  another form are not used at all). They are not part of a layout, and
+- The conditions are remembered together, as one set (when the remembered
+  conditions are of a form that cannot be read, none of them is used). They are not part of a layout, and
   choosing a layout does not change them; another output keeps them too. While
   no panel shows, a change of the conditions is not remembered until a panel
   is added ([What is remembered for the next
@@ -1155,9 +1192,10 @@ with "Tempo" in their names).
 
 ### Layouts (from 2.2.0)
 
-A layout is a set of items to show as panels, in their order (six at most).
-The cards of the layouts are in two columns above the item shelf. Press a
-card, and its items become the panels, in its order. The period, the grouping,
+A layout is a set of items to show as panels, in their order (six items at
+most).
+The cards of the layouts (buttons that you press to choose a layout) are in
+two columns above the item shelf. Press a card, and its items become the panels, in its order. The period, the grouping,
 the activity types, and the conditions are not part of a layout: they are
 remembered apart ([What is remembered for the next
 time](#what-is-remembered-for-the-next-time)).
@@ -1209,8 +1247,8 @@ time](#what-is-remembered-for-the-next-time)).
 - When the item shelf is folded, **Layouts** in the narrow column at the
   left opens the cards in a small window, to choose one at once.
 - The names of the layouts are in the settings on this computer
-  ([Privacy](#privacy)). Changes of the layouts in two tabs are kept one by
-  one; a change of a layout that another tab removed says so, and the
+  ([Privacy](#privacy)). Changes of the layouts made in two tabs at once are
+  both kept; a change of a layout that another tab removed says so, and the
   layouts are read again.
 
 ### The item shelf and the panels
@@ -1309,11 +1347,11 @@ values are made):
 
 - On a panel of **Training (per activity)** or **Running form (FIT)**, press a
   period of the chart (one week, month, and so on, of the grouping), and the
-  list of the activities of that period opens just under the panel. You can
-  also select the chart, choose a period with ← or →, and press Enter (or
-  Space). One list is open at a time. The panels of body records and of
-  estimates, a panel shown as a table, and a panel without any value open
-  none.
+  list of the activities of that period opens just under the panel. With the
+  keys only, select the chart (Tab), choose a period with ← or →, and press
+  Enter (or Space). One list is open at a time. The panels of **Body (daily)**
+  and of **Garmin estimates**, a panel shown as a table, and a panel without
+  any value open none.
 - A click keeps the chart selected, so that ← and → still move the cross
   line (the period of the list stays). Enter takes you to the heading of the
   list. The period of the list has a blue frame on the chart.
@@ -1325,8 +1363,9 @@ values are made):
   list opened from the panel of power, training load, or the running form has
   one more column, of that item. A value that an activity does not have is
   "—".
-- Press the heading of a column to order the list by it; each press turns
-  the order up or down, and rows without a value go last either way. The date
+- Press the heading of a column to order the list by it; each press switches
+  between smallest first and largest first, and rows without a value go last
+  either way. The date
   and time are ordered as they show.
 - Under the list, a line such as "Value of the panel: 108.1 km (activities
   counted: 11)" gives the value of the panel for the period and how many
@@ -1344,7 +1383,7 @@ values are made):
   or **Compare years** change; a change of the language or of **Use the same
   scale for panels with the same unit** keeps it. The list is not remembered
   and never written to a file.
-- For a list and panels made from two readings of the output, see
+- Where the numbers of a list and of the panels do not agree, see
   [When the output changes while you look](#when-the-output-changes-while-you-look-from-220).
 
 ![The activities of a period: October 2026 pressed on the panel of the distance, a list of 11 activities opened just under it (made-up names of training in the column of the names), a blue frame on that month of the chart, and "Value of the panel: 108.1 km (activities counted: 11)" under the list (synthetic data made for the example)](assets/gui-guide/view-list.en.png)
@@ -1354,19 +1393,22 @@ values are made):
 - Marks are your own events on the calendar, such as races, injuries, or new
   shoes. **Marks…** above the panels opens their window: choose the kind
   (**Race**, **Injury**, **Shoes**, or **Other**), give a name of 1 to 30
-  characters and a date, and press **Add**. A mark of a span also has a
-  **Last day**. In the list of the window, each mark has **Change** and
-  **Remove** (it asks first, with **Keep it** as the first button). There can
-  be 200 marks.
+  characters and a date, and press **Add**. With a **Last day** too (for a
+  span only), the mark is a span; without one, it is a mark of one day. In
+  the list of the window, each mark has **Change** and
+  **Remove** (it asks first, and **Keep it** is the button chosen then). There
+  can be 200 marks.
 - Marks show as thin vertical lines on every panel, told apart by the form of
   the line: a race a full line (in the color of the text), shoes a dotted
-  line, another mark a dashed line, and an injury a line of dashes and dots. A
+  line, another mark a dashed line, and an injury a dash-dot line (long dashes and
+  dots in turn). A
   span is a light band whose edges, its first and last day, are the line of
   its kind. The overview gives each mark only a short line at its top,
   whatever its kind (a span at its first day). Their names are on the top
   chart (where they would meet, only their number, such as "3 marks"). Clear
   **Show marks** to hide them; this is remembered.
-- Marks never change the numbers. The top chart tells a screen reader how
+- Marks never change the numbers. The top chart tells a screen reader (the
+  software that reads the screen aloud) how
   many marks are in its period, and the names and days of up to 10; the
   other charts tell how many.
 - Marks of the kind **Race** can be compared in
@@ -1375,12 +1417,19 @@ values are made):
   settings of the GUI on this computer ([What is remembered for the next
   time](#what-is-remembered-for-the-next-time)). They are your own words, so
   they never go into an output, the Support Bundle, or the text of a report on
-  GitHub. An image you save shows their names where you put them in with
-  [Saving as an image](#saving-as-an-image-from-220), and by race day.
+  GitHub. An image you save shows them where you choose **Put in the lines
+  and names of the marks** in [Saving as an image](#saving-as-an-image-from-220)
+  while the page shows the marks, and when you save a comparison by race day.
 - Where the file of the marks cannot be read, or was written by a newer
   version of this app, the marks do not show and the file is never written
   over (**Add**, **Change**, and **Remove** are grayed, and the bar at the
-  bottom says why).
+  bottom says why). The marks of a file that a newer version wrote show in
+  that version of this app. If a file that cannot be read was edited by
+  hand, put it back as it was; if it was not, tell us
+  ([Report a problem on GitHub](#report-a-problem-on-github)). To start anew,
+  stop the GUI, and move that file to the Trash (the Recycle Bin on Windows;
+  [What is remembered for the next time](#what-is-remembered-for-the-next-time)
+  says where it is): the marks in it are gone then.
 
 ![Marks: **Show marks** and **Marks…** above the panels, the lines of the marks on every panel (a race as a full line, an injury as a band), their names on the top chart, and the window of the marks on the right (marks made up for the example)](assets/gui-guide/view-marks.en.png)
 
@@ -1409,7 +1458,7 @@ values are made):
 - Each panel has **Compare years** in its heading. It compares the item of
   that panel year by year. **Show all panels again** goes back; the panels,
   the period, and the grouping are as they were before. An output without
-  days has no years to compare, and the button is grayed.
+  any dated record has no years to compare, and the button is grayed.
 - The bar above the panels has the choices:
   - The list of items in the title (where the item compared is named): to compare another item.
   - **Show as**: **One row per year** (a row a year, with one scale for all
@@ -1419,13 +1468,18 @@ values are made):
   - **Month**: **Whole year**, or one month of each year, from January to
     December.
   - **Line**: only for an item of several lines, such as VO2 Max, by the
-    names of the key of its panel. At first, a line of the newest source (on
-    running, where it has one).
+    names of the key of its panel. At first, the line whose records start the
+    latest; where a line with the same date in its name in the key is a
+    running line, that running line (of the lines Until April 30, 2023 and
+    From May 1, 2023, mostly the second one).
   - **Show as a table**: the periods in rows and the years in columns; the
     last row has the value of the year (or of the month). * marks a period
     cut short (by an end of the output, of the year or month, or by the race
     day), and — a period that the year does not have (outside the output, or
-    a day such as 29 February that the year lacks).
+    a day such as 29 February that the year lacks). While **Compare years**
+    is open, the table stays when you change **Show as**: to bring back the
+    chart, with its legend, press **Show as a chart** or
+    **Show as a calendar**.
   - **Years**: the years of the output. At first the newest four, and
     **Up to 6 years**.
 
@@ -1464,10 +1518,12 @@ values are made):
   after the way back, and is remembered.
 - Readings: with **One row per year**, at the top right of each row; with
   **Overlay** and **Running total**, in a box beside the cross line: each
-  year's own period (for a week, its days in that year) and its value. Select
-  a chart and press ← or → to move by one period, Page Up or Page Down by 12,
-  and Home or End to an end; the periods and the values of the years are
-  then read aloud.
+  year's own period (for a week, its days in that year) and its value. At
+  first, and after a change of the grouping or of the month, they are of the
+  last period of the newest year, where the cross line stands too. Pointing at
+  a chart moves them to the period pointed at. Select a chart and press ← or
+  → to move by one period, Page Up or Page Down by 12, and Home or End to an
+  end; the periods and the values of the years are then read aloud.
 - With **Overlay** and **Running total**, each year has a color of its own: of
   the years chosen, newest first, the purple of the page, orange, teal, and
   navy (a light gray on a dark screen), and the 5th and 6th years are dashed
@@ -1477,13 +1533,14 @@ values are made):
   gets thicker and goes on top, and the other years fade. Press it again, or
   press Esc on the chart or on a year in the legend, to go back. A press away
   from the lines and the points changes nothing. The year highlighted is not
-  remembered. Comparing by race day works the same way. In forced colors, the
-  other years do not fade; the year highlighted only gets thicker.
-- A stop shows under the bar, in the words of a stop of the panels. Where
-  there are too many numbers, group by **Week** or **Month** (by **Week** with
-  one month chosen).
-- For values of the years or races made from another reading of the output
-  than the panels, see
+  remembered. Comparing by race day works the same way. In forced colors (a
+  contrast theme of Windows, for example), the other years do not fade; the
+  year highlighted only gets thicker.
+- A stop shows under the bar above the panels, in the words of a stop of the
+  panels. Where it says **There are too many numbers to show at once.**, group
+  by **Week** or **Month** (by **Week** with one month chosen).
+- Where the values of the years or races and the numbers of the panels do not
+  agree, see
   [When the output changes while you look](#when-the-output-changes-while-you-look-from-220).
 
 #### Calendar
@@ -1492,10 +1549,11 @@ values are made):
   order (when you ran, and where days without a recorded activity ran on),
   use **Calendar**.
 - **Calendar** in **Show as** makes a strip of each year: the weeks across
-  (from the week of 1 January) and the days of the week down, each day
-  colored by its value. The strips of the years chosen are one under another.
-- It goes by **Day** only, and uses no **Month** (the month chosen stays, and
-  comes back with the other ways). It cannot be used while comparing by race
+  (from the week of 1 January) and the days of the week down, Monday to
+  Sunday, each day colored by its value. The strips of the years chosen are
+  one under another.
+- It goes by **Day** only, and the choice of the **Month** is not used and
+  grayed (the month chosen stays, and comes back with the other ways). It cannot be used while comparing by race
   day. Nor can it be used for an item that can have several records a day
   (VO2 Max, the race predictions (5K, 10K, half marathon, and marathon),
   Training readiness, Acute load, Chronic load, and Load ratio); for such an
@@ -1508,11 +1566,14 @@ values are made):
   steps and, for a total or a count with days without a recorded activity
   (0), their number.
 - For a total or a count, a day without a recorded activity (0) is an outline;
-  a day without a value and a day outside the output are not drawn. A recorded
-  0 (activities of 0 km) takes the first step. With conditions, these are of
+  a day without a value and a day outside the output are not drawn. A day
+  without a recorded activity has no activity counted on it; a day without a
+  value has no value of the item (such as a day before the first activity
+  with the item). A recorded 0 (activities of 0 km) takes the first step. With conditions, these are of
   the activities that meet them.
-- At the left of a strip: the year, a period cut short, the value of the
-  year, and the value of the day chosen. The day chosen is the same day of the
+- At the left of a strip: the year (with its days where it is cut short,
+  such as **(to October 21)**), the value of the year, and the value of the
+  day chosen. The day chosen is the same day of the
   year in every strip (28 February for 29 February in a common year, and the
   nearest day of the output outside it).
 - Press a square, or select a strip and use ← and → (a week), ↑ and ↓ (a
@@ -1541,10 +1602,10 @@ values are made):
 - **Span**, in the place of the month, goes from 8, 12, 16 (at first), 20, or
   24 weeks before to the race day. It counts back from the Monday of the week
   of the race, so that every race has as many weeks. The grouping is **Week**
-  only, also for a running total. The ways to show are those of the years but
-  **Calendar**, with **One row per race** at first.
-- **Race week (to the race day)** goes from the Monday of the week of the race
-  to the race day. Where the race is not on a Sunday (or the output ends
+  only, also for a running total. The ways to show are those of the years
+  without **Calendar**, with **One row per race** at first.
+- **Race week (to the race day)**, a period of the readings and the table,
+  goes from the Monday of the week of the race to the race day. Where the race is not on a Sunday (or the output ends
   within that week), it is a period cut short, as the ends of a year are (a
   light, edged bar, a * in the table, and (partial) in the readings). The
   heading of a row gives the value of the whole span counted at once, such as
@@ -1571,9 +1632,9 @@ values are made):
   a line under the filters says so. The **Period**, ‹ ›, the days of a custom
   range, **Activity types counted**, and **Conditions…** can be used, and a
   period, activity types, or conditions changed here stay for the panels when
-  you go back (while comparing years, the period cannot be changed).
-- **Show all panels again** goes back, the focus on **Other views**. To go
-  from one of these views to another, go back to the panels first. While
+  you go back.
+- **Show all panels again** goes back, the focus (where the keys act) on
+  **Other views**. To go from one of these views to another, go back to the panels first. While
   comparing years, **Other views** is not shown.
 
 #### Plot two items
@@ -1582,7 +1643,7 @@ values are made):
   lists of the title, **Item across** and **Item up**; at first the average
   pace across and the average heart rate up, and later the two chosen last. An
   item chosen in one list cannot be chosen in the other, and the list says
-  why. The items are the 15 of **Training (per activity)** (but
+  why. The items are the 15 of **Training (per activity)** (without
   **Activities**) and **Running form (FIT)**; those of **Body (daily)** and
   **Garmin estimates** cannot be chosen.
 - A line under the title gives the numbers only: the points, the activities of
@@ -1648,9 +1709,9 @@ values are made):
   of no activity among them) and Home and End (the first and the last): the
   range and its activities are at the top right, as **10 km or more, under 11
   km: 42**, and are read out too.
-- **Show as a table** gives the activities of each range; **Show as a chart**
-  goes back. An end of a range of a value too large to write, such as a record
-  of an error, is a dash (—).
+- **Show as a table** gives the number of activities of each range; **Show as a chart**
+  goes back. An end of a range (its left or its right value) that is too large
+  to write, as a record of an error can make it, is a dash (—).
 
 ![Distribution: the bars of the distance, a range of 1 km each, with the range chosen, 10 km or more, under 11 km, framed and its activities at the top right (synthetic data)](assets/gui-guide/view-spread.en.png)
 
@@ -1680,7 +1741,8 @@ values are made):
 - A line under the title gives the numbers only: the pairs, the activities of
   the types counted in the period, and those with shoes. With conditions, the
   panels, the tables, and this line count the activities that meet them (also
-  the shoes shown, their first and last use, and their order). Under the
+  the shoes shown, the first and the last month of use that bound the dots of
+  0, the first and the last day of use in the table, and their order). Under the
   panels, **The shoes are as set in Garmin (of Garmin's gear, the shoes only).
   Their names, start and end dates, and maximum distance are the values set in
   Garmin as they are.** is always shown, and a line for each count of 1 or
@@ -1708,8 +1770,8 @@ values are made):
   data of the shoes is too large, **The data of the shoes is too large to
   read.** shows under **By shoes** in the menu, which then cannot be chosen: ↑
   and ↓ stop on it, and pressing it does nothing. Where only other periods or
-  types have shoes, it can be chosen, and the line above shows in the place of
-  the panels.
+  types have shoes, it can be chosen, and **No activity of this period and
+  these types has shoes.** shows in the place of the panels.
 - The start, the end, and the maximum distance are the values set in Garmin,
   as they are. This app says nothing from them, such as when to change shoes.
 
@@ -1719,12 +1781,15 @@ values are made):
 
 - **Summary…** above the panels opens a window with a table of the items of
   the panels: the value of each in the period shown and in the period of the
-  same length just before it, and their difference. It opens where the window
-  of **Marks…** opens, so that only one of the two is open. **Close**, or the
+  same length just before it (for **1 year** and the like, years counted by
+  the dates, so that the days can differ by one; see below), and their
+  difference. It opens where the window
+  of **Marks…** opens; only one of the windows of **Marks…**, **Summary…**,
+  and saving opens at a time. **Close**, or the
   Esc key in the window, closes it (a press outside it does not). Whether it
   was open is not remembered.
 - It can be used with panels, while years are not compared, no other view
-  shows, and the graphs are not shown alone. Meanwhile the window hides; it
+  shows, and the page is not in **Full screen**. Meanwhile the window hides; it
   shows again, and counts again, when they end.
 - Its rows are the items of the panels, in their order. An item of several
   lines, such as VO2 Max, has a row for each line, named as in the legend; a
@@ -1737,8 +1802,9 @@ values are made):
 - A value is that of the whole period, counted with the same **Activity types
   counted** and conditions as the panels, in the way of its item in this
   table. Its words are those beside the heading of a panel by week, month, or
-  year; by day, that heading says other words, but the summary counts the same
-  way. A mean of the records weighs a day with several records as many times.
+  year; by day, that heading says **Value of the day** for an item such as
+  **Mean of the days with a value**, and **Every record (points)** for a mean
+  of the records, but the summary counts the same way. A mean of the records weighs a day with several records as many times.
 
 | How it is counted | Items |
 | --- | --- |
@@ -1751,21 +1817,27 @@ values are made):
 | Mean per day of the days with a value | Steps |
 | Mean of the records (combined by this app) | VO2 Max; Race prediction 5K; Race prediction 10K; Race prediction half marathon; Race prediction marathon; Training readiness; Acute load; Chronic load; Load ratio |
 
+- The steps are a total of each day, so that they are written as **Mean per
+  day of the days with a value**, but they are counted as **Mean of the days
+  with a value** is.
 - A period without a value says **No value**. An item that is a total or a
   number of recorded activities is 0 for a period without an activity of the
   types counted (that meets the conditions, where there are some) where the
   period reaches between the first and the last such activity in the output,
   and then has a difference; a period with activities but none with a value of
-  the item, and one that does not reach between them, says **No value**.
-- The period before is, for **1 year**, **3 years**, and so on, as many years
-  of the calendar up to the day before the period shown; for a range of
-  **Custom range…**, the same number of days just before it.
+  the item, and one that does not reach between them, says **No value** (but
+  where the period before is wholly outside the output, it is a dash (—), as
+  below).
+- The period before is, for **1 year**, **3 years**, and so on, as many years,
+  counted by the dates, up to the day before the period shown; for a range of
+  **Custom range…**, the same number of days just before it, and the column
+  gives the days, such as **The 31 days before**.
 - The line under the title gives the days that the two periods count, in the
   output. They can differ from those of the period moved with ‹: ‹ moves by
   the same number of days, so where the year shown has 29 February, the period
   it moves to and the year before differ by a day; and at the first day of the
-  output, ‹ keeps the length and moves the period back into the output. ‹ and
-  › make the period a range, and the columns then say **This period** and the
+  output, ‹ keeps the length and moves the period back into the output.
+- ‹ and › make the period a range, and the columns then say **This period** and the
   days of the range moved (**The 365 days before** from **1 year**, or 366 for
   a year with 29 February).
 - A difference is the value now minus the value before, as a sign and a number
@@ -1780,36 +1852,46 @@ values are made):
   the total ascent, a period with records in a part of it only has a smaller
   total, and the difference can be large.
 - The window takes the focus on its title. Tab goes to **Close** and to the
-  table, which ↑ and ↓ scroll (its heads stay).
+  table, which ↑ and ↓ scroll (its row of headings stays in place).
 
 ![The summary: the window of Summary… above the panels, with the last year, the year before, and their difference, and a row for each line of VO2 Max (synthetic data)](assets/gui-guide/view-recap.en.png)
 
 ### Saving as an image (from 2.2.0)
 
-- Makes what you see one image file in SVG. **Save as image…** is right after
+- Makes what you see one image file in SVG (a format of images that stay sharp
+  when enlarged, which a browser opens). **Save as image…** is right after
   **Summary…** in the row above the panels, and right after **Show as a
   table** in the bars of **Compare years**, **Plot two items**,
   **Distribution**, and **By shoes**. It opens a window under the row of the
   button; only one of the windows of **Marks…**, **Summary…**, and saving
   opens at a time.
 - The row above the panels does not show while years are compared, another
-  view is shown, or in full screen, where the window hides too and shows again
-  after it. Without panels, its **Save as image…** cannot be pressed. When the
-  view changes, the window closes.
+  view is shown, or in full screen. Without panels, its **Save as image…**
+  cannot be pressed.
+- The window closes when you go from the view it opened in (the panels,
+  **Compare years**, or another view) to another view. In full screen it does
+  not close but hides, and shows again after it (the window of **Summary…**
+  hides while years are compared, another view is shown, or in full screen,
+  and shows again after them).
 - Each time the window opens, its choices are the first ones again: all the
   panels, the light colors, and no marks (nothing is remembered).
 - With the panels, **Panels to save** saves all of them or **This panel
-  only**, **Colors** gives **Light** or **As on the screen**, and **Marks**
+  only** (the panel chosen in the list beside it; at first, the top one of
+  those not shown as a table), **Colors** gives **Light** or **As on the
+  screen**, and **Marks**
   can **Put in the lines and names of the marks**. A panel shown as a table
   does not go in, and where the page shows no marks, no mark goes in.
-- In the other views, the window names in one line what it saves, and what you
-  see becomes one picture, without the choices of the panels and the marks. By
+- In **Compare years** and the other views, the window names in one line what
+  it saves, and what you see becomes one picture, without the choices of the
+  panels and the marks. By
   race day, the names of the races, which are the names of the marks, always
   show. By shoes, the window also says **The names of all the shoes show too,
   also of the rows not on the screen.** With words of the name in the
   conditions, the window of every view also says **The words of the conditions
   show too.**
-- The name of the file holds dates (or years) and the keys of the items only
+- The name of the file holds dates (or years) and the keys of the items
+  (short names of the items, such as `dist` for the distance; not a secret
+  like the key of the launch) only
   (for example `garmin-view_2025-10-22_2026-10-21_dist-pace-hr.svg`): the
   years compared, oldest first (`garmin-compare_2018-2022-2025_dist.svg`), the
   days of the races, oldest first (never their names), or the period and the
@@ -1821,16 +1903,19 @@ values are made):
   the charts, the time axis, and a line under them (the period, the grouping,
   the activity types counted, the conditions where there are some, and the
   name and version of this app; where the names could not be read, also that
-  the words of the name were not used); in the other views, a title line, the
+  the words of the name were not used); in a comparison of years and in the
+  other views, a title line, the
   legend of a calendar (the rule of its steps only), the words that the page
   shows under the points or the ranges, and a line of the years or race days
   compared or of the width of a range. A panel or a year without values goes
   in with the words that the page shows for it. By shoes, every panel goes in,
   also those scrolled out of the screen, with the time axis and the notes.
 - The overview, the list, the buttons, the name of the folder of the output,
-  the cross line, and the frames that show the day, point, or range chosen,
-  with the readings of its values, never go in; the points, the bars, and the
-  days themselves do.
+  the cross line (the vertical line at the period whose values are read), and
+  the
+  frames that show the day, point, or range chosen, with the readings of its
+  values, never go in; the points, the bars, and the days themselves do, and
+  the lines of the marks do where **Marks** puts them in.
 - A year highlighted when comparing years goes in as it shows: the other years
   faint, and its name bold in the legend.
 - **Save** hands the file to the browser as a download, which the browser
@@ -1843,11 +1928,12 @@ values are made):
   a table; an answer on its way; numbers that stopped loading; for two items
   plotted or a distribution, a period without values to draw; by shoes, a
   period and types (and conditions) without an activity with shoes; a chart
-  without room to be drawn; or a panel chosen that no longer shows.
+  without room to be drawn (widen the window of the browser); or a panel
+  chosen that no longer shows.
 - When, at the press, the picture to save is no longer the one that the window
   showed, or the image could not be made, the window says so. Where it can no
-  longer save at the press, it says the reason that it shows by itself, such
-  as an answer on its way, which goes with that reason. The focus stays on
+  longer save at the press, it says the reason that it would show by itself,
+  such as numbers on their way; those words go when the reason does. The focus stays on
   **Save** where it can still be pressed, and goes to the title of the window
   where it cannot; check the window, and press **Save** again when it can
   save.
@@ -1860,28 +1946,37 @@ values are made):
 
 ![Saving as an image: the window of Save as image… above the panels, with all the panels and the light colors chosen (synthetic data)](assets/gui-guide/view-save.en.png)
 
-![A picture saved: the overlay of a comparison of years, saved as an SVG file and opened in a browser, without its line at the bottom (synthetic data)](assets/gui-guide/view-save-picture.en.png)
+![A picture saved: the overlay of a comparison of years, saved as an SVG file and opened in a browser (this picture leaves out the line at the bottom of the image saved; synthetic data)](assets/gui-guide/view-save-picture.en.png)
 
 ### When the output changes while you look (from 2.2.0)
 
-- At every request of numbers, the view page checks that the output is as it
-  was, and reads it again where it changed (the same output normalized again).
-  It also reads it again when the date changes (to leave out records after
-  today). A change of the file of the names (`normalized/activities.json`)
-  alone reads it again too.
-- Right after you normalize again, or right after the date changes, the values
-  of the years or the races in **Compare years** (also by race day), the
-  activities of a period, and the table of **Summary…** can come from another
-  reading than the panels beside them. Compare again, open the list again, or
-  open the summary again, for the new reading.
-- In the other views (two items plotted, a distribution, and the shoes), the
-  values can come from another reading than the panels too. Back from another
-  view, the panels are asked again where the period, the activity types, or
-  the conditions were changed while it showed, and where an answer of that
-  view was of another reading than the panels (for example, of the output read
-  again after them); otherwise they stay as they were read before, also where
-  the output changed after the last answer of that view. Choose the period
-  again for the new reading.
+- Each time it gives numbers, the view page checks that the output is as it
+  was, and reads the output again where it changed (where the same output
+  folder was normalized again, or only the file of the names,
+  `normalized/activities.json`, changed). It also reads it again when the
+  date changes (to leave out records dated after today, if any: a wrong date
+  of a clock, for example, can make them). The page does not say that
+  it read the output again, and the numbers already shown stay as they are.
+  Where you normalize again while the view page is open, or the date
+  changes, press the button of the period again on the panels (the same
+  period will do), and they are of the output as it is now; open a comparison
+  of years, a list, or the summary again as below (while comparing years, the
+  buttons of the period are grayed).
+- So right after you normalize again, or right after the date changes, the
+  numbers of the panels and those of the years or the races in **Compare
+  years** (also by race day), of the activities of a period, and of the table
+  of **Summary…** may not agree: one of them was counted before the output
+  changed. Open the comparison again, open the list again, or open the
+  summary again, and each counts again from the output as it is now.
+- The other views (two items plotted, a distribution, and the shoes) may not
+  agree with the panels in the same way. Back from another view, the panels
+  are counted again where the period, the activity types, or the conditions
+  were changed while it showed, and where that view gave numbers of an output
+  read again after the panels; otherwise the panels keep their numbers, also
+  where the output changed after the last numbers of that view. Where the
+  numbers of the panels look old, press the button of the period again (the
+  same period will do), and the panels count again from the output as it is
+  now.
 
 ### What is remembered for the next time
 

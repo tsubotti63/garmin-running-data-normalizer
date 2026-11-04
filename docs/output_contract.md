@@ -2,13 +2,12 @@
 
 ## Status and authority
 
-- Current stable contract: v2.1.0
+- Current stable contract: v2.2.0
 - Compatibility family: stable 2.x
-- Implementation candidate: v2.2.0rc2 (TestPyPI only)
 
-This document describes the current stable contract, v2.1.0, which keeps the
-Run-All contract of v2.0.0, the first of the `2.x` family, and adds the CSV
-file of the `series` command ([Additive v2.1 series CSV](#additive-v21-series-csv)). It keeps the core layout and
+This document describes the current stable contract, v2.2.0, which keeps the
+Run-All contract of v2.0.0, the first of the `2.x` family, and the CSV file of
+the `series` command that v2.1.0 adds ([Additive v2.1 series CSV](#additive-v21-series-csv)); v2.2.0 changes neither. It keeps the core layout and
 the additive layers of the `1.x` family, and identifies when each of them
 entered; text that begins "Starting with v2.0.0" describes what v2.0.0
 changes.
@@ -428,6 +427,9 @@ version produced, after the checks of `validate-handoff` and
 ```bash
 garmin-running-data-normalizer series --run-output <run output> --output <new file>.csv
 ```
+
+It takes no conditions on the activities, which the view page has from
+v2.2.0: its numbers are those of the page without conditions.
 
 - The file is UTF-8 without a byte order mark, with `\n` line ends and one
   header row: `item,line,kind,unit,vo2max_source_series,sport,period_start,period_end,partial,value,count`.

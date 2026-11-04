@@ -1,6 +1,6 @@
 # Architecture Overview
 
-- Applies to: stable v2.1.0
+- Applies to: stable v2.2.0
 - Compatibility family: stable 2.x
 - Authority: human-readable architecture overview
 - Last reviewed: 2026-10-07
@@ -9,7 +9,7 @@
 
 Garmin Running Data Normalizer is a local-first Python CLI, with a local GUI
 starting with v2.0.0 (`gui`), which runs the same processing from a page in
-the browser of the same computer. The stable v2.1.0
+the browser of the same computer. The stable v2.2.0
 release reads a local Garmin Account Data Export, as a folder or as the
 downloaded ZIP file, normalizes supported JSON and FIT sources,
 and publishes a deterministic handoff with 17 stable normalized datasets plus
@@ -23,6 +23,16 @@ week, month, or year. The package `view` (`view/items.py`, `view/data.py`,
 the page and the CLI give the same numbers; `gui/views.py` answers the page,
 and `view.html`, `view.mjs`, `view_flow.mjs`, `view_chart.mjs`, and
 `view.css` draw it. Neither changes the output.
+
+Starting with v2.2.0, the view page also compares years (also by race day,
+and as a calendar), shows other views of the same numbers (points, spread, a
+summary, and by shoes) and the activities of a period, and narrows them with
+conditions on the activities; `view/series.py` and `view/data.py` give these
+numbers, and `series` writes them without the conditions. The layouts of
+items (`gui/layouts.py`) are kept in the settings, and the marks
+(`gui/marks.py`) in a file of their own next to them; `common/names.py` holds
+the rules of the names that the GUI keeps and shows. The page saves a
+picture as an SVG file by itself. None of them changes the output.
 
 ```text
 Local Garmin Account Data Export (read-only)
@@ -135,15 +145,15 @@ requires Human review before sharing and is never uploaded automatically. See
   coaching, and medical interpretation are not implemented product features.
 - Stable: the local GUI of v2.0.0, described in
   [v2.0.0 GUI Design](gui_design.md), as a second entry point to the same
-  processing as the CLI, with Snapshots and ZIP input, and its view page and
-  the `series` command of v2.1.0.
+  processing as the CLI, with Snapshots and ZIP input, its view page and
+  the `series` command of v2.1.0, and what v2.2.0 adds to the view page.
 
 ## Packaging, release, and CI status
 
-Version 2.1.0 is published as the annotated tag, the
-[latest stable GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.1.0),
+Version 2.2.0 is published as the annotated tag, the
+[latest stable GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.2.0),
 and the
-[latest Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/2.1.0/).
+[latest Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/2.2.0/).
 The package is licensed under Apache-2.0 for Python 3.11 or later. Packaging
 metadata derives the version from the package source. CI validates the
 repository on Ubuntu with Python 3.11 and 3.15 and on macOS with Python 3.15,

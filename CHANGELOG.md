@@ -13,6 +13,53 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
+## v2.2.0 — stable Production release
+
+Published as the annotated `v2.2.0` tag, the latest stable
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.2.0),
+and the verified
+[Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/2.2.0/).
+
+### Added
+
+- On the view page: layouts of items (six built-in, and up to 20 of your
+  own); **Compare years**, one row per year, overlaid, as running totals, or
+  as a calendar of days, also by race day; marks of your own and the list of
+  the activities of a period; **Plot two items**, **Distribution**, **By
+  shoes**, and **Summary…**; conditions on the activities by the words of
+  their names, a distance, and a duration; and **Save as image…**, which saves
+  what you see as an SVG file.
+- The GUI remembers the view of the view page, and the timezone of the last
+  run that made an output.
+
+### Changed
+
+- The settings file of the GUI has format 2. Once v2.2.0 saves it, v2.1.0
+  does not use it and starts as at a first launch, without writing over it;
+  the marks are in `gui-marks.json` next to it.
+- The GUI Guide describes what the view page adds.
+
+### Fixed
+
+- At a later launch, the timezone was taken as the default `Asia/Tokyo`
+  even when the run before had used another one; the timezone of the last
+  run that made an output is now remembered.
+- Settings whose file would be over 64 KiB were written and then could not
+  be read at the next launch; they are now not written, and the file before
+  stays.
+- Under a heavy load, the view page could take a connection that the
+  operating system refused for a stopped app; more connections now wait for
+  the server.
+
+### Compatibility
+
+- For the same input, timezone, and options, the processing, the 17
+  datasets, 247 fields, stable keys, output paths, the Snapshot Store format,
+  the Product exit mapping, and the command line remain those of v2.1.0.
+  Outputs record `2.2.0`; the view page and `series` read only outputs of
+  this version, and `series` takes no conditions. See the
+  [v2.2.0 Release Notes](docs/release_notes/v2.2.0.md).
+
 ## v2.1.0 — stable Production release
 
 Published on 2026-10-28 JST as the annotated `v2.1.0` tag, the latest stable
