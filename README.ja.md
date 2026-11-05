@@ -93,6 +93,8 @@ Synthetic Quick Startを完了できた場合は、個人Garminデータを含�
 
 - [フルマラソンランナーが作った、Garmin ExportをAI分析へつなぐ正規化OSS](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-summary)
 - [Garminの日次データを1行にまとめると何が消える？——v1.3で複数観測を残した理由](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
+- バージョンごとの記事（新しい順）：[v2.2.0](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-v2-2)・[v2.1.0](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-view-page-v2-1)・[v2.0.0](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-gui-v2)・[v1.7.0](https://zenn.dev/tsubotti63/articles/garmin-fit-running-dynamics-v1-7)・[v1.6.0](https://zenn.dev/tsubotti63/articles/garmin-timezone-option-v1-6)・[v1.4.1 と v1.5.0](https://zenn.dev/tsubotti63/articles/garmin-fit-sport-names-v1-5)
+- 作った理由・設計・AI との開発の記事も、[Zenn の記事の一覧](https://zenn.dev/tsubotti63)から開けます。
 
 ## 英語の契約文書が正本です
 

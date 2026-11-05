@@ -187,6 +187,8 @@ Diagnostics release.
 - [Published stable Release v2.2.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.2.0)
 - [Production PyPI v2.2.0](https://pypi.org/project/garmin-running-data-normalizer/2.2.0/)
 - Project story on Zenn: [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
+- Articles on Zenn for each release, newest first (in English where Zenn has a translation, otherwise in Japanese): [v2.2.0](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-v2-2?locale=en), [v2.1.0](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-view-page-v2-1?locale=en), [v2.0.0](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-gui-v2?locale=en), [v1.7.0](https://zenn.dev/tsubotti63/articles/garmin-fit-running-dynamics-v1-7?locale=en), [v1.6.0](https://zenn.dev/tsubotti63/articles/garmin-timezone-option-v1-6?locale=en), [v1.4.1 and v1.5.0](https://zenn.dev/tsubotti63/articles/garmin-fit-sport-names-v1-5?locale=en)
+- [All articles on Zenn](https://zenn.dev/tsubotti63), also on the design and on building this project with AI (in Japanese; most also in English)
 
 What each release added and changed is in [What v2.2.0 adds](#what-v220-adds)
 and the sections after it, near the end of this page.
