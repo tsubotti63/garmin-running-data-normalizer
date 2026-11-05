@@ -839,7 +839,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
             body = re.search(rf"function {name}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
             assert body is not None, name
             with self.subTest(function=name):
-                self.assertIn("  state.typesOpen = false;\n  state.conditionsOpen = false;", body.group(1))
+                # An opening by itself keeps them (stage W1 of v2.2.1).
+                closed = "  if (auto === null) {\n    state.typesOpen = false;\n    state.conditionsOpen = false;" if name == "openOutput" else "  state.typesOpen = false;\n  state.conditionsOpen = false;"
+                self.assertIn(closed, body.group(1))
         style = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
         rule = re.search(r"\n\.conditions-pop \{(.*?)\n\}", style, re.DOTALL)
         assert rule is not None
@@ -887,7 +889,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
             "openList": ("    types: state.answerTypes,\n    conditions: state.answerConditions,",),
             "requestList": ("      types: list.types,\n      conditions: list.conditions,",),
             "requestOverview": (
-                "const signature = JSON.stringify([state.view.view, key, typesRequest(state.counted, state.view.types), conditionsKey(state.conditions)]);",
+                "const parts = [state.view.view, key, typesRequest(state.counted, state.view.types), conditionsKey(state.conditions)];",
+                # With the number of its reading (stage W1 of v2.2.1).
+                "const signature = JSON.stringify([...parts, state.viewRead]);",
                 # An answer on its way for other conditions is dropped when the
                 # overview drawn is that of these (Codex's review of the diff).
                 "  if (state.overview?.signature === signature) {\n    // The overview drawn is that of these: an answer on its way for others,\n    // such as conditions changed and changed back, is dropped (Codex's\n    // review of the diff of T1).\n    state.overviewSeq += 1;\n    return;\n  }",
@@ -1780,7 +1784,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertIn(line, request.group(1))
         self.assertEqual(request.group(1).count("if (seq !== state.spreadSeq) {\n      return;\n    }"), 2)
-        opened = re.search(r"async function openOutput\(target, focus = false\) \{(.*?)\n\}", self.script, re.DOTALL)
+        opened = re.search(r"async function openOutput\(target, focus = false, auto = null\) \{(.*?)\n\}", self.script, re.DOTALL)
         assert opened is not None
         for line in (
             "state.spreadSeq += 1;",
@@ -1912,7 +1916,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertIn(line, request.group(1))
         self.assertEqual(request.group(1).count("if (seq !== state.shoesSeq) {\n      return;\n    }"), 2)
-        opened = re.search(r"async function openOutput\(target, focus = false\) \{(.*?)\n\}", self.script, re.DOTALL)
+        opened = re.search(r"async function openOutput\(target, focus = false, auto = null\) \{(.*?)\n\}", self.script, re.DOTALL)
         assert opened is not None
         for line in (
             "state.shoesSeq += 1;",
@@ -2105,7 +2109,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertIn(line, request.group(1))
         self.assertEqual(request.group(1).count("if (seq !== state.recapSeq) {\n      return;\n    }"), 2)
-        opened = re.search(r"async function openOutput\(target, focus = false\) \{(.*?)\n\}", self.script, re.DOTALL)
+        opened = re.search(r"async function openOutput\(target, focus = false, auto = null\) \{(.*?)\n\}", self.script, re.DOTALL)
         assert opened is not None
         # The answers of the summary on their way are dropped as an output
         # starts opening, as those of the other views, before they could open
@@ -2176,6 +2180,103 @@ class GuiViewPageStructureTest(unittest.TestCase):
         ):
             with self.subTest(line=line):
                 self.assertIn(line, self.script)
+
+    def test_the_view_page_opens_the_output_again_for_a_newer_reading_of_other_facts(self) -> None:
+        # Stage W1 of v2.2.1: every answer of the numbers goes through
+        # takeReading after the check of its generation and before it is used
+        # (a comparison of years once, by its answer of the newest reading); a
+        # request refused for its form opens the output again once
+        # (reopenOnce); an opening by itself opens the folder that the ticket
+        # shown reads, and gives the focus back where it was.
+        def body(name: str) -> str:
+            found = re.search(rf"(?:async )?function {name}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
+            assert found is not None, name
+            return found.group(1)
+
+        refused = '} else if (error.code === "REQUEST_INVALID" && reopenOnce(askedView)) {'
+        refused_payload = '} else if (error.code === "REQUEST_INVALID" && reopenOnce(payload.view)) {'
+        held = {
+            "requestSeries": (
+                "const askedView = state.view.view;",
+                "    if (seq !== state.seriesSeq) {\n      return;\n    }\n    if (!takeReading(askedView, answer)) {\n      state.loading = false;\n      return;\n    }\n    setAnswer(answer);",
+                refused,
+            ),
+            "requestOverview": (
+                "const askedView = state.view.view;",
+                '    if (seq === state.overviewSeq && error.code === "REQUEST_INVALID" && reopenOnce(askedView)) {\n      return;\n    }',
+                "const parts = [state.view.view, key, typesRequest(state.counted, state.view.types), conditionsKey(state.conditions)];",
+                "const signature = JSON.stringify([...parts, state.viewRead]);",
+                "      if (!takeReading(askedView, answer)) {\n        return;\n      }\n      state.overview = { signature: JSON.stringify([...parts, Number.isInteger(answer.read) ? answer.read : null]), key, answer };",
+            ),
+            "requestRecap": (
+                "const askedView = state.view.view;",
+                "    if (!takeReading(askedView, answer)) {\n      state.recapLoading = false;\n      return;\n    }\n    state.recapAnswer = { key, answer };",
+                refused,
+            ),
+            "requestCompare": (
+                "const askedView = state.view.view;",
+                "    if (seq !== state.compareSeq) {\n      return;\n    }\n    // Once for the generation, by its answer of the newest reading (stage W1\n    // of v2.2.1).\n    if (!takeReading(askedView, newestAnswer([whole, ...answers]))) {\n      state.compareLoading = false;\n      return;\n    }",
+                refused,
+            ),
+            "requestPlot": (refused_payload,),
+            "requestSpread": (refused_payload,),
+            "requestShoes": (refused_payload,),
+            "openOutput": (
+                "  state.shoesSeq += 1;\n  // And that of the overview, whose answer of the output before could\n  // otherwise come after this one opened (stage W1 of v2.2.1).\n  state.overviewSeq += 1;",
+                "  state.overviewSeq += 1;\n  // And that of the panels, whose answer of the output before could ask for\n  // its overview after this one opened (Codex's review of the diff of W1).\n  state.seriesSeq += 1;",
+                "  if (auto === null) {\n    state.typesOpen = false;\n    state.conditionsOpen = false;\n    state.pickerOpen = false;\n  }",
+                "    if (auto === null || (ui.rangeFrom.value === (rangeBefore?.from ?? \"\") && ui.rangeTo.value === (rangeBefore?.to ?? \"\"))) {",
+                "    if (auto === null) {\n      rememberItems();\n    }",
+                "const ticket = auto === null ? null : state.view?.view ?? null;",
+                "const focused = auto === null ? null : document.activeElement;",
+                "  if (auto === null) {\n    state.reopenedAt = null;\n  }",
+                "const answer = await openAnswer(target, ticket);",
+                "    state.opening = null;\n    // The answer of the panels that the opening dropped no longer puts their\n    // loading down (stage W1 of v2.2.1, the checker's review of its diff).\n    state.loading = false;",
+                '    state.view = answer;\n    state.viewRead = Number.isInteger(answer.read) ? answer.read : null;\n    if (auto === "refused") {\n      state.reopenedAt = state.viewRead;\n    }',
+                '    if (document.activeElement === document.body || document.activeElement?.closest("[hidden]")) {\n      if (focused !== null && focused !== document.body && focused.isConnected && !focused.closest("[hidden]") && !focused.disabled) {\n        focused.focus();\n      } else {\n        ui.outputSelect.focus();\n      }\n    }',
+            ),
+            "reopen": (
+                "    state.view = answer;\n    state.viewRead = Number.isInteger(answer.read) ? answer.read : null;\n    state.names = answer.names ?? null;",
+                "  const before = state.view;",
+                '    if (before !== null && !sameFacts(before, answer)) {\n      if (state.opening === null) {\n        openOutput(state.target, false, "changed");\n      }\n      return false;\n    }\n    state.view = answer;',
+            ),
+            "openAnswer": (
+                "  if (ticket !== null) {",
+                'return await callApi("/api/view/open", { output: "view", view: ticket });',
+                '      if (error.code !== "VIEW_NOT_OPEN") {\n        throw error;\n      }',
+                'return callApi("/api/view/open", targetPayload(target));',
+            ),
+            "takeReading": (
+                "const step = readingStep(readingOf(state.view, state.viewRead, asked, answer), state.opening !== null);",
+                '  if (step === "reopen") {\n    if (state.target !== null) {\n      openOutput(state.target, false, "changed");\n    }\n    return false;\n  }',
+                '  if (step === "drop") {\n    return false;\n  }',
+                '  if (step === "newer") {\n    state.viewRead = answer.read;\n  }\n  return true;',
+            ),
+            "reopenOnce": (
+                "const step = refusalStep({ asked, view: state.view, opening: state.opening !== null, reopenedAt: state.reopenedAt, known: state.viewRead });",
+                '  if (step === "reopen" && state.target !== null) {\n    openOutput(state.target, false, "refused");\n    return true;\n  }\n  return step === "wait";',
+            ),
+        }
+        for name, lines in held.items():
+            text = body(name)
+            for line in lines:
+                with self.subTest(function=name, line=line[:60]):
+                    self.assertIn(line, text)
+        self.assertIn("  viewRead: null,\n  reopenedAt: null,\n", self.script)
+        for name in ("readingOf", "readingStep", "refusalStep", "newestAnswer", "sameFacts"):
+            with self.subTest(imported=name):
+                self.assertIn(f"\n  {name},\n", self.script.split('} from "./view_flow.mjs";')[0])
+        # The item of the design document, said once.
+        design = re.sub(r"\s+", " ", (ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8"))
+        for line in (
+            "From v2.2.1 (stage W1), the answer of `/api/view/open` gives the number of its reading too, and those four answers give the facts of their reading of the output (`output`: its first and last days, its activity types with their counts, and whether it is partial).",
+            "the page opens the output again by itself, as **Choose another output…** with the same folder does, by the ticket that reads it (`{\"output\": \"view\", \"view\": ticket}`,",
+            "unless an output is being opened; a newer reading of the same facts only moves the reading known on, and the overview keeps the number of its reading in its signature.",
+            "opens the output again by itself once, until a newer reading than the one that it opened is seen; the overview too.",
+            "An opening by itself drops the answers of the output before (those of the panels too), writes no settings, keeps a date being typed and the windows of the activity types and the conditions, and gives the focus back where it was only where the focus was lost meanwhile.",
+        ):
+            with self.subTest(design=line[:60]):
+                self.assertEqual(design.count(line), 1)
 
     def test_a_comparison_never_changes_the_panels_and_drops_old_answers(self) -> None:
         # v2.2.0 L1 (plan v2, 5 and 6): the numbers of a comparison are one

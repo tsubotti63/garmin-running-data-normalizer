@@ -23,6 +23,10 @@ Each reading of an output, as it is opened and as it is read again, has a
 number of one count for the whole server (stage U1 of v2.2.0), which the
 answers of the panels and of the other views give as ``read``, so that the
 page can tell another view answered from another reading than its panels.
+From v2.2.1 (stage W1) the answer of opening gives it too, and the answers
+of the numbers give the facts of their reading of the output (its first and
+last days, its activity types, and whether it is partial) as ``output``, so
+that the page takes those of an output read again.
 """
 
 from __future__ import annotations
@@ -165,6 +169,12 @@ class Views:
         """Check and read ``output``, and keep it under a new ticket. The
         reading takes no lock of the server, so that other requests are
         answered meanwhile."""
+        ticket, data, _read = self.opened(output)
+        return ticket, data
+
+    def opened(self, output: Path) -> tuple[str, ViewData, int]:
+        """As ``open``, with the number of the reading (stage W1 of v2.2.1),
+        which the answer of opening gives beside the facts of the output."""
         data, stamp = self._read(output)
         read = self._number()
         ticket = secrets.token_urlsafe(16)
@@ -172,7 +182,16 @@ class Views:
             self._views[ticket] = _View(output, stamp, data, threading.Lock(), read)
             while len(self._views) > self._max_views:
                 self._views.popitem(last=False)
-        return ticket, data
+        return ticket, data, read
+
+    def output_of(self, ticket: str) -> Path:
+        """The output that ``ticket`` reads (stage W1 of v2.2.1), which the page
+        opens again under a new ticket for a newer reading of other facts."""
+        with self._lock:
+            view = self._views.get(ticket)
+            if view is None:
+                raise ViewNotOpenError(ticket)
+            return view.output
 
     def data(self, ticket: str) -> ViewData:
         """What the output of ``ticket`` holds now: what was read, when its

@@ -1060,6 +1060,103 @@ export function sameReading(first, second) {
   return Number.isInteger(first?.read) && first.read === second?.read;
 }
 
+// The facts of a reading of an output that an answer of the numbers gives
+// (stage W1 of v2.2.1), in the form of the server: the first and last days
+// (ISO days or null), the activity types (a name, a count, and whether it is
+// of running), and whether the output is partial.
+export function outputFactsOk(facts) {
+  const day = (value) => value === null || (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value));
+  return (
+    facts !== null &&
+    typeof facts === "object" &&
+    day(facts.first_day) &&
+    day(facts.last_day) &&
+    typeof facts.partial === "boolean" &&
+    Array.isArray(facts.types) &&
+    facts.types.every((entry) => typeof entry?.name === "string" && Number.isInteger(entry.count) && typeof entry.running === "boolean")
+  );
+}
+
+// Whether the facts of the output that the page opened are those of a
+// reading: the same days, the same activity types in the same order with the
+// same counts, and the same partial output.
+export function sameFacts(view, facts) {
+  const types = (entries) => JSON.stringify((Array.isArray(entries) ? entries : []).map((entry) => [entry?.name, entry?.count, entry?.running]));
+  return (
+    view?.first_day === facts.first_day &&
+    view?.last_day === facts.last_day &&
+    view?.partial === facts.partial &&
+    types(view?.types) === types(facts.types)
+  );
+}
+
+// What an answer of the numbers tells of the reading of the output shown
+// (stage W1 of v2.2.1), from the ticket that asked for it and the number of
+// the reading that the facts shown are of: "other" for an answer of another
+// output, of no newer reading, or without facts of their form; "same" for a
+// newer reading of the same facts; "changed" for a newer reading of other
+// facts, on which the page opens the output again; and "foreign" for an answer
+// that another ticket asked for, which is never used (Codex's review of the
+// diff of W1).
+export function readingOf(view, known, asked, answer) {
+  if (view === null || typeof view !== "object") {
+    return "other";
+  }
+  if (asked !== view.view) {
+    return "foreign";
+  }
+  if (!Number.isInteger(answer?.read) || !Number.isInteger(known) || answer.read <= known || !outputFactsOk(answer.output)) {
+    return "other";
+  }
+  return sameFacts(view, answer.output) ? "same" : "changed";
+}
+
+// The answer of a generation of answers of the newest reading (stage W1 of
+// v2.2.1), as a comparison of years asks for many at once; null where none
+// has the number of a reading.
+export function newestAnswer(answers) {
+  let newest = null;
+  for (const answer of answers) {
+    if (Number.isInteger(answer?.read) && (newest === null || answer.read > newest.read)) {
+      newest = answer;
+    }
+  }
+  return newest;
+}
+
+// What the page does with an answer of the numbers (stage W1 of v2.2.1), by
+// what readingOf tells and whether an output is being opened: "use" it;
+// "newer", use it and move the reading known on; "reopen", open the output
+// again by itself and leave the answer; or "drop" it, as an output being
+// opened, whichever, answers it.
+export function readingStep(reading, opening) {
+  if (reading === "foreign") {
+    return "drop";
+  }
+  if (reading === "changed") {
+    return opening ? "drop" : "reopen";
+  }
+  return reading === "same" ? "newer" : "use";
+}
+
+// What a request of the output shown that was refused for its form does
+// (stage W1 of v2.2.1), as for an activity type that the output read again no
+// longer has: "reopen" the output by itself, once until a newer reading than
+// the one that it opened is seen; "wait", where an output is being opened,
+// which answers it; or "stop", the stop of the request.
+export function refusalStep({ asked, view, opening, reopenedAt, known }) {
+  if (view === null || typeof view !== "object" || asked !== view.view) {
+    return "stop";
+  }
+  if (opening) {
+    return "wait";
+  }
+  if (reopenedAt !== null && !(Number.isInteger(known) && Number.isInteger(reopenedAt) && known > reopenedAt)) {
+    return "stop";
+  }
+  return "reopen";
+}
+
 // What the page offers before an output is open: the latest output, which is
 // the output of this launch's run or else the newest earlier one, with the
 // items remembered; or the first steps.

@@ -232,6 +232,11 @@ import {
   savedAttributes,
   savedPanels,
   sameReading,
+  sameFacts,
+  readingOf,
+  readingStep,
+  refusalStep,
+  newestAnswer,
   yearDrawn,
 } from "./view_flow.mjs";
 import {
@@ -671,6 +676,12 @@ const state = {
   coverageSeq: 0,
   overview: null,
   overviewSeq: 0,
+  // The number of the reading of the output that the facts of the view are
+  // of, and that of the output that opened again by itself after a refusal
+  // of a request (null when it did not), which a newer reading passes
+  // (stage W1 of v2.2.1).
+  viewRead: null,
+  reopenedAt: null,
   // What is open on the page.
   typesOpen: false,
   pickerOpen: false,
@@ -1369,7 +1380,7 @@ const OUTPUT_STOPS = [
   "TIMEZONE_DATA_UNAVAILABLE",
 ];
 
-async function openOutput(target, focus = false) {
+async function openOutput(target, focus = false, auto = null) {
   const seq = ++state.openSeq;
   state.compareSeq += 1;
   // And those of the points, before they could open the output before
@@ -1384,22 +1395,46 @@ async function openOutput(target, focus = false) {
   // And the answers of the view by shoes, so that none of the output before
   // is drawn for another (stage S1 of v2.2.0, Codex's review of its plan).
   state.shoesSeq += 1;
+  // And that of the overview, whose answer of the output before could
+  // otherwise come after this one opened (stage W1 of v2.2.1).
+  state.overviewSeq += 1;
+  // And that of the panels, whose answer of the output before could ask for
+  // its overview after this one opened (Codex's review of the diff of W1).
+  state.seriesSeq += 1;
+  // The ticket of the output shown, whose folder an opening by itself opens
+  // again (stage W1 of v2.2.1): "changed" for a newer reading of other
+  // facts, "refused" after a refusal of a request. An output that the
+  // person opens may open again by itself after a refusal once more.
+  const ticket = auto === null ? null : state.view?.view ?? null;
+  // And where the focus was, which it gives back (stage W1 of v2.2.1).
+  const focused = auto === null ? null : document.activeElement;
+  if (auto === null) {
+    state.reopenedAt = null;
+  }
   state.opening = target.name;
   state.openingTarget = target;
   state.stop = null;
   state.seriesStop = null;
-  state.typesOpen = false;
-  state.conditionsOpen = false;
-  state.pickerOpen = false;
+  // An opening by itself keeps the windows that the person has open (Codex's
+  // review of the diff of W1 of v2.2.1).
+  if (auto === null) {
+    state.typesOpen = false;
+    state.conditionsOpen = false;
+    state.pickerOpen = false;
+  }
   render();
   try {
-    const answer = await callApi("/api/view/open", targetPayload(target));
+    const answer = await openAnswer(target, ticket);
     if (seq !== state.openSeq) {
       return;
     }
     const remembered = rememberedItems(state.settings, answer.items);
     state.items = itemsToOpen(current, remembered, answer.first_items, answer.items);
     state.view = answer;
+    state.viewRead = Number.isInteger(answer.read) ? answer.read : null;
+    if (auto === "refused") {
+      state.reopenedAt = state.viewRead;
+    }
     state.names = answer.names ?? null;
     state.target = target;
     state.opening = null;
@@ -1417,11 +1452,16 @@ async function openOutput(target, focus = false) {
     state.tables = new Set();
     state.notesOpen = null;
     state.cursor = null;
+    const rangeBefore = state.range;
     const period = periodToOpen(periodRequest(state.period, state.range), answer.first_day, answer.last_day) ?? { choice: "all", range: null };
     state.period = period.choice;
     state.range = period.range;
-    ui.rangeFrom.value = state.range?.from ?? "";
-    ui.rangeTo.value = state.range?.to ?? "";
+    // An opening by itself keeps a date being typed (Codex's review of the
+    // diff of W1 of v2.2.1).
+    if (auto === null || (ui.rangeFrom.value === (rangeBefore?.from ?? "") && ui.rangeTo.value === (rangeBefore?.to ?? ""))) {
+      ui.rangeFrom.value = state.range?.from ?? "";
+      ui.rangeTo.value = state.range?.to ?? "";
+    }
     if (state.compare !== null) {
       if (itemsByKey(answer.items).has(state.compare.key) && compareYears(answer.first_day, answer.last_day).length) {
         Object.assign(state.compare, { years: firstCompareYears(compareYears(answer.first_day, answer.last_day)), series: null, cursor: null });
@@ -1476,11 +1516,22 @@ async function openOutput(target, focus = false) {
     state.recapAnswer = null;
     state.recapAsked = null;
     state.recapStop = null;
-    rememberItems();
+    // An opening by itself writes no settings: it is not the person's, and a
+    // saving of the person on its way keeps its stamp (Codex's review of the
+    // diff of W1 of v2.2.1).
+    if (auto === null) {
+      rememberItems();
+    }
     render();
-    // A button that opened it is hidden now.
+    // A button that opened it is hidden now. An opening by itself gives the
+    // focus back where it was, where that shows again, and only where the
+    // focus was lost meanwhile (stage W1 of v2.2.1).
     if (document.activeElement === document.body || document.activeElement?.closest("[hidden]")) {
-      ui.outputSelect.focus();
+      if (focused !== null && focused !== document.body && focused.isConnected && !focused.closest("[hidden]") && !focused.disabled) {
+        focused.focus();
+      } else {
+        ui.outputSelect.focus();
+      }
     }
     requestSeries();
     requestCompare();
@@ -1492,6 +1543,9 @@ async function openOutput(target, focus = false) {
       return;
     }
     state.opening = null;
+    // The answer of the panels that the opening dropped no longer puts their
+    // loading down (stage W1 of v2.2.1, the checker's review of its diff).
+    state.loading = false;
     if (!connectionFailure(error)) {
       state.view = null;
       setAnswer(null);
@@ -1511,6 +1565,23 @@ async function openOutput(target, focus = false) {
       ui.stopHeading.focus();
     }
   }
+}
+
+// The answer of opening an output (stage W1 of v2.2.1): an output that opens
+// again by itself opens the folder that the ticket shown reads, as a run or
+// the list of earlier outputs can name another output by then, and by its
+// target only where the server no longer keeps that ticket.
+async function openAnswer(target, ticket) {
+  if (ticket !== null) {
+    try {
+      return await callApi("/api/view/open", { output: "view", view: ticket });
+    } catch (error) {
+      if (error.code !== "VIEW_NOT_OPEN") {
+        throw error;
+      }
+    }
+  }
+  return callApi("/api/view/open", targetPayload(target));
 }
 
 function openLatest() {
@@ -1605,6 +1676,7 @@ async function requestSeries(again = true) {
     return;
   }
   const seq = ++state.seriesSeq;
+  const askedView = state.view.view;
   state.loading = true;
   render();
   try {
@@ -1612,6 +1684,10 @@ async function requestSeries(again = true) {
     const asked = ++state.availableAsks;
     const answer = await callApi("/api/view/series", payload);
     if (seq !== state.seriesSeq) {
+      return;
+    }
+    if (!takeReading(askedView, answer)) {
+      state.loading = false;
       return;
     }
     setAnswer(answer);
@@ -1649,6 +1725,10 @@ async function requestSeries(again = true) {
         requestSeries(false);
         return;
       }
+    } else if (error.code === "REQUEST_INVALID" && reopenOnce(askedView)) {
+      // A refusal for an activity type that the output read again no longer
+      // has opens the output again once (stage W1 of v2.2.1).
+      return;
     } else if (OUTPUT_STOPS.includes(error.code)) {
       state.view = null;
       setAnswer(null);
@@ -1672,13 +1752,24 @@ async function requestSeries(again = true) {
 // panels show.
 async function reopen() {
   const seq = state.openSeq;
+  const before = state.view;
   try {
     const answer = await callApi("/api/view/open", targetPayload(state.target));
     // Another output opened meanwhile: its answer stays.
     if (seq !== state.openSeq) {
       return false;
     }
+    // An output read again with other facts opens again as a whole, as for an
+    // answer of a newer reading (stage W1 of v2.2.1, the checker's review of
+    // its diff).
+    if (before !== null && !sameFacts(before, answer)) {
+      if (state.opening === null) {
+        openOutput(state.target, false, "changed");
+      }
+      return false;
+    }
     state.view = answer;
+    state.viewRead = Number.isInteger(answer.read) ? answer.read : null;
     state.names = answer.names ?? null;
     return true;
   } catch (error) {
@@ -1708,7 +1799,10 @@ async function requestOverview() {
     render();
     return;
   }
-  const signature = JSON.stringify([state.view.view, key, typesRequest(state.counted, state.view.types), conditionsKey(state.conditions)]);
+  // With the number of the reading that the overview is of (stage W1 of
+  // v2.2.1): a newer reading draws it again.
+  const parts = [state.view.view, key, typesRequest(state.counted, state.view.types), conditionsKey(state.conditions)];
+  const signature = JSON.stringify([...parts, state.viewRead]);
   if (state.overview?.signature === signature) {
     // The overview drawn is that of these: an answer on its way for others,
     // such as conditions changed and changed back, is dropped (Codex's
@@ -1717,13 +1811,25 @@ async function requestOverview() {
     return;
   }
   const seq = ++state.overviewSeq;
+  const askedView = state.view.view;
   try {
     const answer = await callApi("/api/view/series", seriesPayload([key], "all", "month"));
     if (seq === state.overviewSeq) {
-      state.overview = { signature, key, answer };
+      // A newer reading of other facts opens the output again; the overview
+      // is kept under the reading that it is of, so that a newer one of the
+      // same facts is not asked for again (stage W1 of v2.2.1).
+      if (!takeReading(askedView, answer)) {
+        return;
+      }
+      state.overview = { signature: JSON.stringify([...parts, Number.isInteger(answer.read) ? answer.read : null]), key, answer };
       render();
     }
   } catch (error) {
+    // A refusal for an activity type gone opens the output again once, as for
+    // the panels (Codex's review of the diff of W1 of v2.2.1).
+    if (seq === state.overviewSeq && error.code === "REQUEST_INVALID" && reopenOnce(askedView)) {
+      return;
+    }
     if (seq === state.overviewSeq && !connectionFailure(error)) {
       state.overview = null;
     }
@@ -2187,6 +2293,7 @@ async function requestRecap(again = true) {
     return;
   }
   const seq = ++state.recapSeq;
+  const askedView = state.view.view;
   const key = recapKey();
   state.recapAsked = key;
   state.recapAnswer = null;
@@ -2197,6 +2304,10 @@ async function requestRecap(again = true) {
     const payload = { ...seriesPayload(state.items, periodRequest(state.period, state.range), RANGE_GRAIN), previous: true };
     const answer = await callApi("/api/view/series", payload);
     if (seq !== state.recapSeq) {
+      return;
+    }
+    if (!takeReading(askedView, answer)) {
+      state.recapLoading = false;
       return;
     }
     state.recapAnswer = { key, answer };
@@ -2215,6 +2326,9 @@ async function requestRecap(again = true) {
         requestRecap(false);
         return;
       }
+    } else if (error.code === "REQUEST_INVALID" && reopenOnce(askedView)) {
+      // As for the panels (stage W1 of v2.2.1).
+      return;
     } else if (OUTPUT_STOPS.includes(error.code)) {
       state.view = null;
       setAnswer(null);
@@ -5136,6 +5250,7 @@ async function requestCompare(again = true) {
     return;
   }
   const seq = ++state.compareSeq;
+  const askedView = state.view.view;
   const by = compareByNow();
   const choices = raceChoices();
   // The activity types asked for, kept with the answer of this generation,
@@ -5165,6 +5280,12 @@ async function requestCompare(again = true) {
       ...payloads.map((payload) => callApi("/api/view/series", payload)),
     ]);
     if (seq !== state.compareSeq) {
+      return;
+    }
+    // Once for the generation, by its answer of the newest reading (stage W1
+    // of v2.2.1).
+    if (!takeReading(askedView, newestAnswer([whole, ...answers]))) {
+      state.compareLoading = false;
       return;
     }
     const panel = whole.panels?.[0] ?? null;
@@ -5204,6 +5325,9 @@ async function requestCompare(again = true) {
         requestCompare(false);
         return;
       }
+    } else if (error.code === "REQUEST_INVALID" && reopenOnce(askedView)) {
+      // As for the panels (stage W1 of v2.2.1).
+      return;
     } else if (OUTPUT_STOPS.includes(error.code)) {
       state.view = null;
       setAnswer(null);
@@ -7264,6 +7388,42 @@ function otherReading(answer) {
   }
 }
 
+// What an answer of the numbers tells of the reading of the output shown
+// (stage W1 of v2.2.1): a newer reading of other facts opens the output
+// again, as "Choose another output…" with the same folder does, unless an
+// output is being opened, and the answer is not used (false); a newer
+// reading of the same facts moves the reading known on.
+function takeReading(asked, answer) {
+  const step = readingStep(readingOf(state.view, state.viewRead, asked, answer), state.opening !== null);
+  if (step === "reopen") {
+    if (state.target !== null) {
+      openOutput(state.target, false, "changed");
+    }
+    return false;
+  }
+  if (step === "drop") {
+    return false;
+  }
+  if (step === "newer") {
+    state.viewRead = answer.read;
+  }
+  return true;
+}
+
+// A request of the output shown refused for its form, as for an activity
+// type that the output read again no longer has (stage W1 of v2.2.1): the
+// output opens again by itself, once until a newer reading than the one that
+// it opened is seen, and an opening on its way answers it (true); else the
+// stop of the request (false).
+function reopenOnce(asked) {
+  const step = refusalStep({ asked, view: state.view, opening: state.opening !== null, reopenedAt: state.reopenedAt, known: state.viewRead });
+  if (step === "reopen" && state.target !== null) {
+    openOutput(state.target, false, "refused");
+    return true;
+  }
+  return step === "wait";
+}
+
 // Ask for what shows: the other view while it shows, and the panels on the
 // way back, since the period and the activity types are the page's.
 function requestShown() {
@@ -7410,6 +7570,10 @@ async function requestPlot(again = true) {
     if (seq !== state.plotSeq) {
       return;
     }
+    if (!takeReading(payload.view, answer)) {
+      state.plotLoading = false;
+      return;
+    }
     state.plotAnswer = answer;
     otherReading(answer);
     state.plotAsked = payload;
@@ -7433,6 +7597,9 @@ async function requestPlot(again = true) {
         requestPlot(false);
         return;
       }
+    } else if (error.code === "REQUEST_INVALID" && reopenOnce(payload.view)) {
+      // As for the panels (stage W1 of v2.2.1).
+      return;
     } else if (OUTPUT_STOPS.includes(error.code)) {
       state.view = null;
       setAnswer(null);
@@ -7938,6 +8105,10 @@ async function requestSpread(again = true) {
     if (seq !== state.spreadSeq) {
       return;
     }
+    if (!takeReading(payload.view, answer)) {
+      state.spreadLoading = false;
+      return;
+    }
     state.spreadAnswer = answer;
     otherReading(answer);
     state.spreadAsked = payload;
@@ -7961,6 +8132,9 @@ async function requestSpread(again = true) {
         requestSpread(false);
         return;
       }
+    } else if (error.code === "REQUEST_INVALID" && reopenOnce(payload.view)) {
+      // As for the panels (stage W1 of v2.2.1).
+      return;
     } else if (OUTPUT_STOPS.includes(error.code)) {
       state.view = null;
       setAnswer(null);
@@ -8380,6 +8554,10 @@ async function requestShoes(again = true) {
     if (seq !== state.shoesSeq) {
       return;
     }
+    if (!takeReading(payload.view, answer)) {
+      state.shoesLoading = false;
+      return;
+    }
     state.shoesAnswer = answer;
     otherReading(answer);
     state.shoesAsked = payload;
@@ -8404,6 +8582,9 @@ async function requestShoes(again = true) {
         requestShoes(false);
         return;
       }
+    } else if (error.code === "REQUEST_INVALID" && reopenOnce(payload.view)) {
+      // As for the panels (stage W1 of v2.2.1).
+      return;
     } else if (OUTPUT_STOPS.includes(error.code)) {
       state.view = null;
       setAnswer(null);

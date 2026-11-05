@@ -862,12 +862,19 @@ class GuiGuideTest(unittest.TestCase):
                     "In the table, 0:10 is hours and minutes for the time (10 minutes), and minutes and seconds for the average pace (10 seconds a kilometer).",
                     f"numbers being read (the window says {word('view.loading')})",
                     "open a comparison of years, a list, or the summary (all from 2.2.0) again as below",
-                    f"Pressing the button of the period again does not renew the overview under the panels, the years that {word('view.compare.button')} can choose, the days that {word('view.period.custom')} can choose, the list of the activity types, and the like.",
-                    f"To make them of the output as it is now after you normalize again, choose the same output folder with {word('target.other')}, which opens the output again (choosing the same output again in {word('view.output.label')} does not open it again).",
-                    f"The years and the races chosen in {word('view.compare.button')} are then the first ones again.",
+                    # Stage W1 of v2.2.1: the page opens the output again by itself.
+                    f"From 2.2.1, where the page finds, as it gives numbers (when you press the button of the period again, for example), that the days, the activity types, or the like of the output have changed, it opens the output again by itself, as choosing the same output folder with {word('target.other')} does:",
+                    f"the overview under the panels, the years that {word('view.compare.button')} can choose, the days that {word('view.period.custom')} can choose, and the list of the activity types are then of the output as it is now.",
+                    f"An enlarged panel and {word('view.panel.table')} on a panel are undone, and the years and the races chosen in {word('view.compare.button')} are the first ones again. Where the output",
+                    "Where the output is read again with the same days and activity types (where only the date changed, for example), it is not opened again.",
+                    "The list of the activities of a period does not notice that the output changed: open it again after the panels show new numbers.",
+                    f"In 2.2.0, pressing the button of the period again does not renew the overview under the panels and the like: choose the same output folder with {word('target.other')} to open the output again (choosing the same output again in {word('view.output.label')} does not open it again).",
+                    f"An enlarged panel and {word('view.panel.table')} on a panel are then undone, and the years and the races chosen in {word('view.compare.button')} are the first ones again.",
                 )
                 gone = (
                     "Without the GUI, fill in",
+                    # Stage W1 of v2.2.1: the bullet of 2.2.0 before it.
+                    "Pressing the button of the period again does not renew the overview under the panels, the years that",
                     "The line installs into the same virtual environment",
                     "change its value and leave it",
                     "field that is left",
@@ -917,12 +924,18 @@ class GuiGuideTest(unittest.TestCase):
                     "表の 0:10 は、時間では時と分（10 分）、平均ペースでは分と秒（1 km あたり 10 秒）です。",
                     f"・数字を読んでいる間（窓に{word('view.loading')}と出ます）・",
                     "2.2.0 からの年でくらべる・区切りの一覧・まとめの窓は、下のとおり開き直します（年でくらべる間は、期間のボタンは灰色です）。",
-                    f"期間のボタンを押し直しても、段の下の全体図、年でくらべるで選べる年、{word('view.period.custom')}で選べる日付、数える種目の一覧などは、新しくなりません。",
-                    f"正規化し直したあとに、これらも今の出力にするには、{word('target.other')}で同じ出力のフォルダーを選び、出力を開き直します（{word('view.output.label')}の欄で同じ出力を選び直しても、開き直しません）。",
-                    "開き直すと、年でくらべるで選んだ年や大会は、初めのものに戻ります。",
+                    # Stage W1 of v2.2.1: the page opens the output again by itself.
+                    "（2.2.1 から）数字を出すとき（期間のボタンを押し直したときなど）に、見ている出力の日付や種目などが変わったと分かると、見るページは出力を自分で開き直します。",
+                    f"{word('target.other')}で同じ出力のフォルダーを選んだときと同じで、段の下の全体図、年でくらべるで選べる年、{word('view.period.custom')}で選べる日付、数える種目の一覧なども、今の出力になります。",
+                    f"開き直すと、大きくした段と、段の{word('view.panel.table')}は元に戻り、年でくらべるで選んだ年や大会は、初めのものに戻ります。日付や種目などが同じままの読み直し",
+                    "日付や種目などが同じままの読み直し（日付が変わっただけのときなど）では、開き直しません。",
+                    "区切りの一覧は、出力が変わったことに気づきません（段の数が新しくなってから、一覧を開き直してください）。",
+                    f"2.2.0 では、期間のボタンを押し直しても、段の下の全体図などは新しくなりません。{word('target.other')}で同じ出力のフォルダーを選び、出力を開き直してください（{word('view.output.label')}の欄で同じ出力を選び直しても、開き直しません）。開き直すと、大きくした段と、段の{word('view.panel.table')}は元に戻り、年でくらべるで選んだ年や大会は、初めのものに戻ります。",
                 )
                 gone = (
                     "GUI が無いときは",
+                    # Stage W1 of v2.2.1: the bullet of 2.2.0 before it.
+                    "期間のボタンを押し直しても、段の下の全体図、年でくらべるで選べる年、",
                     "同じ仮想環境 `garmin-normalizer` に入り、",
                     "欄の値を変えて離れると",
                     "[次に開いたときに覚えるもの](#次に開いたときに覚えるもの)にあります。その中の",
@@ -2270,9 +2283,11 @@ class GuiGuideTest(unittest.TestCase):
             # Stage U1 of v2.2.0: another view of another reading than the
             # panels marks them too, only after the check of its generation.
             (page, "otherReading"): ("if (!sameReading(state.answer, answer)) {\n    state.panelsStale = true;",),
-            (page, "requestPlot"): ("if (seq !== state.plotSeq) {\n      return;\n    }\n    state.plotAnswer = answer;\n    otherReading(answer);",),
-            (page, "requestSpread"): ("if (seq !== state.spreadSeq) {\n      return;\n    }\n    state.spreadAnswer = answer;\n    otherReading(answer);",),
-            (page, "requestShoes"): ("if (seq !== state.shoesSeq) {\n      return;\n    }\n    state.shoesAnswer = answer;\n    otherReading(answer);",),
+            # From stage W1 of v2.2.1, the reading of the answer is taken
+            # between the check and its use (takeReading).
+            (page, "requestPlot"): ("if (seq !== state.plotSeq) {\n      return;\n    }\n    if (!takeReading(payload.view, answer)) {\n      state.plotLoading = false;\n      return;\n    }\n    state.plotAnswer = answer;\n    otherReading(answer);",),
+            (page, "requestSpread"): ("if (seq !== state.spreadSeq) {\n      return;\n    }\n    if (!takeReading(payload.view, answer)) {\n      state.spreadLoading = false;\n      return;\n    }\n    state.spreadAnswer = answer;\n    otherReading(answer);",),
+            (page, "requestShoes"): ("if (seq !== state.shoesSeq) {\n      return;\n    }\n    if (!takeReading(payload.view, answer)) {\n      state.shoesLoading = false;\n      return;\n    }\n    state.shoesAnswer = answer;\n    otherReading(answer);",),
         }
         for (script, name), lines in held.items():
             body = function_body(script, name)
