@@ -23,9 +23,6 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
-# Import the diagnostics package before the standalone module: importing
-# standalone first meets a circular import when this file runs on its own.
-from garmin_running_data_normalizer.diagnostics import doctor_input  # noqa: F401
 from garmin_running_data_normalizer.output_location import MESSAGES as OUTPUT_MESSAGES
 from garmin_running_data_normalizer.run_all import RunAllError
 from garmin_running_data_normalizer.runner import main

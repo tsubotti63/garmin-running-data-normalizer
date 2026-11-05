@@ -15,9 +15,6 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
-# Import the diagnostics package before the standalone module: importing
-# standalone first meets a circular import when this file runs on its own.
-from garmin_running_data_normalizer import diagnostics  # noqa: F401
 from garmin_running_data_normalizer.gui import runs
 from garmin_running_data_normalizer.gui.outputs import make_support_bundle, support_bundle_path
 from garmin_running_data_normalizer.gui.runs import (

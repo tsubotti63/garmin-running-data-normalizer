@@ -8,7 +8,6 @@ from typing import Any
 
 from . import __version__
 from .common.os_metadata import is_os_metadata_path
-from .diagnostics.validation import validate_diagnostic_authorities
 from .run_all import OUTPUT_PATHS, RUN_ALL_VERSION, SNAPSHOT_LIFECYCLE_PATHS
 
 
@@ -316,6 +315,12 @@ def validate_standalone_handoff(root: str | Path) -> dict[str, Any]:
             "deterministic output digest does not match manifest payloads"
         )
     if diagnostics_available:
+        # Read where it is used: the diagnostics package imports this module
+        # (its doctor checks a handoff), so an import at the top would meet a
+        # circular import when this module is the first that is imported
+        # (stage W4b of v2.2.1).
+        from .diagnostics.validation import validate_diagnostic_authorities
+
         try:
             validate_diagnostic_authorities(
                 output_root,

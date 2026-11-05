@@ -22,9 +22,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-# Import the diagnostics package before modules that import standalone: the
-# other order meets a circular import when this file runs on its own.
-from garmin_running_data_normalizer import __version__, diagnostics  # noqa: F401
+from garmin_running_data_normalizer import __version__
 from garmin_running_data_normalizer.gui import server as gui_server
 from garmin_running_data_normalizer.gui import views as gui_views
 from garmin_running_data_normalizer.gui.layouts import built_in_answer

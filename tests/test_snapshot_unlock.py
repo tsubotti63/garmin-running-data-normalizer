@@ -17,7 +17,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
-from garmin_running_data_normalizer import diagnostics  # noqa: F401
 from garmin_running_data_normalizer.snapshot import store as store_module
 from garmin_running_data_normalizer.snapshot.store import (
     LOCK_NAME,

@@ -22,7 +22,6 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-from garmin_running_data_normalizer import diagnostics  # noqa: F401
 from garmin_running_data_normalizer.gui import places, runs, settings
 from garmin_running_data_normalizer.gui.places import makeable_settings_folders, settings_file_for
 from garmin_running_data_normalizer.snapshot import initialize_store

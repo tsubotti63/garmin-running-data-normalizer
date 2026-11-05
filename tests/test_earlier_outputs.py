@@ -24,9 +24,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-# Import the diagnostics package before the standalone module: importing
-# standalone first meets a circular import when this file runs on its own.
-from garmin_running_data_normalizer import diagnostics  # noqa: F401
 from garmin_running_data_normalizer import __version__
 from garmin_running_data_normalizer.diagnostics.doctor import DoctorError, doctor_run_output
 from garmin_running_data_normalizer.diagnostics.support_bundle import SupportBundleError, build_support_bundle

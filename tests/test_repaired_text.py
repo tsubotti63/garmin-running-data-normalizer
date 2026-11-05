@@ -12,9 +12,6 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-# Import the diagnostics package before the standalone module: importing
-# standalone first meets a circular import when this file runs on its own.
-from garmin_running_data_normalizer.diagnostics import doctor_run_output  # noqa: F401
 from garmin_running_data_normalizer.common.text import (
     REPLACEMENT_CHARACTER,
     may_hold_lone_surrogates,
