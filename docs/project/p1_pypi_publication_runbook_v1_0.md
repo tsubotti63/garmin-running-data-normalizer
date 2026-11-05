@@ -63,10 +63,25 @@ assertion, not a checkout selector. Before repository code is checked out or
 executed, the workflow requires the protected `main` dispatch ref, the reviewed
 workflow definition on `main`, and equality between `source_sha` and
 `github.sha`. It then checks out `github.sha`, verifies the clean source
-identity again, runs all synthetic tests, builds one wheel and one source
-distribution, applies strict Twine checks, confirms the expected version,
-installs both artifacts in isolated environments, records SHA-256 values, and
-retains the workflow artifact for one day.
+identity again, runs all synthetic tests, the repository checks that the
+usual CI runs (`validate_bootstrap.py`, `validate_platform_alignment.py`,
+`static_policy_scan.py`, `validate_public_command_examples.py`, and
+`validate_public_product_state.py` in `scripts/`; not
+`validate_public_history.py`, which needs the whole history), and the page
+tests with the Node of the runner, whose version it prints. It builds one
+wheel and one source distribution, applies strict Twine checks, confirms the
+expected version, installs both artifacts in isolated environments, records
+SHA-256 values, and retains the workflow artifact for one day. In each
+isolated environment, by its own Python in isolated mode, it checks that
+`standalone` can be the first module imported, that the page files, the
+translation catalogs, and the icons of the GUI are those of the source byte
+for byte, and that the built-in layout names are read from the catalogs.
+These checks show that the files are in the distributions; they do not draw
+the pages or run them in a browser.
+
+The workflow does not wait for the CI and CodeQL runs of `source_sha`. Before
+any dispatch, the Human owner confirms that both completed with success for
+that commit.
 
 An upload additionally requires all of the following:
 
@@ -209,6 +224,14 @@ Only after Product approves the production upload:
    do not move the published tag.
 
 ## Post-publication verification
+
+After an upload, the workflow installs the exact version from the selected
+index in a clean Python 3.11 (the distribution that pip selects, normally the
+wheel) and checks its metadata version, `--version`, that `standalone` can be
+the first module imported, and that its page files and catalogs can be read:
+every page file that the GUI serves is there and not empty, both catalogs
+have the same keys and no empty message, and the built-in layout names are
+read. It does not check the published sdist or the hashes; check them below.
 
 For the selected index verify:
 

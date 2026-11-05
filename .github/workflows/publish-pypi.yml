@@ -70,6 +70,17 @@ jobs:
         run: python -m pip install '.[test,release]'
       - name: Run synthetic regression tests
         run: python -m pytest
+      - name: Run repository checks
+        run: |
+          python scripts/validate_bootstrap.py
+          python scripts/validate_platform_alignment.py
+          python scripts/static_policy_scan.py
+          python scripts/validate_public_command_examples.py
+          python scripts/validate_public_product_state.py
+      - name: Run page tests
+        run: |
+          node --version
+          node --test tests/gui_js/*.test.mjs
       - name: Build wheel and source distribution
         run: python -m build
       - name: Validate distribution metadata and README rendering
@@ -99,6 +110,21 @@ jobs:
           /tmp/garmin-normalizer-wheel/bin/python -m pip check
           /tmp/garmin-normalizer-wheel/bin/python -c "import importlib.metadata as m; import garmin_running_data_normalizer as p; assert m.version('garmin-running-data-normalizer') == p.__version__"
           /tmp/garmin-normalizer-wheel/bin/garmin-running-data-normalizer --version
+          /tmp/garmin-normalizer-wheel/bin/python -I -c "import garmin_running_data_normalizer.standalone"
+          /tmp/garmin-normalizer-wheel/bin/python -I - <<'PY'
+          from importlib.resources import files
+          from pathlib import Path
+
+          from garmin_running_data_normalizer.gui.layouts import built_in_name_keys
+
+          installed = Path(str(files("garmin_running_data_normalizer"))).resolve()
+          source = Path("src/garmin_running_data_normalizer").resolve()
+          assert installed != source and source.is_dir(), installed
+          for folder in ("gui/static", "assets"):
+              found, wanted = ({path.relative_to(root / folder).as_posix(): path.read_bytes() for path in (root / folder).rglob("*") if path.is_file()} for root in (installed, source))
+              assert wanted and found == wanted, (folder, sorted(set(found) ^ set(wanted)) or sorted(name for name in wanted if found[name] != wanted[name]))
+          assert len(built_in_name_keys()) == 12
+          PY
       - name: Verify isolated source distribution installation
         run: |
           python -m venv /tmp/garmin-normalizer-sdist
@@ -106,6 +132,21 @@ jobs:
           /tmp/garmin-normalizer-sdist/bin/python -m pip check
           /tmp/garmin-normalizer-sdist/bin/python -c "import importlib.metadata as m; import garmin_running_data_normalizer as p; assert m.version('garmin-running-data-normalizer') == p.__version__"
           /tmp/garmin-normalizer-sdist/bin/garmin-running-data-normalizer --version
+          /tmp/garmin-normalizer-sdist/bin/python -I -c "import garmin_running_data_normalizer.standalone"
+          /tmp/garmin-normalizer-sdist/bin/python -I - <<'PY'
+          from importlib.resources import files
+          from pathlib import Path
+
+          from garmin_running_data_normalizer.gui.layouts import built_in_name_keys
+
+          installed = Path(str(files("garmin_running_data_normalizer"))).resolve()
+          source = Path("src/garmin_running_data_normalizer").resolve()
+          assert installed != source and source.is_dir(), installed
+          for folder in ("gui/static", "assets"):
+              found, wanted = ({path.relative_to(root / folder).as_posix(): path.read_bytes() for path in (root / folder).rglob("*") if path.is_file()} for root in (installed, source))
+              assert wanted and found == wanted, (folder, sorted(set(found) ^ set(wanted)) or sorted(name for name in wanted if found[name] != wanted[name]))
+          assert len(built_in_name_keys()) == 12
+          PY
       - name: Record candidate checksums
         run: sha256sum dist/*
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -188,6 +229,22 @@ jobs:
           done
           python -c "import importlib.metadata as m; import garmin_running_data_normalizer as p; assert m.version('garmin-running-data-normalizer') == p.__version__"
           garmin-running-data-normalizer --version
+          python -I -c "import garmin_running_data_normalizer.standalone"
+          python -I - <<'PY'
+          import json
+          from importlib.resources import files
+
+          from garmin_running_data_normalizer.gui.layouts import built_in_name_keys
+          from garmin_running_data_normalizer.gui.server import STATIC_FILES, load_static_files
+
+          loaded = load_static_files()
+          assert loaded and len(loaded) == len(STATIC_FILES) and all(body for body, _ in loaded.values())
+          catalogs = files("garmin_running_data_normalizer.gui").joinpath("static").joinpath("i18n")
+          english, japanese = (json.loads(catalogs.joinpath(name).read_text(encoding="utf-8")) for name in ("en.json", "ja.json"))
+          assert english and english.keys() == japanese.keys()
+          assert all(isinstance(text, str) and text.strip() for text in (*english.values(), *japanese.values()))
+          assert len(built_in_name_keys()) == 12
+          PY
 
   publish-pypi:
     name: Publish to PyPI
@@ -228,3 +285,19 @@ jobs:
           done
           python -c "import importlib.metadata as m; import garmin_running_data_normalizer as p; assert m.version('garmin-running-data-normalizer') == p.__version__"
           garmin-running-data-normalizer --version
+          python -I -c "import garmin_running_data_normalizer.standalone"
+          python -I - <<'PY'
+          import json
+          from importlib.resources import files
+
+          from garmin_running_data_normalizer.gui.layouts import built_in_name_keys
+          from garmin_running_data_normalizer.gui.server import STATIC_FILES, load_static_files
+
+          loaded = load_static_files()
+          assert loaded and len(loaded) == len(STATIC_FILES) and all(body for body, _ in loaded.values())
+          catalogs = files("garmin_running_data_normalizer.gui").joinpath("static").joinpath("i18n")
+          english, japanese = (json.loads(catalogs.joinpath(name).read_text(encoding="utf-8")) for name in ("en.json", "ja.json"))
+          assert english and english.keys() == japanese.keys()
+          assert all(isinstance(text, str) and text.strip() for text in (*english.values(), *japanese.values()))
+          assert len(built_in_name_keys()) == 12
+          PY
