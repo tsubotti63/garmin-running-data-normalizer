@@ -524,15 +524,15 @@ def test_candidate_contract_marker_says_where_the_candidate_is_published(
     # only, as a release candidate is for its checks; nothing else is taken.
     # A candidate after the stable release (stage E2b).
     _copy_validator_inputs(tmp_path)
-    _start_implementation_candidate(tmp_path, "2.2.1rc1")
+    _start_implementation_candidate(tmp_path, "2.2.2rc1")
     contract = tmp_path / "docs/output_contract.md"
     text = contract.read_text(encoding="utf-8")
     # Every marker of the candidate: the source may be this candidate, with
     # its own marker already (v2.0.1 F4e).
-    marker = re.compile(r"^- Implementation candidate: v2\.2\.1rc1\b.*$", re.M)
+    marker = re.compile(r"^- Implementation candidate: v2\.2\.2rc1\b.*$", re.M)
     assert marker.search(text) is not None
     contract.write_text(
-        marker.sub(f"- Implementation candidate: v2.2.1rc1 {place}".rstrip(), text),
+        marker.sub(f"- Implementation candidate: v2.2.2rc1 {place}".rstrip(), text),
         encoding="utf-8",
     )
 
@@ -568,8 +568,8 @@ def test_the_stable_release_keeps_no_candidate_marker(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     for relative, marker in (
-        ("README.md", "Implementation candidate: **v2.2.1rc1**"),
-        ("docs/output_contract.md", "- Implementation candidate: v2.2.1rc1 (TestPyPI only)"),
+        ("README.md", "Implementation candidate: **v2.2.2rc1**"),
+        ("docs/output_contract.md", "- Implementation candidate: v2.2.2rc1 (TestPyPI only)"),
     ):
         document = tmp_path / relative
         document.write_text(
@@ -702,19 +702,19 @@ def test_current_migration_heading_accepts_any_previous_version(
 
 def test_maintainer_state_follows_candidate_package_version(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
-    _start_implementation_candidate(tmp_path, "2.2.1")
+    _start_implementation_candidate(tmp_path, "2.2.2")
     readiness = tmp_path / "docs/release_readiness.md"
     readiness.write_text(
         readiness.read_text(encoding="utf-8").replace(
             f"Current source and package version: `{__version__}`",
-            "Current source and package version: `2.2.1`",
+            "Current source and package version: `2.2.2`",
         ),
         encoding="utf-8",
     )
 
     version, findings = validate(tmp_path)
 
-    assert version == "2.2.1"
+    assert version == "2.2.2"
     assert not any(
         item.startswith(f"{relative}:")
         for relative in MAINTAINER_STATE_DOCUMENTS
@@ -724,13 +724,13 @@ def test_maintainer_state_follows_candidate_package_version(tmp_path: Path) -> N
 
 def test_candidate_source_version_must_be_recorded(tmp_path: Path) -> None:
     _copy_validator_inputs(tmp_path)
-    _start_implementation_candidate(tmp_path, "2.2.1")
+    _start_implementation_candidate(tmp_path, "2.2.2")
 
     _, findings = validate(tmp_path)
 
     assert (
         "docs/release_readiness.md: required marker is missing: "
-        "Current source and package version: `2.2.1`"
+        "Current source and package version: `2.2.2`"
     ) in findings
 
 
