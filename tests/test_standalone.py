@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-# Import the diagnostics package before the standalone module: importing
-# standalone first meets a circular import when this file runs on its own.
-from garmin_running_data_normalizer import diagnostics  # noqa: F401
 from garmin_running_data_normalizer.run_all import run_all
 from garmin_running_data_normalizer.standalone import (
     OtherVersionError,
@@ -244,6 +244,82 @@ class StandaloneHandoffTest(unittest.TestCase):
             with self.assertRaisesRegex(OtherVersionError, "made by version 1.4.2 of this app") as caught:
                 validate_standalone_handoff(output)
             self.assertEqual(caught.exception.version, "1.4.2")
+
+
+# Each module of the package imported first, with no other module of the
+# package loaded, in a new Python (stage W4b of v2.2.1): the names of the
+# modules found under the source folder and the errors, as ASCII JSON.
+FIRST_IMPORTS = """
+import importlib, json, sys
+from pathlib import Path
+
+source = Path(sys.argv[1])
+sys.path.insert(0, str(source))
+package = "garmin_running_data_normalizer"
+names = []
+for path in sorted((source / package).rglob("*.py")):
+    parts = path.relative_to(source).with_suffix("").parts
+    if parts[-1] != "__main__":
+        names.append(".".join(parts[:-1] if parts[-1] == "__init__" else parts))
+failed = []
+for name in names:
+    for loaded in [key for key in sys.modules if key == package or key.startswith(package + ".")]:
+        del sys.modules[loaded]
+    try:
+        importlib.import_module(name)
+    except Exception as error:
+        failed.append(f"{name}: {type(error).__name__}: {error}")
+print(json.dumps({"file": getattr(sys.modules.get(package), "__file__", None), "names": names, "failed": failed}))
+"""
+
+
+class FirstImportTest(unittest.TestCase):
+    def test_every_module_can_be_the_first_that_is_imported(self) -> None:
+        # The diagnostics package imports standalone (its doctor checks a
+        # handoff), and standalone reads the diagnostic checks where it uses
+        # them, so that no module meets a circular import when it is the
+        # first of the package that is imported, as in a script or a test
+        # file run on its own (stage W4b of v2.2.1). A new Python, so that
+        # the modules that this run has loaded play no part, with its home
+        # folders in a folder of the test, where importing writes nothing.
+        with tempfile.TemporaryDirectory() as folder:
+            completed = subprocess.run(
+                [sys.executable, "-I", "-c", FIRST_IMPORTS, str(ROOT / "src")],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=120,
+                check=False,
+                cwd=folder,
+                env={
+                    **os.environ,
+                    **dict.fromkeys(("HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "XDG_STATE_HOME"), folder),
+                },
+            )
+            written = sorted(path.name for path in Path(folder).iterdir())
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(written, [])
+        found = json.loads(completed.stdout)
+        self.assertEqual(found["failed"], [])
+        self.assertEqual(
+            Path(found["file"]).resolve(), (ROOT / "src/garmin_running_data_normalizer/__init__.py").resolve()
+        )
+        # Not a few modules by mistake: those that import standalone, and
+        # standalone and the diagnostics package themselves, are among them.
+        self.assertGreaterEqual(len(found["names"]), 80)
+        self.assertLessEqual(
+            {
+                "garmin_running_data_normalizer",
+                "garmin_running_data_normalizer.diagnostics",
+                "garmin_running_data_normalizer.diagnostics.doctor",
+                "garmin_running_data_normalizer.gui.outputs",
+                "garmin_running_data_normalizer.output_check",
+                "garmin_running_data_normalizer.runner",
+                "garmin_running_data_normalizer.standalone",
+                "garmin_running_data_normalizer.view.data",
+            },
+            set(found["names"]),
+        )
 
 
 if __name__ == "__main__":

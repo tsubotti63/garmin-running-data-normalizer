@@ -13,9 +13,6 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-# Import the diagnostics package before modules that import standalone: the
-# other order meets a circular import when this file runs on its own.
-from garmin_running_data_normalizer import diagnostics  # noqa: F401
 from garmin_running_data_normalizer.common.names import DIRECTION_CHARACTERS, unsafe_character
 from garmin_running_data_normalizer.gui.settings import SHELF_STATES
 from garmin_running_data_normalizer.view.items import FIRST_ITEMS, ITEMS

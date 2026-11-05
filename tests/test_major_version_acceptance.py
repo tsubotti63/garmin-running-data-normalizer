@@ -7,8 +7,6 @@ from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import patch
 
-# Import the diagnostics package before the standalone module: importing
-# standalone first meets a circular import when this file runs on its own.
 from garmin_running_data_normalizer.diagnostics import doctor as doctor_module
 from garmin_running_data_normalizer.diagnostics.doctor import DoctorError, doctor_run_output
 from garmin_running_data_normalizer import run_all as run_all_module

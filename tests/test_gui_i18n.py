@@ -8,9 +8,6 @@ import unittest
 from html.parser import HTMLParser
 from pathlib import Path
 
-# Import the diagnostics package before modules that import standalone:
-# the other order meets a circular import when this file runs on its own.
-from garmin_running_data_normalizer import diagnostics  # noqa: F401
 from garmin_running_data_normalizer.diagnostics import doctor
 from garmin_running_data_normalizer.diagnostics.contracts import (
     SAFE_WARNING_CODES,

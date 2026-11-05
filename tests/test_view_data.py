@@ -19,9 +19,6 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-# Import the diagnostics package before modules that import standalone:
-# the other order meets a circular import when this file runs on its own.
-from garmin_running_data_normalizer import diagnostics  # noqa: F401
 from garmin_running_data_normalizer.output_check import OutputActionError
 from garmin_running_data_normalizer.run_all import ACTIVITIES_CSV_FIT_SESSION_COLUMNS, run_all
 from garmin_running_data_normalizer.common.identity import IDENTIFIER, read_identifier

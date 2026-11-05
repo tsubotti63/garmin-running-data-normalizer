@@ -14,9 +14,6 @@ from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
-# Import the diagnostics package before modules that import standalone:
-# the other order meets a circular import when this file runs on its own.
-from garmin_running_data_normalizer import diagnostics  # noqa: F401
 from garmin_running_data_normalizer import output_check
 from garmin_running_data_normalizer.diagnostics.doctor import DoctorError, doctor_run_output
 from garmin_running_data_normalizer.gui import outputs, places

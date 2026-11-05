@@ -12,8 +12,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-# The diagnostics package is imported before standalone: the other order meets
-# a circular import when this module is the first that is imported.
 from .diagnostics.doctor import DoctorError, doctor_run_output
 from .standalone import OtherVersionError, StandaloneHandoffError, validate_standalone_handoff
 

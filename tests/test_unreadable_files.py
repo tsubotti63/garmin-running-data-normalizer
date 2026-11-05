@@ -12,8 +12,6 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
-# Import the diagnostics package before the standalone module: importing
-# standalone first meets a circular import when this file runs on its own.
 from garmin_running_data_normalizer.diagnostics import doctor_input, doctor_run_output
 from garmin_running_data_normalizer.diagnostics.support_bundle import build_support_bundle
 from garmin_running_data_normalizer.intake.archive import ArchiveLimits
