@@ -142,7 +142,8 @@ def _add_install_line(root: Path, relative: str, line: str) -> None:
 
 # A release candidate after this release, which is installed from TestPyPI
 # (stage D2); the stable release is installed from Production PyPI only
-# (stage E2b).
+# (stage E2b). While the source is itself a candidate, it is that candidate,
+# whose lines the README already holds (as for 2.2.0rc1; stage W6a of v2.2.1).
 CANDIDATE = "2.2.1rc1"
 
 

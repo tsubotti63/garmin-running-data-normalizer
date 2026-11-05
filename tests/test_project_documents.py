@@ -219,6 +219,9 @@ def test_a_release_candidate_says_how_to_try_it_beside_the_stable_release() -> N
         "この環境からアイコンも作らないで",
         "その 1 行 （Mac と Windows PowerShell）は、英語の README の [Install](README.md#install) にあります。",
         "2 つのバージョンは、設定のファイルを 1 つ使います",
+        # The file to copy, and where the guide says it is (Codex's review
+        # of the diff of W6a).
+        "[2 回目からの起動](docs/gui_guide.ja.md#2-回目からの起動)にある `gui-settings.json`",
         "保管場所と出力は消しません。",
         f"v{stable} の設定を残したいときは、試す前にそのファイルの写しを取り、",
         "2 つの GUI を止めてから戻してください。2 つの GUI を同時に開かないでください。",
@@ -230,6 +233,34 @@ def test_a_release_candidate_says_how_to_try_it_beside_the_stable_release() -> N
         f"v{stable} の「覚えた設定を消す…」はそのファイルを消し、v{rc} が覚えたものも消えます。",
         f"v{rc} のものは見るページの印も消し、印は元に戻せません。",
     ) if first_of_format_2 else ():
+        assert sentence in japanese, sentence
+    # A later candidate, of the same form of settings, says instead that each
+    # version reads what the other saves, that it does not open an output of
+    # the stable release, and to copy the marks too (stage W6a of v2.2.1,
+    # Codex's objection 7 to the plan of W6).
+    for sentence in (
+        "in the same form: each version reads what the other saves.",
+        f"v{rc} does not open an output that v{stable} made, as no version opens the output of another:",
+        "Copy `gui-marks.json` too to keep the marks.",
+    ) if not first_of_format_2 else ():
+        assert sentence in readme, sentence
+    for sentence in (
+        f"v{rc} は v{stable} の出力を開きません。",
+        "印も残すなら `gui-marks.json` の写しも取ってください。",
+    ) if not first_of_format_2 else ():
+        assert sentence in japanese, sentence
+    # Forget removes the half-written files of a write from 2.2.1 (stage W4),
+    # on Windows only those ten minutes old, so that only a candidate of 2.2.1
+    # says so beside v2.2.0 (Codex's review of the diff of W6a).
+    first_with_temporaries = rc.startswith("2.2.1rc")
+    for sentence in (
+        f"that of v{rc} also removes the half-written files that a write leaves when the app stops in the middle of it "
+        "(on Windows, once they are ten minutes old).",
+    ) if first_with_temporaries else ():
+        assert sentence in readme, sentence
+    for sentence in (
+        f"v{rc} のものは、落ちたときに残る書きかけのファイルも消します（Windows では 10 分たってから）。",
+    ) if first_with_temporaries else ():
         assert sentence in japanese, sentence
 
 

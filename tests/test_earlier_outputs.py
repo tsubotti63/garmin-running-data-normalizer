@@ -134,7 +134,7 @@ class EarlierOutputTest(StopLines, unittest.TestCase):
             ("2.0.0", RUN_ALL_VERSION, "2.0.0"),
             ("2.0.1", RUN_ALL_VERSION, "2.0.1"),
             ("2.1.0", RUN_ALL_VERSION, "2.1.0"),
-            ("2.2.1", RUN_ALL_VERSION, "2.2.1"),
+            ("2.2.2", RUN_ALL_VERSION, "2.2.2"),
             # A pre-release, named as a release is (stage D2): the last
             # release candidate before this release (stage E2b, v2.2.0 K6a).
             ("2.2.0rc2", RUN_ALL_VERSION, "2.2.0rc2"),
