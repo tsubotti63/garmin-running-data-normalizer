@@ -1100,6 +1100,26 @@ button.primary:disabled {
   color: var(--text);
 }
 
+/* From v2.2.1 (stage W2) each question is in a row of its own, its box ending
+   where its button ends: the page sets the room right of it (alignConfirmRow);
+   the words in the box stay at its left. */
+.statusbar .confirm-row {
+  display: flex;
+  flex: 1 1 100%;
+  justify-content: flex-end;
+}
+
+.statusbar .confirm-row .confirm {
+  flex: 0 1 34em;
+  min-width: 0;
+}
+
+/* Where the room left of the end of the button is short, the box is as wide
+   as the bar (the checker's review of the plan of W2). */
+.statusbar .confirm-row[data-fit="bar"] .confirm {
+  flex: 1 1 100%;
+}
+
 .confirm .question {
   font-weight: 600;
 }

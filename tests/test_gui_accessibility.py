@@ -2278,6 +2278,99 @@ class GuiViewPageStructureTest(unittest.TestCase):
             with self.subTest(design=line[:60]):
                 self.assertEqual(design.count(line), 1)
 
+    def test_the_questions_of_the_bar_end_where_their_buttons_end(self) -> None:
+        # Stage W2 of v2.2.1 (the person's choice of the samples): the
+        # questions of Quit (both pages) and of forgetting the settings are each
+        # in a row of their own, whose room right of the button the page
+        # measures, and a way of Compare years chosen shows its chart again.
+        normalize = page("index.html")
+        for elements, pairs in ((self.elements, (("quit-row", "quit-confirm"),)), (normalize, (("quit-row", "quit-confirm"), ("forget-row", "forget-confirm")))):
+            for row, question in pairs:
+                with self.subTest(row=row):
+                    box = by_id(elements, row)
+                    self.assertEqual((box.get("class"), "hidden" in box.attributes), ("confirm-row", True))
+                    self.assertIs(by_id(elements, question).parent, box)
+                    self.assertIn("hidden", by_id(elements, question).attributes)
+        style = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
+        for rule in (
+            ".statusbar .confirm-row {\n  display: flex;\n  flex: 1 1 100%;\n  justify-content: flex-end;\n}",
+            ".statusbar .confirm-row .confirm {\n  flex: 0 1 34em;\n  min-width: 0;\n}",
+            '.statusbar .confirm-row[data-fit="bar"] .confirm {\n  flex: 1 1 100%;\n}',
+        ):
+            with self.subTest(rule=rule[:40]):
+                self.assertIn(rule, style)
+        measure = (
+            "function alignConfirmRow(row, button) {\n  if (row.hidden) {\n    return;\n  }\n  const bar = row.parentElement;\n"
+            "  const style = getComputedStyle(bar);\n  const box = bar.getBoundingClientRect();\n  const end = button.getBoundingClientRect().right;\n"
+            "  const room = end - box.left - parseFloat(style.paddingLeft);\n"
+            "  const wide = room < 20 * parseFloat(getComputedStyle(document.documentElement).fontSize);\n"
+            "  row.dataset.fit = wide ? \"bar\" : \"button\";\n"
+            "  row.style.paddingRight = wide ? \"0px\" : `${Math.max(0, Math.round(box.right - parseFloat(style.paddingRight) - end))}px`;\n"
+            "  row.firstElementChild.style.maxWidth = wide ? \"\" : `${Math.floor(room)}px`;\n}"
+        )
+        # The bar and each part of it but the rows of the questions (a part
+        # that grows or wraps may move a button while the bar keeps its size).
+        WATCH_PARTS = (
+            "    const bar = ui.quitRow.parentElement;\n    watcher.observe(bar);\n    for (const part of bar.children) {\n"
+            "      if (!part.classList.contains(\"confirm-row\")) {\n        watcher.observe(part);\n      }\n    }\n"
+        )
+        # What the observer asks for is measured in the next frame, so that
+        # what the measuring changes does not come back to the observer in the
+        # same frame (the errors of the window on the real pages of W2).
+        SCHEDULE = (
+            "let alignFrame = null;\n\nfunction scheduleAlign() {\n  if (alignFrame !== null) {\n    return;\n  }\n"
+            "  alignFrame = window.requestAnimationFrame(() => {\n    alignFrame = null;\n    ALIGN\n  });\n}"
+        )
+        app = (STATIC_ROOT / "app.mjs").read_text(encoding="utf-8")
+        for name, script, lines in (
+            ("view.mjs", self.script, (
+                measure,
+                '  quitRow: byId("quit-row"),',
+                "  ui.quitRow.hidden = !state.quitAsked;\n  ui.quitConfirm.hidden = !state.quitAsked;\n  alignConfirmRow(ui.quitRow, ui.quit);",
+                '  window.addEventListener("resize", () => alignConfirmRow(ui.quitRow, ui.quit));',
+                "  if (compareModeNow() !== mode) {\n    state.compare.table = false;\n  }\n  state.compareMode = mode;\n  rememberItems(true);",
+                "  renderHelp();\n  // The question of Quit, after every part of the bar is drawn (stage W2 of\n  // v2.2.1).\n  alignConfirmRow(ui.quitRow, ui.quit);\n}",
+                "    const watcher = new ResizeObserver(scheduleAlign);\n" + WATCH_PARTS,
+                SCHEDULE.replace("ALIGN", "alignConfirmRow(ui.quitRow, ui.quit);"),
+            )),
+            ("app.mjs", app, (
+                measure,
+                '  quitRow: byId("quit-row"),',
+                '  forgetRow: byId("forget-row"),',
+                "  ui.forgetRow.hidden = !state.forget.asked;\n  ui.forgetConfirm.hidden = !state.forget.asked;\n  alignConfirmRow(ui.forgetRow, ui.forgetButton);",
+                "  ui.quitRow.hidden = !state.quitAsked;\n  ui.quitConfirm.hidden = !state.quitAsked;\n  alignConfirmRow(ui.quitRow, ui.quit);",
+                "function alignConfirmRows() {\n  alignConfirmRow(ui.quitRow, ui.quit);\n  alignConfirmRow(ui.forgetRow, ui.forgetButton);\n}",
+                '  window.addEventListener("resize", alignConfirmRows);',
+                "  renderInfos();\n  // The questions of the bar, after every part of it is drawn (stage W2 of\n  // v2.2.1).\n  alignConfirmRows();\n}",
+                "    const watcher = new ResizeObserver(scheduleAlign);\n" + WATCH_PARTS,
+                SCHEDULE.replace("ALIGN", "alignConfirmRows();"),
+            )),
+        ):
+            for line in lines:
+                with self.subTest(script=name, line=line[:50]):
+                    self.assertEqual(script.count(line), 1)
+        # The table of Compare years goes down only where the way shown
+        # changes, besides its own button, and each comparison starts with
+        # the chart: the item, the years, the month, and the races keep it
+        # (Codex's review of the diff of W2 of v2.2.1).
+        self.assertEqual(re.findall(r"state\.compare\.table = [^;\n]*;", self.script), ["state.compare.table = false;", "state.compare.table = !state.compare.table;"])
+        way = re.search(r"\nfunction chooseCompareMode\(mode\) \{\n(.*?)\n\}\n", self.script, re.DOTALL)
+        assert way is not None
+        self.assertIn("  if (compareModeNow() !== mode) {\n    state.compare.table = false;\n  }\n", way.group(1))
+        opened = re.search(r"\n  state\.compare = \{\n(.*?)\n  \};\n", self.script, re.DOTALL)
+        assert opened is not None
+        self.assertIn("\n    table: false,\n", opened.group(1))
+        self.assertIn('  ui.compareTable.addEventListener("click", () => {\n    state.compare.table = !state.compare.table;\n    render();\n  });', self.script)
+        design = re.sub(r"\s+", " ", (ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8"))
+        for line in (
+            "From v2.2.1 (stage W2) each question is in a row of its own, its box ending where its button ends: CSS alone does not know where the button is,",
+            "the box is at most as wide as the room left of the end of the button, and a room under 20rem leaves the box as wide as the bar.",
+            "Both questions of the normalization page can show at once, each in its own row.",
+            "and as the window, the bar, or any part of the bar changes size (a part that grows or wraps may move the button while the bar keeps its size; such a change is measured in the next frame, so that what the measuring changes does not come back to the observer of the bar in the same frame);",
+        ):
+            with self.subTest(design=line[:40]):
+                self.assertEqual(design.count(line), 1)
+
     def test_a_comparison_never_changes_the_panels_and_drops_old_answers(self) -> None:
         # v2.2.0 L1 (plan v2, 5 and 6): the numbers of a comparison are one
         # generation, whose older answers are dropped when they come, and

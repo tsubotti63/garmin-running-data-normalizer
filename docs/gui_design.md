@@ -123,7 +123,18 @@ with the seconds of each step, and the results by data family (stage B1a).
 - Cancelling asks for confirmation in the fourth box, not in a dialog of the
   browser.
 - Quitting asks for confirmation in the bar at the bottom, as forgetting the
-  settings does (v2.0.1, stage F2). While the server stops, the bar says so
+  settings does (v2.0.1, stage F2). From v2.2.1 (stage W2) each question is
+  in a row of its own, its box ending where its button ends: CSS alone does
+  not know where the button is, so the page measures the room right of the
+  button as the question shows, at the end of each drawing, and as the
+  window, the bar, or any part of the bar changes size (a part that grows or
+  wraps may move the button while the bar keeps its size; such a change is
+  measured in the next frame, so that what the measuring changes does not
+  come back to the observer of the bar in the same frame); the box is at most
+  as wide as the room left of the end of the button, and a room under 20rem
+  leaves the box as wide as the bar. Both questions of the normalization
+  page can show at once, each in its own row. While the server stops, the
+  bar says so
   and the page takes no action; once it stopped, the line above the boxes
   says that the app has stopped and how to start it again. A connection lost
   on the way is told as any lost connection. The language and the help

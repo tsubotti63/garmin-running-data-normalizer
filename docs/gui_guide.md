@@ -1521,9 +1521,11 @@ values are made):
     with a value**, or **Records**, by the item); the last row has the value of the year (or of the month). * marks a period
     cut short (by an end of the output, of the year or month, or by the race
     day), and — a period that the year does not have (outside the output, or
-    a day such as 29 February that the year lacks). While **Compare years**
-    is open, the table stays when you change **Show as**: to bring back the
-    chart, with its legend, press **Show as a chart** or
+    a day such as 29 February that the year lacks). From 2.2.1, choosing
+    another way in **Show as** brings back the chart, with its legend;
+    changing the item, the years, the month, or the races keeps the table. In
+    2.2.0, while **Compare years** is open, the table stays when you change
+    **Show as**: to bring back the chart, press **Show as a chart** or
     **Show as a calendar**.
   - **Years**: the years of the output. At first the newest four, and
     **Up to 6 years**. The years chosen are not remembered: each time, the
@@ -2170,8 +2172,10 @@ Windows PowerShell:
 ### Quit from the view page
 
 **Quit the app…** at the bottom of the view page quits the app, as **Quit** on
-the normalization page does. Its question, **Quit this app?**, shows at the
-left end of the bar at the bottom (**Quit the app…** is at the right end).
+the normalization page does. Its question, **Quit this app?**, shows from
+2.2.1 right above **Quit the app…**, ending where the button ends (across
+the bar where a narrow window leaves too little room left of the button; in
+2.2.0, at the left end of the bar at the bottom).
 **Quit this app** quits it, and the other page says that the app has stopped;
 **Keep using it**, or Escape, keeps the app. While a normalization runs, the
 page says that the app cannot quit. Afterwards, you may close the tabs; to use
