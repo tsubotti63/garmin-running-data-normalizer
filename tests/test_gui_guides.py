@@ -1126,6 +1126,40 @@ class GuiGuideTest(unittest.TestCase):
                 self.assertEqual(reads.count(sentences[language]), 1)
                 self.assertNotIn("**Item**:" if language == "en" else "「項目」：", reads)
 
+    def test_guides_say_that_forgetting_removes_the_half_written_files(self) -> None:
+        # v2.2.1 W4: forgetting the settings also removes the half-written
+        # files that a write leaves where this app stops in the middle of it,
+        # and the privacy section says that they hold a copy; the design
+        # document gives the rules.
+        said = {
+            "ja": (
+                "（2.2.1 から）書く途中でこのアプリが落ちたときに残る書きかけのファイル（設定や印の写しが入ります）も消し、それだけが残っているときも押せます。消すのは、書いたこのアプリがもう終わっているものか、10 分より古いものです（Windows では、10 分より古いものだけ）。ほかに開いているこのアプリが書いている途中のものは残します。",
+                "（2.2.1 から）書く途中でこのアプリが落ちたときに残る書きかけのファイルにも、設定や印の写しが入ります。「覚えた設定を消す…」で一緒に消えます（Windows では、落ちてから 10 分たったあとに）。",
+            ),
+            "en": (
+                "From 2.2.1, it also removes the half-written files that a write leaves when this app stops in the middle of it (they hold a copy of the settings or the marks), and it can be pressed while only such a file is there: one whose launch has ended, or one older than ten minutes (on Windows, only one older than ten minutes). One that another open launch of this app is writing at that moment stays.",
+                "A half-written file that a write leaves when this app stops in the middle of it holds a copy of them too; from 2.2.1, **Forget the remembered settings…** removes it with them (on Windows, once it is ten minutes old).",
+            ),
+        }
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            for sentence in said[language]:
+                with self.subTest(language=language, sentence=sentence[:30]):
+                    self.assertEqual(reads.count(sentence), 1)
+        design = " ".join((ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        for sentence in (
+            "From v2.2.1 (stage W4) forgetting also removes the temporary files that a write leaves where this app stops in the middle of it",
+            "and any older than ten minutes.",
+            "A newer one of another process that is alive, another launch in the middle of its write, stays, and so does the folder with it.",
+            "One that cannot be removed is told as its file would be, and the button can be pressed while one is there.",
+            "A folder that is a link is never looked into, as the settings are never written into one;",
+            "a file is removed only while it is still the one looked at (a newer write or another file in its place stays);",
+            "and one that cannot be looked at, or a folder that cannot be listed, is told as left.",
+        ):
+            with self.subTest(design=sentence[:30]):
+                self.assertEqual(design.count(sentence), 1)
+
     def test_guides_say_the_words_of_the_page_of_v221(self) -> None:
         # v2.2.1 W3 (the person's answer 「おすすめのとおり」): the guides name the
         # bars, the buttons, the steps of the colors, and the ranges of a
@@ -2814,8 +2848,10 @@ class GuiGuideTest(unittest.TestCase):
                 self.assertIn(line, design)
         gui = ROOT / "src" / "garmin_running_data_normalizer" / "gui"
         settings = (gui / "settings.py").read_text(encoding="utf-8")
-        self.assertIn("    with _CHANGE_LOCK:\n        present = any(settings_present(place) for place in places_to_forget)\n        _generation += 1\n", settings)
-        self.assertIn("    with _CHANGE_LOCK:\n        values, notice = read_settings(path)\n        marks, marks_notice = read_marks(marks_path)\n        present = settings_present(path) or settings_present(marks_path)\n        generation = _generation\n", settings)
+        # From stage W4 of v2.2.1 the abandoned temporary files are looked at
+        # in the same lock, before the generation moves on.
+        self.assertIn("    with _CHANGE_LOCK:\n        present = any(settings_present(place) for place in places_to_forget)\n        try:\n            temporaries, unknown = _abandoned_temporaries(places_to_forget)\n        except OSError:\n            # A folder that cannot be looked at: what is in it is not known\n            # to be gone (Codex's review of the diff).\n            temporaries, unknown = [], {0}\n        present = present or bool(temporaries) or bool(unknown)\n        _generation += 1\n", settings)
+        self.assertIn("    with _CHANGE_LOCK:\n        values, notice = read_settings(path)\n        marks, marks_notice = read_marks(marks_path)\n        # An abandoned temporary file is there to forget too (stage W4 of\n        # v2.2.1); the launch is told by the places remembered, not by this.\n        present = settings_present(path) or settings_present(marks_path) or _temporaries_present((path, marks_path))\n        generation = _generation\n", settings)
         self.assertIn("        notice, present, generation = self.server.runs.when_idle(forget_settings)\n", (gui / "server.py").read_text(encoding="utf-8"))
         self.assertIn("        with self._lock:\n            if self._run is not None and self._run.active:\n                raise RunActiveError()\n            return action()\n", (gui / "runs.py").read_text(encoding="utf-8"))
         # The lock of the settings is never held while that of the runs is

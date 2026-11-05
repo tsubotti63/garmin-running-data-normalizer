@@ -196,6 +196,21 @@ first one. A file that cannot be used is told in the bar, and the launch is a
 first one: one of another form is replaced by the next settings, and one of a
 newer version is never written over. The CLI remembers nothing.
 
+From v2.2.1 (stage W4) forgetting also removes the temporary files that a
+write leaves where this app stops in the middle of it
+(`.<name>.<pid>.<8 hex>.tmp` of the settings and of the marks, in their
+folder, each a copy of them): those of the server's own process, whose
+writes are under the lock of the settings, of a process that is gone, by its
+pid where the system tells it without harm (not on Windows, where `os.kill`
+stops a process), and any older than ten minutes. A newer one of another
+process that is alive, another launch in the middle of its write, stays, and
+so does the folder with it. One that cannot be removed is told as its file
+would be, and the button can be pressed while one is there. A folder that is
+a link is never looked into, as the settings are never written into one; a
+file is removed only while it is still the one looked at (a newer write or
+another file in its place stays); and one that cannot be looked at, or a
+folder that cannot be listed, is told as left.
+
 From v2.1.0 the settings also remember the colors of the page when the person
 chose Light or Dark (`theme`), and the items that the view page showed and
 whether its item shelf was open (`view_items` and `view_shelf`, by the names

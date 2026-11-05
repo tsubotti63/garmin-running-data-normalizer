@@ -16,6 +16,7 @@ import stat
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from typing import Any
@@ -415,6 +416,210 @@ class SettingsFileTest(unittest.TestCase):
         self.assertTrue(settings_present(self.path))
         self.assertEqual(remove_settings(self.path), (SETTINGS_NOT_REMOVED, True, generation + 2))
         self.assertTrue(self.path.is_dir())
+
+    def temporary(self, pid: int, *, path: Path | None = None, age: float = 0.0, hexes: str = "0123abcd") -> Path:
+        # A temporary file of a write of ``path`` (the settings at first), as
+        # _write_content names it, ``age`` seconds old (stage W4 of v2.2.1).
+        place = path or self.path
+        place.parent.mkdir(parents=True, exist_ok=True)
+        temporary = place.parent / f".{place.name}.{pid}.{hexes}.tmp"
+        temporary.write_bytes(b'{"store": "synthetic"}')
+        if age:
+            moment = time.time() - age
+            os.utime(temporary, (moment, moment))
+        return temporary
+
+    @staticmethod
+    def other_pid(offset: int) -> int:
+        # A pid that is not this process's; whether it is alive is what the
+        # test makes os.kill answer (Codex's review of the diff: never the
+        # state of the machine).
+        pid = 424240 + offset
+        return pid + 100 if pid == os.getpid() else pid
+
+    def test_forgetting_removes_the_abandoned_temporary_files(self) -> None:
+        # Stage W4 of v2.2.1: a write that stopped in the middle leaves a copy
+        # of the settings or the marks. Forgetting removes those of this
+        # process, older than ten minutes, or of a process that is gone (by
+        # its pid, not on Windows), and leaves a newer one of a process that is
+        # alive, the names of other forms, and a folder; the folder of the
+        # settings stays with what is left.
+        self.assertEqual(settings.TEMPORARY_AGE_SECONDS, 10 * 60)
+        marks = self.path.with_name(places.MARKS_FILE_NAME)
+        alive = self.other_pid(1)
+        gone_pid = self.other_pid(2)
+        own = self.temporary(os.getpid())
+        old = self.temporary(alive, age=settings.TEMPORARY_AGE_SECONDS + 60, hexes="89abcdef")
+        younger = self.temporary(alive, age=settings.TEMPORARY_AGE_SECONDS - 60, hexes="0a0a0a0a")
+        fresh = self.temporary(alive, hexes="00ff00ff")
+        gone = self.temporary(gone_pid, hexes="deadbeef")
+        marks_own = self.temporary(os.getpid(), path=marks)
+        others = [
+            self.path.parent / name
+            for name in (
+                f".{NAME}.0123.0123abcd.tmp",
+                f".{NAME}.{alive}.0123ABCD.tmp",
+                f".{NAME}.{alive}.0123abc.tmp",
+                f".{NAME}.12345678901.0123abcd.tmp",
+                f".{NAME.replace('.', '_')}.{os.getpid()}.0123abcd.tmp",
+                f".other.json.{os.getpid()}.0123abcd.tmp",
+                f"{NAME}.{os.getpid()}.0123abcd.tmp",
+                f".{NAME}.{os.getpid()}.0123abcd.tmp.old",
+            )
+        ]
+        # Old enough to be removed, were they of a name that a write makes
+        # (the partial guard of W4: a name taken by mistake must show).
+        moment = time.time() - settings.TEMPORARY_AGE_SECONDS - 60
+        for other in others:
+            other.write_bytes(b"{}")
+            os.utime(other, (moment, moment))
+        folder = self.path.parent / f".{NAME}.{os.getpid()}.feedbeef.tmp"
+        folder.mkdir()
+
+        def kill(pid: int, signal: int) -> None:
+            if pid == gone_pid:
+                raise ProcessLookupError("gone")
+
+        with patch.object(settings, "_CHECK_PIDS", True), patch("os.kill", side_effect=kill):
+            self.assertEqual(remove_settings(self.path, (marks,))[:2], (None, True))
+        for removed in (own, old, marks_own, gone):
+            with self.subTest(removed=removed.name):
+                self.assertFalse(os.path.lexists(removed))
+        for kept in (younger, fresh, *others):
+            with self.subTest(kept=kept.name):
+                self.assertTrue(kept.exists())
+        self.assertTrue(folder.is_dir())
+        self.assertTrue(self.path.parent.is_dir())
+
+    def test_forgetting_temporary_files_alone_removes_the_folder(self) -> None:
+        # Stage W4 of v2.2.1: a temporary file alone is something to forget,
+        # and the folder goes after it.
+        own = self.temporary(os.getpid())
+        self.assertEqual(remove_settings(self.path)[:2], (None, True))
+        self.assertFalse(os.path.lexists(own))
+        self.assertFalse(self.path.parent.exists())
+        self.assertTrue(self.base.is_dir())
+
+    def test_a_temporary_file_left_is_told_as_its_file(self) -> None:
+        # Stage W4 of v2.2.1: one that cannot be removed holds a copy, and is
+        # told as the file of the settings or of the marks would be.
+        marks = self.path.with_name(places.MARKS_FILE_NAME)
+        real_unlink = os.unlink
+
+        def unlink(place: Any, *args: Any, **kwargs: Any) -> None:
+            if os.fspath(place).endswith(".tmp"):
+                raise PermissionError("denied")
+            real_unlink(place, *args, **kwargs)
+
+        own = self.temporary(os.getpid())
+        with patch("os.unlink", side_effect=unlink):
+            self.assertEqual(remove_settings(self.path, (marks,))[:2], (SETTINGS_NOT_REMOVED, True))
+        self.assertTrue(own.exists())
+        own.unlink()
+        marks_own = self.temporary(os.getpid(), path=marks)
+        with patch("os.unlink", side_effect=unlink):
+            self.assertEqual(remove_settings(self.path, (marks,))[:2], (settings.MARKS_NOT_REMOVED, True))
+        self.assertTrue(marks_own.exists())
+
+    def test_only_a_process_that_is_gone_makes_a_newer_file_abandoned(self) -> None:
+        # Stage W4 of v2.2.1 (the checker's review of the plan, A): only
+        # ProcessLookupError tells that the process is gone; any other answer
+        # counts as alive, and the age decides. os.kill is never really called
+        # here; where pids are not looked at (Windows), it is never called.
+        pid = self.other_pid(2)
+        for error in (PermissionError("another user"), OverflowError("too large"), ValueError("bad"), OSError("other")):
+            with self.subTest(error=type(error).__name__):
+                temporary = self.temporary(pid, hexes="0a0b0c0d")
+                with patch.object(settings, "_CHECK_PIDS", True), patch("os.kill", side_effect=error):
+                    remove_settings(self.path)
+                self.assertTrue(temporary.exists())
+                temporary.unlink()
+        temporary = self.temporary(pid, hexes="0a0b0c0d")
+        with patch.object(settings, "_CHECK_PIDS", True), patch("os.kill", side_effect=ProcessLookupError("gone")) as kill:
+            remove_settings(self.path)
+        self.assertFalse(os.path.lexists(temporary))
+        kill.assert_called_once_with(pid, 0)
+        temporary = self.temporary(pid, hexes="0a0b0c0d")
+        with patch.object(settings, "_CHECK_PIDS", False), patch("os.kill", side_effect=AssertionError("os.kill")):
+            remove_settings(self.path)
+        self.assertTrue(temporary.exists())
+        self.assertIs(settings._CHECK_PIDS, os.name != "nt")
+        # The line itself, which the value on one system alone cannot tell
+        # (the partial guard of W4).
+        self.assertIn('_CHECK_PIDS = os.name != "nt"\n', Path(settings.__file__).read_text(encoding="utf-8"))
+
+    @REAL_SYMLINKS
+    def test_forgetting_removes_a_temporary_link_only(self) -> None:
+        # Stage W4 of v2.2.1: a link of that name is removed, not what it
+        # points to.
+        target = self.root / "target.json"
+        target.write_bytes(b"{}")
+        self.path.parent.mkdir()
+        link = self.path.parent / f".{NAME}.{os.getpid()}.0123abcd.tmp"
+        link.symlink_to(target)
+        self.assertEqual(remove_settings(self.path)[:2], (None, True))
+        self.assertFalse(os.path.lexists(link))
+        self.assertEqual(target.read_bytes(), b"{}")
+
+    def test_a_folder_that_cannot_be_looked_at_is_something_to_forget(self) -> None:
+        # Stage W4 of v2.2.1 (the checker's review of the plan, C): the page
+        # lets the person try.
+        self.path.parent.mkdir()
+        # From Codex's review of the diff, what is in it is not known to be
+        # gone, and is told as left.
+        with patch("os.listdir", side_effect=PermissionError("denied")):
+            # While the folder is there (forgetting removes it when empty).
+            self.assertIs(settings._temporaries_present((self.path,)), True)
+            self.assertEqual(remove_settings(self.path)[:2], (SETTINGS_NOT_REMOVED, True))
+        # Where the folder is not there, there is none.
+        self.assertIs(settings._temporaries_present((self.root / "missing" / NAME,)), False)
+
+    def test_a_temporary_file_that_cannot_be_looked_at_is_told(self) -> None:
+        # Codex's review of the diff: a name of a write that cannot be looked
+        # at is not known to be gone; it is something to forget and is told.
+        own = self.temporary(os.getpid())
+        real_lstat = os.lstat
+
+        def lstat(place: Any, *args: Any, **kwargs: Any) -> os.stat_result:
+            if os.fspath(place).endswith(".tmp"):
+                raise PermissionError("denied")
+            return real_lstat(place, *args, **kwargs)
+
+        with patch("os.lstat", side_effect=lstat):
+            self.assertEqual(remove_settings(self.path)[:2], (SETTINGS_NOT_REMOVED, True))
+            self.assertIs(settings._temporaries_present((self.path,)), True)
+        self.assertTrue(own.exists())
+
+    @REAL_SYMLINKS
+    def test_a_folder_that_is_a_link_is_never_looked_into(self) -> None:
+        # Codex's review of the diff: this app never writes into its folder
+        # where that is a link (_make_folder), and forgetting never removes a
+        # file of that name in the folder that the link points to.
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+        temporary = elsewhere / f".{NAME}.{os.getpid()}.0123abcd.tmp"
+        temporary.write_bytes(b"{}")
+        self.path.parent.symlink_to(elsewhere, target_is_directory=True)
+        self.assertEqual(remove_settings(self.path)[:2], (None, False))
+        self.assertTrue(temporary.exists())
+
+    def test_a_temporary_file_changed_since_it_was_looked_at_stays(self) -> None:
+        # Codex's review of the diff: a file is removed only while it is still
+        # the one looked at; one written again since (another launch going on
+        # with its write) or put in its place is left to its writer, and is
+        # not told as left.
+        own = self.temporary(os.getpid())
+        seen = os.lstat(own)
+        moment = seen.st_mtime + 5
+        os.utime(own, (moment, moment))
+        self.assertIs(settings._remove_temporary(own, seen), True)
+        self.assertTrue(own.exists())
+        with patch.object(settings, "_abandoned_temporaries", return_value=([(0, own, seen)], set())):
+            self.assertEqual(remove_settings(self.path)[:2], (None, True))
+        self.assertTrue(own.exists())
+        self.assertIs(settings._remove_temporary(own, os.lstat(own)), True)
+        self.assertFalse(own.exists())
+        self.assertIs(settings._remove_temporary(own, seen), True)
 
     def test_a_place_that_cannot_be_looked_at_counts_as_present(self) -> None:
         # Stage C1: the page lets the person try, and forgetting tells what

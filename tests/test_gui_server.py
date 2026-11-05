@@ -1326,7 +1326,11 @@ class GuiRunApiTest(GuiServerTestCase):
         self.wait_for_state({"running"})
         self.assertTrue(wait_until(lambda: bool(self.call("/api/run/status", {})[1]["progress"])))
         status, answer = self.call("/api/run/cancel", {})
-        self.assertEqual((status, answer["state"]), (200, "cancelling"))
+        # "cancelling", or "cancelled" where the stub ended before the answer
+        # read its state (a race seen on macOS in CI, #213); the end is checked
+        # below (stage W4 of v2.2.1).
+        self.assertEqual(status, 200)
+        self.assertIn(answer["state"], {"cancelling", "cancelled"})
         self.assertEqual(self.wait_for_state({"cancelled"})["staging_folders"], [])
         self.assertEqual(self.call("/api/shutdown", {}), (200, {"status": "stopping"}))
         self.thread.join(timeout=10)

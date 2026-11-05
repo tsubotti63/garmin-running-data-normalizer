@@ -2274,6 +2274,12 @@ span), whether marks show, the two items plotted and the item of a
 distribution, and the timezone of the last run that made its output. It also
 forgets the conditions of the view page (the words of the name, the distance,
 and the duration). It can be pressed only while there are remembered settings.
+From 2.2.1, it also removes the half-written files that a write leaves when
+this app stops in the middle of it (they hold a copy of the settings or the
+marks), and it can be pressed while only such a file is there: one whose
+launch has ended, or one older than ten minutes (on Windows, only one older
+than ten minutes). One that another open launch of this app is writing at
+that moment stays.
 The store and the outputs stay, and the next launch goes as a first launch; a
 store that is not in the default place must then be opened again. When the
 file cannot be read, the bar says so, and the launch goes as a first one.
@@ -2538,6 +2544,9 @@ it. To remove Python too, do as the documents of python.org say, for
   words of the conditions of the view page, and the timezone. They stay on
   this computer, and are never in the Support Bundle. On a computer that
   others use, remove them with **Forget the remembered settings…**.
+  A half-written file that a write leaves when this app stops in the middle of
+  it holds a copy of them too; from 2.2.1, **Forget the remembered
+  settings…** removes it with them (on Windows, once it is ten minutes old).
 - The [marks](#marks-from-220) of the view page (from 2.2.0) hold your own
   words and events, so this app keeps them only in the file of the marks,
   `gui-marks.json`, never in an output, the Support Bundle, or the text of a
