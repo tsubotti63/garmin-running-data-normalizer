@@ -206,7 +206,10 @@ class RunManagerTest(unittest.TestCase):
         self.start(manager)
         self.wait_for_progress(manager)
         self.assertIsNone(manager.finished_output())
-        self.assertEqual(manager.cancel()["state"], "cancelling")
+        # "cancelling", or "cancelled" where the stub ended before cancel()
+        # read its state (a race seen on macOS in CI, #211); the end is checked
+        # below (stage W4 of v2.2.1).
+        self.assertIn(manager.cancel()["state"], {"cancelling", "cancelled"})
         status = self.wait_for_end(manager, timeout=30.0)
         self.assertEqual(status["state"], "cancelled")
         self.assertEqual(manager._run.process.returncode, 130)

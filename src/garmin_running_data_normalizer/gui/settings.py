@@ -63,9 +63,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import stat
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -107,6 +109,17 @@ SHELF_STATES = ("open", "closed")
 # One change of the settings at a time: each reads the file and writes it
 # whole, so that two at once would keep only one of them.
 _CHANGE_LOCK = threading.Lock()
+# The temporary files that a write leaves where this app stops in the middle
+# of it (stage W4 of v2.2.1): ``.<name>.<pid>.<8 hex>.tmp`` in the folder of
+# the file (see _write_content), a copy of the settings or the marks.
+# Forgetting removes those that are abandoned: of this process, whose writes
+# are under _CHANGE_LOCK; of a process that is gone, by its pid where the
+# system tells it without harm (never on Windows, where os.kill stops a
+# process); or older than TEMPORARY_AGE_SECONDS, as a write takes far less.
+# A newer one of another process that is alive may be in the middle of its
+# write, and stays.
+TEMPORARY_AGE_SECONDS = 10 * 60
+_CHECK_PIDS = os.name != "nt"
 # The generation of the settings (stage U2 of v2.2.0), under _CHANGE_LOCK:
 # forgetting moves it on.
 _generation = 0
@@ -500,6 +513,98 @@ def _remove_file(path: Path) -> bool:
     return True
 
 
+def _temporary_name(path: Path) -> re.Pattern[str]:
+    """The names of the temporary files of a write of ``path``, as
+    _write_content makes them (stage W4 of v2.2.1)."""
+    return re.compile(r"\." + re.escape(path.name) + r"\.([1-9][0-9]{0,9})\.[0-9a-f]{8}\.tmp")
+
+
+def _pid_gone(pid: int) -> bool:
+    """Whether the process ``pid`` is gone (stage W4 of v2.2.1): only when
+    the system says so; any other answer counts as alive, and the age of
+    its file decides."""
+    if not _CHECK_PIDS:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except (OSError, OverflowError, ValueError):
+        return False
+    return False
+
+
+def _abandoned_temporaries(paths: tuple[Path, ...]) -> tuple[list[tuple[int, Path, os.stat_result]], set[int]]:
+    """The abandoned temporary files of the writes of ``paths`` (stage W4 of
+    v2.2.1), each with the index of its path and what was looked at: a file
+    or a link (never a folder) of a name that _write_content makes, of this
+    process, older than TEMPORARY_AGE_SECONDS, or of a process that is gone;
+    and the indices of the paths with such a name that could not be looked at
+    (Codex's review of the diff). A folder that is a link is never looked
+    into, as this app never writes into one (_make_folder); none is where the
+    folder is not there. Raises OSError when a folder cannot be looked at.
+    Under _CHANGE_LOCK."""
+    found: list[tuple[int, Path, os.stat_result]] = []
+    unknown: set[int] = set()
+    now = time.time()
+    for folder in dict.fromkeys(path.parent for path in paths):
+        try:
+            if not stat.S_ISDIR(os.lstat(folder).st_mode):
+                continue
+        except FileNotFoundError:
+            continue
+        names = sorted(os.listdir(folder))
+        for index, path in enumerate(paths):
+            if path.parent != folder:
+                continue
+            pattern = _temporary_name(path)
+            for name in names:
+                matched = pattern.fullmatch(name)
+                if matched is None:
+                    continue
+                place = folder / name
+                try:
+                    status = os.lstat(place)
+                except FileNotFoundError:
+                    continue
+                except OSError:
+                    unknown.add(index)
+                    continue
+                if not (stat.S_ISREG(status.st_mode) or stat.S_ISLNK(status.st_mode)):
+                    continue
+                pid = int(matched.group(1))
+                if pid == os.getpid() or now - status.st_mtime >= TEMPORARY_AGE_SECONDS or _pid_gone(pid):
+                    found.append((index, place, status))
+    return found, unknown
+
+
+def _temporaries_present(paths: tuple[Path, ...]) -> bool:
+    """Whether an abandoned temporary file of ``paths`` is there to forget
+    (stage W4 of v2.2.1); True when one or a folder cannot be looked at, so
+    that the page lets the person try. Under _CHANGE_LOCK."""
+    try:
+        found, unknown = _abandoned_temporaries(paths)
+    except OSError:
+        return True
+    return bool(found) or bool(unknown)
+
+
+def _remove_temporary(place: Path, seen: os.stat_result) -> bool:
+    """Remove the abandoned temporary file at ``place`` while it is still the
+    one that was looked at (stage W4 of v2.2.1, Codex's review of the diff):
+    True when it is gone, or when another file or a newer write is there now,
+    which is no copy left behind."""
+    try:
+        status = os.lstat(place)
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    if (status.st_dev, status.st_ino, status.st_mtime_ns) != (seen.st_dev, seen.st_ino, seen.st_mtime_ns):
+        return True
+    return _remove_file(place)
+
+
 def remove_settings(path: Path, others: tuple[Path, ...] = ()) -> tuple[str | None, bool, int]:
     """Forget the settings: remove the file at ``path`` and those of
     ``others`` in the same folder (the marks, from stage M1 of v2.2.0), each
@@ -510,20 +615,30 @@ def remove_settings(path: Path, others: tuple[Path, ...] = ()) -> tuple[str | No
     forget (stage C1); and from stage U2 the generation of the settings, which
     this moves on whatever it could remove, so that no change asked before is
     written after it. All under the lock, so that what it tells is of the
-    files that it removed."""
+    files that it removed. From stage W4 of v2.2.1 it also removes the
+    abandoned temporary files of those files, before the folder, and tells
+    one that is left as its file would be."""
     global _generation
     places_to_forget = (path, *others)
     with _CHANGE_LOCK:
         present = any(settings_present(place) for place in places_to_forget)
+        try:
+            temporaries, unknown = _abandoned_temporaries(places_to_forget)
+        except OSError:
+            # A folder that cannot be looked at: what is in it is not known
+            # to be gone (Codex's review of the diff).
+            temporaries, unknown = [], {0}
+        present = present or bool(temporaries) or bool(unknown)
         _generation += 1
         removed = [_remove_file(place) for place in places_to_forget]
+        left = unknown | {index for index, place, seen in temporaries if not _remove_temporary(place, seen)}
         try:
             os.rmdir(path.parent)
         except OSError:
             pass
-        if not removed[0]:
+        if not removed[0] or 0 in left:
             return SETTINGS_NOT_REMOVED, present, _generation
-        return (None if all(removed) else MARKS_NOT_REMOVED), present, _generation
+        return (None if all(removed) and not left else MARKS_NOT_REMOVED), present, _generation
 
 
 def remember_run_at(
@@ -751,7 +866,9 @@ def launch_settings() -> dict[str, Any]:
     with _CHANGE_LOCK:
         values, notice = read_settings(path)
         marks, marks_notice = read_marks(marks_path)
-        present = settings_present(path) or settings_present(marks_path)
+        # An abandoned temporary file is there to forget too (stage W4 of
+        # v2.2.1); the launch is told by the places remembered, not by this.
+        present = settings_present(path) or settings_present(marks_path) or _temporaries_present((path, marks_path))
         generation = _generation
     return launch_answer(
         values, notice, present=present, marks=marks, marks_notice=marks_notice, generation=generation

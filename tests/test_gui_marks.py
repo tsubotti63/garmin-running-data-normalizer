@@ -356,6 +356,20 @@ class MarksFileTest(unittest.TestCase):
         self.assertFalse(os.path.lexists(self.path))
         self.assertTrue(self.settings_path.is_dir())
 
+    def test_a_temporary_file_alone_is_settings_to_forget(self) -> None:
+        # Stage W4 of v2.2.1: an abandoned temporary file of a write of the
+        # settings lets the person forget it; the launch stays a first one.
+        self.settings_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.settings_path.parent / f".{self.settings_path.name}.{os.getpid()}.0123abcd.tmp"
+        temporary.write_bytes(b"{}")
+        answer = launch_settings()
+        self.assertIs(answer["present"], True)
+        self.assertEqual(answer["launch"], "first")
+        self.assertEqual(self.forgotten(), (None, True))
+        self.assertFalse(os.path.lexists(temporary))
+        self.assertFalse(self.settings_path.parent.exists())
+        self.assertIs(launch_settings()["present"], False)
+
     def test_the_launch_answer_holds_the_marks_and_what_to_tell(self) -> None:
         kept = added([], "Race J", "2030-04-01")
         self.assertIsNone(write_marks(self.path, kept))
