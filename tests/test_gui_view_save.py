@@ -96,11 +96,13 @@ class GuiViewSaveTest(unittest.TestCase):
         # The line before a saving as the sample of R0 showed it, and the
         # names of the marks where they go in.
         ja, en = catalog("ja"), catalog("en")
-        self.assertEqual(ja["view.save.warn"], "画像には日付と値（個人のデータ）が写ります。このパソコンのダウンロードの場所に保存し、どこへも送りません。")
+        # v2.2.1 W3: the file goes to the browser, which saves it where its
+        # settings say, as the guides say it.
+        self.assertEqual(ja["view.save.warn"], "画像には日付と値（個人のデータ）が写ります。画像のファイルはブラウザーに渡し（保存する場所は、ブラウザーの設定のとおりです）、どこへも送りません。")
         self.assertEqual(ja["view.save.warn_marks"], "印の名前も写ります。")
         # v2.2.0 R3: the English words of the downloads, as the guides say
         # them (the checker's review (c) of R1).
-        self.assertEqual(en["view.save.warn"], "The image shows dates and values (your personal data). It is saved in your downloads on this computer and sent nowhere.")
+        self.assertEqual(en["view.save.warn"], "The image shows dates and values (your personal data). Its file goes to the browser, which saves it where its settings say; it is sent nowhere.")
         self.assertEqual(en["view.save.warn_marks"], "The names of the marks show too.")
         # The page cannot know that the browser saved the file: the line
         # after a saving says that it was handed to the browser.
@@ -698,7 +700,7 @@ class GuiViewSaveTest(unittest.TestCase):
             ("view.save.table", "表で見ているあいだは保存できません。「{button}」を押すと保存できます。", "No image can be saved while the table shows. Press “{button}” to save it."),
             ("view.save.compare_years", "くらべた年 {years}", "Years compared: {years}"),
             ("view.save.compare_races", "くらべた大会の日 {days}", "Race days compared: {days}"),
-            ("view.save.width", "区切りの幅 {width}", "Width of a range: {width}"),
+            ("view.save.width", "区間の幅 {width}", "Width of a range: {width}"),
             # The days of the races in English have commas of their own.
             ("view.save.days_separator", "、", "; "),
             # Why it cannot save (Codex's review of the diff of R2).

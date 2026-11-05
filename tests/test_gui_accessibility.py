@@ -1358,6 +1358,58 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertNotIn("year-start", shoes)
         self.assertNotIn("years-table", shoes)
 
+    def test_a_table_of_comparing_years_fits_six_and_says_what_it_counts(self) -> None:
+        # v2.2.1 W3 (the person's answer to the question of six years): a table
+        # of comparing years (or races) wraps its places and its headings,
+        # English at spaces, never inside a word, and Japanese between its
+        # characters too, so that six years or races fit its box;
+        # in English its headings of the counts are one short word ("Count"),
+        # with the whole word for a screen reader, and a note under the table
+        # says what was counted. The tables by shoes keep their form.
+        from tests.test_gui_view_save import function_body
+
+        script = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        page = (STATIC_ROOT / "view.html").read_text(encoding="utf-8")
+        self.assertRegex(css, r"\.compare-table \.t\.years-table tbody th,\s*\.compare-table \.t\.years-table thead th \{\s*white-space: normal;\s*\}")
+        rule = css[css.index(".compare-table .t.years-table tbody th,") :]
+        rule = rule[: rule.index("}")]
+        self.assertNotIn("overflow-wrap", rule)
+        # Japanese, which has no spaces, wraps between its characters too, so
+        # that six years or six races fit: no keep-all (the person's choice
+        # after Codex's review of the diff).
+        self.assertNotIn("word-break", rule)
+        table = function_body(script, "buildCompareTable")
+        self.assertIn('if (entry.spoken) {\n      cell.setAttribute("aria-label", describe(entry.spoken));\n    }', table)
+        self.assertNotIn("spoken", function_body(script, "buildShoesTable"))
+        self.assertIn('<p id="compare-count-note" class="compare-note" hidden></p>', page)
+        self.assertLess(page.index('id="compare-note"'), page.index('id="compare-count-note"'))
+        render = function_body(script, "renderCompare")
+        for line in (
+            "const countNote = ready && compare.table ? compareCountNoteKey(compareItem(), mode) : null;",
+            "ui.compareCountNote.hidden = countNote === null;",
+            'setText(ui.compareCountNote, countNote === null ? "" : t(countNote));',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, render)
+        # The note is found by its id, and what the page needs of view_flow.mjs
+        # is imported.
+        self.assertIn('  compareCountNote: byId("compare-count-note"),\n', script)
+        for name in ("compareCountNoteKey", "listEmptyMessage"):
+            with self.subTest(imported=name):
+                self.assertIn(f"\n  {name},\n", script.split('} from "./view_flow.mjs";')[0])
+        # The list says its empty sentence by the grouping, the words of
+        # view_flow.mjs (its tests), not the keys alone.
+        self.assertIn('parts.push(element("p", "list-note", describe(listEmptyMessage(list.conditions, list.grain))));', function_body(script, "renderList"))
+        # The design document says both rules.
+        design = " ".join((ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        for sentence in (
+            'From v2.2.1 (stage W3) the table of a comparison names its first column by the grouping, heads the counts in English with one short word, "Count" (a screen reader hears the whole heading), says under the table what was counted, and wraps its places and headings, English at spaces and never inside a word, Japanese between its characters too (it has no spaces), so that six years or six races fit its box.',
+            'From v2.2.1 (stage W3) the sentences of the list name its period by its grouping ("the week chosen"), with the same placeholders in both languages.',
+        ):
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(design.count(sentence), 1)
+
     def test_a_calendar_compares_years_by_day_in_strips_of_its_own(self) -> None:
         # v2.2.0 N1, in the page and its script, which no test runs: the
         # calendar is the fourth way to compare years, greyed for an estimate

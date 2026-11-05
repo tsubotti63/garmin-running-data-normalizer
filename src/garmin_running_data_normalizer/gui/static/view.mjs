@@ -91,6 +91,7 @@ import {
   MAX_COMPARE_YEARS,
   MAX_PANELS,
   clockOf,
+  compareCountNoteKey,
   compareData,
   compareModeFor,
   compareNote,
@@ -174,6 +175,7 @@ import {
   viewHintsShown,
   listAfter,
   listColumns,
+  listEmptyMessage,
   listFrom,
   listHead,
   listLimitMessage,
@@ -591,6 +593,7 @@ const ui = {
   compareAxis: byId("compare-axis"),
   compareAnnouncer: byId("compare-announcer"),
   compareNote: byId("compare-note"),
+  compareCountNote: byId("compare-count-note"),
   seriesStop: byId("series-stop"),
   seriesStopHeading: byId("series-stop-heading"),
   seriesStopLines: byId("series-stop-lines"),
@@ -4884,7 +4887,7 @@ function renderList({ top = false } = {}) {
   } else if (answer === null) {
     parts.push(element("p", "list-note", t("view.loading")));
   } else if (answer.total === 0) {
-    parts.push(element("p", "list-note", t(list.conditions ? "view.list.none_met" : "view.list.none")));
+    parts.push(element("p", "list-note", describe(listEmptyMessage(list.conditions, list.grain))));
   } else if (answer.rows === null) {
     parts.push(element("p", "list-note", describe(listLimitMessage(answer.total, answer.limit, list.grain, state.language))));
   } else {
@@ -5578,6 +5581,10 @@ function renderCompare(live) {
   ui.compareStack.hidden = !ready;
   ui.compareStack.classList.toggle("waiting", state.compareLoading);
   ui.compareNote.hidden = !ready || !compare.table;
+  // What the counts of the table are (stage W3 of v2.2.1).
+  const countNote = ready && compare.table ? compareCountNoteKey(compareItem(), mode) : null;
+  ui.compareCountNote.hidden = countNote === null;
+  setText(ui.compareCountNote, countNote === null ? "" : t(countNote));
   ui.compareLegend.hidden = !ready || compare.table || mode !== "calendar";
   // The notes of the legend under its info button, with the legend, open
   // as the person left them while the item is compared (stage U3 of v2.2.0).
@@ -5990,6 +5997,10 @@ function buildCompareTable(context, name) {
   heads.forEach((entry, index) => {
     const cell = element("th", index === 0 ? "" : starts(index) ? "n year-start" : "n", describe(entry));
     cell.scope = "col";
+    // The whole word of a short heading of the counts (stage W3 of v2.2.1).
+    if (entry.spoken) {
+      cell.setAttribute("aria-label", describe(entry.spoken));
+    }
     headRow.append(cell);
   });
   const thead = element("thead");

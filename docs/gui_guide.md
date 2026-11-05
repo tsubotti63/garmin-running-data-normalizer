@@ -1186,7 +1186,7 @@ and **Garmin estimates**.
 - Following the conditions: the training and running-form panels, the
   overview, the bars of the item shelf and the **Items with values** of the
   layouts, **Compare years** (also by race day and as a calendar),
-  **Summary…** (also the period before), the activities of a period, two items
+  **Summary…** (also the period before), the activities of a day, week, month, or year, two items
   plotted, the distribution, and the panels, tables, and counts of the shoes.
 - Even in those, only the training and running-form items follow the
   conditions.
@@ -1383,12 +1383,12 @@ values are made):
 - To go back to the period before, press its button at the top, such as
   **3 years**.
 
-### The activities of a period (from 2.2.0)
+### The activities of a day, week, month, or year (from 2.2.0)
 
 - On a panel of **Training (per activity)** or **Running form (FIT)**, press a
-  period of the chart (one week, month, and so on, of the grouping), and the
-  list of the activities of that period opens just under the panel. With the
-  keys only, select the chart (Tab), choose a period with ← or →, and press
+  bar or a point of the chart (one day, week, month, or year, by the grouping),
+  and the list of its activities opens just under the panel. With the
+  keys only, select the chart (Tab), choose one with ← or →, and press
   Enter (or Space). One list is open at a time. The panels of **Body (daily)**
   and of **Garmin estimates**, a panel shown as a table, and a panel without
   any value open none.
@@ -1413,8 +1413,9 @@ values are made):
   panel. Some activities in the list, such as one without a heart rate, are
   not counted in it.
 - The list holds the **Activity types counted** only and, where there are
-  conditions, the activities that meet them (a period without one says **No
-  activity of this period meets the conditions.**), up to 500 a period. For
+  conditions, the activities that meet them (where none does, it says so by
+  the grouping, such as **No activity of the week chosen meets the
+  conditions.**), up to 500 at a time. For
   more, it says how many, and the finer grouping that lists them (**Month**
   for a year, **Week** for a month, **Day** for a week).
 - **Close** or Esc closes it, back to the chart. It also closes when the
@@ -1516,11 +1517,13 @@ values are made):
     latest; where a line with the same date in its name in the key is a
     running line, that running line (of the lines Until April 30, 2023 and
     From May 1, 2023, mostly the second one).
-  - **Show as a table**: the periods in rows and the years in columns, each
-    year with a column of values and one of counts (**Activities**, **Days
-    with a value**, or **Records**, by the item); the last row has the value of the year (or of the month). * marks a period
-    cut short (by an end of the output, of the year or month, or by the race
-    day), and — a period that the year does not have (outside the output, or
+  - **Show as a table**: the days, weeks, or months in rows (the first column
+    named by the grouping) and the years in columns, each year with a column
+    of values and one of counts (**Count**: the activities, the days with a
+    value, or the records, by the item, as a note under the table says); the
+    last row has the value of the year (or of the month). * marks one cut
+    short (by an end of the output, of the year or month, or by the race
+    day), and — one not in the year (outside the output, or
     a day such as 29 February that the year lacks). From 2.2.1, choosing
     another way in **Show as** brings back the chart, with its legend;
     changing the item, the years, the month, or the races keeps the table. In
@@ -1667,9 +1670,9 @@ values are made):
   only, also for a running total. The ways to show are those of the years
   without **Calendar**; **One row per year** becomes **One row per race**,
   which is the way at first.
-- **Race week (to the race day)**, a period of the readings and the table,
+- **Race week (to the race day)**, a week of the readings and the table,
   goes from the Monday of the week of the race to the race day. Where the race is not on a Sunday (or the output ends
-  within that week), it is a period cut short, as the ends of a year are (a
+  within that week), it is a week cut short, as the ends of a year are (a
   light, edged bar, a * in the table, and (partial) in the readings). The
   heading of a row gives the value of the whole span counted at once, such as
   "Total of this span"; the last row of the table is the span itself, such as
@@ -1748,9 +1751,9 @@ values are made):
 | Average pace | 10 seconds (0:10 /km) |
 | Average heart rate | 5 bpm |
 | Maximum heart rate | 5 bpm |
-| Cadence | 5 (Garmin value as is) |
-| Power | 10 (Garmin value as is) |
-| Training load | 10 (Garmin value as is) |
+| Cadence | 5 (same unit as Garmin, not named) |
+| Power | 10 (same unit as Garmin, not named) |
+| Training load | 10 (same unit as Garmin, not named) |
 | Total ascent | 10 m |
 | Vertical oscillation | 0.5 cm |
 | Ground contact time | 10 ms |
@@ -1765,7 +1768,8 @@ values are made):
   show rounded values, so an activity near the end of a range can look as if
   it were in the next one: 10,999.6 m shows as 11.0 km, and is in the range
   10–11 km.
-- Where there would be more than 200 ranges, each range is the first of 2, 5,
+- Where there would be more than 200 ranges from the first with a value to the
+  last (those of no activity too), each range is the first of 2, 5,
   10, ... times as wide that is enough, and a line says so. A range of no
   activity has no bar (0 in the table).
 - A line under the title gives the numbers only: the activities counted, those
@@ -2034,7 +2038,7 @@ values are made):
   comparing years, the buttons of the period are grayed).
 - So right after you normalize again, or right after the date changes, the
   numbers of the panels and those of the years or the races in **Compare
-  years** (also by race day), of the activities of a period, and of the table
+  years** (also by race day), of the activities of a day, week, month, or year, and of the table
   of **Summary…** may not agree: one of them was counted before the output
   changed. Open the comparison again, open the list again, or open the
   summary again, and each counts again from the output as it is now.
@@ -2059,7 +2063,7 @@ values are made):
   table** on a panel are undone, and the years and the races chosen in
   **Compare years** are the first ones again. Where the output is read again
   with the same days and activity types (where only the date changed, for
-  example), it is not opened again. The list of the activities of a period
+  example), it is not opened again. The list of the activities of a day, week, month, or year
   does not notice that the output changed: open it again after the panels show
   new numbers.
 - In 2.2.0, pressing the button of the period again does not renew the
@@ -2541,7 +2545,7 @@ it. To remove Python too, do as the documents of python.org say, for
   image](#saving-as-an-image-from-220) shows them where you put them in, and
   by race day). **Forget the remembered settings…** removes them with the
   settings.
-- [The activities of a period](#the-activities-of-a-period-from-220) (from
+- [The activities of a day, week, month, or year](#the-activities-of-a-day-week-month-or-year-from-220) (from
   2.2.0) show the dates and times of the output on the page only, and are
   never written to a file.
 - [Saving as an image](#saving-as-an-image-from-220) (from 2.2.0) writes the
@@ -2557,7 +2561,7 @@ it. To remove Python too, do as the documents of python.org say, for
   remembered setting.
 - The names of the activities and the words of the
   [conditions](#conditions-from-220) (from 2.2.0) may be your own words. The
-  names show in the list of the activities of a period only, and the view page
+  names show in the list of the activities of a day, week, month, or year only, and the view page
   writes them into no file. The words of the conditions show in the window, in
   the line under the filters, and in the line at the top of the full screen,
   and go into the remembered settings and into a picture you save (its line at
@@ -2610,12 +2614,12 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
   output) read out the date, the day of the week, and the value; so does a
   strip that the focus comes to ([Calendar](#calendar)).
 - A chart of a panel of training or of the running form (from 2.2.0) tells
-  that Enter opens the list of the activities of a period. Opened with Enter
+  that Enter opens the list of the activities of a day, week, month, or year. Opened with Enter
   (or Space), the focus goes to the heading of the list, and how many
   activities came is read out; the buttons of the headings of the columns
   order it, and each heading tells the order it sorts by; Esc closes it, back
   to the chart
-  ([The activities of a period](#the-activities-of-a-period-from-220)).
+  ([The activities of a day, week, month, or year](#the-activities-of-a-day-week-month-or-year-from-220)).
 - The top chart tells how many marks (from 2.2.0) are in its period, and the
   names and days of up to 10 ([Marks](#marks-from-220)).
 - In **Other views** (from 2.2.0), Enter, Space, or ↓ opens the menu on its

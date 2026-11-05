@@ -944,6 +944,8 @@ test("the readings and the table of a comparison say each year's own period, its
     [2026, null, "view.compare.outside"],
     [2025, { text: "1/6–1/12" }, "view.compare.no_value"],
   ]);
+  // A period without a value is named by the grouping (stage W3 of v2.2.1).
+  assert.deepEqual([words(readings[1].missing, "ja"), words(readings[1].missing, "en")], ["値の無い週", "A week without a value"]);
   const first = view.compareReadings(item, data, 0, "week", "overlay", "ja");
   assert.deepEqual(first[0].period, { key: "view.period.partial", params: {}, keyParams: { period: { text: "1/1–1/4" } } });
   assert.equal(first[0].value.params.value, "8.0");
@@ -952,7 +954,27 @@ test("the readings and the table of a comparison say each year's own period, its
   assert.equal(view.compareReadings(item, running, 0, "week", "cumulative", "ja")[1].count, null);
   // The table: the periods in rows, the value and the count of each year.
   const table = view.compareTable(item, data, "week", null, 2, "ja");
-  assert.deepEqual(table.heads.map((head) => head.key), ["view.compare.period", "view.compare.year", "view.table.activities", "view.compare.year", "view.table.activities"]);
+  assert.deepEqual(table.heads.map((head) => head.key), ["view.grain.week", "view.compare.year", "view.compare.count.activities", "view.compare.year", "view.compare.count.activities"]);
+  // The first column is named by the grouping; the headings of the counts
+  // are one short word in English, the whole word for a screen reader, and
+  // a note under the table says what they are (stage W3 of v2.2.1).
+  assert.deepEqual([words(table.heads[0], "ja"), words(table.heads[0], "en")], ["週", "Week"]);
+  assert.deepEqual([words(table.heads[2], "ja"), words(table.heads[2], "en")], ["回数", "Count"]);
+  assert.deepEqual([words(table.heads[2].spoken, "ja"), words(table.heads[2].spoken, "en")], ["回数", "Activities"]);
+  assert.equal(table.heads[1].spoken, undefined);
+  for (const [other, kind, whole] of [[{ key: "rhr", kind: "day", group: "body" }, "days", "Days with a value"], [{ key: "vo2", kind: "obs", group: "est" }, "records", "Records"]]) {
+    const heads = view.compareTable(other, data, "week", null, 2, "ja").heads;
+    assert.deepEqual([heads[2].key, heads[2].spoken.key], [`view.compare.count.${kind}`, `view.table.${kind}`], kind);
+    assert.deepEqual([words(heads[2], "en"), words(heads[2].spoken, "en")], ["Count", whole], kind);
+  }
+  assert.equal(view.compareCountNoteKey(item, "overlay"), "view.compare.count_note.activities");
+  assert.equal(view.compareCountNoteKey(item, "rows"), "view.compare.count_note.activities");
+  assert.equal(view.compareCountNoteKey(item, "cumulative"), null);
+  assert.equal(view.compareCountNoteKey({ key: "rhr", kind: "day", group: "body" }, "rows"), "view.compare.count_note.days");
+  assert.equal(view.compareCountNoteKey({ key: "vo2", kind: "obs", group: "est" }, "calendar"), "view.compare.count_note.records");
+  const notes = ["activities", "days", "records"].map((kind) => ({ key: `view.compare.count_note.${kind}`, params: {} }));
+  assert.deepEqual(notes.map((note) => words(note, "ja")), ["回数は、アクティビティの数です。", "値のあった日は、値のある日の数です。", "記録の数は、記録の件数です。"]);
+  assert.deepEqual(notes.map((note) => words(note, "en")), ["Count: the activities.", "Count: the days with a value.", "Count: the records."]);
   assert.equal(table.rows.length, 3);
   assert.deepEqual(table.rows[0].cells.map((cell) => [cell.value?.params.value ?? null, cell.count, cell.partial, cell.outside]), [
     ["8.0", "1", true, false],
@@ -967,9 +989,20 @@ test("the readings and the table of a comparison say each year's own period, its
   // the periods before it would mislead.
   const totals = view.compareTable(item, running, "week", null, 2, "ja", "cumulative");
   assert.equal(totals.counts, false);
-  assert.deepEqual(totals.heads.map((head) => head.key), ["view.compare.period", "view.compare.year", "view.compare.year"]);
+  assert.deepEqual(totals.heads.map((head) => head.key), ["view.grain.week", "view.compare.year", "view.compare.year"]);
   assert.deepEqual(totals.rows[0].cells.map((cell) => cell.count), [null, null]);
   assert.deepEqual(totals.last.cells.map((cell) => cell.count), [null, null]);
+});
+
+test("the first column of a table of comparing years is named by its grouping, by day and by month too (stage W3 of v2.2.1)", () => {
+  const item = { key: "dist", kind: "sum", group: "act" };
+  const whole = answerOf([{ start: "2025-01-01", end: "2025-12-31", partial: false }], [lineOf([12000], [2])]);
+  for (const [grain, end, ja, en] of [["day", "2025-01-01", "日", "Day"], ["month", "2025-01-31", "月", "Month"]]) {
+    const answers = new Map([[2025, answerOf([{ start: "2025-01-01", end, partial: false }], [lineOf([12000], [2])])]]);
+    const data = view.compareData({ years: [2025], month: null, grain, mode: "rows", series: null, answers, whole });
+    const heads = view.compareTable(item, data, grain, null, 1, "ja").heads;
+    assert.deepEqual([heads[0].key, words(heads[0], "ja"), words(heads[0], "en")], [`view.grain.${grain}`, ja, en], grain);
+  }
 });
 
 test("the lines of VO2 Max are offered by the names of their legend", () => {
@@ -1223,6 +1256,7 @@ test("the weeks of a race are placed by their order, and marked where they are c
   const axis = { slotName: (slot) => view.raceSlotName(slot, 2), whole: view.raceValueMessage(item, 2) };
   const table = view.compareTable(item, data, "week", null, 2, "ja", "rows", axis);
   assert.deepEqual(table.heads.filter((_head, index) => index % 2 === 1).map((head) => words(head)), data.map((entry) => words(entry.label)));
+  assert.deepEqual([words(table.heads[0]), words(table.heads[2], "en")], ["週", "Count"]);
   assert.deepEqual(table.rows.map((row) => words(row.period)), ["2 週前", "1 週前", "大会の週（大会の日まで）"]);
   assert.deepEqual(table.rows[0].cells.map((cell) => [cell.outside, cell.partial]), [[false, false], [false, false], [true, false], [true, false]]);
   assert.deepEqual(table.rows[1].cells.map((cell) => [cell.outside, cell.partial]), [[false, false], [false, false], [false, true], [true, false]]);
@@ -1468,14 +1502,25 @@ test("the list says its period, its panel, the value of the panel, and its limit
   assert.equal(words(line, "ja"), "段の値：45.4 km（この値に数えた 5 件）");
   assert.equal(words(view.listValueLine("pace", { value: 0.3125, count: 4 }, "en"), "en"), "Value of the panel: 5:13 /km (activities counted: 4)");
   assert.equal(words(view.listValueLine("hr", { value: null, count: 0 }, "ja"), "ja"), "段の値：値なし（この値に数えた 0 件）");
+  // The list names its period by the grouping in words, the same in both
+  // languages (stage W3 of v2.2.1).
   assert.equal(
     words(view.listLimitMessage(812, 500, "month", "ja"), "ja"),
-    "この区切りには 812 件あります。一覧は 500 件までです。まとめ方を「週」にすると、一覧で見られます。",
+    "この月には 812 件あります。一覧は 500 件までです。まとめ方を「週」にすると、一覧で見られます。",
   );
-  assert.equal(words(view.listLimitMessage(1812, 500, "year", "en"), "en"), "This period has 1,812 activities. The list shows up to 500. Group by “Month” to list them.");
-  assert.equal(words(view.listLimitMessage(612, 500, "week", "ja"), "ja"), "この区切りには 612 件あります。一覧は 500 件までです。まとめ方を「日」にすると、一覧で見られます。");
+  assert.equal(words(view.listLimitMessage(812, 500, "month", "en"), "en"), "The month chosen has 812 activities. The list shows up to 500. Group by “Week” to list them.");
+  assert.equal(words(view.listLimitMessage(1812, 500, "year", "en"), "en"), "The year chosen has 1,812 activities. The list shows up to 500. Group by “Month” to list them.");
+  assert.equal(words(view.listLimitMessage(612, 500, "year", "ja"), "ja"), "この年には 612 件あります。一覧は 500 件までです。まとめ方を「月」にすると、一覧で見られます。");
+  assert.equal(words(view.listLimitMessage(612, 500, "week", "ja"), "ja"), "この週には 612 件あります。一覧は 500 件までです。まとめ方を「日」にすると、一覧で見られます。");
+  assert.equal(words(view.listLimitMessage(612, 500, "week", "en"), "en"), "The week chosen has 612 activities. The list shows up to 500. Group by “Day” to list them.");
   assert.equal(words(view.listLimitMessage(501, 500, "day", "ja"), "ja"), "この日には 501 件あります。一覧は 500 件までです。");
-  assert.equal(words(view.listLimitMessage(501, 500, "day", "en"), "en"), "This day has 501 activities. The list shows up to 500.");
+  assert.equal(words(view.listLimitMessage(501, 500, "day", "en"), "en"), "The day chosen has 501 activities. The list shows up to 500.");
+  for (const [grain, ja, en] of [["day", "日", "day"], ["week", "週", "week"], ["month", "月", "month"], ["year", "年", "year"]]) {
+    assert.equal(words(view.listEmptyMessage(false, grain), "ja"), `この${ja}に、数える種目のアクティビティはありません。`, grain);
+    assert.equal(words(view.listEmptyMessage(false, grain), "en"), `The ${en} chosen has no activities of the types counted.`, grain);
+    assert.equal(words(view.listEmptyMessage(true, grain), "ja"), `この${ja}に、条件に合うアクティビティはありません。`, grain);
+    assert.equal(words(view.listEmptyMessage(true, grain), "en"), `No activity of the ${en} chosen meets the conditions.`, grain);
+  }
 });
 
 // --- The calendar of comparing years (stage N1 of v2.2.0) -------------------
@@ -1832,11 +1877,11 @@ test("a range is written from the numbers of the answer, in the units of the pag
   // The words of a wider width: 10 minutes times 10 and 10 seconds a
   // kilometre times 5, as the checker asked to see them.
   const time = { first: 0, width: 6000, scale: 1, counts: [1], limit: 200, widened: true };
-  assert.equal(words(view.spreadWide("time", time, "ja"), "ja"), "区切りが 200 を超えるので、幅を 1:40 にしました。");
+  assert.equal(words(view.spreadWide("time", time, "ja"), "ja"), "区間が 200 を超えるので、幅を 1:40 にしました。");
   assert.equal(words(view.spreadWide("time", time, "en"), "en"), "As there would be more than 200 ranges, each range is 1:40 wide.");
   const pace = { first: 6, width: 50, scale: 1000, counts: [1], limit: 200, widened: true };
-  assert.equal(words(view.spreadWide("pace", pace, "ja"), "ja"), "区切りが 200 を超えるので、幅を 0:50 /km にしました。");
-  assert.equal(words(view.spreadWide("dist", { first: 0, width: 5000, scale: 1, counts: [1], limit: 200, widened: true }, "ja"), "ja"), "区切りが 200 を超えるので、幅を 5 km にしました。");
+  assert.equal(words(view.spreadWide("pace", pace, "ja"), "ja"), "区間が 200 を超えるので、幅を 0:50 /km にしました。");
+  assert.equal(words(view.spreadWide("dist", { first: 0, width: 5000, scale: 1, counts: [1], limit: 200, widened: true }, "ja"), "ja"), "区間が 200 を超えるので、幅を 5 km にしました。");
   assert.equal(view.spreadWide("dist", { first: 0, width: 1000, scale: 1, counts: [1], limit: 200, widened: false }, "ja"), null);
 });
 
@@ -2287,7 +2332,7 @@ test("the width of a range is written in the unit of its item, as the page write
   // The words of a wider width are those of the width (Codex's review of the
   // plan of R2: one way to write it).
   const wide = { first: 0, width: 5000, scale: 1, counts: [1], limit: 200, widened: true };
-  assert.equal(words(view.spreadWide("dist", wide, "ja"), "ja"), `区切りが 200 を超えるので、幅を ${words(view.spreadWidthValue("dist", wide, "ja"), "ja")} にしました。`);
+  assert.equal(words(view.spreadWide("dist", wide, "ja"), "ja"), `区間が 200 を超えるので、幅を ${words(view.spreadWidthValue("dist", wide, "ja"), "ja")} にしました。`);
 });
 
 test("the line under a picture of another view says the years or the race days compared, the period, the width of a range, the types, and the version", () => {
@@ -2334,7 +2379,7 @@ test("the line under a picture of another view says the years or the race days c
   const range = { first: 0, width: 1000, scale: 1, counts: [1], limit: 200, widened: false };
   assert.deepEqual(pieces("spread", { start: "2025-10-22", end: "2026-10-21", key: "dist", answer: range }), [
     "期間 2025年10月22日〜2026年10月21日",
-    "区切りの幅 1 km",
+    "区間の幅 1 km",
     "数える種目 ランニングの種目すべて（2 つ）",
     "Garmin Running Data Normalizer 2.2.0",
   ]);
