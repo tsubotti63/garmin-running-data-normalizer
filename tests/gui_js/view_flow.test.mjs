@@ -2963,3 +2963,91 @@ test("the line at the top of the full screen writes a dash for an answer without
   assert.deepEqual(view.fullDays({ start: "2024-01-01", end: "2024-03-31" }, "en"), { from: "January 1, 2024", to: "March 31, 2024" });
   assert.deepEqual(view.fullDays({ start: "2024-01-01", end: "2024-03-31" }, "ja"), { from: "2024年1月1日", to: "2024年3月31日" });
 });
+
+// Stage W1 of v2.2.1: the reading of the output that an answer of the numbers
+// is of, and what the page does with it.
+const readFacts = {
+  first_day: "2023-01-01",
+  last_day: "2025-06-30",
+  types: [
+    { name: "running", count: 300, running: true },
+    { name: "road_biking", count: 40, running: false },
+  ],
+  partial: false,
+};
+const readShown = { view: "ticket-a", ...readFacts };
+
+test("an answer of the numbers tells the reading of the output shown", () => {
+  const answer = (read, output = readFacts) => ({ read, output });
+  assert.equal(view.readingOf(readShown, 4, "ticket-a", answer(5)), "same");
+  assert.equal(view.readingOf(readShown, 4, "ticket-a", answer(4)), "other");
+  assert.equal(view.readingOf(readShown, 4, "ticket-a", answer(3)), "other");
+  assert.equal(view.readingOf(readShown, 4, "ticket-a", { output: readFacts }), "other");
+  assert.equal(view.readingOf(readShown, 4, "ticket-a", { read: 5 }), "other");
+  assert.equal(view.readingOf(readShown, 4, "ticket-a", null), "other");
+  // An answer of another output, asked for by another ticket, whatever its
+  // number (the checker's A), is never used (Codex's review of the diff).
+  assert.equal(view.readingOf(readShown, 4, "ticket-b", answer(9, { ...readFacts, last_day: "2026-01-01" })), "foreign");
+  assert.equal(view.readingOf(readShown, 4, "ticket-b", answer(3)), "foreign");
+  assert.equal(view.readingOf(null, 4, "ticket-a", answer(5)), "other");
+  assert.equal(view.readingOf(readShown, null, "ticket-a", answer(5)), "other");
+  for (const changed of [
+    { ...readFacts, first_day: "2022-12-31" },
+    { ...readFacts, last_day: "2025-08-09" },
+    { ...readFacts, last_day: null },
+    { ...readFacts, partial: true },
+    { ...readFacts, types: [readFacts.types[0]] },
+    { ...readFacts, types: [...readFacts.types, { name: "track_running", count: 1, running: true }] },
+    { ...readFacts, types: [{ ...readFacts.types[0], count: 301 }, readFacts.types[1]] },
+    { ...readFacts, types: [readFacts.types[1], readFacts.types[0]] },
+    { ...readFacts, types: [{ ...readFacts.types[0], running: false }, readFacts.types[1]] },
+  ]) {
+    assert.equal(view.readingOf(readShown, 4, "ticket-a", answer(5, changed)), "changed");
+  }
+  assert.equal(view.readingOf({ ...readShown, partial: true }, 4, "ticket-a", answer(5)), "changed");
+  for (const wrong of [
+    null,
+    [],
+    {},
+    { ...readFacts, first_day: "2023-1-1" },
+    { ...readFacts, types: [{ name: "running" }] },
+    { ...readFacts, types: "running" },
+    { ...readFacts, partial: "no" },
+  ]) {
+    assert.equal(view.readingOf(readShown, 4, "ticket-a", answer(5, wrong)), "other");
+  }
+});
+
+test("a comparison of years goes by its answer of the newest reading", () => {
+  assert.equal(view.newestAnswer([]), null);
+  assert.equal(view.newestAnswer([{}, { read: "7" }, null]), null);
+  const newest = { read: 7 };
+  assert.equal(view.newestAnswer([{ read: 5 }, newest, { read: 6 }, {}]), newest);
+});
+
+test("a newer reading of other facts opens the output again unless an output is being opened", () => {
+  assert.equal(view.readingStep("changed", false), "reopen");
+  // Another output that the person opens answers it (the checker's B).
+  assert.equal(view.readingStep("changed", true), "drop");
+  assert.equal(view.readingStep("same", false), "newer");
+  assert.equal(view.readingStep("same", true), "newer");
+  assert.equal(view.readingStep("other", false), "use");
+  assert.equal(view.readingStep("other", true), "use");
+  assert.equal(view.readingStep("foreign", false), "drop");
+  assert.equal(view.readingStep("foreign", true), "drop");
+});
+
+test("a refused request opens the output again once until a newer reading is seen", () => {
+  const step = (fields) => view.refusalStep({ asked: "ticket-a", view: readShown, opening: false, reopenedAt: null, known: 4, ...fields });
+  assert.equal(step({}), "reopen");
+  assert.equal(step({ asked: "ticket-b" }), "stop");
+  assert.equal(step({ view: null }), "stop");
+  assert.equal(step({ opening: true }), "wait");
+  assert.equal(step({ opening: true, reopenedAt: 4 }), "wait");
+  // Not again for the reading that it opened, such as a request of one view
+  // always refused (the checker's C); again after a newer reading.
+  assert.equal(step({ reopenedAt: 4 }), "stop");
+  assert.equal(step({ reopenedAt: 6, known: 5 }), "stop");
+  assert.equal(step({ reopenedAt: 4, known: null }), "stop");
+  assert.equal(step({ reopenedAt: 4, known: 5 }), "reopen");
+});

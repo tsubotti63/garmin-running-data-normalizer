@@ -2047,14 +2047,25 @@ values are made):
     after the last numbers of that view. Where the numbers of the panels look
     old, press the button of the period again (the same period will do), and
     the panels count again from the output as it is now.
-- Pressing the button of the period again does not renew the overview under
-  the panels, the years that **Compare years** can choose, the days that
-  **Custom range…** can choose, the list of the activity types, and the like.
-  To make them of the output as it is now after you normalize again, choose
-  the same output folder with **Choose another output…**, which opens the
-  output again (choosing the same output again in **Output to view** does not
-  open it again). The years and the races chosen in **Compare years** are
-  then the first ones again.
+- From 2.2.1, where the page finds, as it gives numbers (when you press the
+  button of the period again, for example), that the days, the activity types,
+  or the like of the output have changed, it opens the output again by itself,
+  as choosing the same output folder with **Choose another output…** does: the
+  overview under the panels, the years that **Compare years** can choose, the
+  days that **Custom range…** can choose, and the list of the activity types
+  are then of the output as it is now. An enlarged panel and **Show as a
+  table** on a panel are undone, and the years and the races chosen in
+  **Compare years** are the first ones again. Where the output is read again
+  with the same days and activity types (where only the date changed, for
+  example), it is not opened again. The list of the activities of a period
+  does not notice that the output changed: open it again after the panels show
+  new numbers.
+- In 2.2.0, pressing the button of the period again does not renew the
+  overview under the panels and the like: choose the same output folder with
+  **Choose another output…** to open the output again (choosing the same
+  output again in **Output to view** does not open it again). An enlarged
+  panel and **Show as a table** on a panel are then undone, and the years and
+  the races chosen in **Compare years** are the first ones again.
 
 ### What is remembered for the next time
 

@@ -1383,7 +1383,27 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   in those of `/api/view/activities`, which the page does not compare); the
   page compares that of the panels with that of an answer of another view
   taken after the check of its generation, and a number missing counts as
-  another reading. The guides say this in one place.
+  another reading. From v2.2.1 (stage W1), the answer of `/api/view/open`
+  gives the number of its reading too, and those four answers give the facts
+  of their reading of the output (`output`: its first and last days, its
+  activity types with their counts, and whether it is partial). An answer of
+  the ticket shown, of a newer reading whose facts differ from those of the
+  output opened, is not used: the page opens the output again by itself, as
+  **Choose another output…** with the same folder does, by the ticket that
+  reads it (`{"output": "view", "view": ticket}`, so that a run or the list of
+  earlier outputs, which can name another output by then, is not asked; the
+  place is not told, and a ticket that the server no longer keeps opens the
+  target chosen), unless an output is being opened; a newer reading of the
+  same facts only moves the reading known on, and the overview keeps the
+  number of its reading in its signature. A request of the ticket shown that
+  is refused with `REQUEST_INVALID`, as for an activity type that the output
+  read again no longer has, opens the output again by itself once, until a
+  newer reading than the one that it opened is seen; the overview too. An
+  opening by itself drops the answers of the output before (those of the
+  panels too), writes no settings, keeps a date being typed and the windows
+  of the activity types and the conditions, and gives the focus back where it
+  was only where the focus was lost meanwhile. The guides say this in one
+  place.
 
 ## Data handling in 2.0.0
 

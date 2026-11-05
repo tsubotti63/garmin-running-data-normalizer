@@ -48,7 +48,7 @@ from garmin_running_data_normalizer.run_all import RUN_ALL_VERSION, run_all
 from garmin_running_data_normalizer.view import data as view_data
 from garmin_running_data_normalizer.view import series as view_series
 from garmin_running_data_normalizer.view.data import load_view_data
-from garmin_running_data_normalizer.view.items import ITEMS
+from garmin_running_data_normalizer.view.items import ACTIVITIES, ITEMS
 from garmin_running_data_normalizer.view.series import (
     MAX_TYPE_LENGTH,
     MAX_TYPES,
@@ -105,10 +105,26 @@ def as_json(value: Any) -> Any:
 def apart_from_reading(answer: Any) -> Any:
     """An answer of the panels or of another view without the number of the
     reading that it is of (stage U1 of v2.2.0), which it has, a whole number
-    of 1 or more; ViewsTest holds how the numbers are given."""
+    of 1 or more; ViewsTest holds how the numbers are given. Without the facts
+    of that reading of the output too (stage W1 of v2.2.1), which it has in
+    their form (OUTPUT_FACTS); ViewApiTest holds their values."""
     if not isinstance(answer, dict) or type(answer.get("read")) is not int or answer["read"] < 1:
         raise AssertionError(f"an answer without the number of its reading: {str(answer)[:120]}")
-    return {key: value for key, value in answer.items() if key != "read"}
+    facts = answer.get("output")
+    if (
+        not isinstance(facts, dict)
+        or set(facts) != OUTPUT_FACTS
+        or not all(day is None or isinstance(day, str) for day in (facts["first_day"], facts["last_day"]))
+        or not isinstance(facts["types"], list)
+        or type(facts["partial"]) is not bool
+    ):
+        raise AssertionError(f"an answer without the facts of its reading: {str(answer)[:120]}")
+    return {key: value for key, value in answer.items() if key not in ("read", "output")}
+
+
+# The facts of a reading of an output that the answers of the numbers give
+# (stage W1 of v2.2.1), as the answer of opening gives them.
+OUTPUT_FACTS = {"first_day", "last_day", "types", "partial"}
 
 
 class ViewApiTest(GuiServerTestCase):
@@ -140,8 +156,11 @@ class ViewApiTest(GuiServerTestCase):
         data = load_view_data(output)
         self.assertEqual(
             set(answer),
-            {"view", "name", "version", "partial", "first_day", "last_day", "items", "types", "first_items", "layouts", "coverage", "shoes", "names"},
+            {"view", "name", "version", "partial", "first_day", "last_day", "items", "types", "first_items", "layouts", "coverage", "shoes", "names", "read"},
         )
+        # The number of the reading that its facts are of (stage W1 of v2.2.1).
+        self.assertIs(type(answer["read"]), int)
+        self.assertGreaterEqual(answer["read"], 1)
         # The names of the activities were read (stage T1 of v2.2.0).
         self.assertEqual(answer["names"], "read")
         self.assertRegex(answer["view"], r"^[A-Za-z0-9_-]{16,}$")
@@ -489,6 +508,139 @@ class ViewApiTest(GuiServerTestCase):
             with patch.object(self.server.views, "_today", lambda _timezone: tomorrow):
                 self.assertEqual(self.call("/api/view/series", payload)[0], 200)
             self.assertEqual(len(loads), 2)
+
+    def test_the_answers_of_the_numbers_give_the_facts_of_their_reading(self) -> None:
+        # Stage W1 of v2.2.1: the answer of opening gives the number of its
+        # reading, and every answer of the numbers gives the facts of its
+        # reading of the output as the answer of opening gives them.
+        status, opened = self.call("/api/view/open", {"output": "chosen", "path": str(shoe_output())})
+        self.assertEqual(status, 200, opened)
+        facts = {key: opened[key] for key in OUTPUT_FACTS}
+        self.assertEqual(facts, as_json(gui_server._output_facts(load_view(shoe_output()))))
+        for path, payload in (
+            ("/api/view/series", {"items": ["dist"], "grain": "auto"}),
+            ("/api/view/points", {"x": "pace", "y": "hr"}),
+            ("/api/view/spread", {"item": "dist"}),
+            ("/api/view/shoes", {}),
+        ):
+            with self.subTest(path=path):
+                status, answer = self.call(path, {"view": opened["view"], "period": "all", "types": None, **payload})
+                self.assertEqual(status, 200, answer)
+                self.assertEqual((answer["read"], answer["output"]), (opened["read"], facts))
+
+    def test_an_output_read_again_gives_the_facts_of_the_new_reading(self) -> None:
+        # Stage W1 of v2.2.1: an output normalized again, here a reading made
+        # to end later, to be partial, and to have one more activity type,
+        # gives the facts of the new reading with every answer of the numbers,
+        # as the answer of opening it again does.
+        output = self.copied()
+        first = load_view_data(output)
+        rows = first.rows[ACTIVITIES]
+        later = replace(
+            first,
+            last_day=first.last_day + 40,
+            partial=True,
+            rows={**first.rows, ACTIVITIES: (replace(rows[0], marks={**rows[0].marks, "type": "track_running"}), *rows[1:])},
+        )
+        loads: list[Path] = []
+
+        def counted(place: Path) -> Any:
+            loads.append(place)
+            return first if len(loads) == 1 else later
+
+        with patch.object(self.server.views, "_load", counted):
+            status, opened = self.call("/api/view/open", {"output": "chosen", "path": str(output)})
+            self.assertEqual(status, 200, opened)
+            payload = {"view": opened["view"], "items": ["dist"], "period": "all", "grain": "auto", "types": None}
+            status, before = self.call("/api/view/series", payload)
+            self.assertEqual((status, before["read"], before["output"]), (200, opened["read"], {key: opened[key] for key in OUTPUT_FACTS}))
+            activities = output / "analysis" / "activities.csv"
+            moved = activities.stat().st_mtime_ns + 2_000_000_000
+            os.utime(activities, ns=(moved, moved))
+            status, after = self.call("/api/view/series", payload)
+            self.assertEqual(status, 200, after)
+            self.assertGreater(after["read"], opened["read"])
+            expected = as_json(gui_server._output_facts(later))
+            self.assertEqual(after["output"], expected)
+            self.assertEqual((after["output"]["last_day"], after["output"]["partial"]), (date.fromordinal(first.last_day + 40).isoformat(), True))
+            self.assertIn({"name": "track_running", "count": 1, "running": True}, after["output"]["types"])
+            for path, other in (("/api/view/points", {"x": "pace", "y": "hr"}), ("/api/view/spread", {"item": "dist"}), ("/api/view/shoes", {})):
+                with self.subTest(path=path):
+                    status, answer = self.call(path, {"view": opened["view"], "period": "all", "types": None, **other})
+                    self.assertEqual(status, 200, answer)
+                    self.assertEqual((answer["read"], answer["output"]), (after["read"], expected))
+            status, again = self.call("/api/view/open", {"output": "chosen", "path": str(output)})
+            self.assertEqual(status, 200, again)
+            self.assertEqual({key: again[key] for key in OUTPUT_FACTS}, expected)
+            self.assertGreater(again["read"], after["read"])
+            self.assertEqual(len(loads), 3)
+
+    def test_an_activity_type_gone_from_an_output_read_again_is_refused(self) -> None:
+        # Stage W1 of v2.2.1: the check of the activity types stays, so that a
+        # type that the output read again no longer has is refused; the facts
+        # of an answer without it no longer name it (the page opens the
+        # output again once, to take them).
+        output = self.copied()
+        first = load_view_data(output)
+        gone = "trail_running"
+        later = replace(
+            first,
+            rows={
+                **first.rows,
+                ACTIVITIES: tuple(replace(row, marks={**row.marks, "type": "running"}) if row.marks["type"] == gone else row for row in first.rows[ACTIVITIES]),
+            },
+        )
+        self.assertIn(gone, [entry["name"] for entry in activity_types(first)])
+        loads: list[Path] = []
+
+        def counted(place: Path) -> Any:
+            loads.append(place)
+            return first if len(loads) == 1 else later
+
+        with patch.object(self.server.views, "_load", counted):
+            ticket = self.open(output)
+            payload = {"view": ticket, "items": ["dist"], "period": "all", "grain": "auto", "types": ["running", gone]}
+            self.assertEqual(self.call("/api/view/series", payload)[0], 200)
+            activities = output / "analysis" / "activities.csv"
+            moved = activities.stat().st_mtime_ns + 2_000_000_000
+            os.utime(activities, ns=(moved, moved))
+            self.assertEqual(self.call("/api/view/series", payload), (422, {"error": "REQUEST_INVALID"}))
+            status, answer = self.call("/api/view/series", {**payload, "types": ["running"]})
+            self.assertEqual(status, 200, answer)
+            self.assertNotIn(gone, [entry["name"] for entry in answer["output"]["types"]])
+            self.assertEqual(len(loads), 2)
+
+    def test_an_output_opens_again_by_the_ticket_that_reads_it(self) -> None:
+        # Stage W1 of v2.2.1: the page opens the folder that its ticket reads
+        # again by that ticket, under a new ticket, as a run or the list of
+        # earlier outputs can name another output by then; the answer names
+        # no place, and a ticket that the server does not keep is VIEW_NOT_OPEN.
+        output = self.copied()
+        ticket = self.open(output)
+        status, again = self.call("/api/view/open", {"output": "view", "view": ticket})
+        self.assertEqual(status, 200, again)
+        self.assertNotEqual(again["view"], ticket)
+        self.assertEqual(again["name"], output.name)
+        self.assertNotIn(str(output), json.dumps(again))
+        self.assertEqual(self.server.views.output_of(again["view"]), output)
+        self.assertEqual(self.server.views.output_of(ticket), output)
+        self.assertEqual(self.call("/api/view/open", {"output": "view", "view": "a-ticket-never-given"}), (409, {"error": "VIEW_NOT_OPEN"}))
+        for wrong in (None, 3, ["a"]):
+            with self.subTest(view=wrong):
+                self.assertEqual(self.call("/api/view/open", {"output": "view", "view": wrong}), (422, {"error": "REQUEST_INVALID"}))
+
+    def test_the_size_of_an_answer_counts_the_facts_of_its_reading(self) -> None:
+        # Stage W1 of v2.2.1: the facts of the reading are in the answer when
+        # its size is checked.
+        ticket = self.open(made_output())
+        payload = {"view": ticket, "items": ["dist"], "period": "all", "grain": "auto", "types": None}
+        status, answer = self.call("/api/view/series", payload)
+        self.assertEqual(status, 200, answer)
+        without = {key: value for key, value in answer.items() if key != "output"}
+        with patch.object(gui_server, "MAX_ANSWER_BYTES", len(gui_server.json_body(without))):
+            self.assertEqual(self.call("/api/view/series", payload), (422, {"error": "VIEW_ANSWER_TOO_LARGE"}))
+        with patch.object(gui_server, "MAX_ANSWER_BYTES", len(gui_server.json_body(answer))):
+            self.assertEqual(self.call("/api/view/series", payload), (200, answer))
 
     def test_at_most_four_outputs_are_kept(self) -> None:
         # The number of the plan, written as it is, so that a changed

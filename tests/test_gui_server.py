@@ -796,7 +796,7 @@ class GuiPageScriptTest(unittest.TestCase):
         # An output that opens remembers by itself; the person's changes of
         # the items and the shelf by the person.
         self.assertEqual(source.count("rememberItems();"), 1)
-        opened = re.search(r"async function openOutput\(target, focus = false\) \{(.*?)\n\}", source, re.DOTALL)
+        opened = re.search(r"async function openOutput\(target, focus = false, auto = null\) \{(.*?)\n\}", source, re.DOTALL)
         assert opened is not None
         self.assertIn("rememberItems();", opened.group(1))
         # From v2.2.0 (stage K2), the period, the grouping, the activity

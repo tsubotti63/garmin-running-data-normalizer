@@ -277,6 +277,20 @@ def _iso(day: int | None) -> str | None:
     return None if day is None else date.fromordinal(day).isoformat()
 
 
+def _output_facts(data: Any) -> dict[str, Any]:
+    """The facts of a reading of an output that the view page goes by beside
+    the numbers (stage W1 of v2.2.1): its first and last days, its activity
+    types, and whether it is partial. The answer of opening gives them, and
+    the answers of the numbers give them as ``output``, so that the page takes
+    those of an output read again."""
+    return {
+        "first_day": _iso(data.first_day),
+        "last_day": _iso(data.last_day),
+        "types": activity_types(data),
+        "partial": data.partial,
+    }
+
+
 def _command_failed() -> ApiError:
     """The answer to an unexpected error of a check, the Support Bundle, or
     opening the output: the code with which the CLI's commands stop for one
@@ -752,6 +766,18 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
                 raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code) from exc
         raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
 
+    def _view_output(self, payload: dict[str, Any]) -> Path:
+        # The output that a ticket of the view page reads (stage W1 of v2.2.1);
+        # a ticket that the server no longer keeps is VIEW_NOT_OPEN, and the
+        # page then opens the output that it chose.
+        ticket = payload.get("view")
+        if not isinstance(ticket, str):
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+        try:
+            return self.server.views.output_of(ticket)
+        except ViewNotOpenError as exc:
+            raise ApiError(HTTPStatus.CONFLICT, "VIEW_NOT_OPEN") from exc
+
     def _api_check_output(self, payload: dict[str, Any]) -> dict[str, Any]:
         output = self._target_output(payload)
         try:
@@ -934,10 +960,13 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         # The view page opens an output as an action of the fourth box
         # chooses one (stage B5b), and checks it as the check of an output
         # does; the answer names the output by its ticket, never by its
-        # place (stage G3b).
-        output = self._target_output(payload)
+        # place (stage G3b). An output that the page opens again by itself
+        # opens by the ticket that reads it (stage W1 of v2.2.1): the folder of
+        # that ticket, never that of a run or of the list of earlier outputs,
+        # which can be another by then.
+        output = self._view_output(payload) if payload.get("output") == "view" else self._target_output(payload)
         try:
-            ticket, data = self.server.views.open(output)
+            ticket, data, read = self.server.views.opened(output)
         except OutputActionError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code, exc.version) from exc
         except Exception as exc:
@@ -949,11 +978,10 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             "view": ticket,
             "name": output.name,
             "version": data.version,
-            "partial": data.partial,
-            "first_day": _iso(data.first_day),
-            "last_day": _iso(data.last_day),
+            # The facts of this reading of the output, which the answers of the
+            # numbers give again (stage W1 of v2.2.1).
+            **_output_facts(data),
             "items": item_table(),
-            "types": activity_types(data),
             "first_items": default_items(data, shelf),
             # The built-in layouts (stage K1 of v2.2.0).
             "layouts": built_in_answer(),
@@ -964,6 +992,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             # Whether the names of the activities were read (stage T1); every
             # answer of a view says it again, as any can read the output again.
             "names": _names_state(data),
+            # The reading that the facts are of (stage W1 of v2.2.1).
+            "read": read,
         }
 
     def _api_view_series(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -1001,6 +1031,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         answer["names"] = _names_state(data)
         # The reading that the answer is of (stage U1 of v2.2.0).
         answer["read"] = read
+        # And the facts of that reading of the output (stage W1 of v2.2.1).
+        answer["output"] = _output_facts(data)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer
@@ -1067,6 +1099,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         answer["names"] = _names_state(data)
         # The reading that the answer is of (stage U1 of v2.2.0).
         answer["read"] = read
+        # And the facts of that reading of the output (stage W1 of v2.2.1).
+        answer["output"] = _output_facts(data)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer
@@ -1101,6 +1135,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         answer["names"] = _names_state(data)
         # The reading that the answer is of (stage U1 of v2.2.0).
         answer["read"] = read
+        # And the facts of that reading of the output (stage W1 of v2.2.1).
+        answer["output"] = _output_facts(data)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer
@@ -1136,6 +1172,8 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         answer["names"] = _names_state(data)
         # The reading that the answer is of (stage U1 of v2.2.0).
         answer["read"] = read
+        # And the facts of that reading of the output (stage W1 of v2.2.1).
+        answer["output"] = _output_facts(data)
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer
