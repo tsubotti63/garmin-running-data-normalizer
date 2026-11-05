@@ -146,6 +146,7 @@ const ui = {
   quit: byId("quit-button"),
   // Quitting asks first, in the bar (v2.0.1 F2).
   quitConfirm: byId("quit-confirm"),
+  quitRow: byId("quit-row"),
   quitYes: byId("quit-yes"),
   quitNo: byId("quit-no"),
   boxes: {
@@ -306,6 +307,7 @@ const ui = {
   infoAnnouncer: byId("info-announcer"),
   forgetButton: byId("forget-button"),
   forgetConfirm: byId("forget-confirm"),
+  forgetRow: byId("forget-row"),
   forgetYes: byId("forget-yes"),
   forgetNo: byId("forget-no"),
   hints: document.querySelectorAll(".hint"),
@@ -1013,8 +1015,53 @@ function renderSettings() {
     lines.push(...settingsMessages(state.settingsNotice.code, state.settingsNotice.writing).map(describe));
   }
   replaceLines(ui.settingsStatus, lines);
+  ui.forgetRow.hidden = !state.forget.asked;
   ui.forgetConfirm.hidden = !state.forget.asked;
+  alignConfirmRow(ui.forgetRow, ui.forgetButton);
   ui.forgetButton.setAttribute("aria-expanded", String(state.forget.asked));
+}
+
+// The question of a button of the bar at the bottom ends where its button
+// ends (stage W2 of v2.2.1, the person's choice of the samples): CSS alone
+// does not know where the button is, so its row keeps the room right of the
+// button free, measured as it shows, at the end of each drawing, and as the
+// window, the bar, or any part of the bar changes size. The box is at most
+// as wide as the room left of the end of the button; a room under 20rem
+// leaves the box as wide as the bar (the checker's review of the plan).
+function alignConfirmRow(row, button) {
+  if (row.hidden) {
+    return;
+  }
+  const bar = row.parentElement;
+  const style = getComputedStyle(bar);
+  const box = bar.getBoundingClientRect();
+  const end = button.getBoundingClientRect().right;
+  const room = end - box.left - parseFloat(style.paddingLeft);
+  const wide = room < 20 * parseFloat(getComputedStyle(document.documentElement).fontSize);
+  row.dataset.fit = wide ? "bar" : "button";
+  row.style.paddingRight = wide ? "0px" : `${Math.max(0, Math.round(box.right - parseFloat(style.paddingRight) - end))}px`;
+  row.firstElementChild.style.maxWidth = wide ? "" : `${Math.floor(room)}px`;
+}
+
+function alignConfirmRows() {
+  alignConfirmRow(ui.quitRow, ui.quit);
+  alignConfirmRow(ui.forgetRow, ui.forgetButton);
+}
+
+// What the observer of the bar asks for is measured in the next frame, out of
+// its notices: what the measuring changes (the height of the bar) would
+// otherwise come back to the observer in the same frame, which the browser
+// tells as an error of the window (the real pages of W2 of v2.2.1).
+let alignFrame = null;
+
+function scheduleAlign() {
+  if (alignFrame !== null) {
+    return;
+  }
+  alignFrame = window.requestAnimationFrame(() => {
+    alignFrame = null;
+    alignConfirmRows();
+  });
 }
 
 function renderBrowser() {
@@ -1738,7 +1785,9 @@ function renderControls(states, current) {
   ui.quit.disabled = !enabled.quit;
   // The question of Quit in the bar (v2.0.1 F2), as the one that forgets the
   // settings; its answer stops the server only while Quit can.
+  ui.quitRow.hidden = !state.quitAsked;
   ui.quitConfirm.hidden = !state.quitAsked;
+  alignConfirmRow(ui.quitRow, ui.quit);
   ui.quit.setAttribute("aria-expanded", String(state.quitAsked));
   ui.quitYes.disabled = !enabled.quit;
   ui.hintsToggle.disabled = !enabled.hints;
@@ -1799,6 +1848,9 @@ function render() {
   renderHints();
   renderTheme();
   renderInfos();
+  // The questions of the bar, after every part of it is drawn (stage W2 of
+  // v2.2.1).
+  alignConfirmRows();
 }
 
 function stopHeartbeat() {
@@ -2906,6 +2958,22 @@ function connect() {
   ui.outputName.value = defaultOutputName(new Date());
   ui.language.addEventListener("change", () => changeLanguage(ui.language.value));
   ui.quit.addEventListener("click", askQuit);
+  window.addEventListener("resize", alignConfirmRows);
+  // And as the bar or any part of it changes size while a question shows: a
+  // part that grows or wraps may move a button while the bar keeps its size
+  // (the checker's review of the plan of W2 of v2.2.1). The rows of the
+  // questions are left out, as their measures change with the measuring,
+  // which waits for the next frame (scheduleAlign).
+  if (typeof ResizeObserver === "function") {
+    const watcher = new ResizeObserver(scheduleAlign);
+    const bar = ui.quitRow.parentElement;
+    watcher.observe(bar);
+    for (const part of bar.children) {
+      if (!part.classList.contains("confirm-row")) {
+        watcher.observe(part);
+      }
+    }
+  }
   ui.quitYes.addEventListener("click", quit);
   ui.quitNo.addEventListener("click", keepApp);
   ui.quitConfirm.addEventListener("keydown", (event) => {

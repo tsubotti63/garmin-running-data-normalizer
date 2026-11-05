@@ -599,6 +599,7 @@
   </div>
 </aside>
 <footer class="statusbar">
+  <div id="quit-row" class="confirm-row" hidden>
   <div id="quit-confirm" class="confirm" hidden>
     <p id="quit-question" class="question" data-i18n="quit.question"></p>
     <p id="quit-text" data-i18n="quit.text"></p>
@@ -607,6 +608,8 @@
       <button type="button" id="quit-no" data-i18n="quit.no" aria-describedby="quit-question quit-text"></button>
     </div>
   </div>
+  </div>
+  <div id="forget-row" class="confirm-row" hidden>
   <div id="forget-confirm" class="confirm" hidden>
     <p id="forget-question" class="question" data-i18n="forget.question"></p>
     <p id="forget-text" data-i18n="forget.text"></p>
@@ -615,6 +618,7 @@
       <button type="button" id="forget-yes" data-i18n="forget.yes" aria-describedby="forget-question forget-text forget-text-also"></button>
       <button type="button" id="forget-no" data-i18n="forget.no" aria-describedby="forget-question forget-text forget-text-also"></button>
     </div>
+  </div>
   </div>
   <p class="privacy" data-i18n="app.privacy"></p>
   <p id="settings-status" class="status" role="status" aria-live="polite"></p>

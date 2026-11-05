@@ -870,9 +870,12 @@ class GuiGuideTest(unittest.TestCase):
                     "The list of the activities of a period does not notice that the output changed: open it again after the panels show new numbers.",
                     f"In 2.2.0, pressing the button of the period again does not renew the overview under the panels and the like: choose the same output folder with {word('target.other')} to open the output again (choosing the same output again in {word('view.output.label')} does not open it again).",
                     f"An enlarged panel and {word('view.panel.table')} on a panel are then undone, and the years and the races chosen in {word('view.compare.button')} are the first ones again.",
+                    # Stage W2 of v2.2.1: where the question of Quit shows.
+                    "Its question, **Quit this app?**, shows from 2.2.1 right above **Quit the app…**, ending where the button ends (across the bar where a narrow window leaves too little room left of the button; in 2.2.0, at the left end of the bar at the bottom).",
                 )
                 gone = (
                     "Without the GUI, fill in",
+                    "shows at the left end of the bar at the bottom (**Quit the app…** is at the right end).",
                     # Stage W1 of v2.2.1: the bullet of 2.2.0 before it.
                     "Pressing the button of the period again does not renew the overview under the panels, the years that",
                     "The line installs into the same virtual environment",
@@ -931,9 +934,12 @@ class GuiGuideTest(unittest.TestCase):
                     "日付や種目などが同じままの読み直し（日付が変わっただけのときなど）では、開き直しません。",
                     "区切りの一覧は、出力が変わったことに気づきません（段の数が新しくなってから、一覧を開き直してください）。",
                     f"2.2.0 では、期間のボタンを押し直しても、段の下の全体図などは新しくなりません。{word('target.other')}で同じ出力のフォルダーを選び、出力を開き直してください（{word('view.output.label')}の欄で同じ出力を選び直しても、開き直しません）。開き直すと、大きくした段と、段の{word('view.panel.table')}は元に戻り、年でくらべるで選んだ年や大会は、初めのものに戻ります。",
+                    # Stage W2 of v2.2.1: where the question of Quit shows.
+                    "問い「このアプリを終了しますか？」は、（2.2.1 から）「このアプリを終了…」のすぐ上に、その右の端にそろえて出ます（ボタンの左に場所が足りない狭い窓では、下の帯の幅いっぱいに出ます。2.2.0 では、下の帯の左の端に出ます）。",
                 )
                 gone = (
                     "GUI が無いときは",
+                    "下の帯の左の端に出ます（「このアプリを終了…」は右の端にあります）。",
                     # Stage W1 of v2.2.1: the bullet of 2.2.0 before it.
                     "期間のボタンを押し直しても、段の下の全体図、年でくらべるで選べる年、",
                     "同じ仮想環境 `garmin-normalizer` に入り、",
@@ -1228,8 +1234,9 @@ class GuiGuideTest(unittest.TestCase):
                 "At first, and after a change of the grouping or of the month, they are of the last period of the newest year, where the cross line stands too.",
                 "group by **Week** or **Month** (by **Week** with one month chosen).",
                 # v2.2.0 K6a: the table stays while the same comparison is
-                # open, whatever the way to show (the hand checks of rc2).
-                "While **Compare years** is open, the table stays when you change **Show as**: to bring back the chart, with its legend, press **Show as a chart** or **Show as a calendar**.",
+                # open, whatever the way to show (the hand checks of rc2);
+                # from v2.2.1 (stage W2) a way changed shows the chart again.
+                "From 2.2.1, choosing another way in **Show as** brings back the chart, with its legend; changing the item, the years, the month, or the races keeps the table. In 2.2.0, while **Compare years** is open, the table stays when you change **Show as**: to bring back the chart, press **Show as a chart** or **Show as a calendar**.",
             ),
             "ja": (
                 "54 週まである年もあります",
@@ -1247,7 +1254,7 @@ class GuiGuideTest(unittest.TestCase):
                 # K6a).
                 "くらべる間は、期間・‹ ›・「範囲を選ぶ…」の日付の欄・項目の棚・レイアウトは使わず、灰色になります。まとめ方の「自動」と「年」も灰色で、帯の「月」で月を選んだときは、まとめ方の「月」も灰色です。",
                 "まとめ方を「週」か「月」に（帯の「月」で月を選んだときは「週」に）してください。",
-                "年でくらべるを開いている間は、見せ方を替えても「表で見る」のままです。図（凡例を含む）に戻すには「グラフで見る」か「カレンダーで見る」を押します。",
+                "（2.2.1 から）見せ方を選び直すと、図（凡例を含む）に戻ります。項目・年・月・大会を替えても、表のままです。2.2.0 では、年でくらべるを開いている間は、見せ方を替えても「表で見る」のままで、図に戻すには「グラフで見る」か「カレンダーで見る」を押します。",
             ),
         }
         quoted = (

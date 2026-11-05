@@ -604,6 +604,7 @@ const ui = {
   overviewLabel: byId("overview-label"),
   overviewPlot: byId("overview-plot"),
   quitConfirm: byId("quit-confirm"),
+  quitRow: byId("quit-row"),
   quitYes: byId("quit-yes"),
   quitNo: byId("quit-no"),
   language: byId("language-select"),
@@ -5363,6 +5364,44 @@ function chooseCompareItem() {
   requestCompare();
 }
 
+// The question of a button of the bar at the bottom ends where its button
+// ends (stage W2 of v2.2.1, the person's choice of the samples): CSS alone
+// does not know where the button is, so its row keeps the room right of the
+// button free, measured as it shows, at the end of each drawing, and as the
+// window, the bar, or any part of the bar changes size. The box is at most
+// as wide as the room left of the end of the button; a room under 20rem
+// leaves the box as wide as the bar (the checker's review of the plan).
+function alignConfirmRow(row, button) {
+  if (row.hidden) {
+    return;
+  }
+  const bar = row.parentElement;
+  const style = getComputedStyle(bar);
+  const box = bar.getBoundingClientRect();
+  const end = button.getBoundingClientRect().right;
+  const room = end - box.left - parseFloat(style.paddingLeft);
+  const wide = room < 20 * parseFloat(getComputedStyle(document.documentElement).fontSize);
+  row.dataset.fit = wide ? "bar" : "button";
+  row.style.paddingRight = wide ? "0px" : `${Math.max(0, Math.round(box.right - parseFloat(style.paddingRight) - end))}px`;
+  row.firstElementChild.style.maxWidth = wide ? "" : `${Math.floor(room)}px`;
+}
+
+// What the observer of the bar asks for is measured in the next frame, out of
+// its notices: what the measuring changes (the height of the bar) would
+// otherwise come back to the observer in the same frame, which the browser
+// tells as an error of the window (the real pages of W2 of v2.2.1).
+let alignFrame = null;
+
+function scheduleAlign() {
+  if (alignFrame !== null) {
+    return;
+  }
+  alignFrame = window.requestAnimationFrame(() => {
+    alignFrame = null;
+    alignConfirmRow(ui.quitRow, ui.quit);
+  });
+}
+
 // A way chosen, which is remembered: new numbers only where its first
 // grouping, or the month that it uses (none for a calendar), is another.
 function chooseCompareMode(mode) {
@@ -5373,6 +5412,12 @@ function chooseCompareMode(mode) {
     return;
   }
   const month = compareMonthNow();
+  // A table shows the chart of the way chosen again, with its legend (stage
+  // W2 of v2.2.1, the person's choice of the samples); a year, a month, or an
+  // item changed keeps the table.
+  if (compareModeNow() !== mode) {
+    state.compare.table = false;
+  }
   state.compareMode = mode;
   rememberItems(true);
   // By race day, by week whatever the way (Codex's review of the plan of M2).
@@ -7329,7 +7374,9 @@ function renderFooter(live) {
   ui.hintsToggle.disabled = !live;
   ui.toNormalize.disabled = state.stopped;
   ui.quit.disabled = !live;
+  ui.quitRow.hidden = !state.quitAsked;
   ui.quitConfirm.hidden = !state.quitAsked;
+  alignConfirmRow(ui.quitRow, ui.quit);
   ui.quit.setAttribute("aria-expanded", String(state.quitAsked));
   ui.quitYes.disabled = !live;
   const notice = state.settingsNotice;
@@ -8921,6 +8968,9 @@ function render() {
   renderSaveNotice();
   renderFooter(live);
   renderHelp();
+  // The question of Quit, after every part of the bar is drawn (stage W2 of
+  // v2.2.1).
+  alignConfirmRow(ui.quitRow, ui.quit);
 }
 
 // --- Help, quitting, and the controls -------------------------------------
@@ -9209,6 +9259,22 @@ function connect() {
   window.addEventListener("resize", fitSaveWindow);
   window.addEventListener("resize", fitTypesWindow);
   window.addEventListener("resize", fitConditionsWindow);
+  window.addEventListener("resize", () => alignConfirmRow(ui.quitRow, ui.quit));
+  // And as the bar or any part of it changes size while the question shows:
+  // a part that grows or wraps may move the button while the bar keeps its
+  // size (the checker's review of the plan of W2 of v2.2.1). The rows of the
+  // questions are left out, as their measures change with the measuring,
+  // which waits for the next frame (scheduleAlign).
+  if (typeof ResizeObserver === "function") {
+    const watcher = new ResizeObserver(scheduleAlign);
+    const bar = ui.quitRow.parentElement;
+    watcher.observe(bar);
+    for (const part of bar.children) {
+      if (!part.classList.contains("confirm-row")) {
+        watcher.observe(part);
+      }
+    }
+  }
   ui.marksOpen.addEventListener("click", () => openMarks(!state.marksOpen));
   ui.marksPopClose.addEventListener("click", () => openMarks(false));
   // The summary of the panels (stage Q1 of v2.2.0).
