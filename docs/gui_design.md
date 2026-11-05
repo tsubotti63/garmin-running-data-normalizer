@@ -1030,7 +1030,13 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   layouts, and the groupings Auto and Year (and Month over one month) are
   grayed, with a line under the filters that says so, and the overview is
   not shown. The settings remember the way and the month. The help panel
-  gives it in one item, after the layouts (stage L2).
+  gives it in one item, after the layouts (stage L2). From v2.2.1 (stage W3)
+  the table of a comparison names its first column by the grouping, heads
+  the counts in English with one short word, "Count" (a screen reader hears
+  the whole heading), says under the table what was counted, and wraps its
+  places and headings, English at spaces and never inside a word, Japanese
+  between its characters too (it has no spaces), so that six years or six
+  races fit its box.
 - Marks (stage M1): the person's own events, each a kind (race, injury, shoes,
   or other), a name of 1 to 30 characters (checked as the name of a layout),
   and a day or a span of days from 1 January 1900; 200 at most, ordered by
@@ -1082,7 +1088,9 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   of the period cut to the output, as one period of `range`), up to 500 (more
   gives their number only), and gives the value of the panel and the count of
   the activities that it counted, from the same numbers; the page never counts
-  them again. The columns are those of the output: the local date and time as
+  them again. From v2.2.1 (stage W3) the sentences of the list name its
+  period by its grouping ("the week chosen"), with the same placeholders in
+  both languages. The columns are those of the output: the local date and time as
   the output writes them (not needed: an output without the column opens),
   from stage T1 the name where the names were read, the type, seven values,
   and the item of the panel where it is none of them. The page orders the rows

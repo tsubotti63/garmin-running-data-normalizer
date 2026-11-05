@@ -655,6 +655,51 @@ class GuiCatalogTest(unittest.TestCase):
             with self.subTest(key=key):
                 self.assertEqual((ja[key], en[key]), ("レイアウト", "Layouts"))
 
+    def test_the_words_of_v221_w3_name_the_bars_the_ranges_and_the_periods(self) -> None:
+        # v2.2.1 W3 (the person's answer 「おすすめのとおり」): in Japanese the page
+        # says 区間 for the ranges of a distribution and 色の段階 for the steps of
+        # a calendar, names the bars by what they hold, says このコンピューター,
+        # and says that it does not show whether two items are related at all;
+        # in English the list is that of a day, week, month, or year. The old
+        # words are gone from the catalogs.
+        catalogs = {language: load_catalog(language) for language in LANGUAGES}
+        said = {
+            "ja": {
+                "view.caveat": "並べた項目のあいだに関係があるか、どちらが原因かは、このアプリは示しません。",
+                "view.help.other_plot": "2 つの項目のあいだに関係があるか、どちらが原因かは示しません。",
+                "view.help.other_spread": "決まった幅の区間（距離なら 1 km ごと）に何回あるかを棒で見ます。区間には丸める前の値で入れます。棒を押すと、右上に区間と回数が出ます。",
+                "view.spread.label": "棒を選ぶと、右上に区間と回数が出ます。",
+                "view.spread.table_caption": "区間ごとの回数",
+                "view.compare.calendar_steps": "色の段階は年をまたいで同じで、",
+                "view.compare.calendar_note": "値は、日を選んだときの年の帯の左と",
+                "view.compare.calendar_label": "日を選ぶと年の帯の左に値が出ます。",
+                "view.help.conditions_text": "フィルターの帯の下の 1 行に条件が出ます。",
+                "view.help.save_text": "くらべる帯（年でくらべる）と見方の帯（点で並べる・分かれ方）の「画像で保存…」",
+                "view.help.big_text": "ほかの段は細い段になり、",
+                "view.marks.store_note": "印は、このコンピューターの GUI の設定のフォルダーに残ります",
+                "view.help.marks_text": "印は、このコンピューターの GUI の設定のフォルダーにだけ残ります。",
+                "view.note.partial": "「（途中）」の付いた区切りは、",
+            },
+            "en": {
+                "view.help.list": "The activities of a day, week, month, or year",
+                "view.help.list_text": "press a bar or a point of the chart, or select the chart and press Enter, and the activities of its day, week, month, or year open under the panel.",
+                "view.hint.filters": "click a bar or a point, or press Enter on its chart, to open the list of the activities of its day, week, month, or year.",
+                "view.list.hint": "Choose a day, week, month, or year with ← or →, and press Enter to open the list of its activities.",
+                "view.note.partial": "Light bars and the days, weeks, months, or years marked “(partial)”",
+            },
+        }
+        gone = {
+            "ja": ("色の区切り", "このパソコン", "あいだの関係（どちらが原因か）", "区切りの幅", "区切りが {max}", "Garmin の値のまま", "範囲と回数"),
+            "en": ("Garmin value as is", "a period cut short", "Choose a period with", "press a period"),
+        }
+        for language, catalog in catalogs.items():
+            for key, words in said[language].items():
+                with self.subTest(language=language, key=key):
+                    self.assertIn(words, catalog[key])
+            for words in gone[language]:
+                with self.subTest(language=language, gone=words):
+                    self.assertEqual([key for key, text in catalog.items() if words in text], [])
+
     def test_two_items_plotted_say_no_relation_and_quote_the_page(self) -> None:
         # v2.2.0 O1 (the checker's review of the plan): what is not used while
         # plotting quotes the words of the page; no word of the points reads a
@@ -670,7 +715,7 @@ class GuiCatalogTest(unittest.TestCase):
             for word in ("関係", "相関", "傾向") if language == "ja" else ("correlat", "trend", "relation"):
                 with self.subTest(language=language, word=word):
                     self.assertNotIn(word, plotted.lower())
-        self.assertEqual(catalogs["ja"]["view.plot.caveat"], "点で並べた 2 つの項目のあいだの関係（どちらが原因か）は、このアプリは示しません。")
+        self.assertEqual(catalogs["ja"]["view.plot.caveat"], "点で並べた 2 つの項目のあいだに関係があるか、どちらが原因かは、このアプリは示しません。")
         self.assertEqual(catalogs["en"]["view.plot.caveat"], "This app shows no relation or cause between the two items plotted.")
 
     def test_a_distribution_says_no_relation_nor_a_shape_and_quotes_the_page(self) -> None:

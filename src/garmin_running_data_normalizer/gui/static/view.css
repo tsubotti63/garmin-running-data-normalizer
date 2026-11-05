@@ -1742,6 +1742,16 @@ button.small {
   white-space: nowrap;
 }
 
+/* A table of comparing years wraps its places and its headings so that six
+   years or six races fit its box: English at spaces, a word never broken
+   (no overflow-wrap), and Japanese, which has no spaces, between its
+   characters too (no keep-all: the person's choice after Codex's review of
+   the diff; stage W3 of v2.2.1). The tables by shoes keep their form. */
+.compare-table .t.years-table tbody th,
+.compare-table .t.years-table thead th {
+  white-space: normal;
+}
+
 /* Each year (or race) of a table of comparing years apart from the one
    before, by a line on its left (stage U3 of v2.2.0, the person's hand
    check of the release candidate); the tables by shoes keep their form. */

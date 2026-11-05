@@ -38,6 +38,15 @@ const GRAIN_KEYS = {
   year: "view.grain.year",
 };
 
+// The groupings as words inside a sentence ("the week chosen"), apart from
+// their names on the buttons (stage W3 of v2.2.1).
+const GRAIN_WORD_KEYS = {
+  day: "view.grain_word.day",
+  week: "view.grain_word.week",
+  month: "view.grain_word.month",
+  year: "view.grain_word.year",
+};
+
 // The grains as nouns of a count: "Months with records: 12".
 const GRAIN_COUNT_KEYS = {
   day: "view.grains.day",
@@ -193,6 +202,22 @@ const COUNT_HEAD_KEYS = {
   activities: "view.table.activities",
   days: "view.table.days",
   records: "view.table.records",
+};
+
+// The headings of the counts in a table of comparing years: in English one
+// short word, so that six years or races fit (stage W3 of v2.2.1); the whole
+// word stays for a screen reader, and a note under the table says what was
+// counted.
+const COMPARE_COUNT_HEAD_KEYS = {
+  activities: "view.compare.count.activities",
+  days: "view.compare.count.days",
+  records: "view.compare.count.records",
+};
+
+const COMPARE_COUNT_NOTE_KEYS = {
+  activities: "view.compare.count_note.activities",
+  days: "view.compare.count_note.days",
+  records: "view.compare.count_note.records",
 };
 
 // The activity types of Garmin that the page names in its words; any other
@@ -444,6 +469,12 @@ export function countMessage(item, count, grain, language) {
 
 export function countHeadKey(item) {
   return COUNT_HEAD_KEYS[countKind(item)];
+}
+
+// The note under a table of comparing years of what its counts are (stage W3
+// of v2.2.1); none for a running total, which has no counts.
+export function compareCountNoteKey(item, mode) {
+  return mode === "cumulative" ? null : COMPARE_COUNT_NOTE_KEYS[countKind(item)];
 }
 
 // The items that the settings remember (stage G3b), known and once each, up to
@@ -1859,7 +1890,7 @@ export function compareReadings(item, data, slot, grain, mode, language) {
       period: compareWhen(entry.periods[index], grain, language),
       value: has ? valueMessage(item.key, value, language) : null,
       count: has && mode !== "cumulative" ? countMessage(item, entry.counts[index], grain, language) : null,
-      missing: has ? null : message("view.compare.no_value"),
+      missing: has ? null : message("view.compare.no_value", {}, { grain: GRAIN_WORD_KEYS[grain] }),
     };
   });
 }
@@ -1873,11 +1904,11 @@ export function compareReadings(item, data, slot, grain, mode, language) {
 // names of its places and of its last row (``axis``, stage M2).
 export function compareTable(item, data, grain, month, span, language, mode = "rows", axis = null) {
   const counts = mode !== "cumulative";
-  const heads = [message("view.compare.period")];
+  const heads = [message(GRAIN_KEYS[grain])];
   for (const entry of data) {
     heads.push(entry.label);
     if (counts) {
-      heads.push(message(countHeadKey(item)));
+      heads.push({ ...message(COMPARE_COUNT_HEAD_KEYS[countKind(item)]), spoken: message(countHeadKey(item)) });
     }
   }
   const outside = { value: null, count: null, outside: true, partial: false };
@@ -2608,12 +2639,18 @@ export function listValueLine(key, value, language) {
   return { ...message("view.list.value", { n: countText(value?.count ?? 0, language) }, { value: shownValue }), strong: ["value"] };
 }
 
+// What the list says of a period without activities to list, the grouping
+// in words, the same in both languages (stage W3 of v2.2.1).
+export function listEmptyMessage(conditions, grain) {
+  return message(conditions ? "view.list.none_met" : "view.list.none", {}, { grain: GRAIN_WORD_KEYS[grain] });
+}
+
 // What the list says of a period of more activities than it shows: how many,
 // and the finer grouping that lists them; of a day, only how many.
 export function listLimitMessage(total, limit, grain, language) {
   const params = { n: countText(total, language), max: countText(limit, language) };
   return Object.hasOwn(FINER_GRAINS, grain)
-    ? message("view.list.limit", params, { grain: GRAIN_KEYS[FINER_GRAINS[grain]] })
+    ? message("view.list.limit", params, { grain: GRAIN_KEYS[FINER_GRAINS[grain]], unit: GRAIN_WORD_KEYS[grain] })
     : message("view.list.limit_day", params);
 }
 

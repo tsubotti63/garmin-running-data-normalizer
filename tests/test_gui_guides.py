@@ -849,7 +849,8 @@ class GuiGuideTest(unittest.TestCase):
                     "the panels, the period, and the grouping are then as they were before (the grouping while comparing is chosen apart from that of the panels).",
                     f"December (not the grouping {word('view.grain.month')}).",
                     "such as VO2 Max (it has a line for each activity type, and its lines also split on the day when the records of Garmin that its values come from change from the activity records to the MaxMet records, as the note of its panel says), by the names of the key of its panel.",
-                    f"each year with a column of values and one of counts ({word('view.table.activities')}, {word('view.table.days')}, or {word('view.table.records')}, by the item)",
+                    "the days, weeks, or months in rows (the first column named by the grouping) and the years in columns,",
+                    f"each year with a column of values and one of counts ({word('view.compare.count.activities')}: the activities, the days with a value, or the records, by the item, as a note under the table says)",
                     f"The years chosen are not remembered: each time, the newest four. {word('view.compare.show')} and {word('view.compare.month')} are remembered for the next time",
                     f"({word('view.grain.day')} or {word('view.grain.week')} with one month chosen in {word('view.compare.month')} of the bar).",
                     f"the item shelf, and the layouts are not used, and are grayed; so are the groupings {word('view.grain.auto')} and {word('view.grain.year')}, and the grouping {word('view.grain.month')} too where one month is chosen in {word('view.compare.month')} of the bar.",
@@ -867,7 +868,7 @@ class GuiGuideTest(unittest.TestCase):
                     f"the overview under the panels, the years that {word('view.compare.button')} can choose, the days that {word('view.period.custom')} can choose, and the list of the activity types are then of the output as it is now.",
                     f"An enlarged panel and {word('view.panel.table')} on a panel are undone, and the years and the races chosen in {word('view.compare.button')} are the first ones again. Where the output",
                     "Where the output is read again with the same days and activity types (where only the date changed, for example), it is not opened again.",
-                    "The list of the activities of a period does not notice that the output changed: open it again after the panels show new numbers.",
+                    "The list of the activities of a day, week, month, or year does not notice that the output changed: open it again after the panels show new numbers.",
                     f"In 2.2.0, pressing the button of the period again does not renew the overview under the panels and the like: choose the same output folder with {word('target.other')} to open the output again (choosing the same output again in {word('view.output.label')} does not open it again).",
                     f"An enlarged panel and {word('view.panel.table')} on a panel are then undone, and the years and the races chosen in {word('view.compare.button')} are the first ones again.",
                     # Stage W2 of v2.2.1: where the question of Quit shows.
@@ -917,10 +918,10 @@ class GuiGuideTest(unittest.TestCase):
                     "戻ると、段・期間・まとめ方は、くらべる前のとおりです（くらべる間のまとめ方は、段のまとめ方とは別に選びます）。",
                     f"並びます（まとめ方の{word('view.grain.month')}とは別のものです）。",
                     "（VO2 Max は種目ごとに線があり、値の元の Garmin の記録が、活動の記録から MaxMet の記録に変わった日でも、線が分かれます。段の注にも出ます）。",
-                    f"（年ごとに、値の列と件数の列。件数は、項目によって{word('view.table.activities')}{word('view.table.days')}{word('view.table.records')}です）。",
+                    f"（1 列めの見出しはまとめ方の名前。年ごとに、値の列と件数の列。件数は、項目によって{word('view.compare.count.activities')}{word('view.compare.count.days')}{word('view.compare.count.records')}で、表の下に何の数かが出ます）。",
                     "選んだ年は覚えず、開くたびに新しい 4 年です。見せ方と月は、次に開いたときも覚えています（[次に開いたときに覚えるもの](#次に開いたときに覚えるもの)）。",
-                    f"から選びます（帯の{word('view.compare.month')}で月を選んだときは{word('view.grain.day')}か{word('view.grain.week')}）。",
-                    f"数字を出せなかったとき：段の上の帯の下に{word('view.stop.series_heading')}と出て、段と同じ言葉で、そのわけとコードが出ます。",
+                    f"から選びます（くらべる帯の{word('view.compare.month')}で月を選んだときは{word('view.grain.day')}か{word('view.grain.week')}）。",
+                    f"数字を出せなかったとき：くらべる帯の下に{word('view.stop.series_heading')}と出て、段と同じ言葉で、そのわけとコードが出ます。",
                     "ほかのわけで、もう一度してもまた出るときは、そのわけとコードを書いて知らせてください（[GitHub で報告する](#github-で報告する)）。",
                     f"出力が読めなくなったとき（壊れたときなど）は、年でくらべるも閉じて、{word('view.stop.heading')}と出ます。",
                     "（終わりの日もある大会の印では、始まりの日が大会の日で、そのあとの日は入りません）。",
@@ -1042,7 +1043,7 @@ class GuiGuideTest(unittest.TestCase):
                 "「範囲を選ぶ…」で選んだ期間は、その出力の日の範囲と一部だけ重なるときは選んだ日付のままで、値とグラフは、その中の出力の日だけで数えます。「まとめ…」の前の期間は選んだ範囲と同じ日数で、出力で切れた期間の値には「*」が付き、差は「—」です。まったく重ならないときは「全期間」になります。",
                 "出力の日の範囲と一部だけ重なる範囲は、選んだ日付のままで、値とグラフは、その中の出力の日だけで数えます。",
                 "数える種目は、覚えた種目のうち、その出力にある種目です。1 つも無いときは、その出力のランニングの種目すべてです。",
-                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、強調した年、区切りの一覧を開いていたか、ほかの見方を開いていたかと、選んだ点や分かれ方の区切り、靴ごとで選んだ月、まとめの窓を開いていたか、画像で保存の窓を開いていたかと、その選び。",
+                "覚えないもの：見ていた出力、目盛りをそろえるか、段を大きくしたか、表で見ていたか、全画面、年でくらべるを開いていたかと、選んだ年や大会、強調した年、区切りの一覧を開いていたか、ほかの見方を開いていたかと、選んだ点や分かれ方の区間、靴ごとで選んだ月、まとめの窓を開いていたか、画像で保存の窓を開いていたかと、その選び。",
                 "2.2.0 からは、保存したレイアウトの名前、「範囲を選ぶ…」で選んだ期間の日付、数える種目、見るページの条件の言葉、タイムゾーンも入ります。",
             ),
         }
@@ -1125,13 +1126,69 @@ class GuiGuideTest(unittest.TestCase):
                 self.assertEqual(reads.count(sentences[language]), 1)
                 self.assertNotIn("**Item**:" if language == "en" else "「項目」：", reads)
 
+    def test_guides_say_the_words_of_the_page_of_v221(self) -> None:
+        # v2.2.1 W3 (the person's answer 「おすすめのとおり」): the guides name the
+        # bars, the buttons, the steps of the colors, and the ranges of a
+        # distribution as the page does; say what the panels and the plot do
+        # not show as the page does; and name the list of a period by its
+        # grouping. The old words are gone; the texts of the pictures wait for
+        # the pictures (W6).
+        def reads_of(language: str) -> str:
+            text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", GUIDES[language].read_text(encoding="utf-8"))
+            return " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+
+        gone = {
+            "ja": ("色の区切り", "年の札", "大会の札", "区切りの幅", "Garmin の値のまま", "このパソコン", "見せ方を選び直すと", "段の上の帯", "あいだの関係（どちらが原因か）", "範囲と回数", "回数の無い区切り", "どの帯でも", "平年の帯", "分かれ方の区切り", "ごとの区切りに何回", "その区切りと回数"),
+            "en": ("Garmin value as is", "The activities of a period", "the activities of a period", "up to 500 a period", "a period cut short", "choose a period with"),
+        }
+        said = {
+            "ja": (
+                "並べた項目のあいだに関係があるか、どちらが原因か、何をすればよいかは示しません。",
+                "数字の決まり（段の名前の横に出る「合計」などの表示が、その段の値の作り方です）：",
+                "グラフの区切り（まとめ方で決まる 1 つぶん。週でまとめていれば 1 週）を押すと、",
+                "期間の印は、その期間を薄く塗った所で、",
+                "段の上のくらべる帯で選びます。",
+                "「年」：出力にある年のボタンです。",
+                "年のボタンの代わりに、大会のボタンが新しい順に出ます。",
+                "大会の日でくらべるときの大会のボタンは、名前の全部と日付を読み上げます。",
+                "値のある最初の区間から最後の区間までの数（回数の無い区間も入れて）が 200 を超えるときは、",
+                "| ピッチ | 5（Garmin と同じ単位、記載なし） |",
+                "くらべる帯（年でくらべる）と見方の帯（点で並べる・分かれ方・靴ごと）の",
+                "下の帯に「このアプリを終了しています…」と出て",
+                "1 km ごとの区間に何回あったかが棒で出ます。",
+                "棒を押すと、右上にその区間と回数が出ます。",
+            ),
+            "en": (
+                "### The activities of a day, week, month, or year (from 2.2.0)",
+                "press a bar or a point of the chart (one day, week, month, or year, by the grouping), and the list of its activities opens just under the panel.",
+                "(where none does, it says so by the grouping, such as **No activity of the week chosen meets the conditions.**), up to 500 at a time.",
+                "the days, weeks, or months in rows (the first column named by the grouping) and the years in columns,",
+                "* marks one cut short (by an end of the output, of the year or month, or by the race day), and — one not in the year (outside the output,",
+                "- **Race week (to the race day)**, a week of the readings and the table,",
+                "| Cadence | 5 (same unit as Garmin, not named) |",
+                "Where there would be more than 200 ranges from the first with a value to the last (those of no activity too),",
+            ),
+        }
+        for language in GUIDES:
+            text = reads_of(language)
+            for words in gone[language]:
+                with self.subTest(language=language, gone=words):
+                    self.assertNotIn(words, text)
+            for words in said[language]:
+                with self.subTest(language=language, said=words):
+                    self.assertEqual(text.count(words), 1)
+        # The links to the section of the list follow its heading.
+        english = GUIDES["en"].read_text(encoding="utf-8")
+        self.assertEqual(english.count("(#the-activities-of-a-day-week-month-or-year-from-220)"), 2)
+        self.assertNotIn("#the-activities-of-a-period-from-220", english)
+
     def test_guides_say_where_the_notes_of_a_calendar_open(self) -> None:
         # v2.2.0 U3 (the person's hand check of the release candidate): the
         # notes of the legend of a calendar open under its info button,
         # named as the page names it.
         sentences = {
             "en": "**About the legend**, at the right of the legend, opens the rule of the steps and, for a total or a count with days without a recorded activity (0), their number.",
-            "ja": "色の区切りの説明と、記録の無い日（0）の数（合計や回数の項目で、その日があるとき）は、凡例の右の「凡例の見方」を押すと開きます。",
+            "ja": "色の段階の説明と、記録の無い日（0）の数（合計や回数の項目で、その日があるとき）は、凡例の右の「凡例の見方」を押すと開きます。",
         }
         quote = {"en": "**{}**", "ja": "「{}」"}
         for language, path in GUIDES.items():
@@ -1252,9 +1309,9 @@ class GuiGuideTest(unittest.TestCase):
                 # The days of a custom range, told from the Span of a race day,
                 # which the Japanese page also names 範囲 (the second reader of
                 # K6a).
-                "くらべる間は、期間・‹ ›・「範囲を選ぶ…」の日付の欄・項目の棚・レイアウトは使わず、灰色になります。まとめ方の「自動」と「年」も灰色で、帯の「月」で月を選んだときは、まとめ方の「月」も灰色です。",
-                "まとめ方を「週」か「月」に（帯の「月」で月を選んだときは「週」に）してください。",
-                "（2.2.1 から）見せ方を選び直すと、図（凡例を含む）に戻ります。項目・年・月・大会を替えても、表のままです。2.2.0 では、年でくらべるを開いている間は、見せ方を替えても「表で見る」のままで、図に戻すには「グラフで見る」か「カレンダーで見る」を押します。",
+                "くらべる間は、期間・‹ ›・「範囲を選ぶ…」の日付の欄・項目の棚・レイアウトは使わず、灰色になります。まとめ方の「自動」と「年」も灰色で、くらべる帯の「月」で月を選んだときは、まとめ方の「月」も灰色です。",
+                "まとめ方を「週」か「月」に（くらべる帯の「月」で月を選んだときは「週」に）してください。",
+                "（2.2.1 から）ほかの見せ方を選ぶと、図（凡例を含む）に戻ります。項目・年・月・大会を替えても、表のままです。2.2.0 では、年でくらべるを開いている間は、見せ方を替えても「表で見る」のままで、図に戻すには「グラフで見る」か「カレンダーで見る」を押します。",
             ),
         }
         quoted = (
@@ -1334,19 +1391,21 @@ class GuiGuideTest(unittest.TestCase):
         # (the checker's M4-1).
         catalogs = {language: catalog(language) for language in GUIDES}
         headings = {
-            "en": ("The overview", "The activities of a period (from 2.2.0)", "Marks (from 2.2.0)", "Full screen", "Compare years (from 2.2.0)", "When the output changes while you look", "What is remembered for the next time"),
+            "en": ("The overview", "The activities of a day, week, month, or year (from 2.2.0)", "Marks (from 2.2.0)", "Full screen", "Compare years (from 2.2.0)", "When the output changes while you look", "What is remembered for the next time"),
             "ja": ("全体図", "区切りのアクティビティの一覧（2.2.0 から）", "印（2.2.0 から）", "全画面で見る", "年でくらべる（2.2.0 から）", "見ている間に出力が変わったとき", "次に開いたときに覚えるもの"),
         }
         race = {"en": "\n#### Compare by race day\n", "ja": "\n#### 大会の日でくらべる\n"}
         phrases = {
             "en": {
                 1: (
-                    "With the keys only, select the chart (Tab), choose a period with ← or →, and press Enter (or Space).",
+                    "With the keys only, select the chart (Tab), choose one with ← or →, and press Enter (or Space).",
+                    "press a bar or a point of the chart (one day, week, month, or year, by the grouping), and the list of its activities opens just under the panel.",
+                    "(where none does, it says so by the grouping, such as **No activity of the week chosen meets the conditions.**), up to 500 at a time.",
                     "A click keeps the chart selected, so that ← and → still move the cross line (the period of the list stays). Enter takes you to the heading of the list.",
                     "(their timezone is not changed)",
                     "each press switches between smallest first and largest first, and rows without a value go last either way. The date and time are ordered as they show.",
                     "\"Value of the panel: 108.1 km (activities counted: 11)\"",
-                    "up to 500 a period. For more, it says how many, and the finer grouping that lists them (**Month** for a year, **Week** for a month, **Day** for a week).",
+                    "up to 500 at a time. For more, it says how many, and the finer grouping that lists them (**Month** for a year, **Week** for a month, **Day** for a week).",
                     "The list is not remembered and never written to a file.",
                 ),
                 2: (
@@ -1356,12 +1415,14 @@ class GuiGuideTest(unittest.TestCase):
                     "the marks do not show and the file is never written over",
                 ),
                 5: (
-                    "So right after you normalize again, or right after the date changes, the numbers of the panels and those of the years or the races in **Compare years** (also by race day), of the activities of a period, and of the table of **Summary…** may not agree: one of them was counted before the output changed.",
+                    "So right after you normalize again, or right after the date changes, the numbers of the panels and those of the years or the races in **Compare years** (also by race day), of the activities of a day, week, month, or year, and of the table of **Summary…** may not agree: one of them was counted before the output changed.",
                 ),
             },
             "ja": {
                 1: (
                     "キーだけで開くときは、グラフを選んで（Tab キー）← → キーで区切りを選び、Enter キー（か Space キー）を押します。",
+                    "グラフの区切り（まとめ方で決まる 1 つぶん。週でまとめていれば 1 週）を押すと、",
+                    "（条件に合うものが無い区切りでは「この週に、条件に合うアクティビティはありません。」のように、まとめ方の言葉で出ます）。",
                     "押して開いたときは、グラフが選ばれたままなので、← → キーで十字線を動かせます（一覧の区切りは変わりません）。Enter キーで開いたときは、一覧の見出しへ移ります。",
                     "（タイムゾーンは直しません）",
                     "押すたびに小さい順と大きい順が入れ替わり、値の無い行はどちらでも最後です。日時は、見えている日付と時刻の順です。",
@@ -1370,7 +1431,7 @@ class GuiGuideTest(unittest.TestCase):
                     "一覧は覚えず、ファイルにも書きません。",
                 ),
                 2: (
-                    "大会は実線（文字の色）、靴は点線、ほかは破線、けがは一点鎖線（長い線と点のくり返し）です。期間の印は、その期間を薄く塗った帯で、最初と最後の日のふちが、その種類の線です。",
+                    "大会は実線（文字の色）、靴は点線、ほかは破線、けがは一点鎖線（長い線と点のくり返し）です。期間の印は、その期間を薄く塗った所で、最初と最後の日のふちが、その種類の線です。",
                     "印は数字を変えません。",
                     "自分の言葉なので、出力・問い合わせ用ファイル・GitHub への報告の文には入りません。",
                     "印を出さず、ファイルも書き換えません",
@@ -1439,6 +1500,9 @@ class GuiGuideTest(unittest.TestCase):
             words.add(messages["view.list.value"].format(value="108.1 km", n="11"))
             words.add(messages["view.list.moment"].format(date="10/2", weekday="Fri" if language == "en" else "金", time="6:30"))
             words.add(messages["view.marks.crowded"].format(n="3"))
+            # The sentence of a list without an activity, as the page says it
+            # of a week (stage W3 of v2.2.1).
+            words.add(messages["view.list.none_met"].replace("{grain}", messages["view.grain_word.week"]))
             # The dash of the list for a value that an activity does not have.
             words.add("\u2014")
             for number in (1, 2, 5):
@@ -1537,7 +1601,7 @@ class GuiGuideTest(unittest.TestCase):
         phrases = {
             "en": (
                 f"[**Race**](#marks-from-220)) whose days from the Monday {longest} weeks before the week of the race to the race day overlap the days of the output, from its first to its last (always {longest} weeks, whatever **Span** is, and whether or not those days have activities);",
-                "Where the race is not on a Sunday (or the output ends within that week), it is a period cut short,",
+                "Where the race is not on a Sunday (or the output ends within that week), it is a week cut short,",
                 "The overview gives each mark only a short line at its top, whatever its kind (a span at its first day).",
                 "The newest races, up to four, are in rows.",
             ),
@@ -1606,7 +1670,7 @@ class GuiGuideTest(unittest.TestCase):
             if language == "en":
                 parts = re.fullmatch(r"\* (.+); — (.+)\.", note)
                 self.assertIsNotNone(parts)
-                note = "* marks {}, and — {}.".format(*parts.groups())
+                note = "* marks one {}, and — one {}.".format(*parts.groups())
             with self.subTest(language=language, part="note"):
                 self.assertIn(note, reads)
             # The overview is never said to draw the forms of the kinds.
@@ -1720,16 +1784,16 @@ class GuiGuideTest(unittest.TestCase):
                     f"{words['show']}の{calendar}で、1 年を 1 本の横長の帯（年の帯）にします。横に週（1 月 1 日の週から）、縦に曜日（月〜日）で、",
                     f"まとめ方は{words['day']}だけです。月の選び（{words['month']}）は使わず、灰色になります（選んでいた月は覚えていて、ほかの見せ方に戻すとその月で出ます）。",
                     f"大会の日でくらべる間は使えません。1 日に記録がいくつもある項目（{names}）でも使えず、そのわけは{words['calendar_about']}で開きます。",
-                    "色は 6 つの段階までで、年の帯の上の凡例に、色の区切りが出ます。",
-                    f"色の区切りは左の値を含み、右の値を含みません{example[language]}。{right[language]}",
+                    "色は 6 つの段階までで、年の帯の上の凡例に、色の段階が出ます。",
+                    f"色の段階は左の値を含み、右の値を含みません{example[language]}。{right[language]}",
                     f"合計や回数の項目で{zero}は枠だけ、値の無い日と出力の外の日は何も描きません。",
                     "記録された 0（距離 0 km のアクティビティの日など）は、凡例のいちばん左の色です。",
-                    "選んだ日は、どの帯でも、できるだけ同じ月日です。平年の帯では 2 月 29 日の代わりに 2 月 28 日、その年の出力の外の日なら、その年の出力の中でいちばん近い日です。",
+                    "選んだ日は、どの年の帯でも、できるだけ同じ月日です。平年では 2 月 29 日の代わりに 2 月 28 日、その年の出力の外の日なら、その年の出力の中でいちばん近い日です。",
                     f"← → キー（1 週）、↑ ↓ キー（1 日）、Home と End（その年の出力の最初と最後の日）で日を選びます。{rows}の ← →（1 区切り）とは動き方が違います。",
                     f"{words['table']}で日ごとの表（月日 × 年）になり、{words['table_calendar']}で戻ります。",
-                    "強制カラーの画面（Windows のコントラスト テーマなど）では色の段階が見分けにくいことがあるので、値は帯の左と表で読めます。",
+                    "強制カラーの画面（Windows のコントラスト テーマなど）では色の段階が見分けにくいことがあるので、値は年の帯の左と表で読めます。",
                 )
-                keyboard = "カレンダー（2.2.0 から）では、帯ごとに Tab キーで移り、← → キーで 1 週、↑ ↓ キーで 1 日、Home と End でその年の出力の最初と最後の日へ動かすと、日付・曜日・値を読み上げます。帯に移ったときも読み上げます（[カレンダー](#カレンダー)）。"
+                keyboard = "カレンダー（2.2.0 から）では、年の帯ごとに Tab キーで移り、← → キーで 1 週、↑ ↓ キーで 1 日、Home と End でその年の出力の最初と最後の日へ動かすと、日付・曜日・値を読み上げます。年の帯に移ったときも読み上げます（[カレンダー](#カレンダー)）。"
                 race_ways = f"見せ方は、年の見せ方から{calendar}を除いた {len(modes) - 1} つで、{rows}は{mark.format(messages['view.compare.mode.rows_race'])}になります（初めは{mark.format(messages['view.compare.mode.rows_race'])}）。"
                 shades = ("濃い", "淡い", "明るい", "暗い", "薄い")
                 rest = re.search("休み", own_reads)
@@ -1812,7 +1876,15 @@ class GuiGuideTest(unittest.TestCase):
                 clock = messages["view.value.pace"].format(value=clock)
                 return f"{int(shown)} seconds ({clock})" if language == "en" else f"{int(shown)} 秒（{clock}）"
             if unit == "raw":
-                return f"{number} ({messages['view.unit.raw']})" if language == "en" else f"{number}（{messages['view.unit.raw']}）"
+                # The words of the page in the parentheses of the guide (stage
+                # W3 of v2.2.1): "Same unit as Garmin (not named)" is written
+                # "(same unit as Garmin, not named)", without parentheses in
+                # parentheses.
+                raw = re.fullmatch(r"(.+) \((.+)\)", messages["view.unit.raw"]) if language == "en" else re.fullmatch(r"(.+)（(.+)）", messages["view.unit.raw"])
+                self.assertIsNotNone(raw)
+                if language == "en":
+                    return f"{number} ({raw[1][0].lower()}{raw[1][1:]}, {raw[2]})"
+                return f"{number}（{raw[1]}、{raw[2]}）"
             return messages[f"view.value.{'pct' if unit == 'pct_fit' else unit}"].format(value=number)
 
         heading = {"en": "Other views (from 2.2.0)", "ja": "ほかの見方（2.2.0 から）"}
@@ -1822,7 +1894,7 @@ class GuiGuideTest(unittest.TestCase):
         # S2: the view by shoes has its heading after the distribution, and is
         # read apart from it (its words in test_guides_give_the_shoes_as_the_page_does).
         own = {"en": ("Plot two items", "Distribution", "By shoes"), "ja": ("点で並べる", "分かれ方", "靴ごと")}
-        heads = {"en": ("Item", "Width of a range"), "ja": ("項目", "区切りの幅")}
+        heads = {"en": ("Item", "Width of a range"), "ja": ("項目", "区間の幅")}
         scene = {"en": "See how often you ran each distance in the last year", "ja": "直近 1 年に、どの距離を何回走ったかを見る"}
         for language, path in GUIDES.items():
             text = path.read_text(encoding="utf-8")
@@ -1882,7 +1954,7 @@ class GuiGuideTest(unittest.TestCase):
                         f"{mark.format(messages['view.panel.table'])} gives the number of activities of each range; {mark.format(messages['view.panel.chart'])} goes back.",
                         f"A range holds its left value and not its right one ({range_words}: 10 km or more, under 11 km).",
                         f"The ranges count the values before they are rounded. The list and the points show rounded values, so an activity near the end of a range can look as if it were in the next one: 10,999.6 m shows as {shown_value}, and is in the range {range_words}.",
-                        f"Where there would be more than {MAX_RANGES} ranges, each range is the first of 2, 5, 10, ... times as wide that is enough, and a line says so.",
+                        f"Where there would be more than {MAX_RANGES} ranges from the first with a value to the last (those of no activity too), each range is the first of 2, 5, 10, ... times as wide that is enough, and a line says so.",
                         f"For the average pace, {mark.format(messages['view.spread.faster_left'])} is there too.",
                         f"the range and its activities are at the top right, as {mark.format(reading)}, and are read out too.",
                         "An end of a range (its left or its right value) that is too large to write, as a record of an error can make it, is a dash (—).",
@@ -1909,25 +1981,25 @@ class GuiGuideTest(unittest.TestCase):
                         f"選べるのは{mark.format(messages['view.group.act'])}（{mark.format(messages['view.item.count'])}を除く）と{mark.format(messages['view.group.fit'])}の {len(keys)} の項目で、{mark.format(messages['view.group.body'])}と{mark.format(messages['view.group.est'])}の項目は選べません。",
                         f"点にするのは新しい {MAX_POINTS:,} 回までで、それより多いときは、そのことが 1 文で出ます（期間をしぼると、全部を出せます）。",
                         f"点の下には、いつも{mark.format(messages['view.plot.caveat'])}が出ます。",
-                        "目盛りは、それぞれの項目の値の範囲です（0 からではありません）。平均ペースは、値が小さいほど速い回です。縦の項目なら下ほど、横の項目なら左ほど速くなります。",
+                        "目盛りは、それぞれの項目の値に合わせて決まります（0 からではありません）。平均ペースは、値が小さいほど速い回です。縦の項目なら下ほど、横の項目なら左ほど速くなります。",
                         "同じ値の回がほかにあればその数が出ます。読み上げでも聞けます。",
                         "項目を替えると、新しい点が届くまで、前の点は出しません。期間や数える種目・条件を変えたときは、届くまで今の点を薄く残します。",
                     ),
                     "spread": (
-                        f"1 つの項目の 1 回ごとの値が、どの区切りに何回あるかを、棒で見ます。項目は題の中の一覧で選びます。初めは{name['dist']}で、次に開いたときは前に選んだ項目です。選べる項目は、点で並べるのと同じ {len(keys)} です。",
-                        "回数の無い区切りは、棒を描きません（表では 0）。",
+                        f"1 つの項目の 1 回ごとの値が、どの区間に何回あるかを、棒で見ます。項目は題の中の一覧で選びます。初めは{name['dist']}で、次に開いたときは前に選んだ項目です。選べる項目は、点で並べるのと同じ {len(keys)} です。",
+                        "回数の無い区間は、棒を描きません（表では 0）。",
                         "題の下に、数だけの行（数えた回・この期間の回・値の無い回）が出ます。",
-                        "棒を押すか、グラフを選んで ← → キー（1 つずつ。回数の無い区切りも通ります）、Home と End（最初と最後）で区切りを選ぶと、",
-                        f"{mark.format(messages['view.panel.table'])}で区切りごとの回数の表になり、{mark.format(messages['view.panel.chart'])}で戻ります。",
-                        f"区切りは左の値を含み、右の値を含みません（{range_words} は 10 km 以上 11 km 未満）。",
-                        f"区切りは、丸める前の値で数えます。一覧や点の値は丸めて出すので、区切りの境目のすぐ近くの回は、表示と区切りが違って見えることがあります（10,999.6 m の回は{mark.format(shown_value)}と出て、{range_words} に入ります）。",
-                        f"区切りが {MAX_RANGES} を超えるときは、幅を 2 倍・5 倍・10 倍…のうち足りるいちばん小さい幅に広げ、そのことを 1 行で言います。",
+                        "棒を押すか、グラフを選んで ← → キー（1 つずつ。回数の無い区間も通ります）、Home と End（最初と最後）で区間を選ぶと、",
+                        f"{mark.format(messages['view.panel.table'])}で区間ごとの回数の表になり、{mark.format(messages['view.panel.chart'])}で戻ります。",
+                        f"区間は左の値を含み、右の値を含みません（{range_words} は 10 km 以上 11 km 未満）。",
+                        f"区間には、丸める前の値で入れます。一覧や点の値は丸めて出すので、区間の境目のすぐ近くの回は、表示と区間が違って見えることがあります（10,999.6 m の回は{mark.format(shown_value)}と出て、{range_words} に入ります）。",
+                        f"値のある最初の区間から最後の区間までの数（回数の無い区間も入れて）が {MAX_RANGES} を超えるときは、幅を 2 倍・5 倍・10 倍…のうち足りるいちばん小さい幅に広げ、そのことを 1 行で言います。",
                         f"平均ペースのときは{mark.format(messages['view.spread.faster_left'])}も出ます。",
-                        f"右上に{mark.format(reading)}のように、範囲と回数が出ます。読み上げでも聞けます。",
-                        "区切りの端（左の値か右の値）が、記録の誤りのように書き表せないほど大きいときは、その端を「—」で書きます。",
+                        f"右上に{mark.format(reading)}のように、区間と回数が出ます。読み上げでも聞けます。",
+                        "区間の端（左の値か右の値）が、記録の誤りのように書き表せないほど大きいときは、その端を「—」で書きます。",
                     ),
                 }
-                keyboard = "ほかの見方（2.2.0 から）では、メニューを Enter・Space・↓ キーで開くと最初の項目に移り、↑ ↓・Home・End キーで動き、Esc キーでボタンに戻って閉じます。点で並べるでは、グラフを選んで ← → キー（日時の順に 1 つずつ）と Home・End で点を選ぶと、日時・種目・2 つの値（同じ値の回があればその数も）を読み上げます。分かれ方では、← → キー（回数の無い区切りも通ります）と Home・End で区切りを選ぶと、範囲と回数を読み上げます。靴ごとでは、段を選んで ← → キー（1 か月ずつ）と Home・End で月を選ぶと、靴の名前とその月の距離を読み上げます。メニューの「靴ごと」が選べないときは、↑ ↓ キーでそこに止まり、わけも読み上げます。Enter・Space キーでは何もしません。「表で見る」の 2 つの表は、Tab キーで表の枠に入ると、矢印キーで送れます（[ほかの見方](#ほかの見方220-から)）。"
+                keyboard = "ほかの見方（2.2.0 から）では、メニューを Enter・Space・↓ キーで開くと最初の項目に移り、↑ ↓・Home・End キーで動き、Esc キーでボタンに戻って閉じます。点で並べるでは、グラフを選んで ← → キー（日時の順に 1 つずつ）と Home・End で点を選ぶと、日時・種目・2 つの値（同じ値の回があればその数も）を読み上げます。分かれ方では、← → キー（回数の無い区間も通ります）と Home・End で区間を選ぶと、区間と回数を読み上げます。靴ごとでは、段を選んで ← → キー（1 か月ずつ）と Home・End で月を選ぶと、靴の名前とその月の距離を読み上げます。メニューの「靴ごと」が選べないときは、↑ ↓ キーでそこに止まり、わけも読み上げます。Enter・Space キーでは何もしません。「表で見る」の 2 つの表は、Tab キーで表の枠に入ると、矢印キーで送れます（[ほかの見方](#ほかの見方220-から)）。"
                 remembered = ("「印を出す」かどうか、[ほかの見方](#ほかの見方220-から)の点で並べる 2 つの項目と分かれ方の項目と、[条件](#条件で絞る220-から)も覚えます。", "「印を出す」かどうか、点で並べる 2 つの項目と分かれ方の項目、条件（名前の言葉・距離・時間）も。")
                 forgets = "点で並べる 2 つの項目と分かれ方の項目"
                 steps = (f"2. 上の{mark.format(messages['view.period.label'])}で{mark.format(messages['view.period.years1'])}を押します。{mark.format(messages['view.types.label'])}は、ランニングの種目だけにします", f"3. 段の上の{mark.format(messages['view.other.button'])}で{mark.format(messages['view.other.spread'])}を選び、題の一覧で{mark.format(name['dist'])}を選びます")
@@ -2169,11 +2241,11 @@ class GuiGuideTest(unittest.TestCase):
                 "Once **Save** hands the file to the browser, the window closes (where it cannot, the window stays open and says why). Esc, **Close**, or **Cancel** closes it without saving (**Close** and **Cancel** do the same). The focus then goes back to its **Save as image…**.",
             ),
             "ja": (
-                "段の上の行の「まとめ…」の右と、年でくらべる・点で並べる・分かれ方・靴ごとの帯の「表で見る」の右に、「画像で保存…」があります。",
+                "段の上の行の「まとめ…」の右と、くらべる帯（年でくらべる）と見方の帯（点で並べる・分かれ方・靴ごと）の「表で見る」の右に、「画像で保存…」があります。",
                 "年でくらべる・ほかの見方・全画面の間は、段の上の行が隠れます。段が無いときは、段の上の「画像で保存…」は押せません。",
                 "窓は、開いたときの見方（段を並べて見る・年でくらべる・ほかの見方）から別の見方に移ると閉じます。全画面の間は閉じずに隠れ、戻ると出ます（「まとめ…」の窓は、年でくらべる・ほかの見方・全画面の間は隠れ、戻ると出ます）。",
                 "窓を開くたびに、選びは初めの形（並べた段すべて・明るい色・印は入れない）に戻ります（覚えません）。",
-                "全体図・一覧・ボタン・出力のフォルダーの名前と、十字線（値を読む区切りに立つ縦の線）、選んだ日・点・区切りを示す枠、その値を読む所は入りません（点や棒、カレンダーの日そのものは入ります。印の線は、「印」で選んだときに入ります）。",
+                "全体図・一覧・ボタン・出力のフォルダーの名前と、十字線（値を読む区切りに立つ縦の線）、選んだ日・点・区間を示す枠、その値を読む所は入りません（点や棒、カレンダーの日そのものは入ります。印の線は、「印」で選んだときに入ります）。",
                 "点で並べると分かれ方で期間に図にする値が無いとき",
                 "値の無い段や年も、ページに出ている言葉のまま入ります。",
                 "窓の「保存」を押すと、画像のファイルをブラウザーにダウンロードとして渡します。保存する場所は、ブラウザーの設定のとおりです（ふつうはダウンロードの場所。毎回聞く設定なら、そのとき選んだ場所）。このアプリは、保存できたかを知らないので、",
@@ -2202,7 +2274,7 @@ class GuiGuideTest(unittest.TestCase):
                 "In **Save as image…** (from 2.2.0), the window takes the focus on its title; Esc, **Close**, or **Cancel** closes it, back to its button, as does handing the file to the browser; where it could not save, the window says why, and the focus stays on **Save** where it can still be pressed, or goes to the title of the window where it cannot",
             ),
             "ja": (
-                "印は、このアプリが、このパソコンの GUI の設定のフォルダーの `gui-marks.json` にだけ残します",
+                "印は、このアプリが、このコンピューターの GUI の設定のフォルダーの `gui-marks.json` にだけ残します",
                 "[画像で保存](#画像で保存220-から)で「印の線と名前を入れる」を選んだとき（ページで印を出しているとき）と、大会の日でくらべた図を保存したときは、保存した画像に写ります。",
                 "このアプリは、印のファイル `gui-marks.json` にだけ残します。出力・問い合わせ用ファイル・GitHub への報告の文には入りません（[画像で保存](#画像で保存220-から)で印を入れたときと、大会の日でくらべた図は、あなたが保存する画像に写ります）。",
                 "ブラウザーにダウンロードとして渡すだけで、このアプリはどこへも送りません。印を入れたときと、大会の日でくらべた図は、印の名前も写ります。",
@@ -2585,7 +2657,7 @@ class GuiGuideTest(unittest.TestCase):
             }
             lists = {
                 "en": (
-                    "Following the conditions: the training and running-form panels, the overview, the bars of the item shelf and the **{valued}** of the layouts, **{compare}** (also by race day and as a calendar), **{summary}** (also the period before), the activities of a period, two items plotted, the distribution, and the panels, tables, and counts of the shoes.",
+                    "Following the conditions: the training and running-form panels, the overview, the bars of the item shelf and the **{valued}** of the layouts, **{compare}** (also by race day and as a calendar), **{summary}** (also the period before), the activities of a day, week, month, or year, two items plotted, the distribution, and the panels, tables, and counts of the shoes.",
                     "Not following them: the panels of **{body}** and **{estimates}**, the first and the last day of the output and the buttons of the period, the years and the races to choose, the counts in the list of the activity types, whether **{shoes}** can be chosen, and the CSV file of `series`.",
                 ),
                 "ja": (
@@ -2603,7 +2675,9 @@ class GuiGuideTest(unittest.TestCase):
             recap = text[text.index(f"\n{summary}\n") : text.index("\n### ", text.index(f"\n{summary}\n") + 1)]
             self.assertNotIn(messages["view.conditions.none_met"], " ".join(recap.split()) if language == "en" else re.sub(r"\n *", "", recap))
             # The words of the page elsewhere: the list, saving, forgetting.
-            for words in (messages["view.list.none_met"], messages["view.save.warn_conditions"]):
+            # The sentence of a list, as the page says it of a week (stage W3 of
+            # v2.2.1).
+            for words in (messages["view.list.none_met"].replace("{grain}", messages["view.grain_word.week"]), messages["view.save.warn_conditions"]):
                 with self.subTest(language=language, page=words):
                     self.assertIn(mark.format(words), reads)
             columns = {"en": "The columns are {}, {}, and {},", "ja": "列は{}{}{}と、"}[language].format(*(mark.format(messages[f"view.list.{key}"]) for key in ("when", "name", "type")))
@@ -3155,7 +3229,7 @@ class GuiGuideTest(unittest.TestCase):
             # The help says the same of the zero dots.
             with self.subTest(language=language, part="help"):
                 self.assertIn(
-                    "; so is a period whose recorded activities add up to 0." if language == "en" else "記録されたアクティビティの合計が 0 の期間も、同じ点です。",
+                    "; so is one whose recorded activities add up to 0." if language == "en" else "記録されたアクティビティの合計が 0 の区切りも、同じ点です。",
                     words["view.help.zero_text"],
                 )
         # Every total of 0 is the same dot, recorded or not.
