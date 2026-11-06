@@ -7,7 +7,7 @@ Platform maintains its own separate changelog.
 ## v2.2.1 — stable Production GUI fix release
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a
-verified Production PyPI distribution.
+verified Production PyPI distribution on 2026-11-06 JST.
 
 - Fixes small things of the GUI: the view page opens the output again when it
   finds that the output changed, the questions of the bar show right above

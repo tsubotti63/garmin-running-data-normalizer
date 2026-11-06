@@ -15,7 +15,7 @@ canonical platform repository:
 
 ## v2.2.1 — stable Production release
 
-Published as the annotated `v2.2.1` tag, the latest stable
+Published on 2026-11-06 JST as the annotated `v2.2.1` tag, the latest stable
 [GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.2.1),
 and the verified
 [Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/2.2.1/).
