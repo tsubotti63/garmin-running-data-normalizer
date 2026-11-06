@@ -1,5 +1,38 @@
 # Release Readiness
 
+## v2.2.1 stable release
+
+Version `2.2.1` is published as the release that fixes small things of the
+view page and of the bar at the bottom of the pages of the local GUI: the
+view page opens the output again when it finds that the output changed, the
+questions of the bar show right above their buttons, the words of the view
+page and its table of six years are clearer, and forgetting the settings
+also removes the half-written files of a write. It is v2.2.1rc1 with the
+version 2.2.1, the documents of the stable release, and the pictures of the
+GUI Guides taken again with 2.2.1. From v2.2.1rc1, the package's Python
+changes only in the version in `__init__.py`, and the files of the page do
+not change. The release publishes directly to Production PyPI through the
+protected `pypi` Environment; it is not published on TestPyPI.
+
+The Windows CI runs every Windows step with v2.2.1 and Python 3.11, and the
+Windows tests and the isolated wheel installation with Python 3.15. The
+release candidate v2.2.1rc1 was checked on macOS with synthetic data after
+its publication: its installation from TestPyPI, whose 109 package files are
+those of its tag byte for byte; its refusal of an output of v2.2.0 in
+`validate-handoff`, `doctor --run-output`, `support-bundle`, and `series`
+(exit 2 with `OUTPUT_OTHER_VERSION`, writing no file) and on the view page
+(HTTP 422 with `OUTPUT_OTHER_VERSION`), with both outputs unchanged; what
+stages W1 to W4 changed, measured in a scripted browser at 1366 × 650 and
+900 × 700 in English and Japanese, with the images that the view page saves;
+and by hand in Safari and Chrome. The look on Windows was not checked by hand
+for v2.2.1rc1, as the Human maintainer decided on 2026-11-06, and the release
+notes list it as not checked. From v2.2.1rc1, only the version and the
+documents change.
+
+The release source is the `main` commit that merges the v2.2.1 release
+preparation pull request. Its annotated tag, GitHub Release, and publish
+workflow evidence are recorded in this section after publication.
+
 ## v2.2.1rc1 release candidate
 
 Version `2.2.1rc1`, the first release candidate of v2.2.1, is published on
@@ -1054,11 +1087,15 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Default branch: `main`
 - License: `Apache-2.0`
 - GitHub Actions: Operational
-- Current source and package version: `2.2.1rc1`
-- Current Production PyPI version: `2.2.0`
-- Latest GitHub Release: `v2.2.0`
+- Current source and package version: `2.2.1`
+- Current Production PyPI version: `2.2.1`
+- Latest GitHub Release: `v2.2.1`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
+- TestPyPI `2.2.1`: Not used; the release publishes directly to Production
+  PyPI through the protected `pypi` Environment
+- Production PyPI `2.2.1`: Published through Trusted Publishing; the publish
+  workflow verifies the exact-version install
 - TestPyPI `2.2.0`: Not used; the publish workflow's TestPyPI jobs were
   skipped
 - Production PyPI `2.2.0`: Published and exact-version install verified by the
@@ -1106,18 +1143,19 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
   Environments; target approval variables are disabled after use
 
 The repository is public and under ongoing maintenance. Existing release tags
-and GitHub Releases remain immutable. v2.2.0 is the current stable release;
+and GitHub Releases remain immutable. v2.2.1 is the current stable release;
 v2.2.1rc1, v2.2.0rc2, v2.2.0rc1, v2.1.0rc1, v2.0.1rc1, v2.0.0rc5, v2.0.0rc4,
 v2.0.0rc3, v2.0.0rc2, and v2.0.0rc1 are release candidates on TestPyPI only;
-v2.1.0, v2.0.1, v2.0.0, v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1, v1.4.0, and
-v1.3.3 are historical releases. The v2.2.1rc1, v2.2.0rc2, v2.2.0rc1,
+v2.2.0, v2.1.0, v2.0.1, v2.0.0, v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1,
+v1.4.0, and v1.3.3 are historical releases. The v2.2.1rc1, v2.2.0rc2, v2.2.0rc1,
 v2.1.0rc1, v2.0.1rc1, v2.0.0rc5, v2.0.0rc4, v2.0.0rc3, v2.0.0rc2, and
 v2.0.0rc1 tag and TestPyPI publication evidence was recorded only after the
 corresponding external state was observed.
 The v2.2.0, v2.1.0, v2.0.1, v2.0.0, v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1,
 v1.4.0, and v1.3.3 tag, GitHub Release, and Production PyPI publication
 evidence was recorded only after the corresponding external state was
-observed.
+observed; the v2.2.1 publication evidence is added to this document after
+it is observed.
 
 ## Windows CI correction
 
@@ -1138,6 +1176,9 @@ other Windows steps show no failed command in their logs. Tags, GitHub
 Releases, Production PyPI files, and release notes are unchanged.
 
 ## Current release assessment
+
+The v2.2.1 release assessment is recorded here after publication, from the
+release source's main CI run and the Production publish workflow run.
 
 The v2.2.0 release source passed main CI run `41823696700` (`test` and
 `test-python-3-15` on Ubuntu, `macos-python-3-15`, and `windows-runtime` and

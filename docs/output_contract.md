@@ -2,13 +2,12 @@
 
 ## Status and authority
 
-- Current stable contract: v2.2.0
-- Implementation candidate: v2.2.1rc1 (TestPyPI only)
+- Current stable contract: v2.2.1
 - Compatibility family: stable 2.x
 
-This document describes the current stable contract, v2.2.0, which keeps the
+This document describes the current stable contract, v2.2.1, which keeps the
 Run-All contract of v2.0.0, the first of the `2.x` family, and the CSV file of
-the `series` command that v2.1.0 adds ([Additive v2.1 series CSV](#additive-v21-series-csv)); v2.2.0 changes neither. It keeps the core layout and
+the `series` command that v2.1.0 adds ([Additive v2.1 series CSV](#additive-v21-series-csv)); v2.2.0 and v2.2.1 change neither. It keeps the core layout and
 the additive layers of the `1.x` family, and identifies when each of them
 entered; text that begins "Starting with v2.0.0" describes what v2.0.0
 changes.

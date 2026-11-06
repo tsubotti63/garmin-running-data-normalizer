@@ -4,8 +4,8 @@
   command opens the GUI. The view page and the colors of the page are added
   in v2.1.0; the sections marked v2.1.0 describe them. What v2.2.0 adds to
   the view page, and the timezone that the settings remember, are described
-  where the text says v2.2.0.
-- Applies to: stable v2.2.0
+  where the text says v2.2.0, and what v2.2.1 fixes where it says v2.2.1.
+- Applies to: stable v2.2.1
 - Authority: maintainer design record agreed by the Human maintainer on
   2026-10-10 and revised by the Human maintainer's decisions of 2026-10-11.
   Product contracts, tests, and the stable release remain the behavior
@@ -1967,6 +1967,8 @@ alone, and reduced motion.
 | G5–G7 (v2.1.0) | An hour before the server stops by itself, after a check in Safari (G5p); a release candidate on TestPyPI, checked on macOS and a physical Windows machine and read by a new AI session; then the documents that users read, the version 2.1.0, its publication, and its record |
 | K1–U3 (v2.2.0) | What the view page adds, in pull requests #177 to #202 and #205: the layouts, comparing years and the calendar, marks, race days, and the list of activities, the other views and the summary, saving a picture, by shoes, conditions on the activities, and the words and looks that the checks of the release candidate found |
 | K4–K7 (v2.2.0) | Two release candidates on TestPyPI: 2.2.0rc1, checked on macOS and a physical Windows machine and read and used by new AI sessions, and 2.2.0rc2, with those words and looks, checked on macOS; then the documents that users read, the version 2.2.0, its publication, and its record |
+| V1–W5 (v2.2.1) | Fixes after 2.2.0, in pull requests #210 to #214, #216, and #217: the guides answer a third new reader (V1); the view page opens the output again when it finds that the output changed (W1); the questions of the bar end at their buttons, and a way chosen in Compare years brings back its chart (W2); the words of the view page and the table of six years (W3); forgetting also removes the half-written files of a write (W4); `standalone` can be the first module imported (W4b); and the publish workflow checks what it builds and publishes (W5) |
+| W6 (v2.2.1) | A release candidate on TestPyPI, 2.2.1rc1, checked on macOS; then the documents that users read, the version 2.2.1, its publication, and its record |
 
 Installing a release candidate from TestPyPI used Production PyPI as an
 extra index for dependencies, such as `tzdata` on Windows, that TestPyPI may
