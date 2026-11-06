@@ -3,7 +3,7 @@
 ## Status and authority
 
 - Current stable contract: v2.2.0
-- Implementation candidate: v2.2.1rc1 (not published)
+- Implementation candidate: v2.2.1rc1 (TestPyPI only)
 - Compatibility family: stable 2.x
 
 This document describes the current stable contract, v2.2.0, which keeps the

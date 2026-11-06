@@ -103,18 +103,18 @@ input, timezone, and options, the normalization, its outputs, and the Snapshot
 Store are those of v2.1.0. See [What v2.2.0 adds](#what-v220-adds).
 
 Implementation candidate: **v2.2.1rc1** (the first release candidate of
-v2.2.1, for TestPyPI; Production PyPI and the latest GitHub Release stay
-v2.2.0). It is a test version, for checking v2.2.1 before its release: for
-normal use, install the stable release v2.2.0. It fixes the view page and the
-GUI: the view page opens the output again when the output changes while it is
-open, the questions of **Quit** and **Forget the remembered settings…** stand
-above their buttons, the words of the view page and its tables of six years
-are mended, and forgetting the settings also removes the half-written files of
-a write; for the same input, timezone, and options, the normalization, its
-outputs, and the Snapshot Store are those of v2.2.0. Only the version that an
-output records, and what is computed from it, differ, and v2.2.1rc1 does not
-open an output of v2.2.0. **Install** below says how to try it once it is
-published.
+v2.2.1, published on TestPyPI; Production PyPI and the latest GitHub Release
+stay v2.2.0). It is a test version, for checking v2.2.1 before its release:
+for normal use, install the stable release v2.2.0. It fixes the view page and
+the GUI: the view page opens the output again when the output changes while
+it is open, the questions of **Quit** and **Forget the remembered settings…**
+stand above their buttons, the words of the view page and its tables of six
+years are mended, and forgetting the settings also removes the half-written
+files of a write; for the same input, timezone, and options, the
+normalization, its outputs, and the Snapshot Store are those of v2.2.0. Only
+the version that an output records, and what is computed from it, differ,
+and v2.2.1rc1 does not open an output of v2.2.0. **Install** below says how
+to try it.
 
 v2.1.0 adds a page that shows the numbers of an output of this version as
 charts on one time axis, next to the page of the GUI, and the `series` command
@@ -276,8 +276,8 @@ gives one line for macOS and one for Windows PowerShell that make a virtual
 environment, install this app in it, and make the icon.
 
 The release candidate v2.2.1rc1 is a test version, for checking v2.2.1 before
-its release; for normal use, install the stable release as above. Once it is
-published on TestPyPI, install it in a virtual environment of its own, and
+its release; for normal use, install the stable release as above. It is
+published on TestPyPI. Install it in a virtual environment of its own, and
 start the GUI with the Python of that environment, without an icon. The
 lines give Production PyPI too, so that pip finds the dependencies that
 TestPyPI may not provide, such as `tzdata` on Windows; pip looks for each
