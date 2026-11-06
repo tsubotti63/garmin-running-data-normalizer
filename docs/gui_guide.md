@@ -2284,8 +2284,9 @@ launch has ended, or one older than ten minutes (on Windows, only one older
 than ten minutes). One that another open launch of this app is writing at
 that moment stays.
 On Windows, for ten minutes after this app stopped in the middle of a write,
-the half-written file stays, and you may not be able to press the button. Once
-ten minutes have passed, load the page again, and press it.
+the half-written file stays. From 2.3.0, the bar then says so, and the button
+can still be pressed: once ten minutes have passed, press it again (in 2.2.1,
+the button could not be pressed until the page was loaded again).
 The store and the outputs stay, and the next launch goes as a first launch; a
 store that is not in the default place must then be opened again. When the
 file cannot be read, the bar says so, and the launch goes as a first one.
@@ -2606,6 +2607,12 @@ See [Security and Privacy Boundary](security_and_privacy_boundary.md).
 - The help panel stands beside the page; it is not a dialog. Opening it, or
   one of its parts, moves the focus to its heading, and Escape inside it
   closes it.
+- From 2.3.0, the questions **Quit this app?** and **Forget the remembered
+  settings?**, and the question of cancelling a normalization, close by
+  Escape wherever the focus is while they show, as **Keep using it**,
+  **Keep them**, and **Continue** do. Where two or more show, each Escape
+  closes one: the one that holds the focus, else the one that opened last.
+  Until 2.2.1, Escape closed one only while the focus was in it.
 - On the view page, click a chart and press ← or → to move the vertical
   line: each panel shows its value at its top right. **Show as a table**
   shows the numbers of a panel as a table.

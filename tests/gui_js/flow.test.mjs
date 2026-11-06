@@ -191,18 +191,23 @@ test("a run that made its output leaves a file of the settings to forget", () =>
 test("the page tells what forgetting the settings did, and whether a file is left", () => {
   // Stage C1: the server says "forgotten" when no file is left, and whether
   // there was one.
+  // From stage X1 of v2.3.0 the outcome tells apart whether the button can
+  // be pressed (present) and whether the settings and the marks are gone
+  // (forgotten).
   assert.deepEqual(flow.forgetOutcome({ forgotten: true, had_settings: true, notice: null }), {
     key: "forget.done",
     notice: null,
     present: false,
+    forgotten: true,
   });
   assert.deepEqual(flow.forgetOutcome({ forgotten: true, had_settings: false, notice: null }), {
     key: "forget.nothing",
     notice: null,
     present: false,
+    forgotten: true,
   });
   for (const answer of [{ forgotten: false, had_settings: true, notice: "SETTINGS_NOT_REMOVED" }, null, {}, { forgotten: false, notice: "OTHER" }]) {
-    assert.deepEqual(flow.forgetOutcome(answer), { key: null, notice: "SETTINGS_NOT_REMOVED", present: true });
+    assert.deepEqual(flow.forgetOutcome(answer), { key: null, notice: "SETTINGS_NOT_REMOVED", present: true, forgotten: false });
   }
   // The settings were removed, but the marks of the view page were not
   // (stage M1 of v2.2.0).
@@ -210,6 +215,16 @@ test("the page tells what forgetting the settings did, and whether a file is lef
     key: null,
     notice: "MARKS_NOT_REMOVED",
     present: true,
+    forgotten: false,
+  });
+  // Stage X1 of v2.3.0: the files are gone, but a half-written file that may
+  // be in the middle of a write stays; the button can be pressed again, and
+  // the page drops the colors that it remembered, as the settings are gone.
+  assert.deepEqual(flow.forgetOutcome({ forgotten: false, had_settings: true, notice: "TEMPORARY_LEFT" }), {
+    key: null,
+    notice: "TEMPORARY_LEFT",
+    present: true,
+    forgotten: true,
   });
   // When the page starts, from the settings that the server read.
   assert.equal(flow.launchSettings({ settings: { launch: "first", present: true } }).present, true);
@@ -2477,6 +2492,9 @@ test("the page tells what it could not do with the settings", () => {
   assert.deepEqual(keys(flow.settingsMessages("SETTINGS_NOT_WRITTEN", true)), ["settings.not_written"]);
   assert.deepEqual(keys(flow.settingsMessages("SETTINGS_NOT_REMOVED")), ["settings.not_removed"]);
   assert.deepEqual(flow.settingsMessages("SETTINGS_NOT_REMOVED", true), []);
+  // A half-written file that stays after forgetting (stage X1 of v2.3.0).
+  assert.deepEqual(keys(flow.settingsMessages("TEMPORARY_LEFT")), ["settings.temporary_left"]);
+  assert.deepEqual(flow.settingsMessages("TEMPORARY_LEFT", true), []);
   assert.deepEqual(flow.settingsMessages("/path/to/private"), []);
   assert.deepEqual(flow.settingsMessages(null), []);
   // A run that made its output says when its places could not be remembered.
@@ -3001,4 +3019,31 @@ test("a count of one has the words for one on the first page, whole (stage U1 of
   assert.equal(said(flow.warningMessages(warned({ fit: 3, gear: 0 }, 1))[0]), "Warnings: 4 (3 in 1 family, and 1 of no family)");
   assert.equal(flow.warningMessages(warned({ fit: 1, gear: 1 }, 0))[0].key, "output_check.warnings");
   assert.equal(flow.warningMessages(warned({ fit: 0 }, 1))[0].key, "output_check.warnings");
+});
+
+test("Escape closes one question of the page wherever the focus is", () => {
+  // Stage X1 of v2.3.0 (the person's finding in W6d, and the checker's
+  // review of the plan of X1): while questions show, Escape closes one: the
+  // one that holds the focus, else the one that opened last; none where a
+  // part of the page took the Escape first, or while a text is composed.
+  const escape = { key: "Escape", defaultPrevented: false, isComposing: false };
+  assert.equal(flow.questionToClose(escape, ["quit"], null), "quit");
+  assert.equal(flow.questionToClose(escape, ["forget", "quit"], null), "quit");
+  assert.equal(flow.questionToClose(escape, ["quit", "forget"], null), "forget");
+  assert.equal(flow.questionToClose(escape, ["quit", "forget", "cancel"], "quit"), "quit");
+  assert.equal(flow.questionToClose(escape, ["quit", "forget"], "cancel"), "forget");
+  assert.equal(flow.questionToClose(escape, [], null), null);
+  assert.equal(flow.questionToClose(escape, [], "quit"), null);
+  assert.equal(flow.questionToClose({ ...escape, defaultPrevented: true }, ["quit"], "quit"), null);
+  assert.equal(flow.questionToClose({ ...escape, isComposing: true }, ["quit"], "quit"), null);
+  assert.equal(flow.questionToClose({ ...escape, key: "Enter" }, ["quit"], "quit"), null);
+  assert.equal(flow.questionToClose({ ...escape, key: "Esc" }, ["quit"], null), null);
+  assert.equal(flow.questionToClose(null, ["quit"], null), null);
+  // The order in which they opened: one asked again goes to the end.
+  assert.deepEqual(flow.askedLast([], "quit"), ["quit"]);
+  assert.deepEqual(flow.askedLast(["quit"], "forget"), ["quit", "forget"]);
+  assert.deepEqual(flow.askedLast(["quit", "forget"], "quit"), ["forget", "quit"]);
+  const order = ["quit"];
+  assert.deepEqual(flow.askedLast(order, "cancel"), ["quit", "cancel"]);
+  assert.deepEqual(order, ["quit"]);
 });

@@ -32,6 +32,7 @@ from garmin_running_data_normalizer.gui.settings import (
     SETTINGS_NEWER,
     SETTINGS_NOT_REMOVED,
     SETTINGS_NOT_WRITTEN,
+    TEMPORARY_LEFT,
     launch_answer,
     launch_theme,
     read_settings,
@@ -479,8 +480,9 @@ class SettingsFileTest(unittest.TestCase):
             if pid == gone_pid:
                 raise ProcessLookupError("gone")
 
+        # From stage X1 of v2.3.0 the newer ones that stay are told.
         with patch.object(settings, "_CHECK_PIDS", True), patch("os.kill", side_effect=kill):
-            self.assertEqual(remove_settings(self.path, (marks,))[:2], (None, True))
+            self.assertEqual(remove_settings(self.path, (marks,))[:2], (TEMPORARY_LEFT, True))
         for removed in (own, old, marks_own, gone):
             with self.subTest(removed=removed.name):
                 self.assertFalse(os.path.lexists(removed))
@@ -547,6 +549,73 @@ class SettingsFileTest(unittest.TestCase):
         # (the partial guard of W4).
         self.assertIn('_CHECK_PIDS = os.name != "nt"\n', Path(settings.__file__).read_text(encoding="utf-8"))
 
+    def test_a_newer_temporary_file_that_stays_is_told_and_goes_later(self) -> None:
+        # Stage X1 of v2.3.0 (Codex's whole review before W6f, and the
+        # checker's review of the plan of X1): as on Windows, where pids are
+        # not looked at, a half-written file that a stop left stays until it
+        # is ten minutes old. It counts as something to forget, before and
+        # after forgetting, which tells TEMPORARY_LEFT where the files are
+        # gone and moves the generation on as always; ten minutes old, it
+        # goes, and then nothing is left to forget.
+        marks = self.path.with_name(places.MARKS_FILE_NAME)
+        self.assertIsNone(write_settings(self.path, {"hints": False}))
+        marks.write_bytes(b"{}")
+        young = self.temporary(self.other_pid(1), hexes="0a0a0a0a")
+        young_marks = self.temporary(self.other_pid(1), path=marks, hexes="0b0b0b0b")
+        with patch.object(settings, "_CHECK_PIDS", False), patch("os.kill", side_effect=AssertionError("os.kill")):
+            self.assertIs(settings._to_forget((self.path, marks))[0], True)
+            notice, present, generation = remove_settings(self.path, (marks,))
+            self.assertEqual((notice, present), (TEMPORARY_LEFT, True))
+            self.assertFalse(os.path.lexists(self.path))
+            self.assertFalse(os.path.lexists(marks))
+            self.assertTrue(young.exists())
+            self.assertTrue(young_marks.exists())
+            # Still something to forget: the button can be pressed again.
+            self.assertIs(settings._to_forget((self.path, marks))[0], True)
+            self.assertEqual(remove_settings(self.path, (marks,)), (TEMPORARY_LEFT, True, generation + 1))
+            # One of the two ten minutes old goes; the other is told still.
+            moment = time.time() - settings.TEMPORARY_AGE_SECONDS - 1
+            os.utime(young, (moment, moment))
+            self.assertEqual(remove_settings(self.path, (marks,)), (TEMPORARY_LEFT, True, generation + 2))
+            self.assertFalse(os.path.lexists(young))
+            self.assertTrue(young_marks.exists())
+            os.utime(young_marks, (moment, moment))
+            self.assertEqual(remove_settings(self.path, (marks,)), (None, True, generation + 3))
+            self.assertFalse(os.path.lexists(young_marks))
+            self.assertIs(settings._to_forget((self.path, marks))[0], False)
+            self.assertEqual(remove_settings(self.path, (marks,)), (None, False, generation + 4))
+        self.assertFalse(self.path.parent.exists())
+
+    def test_what_could_not_be_removed_is_told_before_a_newer_temporary_file(self) -> None:
+        # Stage X1 of v2.3.0 (the checker's review of the plan of X1): a newer
+        # temporary file is never among what could not be removed, not even
+        # one of the settings (the first place); a file of the settings, then
+        # of the marks, that could not be removed is told first.
+        marks = self.path.with_name(places.MARKS_FILE_NAME)
+        real_unlink = os.unlink
+        for failing, told in ((NAME, SETTINGS_NOT_REMOVED), (places.MARKS_FILE_NAME, settings.MARKS_NOT_REMOVED)):
+            with self.subTest(failing=failing):
+                self.assertIsNone(write_settings(self.path, {"hints": False}))
+                marks.write_bytes(b"{}")
+                young = self.temporary(self.other_pid(1), hexes="0a0a0a0a")
+
+                def unlink(place: Any, *args: Any, **kwargs: Any) -> None:
+                    if os.fspath(place).endswith(os.sep + failing):
+                        raise PermissionError("denied")
+                    real_unlink(place, *args, **kwargs)
+
+                with patch.object(settings, "_CHECK_PIDS", False), patch("os.unlink", side_effect=unlink):
+                    self.assertEqual(remove_settings(self.path, (marks,))[:2], (told, True))
+                self.assertTrue(young.exists())
+                for place in (self.path, marks, young):
+                    if os.path.lexists(place):
+                        place.unlink()
+        # Without them, the newer one alone is told.
+        young = self.temporary(self.other_pid(1), hexes="0a0a0a0a")
+        with patch.object(settings, "_CHECK_PIDS", False):
+            self.assertEqual(remove_settings(self.path, (marks,))[:2], (TEMPORARY_LEFT, True))
+        self.assertTrue(young.exists())
+
     @REAL_SYMLINKS
     def test_forgetting_removes_a_temporary_link_only(self) -> None:
         # Stage W4 of v2.2.1: a link of that name is removed, not what it
@@ -568,10 +637,10 @@ class SettingsFileTest(unittest.TestCase):
         # gone, and is told as left.
         with patch("os.listdir", side_effect=PermissionError("denied")):
             # While the folder is there (forgetting removes it when empty).
-            self.assertIs(settings._temporaries_present((self.path,)), True)
+            self.assertIs(settings._to_forget((self.path,))[0], True)
             self.assertEqual(remove_settings(self.path)[:2], (SETTINGS_NOT_REMOVED, True))
         # Where the folder is not there, there is none.
-        self.assertIs(settings._temporaries_present((self.root / "missing" / NAME,)), False)
+        self.assertIs(settings._to_forget((self.root / "missing" / NAME,))[0], False)
 
     def test_a_temporary_file_that_cannot_be_looked_at_is_told(self) -> None:
         # Codex's review of the diff: a name of a write that cannot be looked
@@ -586,7 +655,7 @@ class SettingsFileTest(unittest.TestCase):
 
         with patch("os.lstat", side_effect=lstat):
             self.assertEqual(remove_settings(self.path)[:2], (SETTINGS_NOT_REMOVED, True))
-            self.assertIs(settings._temporaries_present((self.path,)), True)
+            self.assertIs(settings._to_forget((self.path,))[0], True)
         self.assertTrue(own.exists())
 
     @REAL_SYMLINKS
@@ -613,7 +682,7 @@ class SettingsFileTest(unittest.TestCase):
         os.utime(own, (moment, moment))
         self.assertIs(settings._remove_temporary(own, seen), True)
         self.assertTrue(own.exists())
-        with patch.object(settings, "_abandoned_temporaries", return_value=([(0, own, seen)], set())):
+        with patch.object(settings, "_abandoned_temporaries", return_value=([(0, own, seen)], set(), set())):
             self.assertEqual(remove_settings(self.path)[:2], (None, True))
         self.assertTrue(own.exists())
         self.assertIs(settings._remove_temporary(own, os.lstat(own)), True)
@@ -838,6 +907,37 @@ class SettingsApiTest(GuiServerTestCase):
             self.post("/api/settings/forget"),
             (200, {"forgotten": False, "had_settings": True, "notice": SETTINGS_NOT_REMOVED, "generation": generation + 3}),
         )
+
+    def test_a_newer_temporary_file_that_stays_leaves_the_button_and_is_told(self) -> None:
+        # Stage X1 of v2.3.0 (the checker's review of the plan of X1): as on
+        # Windows, a half-written file that a stop left stays until it is ten
+        # minutes old. The server tells TEMPORARY_LEFT with the files gone,
+        # and the status counts it as something to forget, as forgetting does,
+        # so that every tab can press the button again; ten minutes old, it
+        # goes.
+        path = places.settings_file()
+        generation = self.settings_generation()
+        self.assertIsNone(remember_hints_at(path, False))
+        young = path.parent / f".{path.name}.{SettingsFileTest.other_pid(1)}.0a0a0a0a.tmp"
+        young.write_bytes(b'{"store": "synthetic"}')
+        with patch.object(settings, "_CHECK_PIDS", False):
+            self.assertIs(self.post("/api/status")[1]["settings"]["present"], True)
+            self.assertEqual(
+                self.post("/api/settings/forget"),
+                (200, {"forgotten": False, "had_settings": True, "notice": TEMPORARY_LEFT, "generation": generation + 1}),
+            )
+            self.assertFalse(path.exists())
+            self.assertTrue(young.exists())
+            status = self.post("/api/status")[1]["settings"]
+            self.assertEqual((status["present"], status["launch"], status["hints"]), (True, "first", None))
+            moment = time.time() - settings.TEMPORARY_AGE_SECONDS - 1
+            os.utime(young, (moment, moment))
+            self.assertEqual(
+                self.post("/api/settings/forget"),
+                (200, {"forgotten": True, "had_settings": True, "notice": None, "generation": generation + 2}),
+            )
+        self.assertFalse(os.path.lexists(young))
+        self.assertIs(self.post("/api/status")[1]["settings"]["present"], False)
 
 
 # A change of each of the five requests that change the settings (stage U2

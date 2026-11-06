@@ -18,6 +18,7 @@ import {
   againNote,
   apartReport,
   announcement,
+  askedLast,
   askFlush,
   boxStates,
   boxSummary,
@@ -79,6 +80,7 @@ import {
   resultDetails,
   resultRows,
   resultTotal,
+  questionToClose,
   quitAfterWriting,
   runSummary,
   sameContentNoted,
@@ -2441,8 +2443,14 @@ async function startRun() {
   }
 }
 
+// The questions of the page in the order that they opened (stage X1 of
+// v2.3.0), for Escape, which closes the last one first; whether one shows is
+// read from the page.
+let questionsAsked = [];
+
 // Cancelling asks first, in the box, instead of a dialog of the browser.
 function askCancel() {
+  questionsAsked = askedLast(questionsAsked, "cancel");
   state.cancelAsked = true;
   render();
   ui.cancelYes.focus();
@@ -2470,6 +2478,7 @@ async function cancelRun() {
 
 // Quit asks first, in the bar, as forgetting the settings does (v2.0.1 F2).
 function askQuit() {
+  questionsAsked = askedLast(questionsAsked, "quit");
   state.quitAsked = true;
   render();
   ui.quitNo.focus();
@@ -2855,6 +2864,7 @@ function themeHeard(event) {
 
 // Forgetting the remembered settings asks first, above the bar (stage B4c).
 function askForget() {
+  questionsAsked = askedLast(questionsAsked, "forget");
   state.forget.asked = true;
   state.forget.key = null;
   render();
@@ -2877,8 +2887,9 @@ async function forgetSettings() {
     state.settingsPresent = outcome.present;
     state.settingsNotice = outcome.notice === null ? null : { code: outcome.notice, writing: false };
     // The colors stay on the open pages, as the tips do; a reload, here or in
-    // another tab, follows the browser (stage G3a).
-    if (!outcome.present) {
+    // another tab, follows the browser (stage G3a), also where a half-written
+    // file stays, as the settings are gone (stage X1 of v2.3.0).
+    if (outcome.forgotten) {
       writeStorage(THEME_STORAGE, "auto");
     }
     // The generation after the forgetting, also one that left a file: the
@@ -2976,11 +2987,6 @@ function connect() {
   }
   ui.quitYes.addEventListener("click", quit);
   ui.quitNo.addEventListener("click", keepApp);
-  ui.quitConfirm.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      keepApp();
-    }
-  });
   ui.chooseZip.addEventListener("click", () => chooseWithDialog("zip", "input", ui.chooseZip));
   ui.chooseFolder.addEventListener("click", () => chooseWithDialog("folder", "input", ui.chooseFolder));
   // The store and the folder for the output are folders (stage B4a).
@@ -2995,11 +3001,6 @@ function connect() {
   ui.forgetButton.addEventListener("click", askForget);
   ui.forgetYes.addEventListener("click", forgetSettings);
   ui.forgetNo.addEventListener("click", keepSettings);
-  ui.forgetConfirm.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      keepSettings();
-    }
-  });
   ui.lockConfirm.addEventListener("change", render);
   ui.lockRemove.addEventListener("click", () => storeAction("unlock", state.store.answer?.path, ui.lockRemove));
   ui.check.addEventListener("click", () => runCheck());
@@ -3052,14 +3053,12 @@ function connect() {
   ui.browserUp.addEventListener("click", () => loadFolder(state.browser?.parent));
   ui.browserChoose.addEventListener("click", () => chooseFromList(state.browser?.path));
   ui.browserClose.addEventListener("click", closeBrowser);
+  // The parts of the page that close by Escape take it first (stage X1 of
+  // v2.3.0), so that it does not close a question as well.
   ui.browser.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      event.preventDefault();
       closeBrowser();
-    }
-  });
-  ui.cancelConfirm.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      keepRunning();
     }
   });
   for (const field of [ui.inputPath, ui.outputParent, ui.outputName, ui.timezone]) {
@@ -3089,6 +3088,7 @@ function connect() {
   ui.helpClose.addEventListener("click", closeHelp);
   ui.helpPanel.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      event.preventDefault();
       closeHelp();
     }
   });
@@ -3115,13 +3115,34 @@ function connect() {
   for (const [name, info] of Object.entries(ui.infos)) {
     info.button.addEventListener("click", () => toggleInfo(name));
     for (const element of [info.button, info.region]) {
+      // Only an explanation that is open takes the Escape: on the button of
+      // one that is closed, Escape closes a question (stage X1 of v2.3.0).
       element.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") {
+        if (event.key === "Escape" && state.infos.has(name)) {
+          event.preventDefault();
           closeInfo(name);
         }
       });
     }
   }
+  // Escape closes a question of the page wherever the focus is (stage X1 of
+  // v2.3.0), as its safe answer does: one at a time, the one that holds the
+  // focus, else the one that opened last. The parts above that close by
+  // Escape take it first.
+  const questions = {
+    quit: { region: ui.quitConfirm, keep: keepApp },
+    forget: { region: ui.forgetConfirm, keep: keepSettings },
+    cancel: { region: ui.cancelConfirm, keep: keepRunning },
+  };
+  document.addEventListener("keydown", (event) => {
+    const open = questionsAsked.filter((name) => !questions[name].region.hidden);
+    const focused = open.find((name) => questions[name].region.contains(document.activeElement)) ?? null;
+    const name = questionToClose(event, open, focused);
+    if (name !== null) {
+      event.preventDefault();
+      questions[name].keep();
+    }
+  });
 }
 
 async function start() {
