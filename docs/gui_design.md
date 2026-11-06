@@ -205,7 +205,14 @@ pid where the system tells it without harm (not on Windows, where `os.kill`
 stops a process), and any older than ten minutes. A newer one of another
 process that is alive, another launch in the middle of its write, stays, and
 so does the folder with it. One that cannot be removed is told as its file
-would be, and the button can be pressed while one is there. A folder that is
+would be, and the button can be pressed while one is there. From v2.3.0
+(stage X1) a newer one that stays counts as something to forget too, so that
+the button can still be pressed (on Windows, one that a stop left stays until
+it is ten minutes old): forgetting tells that it stayed (`TEMPORARY_LEFT`,
+where the settings and the marks are gone, so the page drops the colors
+remembered in the browser as well), and pressing again once it is ten
+minutes old removes it. The status of a launch and forgetting count what
+there is to forget alike. A folder that is
 a link is never looked into, as the settings are never written into one; a
 file is removed only while it is still the one looked at (a newer write or
 another file in its place stays); and one that cannot be looked at, or a
@@ -1856,6 +1863,14 @@ alone, and reduced motion.
   keys, and a hidden live region speaks only when the keys move the line (see
   [The view page](#the-view-page-v210)). Its buttons that show only an icon
   have names, and Escape closes what the page opened.
+- From v2.3.0 (stage X1) a question of a page (quitting, forgetting the
+  settings, and cancelling a run) closes by Escape wherever the focus is while
+  it shows, as its safe answer does: one for each Escape, the one that holds
+  the focus, else the one that opened last. A part of the page that closes by
+  Escape takes it first, and an Escape while a text is composed (an IME)
+  closes no question (a window closes by it as before). On the view page
+  Escape cancels a drag first, and graphs only, which hide the bar and a
+  question left open in it, are left by it.
 - Tests check labels, button names, heading order, live regions, focus
   targets, and the contrast of the stylesheet's colors. Keyboard-only use and
   a screen reader (VoiceOver on macOS) are checked by hand in stage C; a

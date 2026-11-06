@@ -442,6 +442,7 @@
   "settings.newer_kept": "The file of the remembered settings was written by a newer version of this app, so it was not changed.",
   "settings.not_removed": "The file of the remembered settings could not be removed.",
   "settings.marks_not_removed": "The file of the marks of the view page could not be removed (the file of the settings was removed).",
+  "settings.temporary_left": "The remembered settings are forgotten. A half-written file stays, as a write may still be using it; press the button again in about ten minutes.",
   "settings.not_written": "The settings could not be remembered. The next launch does not know the settings of this time.",
   "snapshot.empty": "There are no Snapshots yet.",
   "snapshot.heading": "Snapshots",

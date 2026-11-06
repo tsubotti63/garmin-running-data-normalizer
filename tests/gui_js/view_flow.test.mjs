@@ -207,6 +207,45 @@ test("after the other tab forgot the settings, the page remembers none of them",
   assert.deepEqual(settings.view_items, ["dist"]);
 });
 
+test("a half-written file that stays after forgetting leaves the page as forgetting does", () => {
+  // Stage X1 of v2.3.0 (the checker's review of the plan of X1, A3): where
+  // another tab forgot the settings and a half-written file stays, the status
+  // tells "present" (the button can be pressed again) with the values of no
+  // file, as launch_answer gives them; the page takes them as they are, and
+  // what it reads of them afterwards, and the colors, the layouts, and the
+  // marks it takes from them, are as after a forgetting.
+  const later = {
+    launch: "later",
+    store: "/x",
+    hints: false,
+    theme: "dark",
+    view_items: ["dist", "hr"],
+    view_shelf: "closed",
+    view_layouts: [{ id: "mine-1", name: "Made up", items: ["dist"] }],
+    view_marks: [{ id: "m-0000000a", kind: "race", name: "Made up", day: "2030-04-14", end: null }],
+    view_marks_shown: false,
+    timezone: "Asia/Tokyo",
+    present: true,
+  };
+  const noFile = {
+    launch: "first", store: null, output_parent: null, hints: null, theme: null, view_items: null, view_shelf: null,
+    view_layouts: [], view_layouts_hidden: [], view_layout: null, view_period: null, view_grain: null, view_types: null,
+    view_compare_mode: null, view_compare_month: null, view_compare_by: null, view_compare_weeks: null,
+    view_marks_shown: null, view_plot: null, view_spread: null, view_conditions: null, view_marks: [],
+    marks_notice: null, timezone: null, notice: null, present: true, generation: 3,
+  };
+  const forgotten = view.settingsAfterForget(later);
+  for (const settings of [noFile, forgotten]) {
+    assert.equal(view.itemsRemembered(settings), false);
+    assert.deepEqual(view.rememberedKeys(settings), []);
+    assert.equal(view.rememberedItems(settings, ITEMS), null);
+    assert.deepEqual(view.marksToOpen(settings), { marks: [], shown: true, notice: null });
+    assert.equal(settings.theme === "light" || settings.theme === "dark", false);
+    assert.deepEqual(settings.view_layouts ?? [], []);
+    assert.equal(settings.timezone ?? null, null);
+  }
+});
+
 test("an output opens with the items shown, else those remembered, else its first items", () => {
   assert.deepEqual(view.itemsToOpen(["hr"], ["dist"], ["rhr"], ITEMS), ["hr"]);
   assert.deepEqual(view.itemsToOpen(null, ["dist", "nope"], ["rhr"], ITEMS), ["dist"]);

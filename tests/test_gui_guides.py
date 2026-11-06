@@ -1136,18 +1136,30 @@ class GuiGuideTest(unittest.TestCase):
         # and the privacy section says that they hold a copy; the design
         # document gives the rules. From W7 (Codex's whole review before
         # W6f, and the checker's review of the plan): what to do on Windows
-        # for ten minutes after this app stopped in the middle of a write.
+        # for ten minutes after this app stopped in the middle of a write;
+        # from stage X1 of v2.3.0 the bar tells that it stayed, and the button
+        # can be pressed again, with a line of 2.2.1 (the checker's review of
+        # the plan of X1). The sentences of W7 are gone.
         said = {
             "ja": (
                 "（2.2.1 から）書く途中でこのアプリが落ちたときに残る書きかけのファイル（設定や印の写しが入ります）も消し、それだけが残っているときも押せます。消すのは、書いたこのアプリがもう終わっているものか、10 分より古いものです（Windows では、10 分より古いものだけ）。ほかに開いているこのアプリが書いている途中のものは残します。",
                 "（2.2.1 から）書く途中でこのアプリが落ちたときに残る書きかけのファイルにも、設定や印の写しが入ります。「覚えた設定を消す…」で一緒に消えます（Windows では、落ちてから 10 分たったあとに）。",
-                "Windows では、落ちてから 10 分たたないうちは、書きかけのファイルは消えず、ボタンも押せないことがあります。10 分たってからページを読み込み直し、押してください。",
+                "Windows では、落ちてから 10 分たたないうちは、書きかけのファイルは消えません。（2.3.0 から）そのときは、残したことを下の帯に出し、ボタンは押せるままなので、10 分たってから、もう一度押してください（2.2.1 では、ボタンが押せなくなり、ページを読み込み直すと押せました）。",
             ),
             "en": (
                 "From 2.2.1, it also removes the half-written files that a write leaves when this app stops in the middle of it (they hold a copy of the settings or the marks), and it can be pressed while only such a file is there: one whose launch has ended, or one older than ten minutes (on Windows, only one older than ten minutes). One that another open launch of this app is writing at that moment stays.",
                 "A half-written file that a write leaves when this app stops in the middle of it holds a copy of them too; from 2.2.1, **Forget the remembered settings…** removes it with them (on Windows, once it is ten minutes old).",
-                "On Windows, for ten minutes after this app stopped in the middle of a write, the half-written file stays, and you may not be able to press the button. Once ten minutes have passed, load the page again, and press it.",
+                "On Windows, for ten minutes after this app stopped in the middle of a write, the half-written file stays. From 2.3.0, the bar then says so, and the button can still be pressed: once ten minutes have passed, press it again (in 2.2.1, the button could not be pressed until the page was loaded again).",
             ),
+        }
+        gone = {
+            "ja": ("ボタンも押せないことがあります。", "10 分たってからページを読み込み直し、押してください。"),
+            "en": ("you may not be able to press the button", "load the page again, and press it."),
+        }
+        # What the bar says, as the guides tell it (stage X1 of v2.3.0).
+        tells = {
+            "ja": "覚えた設定を消しました。書きかけのファイルは、書いている途中かもしれないので残しました。10 分ほどたってから、もう一度押してください。",
+            "en": "The remembered settings are forgotten. A half-written file stays, as a write may still be using it; press the button again in about ten minutes.",
         }
         for language, path in GUIDES.items():
             text = path.read_text(encoding="utf-8")
@@ -1155,6 +1167,21 @@ class GuiGuideTest(unittest.TestCase):
             for sentence in said[language]:
                 with self.subTest(language=language, sentence=sentence[:30]):
                     self.assertEqual(reads.count(sentence), 1)
+            for old in gone[language]:
+                with self.subTest(language=language, gone=old[:30]):
+                    self.assertNotIn(old, reads)
+            with self.subTest(language=language, bar="settings.temporary_left"):
+                self.assertEqual(catalog(language)["settings.temporary_left"], tells[language])
+        flow = (STATIC_ROOT / "flow.mjs").read_text(encoding="utf-8")
+        self.assertIn('  TEMPORARY_LEFT: "settings.temporary_left",\n', flow)
+        outcome = re.search(r"export function forgetOutcome\(answer\) \{(.*?)\n\}", flow, re.DOTALL)
+        assert outcome is not None
+        self.assertIn('  if (answer?.notice === "TEMPORARY_LEFT") {\n    return { key: null, notice: "TEMPORARY_LEFT", present: true, forgotten: true };\n  }', outcome.group(1))
+        code = (ROOT / "src" / "garmin_running_data_normalizer" / "gui" / "settings.py").read_text(encoding="utf-8")
+        remove = re.search(r"\ndef remove_settings\(.*?\n\n\n", code, re.DOTALL)
+        assert remove is not None
+        self.assertIn("        return (TEMPORARY_LEFT if newer else None), present, _generation\n", remove.group(0))
+        self.assertIn("        if not removed[0] or 0 in left:\n            return SETTINGS_NOT_REMOVED, present, _generation\n        if not all(removed) or left:\n            return MARKS_NOT_REMOVED, present, _generation\n", remove.group(0))
         design = " ".join((ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
         for sentence in (
             "From v2.2.1 (stage W4) forgetting also removes the temporary files that a write leaves where this app stops in the middle of it",
@@ -1164,9 +1191,52 @@ class GuiGuideTest(unittest.TestCase):
             "A folder that is a link is never looked into, as the settings are never written into one;",
             "a file is removed only while it is still the one looked at (a newer write or another file in its place stays);",
             "and one that cannot be looked at, or a folder that cannot be listed, is told as left.",
+            # Stage X1 of v2.3.0.
+            "From v2.3.0 (stage X1) a newer one that stays counts as something to forget too, so that the button can still be pressed (on Windows, one that a stop left stays until it is ten minutes old): forgetting tells that it stayed (`TEMPORARY_LEFT`, where the settings and the marks are gone, so the page drops the colors remembered in the browser as well), and pressing again once it is ten minutes old removes it.",
+            "The status of a launch and forgetting count what there is to forget alike.",
         ):
             with self.subTest(design=sentence[:30]):
                 self.assertEqual(design.count(sentence), 1)
+
+    def test_guides_say_that_escape_closes_a_question_wherever_the_focus_is(self) -> None:
+        # Stage X1 of v2.3.0 (the person's finding in W6d, and the checker's
+        # review of the plan of X1): the section on the keyboard says, once in
+        # each language, that the questions close by Escape wherever the focus
+        # is, one at a time, with a line of 2.2.1; with the names of the
+        # questions and of their safe answers as the page gives them; and the
+        # design gives the rule.
+        said = {
+            "ja": "（2.3.0 から）「このアプリを終了しますか？」「覚えた設定を消しますか？」と、正規化を取り消すかの問いは、開いているあいだ、フォーカスがどこにあっても、Esc キーで閉じます（「やめる」「続ける」を押したのと同じです）。2 つ以上開いているときは、フォーカスのある問いを、無ければあとから開いた問いを、1 回に 1 つ閉じます。2.2.1 までは、問いの中にフォーカスがあるときだけでした。",
+            "en": "From 2.3.0, the questions **Quit this app?** and **Forget the remembered settings?**, and the question of cancelling a normalization, close by Escape wherever the focus is while they show, as **Keep using it**, **Keep them**, and **Continue** do. Where two or more show, each Escape closes one: the one that holds the focus, else the one that opened last. Until 2.2.1, Escape closed one only while the focus was in it.",
+        }
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            reads = " ".join(text.split()) if language == "en" else re.sub(r"\n *", "", text)
+            section = text.split("\n## キーボードとスクリーンリーダー\n" if language == "ja" else "\n## Keyboard and screen readers\n")[1].split("\n## ")[0]
+            keyboard = " ".join(section.split()) if language == "en" else re.sub(r"\n *", "", section)
+            messages = catalog(language)
+            with self.subTest(language=language):
+                self.assertEqual(reads.count(said[language]), 1)
+                self.assertIn(said[language], keyboard)
+                if language == "ja":
+                    names = (f"「{messages['quit.question']}」", f"「{messages['forget.question']}」", f"「{messages['quit.no']}」", f"「{messages['run.cancel_no']}」")
+                    self.assertEqual(messages["forget.no"], messages["quit.no"])
+                else:
+                    names = tuple(f"**{messages[key]}**" for key in ("quit.question", "forget.question", "quit.no", "forget.no", "run.cancel_no"))
+                for name in names:
+                    self.assertIn(name, said[language])
+        design = " ".join((ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        self.assertEqual(
+            design.count(
+                "From v2.3.0 (stage X1) a question of a page (quitting, forgetting the settings, and cancelling a run) closes by Escape wherever the focus is while it shows, as its safe answer does: one for each Escape, the one that holds the focus, else the one that opened last. A part of the page that closes by Escape takes it first, and an Escape while a text is composed (an IME) closes no question (a window closes by it as before). On the view page Escape cancels a drag first, and graphs only, which hide the bar and a question left open in it, are left by it."
+            ),
+            1,
+        )
+        flow = (STATIC_ROOT / "flow.mjs").read_text(encoding="utf-8")
+        choose = re.search(r"export function questionToClose\(event, open, focused\) \{(.*?)\n\}", flow, re.DOTALL)
+        assert choose is not None
+        self.assertIn('  if (event?.key !== "Escape" || event.defaultPrevented === true || event.isComposing === true) {\n    return null;\n  }', choose.group(1))
+        self.assertIn("  return open.length > 0 ? open[open.length - 1] : null;", choose.group(1))
 
     def test_guides_say_the_words_of_the_page_of_v221(self) -> None:
         # v2.2.1 W3 (the person's answer 「おすすめのとおり」): the guides name the
@@ -2857,9 +2927,16 @@ class GuiGuideTest(unittest.TestCase):
         gui = ROOT / "src" / "garmin_running_data_normalizer" / "gui"
         settings = (gui / "settings.py").read_text(encoding="utf-8")
         # From stage W4 of v2.2.1 the abandoned temporary files are looked at
-        # in the same lock, before the generation moves on.
-        self.assertIn("    with _CHANGE_LOCK:\n        present = any(settings_present(place) for place in places_to_forget)\n        try:\n            temporaries, unknown = _abandoned_temporaries(places_to_forget)\n        except OSError:\n            # A folder that cannot be looked at: what is in it is not known\n            # to be gone (Codex's review of the diff).\n            temporaries, unknown = [], {0}\n        present = present or bool(temporaries) or bool(unknown)\n        _generation += 1\n", settings)
-        self.assertIn("    with _CHANGE_LOCK:\n        values, notice = read_settings(path)\n        marks, marks_notice = read_marks(marks_path)\n        # An abandoned temporary file is there to forget too (stage W4 of\n        # v2.2.1); the launch is told by the places remembered, not by this.\n        present = settings_present(path) or settings_present(marks_path) or _temporaries_present((path, marks_path))\n        generation = _generation\n", settings)
+        # in the same lock, before the generation moves on; from stage X1 of
+        # v2.3.0 by the one count of what there is to forget, which the status
+        # takes as well (the checker's review of the plan of X1).
+        self.assertIn("    with _CHANGE_LOCK:\n        present, temporaries, unknown, newer = _to_forget(places_to_forget)\n        _generation += 1\n", settings)
+        self.assertIn("    with _CHANGE_LOCK:\n        values, notice = read_settings(path)\n        marks, marks_notice = read_marks(marks_path)\n        # What there is to forget, as forgetting counts it (stage X1 of\n        # v2.3.0; the temporary files from stage W4 of v2.2.1); the launch is\n        # told by the places remembered, not by this.\n        present = _to_forget((path, marks_path))[0]\n        generation = _generation\n", settings)
+        count = re.search(r"\ndef _to_forget\(.*?\n\n\n", settings, re.DOTALL)
+        assert count is not None
+        self.assertIn("    present = any(settings_present(place) for place in places)\n    try:\n        temporaries, unknown, newer = _abandoned_temporaries(places)\n    except OSError:\n", count.group(0))
+        self.assertIn("        temporaries, unknown, newer = [], {0}, set()\n    return present or bool(temporaries) or bool(unknown) or bool(newer), temporaries, unknown, newer\n", count.group(0))
+        self.assertNotIn("_temporaries_present", settings)
         self.assertIn("        notice, present, generation = self.server.runs.when_idle(forget_settings)\n", (gui / "server.py").read_text(encoding="utf-8"))
         self.assertIn("        with self._lock:\n            if self._run is not None and self._run.active:\n                raise RunActiveError()\n            return action()\n", (gui / "runs.py").read_text(encoding="utf-8"))
         # The lock of the settings is never held while that of the runs is

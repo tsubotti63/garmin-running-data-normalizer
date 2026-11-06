@@ -493,10 +493,9 @@ class GuiPageStructureTest(unittest.TestCase):
         ask = re.search(r"function askQuit\(\) \{(.*?)\n\}", script, re.DOTALL)
         assert ask is not None
         self.assertIn("ui.quitNo.focus();", ask.group(1))
-        self.assertRegex(
-            script,
-            r'ui\.quitConfirm\.addEventListener\("keydown", \(event\) => \{\s*if \(event\.key === "Escape"\) \{\s*keepApp\(\);',
-        )
+        # From stage X1 of v2.3.0, Escape keeps the app wherever the focus is
+        # (test_escape_closes_a_question_wherever_the_focus_is).
+        self.assertIn("    quit: { region: ui.quitConfirm, keep: keepApp },", script)
         stop = re.search(r"async function quit\(\) \{(.*?)\n\}", script, re.DOTALL)
         assert stop is not None
         self.assertIn('state.connectionKey = "status.quitting";', stop.group(1))
@@ -508,6 +507,101 @@ class GuiPageStructureTest(unittest.TestCase):
         self.assertNotIn('await callApi("/api/shutdown");', stop.group(1))
         opened = re.search(r'if \(target === "start_here"\) \{\s*output\.startHereOpened = true;', script)
         self.assertIsNotNone(opened)
+
+    def test_escape_closes_a_question_wherever_the_focus_is(self) -> None:
+        # Stage X1 of v2.3.0 (the person's finding in W6d, and the checker's
+        # review of the plan of X1, A1 and A2), in the page scripts, which no
+        # test runs: while a question shows, Escape closes it wherever the
+        # focus is, as its safe answer does, in one handler of the document
+        # that asks flow.mjs which one (the node tests check questionToClose);
+        # the questions have no handlers of their own any more, which would
+        # take one Escape twice; the parts of the page that close by Escape
+        # take it first, so that it closes no question as well; and on the
+        # view page a drag is cancelled first, and graphs only, which hide the
+        # bar, are left after the question.
+        script = (STATIC_ROOT / "app.mjs").read_text(encoding="utf-8")
+        for name, question in (("askQuit", "quit"), ("askForget", "forget"), ("askCancel", "cancel")):
+            with self.subTest(asks=name):
+                body = re.search(r"function " + name + r"\(\) \{(.*?)\n\}", script, re.DOTALL)
+                assert body is not None
+                self.assertIn(f'  questionsAsked = askedLast(questionsAsked, "{question}");\n', body.group(1))
+        handler = re.search(
+            r"  const questions = \{\n(.*?)\n  \};\n  document\.addEventListener\(\"keydown\", \(event\) => \{\n(.*?)\n  \}\);\n\}\n",
+            script,
+            re.DOTALL,
+        )
+        assert handler is not None
+        self.assertEqual(
+            handler.group(1),
+            "    quit: { region: ui.quitConfirm, keep: keepApp },\n"
+            "    forget: { region: ui.forgetConfirm, keep: keepSettings },\n"
+            "    cancel: { region: ui.cancelConfirm, keep: keepRunning },",
+        )
+        self.assertEqual(
+            handler.group(2),
+            "    const open = questionsAsked.filter((name) => !questions[name].region.hidden);\n"
+            "    const focused = open.find((name) => questions[name].region.contains(document.activeElement)) ?? null;\n"
+            "    const name = questionToClose(event, open, focused);\n"
+            "    if (name !== null) {\n"
+            "      event.preventDefault();\n"
+            "      questions[name].keep();\n"
+            "    }",
+        )
+        for region in ("quitConfirm", "forgetConfirm", "cancelConfirm"):
+            with self.subTest(gone=region):
+                self.assertNotIn(f'ui.{region}.addEventListener("keydown"', script)
+        for taken in (
+            'ui.browser.addEventListener("keydown", (event) => {\n    if (event.key === "Escape") {\n      event.preventDefault();\n      closeBrowser();\n',
+            'ui.helpPanel.addEventListener("keydown", (event) => {\n    if (event.key === "Escape") {\n      event.preventDefault();\n      closeHelp();\n',
+            '      element.addEventListener("keydown", (event) => {\n        if (event.key === "Escape" && state.infos.has(name)) {\n          event.preventDefault();\n          closeInfo(name);\n',
+        ):
+            with self.subTest(taken=taken[:30]):
+                self.assertEqual(script.count(taken), 1)
+        # Every Escape of the page is one of these: no part closes by Escape
+        # without taking it.
+        escapes = re.findall(r'if \(event\.key === "Escape"[^\n]*\) \{\n *([^\n]*)', script)
+        self.assertEqual(escapes, ["event.preventDefault();"] * 3)
+        view = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        self.assertNotIn('ui.quitConfirm.addEventListener("keydown"', view)
+        order = re.search(
+            r'  document\.addEventListener\("keydown", \(event\) => \{\n    if \(event\.key !== "Escape" \|\| event\.defaultPrevented\) \{\n      return;\n    \}\n(.*?)\n  \}\);\n',
+            view,
+            re.DOTALL,
+        )
+        assert order is not None
+        self.assertEqual(
+            order.group(1),
+            "    if (drag !== null) {\n"
+            "      event.preventDefault();\n"
+            "      cancelDrag();\n"
+            "      return;\n"
+            "    }\n"
+            "    // Graphs only hide the bar, and with it a question left open.\n"
+            '    const open = ui.quitConfirm.hidden || state.full ? [] : ["quit"];\n'
+            '    const focused = ui.quitConfirm.contains(document.activeElement) ? "quit" : null;\n'
+            "    if (questionToClose(event, open, focused) !== null) {\n"
+            "      event.preventDefault();\n"
+            "      keepApp();\n"
+            "    } else if (state.full) {\n"
+            "      leaveFull();\n"
+            "    }",
+        )
+        # Every part of the view page that closes by Escape takes it, as the
+        # help panel does (Codex's review of the diff: the windows of the
+        # activity types and of the items to add did not, so that one Escape
+        # closed the question of quitting as well); the list of a panel takes
+        # it at the end of plotKey.
+        self.assertIn('ui.helpPanel.addEventListener("keydown", (event) => {\n    if (event.key === "Escape") {\n      event.preventDefault();\n      closeHelp();\n', view)
+        for window in ("typesPop", "picker"):
+            with self.subTest(window=window):
+                self.assertIn(f'ui.{window}.addEventListener("keydown", (event) => {{\n    if (event.key === "Escape") {{\n      event.preventDefault();\n', view)
+        taken = re.findall(r'if \(event\.key === "Escape"[^\n]*\) \{\n(?: *//[^\n]*\n)* *([^\n]*)', view)
+        self.assertEqual(taken.count("closeList(true);"), 1)
+        self.assertEqual(set(taken), {"event.preventDefault();", "closeList(true);"})
+        self.assertGreaterEqual(len(taken), 15)
+        plot_key = re.search(r"\nfunction plotKey\(event\) \{\n(.*?)\n\}\n", view, re.DOTALL)
+        assert plot_key is not None
+        self.assertTrue(plot_key.group(1).endswith("  } else {\n    return;\n  }\n  event.preventDefault();"))
 
     def test_the_name_and_the_place_of_the_support_bundle_say_what_they_are(self) -> None:
         # Stage B5a: the name of the output is described by its red lines,

@@ -883,6 +883,12 @@ class GuiPageScriptTest(unittest.TestCase):
         forget = body(app, "forgetSettings")
         self.assertIn("themeChannel?.postMessage({ generation: answer.generation });\n      follower.heard(answer.generation);", forget)
         self.assertNotIn("forgotten: true", forget)
+        # From stage X1 of v2.3.0 the colors that the tab remembers go when the
+        # settings are gone, also where a half-written file stays and the
+        # button can still be pressed (the checker's review of the plan, A3;
+        # the partial guard of X1).
+        self.assertIn('    if (outcome.forgotten) {\n      writeStorage(THEME_STORAGE, "auto");\n    }\n', forget)
+        self.assertNotIn("outcome.present) {", forget)
 
 class GuiServerLifecycleTest(GuiServerTestCase):
     idle_timeout = None

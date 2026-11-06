@@ -15,6 +15,7 @@ import {
   connectionMessages,
   lastName,
   normalizePageAddress,
+  questionToClose,
   quitAfterWriting,
   sendLatest,
   settingsFollower,
@@ -9196,11 +9197,6 @@ function connect() {
   ui.quit.addEventListener("click", askQuit);
   ui.quitYes.addEventListener("click", quit);
   ui.quitNo.addEventListener("click", keepApp);
-  ui.quitConfirm.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      keepApp();
-    }
-  });
   ui.outputSelect.addEventListener("change", outputChosen);
   ui.openLatest.addEventListener("click", openLatest);
   ui.chooseOutput.addEventListener("click", () => chooseWithDialog(ui.chooseOutput));
@@ -9368,8 +9364,11 @@ function connect() {
     render();
     ui.typesButton.focus();
   });
+  // Its Escape closes no question of the bar as well (stage X1 of v2.3.0,
+  // Codex's review of the diff), as that of the picker.
   ui.typesPop.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      event.preventDefault();
       state.typesOpen = false;
       render();
       ui.typesButton.focus();
@@ -9453,6 +9452,7 @@ function connect() {
   });
   ui.picker.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      event.preventDefault();
       state.pickerOpen = false;
       render();
       ui.addItems.focus();
@@ -9643,8 +9643,10 @@ function connect() {
       leaveFull();
     }
   });
-  // Esc cancels a drag on the overview, or leaves graphs only; the parts of
-  // the page that close by Esc take it first.
+  // Esc cancels a drag on the overview, or closes the question of quitting
+  // wherever the focus is (stage X1 of v2.3.0, as its safe answer does), or
+  // leaves graphs only, in that order; the parts of the page that close by
+  // Esc take it first.
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || event.defaultPrevented) {
       return;
@@ -9652,6 +9654,14 @@ function connect() {
     if (drag !== null) {
       event.preventDefault();
       cancelDrag();
+      return;
+    }
+    // Graphs only hide the bar, and with it a question left open.
+    const open = ui.quitConfirm.hidden || state.full ? [] : ["quit"];
+    const focused = ui.quitConfirm.contains(document.activeElement) ? "quit" : null;
+    if (questionToClose(event, open, focused) !== null) {
+      event.preventDefault();
+      keepApp();
     } else if (state.full) {
       leaveFull();
     }

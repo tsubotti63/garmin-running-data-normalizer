@@ -1201,6 +1201,9 @@ const SETTINGS_KEYS = {
   // Forgetting removed the settings, but not the marks of the view page
   // (stage M1 of v2.2.0).
   MARKS_NOT_REMOVED: "settings.marks_not_removed",
+  // Forgetting removed the files, but a half-written file that may be in the
+  // middle of a write stays (stage X1 of v2.3.0).
+  TEMPORARY_LEFT: "settings.temporary_left",
 };
 // When a run or the tips could not be remembered, the words say so.
 const SETTINGS_WRITE_KEYS = {
@@ -1312,12 +1315,52 @@ export function settingsPresentAfterRun(present, run) {
 // What the page tells after forgetting the settings (stage C1): the server
 // says "forgotten" when no file is left, and whether there was one; when a
 // file is left, it could not be removed: that of the settings, or from stage
-// M1 of v2.2.0 that of the marks only.
+// M1 of v2.2.0 that of the marks only. From stage X1 of v2.3.0 the outcome
+// tells apart whether the button can be pressed (present) and whether the
+// settings and the marks are gone (forgotten; the checker's review of the
+// plan of X1): where only a half-written file that may be in the middle of a
+// write stays (TEMPORARY_LEFT), they are gone, and the button can be pressed
+// again.
 export function forgetOutcome(answer) {
   if (answer?.forgotten === true) {
-    return { key: answer.had_settings === false ? "forget.nothing" : "forget.done", notice: null, present: false };
+    return {
+      key: answer.had_settings === false ? "forget.nothing" : "forget.done",
+      notice: null,
+      present: false,
+      forgotten: true,
+    };
   }
-  return { key: null, notice: answer?.notice === "MARKS_NOT_REMOVED" ? "MARKS_NOT_REMOVED" : "SETTINGS_NOT_REMOVED", present: true };
+  if (answer?.notice === "TEMPORARY_LEFT") {
+    return { key: null, notice: "TEMPORARY_LEFT", present: true, forgotten: true };
+  }
+  return {
+    key: null,
+    notice: answer?.notice === "MARKS_NOT_REMOVED" ? "MARKS_NOT_REMOVED" : "SETTINGS_NOT_REMOVED",
+    present: true,
+    forgotten: false,
+  };
+}
+
+// The order in which the questions of a page opened (stage X1 of v2.3.0): one
+// asked again goes to the end.
+export function askedLast(order, name) {
+  return [...order.filter((item) => item !== name), name];
+}
+
+// Which question an Escape closes (stage X1 of v2.3.0): while questions of
+// the page show (those of the bar, and cancelling a run), Escape closes one
+// wherever the focus is, as its safe answer does: the one that holds the
+// focus, else the one that opened last (``open``, in the order that they
+// opened). None where a part of the page took the Escape first, or while a
+// text is composed (an IME).
+export function questionToClose(event, open, focused) {
+  if (event?.key !== "Escape" || event.defaultPrevented === true || event.isComposing === true) {
+    return null;
+  }
+  if (focused !== null && focused !== undefined && open.includes(focused)) {
+    return focused;
+  }
+  return open.length > 0 ? open[open.length - 1] : null;
 }
 
 // Whether the tips show (the mockup v10): as the person last switched them,
