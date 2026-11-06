@@ -13,6 +13,48 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
+## v2.2.1 — stable Production release
+
+Published as the annotated `v2.2.1` tag, the latest stable
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.2.1),
+and the verified
+[Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/2.2.1/).
+
+### Fixed
+
+- The view page opens the output again by itself where it finds, as it
+  gives numbers, that the days, the activity types, or whether the output is
+  partial have changed, so that the overview, the years of **Compare years**,
+  the days of **Custom range…**, and the activity types are of the output as
+  it is.
+- The questions before quitting and before **Forget the remembered
+  settings…** show right above their buttons, or across the bar where a
+  narrow window leaves too little room; in **Compare years**, another way
+  chosen after **Show as a table** brings back its chart.
+- The words of the view page are clearer, and the table of **Compare years**
+  fits six years or six races in its box.
+- **Forget the remembered settings…** also removes the half-written files
+  that a write of the settings or of the marks leaves when this app stops in
+  the middle of it.
+
+### Changed
+
+- `standalone` can be the first module of the package imported.
+- The publish workflow also runs the repository checks and the page tests,
+  and checks the files of what it builds and of what it installs from the
+  index.
+- The GUI Guide says what 2.2.1 changes and answers what a third new reader
+  of it asked; its pictures are taken again with 2.2.1.
+
+### Compatibility
+
+- For the same input, timezone, and options, the processing, the 17
+  datasets, 247 fields, stable keys, output paths, the Snapshot Store format,
+  the Product exit mapping, the command line, and the form of the settings
+  and the marks remain those of v2.2.0. Outputs record `2.2.1`; the view page
+  and `series` read only outputs of this version. See the
+  [v2.2.1 Release Notes](docs/release_notes/v2.2.1.md).
+
 ## v2.2.0 — stable Production release
 
 Published on 2026-11-04 JST as the annotated `v2.2.0` tag, the latest stable

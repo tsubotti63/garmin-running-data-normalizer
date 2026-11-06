@@ -1,5 +1,39 @@
 # Migration Notes
 
+## v2.2.0 to v2.2.1
+
+v2.2.1 does not require data migration. Existing Snapshot Stores load and
+verify as before, with the same Snapshot lifecycle contract, policy registry,
+and store format. For the same input, timezone, and options, the processing
+and the outputs are those of v2.2.0, apart from `product_version` `2.2.1`,
+`parser_version` `2.2.1` in what is made from a Snapshot Store, and the values
+that include them.
+
+- Update as [Update to a new version](gui_guide.md#update-to-a-new-version)
+  of the GUI Guide says: stop the GUI first, on macOS as on Windows, and run
+  the line of the guide of v2.2.1, which installs into the same virtual
+  environment and makes the icon again. The Snapshot Store, the outputs, the
+  settings that the GUI remembers, and the marks stay as they are.
+- The view page and `series` open only outputs made by this version.
+  `validate-handoff`, `doctor --run-output`, `support-bundle`, and `series` of
+  v2.2.1, and the view page, stop for an output of v2.2.0 with
+  `OUTPUT_OTHER_VERSION` and name the version that made it. The GUI shows the
+  change since an earlier output only for an output of the same version. The
+  files of an earlier output stay as they are and can still be read; to look
+  at its numbers, normalize its Export again with v2.2.1 into a new folder.
+  With a Snapshot Store, make a new output from the Snapshots that it holds,
+  without importing them again.
+- The settings file of the GUI stays of format 2, and the marks stay in
+  `gui-marks.json` next to it: v2.2.1 and v2.2.0 read what the other saves,
+  so that going back to v2.2.0 keeps them. **Forget the remembered
+  settings…** of v2.2.1 also removes the half-written files that a write of
+  the settings or of the marks leaves when the app stops in the middle of it
+  (on Windows, once they are ten minutes old); that of v2.2.0 leaves them.
+  Neither removes the Snapshot Store or the outputs.
+- The commands and options of the CLI are unchanged.
+
+See the [v2.2.1 Release Notes](release_notes/v2.2.1.md).
+
 ## v2.1.0 to v2.2.0
 
 v2.2.0 does not require data migration. Existing Snapshot Stores load and

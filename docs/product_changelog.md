@@ -4,6 +4,25 @@ This file records factual Garmin Running Data Normalizer product changes. The
 Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
 Platform maintains its own separate changelog.
 
+## v2.2.1 — stable Production GUI fix release
+
+Status: published as the annotated tag, the latest stable GitHub Release, and a
+verified Production PyPI distribution.
+
+- Fixes small things of the GUI: the view page opens the output again when it
+  finds that the output changed, the questions of the bar show right above
+  their buttons, the words of the view page and its table of six years are
+  clearer, and forgetting the settings also removes the half-written files of
+  a write.
+- Lets `standalone` be the first module imported, and checks more of what the
+  publish workflow builds and publishes.
+- Preserves the processing, the 17 datasets, 247 fields, stable keys, the
+  command line, the Snapshot lifecycle contract and policy registry `v1.0`,
+  the form of the settings and the marks, and the `0 / 0 / 3 / 2` Product
+  exit mapping. Outputs of v2.2.0 are refused by the checks of v2.2.1, as for
+  every other version; the view page and `series` read only outputs of this
+  version.
+
 ## v2.2.0 — stable Production release of the views
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a

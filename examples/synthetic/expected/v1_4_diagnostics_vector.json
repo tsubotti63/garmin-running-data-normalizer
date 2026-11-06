@@ -1,43 +1,43 @@
 {
   "dataset_count": 17,
-  "doctor_json_sha256": "1b6ec89318bce2cf8d739ed8e842b97a23e13ad4b67ac53a8d4f4d7630588a43",
+  "doctor_json_sha256": "78bc369134bd44488ebeb0d4982485d7e0d5fa29548be9fab7059e76d507ac9e",
   "field_count": 247,
   "fixture": "examples/synthetic/garmin_export",
   "format": "garmin-running-data-normalizer-v1-4-diagnostics-expected-vector-v1",
   "generated_path_count": 50,
   "product_exit_code": 0,
-  "product_version": "2.2.1rc1",
+  "product_version": "2.2.1",
   "relationship_count": 6,
-  "run_quality_sha256": "67c604476e8112493119ec416f052a6a8144668a6122714c0b00bffcf7b24124",
+  "run_quality_sha256": "765b6fabb331f275f7ba426b671e9218053d0b8b4038674450ce857c1f6c7914",
   "run_status": "PASS_WITH_WARNINGS",
-  "source_completeness_sha256": "81ab7751f604cb98a13ceb9c27dbc11abc3cc02cee02c04567ceaacf10a189c8",
+  "source_completeness_sha256": "07c2a47d252c353ce97b176408f8f865a67ca15ad6abff12987368d996bc7a8e",
   "support_bundle": {
-    "archive_sha256": "db360ef7f6fc8c8616b25b776c02a5947b061c353d8eb86c4d17fe2634bf2167",
-    "content_sha256": "fecc2c05bc870bdbf55ed12d44ee6ca242d805811e0d515c095eece5e3dc8509",
+    "archive_sha256": "f12d6b1bcd57a79e96eede1f47261d12bef8e22e976de7691855ab033311c703",
+    "content_sha256": "2d23634a54136f31968f183c7428fbdb033feb45b3e967e3e5941459ba012cb3",
     "members": {
       "README.md": {
         "bytes": 484,
         "sha256": "ca0fd533c2e626bb36714e0098919d17680b37e827963aafb276b435c13e91d6"
       },
       "doctor.json": {
-        "bytes": 713,
-        "sha256": "0411eac83b4d575b13f67bda5ac9215374badcb8a9aa12782a51000eed1bfbed"
+        "bytes": 710,
+        "sha256": "d599bc465f812362555a030d5602a175c0364fe9f03eb2bcfa7e47c38ec82eb2"
       },
       "manifest.json": {
-        "bytes": 1137,
-        "sha256": "59b28ab48aeea27d1de09f9f1c3228800e7a03beb90e9f59d63e17a769ce253e"
+        "bytes": 1134,
+        "sha256": "dbb4a6f19c5f87328b89a50fec8c0ab84b78ecef7889679430e39a5c7edcb513"
       },
       "privacy_scan.json": {
         "bytes": 298,
         "sha256": "2731b70e0dfb9710644e5960859d564df3b70f6fbfd7d74ba80be6c291002a81"
       },
       "run_quality.json": {
-        "bytes": 10478,
-        "sha256": "7825ccf5c4415308900b948e7b6c3468744467129698778e8705a847b24ad18d"
+        "bytes": 10475,
+        "sha256": "722d54bc60191880255f78f3d012213c53824b299bf6b2775bf4adcacbed066e"
       },
       "source_completeness.json": {
-        "bytes": 7006,
-        "sha256": "2742ff68427fd9d5806845702b802dda34fdea0dfe3e06d256bf34f5a9626e94"
+        "bytes": 7003,
+        "sha256": "8f608489a9203df749370c6a3e725f3eeefe96ec8e3cc3cb4064ec707d6f7ba7"
       }
     }
   }

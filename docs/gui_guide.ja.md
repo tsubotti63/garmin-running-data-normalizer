@@ -1,8 +1,8 @@
 # GUI の手引き
 
-> **v2.2.0 の手引きです。** v1.7.1 までのバージョンには、GUI は入っていません
+> **v2.2.1 の手引きです。** v1.7.1 までのバージョンには、GUI は入っていません
 > （その次のバージョンから入っています）。
-> v2.2.0 の入れ方は、[用意するもの](#用意するもの)にあります。v1.7.1 までの
+> v2.2.1 の入れ方は、[用意するもの](#用意するもの)にあります。v1.7.1 までの
 > バージョンを使い続けるときは、
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md)
 > のとおりに、コマンドラインを使ってください。
@@ -52,7 +52,7 @@ GUI は、Garmin のエクスポート（Account Data Export）を、ブラウ�
   1 と 2 も見てください。Garmin にリクエストしてから、ダウンロードできるように
   なるまでに時間がかかることがあるので、先にリクエストしておいてください。
   このアプリを先に入れて、画面の「使い方」を見てからリクエストしてもかまいません。
-- Python 3.11 以降と、このアプリ v2.2.0。どちらも、下の手順で入れます。
+- Python 3.11 以降と、このアプリ v2.2.1。どちらも、下の手順で入れます。
   GUI のために、ほかに入れるものはありません。
 - 同じコンピューターで動くブラウザー。デスクトップかノートのコンピューターの
   窓で使います。スマートフォンやタブレットには向けていません。
@@ -136,7 +136,7 @@ GUI は、Garmin のエクスポート（Account Data Export）を、ブラウ�
    （[GUI を開けないときに知らせる](#gui-を開けないときに知らせる)）。
 4. 下の 1 行を動かします。ホームのフォルダーに仮想環境 `garmin-normalizer` を
    作り（このアプリのための Python の置き場です。ごみ箱へ入れても、保管場所・
-   出力・覚えた設定は残ります）、そこに v2.2.0 を入れ、GUI を起動するアイコンを作って
+   出力・覚えた設定は残ります）、そこに v2.2.1 を入れ、GUI を起動するアイコンを作って
    （macOS ではデスクトップに、Windows ではデスクトップとスタートメニューに
    できます。[アイコンから起動する](#アイコンから起動する)）、GUI を開きます。
    それぞれの部分は、前の部分がうまくいったときだけ動きます。アイコンを
@@ -151,14 +151,14 @@ GUI は、Garmin のエクスポート（Account Data Export）を、ブラウ�
    macOS：
 
    ```bash
-   python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.2.0 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
+   python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.2.1 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
    ```
 
    Windows PowerShell（どのバージョンでも、この 1 行を使えます。バージョン 5.1 には
    `&&` が無いので、`if ($?)` を入れ子にしてつないでいます）：
 
    ```powershell
-   py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.2.0; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
+   py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.2.1; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
    ```
 
    - うまくいくと、最後にターミナルに次の 3 行が出て、ブラウザーで GUI の画面が
@@ -242,7 +242,7 @@ GUI を開けないときや、上の手順で知らせるように書いてあ�
   出した行。
 - Package version：`--version` が出した行
   （[新しいバージョンに更新するとき](#新しいバージョンに更新するとき)）。
-  このアプリが入る前に止まったときは、入れようとしたバージョン（2.2.0）。
+  このアプリが入る前に止まったときは、入れようとしたバージョン（2.2.1）。
 - Sanitized reproduction：動かした 1 行。手引きの 1 行には名前が入っていない
   ので、そのまま貼ってかまいません。
 - Exit code：止まったコマンドが返した数（終了コード）です。macOS では、止まった
@@ -271,7 +271,7 @@ GUI のアドレスも貼らないでください。起動の鍵が入ってい�
 
 ### 新しいバージョンに更新するとき
 
-このアプリのバージョンは、画面の下に「バージョン 2.2.0」のように出ます。
+このアプリのバージョンは、画面の下に「バージョン 2.2.1」のように出ます。
 ターミナルでは、GUI を動かしている窓とは別の、新しい窓で、次のコマンドを
 動かすと分かります。
 
@@ -311,7 +311,10 @@ Windows PowerShell：
 前のバージョンに戻すときも、そのバージョンの手引きの 1 行を、1 と同じく GUI を
 終えてから動かします（2.1.0 の手引きは
 [v2.1.0 の gui_guide.ja.md](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v2.1.0/docs/gui_guide.ja.md)
-にあります）。2.2.0 から前のバージョン（2.1.0 など）に戻したときは、2.2.0 が
+にあります）。2.2.1 から 2.2.0 に戻したときは、2.2.1 が覚えた設定と印が、
+そのまま使われます（2 つのバージョンは、設定と印を同じ形で残します）。
+下の 2.2.0 のことは、2.2.1 にも当てはまります。
+2.2.0 から前のバージョン（2.1.0 など）に戻したときは、2.2.0 が
 覚えた設定は使われず、初めての起動として始まります。戻したバージョンは、
 2.2.0 の設定のファイルを書き換えないので、戻している間に選んだことは覚えません。
 2.2.0 にまた戻すと、2.2.0 が覚えていたものが、そのまま使われます。ただし、
@@ -1388,7 +1391,7 @@ Windows では、パス全体が 260 文字までです。出力の中のファ�
     選んだ年は覚えず、開くたびに新しい 4 年です。見せ方と月は、次に開いたときも
     覚えています（[次に開いたときに覚えるもの](#次に開いたときに覚えるもの)）。
 
-![年でくらべるの初めの形。距離を年ごとに並べ、2026 年から 2023 年までの 4 段に月ごとの棒と 1 年の合計。上に項目・見せ方・月・年の札の帯、フィルターの下に使わないものの 1 行（見本のために作ったデータ）](assets/gui-guide/view-compare-rows.ja.png)
+![年でくらべるの初めの形。距離を年ごとに並べ、2026 年から 2023 年までの 4 段に月ごとの棒と 1 年の合計。上のくらべる帯に項目・見せ方・月・年のボタン、フィルターの下に使わないものの 1 行（見本のために作ったデータ）](assets/gui-guide/view-compare-rows.ja.png)
 
 ![年でくらべるの「重ねる」。距離の 4 年の線を 1 つの段に重ね、線の端に年、十字線の横に 10 月の値の枠（見本のために作ったデータ）](assets/gui-guide/view-compare-overlay.ja.png)
 
@@ -1479,7 +1482,7 @@ Windows では、パス全体が 260 文字までです。出力の中のファ�
   強制カラーの画面（Windows のコントラスト テーマなど）では色の段階が見分けにくい
   ことがあるので、値は年の帯の左と表で読めます。
 
-![年でくらべるのカレンダー。距離の 2026 年から 2023 年までの 4 本の帯に、日ごとの升目を 6 つの段階までの色で塗り、記録の無い日は枠だけ。帯の上に凡例、帯の左に年と 1 年の合計と選んだ日の値（合成のデータ）](assets/gui-guide/view-compare-calendar.ja.png)
+![年でくらべるのカレンダー。距離の 2026 年から 2023 年までの 4 本の年の帯に、日ごとの升目を 6 つの段階までの色で塗り、記録の無い日は枠だけ。年の帯の上に凡例、年の帯の左に年と 1 年の合計と選んだ日の値（合成のデータ）](assets/gui-guide/view-compare-calendar.ja.png)
 
 #### 大会の日でくらべる
 
@@ -1552,7 +1555,7 @@ Windows では、パス全体が 260 文字までです。出力の中のファ�
 - 項目を替えると、新しい点が届くまで、前の点は出しません。期間や数える種目・
   条件を変えたときは、届くまで今の点を薄く残します。
 
-![点で並べる。平均ペース（横）と平均心拍（縦）の 1 回ごとの点、右端の選んだ点と、右上のその日時・種目・2 つの値、点の下の関係を示さないことの 1 文（合成のデータ）](assets/gui-guide/view-plot.ja.png)
+![点で並べる。平均ペース（横）と平均心拍（縦）の 1 回ごとの点、右端の選んだ点と、右上のその日時・種目・2 つの値、点の下の、関係があるかも、どちらが原因かも示さないことの 1 文（合成のデータ）](assets/gui-guide/view-plot.ja.png)
 
 #### 分かれ方
 
@@ -1600,7 +1603,7 @@ Windows では、パス全体が 260 文字までです。出力の中のファ�
   区間の端（左の値か右の値）が、記録の誤りのように書き表せないほど大きい
   ときは、その端を「—」で書きます。
 
-![分かれ方。距離の 1 km ごとの区切りの棒と、選んだ区切り（10 km 以上 11 km 未満）の枠と、右上のその回数（合成のデータ）](assets/gui-guide/view-spread.ja.png)
+![分かれ方。距離の 1 km ごとの区間の棒と、選んだ区間（10 km 以上 11 km 未満）の枠と、右上のその回数（合成のデータ）](assets/gui-guide/view-spread.ja.png)
 
 #### 靴ごと
 
