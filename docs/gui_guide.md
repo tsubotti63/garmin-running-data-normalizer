@@ -2283,6 +2283,9 @@ marks), and it can be pressed while only such a file is there: one whose
 launch has ended, or one older than ten minutes (on Windows, only one older
 than ten minutes). One that another open launch of this app is writing at
 that moment stays.
+On Windows, for ten minutes after this app stopped in the middle of a write,
+the half-written file stays, and you may not be able to press the button. Once
+ten minutes have passed, load the page again, and press it.
 The store and the outputs stay, and the next launch goes as a first launch; a
 store that is not in the default place must then be opened again. When the
 file cannot be read, the bar says so, and the launch goes as a first one.

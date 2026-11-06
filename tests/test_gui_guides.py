@@ -1134,15 +1134,19 @@ class GuiGuideTest(unittest.TestCase):
         # v2.2.1 W4: forgetting the settings also removes the half-written
         # files that a write leaves where this app stops in the middle of it,
         # and the privacy section says that they hold a copy; the design
-        # document gives the rules.
+        # document gives the rules. From W7 (Codex's whole review before
+        # W6f, and the checker's review of the plan): what to do on Windows
+        # for ten minutes after this app stopped in the middle of a write.
         said = {
             "ja": (
                 "（2.2.1 から）書く途中でこのアプリが落ちたときに残る書きかけのファイル（設定や印の写しが入ります）も消し、それだけが残っているときも押せます。消すのは、書いたこのアプリがもう終わっているものか、10 分より古いものです（Windows では、10 分より古いものだけ）。ほかに開いているこのアプリが書いている途中のものは残します。",
                 "（2.2.1 から）書く途中でこのアプリが落ちたときに残る書きかけのファイルにも、設定や印の写しが入ります。「覚えた設定を消す…」で一緒に消えます（Windows では、落ちてから 10 分たったあとに）。",
+                "Windows では、落ちてから 10 分たたないうちは、書きかけのファイルは消えず、ボタンも押せないことがあります。10 分たってからページを読み込み直し、押してください。",
             ),
             "en": (
                 "From 2.2.1, it also removes the half-written files that a write leaves when this app stops in the middle of it (they hold a copy of the settings or the marks), and it can be pressed while only such a file is there: one whose launch has ended, or one older than ten minutes (on Windows, only one older than ten minutes). One that another open launch of this app is writing at that moment stays.",
                 "A half-written file that a write leaves when this app stops in the middle of it holds a copy of them too; from 2.2.1, **Forget the remembered settings…** removes it with them (on Windows, once it is ten minutes old).",
+                "On Windows, for ten minutes after this app stopped in the middle of a write, the half-written file stays, and you may not be able to press the button. Once ten minutes have passed, load the page again, and press it.",
             ),
         }
         for language, path in GUIDES.items():
