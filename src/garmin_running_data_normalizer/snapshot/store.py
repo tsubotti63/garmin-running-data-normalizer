@@ -518,6 +518,17 @@ def load_store(store_root: str | Path) -> tuple[Path, dict[str, Any]]:
             raise invalid_store_error("store.json is missing")
         raise SnapshotStoreError(STORE_NOT_FOUND_MESSAGE, "SNAPSHOT_STORE_NOT_FOUND")
     metadata = _load_json(metadata_path, root)
+    check_store_metadata(metadata)
+    return root, metadata
+
+
+def check_store_metadata(metadata: dict[str, Any]) -> None:
+    """The checks of a store's store.json that read no file: its version,
+    its policies, its account store id, and the time it was made, in this
+    order, raising the SnapshotStoreError of each, as ``load_store`` checks
+    them. The view page, which reads store.json itself, checks a store by
+    them too (stage X9c-1 of v2.3.0), so that it reads the stores that this
+    version reads."""
     _check_store_version(metadata)
     if metadata.get("single_writer") is not True:
         raise invalid_store_error("snapshot store single-writer policy is not enabled")
@@ -530,7 +541,6 @@ def load_store(store_root: str | Path) -> tuple[Path, dict[str, Any]]:
         _require_aware_iso(str(metadata.get("created_at_utc", "")), "created_at_utc")
     except SnapshotStoreError as exc:
         raise invalid_store_error(str(exc)) from exc
-    return root, metadata
 
 
 # The files that ``snapshot init`` writes at the top of a new store.
@@ -1986,6 +1996,7 @@ __all__ = [
     "check_input_apart",
     "check_label_free",
     "check_new_store_place",
+    "check_store_metadata",
     "check_store_paths",
     "content_multiset",
     "initialize_store",

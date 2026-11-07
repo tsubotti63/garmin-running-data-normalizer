@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import dataclasses
 import struct
+import subprocess
+import sys
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -450,13 +452,31 @@ class LapKindsTest(unittest.TestCase):
         self.assertEqual(names(lap_kinds.LapKinds), ["status", "sessions", "lap_count"])
 
     def test_the_normalizer_does_not_use_it(self) -> None:
-        # Only the module itself names it in the source: the normalizer's reading and its outputs are as before.
+        # Only the module itself and the view page's reading of the laps of one activity (stage X9c-1) name it in
+        # the source: the normalizer's reading and its outputs are as before.
         users = sorted(
-            str(path.relative_to(ROOT))
+            path.relative_to(ROOT).as_posix()
             for path in (ROOT / "src").rglob("*.py")
             if "lap_kinds" in path.read_text(encoding="utf-8")
         )
-        self.assertEqual(users, ["src/garmin_running_data_normalizer/fit/lap_kinds.py"])
+        self.assertEqual(
+            users,
+            ["src/garmin_running_data_normalizer/fit/lap_kinds.py", "src/garmin_running_data_normalizer/gui/fit_reading.py"],
+        )
+        # The commands of the normalizer, imported by a new Python, do not load either.
+        code = (
+            "import sys; sys.path.insert(0, sys.argv[1]); "
+            "import garmin_running_data_normalizer.runner, garmin_running_data_normalizer.run_all; "
+            "print(sorted(name for name in sys.modules if name.endswith(('.lap_kinds', '.fit_reading'))))"
+        )
+        found = subprocess.run(
+            [sys.executable, "-I", "-B", "-c", code, str(ROOT / "src")],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=120,
+        )
+        self.assertEqual(found.stdout.strip(), "[]")
 
 
 if __name__ == "__main__":
