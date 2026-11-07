@@ -41,6 +41,7 @@ def synthetic_fit(
     lap_running_dynamics: tuple[int, int, int, int, int, int] | None = None,
     extra_body: bytes = b"",
     first_start: int = 1_000_000,
+    lap_intensities: tuple[int, ...] | None = None,
 ) -> bytes:
     """Create a visibly synthetic FIT activity without using user data.
 
@@ -49,7 +50,11 @@ def synthetic_fit(
     holds further definitions and records, such as those of other messages,
     written after the sessions and laps (local message numbers 2 and up).
     ``first_start`` is the FIT time of the start of the first session; the
-    others start 10,000 seconds apart (stage G1).
+    others start 10,000 seconds apart (stage G1). ``lap_intensities``, when
+    given, writes that many laps in each session, with the intensity of each
+    (field 23, an enum of one byte), starting 3,600 seconds apart (stage
+    X9c-1 of v2.3.0); the declared number of laps of a session stays
+    ``declared_laps_per_session``.
     """
     session_fields = [
         (2, 4, 0x86), (5, 1, 0x00), (6, 1, 0x00),
@@ -70,6 +75,8 @@ def synthetic_fit(
         session_fields += [(number, 2, 0x84) for number in SESSION_RUNNING_DYNAMICS_FIELDS]
     if lap_running_dynamics is not None:
         lap_fields += [(number, 2, 0x84) for number in LAP_RUNNING_DYNAMICS_FIELDS]
+    if lap_intensities is not None:
+        lap_fields += [(23, 1, 0x00)]
     session_extra = (
         b"" if session_running_dynamics is None
         else struct.pack("<HHHHHH", *session_running_dynamics)
@@ -121,40 +128,42 @@ def synthetic_fit(
                 ),
             )
         )
-        body.extend(
-            _record(
-                1,
-                b"".join(
-                    [
-                        struct.pack(
-                            "<IIIIII",
-                            start,
-                            3_600_000,
-                            3_500_000,
-                            1_000_000 + ordinal * 100,
-                            u32_metric,
-                            5_000 if not invalid_metrics else 0xFFFFFFFF,
-                        ),
-                        bytes(
-                            [
-                                u8_metric,
-                                180 if not invalid_metrics else 0xFF,
-                                82 if not invalid_metrics else 0xFF,
-                                95 if not invalid_metrics else 0xFF,
-                            ]
-                        ),
-                        struct.pack(
-                            "<HHHH",
-                            u16_metric,
-                            400 if not invalid_metrics else 0xFFFF,
-                            100 if not invalid_metrics else 0xFFFF,
-                            80 if not invalid_metrics else 0xFFFF,
-                        ),
-                        lap_extra,
-                    ]
-                ),
+        for lap_number, intensity in enumerate((None,) if lap_intensities is None else lap_intensities):
+            body.extend(
+                _record(
+                    1,
+                    b"".join(
+                        [
+                            struct.pack(
+                                "<IIIIII",
+                                start + lap_number * 3_600,
+                                3_600_000,
+                                3_500_000,
+                                1_000_000 + ordinal * 100,
+                                u32_metric,
+                                5_000 if not invalid_metrics else 0xFFFFFFFF,
+                            ),
+                            bytes(
+                                [
+                                    u8_metric,
+                                    180 if not invalid_metrics else 0xFF,
+                                    82 if not invalid_metrics else 0xFF,
+                                    95 if not invalid_metrics else 0xFF,
+                                ]
+                            ),
+                            struct.pack(
+                                "<HHHH",
+                                u16_metric,
+                                400 if not invalid_metrics else 0xFFFF,
+                                100 if not invalid_metrics else 0xFFFF,
+                                80 if not invalid_metrics else 0xFFFF,
+                            ),
+                            lap_extra,
+                            b"" if intensity is None else bytes([intensity]),
+                        ]
+                    ),
+                )
             )
-        )
     body.extend(extra_body)
     base_header = (
         bytes([header_size, 0x20])
