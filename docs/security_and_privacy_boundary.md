@@ -38,6 +38,14 @@ personal data.
   the command ends, including when it fails or is cancelled. A process that is
   forced to stop, or a power loss, can leave them behind; they contain
   personal data.
+- The view page of the GUI reads outputs. Starting with v2.3.0, only when the
+  laps of one activity are asked for, it also reads the `store.json` and the
+  one FIT file of that activity in the Snapshot Store that the GUI remembers
+  (where a folder has no `store.json`, only whether it holds the other names
+  that a store writes), without following a link, a junction, or another
+  reparse point. It reads no other file of the store, writes nothing, sends
+  nothing, and its answer holds no path, hash, or activity identifier (see
+  [Laps of an activity (v2.3.0)](gui_design.md#laps-of-an-activity-v230)).
 
 ## Scanning
 

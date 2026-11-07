@@ -162,6 +162,8 @@ MARKS_NOT_REMOVED = "MARKS_NOT_REMOVED"
 TEMPORARY_LEFT = "TEMPORARY_LEFT"
 # What reading a file of this app found.
 _NO_FILE, _READ, _UNREADABLE = "none", "read", "unreadable"
+# The most digits of the number of a version that is read as it is.
+_MAX_VERSION_DIGITS = 9
 
 
 def _place(value: Any) -> str | None:
@@ -184,7 +186,11 @@ def _version(value: Any, prefix: str = _FORMAT_PREFIX) -> int | None:
     if isinstance(value, str) and value.startswith(prefix):
         number = value[len(prefix):]
         if number.isascii() and number.isdigit():
-            return int(number)
+            digits = number.lstrip("0") or "0"
+            # More digits than any version of this app has is a later
+            # version, which int() might not take (Codex's read of the diff
+            # of X9c-2: a file within 64 KiB raised ValueError there).
+            return int(digits) if len(digits) <= _MAX_VERSION_DIGITS else 10**_MAX_VERSION_DIGITS
     return None
 
 
@@ -346,13 +352,17 @@ def _read_json(path: Path) -> tuple[str, Any]:
         return _UNREADABLE, None
     if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_SETTINGS_BYTES:
         return _UNREADABLE, None
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    # Opened without waiting, and looked at as opened (Codex's read of the
+    # diff of X9c-2): a pipe put in place of the file is refused, never
+    # waited for, also by the reading of the laps of the view page, which
+    # holds its lock meanwhile.
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
     try:
         descriptor = os.open(path, flags)
     except OSError:
         return _UNREADABLE, None
     try:
-        content = _read_all(descriptor)
+        content = _read_all(descriptor) if stat.S_ISREG(os.fstat(descriptor).st_mode) else None
     except OSError:
         content = None
     finally:
@@ -902,6 +912,15 @@ def launch_theme() -> str | None:
     return read_settings(path)[0].get("theme")
 
 
+def remembered_store() -> Path | None:
+    """The store that the GUI remembers (stage X9c-2 of v2.3.0): the place
+    of the store of the last Snapshot run, as the settings give it; None
+    where they give none, or cannot be read."""
+    values, _notice = read_settings(_target()[0])
+    store = values.get("store")
+    return Path(store) if isinstance(store, str) else None
+
+
 def recent_outputs() -> list[str]:
     """The outputs that the settings remember, newest first (stage B5b); none
     when there are no settings or they are not used."""
@@ -988,6 +1007,7 @@ __all__ = [
     "remember_theme_at",
     "remember_view",
     "remember_view_at",
+    "remembered_store",
     "remove_settings",
     "settings_present",
     "timezone_kept",

@@ -18,7 +18,11 @@
   the same local GUI that reads an output made by this version on the same
   machine and shows its numbers as charts and tables, without interpreting
   them, and the `series` command of the CLI, which writes the same numbers to
-  a CSV file that the person chooses.
+  a CSV file that the person chooses. Starting with v2.3.0, the view page also
+  reads, only when the laps of one activity are asked for, the FIT file of
+  that activity in the Snapshot Store that the GUI remembers, to show the
+  kind of each lap (a Human decision; see
+  [Laps of an activity (v2.3.0)](../gui_design.md#laps-of-an-activity-v230)).
 - Project documentation, runtime assets, tests, sanitization QA, and Git-ignored
   review evidence.
 

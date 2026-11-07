@@ -100,6 +100,22 @@ def as_json(value: Any) -> Any:
     return json.loads(json.dumps(value))
 
 
+def list_apart_from_places(answer: Any) -> Any:
+    """An answer of the list of a period without the number of the reading
+    that it is of and the place of each row among the activities of that
+    reading (stage X9c-2 of v2.3.0), which it has: a whole number of 1 or
+    more, and whole numbers of 0 or more; ListPlacesTest holds their values."""
+    if not isinstance(answer, dict) or type(answer.get("read")) is not int or answer["read"] < 1:
+        raise AssertionError(f"a list without the number of its reading: {str(answer)[:120]}")
+    rows = answer.get("rows")
+    if rows is not None and not all(type(row.get("ref")) is int and row["ref"] >= 0 for row in rows):
+        raise AssertionError(f"a list without the places of its rows: {str(answer)[:120]}")
+    shown = {name: value for name, value in answer.items() if name != "read"}
+    if rows is not None:
+        shown["rows"] = [{name: value for name, value in row.items() if name != "ref"} for row in rows]
+    return shown
+
+
 def apart_from_reading(answer: Any) -> Any:
     """An answer of the panels or of another view without the number of the
     reading that it is of (stage U1 of v2.2.0), which it has, a whole number
@@ -672,7 +688,7 @@ class ViewApiTest(GuiServerTestCase):
                 status, answer = self.call("/api/view/activities", {"view": ticket, "item": key, "period": period, "types": types})
                 self.assertEqual(status, 200, answer)
                 chosen = (date.fromisoformat(period["from"]), date.fromisoformat(period["to"]))
-                self.assertEqual(answer, as_json({**view_series.activity_list(load_view(output), key, chosen, types), "names": "read"}))
+                self.assertEqual(list_apart_from_places(answer), as_json({**view_series.activity_list(load_view(output), key, chosen, types), "names": "read"}))
                 self.assertGreater(answer["total"], 0)
                 self.assertEqual(answer["rows"] is not None, total)
         # The item of the panel, when it is none of the columns of the list,
@@ -961,9 +977,11 @@ class ViewApiTest(GuiServerTestCase):
             with self.subTest(path=path, payload=payload):
                 status, answer = self.call(path, {"view": ticket, **payload, "conditions": asked})
                 self.assertEqual(status, 200, answer)
-                # The list of a period gives no number of a reading, which the
-                # page does not use (stage U1 of v2.2.0).
-                shown = answer if path == "/api/view/activities" else apart_from_reading(answer)
+                # The list of a period gives the number of its reading and the
+                # places of its rows from stage X9c-2 of v2.3.0 (until then no
+                # number of a reading, which the page did not use: U1), not the
+                # facts of the output.
+                shown = list_apart_from_places(answer) if path == "/api/view/activities" else apart_from_reading(answer)
                 self.assertEqual(shown, as_json({**expected, "names": "read"}))
                 if path == "/api/view/activities":
                     self.assertTrue(answer["rows"] and all(row["name"] for row in answer["rows"]))

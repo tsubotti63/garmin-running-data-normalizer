@@ -1,12 +1,15 @@
 """The laps of one activity of an output, with the kinds of the laps that its
-FIT file records, read from the Snapshot Store (stage X9c-1 of v2.3.0,
-internal: nothing calls it yet; the view page asks it from stage X9c-2).
+FIT file records, read from the Snapshot Store (stage X9c-1 of v2.3.0; the
+server of the view page asks it from stage X9c-2, /api/view/laps).
 
 The view page reads the output that it opened; from v2.3.0, when the user
 asks for the laps of one activity, it also reads the one FIT file of that
 activity in the Snapshot Store that the GUI remembers (the user's decision
 of stage X8). It writes nothing, sends nothing, and reads no file of the
-store but store.json and that one blob. An output made without a store, or
+store but store.json and that one blob; where a folder has no store.json,
+the other names that a store writes are looked at, each alone at the top of
+it, to tell a damaged store from no store (stage X9c-2): no file is opened
+for them, and no other name is read. An output made without a store, or
 with another store, is told as such.
 
 The files of the output are compared with the sizes and the SHA-256 that
@@ -42,8 +45,12 @@ the file is opened and after it is read, and a link, a junction, or another
 reparse point is refused. Each look compares a
 file or a folder by its identity, which the system must give (st_ino; a
 file or a folder of a drive that gives none is refused). A FIT file is used
-only with the content of the output's in any case. The folders above the
-store are not looked at, as ``snapshot.store.load_store`` does not. The
+only with the content of the output's in any case. A store in the folder
+snapshots of the remembered folder is opened in the remembered folder,
+which stays open until the reading ends, so that a folder put at the
+remembered place meanwhile is not followed (Codex's second read of the diff
+of X9c-2). The folders above the remembered folder are not looked at, as
+``snapshot.store.load_store`` does not. The
 files of the output are opened without waiting (O_NONBLOCK), so that a pipe
 put in place of one is refused, not waited for, and as themselves (O_NOFOLLOW;
 on Windows FILE_FLAG_OPEN_REPARSE_POINT), so that a link put in place of one
@@ -72,6 +79,7 @@ from ..fit.lap_kinds import intensity_name, read_lap_kinds
 from ..fit.parser import FIT_EPOCH_OFFSET
 from ..output_check import OutputActionError
 from ..snapshot.store import (
+    _STORE_ENTRY_NAMES,
     MAX_STORE_METADATA_BYTES,
     SHA256_RE,
     SnapshotStoreError,
@@ -128,6 +136,9 @@ COMPARED = (
 
 _REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
 _OPENS_AT = os.open in os.supports_dir_fd and hasattr(os, "O_NOFOLLOW") and hasattr(os, "O_DIRECTORY")
+# Whether a name in an open folder is looked at by the descriptor of the
+# folder, as itself (stage X9c-2), so that it is a name of the folder opened.
+_LOOKS_AT = os.stat in os.supports_dir_fd and os.stat in os.supports_follow_symlinks
 _CLOEXEC = getattr(os, "O_CLOEXEC", 0)
 _FOLDER_FLAGS = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0) | _CLOEXEC
 _OUTPUT_FLAGS = (
@@ -381,10 +392,16 @@ def _output_laps(
 class _Root:
     """The folder of a store, opened once, in which its files are read: by
     its descriptor where the system opens files in an open folder, else by
-    its path, looked at first."""
+    its path, looked at first. A folder in another one (``parent``, the
+    folder snapshots of the remembered folder) is opened in that one, which
+    stays open (Codex's second read of the diff of X9c-2): by its descriptor,
+    else at its place, where on Windows the system must have it in the
+    folder held before it, by its name, letter for letter, and elsewhere the
+    folder before it is looked at again, as it was."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, parent: _Root | None = None) -> None:
         self.path = path
+        self.parent = parent
         self.descriptor: int | None = None
         self.looked: os.stat_result | None = None
         # Windows: the folder held (no one renames or removes it until the
@@ -394,14 +411,26 @@ class _Root:
         self.final: str | None = None
 
     def __enter__(self) -> _Root:
+        parent = self.parent
         try:
             if _OPENS_AT:
-                self.descriptor = os.open(self.path, _FOLDER_FLAGS)
+                if parent is not None and parent.descriptor is not None:
+                    self.descriptor = os.open(self.path.name, _FOLDER_FLAGS, dir_fd=parent.descriptor)
+                else:
+                    self.descriptor = os.open(self.path, _FOLDER_FLAGS)
             else:
                 if _WINDOWS:
                     self.hold = _hold(self.path)
                     self.final = _final_path(self.hold)
+                    if parent is not None and (
+                        parent.final is None
+                        or not _same_place(self.final, "\\".join([parent.final.rstrip("\\"), self.path.name]))
+                    ):
+                        raise _Unavailable("store_unreadable")
                 self.looked = _looked(self.path, folder=True)
+                if parent is not None and not _WINDOWS:
+                    if parent.looked is None or not _same_folder(parent.looked, _looked(parent.path, folder=True)):
+                        raise _Unavailable("store_unreadable")
         except FileNotFoundError as exc:
             self.close()
             raise _Missing() from exc
@@ -424,6 +453,29 @@ class _Root:
             hold, self.hold = self.hold, None
             _close_handle(hold)
 
+    def holds_store_entries(self) -> bool:
+        """Whether the folder holds, at its top, one of the names that a
+        store writes besides store.json (snapshot.store's _STORE_ENTRY_NAMES;
+        the folder snapshots does not count). Each is looked at by its name
+        alone, as itself: no file is opened, and no other name of the folder
+        is read (Codex's read of the diff of X9c-2). In the open folder, by
+        its descriptor, where the system looks so; else at its path, the
+        folder held (Windows), where a folder made a junction in its place
+        could only lead the looks to refuse (only an empty folder can be
+        made one)."""
+        for name in sorted(_STORE_ENTRY_NAMES):
+            try:
+                if self.descriptor is not None and _LOOKS_AT:
+                    os.stat(name, dir_fd=self.descriptor, follow_symlinks=False)
+                else:
+                    os.lstat(self.path / name)
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                raise _Unavailable("store_unreadable") from exc
+            return True
+        return False
+
     def read(self, parts: tuple[str, ...], limit: int) -> bytes:
         """The bytes of the file at ``parts`` in the folder, read once. A
         step that is not there raises _Missing, a file over ``limit``
@@ -444,15 +496,26 @@ class _Root:
 
 def _open_store(folder: Path, stack: ExitStack) -> tuple[_Root, dict[str, Any]]:
     """The store at the remembered folder or in its folder snapshots, as the
-    page opens one, open until ``stack`` closes; the next place is looked at
-    only where the folder or its store.json is not there."""
+    page opens one, open until ``stack`` closes. The folder snapshots is
+    looked at only where the folder holds neither store.json nor anything
+    else that a store writes (a folder that holds what a store writes
+    without its store.json is a damaged store, as load_store and the page
+    take it: stage X9c-2 of v2.3.0), and is opened in the folder opened,
+    which stays open until the reading ends; a remembered folder that is not
+    there has no folder in it (Codex's second read of the diff of X9c-2)."""
+    parent: _Root | None = None
     for candidate in _candidates(folder):
-        root = _Root(candidate)
+        root = _Root(candidate, parent)
         try:
             stack.enter_context(root)
+        except _Missing:
+            break
+        try:
             data = root.read(("store.json",), MAX_STORE_METADATA_BYTES)
         except _Missing:
-            root.close()
+            if root.holds_store_entries():
+                raise _Unavailable("store_unreadable") from None
+            parent = root
             continue
         except _TooLarge as exc:
             raise _Unavailable("store_unreadable") from exc

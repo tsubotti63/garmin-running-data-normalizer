@@ -3379,7 +3379,8 @@ class GuiGuideTest(unittest.TestCase):
         # The design document.
         for phrase in (
             "it is drawn as a light point, as is a period whose recorded values add up to 0. The 0 of a period without a record does not always mean that there was no run.",
-            "(`read`; not in those of `/api/view/activities`, which the page does not compare)",
+            # From v2.3.0 the list gives it too (stage X9c-2), for the laps.
+            "(`read`; from v2.3.0 also in those of `/api/view/activities` and `/api/view/laps`, which the page does not compare with that of the panels: the list gives it so that the laps of its rows are asked of the same reading)",
             "(`ONE_KEYS` and `countKey` of `i18n.mjs`, the same Japanese)",
             "that the words of the name were not used where the answer of the panels, of these conditions, says so (`conditionsUnread`).",
             "a press that can no longer save keeps no reason that the window says by itself (`saveSays`, `savePress`)",

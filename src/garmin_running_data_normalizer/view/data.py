@@ -47,7 +47,7 @@ import re
 import stat
 import unicodedata
 from collections import Counter
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -159,7 +159,10 @@ class ViewData:
     ``partial`` marks an output normalized with part of the input left out
     (exit code 3), which the view page says (stage G3b). ``gear`` is None
     where the shoes were not read (stage S1 of v2.2.0), and ``names`` where
-    the names were not asked for (stage T1)."""
+    the names were not asked for (stage T1). ``files`` are the sizes and the
+    SHA-256 of the files of the output as the manifest of this reading gives
+    them (stage X9c-2 of v2.3.0), by which the laps of an activity are read
+    from the files of the same reading."""
 
     version: str
     timezone: str
@@ -172,6 +175,7 @@ class ViewData:
     partial: bool = False
     gear: Gear | None = None
     names: Names | None = None
+    files: dict[str, tuple[int, str]] = field(default_factory=dict)
 
 
 def load_view_data(
@@ -241,6 +245,7 @@ def load_view_data(
         partial=handoff.get("run_status") == "PARTIAL_SUCCESS",
         gear=shoes,
         names=named,
+        files=entries,
     )
 
 

@@ -44,6 +44,7 @@ from typing import Any
 
 from ..common.names import unsafe_character
 from ..output_check import OutputActionError
+from .fit_reading import LAP_FILES
 from ..view.data import GEAR_FILES, MANIFEST, NAMES, ViewData, load_view_data, local_today
 from ..view.items import ACTIVITIES, DATASETS, ITEMS, ITEMS_BY_KEY, Item
 from ..view.series import (
@@ -90,14 +91,16 @@ def output_stamp(output: Path) -> Stamp:
     of the files that the view page reads; a file that cannot be looked at,
     or a link in its place, gives another stamp."""
     stamps = []
-    # The files of the shoes too (stage S1 of v2.2.0), and of the names of the
-    # activities (stage T1): a change of them alone reads the output again.
+    # The files of the shoes too (stage S1 of v2.2.0), of the names of the
+    # activities (stage T1), and of the laps of an activity (stage X9c-2 of
+    # v2.3.0): a change of them alone reads the output again.
     for path in (
         output,
         output / MANIFEST,
         *(output / dataset.path for dataset in DATASETS),
         *(output / path for path in GEAR_FILES),
         output / NAMES,
+        *(output / path for path in LAP_FILES),
     ):
         try:
             status = os.lstat(path)
@@ -204,6 +207,13 @@ class Views:
         the number of its reading (stage U1 of v2.2.0), given in the same lock
         as the data, so that an answer made of it says the reading that it is
         of; a reading again, also for another date of today, has a new one."""
+        data, read, _output = self.lap_reading(ticket)
+        return data, read
+
+    def lap_reading(self, ticket: str) -> tuple[ViewData, int, Path]:
+        """As ``reading``, with the folder of the output, from the same lock
+        (stage X9c-2 of v2.3.0), so that the laps of an activity are read from
+        the output of that reading."""
         with self._lock:
             view = self._views.get(ticket)
             if view is None:
@@ -211,7 +221,7 @@ class Views:
             self._views.move_to_end(ticket)
         with view.lock:
             if output_stamp(view.output) == view.stamp and self._today(view.data.timezone).toordinal() == view.data.today:
-                return view.data, view.read
+                return view.data, view.read, view.output
             try:
                 view.data, view.stamp = self._read(view.output)
             except Exception:
@@ -221,7 +231,7 @@ class Views:
                 raise
             view.read = self._number()
             view.shelves = OrderedDict()
-            return view.data, view.read
+            return view.data, view.read, view.output
 
     def coverage(
         self,

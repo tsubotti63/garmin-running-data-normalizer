@@ -324,6 +324,9 @@ jobs:
       - name: Verify Windows laps and their kinds from the Snapshot Store
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_fit_reading.py -q -rs
+      - name: Verify Windows laps of an activity through the server of the view page
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_view_laps.py -q -rs
   windows-python-3-15:
     runs-on: windows-latest
     steps:
@@ -397,3 +400,6 @@ jobs:
       - name: Verify Windows laps and their kinds from the Snapshot Store with Python 3.15
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_fit_reading.py -q -rs
+      - name: Verify Windows laps of an activity through the server of the view page with Python 3.15
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_view_laps.py -q -rs
