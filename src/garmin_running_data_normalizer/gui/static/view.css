@@ -672,6 +672,41 @@ button.small {
   margin: 0;
 }
 
+/* The window of the laps of an activity of the list (stage X10 of v2.3.0),
+   at the place of the summary and in its form; the kinds are words, to the
+   left, and the table of the laps scrolls as the list does. */
+.laps-body h4 {
+  margin: 6px 0 4px;
+  font-size: 0.9rem;
+}
+
+.laps-body th.laps-kind,
+.laps-body td.laps-kind {
+  text-align: left;
+}
+
+.laps-body .list-table {
+  margin: 4px 0 0;
+}
+
+.laps-body .laps-reason {
+  margin: 4px 0;
+  white-space: normal;
+}
+
+.laps-body .laps-notes p {
+  margin: 2px 0;
+  color: var(--sub);
+  font-size: 0.85rem;
+}
+
+/* A button of the list whose laps cannot be shown: it says why, under the
+   list, and is gray. */
+.list-table button.list-laps-button[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .marks-legend {
   display: flex;
   flex-wrap: wrap;

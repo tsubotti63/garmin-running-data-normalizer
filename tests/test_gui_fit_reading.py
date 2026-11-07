@@ -37,6 +37,7 @@ from garmin_running_data_normalizer.gui.fit_reading import (
     LapRow,
     Laps,
     activity_key,
+    known_unavailable,
     read_laps,
 )
 from garmin_running_data_normalizer.output_check import OutputActionError
@@ -277,6 +278,7 @@ class ReadLapsTest(Fixture):
                     timer_s=row["total_timer_time"],
                     distance_m=row["total_distance"],
                     avg_heart_rate=row["avg_heart_rate"],
+                    max_heart_rate=row["max_heart_rate"],
                     avg_cadence=row["avg_cadence"],
                     avg_speed=row["avg_speed"],
                 )
@@ -285,6 +287,10 @@ class ReadLapsTest(Fixture):
         )
         # The values are those of the output, which the FIT file's agree with.
         self.assertEqual((answer.laps[0].elapsed_s, answer.laps[0].timer_s, answer.laps[0].distance_m), (3600.0, 3500.0, 10000.0))
+        # The maximum heart rate too (stage X10 of v2.3.0), which the synthetic
+        # FIT file records for every lap.
+        self.assertTrue(all(lap.max_heart_rate is not None for lap in answer.laps))
+        self.assertEqual([lap.max_heart_rate for lap in answer.laps], [row["max_heart_rate"] for row in rows])
 
     def test_laps_without_a_known_kind(self) -> None:
         output, store, files, key, _digest = self.copy("no_kinds")
@@ -536,6 +542,8 @@ class ReadLapsTest(Fixture):
             ("a start that is not a time", {"start_time": "start"}),
             ("a start of a number", {"start_time": 1}),
             ("a heart rate too large for a float", {"avg_heart_rate": 10**400}),
+            ("a maximum heart rate of text", {"max_heart_rate": "150"}),
+            ("a maximum heart rate that is not a number", {"max_heart_rate": float("nan")}),
             ("a timer time too large for a float", {"total_timer_time": 10**400}),
         ):
             with self.subTest(name):
@@ -612,6 +620,30 @@ class ReadLapsTest(Fixture):
         self.assertEqual([activity_key(rows, ref) for ref in range(4)], ["a", None, None, None])
         self.assertIsNone(activity_key((Row(1, {}, frozenset(), {}),), 0))
 
+    def test_why_laps_cannot_be_shown_before_a_file_is_read(self) -> None:
+        # Stage X10 of v2.3.0: what the output alone tells, in the order of the
+        # server and read_laps: a key that the activity has not or shares
+        # (as activity_key finds), then an output without its lineage.
+        rows = tuple(Row(1, {}, frozenset(), {"key": key}) for key in ("a", "b", "b", "", "c"))
+        rows += (Row(1, {}, frozenset(), {}),)
+        refs = range(len(rows))
+        shared = ["key_shared" if activity_key(rows, ref) is None else None for ref in refs]
+        self.assertEqual(shared, [None, "key_shared", "key_shared", "key_shared", None, "key_shared"])
+        self.assertEqual(known_unavailable({LINEAGE: (1, "0" * 64)}, rows, refs), dict(enumerate(shared)))
+        self.assertEqual(
+            known_unavailable({}, rows, refs),
+            {ref: reason or "not_from_store" for ref, reason in enumerate(shared)},
+        )
+        # Only the places asked for, each once.
+        self.assertEqual(known_unavailable({}, rows, [4, 1]), {4: "not_from_store", 1: "key_shared"})
+        self.assertEqual(known_unavailable({}, rows, []), {})
+        # The same as read_laps, which an output made without a store tells.
+        output, store, files, key, _digest = self.copy("no_store")
+        self.assertNotIn(LINEAGE, files)
+        made = (Row(1, {}, frozenset(), {"key": key}),)
+        self.assertEqual(known_unavailable(files, made, [0]), {0: read_laps(output, files, key, store).reason})
+        self.assertEqual(read_laps(output, files, key, store).reason, "not_from_store")
+
     def test_the_answer_holds_no_place_digest_or_key(self) -> None:
         self.assertEqual(
             REASONS,
@@ -631,7 +663,9 @@ class ReadLapsTest(Fixture):
         )
         names = lambda kind: [field for field in kind.__dataclass_fields__]  # noqa: E731
         self.assertEqual(names(Laps), ["status", "reason", "laps", "unknown_kind"])
-        self.assertEqual(names(LapRow), ["kind", "elapsed_s", "timer_s", "distance_m", "avg_heart_rate", "avg_cadence", "avg_speed"])
+        self.assertEqual(
+            names(LapRow), ["kind", "elapsed_s", "timer_s", "distance_m", "avg_heart_rate", "max_heart_rate", "avg_cadence", "avg_speed"]
+        )
         for name, change in WAYS.items():
             with self.subTest(name):
                 output, store, files, key, digest = self.copy()

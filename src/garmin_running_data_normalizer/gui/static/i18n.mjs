@@ -77,6 +77,9 @@ export const ONE_KEYS = Object.freeze({
   "progress.building_snapshots": "progress.building_snapshots_one",
   // By the number of the families with warnings, not of the warnings.
   "output_check.warnings": "output_check.warnings_one",
+  // The laps of an activity (stage X10 of v2.3.0).
+  "view.laps.unknown_note": "view.laps.unknown_note_one",
+  "view.laps.no_distance": "view.laps.no_distance_one",
 });
 
 // The key of a message for a count: its words for one where the count is the

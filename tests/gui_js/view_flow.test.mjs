@@ -58,7 +58,8 @@ test("values are written in the units of the page, in each language", () => {
     ["pace", 0.3125, "5:13 /km", "5:13 /km"],
     ["hr", 151.6, "152 bpm", "152 bpm"],
     ["rhr", 48.25, "48.3 bpm", "48.3 bpm"],
-    ["cad", 172.04, "172.0", "172.0"],
+    // Steps a minute, twice the recorded value of one foot (stage X10).
+    ["cad", 86.02, "172 歩/分", "172 spm"],
     ["asc", 120.4, "120 m", "120 m"],
     ["vo", 91.4, "9.1 cm", "9.1 cm"],
     ["gct", 247.6, "248 ms", "248 ms"],
@@ -1425,7 +1426,7 @@ test("the list has the columns of the server, and the item of its panel where it
 
 test("the heads of the list name their columns with their short units, in both languages", () => {
   const heads = (language) => view.listColumns("gct").map((column) => words(view.listHead(column), language));
-  assert.deepEqual(heads("ja"), ["日時", "種目", "距離 km", "時間", "平均ペース /km", "平均心拍 bpm", "最大心拍 bpm", "ピッチ", "総上昇量 m", "接地時間（GCT） ms"]);
+  assert.deepEqual(heads("ja"), ["日時", "種目", "距離 km", "時間", "平均ペース /km", "平均心拍 bpm", "最大心拍 bpm", "ピッチ 歩/分", "総上昇量 m", "接地時間（GCT） ms"]);
   assert.deepEqual(heads("en"), [
     "Date and time",
     "Type",
@@ -1434,7 +1435,7 @@ test("the heads of the list name their columns with their short units, in both l
     "Average pace (/km)",
     "Average heart rate (bpm)",
     "Maximum heart rate (bpm)",
-    "Cadence",
+    "Cadence (spm)",
     "Total ascent (m)",
     "Ground contact time (ms)",
   ]);
@@ -1449,7 +1450,7 @@ test("the values of a row are written without their units, the time of an activi
     ["pace", 0.3125, "5:13"],
     ["hr", 151.6, "152"],
     ["mx", 176, "176"],
-    ["cad", 171.44, "171.4"],
+    ["cad", 85.72, "171"],
     ["asc", 123.4, "123"],
     ["gct", 245.4, "245"],
     ["vo", 87, "8.7"],
@@ -1895,7 +1896,7 @@ test("a range is written from the numbers of the answer, in the units of the pag
     ["pace", { first: 0, width: 1000, scale: 1000 }, "0:00〜16:40 /km", "0:00–16:40 /km"],
     ["hr", { first: 29, width: 5, scale: 1 }, "145〜150 bpm", "145–150 bpm"],
     ["mx", { first: 0, width: 500, scale: 1 }, "0〜500 bpm", "0–500 bpm"],
-    ["cad", { first: 34, width: 5, scale: 1 }, "170〜175", "170–175"],
+    ["cad", { first: 17, width: 5, scale: 1 }, "170〜180 歩/分", "170–180 spm"],
     ["pow", { first: 0, width: 1000, scale: 1 }, "0〜1,000", "0–1,000"],
     ["load", { first: 10, width: 10, scale: 1 }, "100〜110", "100–110"],
     ["asc", { first: 4, width: 10, scale: 1 }, "40〜50 m", "40–50 m"],

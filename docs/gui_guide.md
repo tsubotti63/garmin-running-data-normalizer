@@ -1060,7 +1060,8 @@ or what to do: it is a page to look at with your own eyes.
      **Go to the normalization page** instead: normalize first.
 - The first time, the page shows three panels: distance, resting heart rate,
   and VO2 Max (an item without data is left out). The view page only reads an
-  output, and never changes it.
+  output (from 2.3.0, also the FIT file of an activity in the Snapshot Store,
+  when its laps are shown), and never changes it.
 - **Go to the normalization page** at the top of the view page goes back to
   the tab of the normalization page. When either page is open already, its tab
   comes to the front, and no new tab opens.
@@ -1360,6 +1361,11 @@ values are made):
   means of the activities weighted by their durations (both calculated by this
   app). The maximum heart rate is the highest value of the step. A step
   without a record has none of these.
+- The cadence is in steps per minute (both feet). Garmin's files record it
+  of one foot, so this app doubles it (from 2.3.0; up to 2.2, it was the
+  value as recorded, half of what the watch shows). That the doubled value is
+  the watch's was checked with the running types; a value of another type is
+  doubled too. The values of the output do not change.
 - A Body (daily) item is the mean of the days with a value. A day without a
   value is never filled with 0 or with the value of an earlier day.
 - An item with two or more records a day, such as VO2 Max, shows every record
@@ -1431,6 +1437,33 @@ values are made):
   [When the output changes while you look](#when-the-output-changes-while-you-look).
 
 ![The activities of a day, week, month, or year: October 2026 pressed on the panel of the distance, a list of 11 activities opened just under it (made-up names of training in the column of the names), a blue frame on that month of the chart, and "Value of the panel: 108.1 km (activities counted: 11)" under the list (synthetic data made for the example)](assets/gui-guide/view-list.en.png)
+
+### The laps of an activity (from 2.3.0)
+
+- Press **Laps…** in a row of the list, and the window of the laps of that
+  activity opens at the right above the panels, where **Summary…** opens. The
+  kinds of the laps are as the watch recorded them in the FIT file: Warm Up,
+  Active, Interval, Recovery, Rest, Cool Down, and Unknown (a lap with no kind
+  recorded, or of another kind).
+- The window holds the summary by kind (laps, time, distance, average pace,
+  average heart rate) and the table of the laps (lap, kind, time, distance,
+  pace, average and maximum heart rate, cadence). The time is the timer time,
+  without the pauses. The average pace is the total time divided by the total
+  distance, and the average heart rate is weighted by time. A lap without a
+  distance (a rest standing, for example) has no pace and is left out of the
+  average pace. The cadence is shown for the running types only, in steps per
+  minute.
+- An output does not hold the kinds of the laps, so this app reads the FIT
+  file of the activity from the Snapshot Store that it remembers, only when
+  **Laps…** is pressed. It writes nothing and sends nothing. Reading can take
+  a few seconds to some tens of seconds.
+- Where the laps cannot be shown, the window says why, and what to do where
+  something can be done. For an output normalized without the Snapshot Store,
+  and for an activity that the output cannot tell apart from another,
+  **Laps…** is gray, and the reason is under the list.
+- Close the window with **Close** or the Esc key. **Laps…** in another row of
+  the list shows that activity in the window. Closing or changing the list
+  closes the window too.
 
 ### Marks (from 2.2.0)
 
@@ -1754,7 +1787,7 @@ values are made):
 | Average pace | 10 seconds (0:10 /km) |
 | Average heart rate | 5 bpm |
 | Maximum heart rate | 5 bpm |
-| Cadence | 5 (same unit as Garmin, not named) |
+| Cadence | 10 spm |
 | Power | 10 (same unit as Garmin, not named) |
 | Training load | 10 (same unit as Garmin, not named) |
 | Total ascent | 10 m |
@@ -1859,7 +1892,7 @@ values are made):
   the dates, so that the days can differ by one; see below), and their
   difference. It opens where the window
   of **Marks…** opens; only one of the windows of **Marks…**, **Summary…**,
-  and saving opens at a time. **Close**, or the
+  saving, and the laps opens at a time. **Close**, or the
   Esc key in the window, closes it (a press outside it does not). Whether it
   was open is not remembered.
 - It can be used with panels, while years are not compared, no other view
@@ -1937,8 +1970,8 @@ values are made):
   **Summary…** in the row above the panels, and right after **Show as a
   table** in the bars of **Compare years**, **Plot two items**,
   **Distribution**, and **By shoes**. It opens a window under the row of the
-  button; only one of the windows of **Marks…**, **Summary…**, and saving
-  opens at a time.
+  button; only one of the windows of **Marks…**, **Summary…**, saving, and the
+  laps opens at a time.
 - The row above the panels does not show while years are compared, another
   view is shown, or in full screen. Without panels, its **Save as image…**
   cannot be pressed.
@@ -2157,6 +2190,8 @@ Windows PowerShell:
   file. Put your own places in place of the `/path/to/…` of the example. The
   command writes nothing and stops when a file of that name is there already,
   or when the file would be inside the output.
+- Only the cadence differs from the view page: the CSV file keeps it as
+  recorded (of one foot), half of the steps per minute that the page shows.
 - `--period 3y` is **3 years**, and `--grain month` is **Month**, of the view
   page; without `--period`, the period is **All time**, and without `--grain`,
   the grouping is **Auto**. The names of the items (`dist`, `rhr`, and so on)
@@ -2543,8 +2578,9 @@ it. To remove Python too, do as the documents of python.org say, for
   gives GitHub only the values that the page shows you first.
 - The External-safe Pack and the Support Bundle are made for sharing, but
   review them before you do. The names of your Snapshots are never in them.
-- The view page only reads an output, and sends no numbers anywhere. The CSV
-  file of `series` holds values of the output.
+- The view page only reads an output (from 2.3.0, also the FIT file of an
+  activity in the Snapshot Store, when its laps are shown), and sends no
+  numbers anywhere. The CSV file of `series` holds values of the output.
 - The remembered settings hold the names of places and of the items of the
   view page, and from 2.2.0 also the names of the layouts you saved, the days
   of a period chosen with **Custom range…**, the activity types counted, the

@@ -51,6 +51,9 @@ UNITS = {
     ("percent", "pct"): Fraction(1),
     ("percent", "pct_fit"): Fraction(1),
     (None, "raw"): Fraction(1),
+    # The cadence: Garmin records it of one foot, the page writes steps a
+    # minute (stage X10 of v2.3.0, the person's choice).
+    (None, "spm"): Fraction(2),
 }
 
 

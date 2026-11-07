@@ -2,7 +2,10 @@
 of v2.3.0): /api/view/laps reads the FIT file of the activity from the
 Snapshot Store that the GUI remembers (gui.fit_reading); the list of a period
 gives the number of its reading and the place of each row among the
-activities of that reading, by which the page names the activity.
+activities of that reading, by which the page names the activity. From
+stage X10, the list also gives why the laps of a row cannot be shown where
+the output alone tells it (laps_unavailable), the same as pressing tells,
+and the laps give their maximum heart rate.
 
 The output and the store are made as the CLI and the GUI make them
 (tests.test_gui_fit_reading.build: a synthetic Export registered in a store
@@ -50,7 +53,10 @@ _MADE: dict[str, Any] = {}
 # of opening gives them (stage W1 of v2.2.1).
 OUTPUT_FACTS = ("first_day", "last_day", "types", "partial")
 # The fields of a lap that the answer gives, and no other.
-LAP_FIELDS = {"kind", "elapsed_s", "timer_s", "distance_m", "avg_heart_rate", "avg_cadence", "avg_speed"}
+LAP_FIELDS = {"kind", "elapsed_s", "timer_s", "distance_m", "avg_heart_rate", "max_heart_rate", "avg_cadence", "avg_speed"}
+# Why the laps of a row of the list cannot be shown, where the output alone
+# tells it before a file is read (stage X10 of v2.3.0).
+KNOWN_FROM_THE_OUTPUT = (None, "key_shared", "not_from_store")
 NOT_A_TICKET = "not-a-ticket-of-this-server"
 
 
@@ -143,6 +149,22 @@ class LapsApiTest(GuiServerTestCase):
     def facts(self, opened: dict[str, Any]) -> dict[str, Any]:
         return {name: opened[name] for name in OUTPUT_FACTS}
 
+    def assert_the_list_tells_as_pressing(self, opened: dict[str, Any], listed: dict[str, Any]) -> None:
+        """Every row of the list gives why its laps cannot be shown where the
+        output alone tells it, as pressing it answers (stage X10 of v2.3.0);
+        a row of none is one whose laps the server reads, or tells another
+        reason of."""
+        self.assertTrue(listed["rows"])
+        for row in listed["rows"]:
+            with self.subTest(ref=row["ref"]):
+                self.assertIn(row["laps_unavailable"], KNOWN_FROM_THE_OUTPUT)
+                status, answer = self.call("/api/view/laps", {"view": opened["view"], "read": listed["read"], "ref": row["ref"]})
+                self.assertEqual(status, 200, answer)
+                if row["laps_unavailable"] is None:
+                    self.assertTrue(answer["status"] == "laps" or answer["reason"] not in KNOWN_FROM_THE_OUTPUT, answer)
+                else:
+                    self.assertEqual((answer["status"], answer["reason"]), ("unavailable", row["laps_unavailable"]))
+
     def test_the_reasons_are_thirteen_in_their_order(self) -> None:
         # Those of gui.fit_reading, then the two of the server, which the page
         # tells apart by these names from stage X10 (the words of the page).
@@ -175,6 +197,7 @@ class LapsApiTest(GuiServerTestCase):
         self.assertEqual(listed["read"], opened["read"])
         [row] = listed["rows"]
         self.assertEqual(row["ref"], 0)
+        self.assertIsNone(row["laps_unavailable"])
         status, answer = self.call("/api/view/laps", {"view": opened["view"], "read": listed["read"], "ref": row["ref"]})
         self.assertEqual(status, 200, answer)
         self.assertEqual(set(answer), {"status", "laps", "counts", "read", "output"})
@@ -187,6 +210,11 @@ class LapsApiTest(GuiServerTestCase):
         key = load(output / LINKS)[0]["garmin_activity_key"]
         laps = read_laps(output, entries(output), key, store)
         self.assertEqual(answer["laps"], as_json([dataclasses.asdict(lap) for lap in laps.laps]))
+        # The maximum heart rate of each lap is the output's (stage X10).
+        rows = sorted(load(output / LAPS), key=lambda lap: lap["lap_ordinal_within_session"])
+        self.assertEqual([lap["max_heart_rate"] for lap in answer["laps"]], [lap["max_heart_rate"] for lap in rows])
+        self.assertTrue(all(lap["max_heart_rate"] is not None for lap in answer["laps"]))
+        self.assert_the_list_tells_as_pressing(opened, listed)
         self.assertEqual((answer["read"], answer["output"]), (listed["read"], self.facts(opened)))
         # No place, SHA-256, or key reaches the page, in the list or the laps.
         text = json.dumps([listed, answer])
@@ -215,6 +243,9 @@ class LapsApiTest(GuiServerTestCase):
             self.call("/api/view/laps", {"view": opened["view"], "read": listed["read"], "ref": listed["rows"][0]["ref"]}),
             (200, {"status": "unavailable", "reason": "not_from_store", "read": listed["read"], "output": self.facts(opened)}),
         )
+        # The list tells it before the button is pressed (stage X10).
+        self.assertEqual([row["laps_unavailable"] for row in listed["rows"]], ["not_from_store"])
+        self.assert_the_list_tells_as_pressing(opened, listed)
 
     def test_the_store_is_the_one_that_the_settings_remember_at_each_request(self) -> None:
         output, store = self.copy()
@@ -494,11 +525,25 @@ class LapsApiTest(GuiServerTestCase):
         return data, opened
 
     def test_an_activity_whose_key_another_has_too_or_that_has_none(self) -> None:
+        # A reading made by hand has no file of its lineage, as an output made
+        # without a store: the key is looked at first, as pressing does, so
+        # that the list tells key_shared where both hold (stage X10).
         data, opened = self.made(
-            [keyed("2024-03-05", "k1", distance_m=1000.0), keyed("2024-03-06", "k1", distance_m=2000.0), keyed("2024-03-07", "", distance_m=3000.0)]
+            [
+                keyed("2024-03-05", "k1", distance_m=1000.0),
+                keyed("2024-03-06", "k1", distance_m=2000.0),
+                keyed("2024-03-07", "", distance_m=3000.0),
+                keyed("2024-03-08", "k2", distance_m=4000.0),
+            ]
         )
+        self.assertNotIn("snapshot/snapshot_lineage.json", data.files)
         listed = self.listed(opened["view"], "2024-03-01", "2024-03-31")
-        self.assertEqual(sorted(row["ref"] for row in listed["rows"]), [0, 1, 2])
+        self.assertEqual(sorted(row["ref"] for row in listed["rows"]), [0, 1, 2, 3])
+        self.assertEqual(
+            {row["ref"]: row["laps_unavailable"] for row in listed["rows"]},
+            {0: "key_shared", 1: "key_shared", 2: "key_shared", 3: "not_from_store"},
+        )
+        self.assert_the_list_tells_as_pressing(opened, listed)
         with patch.object(gui_server, "MAX_ANSWER_BYTES", 10):
             self.assertEqual(
                 self.call("/api/view/laps", {"view": opened["view"], "read": listed["read"], "ref": 0}), (422, {"error": "VIEW_ANSWER_TOO_LARGE"})
@@ -608,8 +653,10 @@ class LapsApiTest(GuiServerTestCase):
         self.assertNotIn("read", answer)
         self.assertEqual(len(answer["rows"]), 1)
         self.assertNotIn("ref", answer["rows"][0])
+        # Nor why laps cannot be shown, which is the server's too (stage X10).
+        self.assertNotIn("laps_unavailable", answer["rows"][0])
         written = self.place / "series.csv"
         write_series(output, written)
         header = written.read_text(encoding="utf-8").splitlines()[0].split(",")
         self.assertEqual(header, list(SERIES_COLUMNS))
-        self.assertFalse({"ref", "read"} & set(header))
+        self.assertFalse({"ref", "read", "laps_unavailable"} & set(header))

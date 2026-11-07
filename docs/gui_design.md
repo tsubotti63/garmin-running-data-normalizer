@@ -1530,8 +1530,9 @@ words of the reasons why laps are not shown, are stage X10.
 - The answer (200): `{status: "laps", laps, counts, read, output}`, each lap
   with its `kind` from the FIT file (`active`, `rest`, `warmup`, `cooldown`,
   `recovery`, `interval`, or `unknown`) and its values from the output
-  (`elapsed_s`, `timer_s`, `distance_m`, `avg_heart_rate`, `avg_cadence`, and
-  `avg_speed`), and `counts` the number of the laps and of those of an
+  (`elapsed_s`, `timer_s`, `distance_m`, `avg_heart_rate`, `max_heart_rate`
+  from stage X10, `avg_cadence`, and `avg_speed`; none read anew from the
+  store), and `counts` the number of the laps and of those of an
   unknown kind; or `{status: "unavailable", reason, read, output}`, where
   `reason` is one of thirteen (`LAP_REASONS` of `gui/server.py`):
   `not_from_store`, `no_store`, `other_store`, `store_unreadable`, `no_link`,
@@ -1540,10 +1541,34 @@ words of the reasons why laps are not shown, are stage X10.
   `read_stale`, and `busy`. `output` gives the facts of the reading, as the
   other answers do. No place, SHA-256, key of an activity, or position is in
   an answer.
+- From stage X10, the list of a period gives with each row, besides `ref`,
+  why the laps of that activity cannot be shown where the output alone tells
+  it before a file is read (`laps_unavailable`): `key_shared` where the
+  activity has no key or another activity has it too, else `not_from_store`
+  where the manifest of the reading has no `snapshot/snapshot_lineage.json`,
+  else `null`. Asking for the laps tells the same, in the same order, and
+  the other reasons only then. The list of `view.series` and the CSV file of
+  the command `series` do not have it.
 - A file of the output that is not as its manifest gives it, or of a form
   that this version does not write, gives the code of the check of the
   output (such as `OUTPUT_CHANGED`), and an answer of any status over 4 MiB
   gives `VIEW_ANSWER_TOO_LARGE`.
+- The cadence in steps per minute (stage X10, the choice of the Human
+  maintainer): Garmin's files record the cadence of a run of one foot
+  (strides per minute, the `avg_running_cadence` of the FIT profile), half of
+  what the watch shows (steps per minute, both feet). The page writes the
+  item `cad` (Garmin's `avgRunCadence`) doubled, in `spm`: in
+  `ITEM_FORMATS` of `view_flow.mjs` it is the one item whose factor is not
+  that of its unit (2), so that the panels, their scales, the list, the
+  summary and its differences, the comparisons, the plot, the distribution,
+  and the saved pictures show steps per minute; the window of the laps
+  doubles the cadence of the laps of a running type the same way, and shows
+  none for another type. That the doubled value is the watch's was checked
+  with the running types; a value of another type is doubled too. The answers
+  of the server, the output, and the CSV file of `series` keep the values as
+  recorded (the output contract says to keep the basis of a source value).
+  The widths of the ranges of the distribution stay those of the server (5
+  as recorded, 10 steps per minute on the page).
 
 ## Data handling in 2.0.0
 
