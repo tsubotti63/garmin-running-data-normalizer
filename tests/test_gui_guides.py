@@ -1192,11 +1192,15 @@ class GuiGuideTest(unittest.TestCase):
             "a file is removed only while it is still the one looked at (a newer write or another file in its place stays);",
             "and one that cannot be looked at, or a folder that cannot be listed, is told as left.",
             # Stage X1 of v2.3.0.
-            "From v2.3.0 (stage X1) a newer one that stays counts as something to forget too, so that the button can still be pressed (on Windows, one that a stop left stays until it is ten minutes old): forgetting tells that it stayed (`TEMPORARY_LEFT`, where the settings and the marks are gone, so the page drops the colors remembered in the browser as well), and pressing again once it is ten minutes old removes it.",
+            "From v2.3.0 (stage X1) a newer one that stays counts as something to forget too, so that the button can still be pressed (on Windows, one that a stop left stays until it is ten minutes old): forgetting tells that it stayed (`TEMPORARY_LEFT`, where the settings and the marks are gone, so the page drops the colors remembered in the tab as well), and pressing again once it is ten minutes old removes it.",
             "The status of a launch and forgetting count what there is to forget alike.",
         ):
             with self.subTest(design=sentence[:30]):
                 self.assertEqual(design.count(sentence), 1)
+        # The colors are remembered in the tab (sessionStorage), not in the
+        # browser: the words of X1 were put right in stage X2 (the checker's
+        # review of the diff of X1, B2).
+        self.assertNotIn("the colors remembered in the browser", design)
 
     def test_guides_say_that_escape_closes_a_question_wherever_the_focus_is(self) -> None:
         # Stage X1 of v2.3.0 (the person's finding in W6d, and the checker's

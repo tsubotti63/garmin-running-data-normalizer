@@ -1442,7 +1442,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
         for line in (
             'const table = element("table", "t years-table");',
             "const starts = (index) => index > 0 && (!counts || index % 2 === 1);",
-            'const cell = element("th", index === 0 ? "" : starts(index) ? "n year-start" : "n", describe(entry));',
+            'const ofRace = entry.key === "view.compare.race";',
+            'const cell = element("th", index === 0 ? "" : starts(index) ? "n year-start" : "n", ofRace ? null : describe(entry));',
+            "if (ofRace) {\n      cell.append(...raceHeadParts(entry));\n    }",
             'tr.append(element("td", cell.value === null ? "n empty year-start" : "n year-start", text));',
         ):
             with self.subTest(line=line):
@@ -1473,6 +1475,22 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # that six years or six races fit: no keep-all (the person's choice
         # after Codex's review of the diff).
         self.assertNotIn("word-break", rule)
+        # From v2.3.0 (stage X2): the name of a race in a heading is in a part
+        # of its own that may wrap between any two characters where it does
+        # not fit (six names of thirty letters with no space kept the table
+        # out of its box); the words around it are those of its message, so
+        # that the text of the heading stays as it was, and only the heading
+        # of a race (the key of its message in view_flow.mjs) is made so.
+        self.assertRegex(css, r"\n\.years-table \.years-race-name \{\n  overflow-wrap: anywhere;\n\}\n")
+        parts = function_body(script, "raceHeadParts")
+        self.assertIn('const [before = "", after = ""] = t(entry.key, { ...describedParams(entry), name: "\\u0001" }).split("\\u0001");', parts)
+        self.assertIn('return [before, element("span", "years-race-name", entry.params.name), after];', parts)
+        flow = (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8")
+        self.assertEqual(flow.count('message("view.compare.race", '), 1)
+        self.assertIn('label: message("view.compare.race", { name: race.name, date: dateText(race.day, language) }),', flow)
+        self.assertNotIn("years-race-name", function_body(script, "buildShoesTable"))
+        design = " ".join((STATIC_ROOT.parents[3] / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        self.assertEqual(design.count("From v2.3.0 (stage X2) the name of a race in a heading may wrap between any two characters where it does not fit (`raceHeadParts`), so that six names of thirty letters with no space fit too; the other words of the headings wrap as before."), 1)
         table = function_body(script, "buildCompareTable")
         self.assertIn('if (entry.spoken) {\n      cell.setAttribute("aria-label", describe(entry.spoken));\n    }', table)
         self.assertNotIn("spoken", function_body(script, "buildShoesTable"))

@@ -81,6 +81,21 @@ class GuiViewSaveTest(unittest.TestCase):
         self.assertIn("part-note", by_id(self.elements, "save-warn").parent.get("class"))
         problem = by_id(self.elements, "save-problem")
         self.assertEqual((problem.get("role"), problem.get("aria-live")), ("status", "polite"))
+        # From v2.3.0 (stage X2, G1 and H1 of the checker's reviews of its
+        # plan): the line before a saving comes right under what the window
+        # saves, above the choices; the marks that the choice of the panels
+        # puts in are said under that choice; and the end of the window, why
+        # it cannot save and the buttons, is a part of its own, the last one.
+        parts = [element.get("id") or element.get("class") for element in self.elements if element.parent is window]
+        self.assertEqual(parts[parts.index("save-what") + 1], "part-note save-warn")
+        self.assertLess(parts.index("part-note save-warn"), parts.index("save-scope-field"))
+        self.assertEqual(parts[-1], "save-end")
+        end = next(element for element in self.elements if element.parent is window and element.get("class") == "save-end")
+        self.assertEqual([element.get("id") or element.get("class") for element in self.elements if element.parent is end], ["save-problem", "button-row"])
+        field = by_id(self.elements, "save-marks-field")
+        self.assertEqual([element.get("id") for element in self.elements if element.parent is field and element.tag == "p"], ["save-marks-none", "save-marks-warn"])
+        said = by_id(self.elements, "save-marks-warn")
+        self.assertEqual((said.get("class"), "hidden" in said.attributes), ("note save-note", True))
         buttons = [element.get("id") for element in self.elements if element.tag == "button" and window in element.ancestors()]
         self.assertEqual(buttons, ["save-pop-close", "save-cancel", "save-go"])
         self.assertEqual(by_id(self.elements, "save-go").get("class"), "primary")
@@ -91,6 +106,55 @@ class GuiViewSaveTest(unittest.TestCase):
         settings = by_id(self.elements, "settings-status")
         bar = [element.get("id") for element in self.elements if element.parent is settings.parent]
         self.assertEqual(bar[bar.index("settings-status") + 1], "save-status")
+
+    def test_the_end_of_the_save_window_stays_at_its_bottom(self) -> None:
+        # v2.3.0 X2 (F3, with G1 of the checker's review of its plan): at
+        # 1366x650 the buttons of the window were hidden in it until it was
+        # scrolled. Its end, why it cannot save and the buttons, stays at the
+        # bottom of the window while it scrolls, on the ground of the window,
+        # with a padding above the buttons in place of the margin that they
+        # have elsewhere (through which the choices showed); a field that
+        # takes the focus scrolls above that end at its tallest.
+        css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        window = re.search(r"\n\.save-pop \{\n(.*?)\n\}\n", css, re.DOTALL)
+        assert window is not None
+        self.assertIn("  overflow: auto;\n", window.group(1))
+        # The end holds the room under its buttons, in place of the padding
+        # of the window, where what scrolls showed under the end (it stays
+        # inside the padding of the window); the scroll padding is the height
+        # of the end at its tallest, that room in it.
+        self.assertIn("  padding-bottom: 0;\n", window.group(1))
+        self.assertIn("  scroll-padding-bottom: 95px;\n", window.group(1))
+        end = re.search(r"\n\.save-pop > \.save-end \{\n(.*?)\n\}\n", css, re.DOTALL)
+        assert end is not None
+        self.assertEqual(
+            end.group(1).split("\n"),
+            [
+                "  position: sticky;",
+                "  bottom: 0;",
+                "  display: flex;",
+                "  flex-direction: column;",
+                "  gap: 8px;",
+                "  padding-top: 8px;",
+                "  padding-bottom: 10px;",
+                "  background: var(--surface);",
+            ],
+        )
+        self.assertRegex(css, r"\n\.save-pop > \.save-end > \.button-row \{\n  margin-top: 0;\n\}\n")
+        # A note of a choice goes under it, on a line of its own, as the
+        # design says (Codex's review of the diff of X2: the names of the
+        # marks that a press puts in sat beside the choice where they fit).
+        self.assertRegex(css, r"\n\.save-field > \.save-note \{\n  flex-basis: 100%;\n\}\n")
+        # The design document says the order of the window and its end.
+        design = " ".join((STATIC_ROOT.parents[3] / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        sentence = (
+            "From v2.3.0 (stage X2) the window says what it saves and then the line before a saving, above its choices; "
+            "the names of the marks that the choice of the panels puts in are said under that choice, so that a press does not move it; "
+            "its end, why it cannot save and the buttons (`.save-end`), stays at the bottom of the window while it scrolls, "
+            "where at 1366 × 650 the buttons were hidden in it; "
+            "and the window opens at its top each time, also where it was scrolled before it closed."
+        )
+        self.assertEqual(design.count(sentence), 1)
 
     def test_the_words_before_and_after_a_saving_are_those_of_the_sample(self) -> None:
         # The line before a saving as the sample of R0 showed it, and the
@@ -117,7 +181,17 @@ class GuiViewSaveTest(unittest.TestCase):
         body = function_body(self.script, "renderSave")
         # And the view by shoes: the names of all its shoes (stage S1 of
         # v2.2.0, Codex's review of its plan).
-        self.assertIn('const named = target.view === "shoes" ? t("view.save.warn_shoes") : (panels ? ui.saveMarks.checked : target.marks) ? t("view.save.warn_marks") : null;', body)
+        self.assertIn('const named = target.view === "shoes" ? t("view.save.warn_shoes") : !panels && target.marks ? t("view.save.warn_marks") : null;', body)
+        # From v2.3.0 (stage X2, H1): the marks that the choice of the panels
+        # puts in are said under that choice, so that a press does not move it.
+        for line in (
+            "const marked = panels && ui.saveMarks.checked;",
+            "ui.saveMarksWarn.hidden = !marked;",
+            'setText(ui.saveMarksWarn, marked ? t("view.save.warn_marks") : "");',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, body)
+        self.assertIn('  saveMarksWarn: byId("save-marks-warn"),\n', self.script)
         # From T1, the words of the conditions of the answer drawn add to them
         # (Codex's review of the plan of T1).
         self.assertIn('const words = typeof drawnConditions(target.view)?.asked?.name === "string" ? t("view.save.warn_conditions") : null;', body)
@@ -140,6 +214,11 @@ class GuiViewSaveTest(unittest.TestCase):
                 "  if (state.marksOpen) {\n      state.marksOpen = false;",
                 "state.saveFrom = from;",
                 "(open ? ui.saveTitle : saveButton(state.saveFrom)).focus();",
+                # It opens at its top each time, also where it was scrolled
+                # before it closed (stage X2 of v2.3.0: at 1366 x 650 a part
+                # of the scrolling stayed), before the focus goes to its title.
+                "  render();\n  // It opens at its top each time, also where it was scrolled before it\n  // closed (stage X2 of v2.3.0).\n"
+                "  if (open) {\n    ui.savePop.scrollTop = 0;\n  }\n  (open ? ui.saveTitle : saveButton(state.saveFrom)).focus();",
             ),
             "openRecap": ("    state.saveOpen = false;",),
             "openMarks": ("    state.saveOpen = false;",),

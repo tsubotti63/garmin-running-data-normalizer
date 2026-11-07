@@ -457,6 +457,7 @@ const ui = {
   saveScreen: byId("save-screen"),
   saveMarks: byId("save-marks"),
   saveMarksNone: byId("save-marks-none"),
+  saveMarksWarn: byId("save-marks-warn"),
   saveName: byId("save-name"),
   saveWarn: byId("save-warn"),
   saveProblem: byId("save-problem"),
@@ -2959,7 +2960,14 @@ function renderSave(viewing) {
   // always (the checker's answer 5 of the plan of R2).
   // The view by shoes: the names of all the shoes, also of the rows out of
   // the screen (Codex's review of the plan of S1 of v2.2.0).
-  const named = target.view === "shoes" ? t("view.save.warn_shoes") : (panels ? ui.saveMarks.checked : target.marks) ? t("view.save.warn_marks") : null;
+  // The marks that the choice of the panels puts in are said under that
+  // choice, which a press then does not move, as the line before a saving
+  // went above the choices (stage X2 of v2.3.0, H1 of the checker's review
+  // of its form); a view that always names the marks says so in that line.
+  const named = target.view === "shoes" ? t("view.save.warn_shoes") : !panels && target.marks ? t("view.save.warn_marks") : null;
+  const marked = panels && ui.saveMarks.checked;
+  ui.saveMarksWarn.hidden = !marked;
+  setText(ui.saveMarksWarn, marked ? t("view.save.warn_marks") : "");
   // The words of the conditions of the answer drawn, which the picture writes
   // (stage T1 of v2.2.0), add to the others (Codex's review of the plan of T1).
   const words = typeof drawnConditions(target.view)?.asked?.name === "string" ? t("view.save.warn_conditions") : null;
@@ -3073,6 +3081,11 @@ function openSave(open, from = state.saveFrom) {
     }
   }
   render();
+  // It opens at its top each time, also where it was scrolled before it
+  // closed (stage X2 of v2.3.0).
+  if (open) {
+    ui.savePop.scrollTop = 0;
+  }
   (open ? ui.saveTitle : saveButton(state.saveFrom)).focus();
 }
 
@@ -5867,6 +5880,16 @@ function compareName(entry) {
   return [before, element("span", "compare-race-name", entry.race.name), after];
 }
 
+// The heading of a race in a table of comparing years (stage X2 of v2.3.0):
+// the words of its message around the name, and the name in a part of its
+// own, which may wrap between any two characters where it does not fit, so
+// that six names of thirty letters with no space keep the table in its
+// box; the text of the heading stays as it was.
+function raceHeadParts(entry) {
+  const [before = "", after = ""] = t(entry.key, { ...describedParams(entry), name: "\u0001" }).split("\u0001");
+  return [before, element("span", "years-race-name", entry.params.name), after];
+}
+
 // A row of a year (or of a race): its name, the days that the output cuts,
 // its value (of the year, of the month, or of the span of the race) as the
 // server counts it, its reading, and its chart.
@@ -5996,7 +6019,11 @@ function buildCompareTable(context, name) {
   // counts (stage U3 of v2.2.0).
   const starts = (index) => index > 0 && (!counts || index % 2 === 1);
   heads.forEach((entry, index) => {
-    const cell = element("th", index === 0 ? "" : starts(index) ? "n year-start" : "n", describe(entry));
+    const ofRace = entry.key === "view.compare.race";
+    const cell = element("th", index === 0 ? "" : starts(index) ? "n year-start" : "n", ofRace ? null : describe(entry));
+    if (ofRace) {
+      cell.append(...raceHeadParts(entry));
+    }
     cell.scope = "col";
     // The whole word of a short heading of the counts (stage W3 of v2.2.1).
     if (entry.spoken) {

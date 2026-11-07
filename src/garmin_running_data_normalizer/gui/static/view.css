@@ -1752,6 +1752,14 @@ button.small {
   white-space: normal;
 }
 
+/* The name of a race in a heading of a table of comparing years may wrap
+   between any two characters where it does not fit (stage X2 of v2.3.0:
+   six names of thirty letters with no space kept the table out of its
+   box); the other words of the headings wrap as above. */
+.years-table .years-race-name {
+  overflow-wrap: anywhere;
+}
+
 /* Each year (or race) of a table of comparing years apart from the one
    before, by a line on its left (stage U3 of v2.2.0, the person's hand
    check of the release candidate); the tables by shoes keep their form. */
@@ -2859,8 +2867,34 @@ button.small {
   width: 540px;
   max-width: calc(100vw - 32px);
   margin-top: 6px;
+  /* The end of the window holds the room under its buttons, so that what
+     scrolls does not show under the end (stage X2). */
+  padding-bottom: 0;
   overflow: auto;
+  /* A field that takes the focus scrolls above the end of the window, at
+     its tallest, with the longest line of why it cannot save (stage X2). */
+  scroll-padding-bottom: 95px;
   color: var(--text);
+}
+
+/* The end of the save window, why it cannot save and the buttons, stays at
+   the bottom of the window while it scrolls (stage X2 of v2.3.0: at
+   1366x650 the buttons were hidden in it), on the ground of the window,
+   with a padding above the buttons where they had a margin, through which
+   the choices showed. */
+.save-pop > .save-end {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  padding-bottom: 10px;
+  background: var(--surface);
+}
+
+.save-pop > .save-end > .button-row {
+  margin-top: 0;
 }
 
 .save-field {
@@ -2891,6 +2925,13 @@ button.small {
    next line whole (the real page of R1: "This panel only" was cut in three). */
 .save-field label {
   white-space: nowrap;
+}
+
+/* A note of a choice goes under it, on a line of its own, as the design
+   says (stage X2: the names of the marks that a press puts in sat beside
+   the choice where they fit; Codex's review of the diff). */
+.save-field > .save-note {
+  flex-basis: 100%;
 }
 
 .save-note,
