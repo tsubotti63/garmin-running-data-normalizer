@@ -825,11 +825,15 @@ the page's own folder list without one (stage B4a).
 
 Version 2.1.0 adds a page that shows the numbers of an output that this
 version made, as panels on one time axis (stages G1 to G3b-2, decisions
-20261026-9 to 20261026-11). It reads outputs only, sends nothing, and does not
+20261026-9 to 20261026-11). It reads outputs, sends nothing, and does not
 interpret the numbers: it does not say what a value means, which item causes
-another, or what to do. The `series` command of the CLI writes the same
-numbers to a CSV file, with the same functions (stage G2); it takes no
-conditions on the activities, which the page has from v2.2.0 (stage T1).
+another, or what to do. From v2.3.0 it also reads the FIT file of one
+activity in the Snapshot Store that the GUI remembers, only when the laps of
+that activity are asked for
+([Laps of an activity (v2.3.0)](#laps-of-an-activity-v230)). The `series`
+command of the CLI writes the same numbers to a CSV file, with the same
+functions (stage G2); it takes no conditions on the activities, which the
+page has from v2.2.0 (stage T1).
 
 Place and tabs:
 
@@ -1430,9 +1434,11 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   of another reading than the panels, so that otherwise they show the reading
   before. Each reading of an output has a number of one count for the whole
   server, given with its data in the answers of `/api/view/series`,
-  `/api/view/points`, `/api/view/spread`, and `/api/view/shoes` (`read`; not
-  in those of `/api/view/activities`, which the page does not compare); the
-  page compares that of the panels with that of an answer of another view
+  `/api/view/points`, `/api/view/spread`, and `/api/view/shoes` (`read`; from
+  v2.3.0 also in those of `/api/view/activities` and `/api/view/laps`, which
+  the page does not compare with that of the panels: the list gives it so
+  that the laps of its rows are asked of the same reading); the page compares
+  that of the panels with that of an answer of another view
   taken after the check of its generation, and a number missing counts as
   another reading. From v2.2.1 (stage W1), the answer of `/api/view/open`
   gives the number of its reading too, and those four answers give the facts
@@ -1455,6 +1461,89 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   of the activity types and the conditions, and gives the focus back where it
   was only where the focus was lost meanwhile. The guides say this in one
   place.
+
+### Laps of an activity (v2.3.0)
+
+From v2.3.0 the view page can show the laps of one activity with the kind of
+each lap that its FIT file records, so that the pace of the hard parts can be
+seen apart from the rests (the decision of the Human maintainer at stage X8,
+which widens what the page reads; stages X9b to X9c-2). An output does not
+hold these kinds, so the server reads them, only when the laps of one
+activity are asked for, from the FIT file of that activity in the Snapshot
+Store that the GUI remembers (`fit/lap_kinds.py` reads the kinds,
+`gui/fit_reading.py` the files). The window of the laps on the page, and the
+words of the reasons why laps are not shown, are stage X10.
+
+- The request: `POST /api/view/laps` `{view, read, ref}`, under the checks of
+  the other requests of the view page. `ref` is the place of the activity
+  among the activities of a reading and `read` the number of that reading,
+  which the list of a period gives (`read`, and `ref` with each row; never
+  the key of an activity). Both are whole numbers, not truth values, and
+  `ref` is one of the activities of the reading; otherwise `REQUEST_INVALID`,
+  and a ticket that the server does not keep gives `VIEW_NOT_OPEN`.
+- The output of the ticket is taken as for the other requests (read again
+  where it changed, or the date did), and a `read` of another reading is
+  answered as stale, with the number of the reading now, so that the page
+  asks for the list again: the places of one reading are never taken for
+  those of another. Then one reading of a store at a time for the whole
+  server: another request is answered at once that it is busy. The lock is
+  taken without waiting once the output is read and the activity found, and
+  held around the reading of the store only, so that a reading of an output
+  that waits keeps no other laps busy.
+- The store is the one that the settings remember (`store`, which a Snapshot
+  run writes), read at each request; there is none where the settings are
+  missing, cannot be read, are of another form, or are of a newer version. It
+  is opened at that place, or else in its folder `snapshots`, as the page
+  opens a store; a folder that holds what a store writes without its
+  `store.json` is a damaged store, as `load_store` takes it, and the next
+  place is not tried. The folder `snapshots` is opened in the folder opened
+  at the remembered place, which stays open until the reading ends (on
+  Windows it is held, and the system must have the folder `snapshots` in
+  it), and a remembered folder that is not there has none, so that a folder
+  put at the remembered place meanwhile is not followed.
+- What is read: the files of the output that tie the activity to its FIT file
+  (`snapshot/snapshot_lineage.json`, `normalized/activity_fit_links.json`,
+  `normalized/fit_sessions.json`, and `normalized/fit_laps.json`), each read
+  once and compared with the size and the SHA-256 that the manifest of the
+  reading gives; the `store.json` of the store, up to 64 KiB, which must be
+  that of the store in the lineage of the output; where a folder has no
+  `store.json`, whether it holds the other names that a store writes, each
+  looked at alone at its top (no file is opened, and no other name is read);
+  and the FIT file of the activity among the blobs of the store, by the
+  SHA-256 that the output records, read once up to 32 MiB and used only
+  where the SHA-256 of its bytes is that one and its sessions and laps are
+  those of the output. Nothing else of the store is read, and nothing is
+  written, kept, or sent.
+- Links: the folder of the store is opened once, and every step from it
+  without following a link. On macOS and Linux each folder of the way is
+  opened from the one before it, by its descriptor, and the file with
+  `O_NOFOLLOW` and `O_NONBLOCK`; on Windows, which has no such openings, the
+  folders of the way are held from before they are looked at until the file
+  is read, so that none can be renamed or removed meanwhile, the file is
+  opened as itself, and it is read only where its final place is, letter for
+  letter, that of the held folder and the way. A link, a junction, another
+  reparse point, a pipe, or a file or a folder without an identity is
+  refused; each step is looked at again after the reading, and the files of
+  the output are opened without waiting and as themselves. The folders above
+  the remembered folder are not looked at, as `load_store` does not look at
+  them.
+- The answer (200): `{status: "laps", laps, counts, read, output}`, each lap
+  with its `kind` from the FIT file (`active`, `rest`, `warmup`, `cooldown`,
+  `recovery`, `interval`, or `unknown`) and its values from the output
+  (`elapsed_s`, `timer_s`, `distance_m`, `avg_heart_rate`, `avg_cadence`, and
+  `avg_speed`), and `counts` the number of the laps and of those of an
+  unknown kind; or `{status: "unavailable", reason, read, output}`, where
+  `reason` is one of thirteen (`LAP_REASONS` of `gui/server.py`):
+  `not_from_store`, `no_store`, `other_store`, `store_unreadable`, `no_link`,
+  `key_shared` (a key that another activity has too, or none), `fit_missing`,
+  `fit_too_large`, `fit_changed`, `fit_not_activity`, `laps_differ`,
+  `read_stale`, and `busy`. `output` gives the facts of the reading, as the
+  other answers do. No place, SHA-256, key of an activity, or position is in
+  an answer.
+- A file of the output that is not as its manifest gives it, or of a form
+  that this version does not write, gives the code of the check of the
+  output (such as `OUTPUT_CHANGED`), and an answer of any status over 4 MiB
+  gives `VIEW_ANSWER_TOO_LARGE`.
 
 ## Data handling in 2.0.0
 
@@ -1673,8 +1762,9 @@ Processing:
 - The messages between the tabs of a launch (`BroadcastChannel`, v2.1.0) carry
   the colors, the generation of the settings after a forgetting (from stage U2
   of v2.2.0; until then, the notice that they were forgotten), and the notice
-  that the app stopped; never the key. The view page reads outputs through the
-  server only, and opens nothing outside the page.
+  that the app stopped; never the key. The view page reads outputs, and from
+  v2.3.0 the FIT file of one activity in the Snapshot Store that the GUI
+  remembers, through the server only, and opens nothing outside the page.
 
 ## Privacy
 
@@ -1735,6 +1825,13 @@ Processing:
   report.
 - The view page (v2.1.0) writes nothing in an output. The server keeps what
   it read in memory only, under a ticket that holds no place.
+- From v2.3.0 the view page also reads, only when the laps of one activity are
+  asked for, the `store.json` and the one FIT file of that activity in the
+  Snapshot Store that the GUI remembers (where a folder has no `store.json`,
+  only whether it holds the other names that a store writes). It writes nothing
+  in the store, keeps nothing of the FIT file, and its answer holds the kinds
+  and the values of the laps only: no place, SHA-256, key of an activity, or
+  position (see [Laps of an activity (v2.3.0)](#laps-of-an-activity-v230)).
 - A Snapshot Store or a folder for the output in a folder that a cloud may
   copy is marked in yellow, without a stop (stage B4a): a folder that a cloud
   app keeps (on a Mac, iCloud Drive in `Library/Mobile Documents` and the

@@ -227,6 +227,26 @@ class SettingsFileTest(unittest.TestCase):
         self.assertIsNone(remove_settings(self.path)[0])
         self.assertFalse(self.path.exists())
 
+    def test_a_version_of_more_digits_than_a_number_takes_is_a_newer_one(self) -> None:
+        # Codex's read of the diff of X9c-2: within 64 KiB, the number of a
+        # version can have more digits than int() takes. Such a file is of a
+        # later version, neither used nor written over, and stops nothing;
+        # the zeros before a number do not count.
+        self.path.parent.mkdir()
+        for digits in ("1" * 5000, "0" * 5000 + "3", "1" + "0" * 9):
+            with self.subTest(digits=len(digits)):
+                content = json.dumps({"format": settings._FORMAT_PREFIX + digits, "store": self.store}).encode()
+                self.path.write_bytes(content)
+                self.assertEqual(read_settings(self.path), ({}, SETTINGS_NEWER))
+                self.assertEqual(remember_hints_at(self.path, True), SETTINGS_NEWER)
+                self.assertEqual(self.path.read_bytes(), content)
+        self.path.write_bytes(json.dumps({"format": settings._FORMAT_PREFIX + "0" * 5000 + "2", "store": self.store}).encode())
+        self.assertEqual(read_settings(self.path), ({"store": self.store}, None))
+        # The marks are read in the same way.
+        marks = self.path.with_name("marks-of-the-test.json")
+        marks.write_bytes(json.dumps({"format": settings.MARKS_FORMAT_PREFIX + "7" * 5000, "marks": []}).encode())
+        self.assertEqual(settings.read_marks(marks), ([], settings.MARKS_NEWER))
+
     def test_a_file_that_is_not_used_is_replaced_by_the_next_settings(self) -> None:
         self.path.parent.mkdir()
         self.path.write_bytes(b"{not json")

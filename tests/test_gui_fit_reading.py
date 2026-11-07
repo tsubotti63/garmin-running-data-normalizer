@@ -191,7 +191,9 @@ WAYS = {
     "other_store": lambda o, s, f, k, d: writable(s / "store.json").write_text(json.dumps({**load(s / "store.json"), "account_store_id": "another-account"}), encoding="utf-8"),
     "store_unreadable": lambda o, s, f, k, d: writable(s / "store.json").write_bytes(b"{"),
     "store_json_too_large": lambda o, s, f, k, d: writable(s / "store.json").write_bytes(b" " * (64 * 1024 + 1)),
-    "no_store": lambda o, s, f, k, d: writable(s / "store.json").unlink(),
+    "no_store": lambda o, s, f, k, d: remove_folder(s),
+    # What a store writes without its store.json: a damaged store, as load_store takes it (stage X9c-2).
+    "store_json_missing": lambda o, s, f, k, d: writable(s / "store.json").unlink(),
     "no_link": lambda o, s, f, k, d: rewrite(o, f, LINKS, []),
     "laps_differ": lambda o, s, f, k, d: rewrite(o, f, LAPS, sorted(load(o / LAPS), key=lambda row: row["lap_ordinal_within_session"])[:-1]),
     "OUTPUT_CHANGED": lambda o, s, f, k, d: (o / LAPS).write_text("[]", encoding="utf-8"),
@@ -314,6 +316,38 @@ class ReadLapsTest(Fixture):
         self.assertReason(read_laps(output, files, key, store.parent / "gone"), "no_store")
         (store.parent / "empty").mkdir()
         self.assertReason(read_laps(output, files, key, store.parent / "empty"), "no_store")
+
+    def test_a_store_without_its_store_json(self) -> None:
+        # A folder that holds what a store writes but not its store.json is a
+        # damaged store, as load_store and the page take it: the reading does
+        # not go on to its folder snapshots (stage X9c-2 of v2.3.0). Only the
+        # names of the entries count, and the folder snapshots does not.
+        output, store, files, key, _digest = self.copy()
+        writable(store / "store.json").unlink()
+        self.assertReason(read_laps(output, files, key, store), "store_unreadable")
+        output, store, files, key, _digest = self.copy()
+        parent = store.parent / "chosen"
+        parent.mkdir()
+        (parent / "notes.txt").write_text("not of a store", encoding="utf-8")
+        store.rename(parent / "snapshots")
+        self.assertEqual(read_laps(output, files, key, parent).status, "laps")
+        for name in sorted(fit_reading._STORE_ENTRY_NAMES):
+            with self.subTest(name=name):
+                (parent / name).mkdir() if name in ("blobs", "journal") else (parent / name).write_text("", encoding="utf-8")
+                self.assertReason(read_laps(output, files, key, parent), "store_unreadable")
+                (parent / name).rmdir() if name in ("blobs", "journal") else (parent / name).unlink()
+        self.assertNotIn("snapshots", fit_reading._STORE_ENTRY_NAMES)
+
+    @unittest.skipIf(WINDOWS, "symbolic links need a privilege on Windows")
+    def test_a_link_of_a_name_that_a_store_writes_counts_as_itself(self) -> None:
+        # The names are looked at as themselves (stage X9c-2): a link named as
+        # what a store writes counts, also where it leads nowhere, and is not
+        # followed.
+        output, store, files, key, _digest = self.copy()
+        folder = store.parent / "chosen"
+        folder.mkdir()
+        make_link(folder / "nowhere", folder / "blobs", folder=True)
+        self.assertReason(read_laps(output, files, key, folder), "store_unreadable")
 
     def test_a_store_in_the_folder_snapshots_of_the_remembered_folder(self) -> None:
         output, store, files, key, _digest = self.copy()
@@ -660,6 +694,102 @@ class LinksInTheStoreTest(Fixture):
                 _winapi.CreateJunction(str(real), str(step))
                 self.assertReason(read_laps(output, files, key, store), "store_unreadable")
 
+    def moved_store(self) -> tuple[Path, Path, dict[str, tuple[int, str]], str, Path, Path]:
+        """A copy whose store is the folder snapshots of a folder elsewhere,
+        and an empty folder to remember: the output, the empty folder, the
+        files, the key, the folder elsewhere, and the store."""
+        output, store, files, key, _digest = self.copy()
+        empty = store.parent / "empty"
+        empty.mkdir()
+        elsewhere = store.parent / "elsewhere"
+        elsewhere.mkdir()
+        store.rename(elsewhere / "snapshots")
+        return output, empty, files, key, elsewhere, elsewhere / "snapshots"
+
+    @unittest.skipIf(WINDOWS, "symbolic links need a privilege on Windows; a junction made in place is tested below")
+    def test_the_folder_snapshots_is_that_of_the_folder_opened(self) -> None:
+        # Codex's second read of the diff of X9c-2: once the remembered folder
+        # is found without store.json, it is put elsewhere, and a link to a
+        # folder whose folder snapshots is a store of the output is put at its
+        # place. The folder snapshots is that of the folder opened: there is
+        # none (by descriptors), or the folder before it is not as it was (by
+        # paths); the store elsewhere is never read.
+        for mode in self.modes():
+            with self.subTest(dir_fd=mode), mock.patch.object(fit_reading, "_OPENS_AT", mode):
+                output, empty, files, key, elsewhere, store = self.moved_store()
+                self.assertEqual(read_laps(output, files, key, elsewhere).status, "laps")
+                real_read = fit_reading._Root.read
+                moved: list[bool] = []
+
+                def reading(root, parts, limit):
+                    try:
+                        return real_read(root, parts, limit)
+                    except fit_reading._Missing:
+                        if not moved:
+                            moved.append(True)
+                            empty.rename(empty.with_name("empty-old"))
+                            make_link(elsewhere, empty, folder=True)
+                        raise
+
+                with mock.patch.object(fit_reading._Root, "read", autospec=True, side_effect=reading):
+                    answer = read_laps(output, files, key, empty)
+                self.assertEqual(moved, [True])
+                self.assertReason(answer, "no_store" if mode else "store_unreadable")
+
+    def test_a_remembered_folder_that_was_not_there_has_no_folder_in_it(self) -> None:
+        # Codex's second read of the diff of X9c-2: a remembered folder that is
+        # not there has no folder snapshots in it, also where a link (on
+        # Windows a junction) to a folder whose folder snapshots is a store of
+        # the output is put at its place right after.
+        output, empty, files, key, elsewhere, store = self.moved_store()
+        missing = empty.with_name("not-yet")
+        real_enter = fit_reading._Root.__enter__
+        made: list[bool] = []
+
+        def entering(root):
+            try:
+                return real_enter(root)
+            except fit_reading._Missing:
+                if not made:
+                    made.append(True)
+                    if WINDOWS:
+                        import _winapi
+
+                        _winapi.CreateJunction(str(elsewhere), str(missing))
+                    else:
+                        make_link(elsewhere, missing, folder=True)
+                raise
+
+        with mock.patch.object(fit_reading._Root, "__enter__", new=entering):
+            answer = read_laps(output, files, key, missing)
+        self.assertEqual(made, [True])
+        self.assertReason(answer, "no_store")
+
+    @unittest.skipUnless(WINDOWS, "junctions are of Windows")
+    def test_a_folder_made_a_junction_before_its_folder_snapshots_is_opened(self) -> None:
+        # Codex's second read of the diff of X9c-2: the remembered folder, held
+        # and found without store.json, made a junction in its place to a
+        # folder whose folder snapshots is a store of the output. The system
+        # has that folder snapshots elsewhere than in the folder held: refused
+        # before a byte of it is read.
+        output, empty, files, key, elsewhere, store = self.moved_store()
+        real_read = fit_reading._Root.read
+        made: list[bool] = []
+
+        def reading(root, parts, limit):
+            try:
+                return real_read(root, parts, limit)
+            except fit_reading._Missing:
+                if not made:
+                    made.append(True)
+                    junction_in_place(empty, elsewhere)
+                raise
+
+        with mock.patch.object(fit_reading._Root, "read", autospec=True, side_effect=reading):
+            answer = read_laps(output, files, key, empty)
+        self.assertEqual(made, [True])
+        self.assertReason(answer, "store_unreadable")
+
     @unittest.skipUnless(WINDOWS, "junctions are of Windows")
     def test_a_junction_put_in_place_of_a_folder_while_the_store_is_read(self) -> None:
         # Between the reading of store.json and that of the blob: a folder of
@@ -927,6 +1057,52 @@ class SwapsWhileReadTest(Fixture):
                 self.assertEqual(other.casefold(), place.casefold())
                 self.assertFalse(fit_reading._same_place(other, place))
 
+    def test_the_names_at_the_top_are_those_of_the_folder_opened(self) -> None:
+        # Where a folder has no store.json, the names that a store writes are
+        # looked at in the folder opened, by its descriptor where the system
+        # looks so, not at its place again: a folder that holds what a store
+        # writes, put at the place meanwhile, is not taken for it (stage
+        # X9c-2). On Windows the folder is held, and cannot be renamed
+        # meanwhile.
+        output, store, files, key, _digest = self.copy()
+        empty = store.parent / "empty"
+        empty.mkdir()
+        real_read = fit_reading._Root.read
+        moved: list[bool] = []
+
+        def reading(root, parts, limit):
+            try:
+                return real_read(root, parts, limit)
+            except fit_reading._Missing:
+                # Its store.json is not there: the folder is put elsewhere,
+                # and one that holds a folder blobs is put at its place.
+                if not moved:
+                    moved.append(self.renamed(empty, empty.with_name("empty-old")))
+                    if moved[-1]:
+                        (empty / "blobs").mkdir(parents=True)
+                raise
+
+        with mock.patch.object(fit_reading._Root, "read", autospec=True, side_effect=reading):
+            answer = read_laps(output, files, key, empty)
+        self.assertEqual(moved, [False] if WINDOWS else [True])
+        self.assertReason(answer, "no_store")
+
+    def test_a_blob_that_changes_while_it_is_read(self) -> None:
+        for mode in [True, False] if fit_reading._OPENS_AT else [False]:
+            with self.subTest(dir_fd=mode):
+                output, store, files, key, digest = self.copy()
+                path = writable(blob(store, digest))
+                real_fdopen = os.fdopen
+
+                def reading(descriptor, *args, **kwargs):
+                    handle = real_fdopen(descriptor, *args, **kwargs)
+                    status = os.stat(path)
+                    os.utime(path, ns=(status.st_atime_ns, status.st_mtime_ns + 1_000_000_000))
+                    return handle
+
+                with mock.patch.object(fit_reading, "_OPENS_AT", mode), mock.patch.object(os, "fdopen", side_effect=reading):
+                    self.assertReason(read_laps(output, files, key, store), "store_unreadable")
+
     def test_files_and_folders_without_an_identity(self) -> None:
         # A system that gives no identity of a file (st_ino 0) could not tell
         # a file put in place of another for a moment: such a file or folder
@@ -1008,22 +1184,6 @@ class ChangesWhileReadTest(Fixture):
         helper.join()
         self.assertEqual((done, got), ([True], "OUTPUT_NOT_AVAILABLE"))
         self.assertLess(took, 2.0)
-
-    def test_a_blob_that_changes_while_it_is_read(self) -> None:
-        for mode in [True, False] if fit_reading._OPENS_AT else [False]:
-            with self.subTest(dir_fd=mode):
-                output, store, files, key, digest = self.copy()
-                path = writable(blob(store, digest))
-                real_fdopen = os.fdopen
-
-                def reading(descriptor, *args, **kwargs):
-                    handle = real_fdopen(descriptor, *args, **kwargs)
-                    status = os.stat(path)
-                    os.utime(path, ns=(status.st_atime_ns, status.st_mtime_ns + 1_000_000_000))
-                    return handle
-
-                with mock.patch.object(fit_reading, "_OPENS_AT", mode), mock.patch.object(os, "fdopen", side_effect=reading):
-                    self.assertReason(read_laps(output, files, key, store), "store_unreadable")
 
     def test_by_path_a_folder_put_in_place_of_another(self) -> None:
         output, store, files, key, digest = self.copy()

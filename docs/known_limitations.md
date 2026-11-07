@@ -292,6 +292,18 @@ the data, which v2.0.0 changed, are in
 - The view page and `series` give numbers to look at and to count: they do not
   say what causes what, or what to do, and a value that Garmin did not record
   stays empty.
+- Starting with v2.3.0, the laps of an activity, with the kind of each lap,
+  are shown only for an output made from the Snapshot Store that the GUI
+  remembers now: after a run with another store, or after the remembered
+  settings are forgotten, the laps of an output made before are not shown.
+  Two stores of the same id, such as a copy of a store, are not told apart:
+  the one remembered is read, and a FIT file of it is used only where it is
+  the one that the output records.
+- The laps of an activity are not shown from a store on a drive that gives no
+  identity of its files, from a store whose folder, or the folder that the
+  GUI remembers, is itself a link (on Windows also a junction; the GUI uses
+  such a store otherwise as before), or from a FIT file over 32 MiB (the
+  normalizer reads FIT files up to 128 MiB).
 
 ## Distribution and integrations
 

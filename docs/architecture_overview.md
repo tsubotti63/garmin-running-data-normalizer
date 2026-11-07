@@ -34,6 +34,14 @@ items (`gui/layouts.py`) are kept in the settings, and the marks
 the rules of the names that the GUI keeps and shows. The page saves a
 picture as an SVG file by itself. None of them changes the output.
 
+Starting with v2.3.0, the server of the view page also gives the laps of one
+activity with the kind of each lap that its FIT file records
+(`/api/view/laps`): `fit/lap_kinds.py` reads the kinds from the bytes of a
+FIT file, and `gui/fit_reading.py` reads that FIT file from the Snapshot
+Store that the GUI remembers, only when the laps of the activity are asked
+for, without following a link, and ties its laps to those of the output.
+Neither changes the output or the store.
+
 ```text
 Local Garmin Account Data Export (read-only)
   -> discovery and bounded archive intake

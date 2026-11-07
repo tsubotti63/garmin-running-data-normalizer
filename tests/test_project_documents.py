@@ -56,6 +56,30 @@ def test_the_project_documents_name_the_view_page_that_does_not_interpret() -> N
     assert "Since v2.1.0, the view page is a second page in the next tab" in design
 
 
+def test_the_boundaries_name_the_fit_file_that_the_view_page_reads() -> None:
+    # Stage X9c-2 of v2.3.0: the Human maintainer chose at stage X8 that the
+    # view page reads, only when asked, the FIT file of one activity in the
+    # Snapshot Store, which widens the privacy boundary; the boundary and the
+    # privacy boundary, whose text the Human maintainer decides, say so.
+    boundary = flowing("docs/project/project_boundary.md")
+    assert (
+        "a CSV file that the person chooses. Starting with v2.3.0, the view page also reads, only when the laps "
+        "of one activity are asked for, the FIT file of that activity in the Snapshot Store that the GUI "
+        "remembers, to show the kind of each lap (a Human decision; see "
+        "[Laps of an activity (v2.3.0)](../gui_design.md#laps-of-an-activity-v230))."
+    ) in boundary
+    privacy = flowing("docs/security_and_privacy_boundary.md")
+    assert (
+        "- The view page of the GUI reads outputs. Starting with v2.3.0, only when the laps of one activity are "
+        "asked for, it also reads the `store.json` and the one FIT file of that activity in the Snapshot Store "
+        "that the GUI remembers (where a folder has no `store.json`, only whether it holds the other names that a "
+        "store writes), without following a link, a junction, or another reparse point. It reads no other file of "
+        "the store, writes "
+        "nothing, sends nothing, and its answer holds no path, hash, or activity identifier (see "
+        "[Laps of an activity (v2.3.0)](gui_design.md#laps-of-an-activity-v230))."
+    ) in privacy
+
+
 def test_a_release_candidate_sends_its_readers_to_the_stable_release() -> None:
     # v2.0.1 F4: while the source is a release candidate, the README names it
     # as a test version on TestPyPI, after the stable release and how to

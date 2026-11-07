@@ -51,6 +51,7 @@ from .runs import (
 )
 from .layouts import BUILT_IN_IDS, USER_LAYOUT_ID, LayoutChangeError, built_in_answer
 from .marks import MarkChangeError
+from .fit_reading import REASONS, Laps, activity_key, read_laps
 from .settings import (
     SHELF_STATES,
     THEMES,
@@ -63,6 +64,7 @@ from .settings import (
     remember_hints,
     remember_theme,
     remember_view,
+    remembered_store,
 )
 from .stores import check_store, download_time, open_store, store_place, unlock_store
 from .views import (
@@ -88,7 +90,7 @@ from .views import (
     series_request,
     types_ok,
 )
-from ..view.items import ITEMS_BY_KEY
+from ..view.items import ACTIVITIES, ITEMS_BY_KEY
 from ..view.series import (
     MAX_ANSWER_BYTES,
     MAX_PANELS,
@@ -97,6 +99,7 @@ from ..view.series import (
     activity_spread,
     activity_types,
     default_items,
+    list_rows,
     point_item,
     shoe_answer,
     shoe_count,
@@ -206,7 +209,16 @@ API_ROUTES = {
     "/api/view/spread": "_api_view_spread",
     # The view by shoes (stage S1 of v2.2.0).
     "/api/view/shoes": "_api_view_shoes",
+    # The laps of one activity with the kinds that its FIT file records
+    # (stage X9c-2 of v2.3.0).
+    "/api/view/laps": "_api_view_laps",
 }
+
+# Why the laps of an activity are not shown (stage X9c-2 of v2.3.0): those
+# of gui.fit_reading, a reading of the output that is not the page's
+# (read_stale), and another reading of a store under way (busy). The page
+# tells them from stage X10, by these names.
+LAP_REASONS = (*REASONS, "read_stale", "busy")
 
 
 class ApiError(Exception):
@@ -289,6 +301,44 @@ def _output_facts(data: Any) -> dict[str, Any]:
         "types": activity_types(data),
         "partial": data.partial,
     }
+
+
+def _whole(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _laps_answer(laps: Laps) -> dict[str, Any]:
+    """The answer of the laps of an activity (stage X9c-2 of v2.3.0), made of
+    the fields named here only: the kind of each lap from its FIT file and
+    its values from the output, and how many laps have no known kind; or why
+    the laps are not shown. No place, SHA-256, or key."""
+    if laps.status != "laps":
+        return {"status": "unavailable", "reason": laps.reason}
+    return {
+        "status": "laps",
+        "laps": [
+            {
+                "kind": lap.kind,
+                "elapsed_s": lap.elapsed_s,
+                "timer_s": lap.timer_s,
+                "distance_m": lap.distance_m,
+                "avg_heart_rate": lap.avg_heart_rate,
+                "avg_cadence": lap.avg_cadence,
+                "avg_speed": lap.avg_speed,
+            }
+            for lap in laps.laps
+        ],
+        "counts": {"laps": len(laps.laps), "unknown_kind": laps.unknown_kind},
+    }
+
+
+def _bounded(answer: dict[str, Any]) -> dict[str, Any]:
+    """An answer of the laps of an activity, of any status, at most
+    MAX_ANSWER_BYTES as sent: the facts of the output in it have no limit of
+    their own (Codex's read of the diff of X9c-2)."""
+    if len(json_body(answer)) > MAX_ANSWER_BYTES:
+        raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
+    return answer
 
 
 def _command_failed() -> ApiError:
@@ -378,6 +428,9 @@ class GuiServer(ThreadingHTTPServer):
         # The outputs that the view page opened, by their tickets, and what
         # it read of them, in memory only (stage G3b).
         self.views = Views()
+        # One reading of a store for the laps of an activity at a time (stage
+        # X9c-2 of v2.3.0): another is told busy at once, not made to wait.
+        self.laps_lock = threading.Lock()
         self.idle_timeout = idle_timeout
         self._last_request = time.monotonic()
         self._lock = threading.Lock()
@@ -1054,7 +1107,7 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         except ViewRequestError as exc:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
         try:
-            data = self.server.views.data(ticket)
+            data, read = self.server.views.reading(ticket)
         except ViewNotOpenError as exc:
             raise ApiError(HTTPStatus.CONFLICT, "VIEW_NOT_OPEN") from exc
         except OutputActionError as exc:
@@ -1065,9 +1118,62 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
         answer = activity_list(data, key, period, types, conditions)
         answer["names"] = _names_state(data)
+        # Each row's place among the activities of this reading, by which the
+        # page asks for its laps, and the reading that it is of (stage X9c-2
+        # of v2.3.0); the declared key of an activity is never given.
+        if answer["rows"] is not None:
+            places = {id(row): ref for ref, row in enumerate(data.rows[ACTIVITIES])}
+            for row, chosen in zip(answer["rows"], list_rows(data, period, types, conditions), strict=True):
+                row["ref"] = places[id(chosen)]
+        answer["read"] = read
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer
+
+    def _api_view_laps(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The laps of one activity of an output that the page opened, with
+        # the kinds that its FIT file records, read from the Snapshot Store
+        # that the GUI remembers (stage X9c-2 of v2.3.0; gui.fit_reading).
+        # The page names the activity by its place among the activities of a
+        # reading (``ref``, from the list of a period) and that reading
+        # (``read``). One reading of a store at a time: another is told busy.
+        ticket, read, ref = payload.get("view"), payload.get("read"), payload.get("ref")
+        if not isinstance(ticket, str) or not _whole(read) or not _whole(ref):
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+        try:
+            data, current, output = self.server.views.lap_reading(ticket)
+        except ViewNotOpenError as exc:
+            raise ApiError(HTTPStatus.CONFLICT, "VIEW_NOT_OPEN") from exc
+        except OutputActionError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code, exc.version) from exc
+        except Exception as exc:
+            raise _command_failed() from exc
+        facts = {"read": current, "output": _output_facts(data)}
+        # Another reading than the page's, also for another date of today:
+        # its places are of another list, which the page asks again.
+        if read != current:
+            return _bounded({"status": "unavailable", "reason": "read_stale", **facts})
+        rows = data.rows[ACTIVITIES]
+        if ref >= len(rows):
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+        key = activity_key(rows, ref)
+        if key is None:
+            return _bounded({"status": "unavailable", "reason": "key_shared", **facts})
+        # The lock is taken without waiting once the output is read and the
+        # activity found, around the reading of the store only, so that a
+        # reading of an output that waits keeps no other laps busy (Codex's
+        # read of the diff of X9c-2).
+        if not self.server.laps_lock.acquire(blocking=False):
+            return _bounded({"status": "unavailable", "reason": "busy", **facts})
+        try:
+            laps = read_laps(output, data.files, key, remembered_store())
+        except OutputActionError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code, exc.version) from exc
+        except Exception as exc:
+            raise _command_failed() from exc
+        finally:
+            self.server.laps_lock.release()
+        return _bounded({**_laps_answer(laps), **facts})
 
     def _api_view_points(self, payload: dict[str, Any]) -> dict[str, Any]:
         # Two items of the activities plotted against each other (stage O1

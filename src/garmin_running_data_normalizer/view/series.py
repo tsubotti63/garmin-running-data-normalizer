@@ -780,6 +780,18 @@ def activity_list(
     }
 
 
+def list_rows(
+    data: ViewData,
+    period: tuple[date, date],
+    types: Collection[str] | None = None,
+    conditions: Conditions | None = None,
+) -> list[Row]:
+    """The rows of the activities that activity_list lists, in its order
+    (stage X9c-2 of v2.3.0): the server finds by them where each is among
+    the activities of the reading, for the laps of one activity."""
+    return _period_rows(data, period, types, conditions)[1]
+
+
 def _period_rows(
     data: ViewData,
     period: str | tuple[date, date],
@@ -1136,6 +1148,7 @@ __all__ = [
     "default_items",
     "default_types",
     "item_series",
+    "list_rows",
     "period_bounds",
     "point_item",
     "previous_span",
