@@ -210,7 +210,7 @@ would be, and the button can be pressed while one is there. From v2.3.0
 the button can still be pressed (on Windows, one that a stop left stays until
 it is ten minutes old): forgetting tells that it stayed (`TEMPORARY_LEFT`,
 where the settings and the marks are gone, so the page drops the colors
-remembered in the browser as well), and pressing again once it is ten
+remembered in the tab as well), and pressing again once it is ten
 minutes old removes it. The status of a launch and forgetting count what
 there is to forget alike. A folder that is
 a link is never looked into, as the settings are never written into one; a
@@ -1058,7 +1058,10 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   the whole heading), says under the table what was counted, and wraps its
   places and headings, English at spaces and never inside a word, Japanese
   between its characters too (it has no spaces), so that six years or six
-  races fit its box.
+  races fit its box. From v2.3.0 (stage X2) the name of a race in a heading
+  may wrap between any two characters where it does not fit (`raceHeadParts`),
+  so that six names of thirty letters with no space fit too; the other
+  words of the headings wrap as before.
 - Marks (stage M1): the person's own events, each a kind (race, injury, shoes,
   or other), a name of 1 to 30 characters (checked as the name of a layout),
   and a day or a span of days from 1 January 1900; 200 at most, ordered by
@@ -1319,7 +1322,14 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   the output does not reach) has no line under its picture and no name of a
   file. Nothing is sent to the server or anywhere else, and the
   Content-Security-Policy stays as it is. Only SVG is made; PNG and the other
-  formats are out of scope.
+  formats are out of scope. From v2.3.0 (stage X2) the window says what it
+  saves and then the line before a saving, above its choices; the names of
+  the marks that the choice of the panels puts in are said under that
+  choice, so that a press does not move it; its end, why it cannot save
+  and the buttons (`.save-end`), stays at the bottom of the window while it
+  scrolls, where at 1366 × 650 the buttons were hidden in it; and the
+  window opens at its top each time, also where it was scrolled before it
+  closed.
 - The colors of the years compared and a year highlighted (stage L3): the
   lines of the years laid over one another or as running totals take colors of
   their own (`--year1` to `--year6` in styles.css), apart from the six steps

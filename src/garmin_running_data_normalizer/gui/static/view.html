@@ -295,6 +295,10 @@
       <div id="save-pop" class="pop save-pop" role="dialog" aria-labelledby="save-pop-title" hidden>
         <div class="pop-head"><span id="save-pop-title" class="pop-title" tabindex="-1" data-i18n="view.save.title"></span><button type="button" id="save-pop-close" class="small" data-i18n="help.close"></button></div>
         <p id="save-what" class="save-what" hidden></p>
+        <div class="part-note save-warn">
+          <svg class="icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M8 1.9l6.5 11.8h-13z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.3v3.4M8 11.6v.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <p id="save-warn"></p>
+        </div>
         <fieldset class="save-field" id="save-scope-field">
           <legend data-i18n="view.save.scope"></legend>
           <span class="save-choice"><input type="radio" name="save-scope" id="save-all" value="all" checked><label for="save-all" id="save-all-label"></label></span>
@@ -314,17 +318,16 @@
           <legend data-i18n="view.save.marks"></legend>
           <span class="save-choice"><input type="checkbox" id="save-marks"><label for="save-marks" data-i18n="view.save.marks_in"></label></span>
           <p id="save-marks-none" class="note save-note" data-i18n="view.save.marks_none" hidden></p>
+          <p id="save-marks-warn" class="note save-note" hidden></p>
         </fieldset>
         <p class="save-file"><span data-i18n="view.save.file"></span> <code id="save-name"></code></p>
         <p class="note save-note" data-i18n="view.save.format"></p>
-        <div class="part-note save-warn">
-          <svg class="icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M8 1.9l6.5 11.8h-13z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.3v3.4M8 11.6v.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-          <p id="save-warn"></p>
-        </div>
-        <p id="save-problem" class="save-problem" role="status" aria-live="polite"></p>
-        <div class="button-row">
-          <button type="button" id="save-cancel" data-i18n="view.save.cancel"></button>
-          <button type="button" id="save-go" class="primary" data-i18n="view.save.save"></button>
+        <div class="save-end">
+          <p id="save-problem" class="save-problem" role="status" aria-live="polite"></p>
+          <div class="button-row">
+            <button type="button" id="save-cancel" data-i18n="view.save.cancel"></button>
+            <button type="button" id="save-go" class="primary" data-i18n="view.save.save"></button>
+          </div>
         </div>
       </div>
       <section id="compare" class="compare" aria-labelledby="compare-title" hidden>
