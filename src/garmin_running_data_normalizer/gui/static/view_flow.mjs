@@ -3569,6 +3569,243 @@ export function shoesTables(answer, language) {
   return { summary, months };
 }
 
+// --- The work laps of the shoes (stage X11 of v2.3.0) ---------------------
+
+// The sums of the work laps (Active and Interval, the person's choice of the
+// samples of X11) of a pair of shoes or of the period, as the server gives
+// them for the activities of one request (gui/shoe_work.py): they add up
+// over the requests. The counts of the activities, and why one is not
+// counted.
+// The sums of the work laps, whole numbers all: the time in milliseconds,
+// the distance in centimetres, and the heart rate in beats a minute times
+// milliseconds, the units of the FIT file, so that the sums of the requests
+// add up to those of one request exactly (Codex's eighth read of the diff of
+// X11).
+export const WORK_SUMS = ["laps", "time_ms", "time_laps", "distance_cm", "distance_laps", "paced_time_ms", "paced_distance_cm", "heart_bpm_ms", "heart_time_ms"];
+export const WORK_RUN_COUNTS = ["counted", "no_work", "unknown_left", "unknown_laps", "no_pace"];
+export const WORK_NOT_COUNTED = [
+  "unknown_kinds",
+  "no_laps",
+  "key_shared",
+  "no_link",
+  "fit_missing",
+  "fit_too_large",
+  "fit_changed",
+  "fit_not_activity",
+  "laps_differ",
+  "store_unreadable",
+];
+// Why the work laps cannot be counted at all, which the bar of the shoes says.
+export const WORK_UNAVAILABLE = ["not_from_store", "no_store", "other_store", "store_unreadable", "too_many", "read_stale", "busy"];
+// The words of each reason, of an activity not counted and of all.
+export const WORK_REASON_KEYS = {
+  unknown_kinds: "view.shoes.work.reason.unknown_kinds",
+  no_laps: "view.shoes.work.reason.no_laps",
+  key_shared: "view.shoes.work.reason.key_shared",
+  no_link: "view.shoes.work.reason.no_link",
+  fit_missing: "view.shoes.work.reason.fit_missing",
+  fit_too_large: "view.shoes.work.reason.fit_too_large",
+  fit_changed: "view.shoes.work.reason.fit_changed",
+  fit_not_activity: "view.shoes.work.reason.fit_not_activity",
+  laps_differ: "view.shoes.work.reason.laps_differ",
+  store_unreadable: "view.shoes.work.reason.store_unreadable",
+};
+export const WORK_WHOLE_KEYS = {
+  not_from_store: "view.shoes.work.whole.not_from_store",
+  no_store: "view.shoes.work.whole.no_store",
+  other_store: "view.shoes.work.whole.other_store",
+  store_unreadable: "view.shoes.work.whole.store_unreadable",
+  too_many: "view.shoes.work.whole.too_many",
+  read_stale: "view.shoes.work.whole.read_stale",
+  busy: "view.shoes.work.whole.busy",
+};
+
+function workSums(value, names) {
+  if (value === null || typeof value !== "object" || value.not_counted === null || typeof value.not_counted !== "object") {
+    return null;
+  }
+  const sums = {};
+  for (const name of names) {
+    const number = value[name];
+    if (!Number.isSafeInteger(number) || number < 0) {
+      return null;
+    }
+    sums[name] = number;
+  }
+  const notCounted = {};
+  for (const [reason, count] of Object.entries(value.not_counted)) {
+    if (!WORK_NOT_COUNTED.includes(reason) || !Number.isInteger(count) || count < 0) {
+      return null;
+    }
+    notCounted[reason] = count;
+  }
+  return { ...sums, not_counted: notCounted };
+}
+
+// An answer of the work laps as the page takes it: the sums of each of the
+// ``pairs`` pairs of the view and of the period, the activities in all, and
+// where the next request starts (null after the last); or why they cannot be
+// counted; null for an answer of another form, which the page takes as a
+// stop.
+export function workTaken(answer, pairs) {
+  if (answer === null || typeof answer !== "object") {
+    return null;
+  }
+  if (answer.status === "unavailable") {
+    return WORK_UNAVAILABLE.includes(answer.reason) ? { reason: answer.reason } : null;
+  }
+  const whole = (value) => Number.isInteger(value) && value >= 0;
+  if (answer.status !== "work" || !whole(answer.runs) || !whole(answer.from) || !(answer.next === null || (whole(answer.next) && answer.next > answer.from && answer.next < answer.runs))) {
+    return null;
+  }
+  if (!Array.isArray(answer.pairs) || answer.pairs.length !== pairs) {
+    return null;
+  }
+  const taken = answer.pairs.map((pair) => workSums(pair, [...WORK_SUMS, ...WORK_RUN_COUNTS]));
+  const counts = workSums(answer.counts, [...WORK_SUMS, ...WORK_RUN_COUNTS, "two_pairs"]);
+  if (taken.includes(null) || counts === null) {
+    return null;
+  }
+  return { runs: answer.runs, from: answer.from, next: answer.next, pairs: taken, counts };
+}
+
+// Nothing counted yet, of a pair or of the period.
+export function workEmpty(names = [...WORK_SUMS, ...WORK_RUN_COUNTS]) {
+  return { ...Object.fromEntries(names.map((name) => [name, 0])), not_counted: {} };
+}
+
+// Two sums added, as the requests of one counting add up; null where a sum
+// would pass the whole numbers that a number of the page holds exactly, so
+// that the sums never depend on where the requests ended (Codex's ninth read
+// of the diff of X11).
+export function workAdd(total, part) {
+  const sum = { ...total, not_counted: { ...total.not_counted } };
+  for (const [name, value] of Object.entries(part)) {
+    if (name === "not_counted") {
+      for (const [reason, count] of Object.entries(value)) {
+        sum.not_counted[reason] = (sum.not_counted[reason] ?? 0) + count;
+        if (!Number.isSafeInteger(sum.not_counted[reason])) {
+          return null;
+        }
+      }
+    } else {
+      sum[name] = (sum[name] ?? 0) + value;
+      if (!Number.isSafeInteger(sum[name])) {
+        return null;
+      }
+    }
+  }
+  return sum;
+}
+
+// The values of a sum as the table shows them, as lapTotals counts the laps
+// of the window of the laps: the time (seconds) and the distance (metres) of
+// the laps that have one, the average pace (seconds a metre) of the laps that
+// have both (of a distance above 0), the heart rate weighted by the time;
+// null where no lap has them; and the activities counted and not. From the
+// whole numbers of the sums only, so that they do not depend on where the
+// requests ended.
+export function workValues(sum) {
+  return {
+    distance: sum.distance_laps > 0 ? sum.distance_cm / 100 : null,
+    time: sum.time_laps > 0 ? sum.time_ms / 1000 : null,
+    pace: sum.paced_distance_cm > 0 ? sum.paced_time_ms / sum.paced_distance_cm / 10 : null,
+    heart: sum.heart_time_ms > 0 ? sum.heart_bpm_ms / sum.heart_time_ms : null,
+    counted: sum.counted,
+    notCounted: Object.values(sum.not_counted).reduce((total, count) => total + count, 0),
+  };
+}
+
+const SHOES_WORK_HEADS = [
+  "view.shoes.head.shoe",
+  "view.shoes.work.head.distance",
+  "view.shoes.work.head.time",
+  "view.shoes.work.head.pace",
+  "view.shoes.work.head.heart",
+  "view.shoes.work.head.counted",
+  "view.shoes.work.head.not_counted",
+];
+
+// The table of the work laps: a row a pair, in the order of the view, its
+// work distance, time, average pace, and heart rate, and its activities
+// counted and not, from the sums of each pair (``sums``, in that order).
+export function shoesWorkTable(answer, sums, language) {
+  const text = (column, value) => (Number.isFinite(value) ? plain(lapText(column, value, language)) : plain("—"));
+  return {
+    heads: SHOES_WORK_HEADS.map((key) => message(key)),
+    rows: answer.shoes.map((shoe, index) => {
+      const values = workValues(sums[index]);
+      return [
+        shoeName(shoe, language),
+        Number.isFinite(values.distance) ? valueMessage("dist", values.distance, language) : plain("—"),
+        text("time", values.time),
+        text("pace", values.pace),
+        text("heart", values.heart),
+        plain(countText(values.counted, language)),
+        plain(countText(values.notCounted, language)),
+      ];
+    }),
+  };
+}
+
+// The lines of the work laps under the tables: which values the table of the
+// work laps holds, and the activities counted and not, by reason (in the
+// order of WORK_NOT_COUNTED, each a message for the page to join); then the
+// more that the info button opens: the activities whose laps of no known kind
+// were left out, those with no work lap, those not in the average pace, the
+// activities of two pairs, and how an activity is counted.
+export function shoesWorkLines(counts) {
+  const n = (value) => ({ n: value });
+  const reasons = WORK_NOT_COUNTED.filter((reason) => counts.not_counted[reason] > 0).map((reason) =>
+    message(WORK_REASON_KEYS[reason], n(counts.not_counted[reason])),
+  );
+  const notCounted = Object.values(counts.not_counted).reduce((total, count) => total + count, 0);
+  const more = [];
+  if (counts.unknown_left > 0) {
+    more.push(message("view.shoes.work.unknown_left", { n: counts.unknown_left, m: counts.unknown_laps }));
+  }
+  if (counts.no_work > 0) {
+    more.push(message("view.shoes.work.no_work", n(counts.no_work)));
+  }
+  if (counts.no_pace > 0) {
+    more.push(message("view.shoes.work.no_pace", n(counts.no_pace)));
+  }
+  if (counts.two_pairs > 0) {
+    more.push(message("view.shoes.work.two_pairs", n(counts.two_pairs)));
+  }
+  more.push(message("view.shoes.work.all_work"), message("view.shoes.work.not_drawn"), message("view.shoes.work.kinds"));
+  return {
+    shown: message("view.shoes.work.shown"),
+    counted: notCounted > 0
+      ? { key: "view.shoes.work.counted", params: { n: counts.counted, m: notCounted }, reasons }
+      : { key: "view.shoes.work.counted_all", params: { n: counts.counted }, reasons: [] },
+    more,
+  };
+}
+
+// What the bar says before the work laps are read, from what the answer of
+// the shoes says (``work``): the activities to read and those known not to be
+// read; or why they cannot be read at all: an output made without the
+// Snapshot Store, more activities than one counting reads, or none to read.
+export function shoesWorkBefore(work) {
+  if (work === null || typeof work !== "object" || !Number.isInteger(work.runs) || !Number.isInteger(work.known) || !Number.isInteger(work.limit)) {
+    return { why: "view.shoes.work.none" };
+  }
+  if (work.reason === "not_from_store") {
+    return { why: WORK_WHOLE_KEYS.not_from_store };
+  }
+  if (work.runs > work.limit) {
+    return { why: WORK_WHOLE_KEYS.too_many, params: { n: work.runs, max: work.limit } };
+  }
+  const read = work.runs - work.known;
+  if (read <= 0) {
+    return { why: "view.shoes.work.none" };
+  }
+  return work.known > 0
+    ? { line: message("view.shoes.work.before_known", { n: read, m: work.known }) }
+    : { line: message("view.shoes.work.before", { n: read }) };
+}
+
 // --- The conditions on the activities (stage T1 of v2.2.0) ----------------
 
 // The limits of the conditions, as view/series.py has them; the server checks

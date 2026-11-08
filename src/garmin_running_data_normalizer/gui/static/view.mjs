@@ -241,6 +241,16 @@ import {
   shoesNotes,
   shoesRead,
   shoesTables,
+  // The work laps of the shoes (stage X11 of v2.3.0).
+  WORK_RUN_COUNTS,
+  WORK_SUMS,
+  WORK_WHOLE_KEYS,
+  shoesWorkBefore,
+  shoesWorkLines,
+  shoesWorkTable,
+  workAdd,
+  workEmpty,
+  workTaken,
   shoesWhy,
   saveViewFooter,
   saveViewReady,
@@ -598,6 +608,17 @@ const ui = {
   shoesNone: byId("shoes-none"),
   shoesNotes: byId("shoes-notes"),
   shoesOff: byId("shoes-off"),
+  // The work laps of the shoes (stage X11 of v2.3.0).
+  shoesWork: byId("shoes-work"),
+  shoesWorkLine: byId("shoes-work-line"),
+  shoesWorkText: byId("shoes-work-text"),
+  shoesWorkRead: byId("shoes-work-read"),
+  shoesWorkStop: byId("shoes-work-stop"),
+  shoesWorkNotes: byId("shoes-work-notes"),
+  shoesWorkShown: byId("shoes-work-shown"),
+  shoesWorkInfo: byId("shoes-work-info"),
+  shoesWorkCounted: byId("shoes-work-counted"),
+  shoesWorkMore: byId("shoes-work-more"),
   compareYears: byId("compare-years"),
   compareYearsLabel: byId("compare-years-label"),
   compareUpTo: byId("compare-up-to"),
@@ -796,6 +817,13 @@ const state = {
   shoesLoading: false,
   shoesStop: null,
   shoesAvailable: null,
+  // The counting of the work laps of the shoes (stage X11 of v2.3.0): null,
+  // or what the bar says before reading ("ask"), the reading of its requests
+  // ("reading"), its sums once all are read ("done"), or why it stopped
+  // ("message"); a counting of another number is dropped when its answer
+  // comes.
+  shoesWork: null,
+  shoesWorkSeq: 0,
   // The answers of the numbers and of the shoes both say it again: what the
   // one asked for last said is kept, so that a late answer of data read
   // before does not put back what a newer one said (Codex's review of the
@@ -1440,6 +1468,9 @@ async function openOutput(target, focus = false, auto = null) {
   // And that of the panels, whose answer of the output before could ask for
   // its overview after this one opened (Codex's review of the diff of W1).
   state.seriesSeq += 1;
+  // And a counting of the work laps of the shoes, whose requests would go on
+  // for the output before (Codex's read of the diff of X11, 2).
+  dropShoesWork();
   // The ticket of the output shown, whose folder an opening by itself opens
   // again (stage W1 of v2.2.1): "changed" for a newer reading of other
   // facts, "refused" after a refusal of a request. An output that the
@@ -4609,7 +4640,12 @@ function scheduleRedraw() {
       renderSpreadBody(spreadAnswerNow());
     }
     if (!ui.shoes.hidden) {
+      // As renderShoes does (Codex's sixth read of the diff of X11).
+      const inShoes = ui.shoes.contains(document.activeElement);
       renderShoesBody(state.shoesAnswer);
+      if (inShoes) {
+        shoesWorkFocusAway();
+      }
     }
     // The window of the saving reads the charts drawn again, while it shows
     // only, so that the focus stays where it is (Codex's review of the plan
@@ -8976,6 +9012,10 @@ function buildSpreadTable(drawn, key) {
 let shoeRows = [];
 let shoesContext = null;
 let shoesDrawn = null;
+// The request of the work laps on its way, settled or not, also of a
+// counting dropped meanwhile: one at a time (Codex's read of the diff of
+// X11, 3: Stop leaves its request on its way).
+let shoesWorkAsking = null;
 
 function shoesShown() {
   return state.shoes !== null && state.view !== null;
@@ -8989,6 +9029,7 @@ function enterShoes() {
     return;
   }
   listChanged("shoes");
+  dropShoesWork();
   state.shoes = { table: false, cursor: null };
   state.shoesAnswer = null;
   state.shoesAsked = null;
@@ -9008,6 +9049,7 @@ function enterShoes() {
 
 // Back to the panels as they were, as from the distribution.
 function leaveShoes() {
+  dropShoesWork();
   state.shoes = null;
   state.shoesAnswer = null;
   state.shoesAsked = null;
@@ -9041,6 +9083,13 @@ async function requestShoes(again = true) {
     return;
   }
   const seq = ++state.shoesSeq;
+  // A counting of the work laps is of the shoes shown: another request drops
+  // it, but for the words of a reading told stale, which ask to press again.
+  if (state.shoesWork?.keep) {
+    state.shoesWork.keep = false;
+  } else {
+    dropShoesWork();
+  }
   state.shoesLoading = true;
   render();
   const payload = shoesPayload();
@@ -9075,7 +9124,9 @@ async function requestShoes(again = true) {
           return;
         }
         state.shoesLoading = false;
-        requestShoes(false);
+        // Awaited, so that a caller knows when the shoes are drawn (Codex's
+        // third read of the diff of X11, 2).
+        await requestShoes(false);
         return;
       }
     } else if (error.code === "REQUEST_INVALID" && reopenOnce(payload.view)) {
@@ -9114,6 +9165,11 @@ function renderShoes(live) {
     ui.shoesAxis.replaceChildren();
     return;
   }
+  // A focus in the view by shoes that what is drawn now hides or takes
+  // away (Read, Stop, "How it counts", the heading of a stop, a table, as
+  // where a newer reading drops a counting) goes on to the button or the
+  // heading of a stop (Codex's fifth and sixth reads of the diff of X11).
+  const inShoes = ui.shoes.contains(document.activeElement);
   const drawn = state.shoesAnswer;
   ui.shoesTable.disabled = drawn === null || !drawn.shoes.length;
   ui.shoesTable.setAttribute("aria-pressed", String(shoes.table));
@@ -9125,6 +9181,7 @@ function renderShoes(live) {
     renderStop(ui.shoesStop, null, ui.shoesStopLines, ui.shoesStopCode, stopBox(state.shoesStop.code, state.shoesStop.detail, state.productVersion));
   }
   setText(ui.shoesCount, drawn === null ? "" : describe(shoesCount(drawn)));
+  renderShoesWork(drawn);
   ui.shoesNone.hidden = drawn === null || drawn.shoes.length > 0;
   const notes = drawn === null ? [] : shoesNotes(drawn).map(describe);
   if (JSON.stringify(notes) !== ui.shoesNotes.dataset.notes) {
@@ -9132,6 +9189,9 @@ function renderShoes(live) {
     ui.shoesNotes.dataset.notes = JSON.stringify(notes);
   }
   renderShoesBody(drawn);
+  if (inShoes) {
+    shoesWorkFocusAway();
+  }
 }
 
 // The rows of the shoes, or their tables, built again only for another
@@ -9141,7 +9201,7 @@ function renderShoesBody(drawn) {
   if (shoes === null) {
     return;
   }
-  if (shoesDrawn !== null && shoesDrawn[0] === drawn && shoesDrawn[1] === shoes.table && shoesDrawn[2] === state.language) {
+  if (shoesDrawn !== null && shoesDrawn[0] === drawn && shoesDrawn[1] === shoes.table && shoesDrawn[2] === state.language && shoesDrawn[3] === shoesWorkDone(drawn)) {
     renderShoesCharts();
     return;
   }
@@ -9151,7 +9211,7 @@ function renderShoesBody(drawn) {
   shoesContext = null;
   ui.shoesAxis.replaceChildren();
   delete ui.shoesAxis.dataset.width;
-  shoesDrawn = [drawn, shoes.table, state.language];
+  shoesDrawn = [drawn, shoes.table, state.language, shoesWorkDone(drawn)];
   if (drawn === null || !drawn.shoes.length) {
     ui.shoesPanels.replaceChildren();
     ui.shoesAxis.hidden = true;
@@ -9344,10 +9404,25 @@ function shoesPointer(event) {
 // pair (Codex's review of the plan of S1).
 function buildShoesTables(drawn) {
   const { summary, months } = shoesTables(drawn, state.language);
-  return [
+  const tables = [
     buildShoesTable("shoes-table-name", t("view.shoes.table_label"), t("view.shoes.table_caption"), summary),
     buildShoesTable("shoes-months-name", t("view.shoes.months_label"), t("view.shoes.months_caption"), months, "shoes-months"),
   ];
+  // The table of the work laps above them, once they are counted (stage X11
+  // of v2.3.0); its heading takes the focus when the counting ends.
+  const work = shoesWorkDone(drawn);
+  if (work !== null) {
+    const section = buildShoesTable("shoes-work-name", t("view.shoes.work.table_label"), t("view.shoes.work.table_caption"), shoesWorkTable(drawn, work.sums, state.language), "shoes-work-table");
+    section.querySelector("#shoes-work-name").tabIndex = -1;
+    tables.unshift(section);
+  }
+  return tables;
+}
+
+// The counting of the work laps of the shoes shown, once all is read.
+function shoesWorkDone(drawn) {
+  const work = state.shoesWork;
+  return work !== null && work.phase === "done" && drawn !== null && work.read === drawn.read && work.known === state.viewRead ? work : null;
 }
 
 // A table of the shoes; the table by month (of the kind "shoes-months")
@@ -9386,6 +9461,277 @@ function buildShoesTable(id, label, caption, { heads, rows }, kind = null) {
   wrap.append(table);
   section.append(wrap);
   return section;
+}
+
+// --- The work laps of the shoes (stage X11 of v2.3.0) ----------------------
+
+// Drop the counting of the work laps: the view left or shown again, another
+// period, types, conditions, or reading. A late answer of its requests is of
+// another number, and dropped.
+function dropShoesWork() {
+  state.shoesWork = null;
+  state.shoesWorkSeq += 1;
+}
+
+// "Count the work laps…": the tables show, and the bar says what is read
+// before it is read, with "Read" and "Stop"; or why it cannot be read, by
+// the answer of the shoes, which reads no file for it.
+function askShoesWork() {
+  const drawn = state.shoesAnswer;
+  if (state.shoes === null || drawn === null || state.shoesLoading || state.shoesWork?.phase === "reading" || !drawn.shoes.length) {
+    return;
+  }
+  const before = shoesWorkBefore(drawn.work);
+  if (before.line === undefined) {
+    return;
+  }
+  dropShoesWork();
+  // The stop of a counting before goes with it (Codex's seventh read of the
+  // diff of X11); a stop of the shoes themselves stays.
+  if (state.shoesStop?.work) {
+    state.shoesStop = null;
+  }
+  state.shoes.table = true;
+  // The reading of the output that the page knows now: a newer one, from
+  // any answer, drops the counting (Codex's fourth read of the diff of X11).
+  state.shoesWork = { seq: state.shoesWorkSeq, phase: "ask", before, read: drawn.read, known: state.viewRead, asked: { ...state.shoesAsked, read: drawn.read }, pairs: drawn.shoes.length };
+  render();
+  ui.shoesWorkRead.focus();
+}
+
+function waitFor(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+// "Read": the work laps, one request at a time, from the first activity, as
+// one counting whose sums add up. An answer of a counting dropped meanwhile
+// is dropped. A request told busy is asked once more after a second (the
+// checker's review of the plan of X11, 9c 3); another reason, a reading told
+// stale, an answer of another form, or a stop drops what was read, and
+// nothing in part is shown (Codex's review of the plan of X11, 9).
+async function readShoesWork() {
+  const work = state.shoesWork;
+  if (work === null || work.phase !== "ask") {
+    return;
+  }
+  Object.assign(work, {
+    phase: "reading",
+    done: 0,
+    runs: work.before.line.params.n + (work.before.line.params.m ?? 0),
+    sums: Array.from({ length: work.pairs }, () => workEmpty()),
+    counts: workEmpty([...WORK_SUMS, ...WORK_RUN_COUNTS, "two_pairs"]),
+  });
+  render();
+  ui.shoesWorkStop.focus();
+  const mine = () => state.shoesWork === work && work.seq === state.shoesWorkSeq && work.phase === "reading";
+  // Of the shoes shown, of the output shown, of the reading known when it
+  // was asked for. A counting whose view changed under it (the output opened
+  // again with another ticket, a newer reading known from another answer, or
+  // the view by shoes left) ends as dropped; one dropped meanwhile is left as
+  // it is (Codex's third and fourth reads of the diff of X11).
+  const current = () => {
+    if (!mine()) {
+      return false;
+    }
+    if (state.shoes !== null && state.view?.view === work.asked.view && state.viewRead === work.known) {
+      return true;
+    }
+    dropShoesWork();
+    render();
+    shoesWorkFocusAway();
+    return false;
+  };
+  let start = 0;
+  let retried = false;
+  for (;;) {
+    if (!current()) {
+      return;
+    }
+    while (shoesWorkAsking !== null) {
+      await shoesWorkAsking;
+      if (!current()) {
+        return;
+      }
+    }
+    const asking = callApi("/api/view/shoes/work", { ...work.asked, from: start });
+    const settled = asking.then(() => undefined, () => undefined);
+    shoesWorkAsking = settled;
+    settled.then(() => {
+      if (shoesWorkAsking === settled) {
+        shoesWorkAsking = null;
+      }
+    });
+    let answer;
+    try {
+      answer = await asking;
+    } catch (error) {
+      if (!current()) {
+        return;
+      }
+      dropShoesWork();
+      if (connectionFailure(error)) {
+        // The bar of the page says so.
+      } else if (error.code === "VIEW_NOT_OPEN" && state.target !== null) {
+        const shoesSeq = state.shoesSeq;
+        if (await reopen()) {
+          // The shoes asked for again with the ticket of the output opened
+          // again, which drops a counting asked for with the ticket before;
+          // not where the shoes were asked for meanwhile, as requestShoes
+          // does (Codex's second and third reads of the diff of X11).
+          if (state.shoesSeq === shoesSeq) {
+            await requestShoes(false);
+          }
+          shoesWorkFocusAway();
+          return;
+        }
+      } else if (OUTPUT_STOPS.includes(error.code)) {
+        state.view = null;
+        setAnswer(null);
+        state.compare = null;
+        state.plot = null;
+        state.spread = null;
+        state.shoes = null;
+        state.stop = { code: error.code, detail: error.detail };
+      } else {
+        state.shoesStop = { code: error.code, detail: error.detail, work: true };
+      }
+      render();
+      shoesWorkFocusAway();
+      return;
+    }
+    if (!current()) {
+      return;
+    }
+    const taken = workTaken(answer, work.pairs);
+    if (taken === null || (taken.reason === undefined && (taken.from !== start || taken.runs !== work.runs))) {
+      // An answer of another form, as for the laps of an activity.
+      dropShoesWork();
+      state.shoesStop = { code: null, detail: null, work: true };
+      render();
+      shoesWorkFocusAway();
+      return;
+    }
+    if (taken.reason !== undefined) {
+      if (taken.reason === "busy" && !retried) {
+        retried = true;
+        await waitFor(1000);
+        if (!current()) {
+          return;
+        }
+        continue;
+      }
+      dropShoesWork();
+      state.shoesWork = {
+        seq: state.shoesWorkSeq,
+        phase: "message",
+        why: WORK_WHOLE_KEYS[taken.reason],
+        params: { n: work.runs, max: state.shoesAnswer?.work?.limit ?? 0 },
+        keep: taken.reason === "read_stale",
+      };
+      render();
+      // Not from where the person put it (Codex's third read of the diff
+      // of X11, 3).
+      shoesWorkFocusAway();
+      if (taken.reason === "read_stale") {
+        // Where the shoes asked again stop the page, the focus goes to the
+        // heading of the stop (Codex's second read of the diff of X11, 3).
+        await requestShoes();
+        shoesWorkFocusAway();
+      }
+      return;
+    }
+    retried = false;
+    const sums = work.sums.map((sum, index) => workAdd(sum, taken.pairs[index]));
+    const counts = workAdd(work.counts, taken.counts);
+    if (sums.includes(null) || counts === null) {
+      // Sums past the whole numbers that the page holds exactly: as an
+      // answer of another form (Codex's ninth read of the diff of X11).
+      dropShoesWork();
+      state.shoesStop = { code: null, detail: null, work: true };
+      render();
+      shoesWorkFocusAway();
+      return;
+    }
+    work.sums = sums;
+    work.counts = counts;
+    if (taken.next === null) {
+      work.done = work.runs;
+      work.phase = "done";
+      // The table, also where the chart was chosen while reading (Codex's
+      // read of the diff of X11, 5), its heading to take the focus.
+      state.shoes.table = true;
+      render();
+      byId("shoes-work-name")?.focus();
+      return;
+    }
+    work.done = taken.next;
+    start = taken.next;
+    render();
+  }
+}
+
+// "Stop" while reading: no more request; the one on its way is dropped.
+function stopShoesWork() {
+  if (state.shoesWork?.phase !== "reading") {
+    return;
+  }
+  dropShoesWork();
+  render();
+  ui.shoesWork.focus();
+}
+
+// The focus of a counting that ends with a stop or an error, which hid
+// "Stop": the heading of the stop shown, else the button (Codex's read of
+// the diff of X11, 4). A focus elsewhere that is still shown stays.
+function shoesWorkFocusAway() {
+  const shown = (node) => node !== null && node !== undefined && node.isConnected && node.closest("[hidden]") === null;
+  const active = document.activeElement;
+  if (active !== null && active !== document.body && shown(active)) {
+    return;
+  }
+  [byId("shoes-stop-heading"), ui.stopHeading, ui.shoesWork, ui.shoesTitle, ui.emptyHeading].find(shown)?.focus();
+}
+
+// The button, the line of the bar, and the lines under the tables of the
+// work laps.
+function renderShoesWork(drawn) {
+  const work = state.shoesWork;
+  const shown = drawn !== null && drawn.shoes.length > 0;
+  ui.shoesWork.hidden = !shown;
+  const before = shown ? shoesWorkBefore(drawn.work) : null;
+  const grey = before !== null && before.line === undefined;
+  ui.shoesWork.setAttribute("aria-disabled", String(grey || work?.phase === "reading" || state.shoesLoading));
+  let text = "";
+  if (work !== null && work.phase === "ask") {
+    text = describe(work.before.line);
+  } else if (work !== null && work.phase === "reading") {
+    text = t("view.shoes.work.reading", { done: formatNumber(work.done), total: formatNumber(work.runs) });
+  } else if (work !== null && work.phase === "message") {
+    text = t(work.why, { n: formatNumber(work.params.n), max: formatNumber(work.params.max) });
+  } else if (grey) {
+    text = t(before.why, { n: formatNumber(before.params?.n), max: formatNumber(before.params?.max) });
+  }
+  ui.shoesWorkLine.hidden = text === "";
+  setText(ui.shoesWorkText, text);
+  ui.shoesWorkRead.hidden = work?.phase !== "ask";
+  ui.shoesWorkStop.hidden = work?.phase !== "reading";
+  const done = state.shoes?.table ? shoesWorkDone(drawn) : null;
+  ui.shoesWorkNotes.hidden = done === null;
+  if (done === null) {
+    return;
+  }
+  const lines = shoesWorkLines(done.counts);
+  setText(ui.shoesWorkShown, describe(lines.shown));
+  setText(ui.shoesWorkCounted, t(lines.counted.key, {
+    ...Object.fromEntries(Object.entries(lines.counted.params).map(([name, value]) => [name, formatNumber(value)])),
+    words: lines.counted.reasons.map(describe).join(t("view.spoken_separator")),
+  }));
+  const more = lines.more.map(describe);
+  if (JSON.stringify(more) !== ui.shoesWorkMore.dataset.lines) {
+    ui.shoesWorkMore.replaceChildren(...more.map((line) => element("p", "compare-note", line)));
+    ui.shoesWorkMore.dataset.lines = JSON.stringify(more);
+  }
+  ui.shoesWorkMore.hidden = ui.shoesWorkInfo.getAttribute("aria-expanded") !== "true";
 }
 
 function render() {
@@ -9968,6 +10314,19 @@ function connect() {
     }
   });
   ui.shoesBack.addEventListener("click", leaveShoes);
+  // The work laps of the shoes (stage X11 of v2.3.0).
+  ui.shoesWork.addEventListener("click", () => {
+    if (ui.shoesWork.getAttribute("aria-disabled") !== "true") {
+      askShoesWork();
+    }
+  });
+  ui.shoesWorkRead.addEventListener("click", readShoesWork);
+  ui.shoesWorkStop.addEventListener("click", stopShoesWork);
+  ui.shoesWorkInfo.addEventListener("click", () => {
+    const open = ui.shoesWorkInfo.getAttribute("aria-expanded") !== "true";
+    ui.shoesWorkInfo.setAttribute("aria-expanded", String(open));
+    ui.shoesWorkMore.hidden = !open;
+  });
   ui.shoesPanels.addEventListener("pointermove", shoesPointer);
   ui.shoesPanels.addEventListener("keydown", shoesKeyDown);
   document.addEventListener("pointerdown", (event) => {

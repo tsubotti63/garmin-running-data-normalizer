@@ -68,7 +68,7 @@ import math
 import os
 import stat
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from contextlib import ExitStack
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -202,6 +202,30 @@ class _Missing(Exception):
 
 class _TooLarge(Exception):
     """A file of the store is larger than its limit."""
+
+
+class _OverBudget(Exception):
+    """A FIT file that would bring the bytes read in one request of many
+    activities past its budget (stage X11 of v2.3.0): not read, so that the
+    request ends before it and the next one reads it."""
+
+
+class _Budget:
+    """The bytes of FIT files that one request of many activities may read
+    (stage X11 of v2.3.0). Each file is counted by its size as it was opened,
+    before a byte of it is read, whether or not it is then found as the
+    output says (Codex's read of the diff of X11, 1); one that would bring
+    the count past ``limit`` is not read (_OverBudget), but for the first
+    file read."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self.used = 0
+
+    def take(self, size: int) -> None:
+        if self.used > 0 and self.used + size > self.limit:
+            raise _OverBudget()
+        self.used += size
 
 
 def activity_key(rows: Sequence[Row], ref: int) -> str | None:
@@ -354,6 +378,14 @@ def _link(output: Path, files: Mapping[str, tuple[int, str]], key: str) -> tuple
     the activity names; the session must be linked to no other activity."""
     rows = _records(output, files, LINKS)
     mine = [row for row in rows if row.get("garmin_activity_key") == key]
+    return _checked_link(mine, lambda session_key: sum(1 for row in rows if row.get("fit_session_key") == session_key))
+
+
+def _checked_link(mine: list[dict[str, Any]], linked: Any) -> tuple[str, str]:
+    """The checks of _link on the links of the activity (``mine``), with the
+    number of the links of all the activities to a session (``linked``), so
+    that one activity and many are read with the same checks (stage X11 of
+    v2.3.0)."""
     if len(mine) != 1:
         raise _Unavailable("no_link")
     link = mine[0]
@@ -366,7 +398,7 @@ def _link(output: Path, files: Mapping[str, tuple[int, str]], key: str) -> tuple
     session_key, digest = link.get("fit_session_key"), link.get("fit_source_sha256")
     if not isinstance(session_key, str) or not isinstance(digest, str):
         raise OutputActionError("OUTPUT_CHANGED")
-    if sum(1 for row in rows if row.get("fit_session_key") == session_key) != 1:
+    if linked(session_key) != 1:
         raise _Unavailable("no_link")
     return session_key, digest
 
@@ -375,6 +407,11 @@ def _session(output: Path, files: Mapping[str, tuple[int, str]], session_key: st
     """The number of the session in its FIT file, as its one row gives it,
     with the SHA-256 of the link and its key made of the two."""
     rows = [row for row in _records(output, files, SESSIONS) if row.get("fit_session_key") == session_key]
+    return _checked_session(rows, session_key, digest)
+
+
+def _checked_session(rows: list[dict[str, Any]], session_key: str, digest: str) -> int:
+    """The checks of _session on the rows of the session."""
     if len(rows) != 1:
         raise OutputActionError("OUTPUT_CHANGED")
     ordinal, source = rows[0].get("session_ordinal"), rows[0].get("source_sha256")
@@ -399,6 +436,11 @@ def _output_laps(
     """The rows of the laps of the session, by their numbers, which run from
     0 without a gap or a repeat."""
     rows = [row for row in _records(output, files, LAPS) if row.get("fit_session_key") == session_key]
+    return _checked_laps(rows, digest, ordinal)
+
+
+def _checked_laps(rows: list[dict[str, Any]], digest: str, ordinal: int) -> list[dict[str, Any]]:
+    """The checks of _output_laps on the rows of the laps of the session."""
     numbers = [row.get("lap_ordinal_within_session") for row in rows]
     if (
         any(
@@ -504,18 +546,19 @@ class _Root:
             return True
         return False
 
-    def read(self, parts: tuple[str, ...], limit: int) -> bytes:
+    def read(self, parts: tuple[str, ...], limit: int, budget: _Budget | None = None) -> bytes:
         """The bytes of the file at ``parts`` in the folder, read once. A
         step that is not there raises _Missing, a file over ``limit``
-        _TooLarge, and a link, a reparse point, another kind of file, a file
-        that changed while it was read, or a step that cannot be opened,
-        store_unreadable."""
+        _TooLarge, a file within it that ``budget`` (where given) does not
+        take _OverBudget, before a byte is read, and a link, a reparse point,
+        another kind of file, a file that changed while it was read, or a
+        step that cannot be opened, store_unreadable."""
         try:
             if self.descriptor is not None:
-                return _bytes_at(self.descriptor, parts, limit)
+                return _bytes_at(self.descriptor, parts, limit, budget)
             if self.looked is None:
                 raise _Unavailable("store_unreadable")
-            return _bytes_by_path(self.path, self.looked, parts, limit, self.final)
+            return _bytes_by_path(self.path, self.looked, parts, limit, self.final, budget)
         except FileNotFoundError as exc:
             raise _Missing() from exc
         except OSError as exc:
@@ -573,10 +616,11 @@ def _store_metadata(data: bytes) -> dict[str, Any]:
     return metadata
 
 
-def _fit_bytes(root: _Root, digest: str) -> bytes:
-    """The bytes of the FIT file of ``digest``, its blob in the store."""
+def _fit_bytes(root: _Root, digest: str, budget: _Budget | None = None) -> bytes:
+    """The bytes of the FIT file of ``digest``, its blob in the store; one
+    that ``budget`` (where given) does not take raises _OverBudget unread."""
     try:
-        data = root.read(tuple(_blob_relative_path(digest).split("/")), MAX_FIT_BYTES)
+        data = root.read(tuple(_blob_relative_path(digest).split("/")), MAX_FIT_BYTES, budget)
     except _Missing as exc:
         raise _Unavailable("fit_missing") from exc
     except _TooLarge as exc:
@@ -586,7 +630,7 @@ def _fit_bytes(root: _Root, digest: str) -> bytes:
     return data
 
 
-def _bytes_at(root: int, parts: tuple[str, ...], limit: int) -> bytes:
+def _bytes_at(root: int, parts: tuple[str, ...], limit: int, budget: _Budget | None = None) -> bytes:
     """Each folder opened in the one before it, from the open folder of the
     store, none of them, nor the file, through a link."""
     opened: list[int] = []
@@ -600,14 +644,19 @@ def _bytes_at(root: int, parts: tuple[str, ...], limit: int) -> bytes:
                 dir_fd=opened[-1] if opened else root,
             )
         )
-        return _read_opened(opened[-1], limit, None)
+        return _read_opened(opened[-1], limit, None, budget)
     finally:
         for descriptor in reversed(opened):
             os.close(descriptor)
 
 
 def _bytes_by_path(
-    root: Path, root_looked: os.stat_result, parts: tuple[str, ...], limit: int, root_final: str | None
+    root: Path,
+    root_looked: os.stat_result,
+    parts: tuple[str, ...],
+    limit: int,
+    root_final: str | None,
+    budget: _Budget | None = None,
 ) -> bytes:
     """Each step looked at before the file is opened and after it is read;
     the folder of the store as when it was opened, and on Windows the file
@@ -627,7 +676,7 @@ def _bytes_by_path(
         expected = None if root_final is None else "\\".join([root_final.rstrip("\\"), *parts])
         descriptor = _open_file(steps[-1], expected)
         try:
-            data = _read_opened(descriptor, limit, before[-1])
+            data = _read_opened(descriptor, limit, before[-1], budget)
         finally:
             os.close(descriptor)
         after = [_looked(step, folder=index < len(parts)) for index, step in enumerate(steps)]
@@ -727,9 +776,15 @@ def _same_file(first: os.stat_result, second: os.stat_result) -> bool:
     )
 
 
-def _read_opened(descriptor: int, limit: int, looked: os.stat_result | None) -> bytes:
-    """Read an open file once, at most ``limit`` and one byte: a plain file,
-    the one looked at before it was opened, unchanged while it was read."""
+def _read_opened(descriptor: int, limit: int, looked: os.stat_result | None, budget: _Budget | None = None) -> bytes:
+    """Read an open file once, at most its size as it was opened (within
+    ``limit``) and one byte, so that a file that grows while it is read is not
+    read past what a budget counted (Codex's second read of the diff of X11,
+    1): a plain file, the one looked at before it was opened, unchanged while
+    it was read. A
+    file within ``limit`` is counted by ``budget`` (where given; stage X11
+    of v2.3.0) before a byte of it is read, and not read where the budget
+    does not take it: _OverBudget."""
     opened = os.fstat(descriptor)
     if not stat.S_ISREG(opened.st_mode) or getattr(opened, "st_file_attributes", 0) & _REPARSE_POINT:
         raise _Unavailable("store_unreadable")
@@ -737,10 +792,14 @@ def _read_opened(descriptor: int, limit: int, looked: os.stat_result | None) -> 
         raise _Unavailable("store_unreadable")
     if opened.st_size > limit:
         raise _TooLarge()
+    if budget is not None:
+        budget.take(opened.st_size)
     with os.fdopen(descriptor, "rb", closefd=False) as handle:
-        data = handle.read(limit + 1)
+        data = handle.read(min(limit, opened.st_size) + 1)
     if len(data) > limit:
         raise _TooLarge()
+    if len(data) > opened.st_size:
+        raise _Unavailable("store_unreadable")
     if not _same_file(opened, os.fstat(descriptor)):
         raise _Unavailable("store_unreadable")
     return data
@@ -795,7 +854,12 @@ def _agree(first: Any, second: Any) -> bool:
 
 
 def _laps(data: bytes, ordinal: int, rows: list[dict[str, Any]]) -> Laps:
-    kinds = read_lap_kinds(data)
+    return _laps_of_kinds(read_lap_kinds(data), ordinal, rows)
+
+
+def _laps_of_kinds(kinds: Any, ordinal: int, rows: list[dict[str, Any]]) -> Laps:
+    """The laps of the session ``ordinal`` of the FIT file whose kinds were
+    read (``kinds``, of fit.lap_kinds), tied to the rows of the output."""
     if kinds.status != "parsed_activity" or ordinal >= len(kinds.sessions):
         raise _Unavailable("fit_not_activity")
     fit_laps = kinds.sessions[ordinal].laps
@@ -824,6 +888,146 @@ def _laps(data: bytes, ordinal: int, rows: list[dict[str, Any]]) -> Laps:
     return Laps("laps", laps=tuple(laps), unknown_kind=sum(1 for lap in laps if lap.kind == UNKNOWN_KIND))
 
 
+# The laps of many activities (stage X11 of v2.3.0): the view by shoes counts
+# the work laps of the activities with shoes of a period, a request of the page
+# at a time. A request reads the files of the output and store.json once, as
+# read_laps reads them, then the activities that it is given in their order,
+# with the checks of read_laps, each FIT file once (by its SHA-256), until it
+# has done MAX_MANY_RUNS activities or a FIT file would bring the bytes that it
+# read past MAX_MANY_BYTES (the size of the file as it was opened, before a
+# byte of it is read, counted whether or not the file is then found as the
+# output says; the first FIT file of a request is read within MAX_FIT_BYTES).
+# Nothing is kept after the request: of each FIT file, only the kinds of its
+# laps, until the request ends.
+
+MAX_MANY_RUNS = 100
+MAX_MANY_BYTES = 32 * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class ManyLaps:
+    """The answer for many activities: status "laps" with the answer of each
+    activity done, in the order given (a Laps each, as read_laps answers it),
+    and how many were done (the rest are for the next request); or status
+    "unavailable" with the reason of the output or of the store, for all of
+    them (not_from_store, no_store, other_store, store_unreadable)."""
+
+    status: str
+    reason: str | None = None
+    runs: tuple[Laps, ...] = ()
+    done: int = 0
+
+
+class _OutputIndex:
+    """The links, the sessions, and the laps of the output, read once for a
+    request and kept by their keys: the activities are found in them with the
+    checks of _link, _session, and _output_laps, over all the rows of the
+    output (Codex's review of the plan of X11, 1)."""
+
+    def __init__(self, output: Path, files: Mapping[str, tuple[int, str]]) -> None:
+        self.links: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        self.linked: Counter[str] = Counter()
+        for row in _records(output, files, LINKS):
+            key, session_key = row.get("garmin_activity_key"), row.get("fit_session_key")
+            if isinstance(key, str):
+                self.links[key].append(row)
+            if isinstance(session_key, str):
+                self.linked[session_key] += 1
+        self.sessions = self._by_session(_records(output, files, SESSIONS))
+        self.laps = self._by_session(_records(output, files, LAPS))
+
+    @staticmethod
+    def _by_session(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+        found: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            session_key = row.get("fit_session_key")
+            if isinstance(session_key, str):
+                found[session_key].append(row)
+        return found
+
+    def link(self, key: str) -> tuple[str, str]:
+        return _checked_link(self.links.get(key, []), lambda session_key: self.linked[session_key])
+
+    def session(self, session_key: str, digest: str) -> int:
+        return _checked_session(self.sessions.get(session_key, []), session_key, digest)
+
+    def output_laps(self, digest: str, session_key: str, ordinal: int) -> list[dict[str, Any]]:
+        return _checked_laps(self.laps.get(session_key, []), digest, ordinal)
+
+
+def read_many_laps(
+    output: Path,
+    files: Mapping[str, tuple[int, str]],
+    keys: Sequence[str | None],
+    store_folder: Path | None,
+    *,
+    runs: int = MAX_MANY_RUNS,
+    budget: int = MAX_MANY_BYTES,
+) -> ManyLaps:
+    """The laps of the activities of ``keys`` in ``output``, in their order,
+    each as read_laps reads it (None, or an empty key, for an activity whose
+    key another activity has too: key_shared), at most ``runs`` of them and
+    FIT files of at most ``budget`` bytes. A reason of the output or of the
+    store is told for all; a file of the output that is not as its manifest
+    gives it raises OutputActionError, as read_laps does."""
+    try:
+        return _read_many_laps(Path(output), files, keys, store_folder, runs, budget)
+    except _Unavailable as exc:
+        return ManyLaps("unavailable", exc.reason)
+
+
+def _read_many_laps(
+    output: Path,
+    files: Mapping[str, tuple[int, str]],
+    keys: Sequence[str | None],
+    store_folder: Path | None,
+    runs: int,
+    budget: int,
+) -> ManyLaps:
+    if LINEAGE not in files:
+        raise _Unavailable("not_from_store")
+    if any(path not in files for path in (LINKS, SESSIONS, LAPS)):
+        raise OutputActionError("OUTPUT_CHANGED")
+    account = _lineage_account(output, files)
+    if store_folder is None:
+        raise _Unavailable("no_store")
+    answers: list[Laps] = []
+    with ExitStack() as stack:
+        root, metadata = _open_store(Path(store_folder), stack)
+        if metadata["account_store_id"] != account:
+            raise _Unavailable("other_store")
+        index = _OutputIndex(output, files)
+        # The kinds of the FIT files read in this request, or why one could
+        # not be read, by its SHA-256: a file of two sessions, of two
+        # activities, is read once.
+        kinds_of: dict[str, Any] = {}
+        read = _Budget(budget)
+        for key in keys[:runs]:
+            if not key:
+                answers.append(Laps("unavailable", "key_shared"))
+                continue
+            try:
+                session_key, digest = index.link(key)
+                ordinal = index.session(session_key, digest)
+                rows = index.output_laps(digest, session_key, ordinal)
+                kinds = kinds_of.get(digest)
+                if kinds is None:
+                    try:
+                        data = _fit_bytes(root, digest, read)
+                    except _OverBudget:
+                        break
+                    except _Unavailable as exc:
+                        kinds_of[digest] = exc.reason
+                        raise
+                    kinds = kinds_of[digest] = read_lap_kinds(data)
+                elif isinstance(kinds, str):
+                    raise _Unavailable(kinds)
+                answers.append(_laps_of_kinds(kinds, ordinal, rows))
+            except _Unavailable as exc:
+                answers.append(Laps("unavailable", exc.reason))
+    return ManyLaps("laps", runs=tuple(answers), done=len(answers))
+
+
 __all__ = [
     "COMPARED",
     "KINDS",
@@ -834,10 +1038,14 @@ __all__ = [
     "LapRow",
     "Laps",
     "MAX_FIT_BYTES",
+    "MAX_MANY_BYTES",
+    "MAX_MANY_RUNS",
+    "ManyLaps",
     "REASONS",
     "SESSIONS",
     "UNKNOWN_KIND",
     "activity_key",
     "known_unavailable",
     "read_laps",
+    "read_many_laps",
 ]

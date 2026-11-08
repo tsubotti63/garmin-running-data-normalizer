@@ -22,7 +22,11 @@
   reads, only when the laps of one activity are asked for, the FIT file of
   that activity in the Snapshot Store that the GUI remembers, to show the
   kind of each lap (a Human decision; see
-  [Laps of an activity (v2.3.0)](../gui_design.md#laps-of-an-activity-v230)).
+  [Laps of an activity (v2.3.0)](../gui_design.md#laps-of-an-activity-v230)),
+  and, only when the work laps of the shoes of a period are counted, the FIT
+  files of the activities with shoes of that period (the Human's choice of
+  the samples of stage X11; see
+  [Work laps of the shoes (v2.3.0)](../gui_design.md#work-laps-of-the-shoes-v230)).
 - Project documentation, runtime assets, tests, sanitization QA, and Git-ignored
   review evidence.
 
