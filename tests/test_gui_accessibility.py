@@ -2178,7 +2178,8 @@ class GuiViewPageStructureTest(unittest.TestCase):
                 "ui.recapOpen.focus();",
             ),
             # The window of the saving, at the same place, closes too (stage R1).
-            "openMarks": ("  if (open) {\n    // One window opens under the right end of the row at a time (stage Q1).\n    state.recapOpen = false;\n    state.saveOpen = false;\n  }",),
+            # The window of the laps too (stage X10 of v2.3.0).
+            "openMarks": ("  if (open) {\n    // One window opens under the right end of the row at a time (stage Q1).\n    state.recapOpen = false;\n    state.saveOpen = false;\n    dropLaps();\n  }",),
             # A low window keeps the heads and two rows or so of its table,
             # and scrolls as a whole (Codex's review of the diff of Q1).
             "fitRecapWindow": (
@@ -2303,6 +2304,115 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertIn("const RECAP_KEPT = 112;", self.script)
         self.assertRegex(view_css, r"\.recap-body thead th \{\s*position: sticky;\s*top: 0;\s*z-index: 1;\s*background: var\(--surface\);")
         self.assertIn('viewBar: document.querySelector(".view-bar"),', self.script)
+
+    def test_the_laps_of_a_row_of_the_list_are_a_window(self) -> None:
+        # Stage X10 of v2.3.0 (the person's answer 「2 C と最大心拍も」), in the
+        # page and its script, which no test runs: each row of the list has a
+        # button of its laps, which cannot be pressed (aria-disabled, tied to
+        # the line under the list that says why) where the output alone tells
+        # that they cannot be shown; the window opens at the place of the
+        # summary as the summary does, without holding the focus (the checker's
+        # review of the samples, 2), and one of the windows there shows at a
+        # time; its title takes the focus, the close button and Escape go back
+        # to the button of the row, and the heading of the list takes it where
+        # the list was made anew; one request at a time, the last row pressed;
+        # a list closed or changed closes it, and an answer of another reading
+        # asks for the list again (the checker's review of the plan, 3 to 5).
+        row = by_id(self.elements, "caveat")
+        window = by_id(self.elements, "laps-pop")
+        self.assertIs(window.parent, row)
+        self.assertEqual((window.get("role"), window.get("aria-labelledby"), window.get("class")), ("dialog", "laps-pop-title", "pop recap-pop laps-pop"))
+        self.assertIn("hidden", window.attributes)
+        self.assertNotIn("aria-modal", window.attributes)
+        self.assertEqual(by_id(self.elements, "laps-pop-title").get("tabindex"), "-1")
+        self.assertEqual(by_id(self.elements, "laps-pop-close").get("data-i18n"), "help.close")
+        loading = by_id(self.elements, "laps-loading")
+        self.assertEqual((loading.get("role"), loading.get("aria-live")), ("status", "polite"))
+        body = by_id(self.elements, "laps-body")
+        self.assertEqual((body.get("tabindex"), body.get("role"), body.get("aria-labelledby")), ("0", "region", "laps-pop-title"))
+        self.assertIn("hidden", by_id(self.elements, "laps-stop").attributes)
+        self.assertIn("hidden", by_id(self.elements, "laps-note").attributes)
+        self.assertEqual(by_id(self.elements, "laps-stop-heading").get("data-i18n"), "view.laps.stop_heading")
+        for name in ("laps-pop-title", "laps-pop-close", "laps-loading", "laps-stop", "laps-stop-lines", "laps-stop-code", "laps-body", "laps-note"):
+            with self.subTest(element=name):
+                self.assertIn(window, by_id(self.elements, name).ancestors())
+        held = {
+            "dropLaps": ("  state.laps = null;\n  state.lapsAnswer = null;\n  state.lapsStop = null;\n  state.lapsLoading = false;",),
+            # The running types as the page counts them at first.
+            "runningType": ("return (state.view?.types ?? []).some((entry) => entry.name === name && entry.running === true);",),
+            "lapsCell": (
+                'button.dataset.action = "list-laps";',
+                "button.dataset.listFocus = `laps-${row.ref}`;",
+                'button.setAttribute("aria-haspopup", "dialog");',
+                'button.setAttribute("aria-controls", "laps-pop");',
+                "if (LIST_LAP_REASONS.includes(row.laps_unavailable)) {",
+                'button.setAttribute("aria-disabled", "true");',
+                'button.setAttribute("aria-describedby", `list-laps-${row.laps_unavailable}`);',
+            ),
+            "openLaps": (
+                'if (row === undefined || button.getAttribute("aria-disabled") === "true") {',
+                "  state.recapOpen = false;\n  state.saveOpen = false;\n  if (state.marksOpen) {",
+                "state.laps = { ref, read: list.answer.read, key: list.key, when: row.datetime, type: row.type, running: runningType(row.type) };",
+                "  ui.lapsTitle.focus();\n  requestLaps();",
+                # Read from the press, also while another row's answer is on its way
+                # (Codex's second read, 3).
+                "  state.lapsLoading = true;\n  render();",
+            ),
+            "closeLaps": ('(listBox?.querySelector(`[data-list-focus="laps-${laps.ref}"]`) ?? listBox?.querySelector(".list-title"))?.focus();',),
+            "requestLaps": (
+                "if (laps === null || state.view === null || state.lapsAsking) {",
+                'answer = await callApi("/api/view/laps", { view: state.view.view, read: laps.read, ref: laps.ref });',
+                "  if (state.laps !== laps) {\n    // Closed, or another row pressed meanwhile.\n    requestLaps();\n    return;\n  }",
+                '} else if (taken.reason === "read_stale") {\n      lapsStale();',
+                # The output opened again, or not: still its row's, or it ends
+                # (Codex's second read, 1).
+                "    const reopened = await reopen();\n    if (state.laps !== laps) {\n      return;\n    }\n    if (reopened) {\n      lapsStale();\n      return;\n    }",
+            ),
+            # The rows of the reading before are not shown while the list is asked
+            # for again (Codex's 3).
+            "lapsStale": ("list.answer = null;", "list.lapsStale = true;", "requestList();", "  if (focused) {\n    focusList();\n  }"),
+            "renderLaps": (
+                "if (state.laps !== null && (!viewing || apart() || state.full || state.list === null || state.list.key !== state.laps.key)) {",
+                "ui.lapsPop.hidden = state.laps === null;",
+                "    if (focused) {\n      queueMicrotask(() => lapsFocusAway());\n    }",
+            ),
+            # The window hides at once where the list closes or changes, and the
+            # focus goes away from it (Codex's read of the diff of X10, 1 and 2).
+            # Once the page is drawn, which may close the list or stop the page
+            # (Codex's second read of the diff of X10, 2).
+            "hideLaps": ("  dropLaps();\n  ui.lapsPop.hidden = true;", "    queueMicrotask(() => lapsFocusAway(fallback));"),
+            "lapsFocusAway": (
+                # Not where the person's close sent it to the button already.
+                "  if (active !== null && active !== document.body && !ui.lapsPop.contains(active)) {\n    return;\n  }",
+                'const shown = (node) => node !== null && node !== undefined && node.isConnected && node.closest("[hidden]") === null;',
+                '[listBox?.querySelector(".list-title"), fallback, ui.stopHeading, ui.emptyHeading].find(shown)?.focus();',
+            ),
+            "renderLapsBody": ("t(LAP_REASON_KEYS[answer.reason])", 'lapsTable(answer.laps, laps.running ? LAP_CADENCE_FACTOR : null),'),
+            "lapsTable": ('const columns = ["number", "kind", "time", "distance", "pace", "heart", "max", ...(factor === null ? [] : ["cadence"])];',),
+            "lapsSummaryTable": ('lapsHeads(["kind", "laps", "time", "distance", "avg_pace", "heart"])',),
+            # The list closes the window, and another list too.
+            "closeList": ("  listBox = null;\n  hideLaps(drawn.find((entry) => entry.key === list.key)?.plot ?? null);",),
+            "openList": ("  hideLaps();\n  state.list = {",),
+            "renderList": ("note.id = `list-laps-${reason}`;", "if (list.lapsStale && answer !== null) {"),
+            # One window under the right end of the row at a time.
+            "openRecap": ("    state.saveOpen = false;\n    dropLaps();",),
+            "openSave": ("    state.recapOpen = false;\n    dropLaps();",),
+            "panelAction": ('    case "list-laps":\n      openLaps(button);\n      return;',),
+            "renderStage": ("  renderRecap(viewing, live);\n  renderLaps(viewing);",),
+        }
+        for name, lines in held.items():
+            found = re.search(rf"function {name}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
+            assert found is not None, name
+            for line in lines:
+                with self.subTest(function=name, line=line[:60]):
+                    self.assertIn(line, found.group(1))
+        self.assertIn('ui.lapsClose.addEventListener("click", () => closeLaps(true));', self.script)
+        # Its height follows the window of the browser (Codex's 4).
+        self.assertIn('  window.addEventListener("resize", () => fitPop(ui.lapsPop));', self.script)
+        self.assertIn('  ui.lapsPop.addEventListener("keydown", (event) => {\n    if (event.key === "Escape") {\n      event.preventDefault();\n      closeLaps(true);', self.script)
+        style = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        self.assertIn('.list-table button.list-laps-button[aria-disabled="true"] {\n  opacity: 0.55;\n  cursor: not-allowed;\n}', style)
+        self.assertIn(".laps-body th.laps-kind,\n.laps-body td.laps-kind {\n  text-align: left;\n}", style)
 
     def test_the_list_follows_the_panels_and_drops_old_answers(self) -> None:
         # Stage M3 of v2.2.0 (the checker's review of the plan, and Codex's):

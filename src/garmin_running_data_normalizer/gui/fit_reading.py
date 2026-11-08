@@ -68,11 +68,12 @@ import math
 import os
 import stat
 import sys
+from collections import Counter
 from contextlib import ExitStack
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from ..common.json_depth import check_json_depth
 from ..fit.lap_kinds import intensity_name, read_lap_kinds
@@ -164,13 +165,15 @@ _FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
 @dataclass(frozen=True)
 class LapRow:
     """One lap as the view page shows it: its kind from the FIT file, and its
-    values from the output."""
+    values from the output (the maximum heart rate from stage X10 of v2.3.0,
+    which the person chose for the window of the laps)."""
 
     kind: str
     elapsed_s: float | None
     timer_s: float | None
     distance_m: float | None
     avg_heart_rate: float | None
+    max_heart_rate: float | None
     avg_cadence: float | None
     avg_speed: float | None
 
@@ -209,6 +212,31 @@ def activity_key(rows: Sequence[Row], ref: int) -> str | None:
     if not key or sum(1 for row in rows if row.marks.get("key") == key) != 1:
         return None
     return key
+
+
+def known_unavailable(
+    files: Mapping[str, tuple[int, str]],
+    rows: Sequence[Row],
+    refs: Iterable[int],
+) -> dict[int, str | None]:
+    """Why the laps of each activity at ``refs`` cannot be shown, where the
+    output alone tells it before a file is read (stage X10 of v2.3.0), so
+    that the page shows its button as one that cannot be pressed: in the
+    order of the view page's server and read_laps, a key that the activity
+    has not or that another activity has too (key_shared, as activity_key
+    finds), then an output normalized without the Snapshot Store
+    (not_from_store, as the manifest of the reading gives its files); else
+    None, and the reasons that need a file are said when it is pressed."""
+    counts = Counter(row.marks.get("key") or "" for row in rows)
+    from_store = LINEAGE in files
+    answer: dict[int, str | None] = {}
+    for ref in refs:
+        key = rows[ref].marks.get("key") or ""
+        if not key or counts[key] != 1:
+            answer[ref] = "key_shared"
+        else:
+            answer[ref] = None if from_store else "not_from_store"
+    return answer
 
 
 def read_laps(
@@ -788,6 +816,7 @@ def _laps(data: bytes, ordinal: int, rows: list[dict[str, Any]]) -> Laps:
                 timer_s=_output_number(row, "total_timer_time"),
                 distance_m=_output_number(row, "total_distance"),
                 avg_heart_rate=_output_number(row, "avg_heart_rate"),
+                max_heart_rate=_output_number(row, "max_heart_rate"),
                 avg_cadence=_output_number(row, "avg_cadence"),
                 avg_speed=_output_number(row, "avg_speed"),
             )
@@ -809,5 +838,6 @@ __all__ = [
     "SESSIONS",
     "UNKNOWN_KIND",
     "activity_key",
+    "known_unavailable",
     "read_laps",
 ]

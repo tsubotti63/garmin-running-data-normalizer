@@ -291,6 +291,17 @@
           <p class="note recap-note" data-i18n="view.recap.records_note"></p>
           <p id="recap-cut" class="note recap-note"></p>
         </div>
+        <div id="laps-pop" class="pop recap-pop laps-pop" role="dialog" aria-labelledby="laps-pop-title" hidden>
+          <div class="pop-head"><span id="laps-pop-title" class="pop-title" tabindex="-1"></span><button type="button" id="laps-pop-close" class="small" data-i18n="help.close"></button></div>
+          <p id="laps-loading" class="loading" role="status" aria-live="polite"></p>
+          <div id="laps-stop" class="errbox view-stop" hidden>
+            <h4 id="laps-stop-heading" tabindex="-1" data-i18n="view.laps.stop_heading"></h4>
+            <div id="laps-stop-lines" class="messages"></div>
+            <p id="laps-stop-code" class="stop-code"></p>
+          </div>
+          <div id="laps-body" class="recap-body laps-body" tabindex="0" role="region" aria-labelledby="laps-pop-title"></div>
+          <p id="laps-note" class="note recap-note" hidden></p>
+        </div>
       </div>
       <div id="save-pop" class="pop save-pop" role="dialog" aria-labelledby="save-pop-title" hidden>
         <div class="pop-head"><span id="save-pop-title" class="pop-title" tabindex="-1" data-i18n="view.save.title"></span><button type="button" id="save-pop-close" class="small" data-i18n="help.close"></button></div>

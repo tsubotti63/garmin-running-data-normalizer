@@ -315,7 +315,7 @@ class GuiCatalogTest(unittest.TestCase):
         # review of the plan of U1, C, and Codex's review of the plan, 7).
         english, japanese = load_catalog("en"), load_catalog("ja")
         ones = one_keys()
-        self.assertEqual(len(ones), 25)
+        self.assertEqual(len(ones), 27)
         self.assertFalse(set(ones) & set(ones.values()))
         self.assertFalse((set(ones) | set(ones.values())) & set(NO_WORDS_FOR_ONE))
         self.assertFalse(COUNT_PLACEHOLDERS & MEASURE_PLACEHOLDERS or COUNT_PLACEHOLDERS & WORD_PLACEHOLDERS or MEASURE_PLACEHOLDERS & WORD_PLACEHOLDERS)
@@ -369,6 +369,11 @@ class GuiCatalogTest(unittest.TestCase):
             ),
             ("view_flow.mjs", "shoesNotes"): ("notes.push(message(countKey(key, answer[name]), { n: answer[name] }));",),
             ("view_flow.mjs", "raceSlotName"): ('message(countKey("view.compare.weeks_before", weeks - slot), { n: weeks - slot })',),
+            # The laps of an activity (stage X10 of v2.3.0).
+            ("view_flow.mjs", "lapsNoteMessages"): (
+                'lines.push(message(countKey("view.laps.unknown_note", notes.unknown), { n: n(notes.unknown) }));',
+                'lines.push(message(countKey("view.laps.no_distance", notes.unpaced), { n: n(notes.unpaced) }));',
+            ),
             ("flow.mjs", "progressMessage"): ("return { key: countKey(STAGE_KEYS.building_snapshots, progress.snapshots), params: { snapshots: progress.snapshots }, keyParams: {} };",),
             ("flow.mjs", "warningMessages"): ('const messages = [message(countKey("output_check.warnings", totals.kinds), { ...totals })];',),
             ("flow.mjs", "nextLine"): (

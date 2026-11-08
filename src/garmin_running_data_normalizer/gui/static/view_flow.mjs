@@ -116,7 +116,10 @@ export const ITEM_FORMATS = {
   pace: { unit: "pace", factor: 1000, digits: 0 },
   hr: { unit: "bpm", factor: 1, digits: 0 },
   mx: { unit: "bpm", factor: 1, digits: 0 },
-  cad: { unit: "raw", factor: 1, digits: 1 },
+  // Garmin records the cadence of a run of one foot, strides a minute, as
+  // the FIT profile's avg_running_cadence; the page writes steps a minute,
+  // as the watch shows it (stage X10 of v2.3.0, the person's choice).
+  cad: { unit: "spm", factor: 2, digits: 0 },
   pow: { unit: "raw", factor: 1, digits: 0 },
   load: { unit: "raw", factor: 1, digits: 0 },
   asc: { unit: "m", factor: 1, digits: 0 },
@@ -157,6 +160,7 @@ const UNIT_KEYS = {
   pace: "view.unit.pace",
   bpm: "view.unit.bpm",
   raw: "view.unit.raw",
+  spm: "view.unit.spm",
   m: "view.unit.m",
   cm: "view.unit.cm",
   ms: "view.unit.ms",
@@ -173,6 +177,7 @@ const VALUE_KEYS = {
   count: "view.value.count",
   pace: "view.value.pace",
   bpm: "view.value.bpm",
+  spm: "view.value.spm",
   m: "view.value.m",
   cm: "view.value.cm",
   ms: "view.value.ms",
@@ -2482,6 +2487,7 @@ const LIST_UNIT_KEYS = {
   km: "view.unit.km",
   pace: "view.list.unit_pace",
   bpm: "view.unit.bpm",
+  spm: "view.unit.spm",
   m: "view.unit.m",
   cm: "view.unit.cm",
   ms: "view.unit.ms",
@@ -3801,4 +3807,207 @@ export function conditionsCounts(counts, whole) {
 // (the checker's review of the plan of U1, 6).
 export function conditionsUnread(counts, conditions) {
   return counts !== null && typeof counts === "object" && conditionsKey(counts.asked ?? null) === conditionsKey(conditions) && counts.name === "unread";
+}
+
+// --- The laps of an activity (stage X10 of v2.3.0) --------------------------
+
+// The kinds of the laps that the server gives (gui/fit_reading.py), in the
+// order of the summary: as a workout goes, then the laps of no known kind.
+export const LAP_KINDS = ["warmup", "active", "interval", "recovery", "rest", "cooldown", "unknown"];
+// Why the laps of an activity cannot be shown (LAP_REASONS of gui/server.py),
+// and those that the list tells before its button is pressed, in the order
+// in which the server looks at them.
+export const LAP_REASONS = [
+  "not_from_store",
+  "no_store",
+  "other_store",
+  "store_unreadable",
+  "no_link",
+  "key_shared",
+  "fit_missing",
+  "fit_too_large",
+  "fit_changed",
+  "fit_not_activity",
+  "laps_differ",
+  "read_stale",
+  "busy",
+];
+export const LIST_LAP_REASONS = ["key_shared", "not_from_store"];
+// The words of the kinds, Garmin's (the person's answer of stage X8), and of
+// the reasons: those of the window, and those under the list for the rows
+// whose button cannot be pressed and for a list asked for again.
+export const LAP_KIND_KEYS = {
+  warmup: "view.laps.kind.warmup",
+  active: "view.laps.kind.active",
+  interval: "view.laps.kind.interval",
+  recovery: "view.laps.kind.recovery",
+  rest: "view.laps.kind.rest",
+  cooldown: "view.laps.kind.cooldown",
+  unknown: "view.laps.kind.unknown",
+};
+export const LAP_REASON_KEYS = {
+  not_from_store: "view.laps.reason.not_from_store",
+  no_store: "view.laps.reason.no_store",
+  other_store: "view.laps.reason.other_store",
+  store_unreadable: "view.laps.reason.store_unreadable",
+  no_link: "view.laps.reason.no_link",
+  key_shared: "view.laps.reason.key_shared",
+  fit_missing: "view.laps.reason.fit_missing",
+  fit_too_large: "view.laps.reason.fit_too_large",
+  fit_changed: "view.laps.reason.fit_changed",
+  fit_not_activity: "view.laps.reason.fit_not_activity",
+  laps_differ: "view.laps.reason.laps_differ",
+  busy: "view.laps.reason.busy",
+};
+// The heads of the columns of the two tables of the window.
+export const LAP_HEAD_KEYS = {
+  kind: "view.laps.head.kind",
+  laps: "view.laps.head.laps",
+  number: "view.laps.head.number",
+  time: "view.laps.head.time",
+  distance: "view.laps.head.distance",
+  avg_pace: "view.laps.head.avg_pace",
+  pace: "view.laps.head.pace",
+  heart: "view.laps.head.heart",
+  max: "view.laps.head.max",
+  cadence: "view.laps.head.cadence",
+};
+export const LIST_LAP_KEYS = {
+  key_shared: "view.list.laps_key_shared",
+  not_from_store: "view.list.laps_not_from_store",
+  read_stale: "view.list.laps_stale",
+};
+// The cadence of a lap of a running activity in the FIT file is of one foot
+// (avg_running_cadence, strides a minute, in the FIT profile); the window
+// shows steps a minute, as the watch does (the FIT SDK's profile.py and
+// Garmin's manuals; stage X10).
+export const LAP_CADENCE_FACTOR = 2;
+// The values of a lap that the answer gives, each a number of 0 or more or
+// null.
+const LAP_NUMBERS = ["elapsed_s", "timer_s", "distance_m", "avg_heart_rate", "max_heart_rate", "avg_cadence", "avg_speed"];
+
+// An answer of the laps as the page takes it: the laps, each of a known kind
+// and of the values that the answer gives, with the counts that agree with
+// them; or why they cannot be shown; null for an answer of another form,
+// which the page takes as a stop.
+export function lapsTaken(answer) {
+  if (answer === null || typeof answer !== "object") {
+    return null;
+  }
+  if (answer.status === "unavailable") {
+    return LAP_REASONS.includes(answer.reason) ? { reason: answer.reason } : null;
+  }
+  if (answer.status !== "laps" || !Array.isArray(answer.laps)) {
+    return null;
+  }
+  const number = (value) => value === null || (typeof value === "number" && Number.isFinite(value) && value >= 0);
+  const good = answer.laps.every(
+    (lap) => lap !== null && typeof lap === "object" && LAP_KINDS.includes(lap.kind) && LAP_NUMBERS.every((name) => number(lap[name])),
+  );
+  if (!good) {
+    return null;
+  }
+  const unknown = answer.laps.filter((lap) => lap.kind === "unknown").length;
+  if (answer.counts?.laps !== answer.laps.length || answer.counts?.unknown_kind !== unknown) {
+    return null;
+  }
+  return { laps: answer.laps };
+}
+
+// The summary of the laps: a row for each kind that the laps have, in the
+// order of LAP_KINDS, then one of all the laps (kind null), as the page
+// counts the panels (view/series.py): the time is the timer time, without the
+// pauses; the average pace is the total time over the total distance of the
+// laps that have both, of a distance above 0 (a lap of no distance, as a
+// rest standing, is left out of it); the average heart rate is weighted by
+// the timer time of the laps that have both; null where no lap has them.
+export function lapsSummary(laps) {
+  const kinds = LAP_KINDS.filter((kind) => laps.some((lap) => lap.kind === kind));
+  return [...kinds.map((kind) => ({ kind, ...lapTotals(laps.filter((lap) => lap.kind === kind)) })), { kind: null, ...lapTotals(laps) }];
+}
+
+function lapTotals(laps) {
+  const sum = (values) => values.reduce((total, value) => total + value, 0);
+  const timed = laps.filter((lap) => lap.timer_s !== null);
+  const measured = laps.filter((lap) => lap.distance_m !== null);
+  const paced = laps.filter((lap) => lap.timer_s !== null && lap.distance_m > 0);
+  const hearts = laps.filter((lap) => lap.timer_s > 0 && lap.avg_heart_rate !== null);
+  const pacedDistance = sum(paced.map((lap) => lap.distance_m));
+  const heartTime = sum(hearts.map((lap) => lap.timer_s));
+  return {
+    laps: laps.length,
+    time: timed.length ? sum(timed.map((lap) => lap.timer_s)) : null,
+    distance: measured.length ? sum(measured.map((lap) => lap.distance_m)) : null,
+    pace: pacedDistance > 0 ? sum(paced.map((lap) => lap.timer_s)) / pacedDistance : null,
+    heart: heartTime > 0 ? sum(hearts.map((lap) => lap.avg_heart_rate * lap.timer_s)) / heartTime : null,
+  };
+}
+
+// The rows of the table of the laps, in the order of the FIT file: the
+// number of each lap, its kind, its timer time, distance, pace (its timer
+// time over its distance; none without a distance), average and maximum heart
+// rate, and cadence: that of the output times ``factor``, or none where
+// ``factor`` is null (an activity that is not of a running type).
+export function lapRows(laps, factor) {
+  return laps.map((lap, index) => ({
+    number: index + 1,
+    kind: lap.kind,
+    time: lap.timer_s,
+    distance: lap.distance_m,
+    pace: lap.timer_s !== null && lap.distance_m > 0 ? lap.timer_s / lap.distance_m : null,
+    heart: lap.avg_heart_rate,
+    max: lap.max_heart_rate,
+    cadence: factor === null || lap.avg_cadence === null ? null : lap.avg_cadence * factor,
+  }));
+}
+
+// What the window says under the summary: how many laps are of no known
+// kind, how many have no distance and are left out of the average pace, and
+// the one kind of all the laps where more than one lap and all of one known
+// kind (a run without a workout, mostly).
+export function lapsNotes(laps) {
+  const kinds = new Set(laps.map((lap) => lap.kind));
+  return {
+    unknown: laps.filter((lap) => lap.kind === "unknown").length,
+    unpaced: laps.filter((lap) => !(lap.distance_m > 0)).length,
+    one: laps.length > 1 && kinds.size === 1 && !kinds.has("unknown") ? laps[0].kind : null,
+  };
+}
+
+// The lines under the summary, as messages: the one kind of all the laps,
+// and the counts of the laps of no known kind and of no distance, with their
+// words for one.
+export function lapsNoteMessages(laps, language) {
+  const notes = lapsNotes(laps);
+  const n = (value) => countText(value, language);
+  const lines = [];
+  if (notes.one !== null) {
+    lines.push(message("view.laps.one_kind", {}, { kind: message(LAP_KIND_KEYS[notes.one]) }));
+  }
+  if (notes.unknown > 0) {
+    lines.push(message(countKey("view.laps.unknown_note", notes.unknown), { n: n(notes.unknown) }));
+  }
+  if (notes.unpaced > 0) {
+    lines.push(message(countKey("view.laps.no_distance", notes.unpaced), { n: n(notes.unpaced) }));
+  }
+  return lines;
+}
+
+// A value of the laps as the window writes it: a time as a clock, a distance
+// in km with two digits, a pace in minutes and seconds a km, a heart rate and
+// a cadence as whole numbers; null for none.
+export function lapText(column, value, language) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  if (column === "time") {
+    return clockSeconds(value);
+  }
+  if (column === "pace") {
+    return clockSeconds(value * 1000);
+  }
+  if (column === "distance") {
+    return `${numberFormat(language, 2).format(value / 1000)} km`;
+  }
+  return numberFormat(language, 0).format(value);
 }

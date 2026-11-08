@@ -104,15 +104,22 @@ def list_apart_from_places(answer: Any) -> Any:
     """An answer of the list of a period without the number of the reading
     that it is of and the place of each row among the activities of that
     reading (stage X9c-2 of v2.3.0), which it has: a whole number of 1 or
-    more, and whole numbers of 0 or more; ListPlacesTest holds their values."""
+    more, and whole numbers of 0 or more; ListPlacesTest holds their values.
+    Without why the laps of each row cannot be shown where the output alone
+    tells it (stage X10), which each row has: None, key_shared, or
+    not_from_store; LapsApiTest holds their values."""
     if not isinstance(answer, dict) or type(answer.get("read")) is not int or answer["read"] < 1:
         raise AssertionError(f"a list without the number of its reading: {str(answer)[:120]}")
     rows = answer.get("rows")
     if rows is not None and not all(type(row.get("ref")) is int and row["ref"] >= 0 for row in rows):
         raise AssertionError(f"a list without the places of its rows: {str(answer)[:120]}")
+    if rows is not None and not all(
+        "laps_unavailable" in row and row["laps_unavailable"] in (None, "key_shared", "not_from_store") for row in rows
+    ):
+        raise AssertionError(f"a list without why the laps of its rows cannot be shown: {str(answer)[:120]}")
     shown = {name: value for name, value in answer.items() if name != "read"}
     if rows is not None:
-        shown["rows"] = [{name: value for name, value in row.items() if name != "ref"} for row in rows]
+        shown["rows"] = [{name: value for name, value in row.items() if name not in ("ref", "laps_unavailable")} for row in rows]
     return shown
 
 

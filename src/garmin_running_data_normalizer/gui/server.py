@@ -51,7 +51,7 @@ from .runs import (
 )
 from .layouts import BUILT_IN_IDS, USER_LAYOUT_ID, LayoutChangeError, built_in_answer
 from .marks import MarkChangeError
-from .fit_reading import REASONS, Laps, activity_key, read_laps
+from .fit_reading import REASONS, Laps, activity_key, known_unavailable, read_laps
 from .settings import (
     SHELF_STATES,
     THEMES,
@@ -323,6 +323,7 @@ def _laps_answer(laps: Laps) -> dict[str, Any]:
                 "timer_s": lap.timer_s,
                 "distance_m": lap.distance_m,
                 "avg_heart_rate": lap.avg_heart_rate,
+                "max_heart_rate": lap.max_heart_rate,
                 "avg_cadence": lap.avg_cadence,
                 "avg_speed": lap.avg_speed,
             }
@@ -1120,11 +1121,16 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         answer["names"] = _names_state(data)
         # Each row's place among the activities of this reading, by which the
         # page asks for its laps, and the reading that it is of (stage X9c-2
-        # of v2.3.0); the declared key of an activity is never given.
+        # of v2.3.0); the declared key of an activity is never given. Why its
+        # laps cannot be shown, where the output alone tells it before a file
+        # is read, so that the page's button cannot be pressed (stage X10).
         if answer["rows"] is not None:
             places = {id(row): ref for ref, row in enumerate(data.rows[ACTIVITIES])}
             for row, chosen in zip(answer["rows"], list_rows(data, period, types, conditions), strict=True):
                 row["ref"] = places[id(chosen)]
+            known = known_unavailable(data.files, data.rows[ACTIVITIES], [row["ref"] for row in answer["rows"]])
+            for row in answer["rows"]:
+                row["laps_unavailable"] = known[row["ref"]]
         answer["read"] = read
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")

@@ -1242,6 +1242,41 @@ class GuiGuideTest(unittest.TestCase):
         self.assertIn('  if (event?.key !== "Escape" || event.defaultPrevented === true || event.isComposing === true) {\n    return null;\n  }', choose.group(1))
         self.assertIn("  return open.length > 0 ? open[open.length - 1] : null;", choose.group(1))
 
+    def test_guides_say_the_cadence_in_steps_a_minute(self) -> None:
+        # Stage X10 of v2.3.0 (the person's answer 「1 歩数にそろえる」): the page
+        # writes the cadence in steps a minute, twice the value of one foot
+        # that Garmin's files record (checked with the running types), and the
+        # guides say so once, with the width of its ranges in those steps, and
+        # that the output and the CSV file of series keep the values as
+        # recorded (the checker's review of the plan, 1 and 2).
+        said = {
+            "ja": (
+                "ピッチは 1 分の歩数（両足）です。",
+                "Garmin のファイルは片足の数で記録しているので、このアプリが 2 倍して出します（2.3.0 から。2.2 までは記録の値のままで、時計の画面の半分でした）。",
+                "2 倍で時計と同じになることは、走る種目で確かめました。",
+                "ほかの種目に値があるときも、同じく 2 倍して出します。",
+                "正規化の出力の値は変わりません。",
+                "ピッチだけは、CSV では記録の値のまま（片足の数）で、見るページの値（1 分の歩数）の半分です。",
+                "| ピッチ | 10 歩/分 |",
+            ),
+            "en": (
+                "The cadence is in steps per minute (both feet).",
+                "Garmin's files record it of one foot, so this app doubles it (from 2.3.0; up to 2.2, it was the value as recorded, half of what the watch shows).",
+                "That the doubled value is the watch's was checked with the running types; a value of another type is doubled too.",
+                "The values of the output do not change.",
+                "Only the cadence differs from the view page: the CSV file keeps it as recorded (of one foot), half of the steps per minute that the page shows.",
+                "| Cadence | 10 spm |",
+            ),
+        }
+        gone = {"ja": "| ピッチ | 5（Garmin と同じ単位、記載なし） |", "en": "| Cadence | 5 (same unit as Garmin, not named) |"}
+        for language, sentences in said.items():
+            raw = GUIDES[language].read_text(encoding="utf-8")
+            text = " ".join(raw.split()) if language == "en" else re.sub(r"\n *", "", raw)
+            self.assertNotIn(gone[language], raw)
+            for sentence in sentences:
+                with self.subTest(language=language, sentence=sentence[:40]):
+                    self.assertEqual(text.count(sentence), 1)
+
     def test_guides_say_the_words_of_the_page_of_v221(self) -> None:
         # v2.2.1 W3 (the person's answer 「おすすめのとおり」): the guides name the
         # bars, the buttons, the steps of the colors, and the ranges of a
@@ -1268,7 +1303,7 @@ class GuiGuideTest(unittest.TestCase):
                 "年のボタンの代わりに、大会のボタンが新しい順に出ます。",
                 "大会の日でくらべるときの大会のボタンは、名前の全部と日付を読み上げます。",
                 "値のある最初の区間から最後の区間までの数（回数の無い区間も入れて）が 200 を超えるときは、",
-                "| ピッチ | 5（Garmin と同じ単位、記載なし） |",
+                "| パワー | 10（Garmin と同じ単位、記載なし） |",
                 "くらべる帯（年でくらべる）と見方の帯（点で並べる・分かれ方・靴ごと）の",
                 "下の帯に「このアプリを終了しています…」と出て",
                 "1 km ごとの区間に何回あったかが棒で出ます。",
@@ -1281,7 +1316,7 @@ class GuiGuideTest(unittest.TestCase):
                 "the days, weeks, or months in rows (the first column named by the grouping) and the years in columns,",
                 "* marks one cut short (by an end of the output, of the year or month, or by the race day), and — one not in the year (outside the output,",
                 "- **Race week (to the race day)**, a week of the readings and the table,",
-                "| Cadence | 5 (same unit as Garmin, not named) |",
+                "| Power | 10 (same unit as Garmin, not named) |",
                 "Where there would be more than 200 ranges from the first with a value to the last (those of no activity too),",
             ),
         }
@@ -2235,7 +2270,7 @@ class GuiGuideTest(unittest.TestCase):
             if language == "en":
                 phrases = (
                     f"{mark.format(messages['view.recap.button'])} above the panels opens a window with a table of the items of the panels: the value of each in the period shown and in the period of the same length just before it (for {mark.format(messages['view.period.years1'])} and the like, years counted by the dates, so that the days can differ by one; see below), and their difference.",
-                    f"It opens where the window of {mark.format(messages['view.marks.button'])} opens; only one of the windows of {mark.format(messages['view.marks.button'])}, {mark.format(messages['view.recap.button'])}, and saving opens at a time. {mark.format(messages['help.close'])}, or the Esc key in the window, closes it (a press outside it does not). Whether it was open is not remembered.",
+                    f"It opens where the window of {mark.format(messages['view.marks.button'])} opens; only one of the windows of {mark.format(messages['view.marks.button'])}, {mark.format(messages['view.recap.button'])}, saving, and the laps opens at a time. {mark.format(messages['help.close'])}, or the Esc key in the window, closes it (a press outside it does not). Whether it was open is not remembered.",
                     "It can be used with panels, while years are not compared, no other view shows, and the page is not in **Full screen**.",
                     f"Its columns are {mark.format(messages['view.recap.item'])}, the period shown ({mark.format(messages['view.recap.now.years1'])}, {mark.format(messages['view.recap.now.custom'])}, and so on), the period before ({mark.format(messages['view.recap.before.years1'])}, {mark.format(days[31])}, and so on), and {mark.format(messages['view.recap.difference'])}.",
                     f"counted with the same {mark.format(messages['view.types.label'])} and conditions as the panels",
@@ -2253,7 +2288,7 @@ class GuiGuideTest(unittest.TestCase):
             else:
                 phrases = (
                     f"段の上の行の{mark.format(messages['view.recap.button'])}で、並べた段の項目を表にした窓を開きます。今の期間と、その前の同じ長さの期間（「1 年」などは日付で数えた年なので、日数が 1 日違うことがあります。下を見てください）の値と、その差が並びます。",
-                    f"窓は{mark.format(messages['view.marks.button'])}の窓と同じ所に開きます。{mark.format(messages['view.marks.button'])}{mark.format(messages['view.recap.button'])}と画像で保存の窓は、どれか 1 つだけが開きます。閉じるときは{mark.format(messages['help.close'])}を押すか、窓の中で Esc キーを押します（窓の外を押しても閉じません）。開いていたかは覚えません。",
+                    f"窓は{mark.format(messages['view.marks.button'])}の窓と同じ所に開きます。{mark.format(messages['view.marks.button'])}{mark.format(messages['view.recap.button'])}と画像で保存とラップの窓は、どれか 1 つだけが開きます。閉じるときは{mark.format(messages['help.close'])}を押すか、窓の中で Esc キーを押します（窓の外を押しても閉じません）。開いていたかは覚えません。",
                     "段が 1 つ以上あり、年でくらべる・ほかの見方・全画面でないときに使えます。",
                     f"列は{mark.format(messages['view.recap.item'])}、今の期間（{mark.format(messages['view.recap.now.years1'])}{mark.format(messages['view.recap.now.custom'])}など）、前の期間（{mark.format(messages['view.recap.before.years1'])}{mark.format(days[31])}など）、{mark.format(messages['view.recap.difference'])}です。",
                     f"段と同じ{mark.format(messages['view.types.label'])}と条件で数えます。",
@@ -3390,6 +3425,52 @@ class GuiGuideTest(unittest.TestCase):
                 self.assertEqual(design.count(phrase), 1)
         self.assertNotIn("0 means no record", design)
 
+
+    def test_the_design_and_the_guides_say_what_x10_reads_and_writes(self) -> None:
+        # Stage X10 of v2.3.0 (the checker's review of the guard, 1 and 2): the
+        # design document says the new field of the list, the maximum heart
+        # rate of the laps, and the factor of the cadence; the guides say that
+        # the view page reads the FIT file of an activity in the store when its
+        # laps are shown, in the four places that said that it reads outputs
+        # only, and the words of the page too.
+        design = " ".join((ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        for phrase in (
+            "From stage X10, the list of a period gives with each row, besides `ref`, why the laps of that activity cannot be shown where the output alone tells it before a file is read (`laps_unavailable`): `key_shared` where the activity has no key or another activity has it too, else `not_from_store` where the manifest of the reading has no `snapshot/snapshot_lineage.json`, else `null`.",
+            "(`elapsed_s`, `timer_s`, `distance_m`, `avg_heart_rate`, `max_heart_rate` from stage X10, `avg_cadence`, and `avg_speed`; none read anew from the store)",
+            "in `ITEM_FORMATS` of `view_flow.mjs` it is the one item whose factor is not that of its unit (2),",
+            "The answers of the server, the output, and the CSV file of `series` keep the values as recorded",
+        ):
+            with self.subTest(design=phrase[:40]):
+                self.assertEqual(design.count(phrase), 1)
+        said = {
+            "ja": (
+                "見るページは出力を読むだけで、書き換えません（2.3.0 からは、ラップを見るときだけ、保管場所のそのアクティビティの FIT ファイルも読みます）。",
+                "見るページは出力を読むだけで、数字を外へ送りません（2.3.0 からは、ラップを見るときだけ、保管場所の FIT ファイルも読みます）。",
+            ),
+            "en": (
+                "The view page only reads an output (from 2.3.0, also the FIT file of an activity in the Snapshot Store, when its laps are shown), and never changes it.",
+                "The view page only reads an output (from 2.3.0, also the FIT file of an activity in the Snapshot Store, when its laps are shown), and sends no numbers anywhere.",
+            ),
+        }
+        gone = {
+            "ja": ("見るページは出力を読むだけで、書き換えません。", "見るページは出力を読むだけで、数字を外へ送りません。"),
+            "en": ("The view page only reads an output, and never changes it.", "The view page only reads an output, and sends no numbers anywhere."),
+        }
+        for language in GUIDES:
+            raw = GUIDES[language].read_text(encoding="utf-8")
+            text = " ".join(raw.split()) if language == "en" else re.sub(r"\n *", "", raw)
+            for sentence in said[language]:
+                with self.subTest(language=language, said=sentence[:40]):
+                    self.assertEqual(text.count(sentence), 1)
+            for sentence in gone[language]:
+                with self.subTest(language=language, gone=sentence[:40]):
+                    self.assertNotIn(sentence, text)
+        words = {
+            language: json.loads((ROOT / "src/garmin_running_data_normalizer/gui/static/i18n" / f"{language}.json").read_text(encoding="utf-8"))["view.empty.latest_text"]
+            for language in GUIDES
+        }
+        self.assertIn("この画面は出力（ラップを見るときは、保管場所の FIT ファイルも）を読むだけで、書き換えません。", words["ja"])
+        self.assertIn("This page only reads the output (and, for the laps of an activity, its FIT file in the Snapshot Store) and never changes them.", words["en"])
 
 if __name__ == "__main__":
     unittest.main()

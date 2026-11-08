@@ -4,7 +4,9 @@
 // tests check; this module puts them in the page. Visible text comes from the
 // message catalogs, and the page changes text with textContent only, never
 // with HTML, so that a name from the computer is never read as markup. The
-// page reads outputs only, and never changes them.
+// page reads outputs, and through the server the FIT file of an activity in
+// the Snapshot Store when its laps are shown (stage X10 of v2.3.0), and
+// never changes them.
 
 import { chooseLanguage, translate } from "./i18n.mjs";
 import { ApiError, addressValue, callWithKey, readLaunchKey, readStorage, writeStorage } from "./launch.mjs";
@@ -127,6 +129,17 @@ import {
   kindKey,
   laterSender,
   dropPlace,
+  LAP_CADENCE_FACTOR,
+  LAP_HEAD_KEYS,
+  LAP_KIND_KEYS,
+  LAP_REASON_KEYS,
+  LIST_LAP_KEYS,
+  LIST_LAP_REASONS,
+  lapRows,
+  lapText,
+  lapsNoteMessages,
+  lapsSummary,
+  lapsTaken,
   layoutCards,
   layoutKept,
   layoutNotes,
@@ -444,6 +457,16 @@ const ui = {
   recapBody: byId("recap-body"),
   recapDifferenceNote: byId("recap-difference-note"),
   recapCut: byId("recap-cut"),
+  // The window of the laps of an activity of the list (stage X10 of v2.3.0).
+  lapsPop: byId("laps-pop"),
+  lapsTitle: byId("laps-pop-title"),
+  lapsClose: byId("laps-pop-close"),
+  lapsLoading: byId("laps-loading"),
+  lapsStop: byId("laps-stop"),
+  lapsStopLines: byId("laps-stop-lines"),
+  lapsStopCode: byId("laps-stop-code"),
+  lapsBody: byId("laps-body"),
+  lapsNote: byId("laps-note"),
   saveOpen: byId("save-open"),
   savePop: byId("save-pop"),
   saveTitle: byId("save-pop-title"),
@@ -803,6 +826,16 @@ const state = {
   recapSeq: 0,
   recapStop: null,
   recapShown: false,
+  // The window of the laps of an activity of the list (stage X10 of v2.3.0):
+  // the row whose laps it shows (its place, the reading of the list, the item
+  // of the list, its date and time and type, and whether it is of a running
+  // type), the answer taken, its stop, whether an answer is on its way, and
+  // whether a request is.
+  laps: null,
+  lapsAnswer: null,
+  lapsStop: null,
+  lapsLoading: false,
+  lapsAsking: false,
   // Saving as an image (stage R1 of v2.2.0): whether its window is open, its
   // choices for this time it opens, why it could not save, and the line
   // after a saving, as what it is said of.
@@ -2104,6 +2137,7 @@ async function openMarks(open) {
     // One window opens under the right end of the row at a time (stage Q1).
     state.recapOpen = false;
     state.saveOpen = false;
+    dropLaps();
   }
   state.markAsk = null;
   state.markProblem = null;
@@ -2272,8 +2306,10 @@ function openRecap(open) {
   state.recapOpen = open;
   state.recapAsked = null;
   if (open) {
-    // The window of the saving, at the same place, closes too (stage R1).
+    // The window of the saving, at the same place, closes too (stage R1),
+    // and that of the laps (stage X10 of v2.3.0).
     state.saveOpen = false;
+    dropLaps();
   }
   if (open && state.marksOpen) {
     state.marksOpen = false;
@@ -3074,6 +3110,7 @@ function openSave(open, from = state.saveFrom) {
     state.saveMarks = false;
     state.saveNotice = null;
     state.recapOpen = false;
+    dropLaps();
     if (state.marksOpen) {
       state.marksOpen = false;
       state.markAsk = null;
@@ -4740,6 +4777,7 @@ function openList(key, index, byKey) {
     }
     return;
   }
+  hideLaps();
   state.list = {
     key,
     index,
@@ -4780,6 +4818,7 @@ function closeList(byPerson = false) {
   state.listSeq += 1;
   listBox?.remove();
   listBox = null;
+  hideLaps(drawn.find((entry) => entry.key === list.key)?.plot ?? null);
   drawAgain(list.key);
   moveCross(byPerson ? list.index : state.cursor, false);
   if (byPerson) {
@@ -4906,6 +4945,14 @@ function renderList({ top = false } = {}) {
     parts.push(element("p", "list-note", describe(listLimitMessage(answer.total, answer.limit, list.grain, state.language))));
   } else {
     parts.push(buildListTable(list, answer.rows, titleText));
+    for (const reason of LIST_LAP_REASONS.filter((name) => answer.rows.some((row) => row.laps_unavailable === name))) {
+      const note = element("p", "list-note list-laps-note", t(LIST_LAP_KEYS[reason]));
+      note.id = `list-laps-${reason}`;
+      parts.push(note);
+    }
+  }
+  if (list.lapsStale && answer !== null) {
+    parts.push(element("p", "list-note list-laps-note", t(LIST_LAP_KEYS.read_stale)));
   }
   if (answer !== null) {
     const line = element("p", "list-value");
@@ -4959,6 +5006,10 @@ function buildListTable(list, rows, titleText) {
     cell.append(button);
     headRow.append(cell);
   }
+  // The laps of each activity, in a window (stage X10 of v2.3.0).
+  const lapsHead = element("th", "list-laps-head", t("view.list.laps"));
+  lapsHead.scope = "col";
+  headRow.append(lapsHead);
   head.append(headRow);
   const body = element("tbody");
   const typeName = (name) => describe(typeMessage(name));
@@ -4991,6 +5042,7 @@ function buildListTable(list, rows, titleText) {
       }
       line.append(cell);
     }
+    line.append(lapsCell(row));
     body.append(line);
   }
   table.append(caption, head, body);
@@ -5013,6 +5065,363 @@ function listStop(stop) {
     }
   }
   return box;
+}
+
+// The cell of the button of the laps of a row of the list: it cannot be
+// pressed where the output alone tells that its laps cannot be shown, and is
+// tied to the line under the list that says why (stage X10 of v2.3.0).
+function lapsCell(row) {
+  const cell = element("td", "list-laps");
+  if (!Number.isInteger(row.ref)) {
+    return cell;
+  }
+  const button = element("button", "small list-laps-button", t("view.list.laps_button"));
+  button.type = "button";
+  button.dataset.action = "list-laps";
+  button.dataset.ref = String(row.ref);
+  button.dataset.listFocus = `laps-${row.ref}`;
+  button.setAttribute("aria-haspopup", "dialog");
+  button.setAttribute("aria-controls", "laps-pop");
+  button.setAttribute("aria-expanded", String(state.laps?.ref === row.ref));
+  if (LIST_LAP_REASONS.includes(row.laps_unavailable)) {
+    button.setAttribute("aria-disabled", "true");
+    button.setAttribute("aria-describedby", `list-laps-${row.laps_unavailable}`);
+  }
+  cell.append(button);
+  return cell;
+}
+
+// --- The laps of an activity of the list (stage X10 of v2.3.0) ------------
+
+// The window of the laps shows one activity of the list at a time, at the
+// place of the summary under the right end of the row of the panels, without
+// holding the focus in it, so that another row of the list can be pressed;
+// the server reads the laps from the FIT file of the activity only then
+// (gui/fit_reading.py). Its state, other than the row of the list, goes with
+// it, and an answer on its way is not shown.
+function dropLaps() {
+  state.laps = null;
+  state.lapsAnswer = null;
+  state.lapsStop = null;
+  state.lapsLoading = false;
+}
+
+// Hide the window at once where the list closes or changes, which draws no
+// more than the list (Codex's read of the diff of X10, 1: the window stayed,
+// and its Close button did nothing); the focus inside it goes away from it.
+function hideLaps(fallback = null) {
+  const focused = ui.lapsPop.contains(document.activeElement);
+  dropLaps();
+  ui.lapsPop.hidden = true;
+  delete ui.lapsBody.dataset.signature;
+  if (focused) {
+    queueMicrotask(() => lapsFocusAway(fallback));
+  }
+}
+
+// Where the focus goes from the window as it hides: the heading of the list,
+// or where the list is gone, the chart of its panel, or the heading of what
+// shows instead, as for the summary (Codex's read of the diff of X10, 2),
+// chosen once the page is drawn, which may close the list or stop the page
+// (Codex's second read, 2).
+function lapsFocusAway(fallback = null) {
+  // Only where the focus is still in the window that hid, or lost: a close by
+  // the person has sent it to the button of the row already (the real-page
+  // check of X10).
+  const active = document.activeElement;
+  if (active !== null && active !== document.body && !ui.lapsPop.contains(active)) {
+    return;
+  }
+  const shown = (node) => node !== null && node !== undefined && node.isConnected && node.closest("[hidden]") === null;
+  [listBox?.querySelector(".list-title"), fallback, ui.stopHeading, ui.emptyHeading].find(shown)?.focus();
+}
+
+// Whether an activity type is one of the running types, as the page counts
+// "all the running types" at first: their cadence is in steps a minute.
+function runningType(name) {
+  return (state.view?.types ?? []).some((entry) => entry.name === name && entry.running === true);
+}
+
+// Open the window of the laps of a row of the list: the windows at the same
+// place close, the focus goes to its title, and the laps are asked for; a
+// button that cannot be pressed does nothing.
+function openLaps(button) {
+  const list = state.list;
+  const ref = Number(button.dataset.ref);
+  const row = Array.isArray(list?.answer?.rows) ? list.answer.rows.find((candidate) => candidate.ref === ref) : undefined;
+  if (row === undefined || button.getAttribute("aria-disabled") === "true") {
+    return;
+  }
+  state.recapOpen = false;
+  state.saveOpen = false;
+  if (state.marksOpen) {
+    state.marksOpen = false;
+    state.markAsk = null;
+    editMark(null, false);
+  }
+  list.lapsStale = false;
+  dropLaps();
+  state.laps = { ref, read: list.answer.read, key: list.key, when: row.datetime, type: row.type, running: runningType(row.type) };
+  // Read from now, also while the answer of another row is on its way
+  // (Codex's second read of the diff of X10, 3).
+  state.lapsLoading = true;
+  render();
+  ui.lapsTitle.focus();
+  requestLaps();
+}
+
+// Close the window. Closed by the person, the focus goes back to the button
+// of its row, or to the heading of the list where the row is not there.
+function closeLaps(byPerson = false) {
+  const laps = state.laps;
+  if (laps === null) {
+    return;
+  }
+  dropLaps();
+  render();
+  if (byPerson) {
+    (listBox?.querySelector(`[data-list-focus="laps-${laps.ref}"]`) ?? listBox?.querySelector(".list-title"))?.focus();
+  }
+}
+
+// Ask for the laps of the row of the window, one request at a time: a row
+// pressed while one is on its way is asked for when it is back, whose answer
+// is not shown, so that only the last row pressed is asked for. A ticket that
+// the server no longer keeps opens the output again, once, and the list is
+// asked for again, as for an answer of another reading.
+async function requestLaps(again = true) {
+  const laps = state.laps;
+  if (laps === null || state.view === null || state.lapsAsking) {
+    return;
+  }
+  state.lapsAsking = true;
+  state.lapsLoading = true;
+  render();
+  let answer = null;
+  let failure = null;
+  try {
+    answer = await callApi("/api/view/laps", { view: state.view.view, read: laps.read, ref: laps.ref });
+  } catch (error) {
+    failure = error;
+  }
+  state.lapsAsking = false;
+  if (state.laps !== laps) {
+    // Closed, or another row pressed meanwhile.
+    requestLaps();
+    return;
+  }
+  state.lapsLoading = false;
+  if (failure === null) {
+    const taken = lapsTaken(answer);
+    if (taken === null) {
+      state.lapsStop = { code: null, detail: null };
+    } else if (taken.reason === "read_stale") {
+      lapsStale();
+      return;
+    } else {
+      state.lapsAnswer = taken;
+    }
+  } else if (connectionFailure(failure)) {
+    state.lapsStop = { code: null, detail: null };
+  } else if (failure.code === "VIEW_NOT_OPEN" && again && state.target !== null) {
+    // The window may show another row, or none, once the output opened
+    // again or could not (Codex's second read of the diff of X10, 1).
+    const reopened = await reopen();
+    if (state.laps !== laps) {
+      return;
+    }
+    if (reopened) {
+      lapsStale();
+      return;
+    }
+    state.lapsStop = { code: failure.code, detail: failure.detail };
+  } else if (OUTPUT_STOPS.includes(failure.code)) {
+    state.view = null;
+    setAnswer(null);
+    state.compare = null;
+    state.plot = null;
+    state.spread = null;
+    state.shoes = null;
+    state.stop = { code: failure.code, detail: failure.detail };
+  } else {
+    state.lapsStop = { code: failure.code, detail: failure.detail };
+  }
+  render();
+}
+
+// The output was read again since the list: the window closes, the list is
+// asked for again and says why under it, and the heading of the list takes
+// the focus that the window had.
+function lapsStale() {
+  const list = state.list;
+  const focused = ui.lapsPop.contains(document.activeElement);
+  dropLaps();
+  if (list !== null) {
+    // The rows of the reading before are not shown, nor pressed, while the list
+    // is asked for again (Codex's read of the diff of X10, 3).
+    list.answer = null;
+    list.lapsStale = true;
+    setText(ui.listAnnouncer, t(LIST_LAP_KEYS.read_stale));
+    requestList();
+  }
+  render();
+  renderList();
+  if (focused) {
+    focusList();
+  }
+}
+
+// The window: shown while its row is of the list shown under the panels
+// (not another view, nor the graphs only); hidden, the focus inside it goes
+// to the heading of the list. The buttons of the list say which is open.
+function renderLaps(viewing) {
+  if (state.laps !== null && (!viewing || apart() || state.full || state.list === null || state.list.key !== state.laps.key)) {
+    dropLaps();
+  }
+  for (const button of listBox?.querySelectorAll("button.list-laps-button") ?? []) {
+    button.setAttribute("aria-expanded", String(state.laps !== null && state.laps.ref === Number(button.dataset.ref)));
+  }
+  const focused = ui.lapsPop.contains(document.activeElement);
+  ui.lapsPop.hidden = state.laps === null;
+  if (ui.lapsPop.hidden) {
+    delete ui.lapsBody.dataset.signature;
+    if (focused) {
+      queueMicrotask(() => lapsFocusAway());
+    }
+    return;
+  }
+  const laps = state.laps;
+  setText(ui.lapsTitle, t("view.laps.title", { when: describe(listWhen(laps.when, state.language)) || "", type: describe(typeMessage(laps.type)) }));
+  setText(ui.lapsLoading, state.lapsLoading ? t("view.laps.reading") : "");
+  ui.lapsStop.hidden = state.lapsStop === null;
+  if (!ui.lapsStop.hidden) {
+    if (state.lapsStop.code === null) {
+      ui.lapsStopLines.replaceChildren(element("p", "", t("view.laps.failed")));
+      setText(ui.lapsStopCode, "");
+    } else {
+      renderStop(ui.lapsStop, null, ui.lapsStopLines, ui.lapsStopCode, stopBox(state.lapsStop.code, state.lapsStop.detail, state.productVersion));
+    }
+  }
+  renderLapsBody(laps, state.lapsAnswer);
+  fitPop(ui.lapsPop);
+}
+
+// What the window holds: why the laps cannot be shown, with the reason to
+// quote; or the summary by kind, what it leaves out, and the table of the
+// laps, with the note of how they are counted.
+function renderLapsBody(laps, answer) {
+  const signature = JSON.stringify([state.language, laps.ref, laps.running, answer]);
+  if (ui.lapsBody.dataset.signature === signature) {
+    return;
+  }
+  ui.lapsBody.dataset.signature = signature;
+  ui.lapsNote.hidden = answer === null || answer.laps === undefined;
+  if (answer === null) {
+    ui.lapsBody.replaceChildren();
+    return;
+  }
+  if (answer.laps === undefined) {
+    ui.lapsBody.replaceChildren(
+      element("p", "laps-reason", t(LAP_REASON_KEYS[answer.reason])),
+      element("p", "stop-code", t("view.laps.code", { code: answer.reason })),
+    );
+    return;
+  }
+  const lines = element("div", "laps-notes");
+  for (const line of lapsNoteMessages(answer.laps, state.language)) {
+    lines.append(element("p", "", describe(line)));
+  }
+  ui.lapsBody.replaceChildren(
+    element("h4", "", t("view.laps.by_kind")),
+    lapsSummaryTable(answer.laps),
+    lines,
+    element("h4", "", t("view.laps.by_lap")),
+    lapsTable(answer.laps, laps.running ? LAP_CADENCE_FACTOR : null),
+  );
+  setText(ui.lapsNote, t(laps.running ? "view.laps.note_running" : "view.laps.note"));
+}
+
+// A cell of the laps: its text, or a dash that says that there is none.
+function lapsValueCell(text, kind = false) {
+  const cell = element("td", kind ? "laps-kind" : "n");
+  if (text === null) {
+    cell.classList.add("empty");
+    const dash = element("span", "", "—");
+    dash.setAttribute("aria-hidden", "true");
+    cell.append(dash, element("span", "visually-hidden", t("view.no_value")));
+  } else {
+    cell.textContent = text;
+  }
+  return cell;
+}
+
+function lapsHeads(columns) {
+  const head = element("thead");
+  const row = element("tr");
+  for (const column of columns) {
+    const cell = element("th", column === "kind" ? "laps-kind" : "n", t(LAP_HEAD_KEYS[column]));
+    cell.scope = "col";
+    row.append(cell);
+  }
+  head.append(row);
+  return head;
+}
+
+// The summary: a row for each kind of the laps, then all the laps.
+function lapsSummaryTable(laps) {
+  const table = element("table", "t laps-summary");
+  table.append(element("caption", "visually-hidden", t("view.laps.by_kind")), lapsHeads(["kind", "laps", "time", "distance", "avg_pace", "heart"]));
+  const body = element("tbody");
+  for (const row of lapsSummary(laps)) {
+    const line = element("tr");
+    const name = element("th", "laps-kind", row.kind === null ? t("view.laps.all") : t(LAP_KIND_KEYS[row.kind]));
+    name.scope = "row";
+    line.append(
+      name,
+      lapsValueCell(lapText("laps", row.laps, state.language)),
+      lapsValueCell(lapText("time", row.time, state.language)),
+      lapsValueCell(lapText("distance", row.distance, state.language)),
+      lapsValueCell(lapText("pace", row.pace, state.language)),
+      lapsValueCell(lapText("heart", row.heart, state.language)),
+    );
+    body.append(line);
+  }
+  table.append(body);
+  return table;
+}
+
+// The laps in the order of the FIT file, in a region that scrolls as the
+// list does; the cadence only for a running type.
+function lapsTable(laps, factor) {
+  const wrap = element("div", "list-table laps-table");
+  wrap.tabIndex = 0;
+  wrap.setAttribute("role", "region");
+  wrap.setAttribute("aria-label", t("view.laps.by_lap"));
+  const columns = ["number", "kind", "time", "distance", "pace", "heart", "max", ...(factor === null ? [] : ["cadence"])];
+  const table = element("table", "t");
+  table.append(element("caption", "visually-hidden", t("view.laps.by_lap")), lapsHeads(columns));
+  const body = element("tbody");
+  for (const row of lapRows(laps, factor)) {
+    const line = element("tr");
+    const number = element("th", "n", lapText("number", row.number, state.language));
+    number.scope = "row";
+    line.append(
+      number,
+      lapsValueCell(t(LAP_KIND_KEYS[row.kind]), true),
+      lapsValueCell(lapText("time", row.time, state.language)),
+      lapsValueCell(lapText("distance", row.distance, state.language)),
+      lapsValueCell(lapText("pace", row.pace, state.language)),
+      lapsValueCell(lapText("heart", row.heart, state.language)),
+      lapsValueCell(lapText("max", row.max, state.language)),
+    );
+    if (factor !== null) {
+      line.append(lapsValueCell(lapText("cadence", row.cadence, state.language)));
+    }
+    body.append(line);
+  }
+  table.append(body);
+  wrap.append(table);
+  return wrap;
 }
 
 // --- The overview ---------------------------------------------------------
@@ -7335,6 +7744,7 @@ function renderStage(live) {
   renderPicker(viewing);
   renderMarks(viewing && !apart(), live);
   renderRecap(viewing, live);
+  renderLaps(viewing);
   setText(ui.loading, state.loading && viewing ? t("view.loading") : "");
   ui.align.disabled = !viewing;
   ui.align.checked = state.align;
@@ -9141,6 +9551,9 @@ function panelAction(event) {
     case "list-sort":
       sortList(button.dataset.column);
       return;
+    case "list-laps":
+      openLaps(button);
+      return;
     case "table":
       listChanged("table");
       if (state.tables.has(key)) {
@@ -9290,6 +9703,8 @@ function connect() {
   ui.marksShown.addEventListener("change", changeMarksShown);
   window.addEventListener("resize", fitMarksWindow);
   window.addEventListener("resize", fitRecapWindow);
+  // The window of the laps too (Codex's read of the diff of X10, 4).
+  window.addEventListener("resize", () => fitPop(ui.lapsPop));
   window.addEventListener("resize", fitSaveWindow);
   window.addEventListener("resize", fitTypesWindow);
   window.addEventListener("resize", fitConditionsWindow);
@@ -9318,6 +9733,14 @@ function connect() {
     if (event.key === "Escape") {
       event.preventDefault();
       openRecap(false);
+    }
+  });
+  // The window of the laps of an activity of the list (stage X10 of v2.3.0).
+  ui.lapsClose.addEventListener("click", () => closeLaps(true));
+  ui.lapsPop.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeLaps(true);
     }
   });
   // Saving as an image (stage R1 of v2.2.0): Escape in the window closes it.
