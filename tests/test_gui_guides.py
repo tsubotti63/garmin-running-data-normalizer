@@ -1510,6 +1510,17 @@ class GuiGuideTest(unittest.TestCase):
             periods = (messages["view.compare.whole_year"], messages["view.compare.this_span"], messages["view.compare.race_days"].format(n=16))
             words |= {messages[key].format(period=period) for key in messages if key.startswith("view.compare.value.") for period in periods}
             words.add(messages["view.compare.until"].format(date=date))
+            # From stage X4 of v2.3.0, the highest: its word as the second line
+            # of a panel and the table (for the ear) say it, the heading of a
+            # row as the page writes it of the example (its triangle before
+            # it), and the ellipsis of a heading that shrinks.
+            example = ("201.3 km", "January 2026") if language == "en" else ("201.3 km", "2026年1月")
+            words |= {
+                messages["view.summary.highest"].split(" {value}")[0],
+                messages["view.compare.highest_cell"].strip("()（）"),
+                "▼" + messages["view.summary.highest"].format(value=example[0], period=example[1]),
+                "…",
+            }
             pattern = r"\*\*([^*]+)\*\*|\"([^\"]+)\"" if language == "en" else r"「([^」]+)」()"
             for word in (bold or plain for bold, plain in re.findall(pattern, part_reads)):
                 with self.subTest(language=language, quoted=word):
@@ -1740,6 +1751,74 @@ class GuiGuideTest(unittest.TestCase):
         ):
             with self.subTest(phrase=phrase[:60]):
                 self.assertEqual(text.count(phrase), 1)
+
+    def test_guides_and_the_design_say_how_the_highest_of_a_year_is_marked(self) -> None:
+        # v2.3.0 X4 (the person's choice "1 C と案 2" of the samples): every
+        # sentence of the highest, once, in its section (comparing years, or
+        # by race day), in both languages, and in the design; the words of the
+        # page that the guides quote are those of the catalogs.
+        sections = {
+            "en": ("\n### Compare years (from 2.2.0)\n", "\n#### Calendar\n", "\n#### Compare by race day\n", "\n### Other views (from 2.2.0)\n"),
+            "ja": ("\n### 年でくらべる（2.2.0 から）\n", "\n#### カレンダー\n", "\n#### 大会の日でくらべる\n", "\n### ほかの見方（2.2.0 から）\n"),
+        }
+        year_phrases = {
+            "en": (
+                "(From 2.3.0) The highest of each year: the period with the largest value in the year (with one month chosen, in that month) is marked.",
+                "Its period and value are those of **Highest** on the second line of a panel (of a total, among the periods with records); of periods with the same value, the earliest, decided before rounding.",
+                "Every item has it; of the average pace, it is the period with the largest time ÷ distance, the slowest.",
+                "With **One row per year**, the heading of a row says, after \"Total of the year\" and the like, \"▼Highest 201.3 km (January 2026)\", and a small ▼ is above the highest bar (of an item drawn as a line, its point).",
+                "Where the heading has no room, it shrinks from its period with \"…\" (it is read out, and saved in a picture, whole).",
+                "**Show as a table** writes the highest value in bold, with ▲ (read out as \"highest\"); the note under the table says what it is.",
+                "The charts of **Overlay**, **Running total**, and **Calendar** have none, nor has the table of a running total (its values are added up).",
+            ),
+            "ja": (
+                "（2.3.0 から）年ごとの「最大」：その年（月を選んだときは、その月）で値がいちばん大きい区切りに印が付きます。",
+                "区切りと値は、ふだんの段の 2 行目の「最大」と同じです（合計の項目では、記録のある区切りから）。",
+                "同じ値の区切りがいくつもあるときは、丸める前の値で決め、いちばん早い区切りです。",
+                "どの項目にも付き、平均ペースでは、時間 ÷ 距離がいちばん大きい（いちばん遅い）区切りです。",
+                "「年ごとに並べる」では、段の見出しの「1 年の合計」などの右に「▼最大 201.3 km（2026年1月）」のように出て、図の最大の棒（線の項目では点）の上に小さな ▼ が付きます。",
+                "見出しが狭いときは、区切りの所から「…」で縮みます（読み上げと画像では全文です）。",
+                "「表で見る」では、最大の値が太字になり、▲ が付きます（読み上げでは「最大」）。表の下に、その注が出ます。",
+                "「重ねる」「累積」「カレンダー」の図には付きません。「累積」の表にも付きません（足し上げた値のため）。",
+            ),
+        }
+        race_phrases = {
+            "en": ("(From 2.3.0) As by year, the highest period of the span of each race is marked: of the distance, by week, the week with the most in the span, and by day, for a full or half marathon, mostly the race day itself.",),
+            "ja": ("（2.3.0 から）年でくらべると同じく、大会ごとに、その範囲の「最大」の区切りに印が付きます。距離なら、週ごとでは範囲の中でいちばん多い週、日ごとでは、フルやハーフの大会なら、ふつうは大会の日です。",),
+        }
+        quoted = ("view.compare.mode.rows", "view.panel.table", "view.compare.mode.overlay", "view.compare.mode.cumulative", "view.compare.mode.calendar")
+        for language, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            messages = catalog(language)
+            years, calendar, race, after = (text.index(heading) for heading in sections[language])
+            joined = (lambda part: " ".join(part.split())) if language == "en" else (lambda part: re.sub(r"\n *", "", part))
+            whole = joined(text)
+            for phrase in year_phrases[language]:
+                with self.subTest(language=language, phrase=phrase[:50]):
+                    self.assertEqual(whole.count(phrase), 1)
+                    self.assertIn(phrase, joined(text[years:calendar]))
+            for phrase in race_phrases[language]:
+                with self.subTest(language=language, phrase=phrase[:50]):
+                    self.assertEqual(whole.count(phrase), 1)
+                    self.assertIn(phrase, joined(text[race:after]))
+            mark = "**{}**" if language == "en" else "「{}」"
+            for key in quoted:
+                with self.subTest(language=language, words=key):
+                    self.assertIn(mark.format(messages[key]), joined(text[years:calendar]))
+        design = " ".join((ROOT / "docs/gui_design.md").read_text(encoding="utf-8").split())
+        for phrase in (
+            "- The highest of each year (stage X4 of v2.3.0, the person's choice \"C and range 2\" of the samples):",
+            "the period of the highest value of each year (or race) is that of the server's summary of the line compared (`summary.highest` of the answer of that year, as on the second line of a panel: of a total, among the periods with records; of equal values, the earliest; decided before rounding), never looked for again in the page, and never taken from the summary of every line of a panel.",
+            "Every item has it (the highest of a pace is its slowest period).",
+            "In the table (of every way but the running total, whose values are added up) its value is bold, with a triangle ▲ for the eye and its word for the ear, and a note under the table after that of * and — (of the year, of the month chosen, or of the span of a race).",
+            "The heading of a row (by year, or by race) says \"▼Highest <value> (<period>)\" in the words of the second line of a panel, in one span of the class of the value of the year, so that a picture takes its words whole; a small triangle ▼ stands above the highest bar (or point) of the row, in its plot and above its cross line: 3 above the top of a bar, and 8 above the middle of anything else drawn there (a point of a line, the hollow dot of a 0, which stands on the baseline, or the records of a day, whose highest it stands above too: the value of such a day is the mean of its records), clear of the point or the dot, its ring, and the dot of the cross line.",
+            "Overlay, running totals, and calendars draw none.",
+            "Where the heading of a row has no room, the words of the highest shrink from the period, for the eye only; the name of a race (up to 16em, as before) and its day are kept.",
+            "Where even that is not enough, the end of the heading is cut, as before (the reading on its right first, then the highest).",
+            "Nothing is remembered, and the server is unchanged.",
+        ):
+            with self.subTest(design=phrase[:50]):
+                self.assertEqual(design.count(phrase), 1)
 
     def test_guides_give_the_races_and_the_overview_as_the_page_does(self) -> None:
         # v2.2.0 M4 (Codex's review of the diff of M4): what the guides and the
