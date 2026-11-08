@@ -52,6 +52,7 @@ from .runs import (
 from .layouts import BUILT_IN_IDS, USER_LAYOUT_ID, LayoutChangeError, built_in_answer
 from .marks import MarkChangeError
 from .fit_reading import REASONS, Laps, activity_key, known_unavailable, read_laps
+from .shoe_work import WorkRequestError, work_answer, work_known, work_runs
 from .settings import (
     SHELF_STATES,
     THEMES,
@@ -212,6 +213,8 @@ API_ROUTES = {
     # The laps of one activity with the kinds that its FIT file records
     # (stage X9c-2 of v2.3.0).
     "/api/view/laps": "_api_view_laps",
+    # The work laps of the shoes of a period (stage X11 of v2.3.0).
+    "/api/view/shoes/work": "_api_view_shoes_work",
 }
 
 # Why the laps of an activity are not shown (stage X9c-2 of v2.3.0): those
@@ -1181,6 +1184,55 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             self.server.laps_lock.release()
         return _bounded({**_laps_answer(laps), **facts})
 
+    def _api_view_shoes_work(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The work laps of the pairs of the view by shoes (stage X11 of
+        # v2.3.0; gui.shoe_work), from the activities of the period, the
+        # activity types, and the conditions of the view by shoes, from the
+        # place ``from`` among them, as many as one request reads, under the
+        # one reading of a store at a time of the laps of an activity: another
+        # is told busy. The page names the reading (``read``) whose shoes it
+        # shows; another is told read_stale.
+        ticket, read, start = payload.get("view"), payload.get("read"), payload.get("from")
+        try:
+            if not isinstance(ticket, str) or not _whole(read) or not _whole(start):
+                raise ViewRequestError("view")
+            period, types = shoes_request(payload)
+            conditions = conditions_request(payload)
+        except ConditionsRequestError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "CONDITIONS_INVALID") from exc
+        except ViewRequestError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
+        try:
+            data, current, output = self.server.views.lap_reading(ticket)
+        except ViewNotOpenError as exc:
+            raise ApiError(HTTPStatus.CONFLICT, "VIEW_NOT_OPEN") from exc
+        except OutputActionError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code, exc.version) from exc
+        except Exception as exc:
+            raise _command_failed() from exc
+        facts = {"read": current, "output": _output_facts(data)}
+        if read != current:
+            return _bounded({"status": "unavailable", "reason": "read_stale", **facts})
+        if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+        pairs, runs = work_runs(data, period, types, conditions)
+        # As for the laps of an activity, the lock is taken without waiting
+        # once the output is read and the activities found, around the
+        # reading of the store only.
+        if not self.server.laps_lock.acquire(blocking=False):
+            return _bounded({"status": "unavailable", "reason": "busy", **facts})
+        try:
+            answer = work_answer(data, data.files, output, remembered_store(), pairs, runs, start)
+        except WorkRequestError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID") from exc
+        except OutputActionError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code, exc.version) from exc
+        except Exception as exc:
+            raise _command_failed() from exc
+        finally:
+            self.server.laps_lock.release()
+        return _bounded({**answer, **facts})
+
     def _api_view_points(self, payload: dict[str, Any]) -> dict[str, Any]:
         # Two items of the activities plotted against each other (stage O1
         # of v2.2.0), from what the view page read of the output, chosen as
@@ -1281,6 +1333,10 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         if types is not None and not set(types) <= {entry["name"] for entry in activity_types(data)}:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
         answer = shoe_answer(data, period, types, conditions)
+        # What the page says before it counts the work laps of these shoes
+        # (stage X11 of v2.3.0): the activities to read, those known not to
+        # be read, and the reason of the output; no file is read for it.
+        answer["work"] = work_known(data, data.files, period, types, conditions)
         answer["names"] = _names_state(data)
         # The reading that the answer is of (stage U1 of v2.2.0).
         answer["read"] = read

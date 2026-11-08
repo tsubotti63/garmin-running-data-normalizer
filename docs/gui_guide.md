@@ -566,6 +566,9 @@ When: you want to see how far you ran in each pair of shoes, month by month.
    a month: every panel gives its distance at the top right.
 5. For the numbers, press **Show as a table** (a table of the shoes and one by
    month).
+6. (From 2.3.0) To see the distance and the average pace of each pair over the
+   work laps only (Active, Interval), without the rests, press **Count the
+   work laps…**, then **Read**.
 
 More: [By shoes](#by-shoes), [Other views](#other-views-from-220)
 
@@ -1060,8 +1063,9 @@ or what to do: it is a page to look at with your own eyes.
      **Go to the normalization page** instead: normalize first.
 - The first time, the page shows three panels: distance, resting heart rate,
   and VO2 Max (an item without data is left out). The view page only reads an
-  output (from 2.3.0, also the FIT file of an activity in the Snapshot Store,
-  when its laps are shown), and never changes it.
+  output (from 2.3.0, also FIT files in the Snapshot Store, when the laps of an
+  activity are shown or the work laps of the shoes are counted), and never
+  changes it.
 - **Go to the normalization page** at the top of the view page goes back to
   the tab of the normalization page. When either page is open already, its tab
   comes to the front, and no new tab opens.
@@ -1881,6 +1885,31 @@ values are made):
   these types has shoes.** shows in the place of the panels.
 - The start, the end, and the maximum distance are the values set in Garmin,
   as they are. This app says nothing from them, such as when to change shoes.
+- (From 2.3.0) **Count the work laps…** above the panels shows the tables and
+  says how many runs it reads (leaving out those known not to be readable).
+  **Read** reads, from the Snapshot Store that this app remembers, the FIT
+  files of the runs with shoes of this period and of the types counted (and
+  of the conditions, where there are some), and shows the table **Work laps
+  (Active, Interval) by pair** above the table of the shoes: the pair, the
+  work distance, time, average pace, average heart rate, and the runs counted
+  and not counted. While it reads, it says how many runs it read, and
+  **Stop** stops it (what was read is dropped). With many runs, it takes
+  time.
+- The work laps are the laps whose kind, as the watch recorded it in the FIT
+  file, is Active or Interval. Warm Up, Recovery, Rest, Cool Down, and laps of
+  no known kind are not counted. A run whose laps are all of the work kinds
+  counts whole. The average pace is the total time over the total distance
+  (of the laps that have both, with a distance above 0), and the average
+  heart rate is weighted by time, as in the window of the laps.
+- A run with two pairs of shoes counts for each pair. The runs not counted
+  (no FIT file, laps of unknown kind, and so on) are not counted as 0: the
+  line under the tables says how many and why, and **How it counts** opens
+  the rest of the counts.
+- One counting reads at most 5,000 runs with shoes. Another period, other
+  types, other conditions, or the output read again drops the counted table
+  (press again). For an output made without the Snapshot Store, the button
+  cannot be pressed, and the line says why. The table of the work laps is
+  not in a saved picture.
 
 ![By shoes: the panels of made-up shoes (two of one name told apart by their start dates), the distance of the month chosen by the cross line at the top right, and the notes under the panels (synthetic data)](assets/gui-guide/view-shoes.en.png)
 
@@ -2578,9 +2607,10 @@ it. To remove Python too, do as the documents of python.org say, for
   gives GitHub only the values that the page shows you first.
 - The External-safe Pack and the Support Bundle are made for sharing, but
   review them before you do. The names of your Snapshots are never in them.
-- The view page only reads an output (from 2.3.0, also the FIT file of an
-  activity in the Snapshot Store, when its laps are shown), and sends no
-  numbers anywhere. The CSV file of `series` holds values of the output.
+- The view page only reads an output (from 2.3.0, also FIT files in the
+  Snapshot Store, when the laps of an activity are shown or the work laps of
+  the shoes are counted), and sends no numbers anywhere. The CSV file of
+  `series` holds values of the output.
 - The remembered settings hold the names of places and of the items of the
   view page, and from 2.2.0 also the names of the layouts you saved, the days
   of a period chosen with **Custom range…**, the activity types counted, the

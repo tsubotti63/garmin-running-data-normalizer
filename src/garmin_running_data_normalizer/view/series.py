@@ -1115,6 +1115,32 @@ def shoe_answer(
     return answer
 
 
+
+def shoe_order(
+    data: ViewData,
+    period: str | tuple[date, date] = "all",
+    types: Collection[str] | None = None,
+    conditions: Conditions | None = None,
+) -> list[tuple[str, list[Row]]]:
+    """The pairs of shoes that the view by shoes shows for ``period``, in its
+    order (the day of the last activity in the period, newest first, then the
+    order of gear.json), each with its activities in the period of the
+    activity types counted that meet the conditions, in the order of the
+    output, as shoe_answer counts them (stage X11 of v2.3.0, which counts the
+    work laps of those activities)."""
+    gear = data.gear
+    whole, rows = _period_rows(data, period, types, conditions)
+    if gear is None or whole is None:
+        return []
+    linked: dict[str, list[Row]] = defaultdict(list)
+    for row in rows:
+        key = row.marks.get("key") or ""
+        for shoe in gear.links.get(key, frozenset()) if key else ():
+            linked[shoe].append(row)
+    chosen = [(own[-1].day, shoe.place, shoe.key, own) for shoe in gear.shoes if (own := linked.get(shoe.key))]
+    chosen.sort(key=lambda found: (-found[0], found[1]))
+    return [(key, own) for _last, _place, key, own in chosen]
+
 __all__ = [
     "GRAINS",
     "LAST_YEARS",
@@ -1153,6 +1179,7 @@ __all__ = [
     "point_item",
     "previous_span",
     "shoe_answer",
+    "shoe_order",
     "shoe_count",
     "type_name_ok",
     "view_answer",

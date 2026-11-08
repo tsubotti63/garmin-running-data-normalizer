@@ -304,6 +304,14 @@ the data, which v2.0.0 changed, are in
   GUI remembers, is itself a link (on Windows also a junction; the GUI uses
   such a store otherwise as before), or from a FIT file over 32 MiB (the
   normalizer reads FIT files up to 128 MiB).
+- Starting with v2.3.0, the work laps of the shoes (Active and Interval, as
+  the watch recorded the kinds in the FIT files) are counted under the same
+  conditions as the laps of an activity. Laps of no known kind are never
+  counted: a run with no work lap and some laps of no known kind is not
+  counted, and older runs whose watch recorded no kinds are not counted. A
+  run with two pairs of shoes counts for each pair, as the distance of the
+  view by shoes does. One counting reads at most 5,000 runs, and reading
+  takes time with many runs (measured on synthetic data only).
 
 ## Distribution and integrations
 

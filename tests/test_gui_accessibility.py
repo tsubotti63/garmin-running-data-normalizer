@@ -2414,6 +2414,177 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertIn('.list-table button.list-laps-button[aria-disabled="true"] {\n  opacity: 0.55;\n  cursor: not-allowed;\n}', style)
         self.assertIn(".laps-body th.laps-kind,\n.laps-body td.laps-kind {\n  text-align: left;\n}", style)
 
+    def test_the_work_laps_of_the_shoes_are_counted_a_request_at_a_time(self) -> None:
+        # Stage X11 of v2.3.0 (the person's answer 「1 C と案 1」), in the page
+        # and its script, which no test runs (the real page was checked with
+        # synthetic data): the button in the heading of the view by shoes,
+        # also over the chart, which cannot be pressed (aria-disabled, its
+        # words in the line) where the answer of the shoes tells that nothing
+        # can be read; pressed, the tables and the line before reading, with
+        # "Read"; read, a request at a time from the place of the answer
+        # before, the line while reading, with "Stop"; an answer of a counting
+        # dropped meanwhile is dropped, one told busy is asked once more after
+        # a second, one told read_stale keeps its words while the shoes are
+        # asked again, and the table of the work laps goes above the tables of
+        # the shoes, its heading taking the focus (the checker's review of the
+        # plan of X11, 9c 3; Codex's review of the plan of X11, 9).
+        ids = [element.get("id") for element in self.elements]
+        self.assertLess(ids.index("shoes-save"), ids.index("shoes-work"))
+        self.assertLess(ids.index("shoes-work"), ids.index("shoes-back"))
+        button = by_id(self.elements, "shoes-work")
+        self.assertIs(button.parent, by_id(self.elements, "shoes-table").parent)
+        self.assertEqual((button.get("class"), button.get("data-i18n")), ("small", "view.shoes.work.button"))
+        line = by_id(self.elements, "shoes-work-line")
+        self.assertIn("hidden", line.attributes)
+        self.assertEqual(line.get("class"), "compare-line shoes-work-line")
+        text = by_id(self.elements, "shoes-work-text")
+        self.assertEqual((text.parent, text.get("role"), text.get("aria-live")), (line, "status", "polite"))
+        for name, key in (("shoes-work-read", "view.shoes.work.read"), ("shoes-work-stop", "view.shoes.work.stop")):
+            with self.subTest(element=name):
+                self.assertIs(by_id(self.elements, name).parent, line)
+                self.assertIn("hidden", by_id(self.elements, name).attributes)
+                self.assertEqual(by_id(self.elements, name).get("data-i18n"), key)
+        notes = by_id(self.elements, "shoes-work-notes")
+        self.assertIn("hidden", notes.attributes)
+        self.assertIs(notes.parent, by_id(self.elements, "shoes-notes").parent)
+        self.assertLess(ids.index("shoes-work-notes"), ids.index("shoes-notes"))
+        info = by_id(self.elements, "shoes-work-info")
+        self.assertEqual((info.get("aria-expanded"), info.get("aria-controls"), info.get("data-i18n")), ("false", "shoes-work-more", "view.shoes.work.info"))
+        self.assertIn("hidden", by_id(self.elements, "shoes-work-more").attributes)
+        for name in ("shoes-work-shown", "shoes-work-info", "shoes-work-counted", "shoes-work-more"):
+            with self.subTest(element=name):
+                self.assertIn(notes, by_id(self.elements, name).ancestors())
+        held = {
+            "dropShoesWork": ("  state.shoesWork = null;\n  state.shoesWorkSeq += 1;",),
+            "enterShoes": ('  listChanged("shoes");\n  dropShoesWork();',),
+            "leaveShoes": ("  dropShoesWork();\n  state.shoes = null;",),
+            # Another period, types, conditions, or reading drop it, but for
+            # the words of a reading told stale.
+            "requestShoes": (
+                "  if (state.shoesWork?.keep) {\n    state.shoesWork.keep = false;\n  } else {\n    dropShoesWork();\n  }",
+                # The shoes asked for again after the output opened again are
+                # awaited (Codex's third read of the diff of X11, 2).
+                "        state.shoesLoading = false;\n        // Awaited, so that a caller knows when the shoes are drawn (Codex's\n        // third read of the diff of X11, 2).\n        await requestShoes(false);\n        return;",
+            ),
+            "askShoesWork": (
+                'if (state.shoes === null || drawn === null || state.shoesLoading || state.shoesWork?.phase === "reading" || !drawn.shoes.length) {',
+                "  if (before.line === undefined) {\n    return;\n  }",
+                # The stop of a counting before goes with it (Codex's seventh
+                # read of the diff of X11).
+                "  if (state.shoesStop?.work) {\n    state.shoesStop = null;\n  }\n  state.shoes.table = true;",
+                # With the reading known when it is asked for (Codex's fourth
+                # read of the diff of X11).
+                'state.shoesWork = { seq: state.shoesWorkSeq, phase: "ask", before, read: drawn.read, known: state.viewRead, asked: { ...state.shoesAsked, read: drawn.read }, pairs: drawn.shoes.length };',
+                "  render();\n  ui.shoesWorkRead.focus();",
+            ),
+            "readShoesWork": (
+                '  if (work === null || work.phase !== "ask") {\n    return;\n  }',
+                "  render();\n  ui.shoesWorkStop.focus();",
+                # The sums of each pair (work.pairs is their number).
+                "    sums: Array.from({ length: work.pairs }, () => workEmpty()),",
+                # Of the shoes shown, of the output shown (Codex's read of the
+                # diff of X11, 2); a counting whose view changed under it ends
+                # (Codex's third read, 1), also before its first request.
+                'const mine = () => state.shoesWork === work && work.seq === state.shoesWorkSeq && work.phase === "reading";',
+                "    if (state.shoes !== null && state.view?.view === work.asked.view && state.viewRead === work.known) {\n      return true;\n    }\n    dropShoesWork();\n    render();\n    shoesWorkFocusAway();\n    return false;",
+                "  for (;;) {\n    if (!current()) {\n      return;\n    }\n    while (shoesWorkAsking !== null) {",
+                # A request of a counting dropped meanwhile is waited for
+                # (Codex's read of the diff of X11, 3).
+                "    while (shoesWorkAsking !== null) {\n      await shoesWorkAsking;\n      if (!current()) {\n        return;\n      }\n    }\n    const asking = callApi(\"/api/view/shoes/work\", { ...work.asked, from: start });",
+                "    shoesWorkAsking = settled;\n    settled.then(() => {\n      if (shoesWorkAsking === settled) {\n        shoesWorkAsking = null;\n      }\n    });",
+                # After the output opened again, the shoes asked for again
+                # only where they were not meanwhile, as requestShoes does
+                # (Codex's second and third reads of the diff of X11).
+                '} else if (error.code === "VIEW_NOT_OPEN" && state.target !== null) {\n        const shoesSeq = state.shoesSeq;\n        if (await reopen()) {',
+                '          if (state.shoesSeq === shoesSeq) {\n            await requestShoes(false);\n          }\n          shoesWorkFocusAway();\n          return;',
+                "} else if (OUTPUT_STOPS.includes(error.code)) {",
+                "state.shoesStop = { code: error.code, detail: error.detail, work: true };",
+                "if (taken === null || (taken.reason === undefined && (taken.from !== start || taken.runs !== work.runs))) {",
+                'state.shoesStop = { code: null, detail: null, work: true };',
+                '      if (taken.reason === "busy" && !retried) {\n        retried = true;\n        await waitFor(1000);\n        if (!current()) {\n          return;\n        }\n        continue;\n      }',
+                'keep: taken.reason === "read_stale",',
+                # The focus away once the shoes asked again are drawn (Codex's
+                # second read of the diff of X11, 3), and not from where the
+                # person put it (its third read, 3).
+                '      render();\n      // Not from where the person put it (Codex\'s third read of the diff\n      // of X11, 3).\n      shoesWorkFocusAway();\n      if (taken.reason === "read_stale") {',
+                '        await requestShoes();\n        shoesWorkFocusAway();\n      }\n      return;',
+                # Sums past the whole numbers that the page holds exactly end the
+                # counting (Codex's ninth read of the diff of X11).
+                "    retried = false;\n    const sums = work.sums.map((sum, index) => workAdd(sum, taken.pairs[index]));\n    const counts = workAdd(work.counts, taken.counts);\n    if (sums.includes(null) || counts === null) {",
+                "      dropShoesWork();\n      state.shoesStop = { code: null, detail: null, work: true };\n      render();\n      shoesWorkFocusAway();\n      return;\n    }\n    work.sums = sums;\n    work.counts = counts;",
+                # The table at the end, also after the chart was chosen while
+                # reading (Codex's read of the diff of X11, 5).
+                '      work.phase = "done";\n      // The table, also where the chart was chosen while reading (Codex\'s\n      // read of the diff of X11, 5), its heading to take the focus.\n      state.shoes.table = true;\n      render();\n      byId("shoes-work-name")?.focus();',
+                "    work.done = taken.next;\n    start = taken.next;",
+            ),
+            "stopShoesWork": ('  if (state.shoesWork?.phase !== "reading") {\n    return;\n  }\n  dropShoesWork();\n  render();\n  ui.shoesWork.focus();',),
+            # The focus after a stop or an error, which hid "Stop" (Codex's
+            # read of the diff of X11, 4).
+            "shoesWorkFocusAway": (
+                "  if (active !== null && active !== document.body && shown(active)) {\n    return;\n  }",
+                '[byId("shoes-stop-heading"), ui.stopHeading, ui.shoesWork, ui.shoesTitle, ui.emptyHeading].find(shown)?.focus();',
+            ),
+            # Opening another output drops a counting (Codex's read of the
+            # diff of X11, 2).
+            "openOutput": ("  state.seriesSeq += 1;\n  // And a counting of the work laps of the shoes, whose requests would go on\n  // for the output before (Codex's read of the diff of X11, 2).\n  dropShoesWork();",),
+            # Not where a newer reading is known (Codex's fourth read of the
+            # diff of X11).
+            "shoesWorkDone": ('return work !== null && work.phase === "done" && drawn !== null && work.read === drawn.read && work.known === state.viewRead ? work : null;',),
+            # The table from the sums of each pair that the counting keeps
+            # (the real page of X11 found it drawn from the number of pairs).
+            "buildShoesTables": ("shoesWorkTable(drawn, work.sums, state.language)", 'section.querySelector("#shoes-work-name").tabIndex = -1;', "    tables.unshift(section);"),
+            # A focus in the view by shoes that the drawing hides or takes away
+            # goes on (Codex's fifth and sixth reads of the diff of X11).
+            "renderShoes": ("  renderShoesWork(drawn);", "  const inShoes = ui.shoes.contains(document.activeElement);", "  renderShoesBody(drawn);\n  if (inShoes) {\n    shoesWorkFocusAway();\n  }"),
+            "renderShoesBody": ("shoesDrawn[2] === state.language && shoesDrawn[3] === shoesWorkDone(drawn)) {", "shoesDrawn = [drawn, shoes.table, state.language, shoesWorkDone(drawn)];"),
+            "renderShoesWork": (
+                "ui.shoesWork.hidden = !shown;",
+                'ui.shoesWork.setAttribute("aria-disabled", String(grey || work?.phase === "reading" || state.shoesLoading));',
+                'ui.shoesWorkRead.hidden = work?.phase !== "ask";',
+                'ui.shoesWorkStop.hidden = work?.phase !== "reading";',
+                "const done = state.shoes?.table ? shoesWorkDone(drawn) : null;",
+                'ui.shoesWorkMore.hidden = ui.shoesWorkInfo.getAttribute("aria-expanded") !== "true";',
+            ),
+        }
+        for name, lines in held.items():
+            found = re.search(rf"(?:async )?function {name}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
+            assert found is not None, name
+            for line in lines:
+                with self.subTest(function=name, line=line[:60]):
+                    self.assertIn(line, found.group(1))
+        read = re.search(r"async function readShoesWork\(\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert read is not None
+        # The answer of a counting dropped meanwhile is dropped: before a
+        # request, after an error, after an answer, after the wait of busy,
+        # and after the wait of a request of a counting dropped before.
+        self.assertEqual(read.group(1).count("if (!current()) {\n"), 5)
+        # The focus away after an error and after an answer of another
+        # form (the reopening has its own, held above).
+        self.assertEqual(read.group(1).count("      render();\n      shoesWorkFocusAway();\n      return;\n"), 3)
+        self.assertIn('  ui.shoesWork.addEventListener("click", () => {\n    if (ui.shoesWork.getAttribute("aria-disabled") !== "true") {\n      askShoesWork();', self.script)
+        self.assertIn('  ui.shoesWorkRead.addEventListener("click", readShoesWork);\n  ui.shoesWorkStop.addEventListener("click", stopShoesWork);', self.script)
+        self.assertIn('    const open = ui.shoesWorkInfo.getAttribute("aria-expanded") !== "true";\n    ui.shoesWorkInfo.setAttribute("aria-expanded", String(open));\n    ui.shoesWorkMore.hidden = !open;', self.script)
+        # The charts drawn again for another size of the window keep a focus
+        # in the view by shoes as renderShoes does (Codex's sixth read).
+        redraw = re.search(r"function scheduleRedraw\(\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert redraw is not None
+        self.assertIn("    if (!ui.shoes.hidden) {\n      // As renderShoes does (Codex's sixth read of the diff of X11).\n      const inShoes = ui.shoes.contains(document.activeElement);\n      renderShoesBody(state.shoesAnswer);\n      if (inShoes) {\n        shoesWorkFocusAway();\n      }\n    }", redraw.group(1))
+        style = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        self.assertIn('#shoes-work[aria-disabled="true"] {\n  opacity: 0.55;\n  cursor: not-allowed;\n}', style)
+        self.assertIn('.shoes-work-table th[scope="row"] {\n  white-space: normal;\n  overflow-wrap: anywhere;\n}', style)
+
+    def test_the_words_of_an_info_button_have_no_mark_of_their_own(self) -> None:
+        # The style puts ⓘ before the words of every info button (styles.css,
+        # .info-button::before); words with a mark of their own showed it
+        # twice (the real page of stage X11 of v2.3.0).
+        catalogs = {language: json.loads((STATIC_ROOT / "i18n" / f"{language}.json").read_text(encoding="utf-8")) for language in ("ja", "en")}
+        buttons = [element for element in self.elements if "info-button" in (element.get("class") or "").split() and element.get("data-i18n")]
+        self.assertIn("shoes-work-info", [button.get("id") for button in buttons])
+        for button in buttons:
+            for language, words in catalogs.items():
+                with self.subTest(button=button.get("id"), language=language):
+                    self.assertNotIn("ⓘ", words[button.get("data-i18n")])
+
     def test_the_list_follows_the_panels_and_drops_old_answers(self) -> None:
         # Stage M3 of v2.2.0 (the checker's review of the plan, and Codex's):
         # the list closes when what the panels count or show changes, and

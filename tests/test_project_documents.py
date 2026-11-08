@@ -60,23 +60,33 @@ def test_the_boundaries_name_the_fit_file_that_the_view_page_reads() -> None:
     # Stage X9c-2 of v2.3.0: the Human maintainer chose at stage X8 that the
     # view page reads, only when asked, the FIT file of one activity in the
     # Snapshot Store, which widens the privacy boundary; the boundary and the
-    # privacy boundary, whose text the Human maintainer decides, say so.
+    # privacy boundary, whose text the Human maintainer decides, say so. Stage
+    # X11 adds the FIT files of the activities with shoes of a period, when
+    # their work laps are counted (the Human's choice of the samples of X11),
+    # with the limits and the count said before reading.
     boundary = flowing("docs/project/project_boundary.md")
     assert (
         "a CSV file that the person chooses. Starting with v2.3.0, the view page also reads, only when the laps "
         "of one activity are asked for, the FIT file of that activity in the Snapshot Store that the GUI "
         "remembers, to show the kind of each lap (a Human decision; see "
-        "[Laps of an activity (v2.3.0)](../gui_design.md#laps-of-an-activity-v230))."
+        "[Laps of an activity (v2.3.0)](../gui_design.md#laps-of-an-activity-v230)), and, only when the work "
+        "laps of the shoes of a period are counted, the FIT files of the activities with shoes of that period "
+        "(the Human's choice of the samples of stage X11; see "
+        "[Work laps of the shoes (v2.3.0)](../gui_design.md#work-laps-of-the-shoes-v230))."
     ) in boundary
     privacy = flowing("docs/security_and_privacy_boundary.md")
     assert (
         "- The view page of the GUI reads outputs. Starting with v2.3.0, only when the laps of one activity are "
         "asked for, it also reads the `store.json` and the one FIT file of that activity in the Snapshot Store "
         "that the GUI remembers (where a folder has no `store.json`, only whether it holds the other names that a "
-        "store writes), without following a link, a junction, or another reparse point. It reads no other file of "
-        "the store, writes "
-        "nothing, sends nothing, and its answer holds no path, hash, or activity identifier (see "
-        "[Laps of an activity (v2.3.0)](gui_design.md#laps-of-an-activity-v230))."
+        "store writes), without following a link, a junction, or another reparse point; and only when the work "
+        "laps of the shoes of a period are counted, after the page says how many activities it reads, the "
+        "`store.json` and the FIT files of the activities with shoes of that period, in the same way: at most "
+        "5,000 activities in one counting, and in one request at most 100 activities and 32 MiB of FIT files. It "
+        "reads no other file of the store, writes nothing, sends nothing, keeps nothing of a FIT file or of the "
+        "sums after a request, and its answers hold no path, hash, or activity identifier (see "
+        "[Laps of an activity (v2.3.0)](gui_design.md#laps-of-an-activity-v230) and "
+        "[Work laps of the shoes (v2.3.0)](gui_design.md#work-laps-of-the-shoes-v230))."
     ) in privacy
 
 

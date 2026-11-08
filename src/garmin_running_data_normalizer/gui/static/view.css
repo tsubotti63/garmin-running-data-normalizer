@@ -707,6 +707,32 @@ button.small {
   cursor: not-allowed;
 }
 
+/* The work laps of the shoes (stage X11 of v2.3.0): the button of the bar is
+   gray where they cannot be counted (the line under it says why, or while
+   they are read); the line of the bar holds "Read" and "Stop"; the table of
+   the work laps names its pairs on lines that wrap. */
+#shoes-work[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.shoes-work-line {
+  flex-wrap: wrap;
+  gap: 0.4rem 0.8rem;
+}
+
+.shoes-work-table th[scope="row"] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.shoes-work-more {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.4rem 0.7rem;
+  margin: 0.3rem 0;
+}
+
 .marks-legend {
   display: flex;
   flex-wrap: wrap;

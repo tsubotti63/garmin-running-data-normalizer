@@ -153,6 +153,25 @@ NO_WORDS_FOR_ONE = {
     "view.conditions.button_some": LABEL,
     "view.conditions.line.period": LABEL,
     "view.conditions.line.whole": LABEL,
+    # The work laps of the shoes (stage X11 of v2.3.0): each count after the
+    # name of what is counted and a colon, or of the form 1/2, in English.
+    "view.shoes.work.before": LABEL,
+    "view.shoes.work.before_known": LABEL,
+    "view.shoes.work.reading": OF,
+    "view.shoes.work.counted": LABEL,
+    "view.shoes.work.counted_all": LABEL,
+    "view.shoes.work.unknown_left": LABEL,
+    "view.shoes.work.no_work": LABEL,
+    "view.shoes.work.no_pace": LABEL,
+    "view.shoes.work.two_pairs": LABEL,
+    "view.shoes.work.whole.too_many": "more activities than MAX_WORK_RUNS (5000) of gui/shoe_work.py, never 1",
+    **{
+        f"view.shoes.work.reason.{name}": LABEL
+        for name in (
+            "unknown_kinds", "no_laps", "key_shared", "no_link", "fit_missing", "fit_too_large", "fit_changed", "fit_not_activity",
+            "laps_differ", "store_unreadable",
+        )
+    },
     **{
         f"warning.{name}": IN_PARENTHESES
         for name in (

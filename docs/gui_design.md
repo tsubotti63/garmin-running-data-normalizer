@@ -830,7 +830,10 @@ interpret the numbers: it does not say what a value means, which item causes
 another, or what to do. From v2.3.0 it also reads the FIT file of one
 activity in the Snapshot Store that the GUI remembers, only when the laps of
 that activity are asked for
-([Laps of an activity (v2.3.0)](#laps-of-an-activity-v230)). The `series`
+([Laps of an activity (v2.3.0)](#laps-of-an-activity-v230)), and the FIT
+files of the activities with shoes of a period, only when the work laps of
+the shoes are counted
+([Work laps of the shoes (v2.3.0)](#work-laps-of-the-shoes-v230)). The `series`
 command of the CLI writes the same numbers to a CSV file, with the same
 functions (stage G2); it takes no conditions on the activities, which the
 page has from v2.2.0 (stage T1).
@@ -1570,6 +1573,84 @@ words of the reasons why laps are not shown, are stage X10.
   The widths of the ranges of the distribution stay those of the server (5
   as recorded, 10 steps per minute on the page).
 
+### Work laps of the shoes (v2.3.0)
+
+From v2.3.0 the view by shoes can count, for each pair of shoes, the laps of
+its activities in the period whose kind, as their FIT files record it, is
+Active or Interval (the work laps), so that the average pace of a pair is not
+pulled down by its rests (the Human's choice of the samples of stage X11: the
+table of the work laps above the table of the shoes, and the kinds Active and
+Interval). The server reads them with the guards of the laps of an activity
+(`gui/fit_reading.py` `read_many_laps`) and adds them up by pair
+(`gui/shoe_work.py`), a request of the page at a time; the page adds the
+requests up.
+
+- Before reading: the answer of the shoes (`/api/view/shoes`) gives `work`:
+  `{runs, known, limit, reason}`, the activities with shoes of the view, those
+  known not to be read before a file is read (`key_shared`, as
+  `laps_unavailable` of the list), the most of one counting (5,000), and
+  `not_from_store` where the manifest of the reading has no
+  `snapshot/snapshot_lineage.json` (else `null`). No file is read for it. The
+  page says how many activities it reads before it reads them, and greys its
+  button where none can be read.
+- The request: `POST /api/view/shoes/work`
+  `{view, read, period, types, conditions, from}`, the period, the activity
+  types, and the conditions as for the shoes, `read` the number of the
+  reading whose shoes the page shows, and `from` the place, among the
+  activities with shoes of the view in the order of the output, where the
+  request starts (a whole number, not a truth value, at most the number of
+  those activities); otherwise `REQUEST_INVALID`. A `read` of another reading
+  is answered as stale, and the lock of the laps of an activity is taken as
+  for them: another reading of a store is answered at once as busy (the page
+  asks once more after a second, then stops).
+- One request reads the files of the output that tie the activities to their
+  FIT files once, and the activities from `from` with the checks of the laps
+  of an activity (a link of an activity is checked against all the links of
+  the output), each FIT file once by its SHA-256, until it has done 100
+  activities or the next FIT file would bring the bytes that it read past
+  32 MiB (by the size of the file as it was opened, before a byte of it is
+  read; the first FIT file of a request is read within the 32 MiB of one
+  file). A FIT file that is read counts, whether or not it is then found as
+  the output says. A FIT file of two activities whose requests differ is read
+  in each.
+  Of each FIT file only the kinds of its laps are kept, until the request
+  ends.
+- The answer (200): `{status: "work", runs, from, next, pairs, counts, read,
+  output}`: `runs` the activities with shoes of the view, `next` the place of
+  the next request (`null` after the last), `pairs` the sums of each pair in
+  the order of the view, and `counts` those of the period, which count an
+  activity of two pairs once (`two_pairs`). A sum holds the work laps, the
+  time and the laps that have one, the distance and the laps that have one,
+  the time and the distance of the laps that have both (a distance above 0)
+  for the average pace, the heart rate weighted by the time and that time
+  (all of them whole numbers: milliseconds, centimetres, and beats a minute
+  times milliseconds, the units of the FIT file, so that the sums of the
+  requests add up to those of one request exactly, wherever they end), and
+  the activities: counted, counted with no work lap where all their laps
+  are of a known kind, counted with their laps of no known kind left out (and
+  those laps), counted with no work lap of a pace, and not counted by reason
+  (`unknown_kinds` where an activity has no work lap and some laps of no
+  known kind, `no_laps`, and those of the laps of an activity that are of one
+  activity: `key_shared`, `no_link`, `fit_missing`, `fit_too_large`,
+  `fit_changed`, `fit_not_activity`, `laps_differ`, and `store_unreadable`
+  where a FIT file cannot be read). An activity of two pairs counts for each
+  pair, with its distance, time, and heart rate. Or `{status: "unavailable",
+  reason, read, output}` for all: `not_from_store`, `no_store`, `other_store`,
+  `store_unreadable` (the `store.json`), `too_many` (more than 5,000
+  activities), `read_stale`, or `busy`. No place, SHA-256, or key of an
+  activity is in an answer, and an answer over 4 MiB gives
+  `VIEW_ANSWER_TOO_LARGE`.
+- The page: "Count the work laps…" in the bar of the shoes shows the tables,
+  says what it reads, and reads on "Read", one request at a time, saying how
+  many activities it read; "Stop" asks no more, and the answer of the request
+  on its way is dropped. The table of the work laps (a row a pair: work
+  distance, time, average pace, average heart rate, activities counted and
+  not) shows above the table of the shoes, with two lines under the tables
+  and the rest of the counts behind an info button. A reason, a stale
+  reading, a stop, or an answer of another form drops all that was read;
+  another period, activity types, conditions, or reading drops the counting.
+  The table is not in a saved picture (a table is not saved).
+
 ## Data handling in 2.0.0
 
 These rules apply to the CLI and the GUI. The exact lists and output shapes are
@@ -1788,8 +1869,10 @@ Processing:
   the colors, the generation of the settings after a forgetting (from stage U2
   of v2.2.0; until then, the notice that they were forgotten), and the notice
   that the app stopped; never the key. The view page reads outputs, and from
-  v2.3.0 the FIT file of one activity in the Snapshot Store that the GUI
-  remembers, through the server only, and opens nothing outside the page.
+  v2.3.0 FIT files in the Snapshot Store that the GUI remembers (that of one
+  activity when its laps are asked for, and those of the activities with
+  shoes of a period when their work laps are counted), through the server
+  only, and opens nothing outside the page.
 
 ## Privacy
 
@@ -1857,6 +1940,12 @@ Processing:
   in the store, keeps nothing of the FIT file, and its answer holds the kinds
   and the values of the laps only: no place, SHA-256, key of an activity, or
   position (see [Laps of an activity (v2.3.0)](#laps-of-an-activity-v230)).
+  Only when the work laps of the shoes of a period are counted, it reads the
+  `store.json` and the FIT files of the activities with shoes of that period,
+  in the same way and within the limits of
+  [Work laps of the shoes (v2.3.0)](#work-laps-of-the-shoes-v230); it keeps
+  nothing of a FIT file or of the sums after a request, and its answers hold
+  sums and counts only.
 - A Snapshot Store or a folder for the output in a folder that a cloud may
   copy is marked in yellow, without a stop (stage B4a): a folder that a cloud
   app keeps (on a Mac, iCloud Drive in `Library/Mobile Documents` and the

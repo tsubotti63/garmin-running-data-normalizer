@@ -26,6 +26,7 @@ from garmin_running_data_normalizer import __version__
 from garmin_running_data_normalizer.gui import server as gui_server
 from garmin_running_data_normalizer.gui import views as gui_views
 from garmin_running_data_normalizer.gui.layouts import built_in_answer
+from garmin_running_data_normalizer.gui.shoe_work import work_known
 from garmin_running_data_normalizer.gui.views import (
     MAX_SHELVES,
     load_view,
@@ -240,7 +241,8 @@ class ViewApiTest(GuiServerTestCase):
             with self.subTest(period=period, types=types):
                 status, answer = self.call("/api/view/shoes", {"view": opened["view"], "period": period, "types": types})
                 self.assertEqual(status, 200)
-                self.assertEqual(apart_from_reading(answer), as_json({**shoe_answer(data, chosen, types), "names": "read"}))
+                expected = {**shoe_answer(data, chosen, types), "work": work_known(data, data.files, chosen, types, None), "names": "read"}
+                self.assertEqual(apart_from_reading(answer), as_json(expected))
         status, numbers = self.call("/api/view/series", {"view": opened["view"], "items": ["dist"], "period": "all", "grain": "auto", "types": None})
         self.assertEqual((status, numbers["shoes"]), (200, {"count": 6, "too_large": False}))
 
@@ -979,7 +981,13 @@ class ViewApiTest(GuiServerTestCase):
             ),
             ("/api/view/points", {"x": "dist", "y": "pace", "period": span, "types": None}, view_series.activity_points(data, "dist", "pace", year, None, conditions)),
             ("/api/view/spread", {"item": "pace", "period": span, "types": None}, view_series.activity_spread(data, "pace", year, None, conditions)),
-            ("/api/view/shoes", {"period": span, "types": None}, shoe_answer(data, year, None, conditions)),
+            (
+                "/api/view/shoes",
+                {"period": span, "types": None},
+                # With what the page says before it counts the work laps of
+                # the shoes (stage X11 of v2.3.0), of the same conditions.
+                {**shoe_answer(data, year, None, conditions), "work": work_known(data, data.files, year, None, conditions)},
+            ),
         ):
             with self.subTest(path=path, payload=payload):
                 status, answer = self.call(path, {"view": ticket, **payload, "conditions": asked})

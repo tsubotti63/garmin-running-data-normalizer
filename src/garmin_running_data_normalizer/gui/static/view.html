@@ -473,12 +473,18 @@
             <h3 id="shoes-title" class="compare-title" tabindex="-1" data-i18n="view.shoes.title"></h3>
             <button type="button" id="shoes-table" class="small" aria-pressed="false"><span id="shoes-table-chart" data-i18n="view.panel.chart" hidden></span><span id="shoes-table-table" data-i18n="view.panel.table"></span></button>
             <button type="button" id="shoes-save" class="small" aria-expanded="false" aria-controls="save-pop" data-i18n="view.save.button"></button>
+            <button type="button" id="shoes-work" class="small" data-i18n="view.shoes.work.button"></button>
             <span class="spacer"></span>
             <button type="button" id="shoes-back" class="small" data-i18n="view.panel.unbig"></button>
           </div>
           <div class="compare-line">
             <span id="shoes-count" class="note"></span>
             <p id="shoes-loading" class="loading" role="status" aria-live="polite"></p>
+          </div>
+          <div id="shoes-work-line" class="compare-line shoes-work-line" hidden>
+            <span id="shoes-work-text" class="note" role="status" aria-live="polite"></span>
+            <button type="button" id="shoes-work-read" class="small" data-i18n="view.shoes.work.read" hidden></button>
+            <button type="button" id="shoes-work-stop" class="small" data-i18n="view.shoes.work.stop" hidden></button>
           </div>
         </div>
         <div id="shoes-stop" class="errbox view-stop" hidden>
@@ -492,6 +498,11 @@
           <p id="shoes-announcer" class="visually-hidden" aria-live="polite"></p>
         </div>
         <p id="shoes-none" class="note plot-none" data-i18n="view.shoes.none" hidden></p>
+        <div id="shoes-work-notes" class="shoes-notes shoes-work-notes" hidden>
+          <p class="compare-note"><span id="shoes-work-shown"></span> <button type="button" id="shoes-work-info" class="info-button" aria-expanded="false" aria-controls="shoes-work-more" data-i18n="view.shoes.work.info"></button></p>
+          <p id="shoes-work-counted" class="compare-note"></p>
+          <div id="shoes-work-more" class="shoes-work-more" hidden></div>
+        </div>
         <div id="shoes-notes" class="shoes-notes"></div>
       </section>
       <div id="series-stop" class="errbox view-stop" hidden>

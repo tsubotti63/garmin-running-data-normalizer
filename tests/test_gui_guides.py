@@ -3444,12 +3444,13 @@ class GuiGuideTest(unittest.TestCase):
                 self.assertEqual(design.count(phrase), 1)
         said = {
             "ja": (
-                "見るページは出力を読むだけで、書き換えません（2.3.0 からは、ラップを見るときだけ、保管場所のそのアクティビティの FIT ファイルも読みます）。",
-                "見るページは出力を読むだけで、数字を外へ送りません（2.3.0 からは、ラップを見るときだけ、保管場所の FIT ファイルも読みます）。",
+                # From stage X11, also when the work laps of the shoes are counted.
+                "見るページは出力を読むだけで、書き換えません（2.3.0 からは、ラップを見るときと、靴ごとに疾走区間を数えるときだけ、保管場所の FIT ファイルも読みます）。",
+                "見るページは出力を読むだけで、数字を外へ送りません（2.3.0 からは、ラップを見るときと、靴ごとに疾走区間を数えるときだけ、保管場所の FIT ファイルも読みます）。",
             ),
             "en": (
-                "The view page only reads an output (from 2.3.0, also the FIT file of an activity in the Snapshot Store, when its laps are shown), and never changes it.",
-                "The view page only reads an output (from 2.3.0, also the FIT file of an activity in the Snapshot Store, when its laps are shown), and sends no numbers anywhere.",
+                "The view page only reads an output (from 2.3.0, also FIT files in the Snapshot Store, when the laps of an activity are shown or the work laps of the shoes are counted), and never changes it.",
+                "The view page only reads an output (from 2.3.0, also FIT files in the Snapshot Store, when the laps of an activity are shown or the work laps of the shoes are counted), and sends no numbers anywhere.",
             ),
         }
         gone = {
@@ -3469,8 +3470,65 @@ class GuiGuideTest(unittest.TestCase):
             language: json.loads((ROOT / "src/garmin_running_data_normalizer/gui/static/i18n" / f"{language}.json").read_text(encoding="utf-8"))["view.empty.latest_text"]
             for language in GUIDES
         }
-        self.assertIn("この画面は出力（ラップを見るときは、保管場所の FIT ファイルも）を読むだけで、書き換えません。", words["ja"])
-        self.assertIn("This page only reads the output (and, for the laps of an activity, its FIT file in the Snapshot Store) and never changes them.", words["en"])
+        self.assertIn("この画面は出力（ラップを見るとき・疾走区間を数えるときは、保管場所の FIT ファイルも）を読むだけで、書き換えません。", words["ja"])
+        self.assertIn("This page only reads the output (and, for the laps of an activity or the work laps of the shoes, FIT files in the Snapshot Store) and never changes them.", words["en"])
+
+    def test_the_documents_and_the_guides_say_what_x11_reads(self) -> None:
+        # Stage X11 of v2.3.0: the five documents that said that the view page
+        # reads one FIT file for the laps of one activity also say the reading
+        # of the work laps of the shoes, with its limits (the checker's review
+        # of the samples, 1: the limits and the count said before reading);
+        # the guides say how it counts, in both languages.
+        def flat(name: str) -> str:
+            return " ".join((ROOT / name).read_text(encoding="utf-8").split())
+
+        held = {
+            "docs/security_and_privacy_boundary.md": (
+                "and only when the work laps of the shoes of a period are counted, after the page says how many activities it reads, the `store.json` and the FIT files of the activities with shoes of that period, in the same way: at most 5,000 activities in one counting, and in one request at most 100 activities and 32 MiB of FIT files.",
+                "keeps nothing of a FIT file or of the sums after a request,",
+            ),
+            "docs/project/project_boundary.md": ("and, only when the work laps of the shoes of a period are counted, the FIT files of the activities with shoes of that period",),
+            "docs/gui_design.md": (
+                "### Work laps of the shoes (v2.3.0)",
+                "until it has done 100 activities or the next FIT file would bring the bytes that it read past 32 MiB (by the size of the file as it was opened, before a byte of it is read;",
+                "An activity of two pairs counts for each pair, with its distance, time, and heart rate.",
+                # Whole numbers (Codex's eighth read of the diff of X11).
+                "(all of them whole numbers: milliseconds, centimetres, and beats a minute times milliseconds, the units of the FIT file, so that the sums of the requests add up to those of one request exactly, wherever they end)",
+                # A file read counts (Codex's read of the diff of X11, 1).
+                "A FIT file that is read counts, whether or not it is then found as the output says.",
+                "the answer of the shoes (`/api/view/shoes`) gives `work`: `{runs, known, limit, reason}`,",
+                "and the FIT files of the activities with shoes of a period, only when the work laps of the shoes are counted",
+                # The safety of the GUI says both readings of FIT files.
+                "The view page reads outputs, and from v2.3.0 FIT files in the Snapshot Store that the GUI remembers (that of one activity when its laps are asked for, and those of the activities with shoes of a period when their work laps are counted), through the server only, and opens nothing outside the page.",
+            ),
+            "docs/architecture_overview.md": ("It also counts the work laps of the shoes of a period (`/api/view/shoes/work`):",),
+            "docs/known_limitations.md": ("Laps of no known kind are never counted: a run with no work lap and some laps of no known kind is not counted,",),
+        }
+        for name, phrases in held.items():
+            text = flat(name)
+            for phrase in phrases:
+                with self.subTest(document=name, phrase=phrase[:40]):
+                    self.assertEqual(text.count(phrase), 1)
+        said = {
+            "ja": (
+                "疾走区間は、時計が FIT ファイルに記録した区間の種類が「ラン」と「インターバル」のラップです。",
+                "1 回に靴が 2 つ付いたランは、どちらの靴にも数えます。",
+                "一度に数えられるのは、靴の付いたラン 5,000 回までです。",
+                "（2.3.0 から）休みのラップを外した疾走区間（ラン・インターバル）の距離と平均ペースを靴ごとに見るときは、「疾走区間を数える…」を押し、「読む」を押します。",
+            ),
+            "en": (
+                "The work laps are the laps whose kind, as the watch recorded it in the FIT file, is Active or Interval.",
+                "A run with two pairs of shoes counts for each pair.",
+                "One counting reads at most 5,000 runs with shoes.",
+                "(From 2.3.0) To see the distance and the average pace of each pair over the work laps only (Active, Interval), without the rests, press **Count the work laps…**, then **Read**.",
+            ),
+        }
+        for language in GUIDES:
+            raw = GUIDES[language].read_text(encoding="utf-8")
+            text = " ".join(raw.split()) if language == "en" else re.sub(r"\n *", "", raw)
+            for sentence in said[language]:
+                with self.subTest(language=language, said=sentence[:40]):
+                    self.assertEqual(text.count(sentence), 1)
 
 if __name__ == "__main__":
     unittest.main()

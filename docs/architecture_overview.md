@@ -40,7 +40,11 @@ activity with the kind of each lap that its FIT file records
 FIT file, and `gui/fit_reading.py` reads that FIT file from the Snapshot
 Store that the GUI remembers, only when the laps of the activity are asked
 for, without following a link, and ties its laps to those of the output.
-Neither changes the output or the store.
+It also counts the work laps of the shoes of a period
+(`/api/view/shoes/work`): `gui/shoe_work.py` adds up by pair the laps that
+`gui/fit_reading.py` reads for many activities, only when they are counted,
+a request of the page at a time. None of them changes the output or the
+store.
 
 ```text
 Local Garmin Account Data Export (read-only)

@@ -43,9 +43,16 @@ personal data.
   one FIT file of that activity in the Snapshot Store that the GUI remembers
   (where a folder has no `store.json`, only whether it holds the other names
   that a store writes), without following a link, a junction, or another
-  reparse point. It reads no other file of the store, writes nothing, sends
-  nothing, and its answer holds no path, hash, or activity identifier (see
-  [Laps of an activity (v2.3.0)](gui_design.md#laps-of-an-activity-v230)).
+  reparse point; and only when the work laps of the shoes of a period are
+  counted, after the page says how many activities it reads, the `store.json`
+  and the FIT files of the activities with shoes of that period, in the same
+  way: at most 5,000 activities in one counting, and in one request at most
+  100 activities and 32 MiB of FIT files. It reads no other file of the
+  store, writes nothing, sends nothing, keeps nothing of a FIT file or of the
+  sums after a request, and its answers hold no path, hash, or activity
+  identifier (see
+  [Laps of an activity (v2.3.0)](gui_design.md#laps-of-an-activity-v230) and
+  [Work laps of the shoes (v2.3.0)](gui_design.md#work-laps-of-the-shoes-v230)).
 
 ## Scanning
 
