@@ -114,8 +114,8 @@ NO_WORDS_FOR_ONE = {
     "view.count.records": LABEL,
     "view.layouts.valued": OF,
     "view.compare.week_number": NAMES,
-    "view.compare.weeks_option": "the weeks of a comparison by race day are 8 to 24 (COMPARE_WEEKS)",
-    "view.compare.race_days": "the weeks of a comparison by race day are 8 to 24 (COMPARE_WEEKS)",
+    "view.compare.weeks_option": "the weeks of a comparison by race day are 2 to 24 (COMPARE_WEEKS, from stage X3 of v2.3.0)",
+    "view.compare.race_days": "the weeks of a comparison by race day are 2 to 24 (COMPARE_WEEKS, from stage X3 of v2.3.0)",
     "view.recap.before.days": "one day has view.recap.before.day (view_flow.mjs)",
     "view.save.all": IN_PARENTHESES,
     "view.save.tables": IN_PARENTHESES,
@@ -334,7 +334,8 @@ class GuiCatalogTest(unittest.TestCase):
         # review of the plan of U1, C, and Codex's review of the plan, 7).
         english, japanese = load_catalog("en"), load_catalog("ja")
         ones = one_keys()
-        self.assertEqual(len(ones), 27)
+        # The days before a race day of stage X3 of v2.3.0 make 28.
+        self.assertEqual(len(ones), 28)
         self.assertFalse(set(ones) & set(ones.values()))
         self.assertFalse((set(ones) | set(ones.values())) & set(NO_WORDS_FOR_ONE))
         self.assertFalse(COUNT_PLACEHOLDERS & MEASURE_PLACEHOLDERS or COUNT_PLACEHOLDERS & WORD_PLACEHOLDERS or MEASURE_PLACEHOLDERS & WORD_PLACEHOLDERS)
@@ -387,7 +388,17 @@ class GuiCatalogTest(unittest.TestCase):
                 'notes.push(message(countKey("view.note.no_date", count("no_date")), { n: n(count("no_date")) }));',
             ),
             ("view_flow.mjs", "shoesNotes"): ("notes.push(message(countKey(key, answer[name]), { n: answer[name] }));",),
-            ("view_flow.mjs", "raceSlotName"): ('message(countKey("view.compare.weeks_before", weeks - slot), { n: weeks - slot })',),
+            ("view_flow.mjs", "raceSlotName"): (
+                'message(countKey("view.compare.weeks_before", weeks - slot), { n: weeks - slot })',
+                # The days before a race day (stage X3 of v2.3.0).
+                'message(countKey("view.compare.days_before", days), { n: days })',
+            ),
+            # The marks of the axis, every week for a short span and by day
+            # (stage X3 of v2.3.0).
+            ("view_flow.mjs", "raceTicks"): (
+                'ticks.push({ at: span - n, text: message(countKey("view.compare.days_before", n), { n }) });',
+                'ticks.push({ at: weeks - n, text: message(countKey("view.compare.weeks_before", n), { n }) });',
+            ),
             # The laps of an activity (stage X10 of v2.3.0).
             ("view_flow.mjs", "lapsNoteMessages"): (
                 'lines.push(message(countKey("view.laps.unknown_note", notes.unknown), { n: n(notes.unknown) }));',
@@ -606,9 +617,21 @@ class GuiCatalogTest(unittest.TestCase):
             # v2.2.0 M2: what is not used while comparing by race day, where
             # the item is chosen, and the button that two race marks make
             # usable; the page puts the item before what it compares by.
-            for named in ("view.period.label", "view.shelf.heading", "view.layouts.heading", "view.grain.week"):
+            # From stage X3 of v2.3.0, the day of the groupings too.
+            for named in ("view.period.label", "view.shelf.heading", "view.layouts.heading", "view.grain.week", "view.grain.day"):
                 with self.subTest(language=language, key="view.compare.off_race", named=named):
                     self.assertIn(quote.format(catalog[named]), catalog["view.compare.off_race"])
+            # The words of a race by day (stage X3 of v2.3.0): the place of the
+            # race day and its days before are not the words of the span
+            # (race_day_slot is not race_days, which is the span), and "not in
+            # span" of the table is the word that the readings and the note say.
+            with self.subTest(language=language, key="view.compare.race_day_slot"):
+                self.assertNotEqual(catalog["view.compare.race_day_slot"], catalog["view.compare.race_days"])
+                self.assertNotIn("{n}", catalog["view.compare.race_day_slot"])
+                self.assertIn("{n}", catalog["view.compare.race_days"])
+            with self.subTest(language=language, key="view.compare.not_in_span_note"):
+                self.assertIn(catalog["view.compare.not_in_span_cell"], catalog["view.compare.not_in_span_note"])
+                self.assertIn(catalog["view.compare.not_in_span_cell"].lower(), catalog["view.compare.not_in_span"].lower())
             with self.subTest(language=language, key="view.compare.race_needed"):
                 self.assertIn(quote.format(catalog["view.compare.by.race"]), catalog["view.compare.race_needed"])
             # The mark of a period cut short names the race day too (Codex's

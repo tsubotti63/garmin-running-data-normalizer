@@ -1592,23 +1592,35 @@ class GuiGuideTest(unittest.TestCase):
                 ),
             },
         }
+        # From stage X3 of v2.3.0, the spans from 2 weeks and the day too (the
+        # person's choice B of the samples), each sentence in both languages.
         race_phrases = {
             "en": (
+                "goes from 2, 4 (from 2.3.0), 8, 12, 16 (at first), 20, or 24 weeks before to the race day",
                 "It counts back from the Monday of the week of the race, so that every race has as many weeks.",
-                "The grouping is **Week** only, also for a running total.",
-                "The way to compare (by year or by race day) and the weeks of the span are remembered for the next time; the races chosen are not.",
+                "The grouping is **Week** or, from 2.3.0, **Day** (**Week** at first), also for a running total.",
+                "(From 2.3.0) By **Day**, every race is lined up on its race day at the right end, and its days are placed by how many days they are before it (the axis says, for example, 28 days before).",
+                "The days of the span are those of **Week** (from the Monday some weeks before the week of the race to the race day), so the heading of a row and the last row of the table give the same values as by **Week**.",
+                "Where a race is not on a Sunday, the first few days at the left are not in its span: the table says **Not in span**, the readings say so, and a note under the table says what it means.",
+                "The day stays when the way to show or the item changes.",
+                "The way to compare (by year or by race day) and the weeks of the span are remembered for the next time; the races chosen and **Day** are not (it opens by **Week**).",
             ),
             "ja": (
+                "月の代わりの「範囲」で、2・4（2.3.0 から）・8・12・16（初め）・20・24 週前から大会の日までを選びます",
                 "大会の週の月曜からさかのぼるので、どの大会も週の数がそろいます。",
-                "まとめ方は「週」だけです（累積でも）。",
-                "次に開いたときも、くらべ方（年か大会の日か）と範囲の週の数を覚えています。選んだ大会は覚えません。",
+                "まとめ方は「週」と、（2.3.0 から）「日」です（累積でも。初めは「週」）。",
+                "（2.3.0 から）まとめ方の「日」では、どの大会も大会の日を右の端にそろえ、大会の日から何日前かで並べます（軸は 28 日前のように出ます）。",
+                "範囲の日は「週」と同じ（大会の週の月曜からさかのぼった日から大会の日まで）なので、段の見出しと表の最後の行の値も「週」と同じです。",
+                "大会が日曜でないときは、左の端の数日が範囲の外で、表は「範囲の外」、読み取りは範囲の外だということを言い、表の下に注が出ます。",
+                "見せ方や項目を替えても「日」のままです。",
+                "次に開いたときも、くらべ方（年か大会の日か）と範囲の週の数を覚えています。選んだ大会と、まとめ方の「日」は覚えません（次は「週」で開きます）。",
             ),
         }
         quoted = {
             1: ("view.group.act", "view.group.fit", "view.panel.table", "view.list.close", "view.types.label", "view.align", "view.grain.month", "view.grain.week", "view.grain.day"),
             2: ("view.marks.button", "view.marks.kind.race", "view.marks.kind.injury", "view.marks.kind.shoes", "view.marks.kind.other", "view.marks.add", "view.marks.end", "view.marks.change", "view.marks.remove", "view.marks.keep", "view.marks.show"),
         }
-        race_quoted = ("view.compare.by.year", "view.compare.by.race", "view.compare.weeks", "view.compare.mode.rows_race", "view.compare.race_week", "view.marks.kind.race")
+        race_quoted = ("view.compare.by.year", "view.compare.by.race", "view.compare.weeks", "view.compare.mode.rows_race", "view.compare.race_week", "view.marks.kind.race", "view.grain.week", "view.grain.day", "view.compare.not_in_span_cell")
         links = {
             "en": "(#when-the-output-changes-while-you-look)",
             "ja": "(#見ている間に出力が変わったとき)",
@@ -1677,6 +1689,24 @@ class GuiGuideTest(unittest.TestCase):
                 self.assertIn("(#compare-by-race-day)" if language == "en" else "(#大会の日でくらべる)", scene)
                 self.assertIn("(#marks-from-220)" if language == "en" else "(#印220-から)", scene)
                 self.assertIn("2026-03-15", scene)
+                # From stage X3 of v2.3.0, the days before the races: the day
+                # of the grouping and the short spans, in the words of the page.
+                reads = " ".join(scene.split()) if language == "en" else re.sub(r"\n *", "", scene)
+                step = (
+                    "5. (From 2.3.0) To see the days before the races, press {day} in {grain} at the top. For the last weeks in large, choose {two} or {four} in {span}."
+                    if language == "en"
+                    else "5. （2.3.0 から）大会の前を日ごとに見るときは、上の{grain}で{day}を押します。直前の数週を大きく見るときは、{span}で{two}か{four}を選びます。"
+                )
+                self.assertIn(
+                    step.format(
+                        day=mark.format(messages["view.grain.day"]),
+                        grain=mark.format(messages["view.grain.label"]),
+                        two=mark.format(messages["view.compare.weeks_option"].format(n=2)),
+                        four=mark.format(messages["view.compare.weeks_option"].format(n=4)),
+                        span=mark.format(messages["view.compare.weeks"]),
+                    ),
+                    reads,
+                )
         # The lines of the marks, as view.css draws them (the checker's M4-1).
         css = (ROOT / "src/garmin_running_data_normalizer/gui/static/view.css").read_text(encoding="utf-8")
         for rule in (
@@ -1687,6 +1717,29 @@ class GuiGuideTest(unittest.TestCase):
         ):
             with self.subTest(rule=rule):
                 self.assertRegex(css, rule)
+
+    def test_the_design_says_how_races_go_by_day(self) -> None:
+        # v2.3.0 X3 (the person's choice B of the samples, and the checker's
+        # review of the plan of its parts, 1 and 2): the design says the spans
+        # from 2 weeks where it gives them, and how a race goes by day.
+        text = " ".join((ROOT / "docs/gui_design.md").read_text(encoding="utf-8").split())
+        for phrase in (
+            "Each race asks from the Monday of the week some weeks (2 and 4 from stage X3, 8, 12, 16 at first, 20, or 24) before its week to its day",
+            "placed by their order to the week of the race (by week; by day, see stage X3), which ends on the race day",
+            "- Comparing by race day by day (stage X3 of v2.3.0, the person's choice B of the samples): by race day, the grouping takes the day too",
+            "not remembered, and kept where the way or the item changes, while the cross line starts again as before",
+            "By day, the days of a race are those of its span by week",
+            "so that the value of its whole span stays the same",
+            "which every race has at the last place (7 × weeks + 6)",
+            '("Not in span" in the table and the readings, with a note under the table), whether or not the output reaches their days, as they are never asked for; the days of a span that the output does not reach are outside the output, as by week.',
+            "A mark of a span has its first day as its race day, as by week.",
+            "The axis is marked every 7, 14, or 28 days before the race day (spans up to 4, up to 12, or of more weeks); by week, a span of 4 weeks or less is marked every week.",
+            "The line under a picture says the grouping, as that of the years; the name of its file does not.",
+            "The keys move the cross line as before (12 places with Page Up and Page Down).",
+            "The settings keep 2 and 4 weeks: a version before 2.3.0 leaves them out of its settings (that field only) and opens its page with 16 weeks.",
+        ):
+            with self.subTest(phrase=phrase[:60]):
+                self.assertEqual(text.count(phrase), 1)
 
     def test_guides_give_the_races_and_the_overview_as_the_page_does(self) -> None:
         # v2.2.0 M4 (Codex's review of the diff of M4): what the guides and the
@@ -1814,6 +1867,15 @@ class GuiGuideTest(unittest.TestCase):
             )
             with self.subTest(language=language, part="weeks chosen"):
                 self.assertEqual(messages["view.help.race_text"].count(chosen), 1)
+            # The grouping by race day: the week, and from stage X3 of v2.3.0
+            # the day too, every race lined up on its race day.
+            grouping = (
+                "It goes by week or by day: by week, the week of a race ends on the race day; by day, every race is lined up on its race day."
+                if language == "en"
+                else "まとめ方は週か日です。週では大会の週は大会の日まで、日ではどの大会も大会の日にそろえて並べます。"
+            )
+            with self.subTest(language=language, part="grouping"):
+                self.assertEqual(messages["view.help.race_text"].count(grouping), 1)
             # The note of the table is in the note of the guides as a whole,
             # not as words that the guides also have elsewhere ("outside the
             # output"; the partial guard of M4).

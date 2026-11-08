@@ -1096,10 +1096,10 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   Monday 24 weeks before the week of the race to the race day overlap the days
   of the output, from its first to its last (a race after its last day too;
   always 24 weeks, whatever the span chosen, and whether or not those days
-  have activities). Each race asks from the Monday of the week some weeks (8, 12,
-  16 at first, 20, or 24) before its week to its day, so that every race has
-  as many weeks, placed by their order to the week of the race, which ends on
-  the race day: a period cut short (as a year's ends are) where the race is
+  have activities). Each race asks from the Monday of the week some weeks (2
+  and 4 from stage X3, 8, 12, 16 at first, 20, or 24) before its week to its
+  day, so that every race has as many weeks, placed by their order to the week
+  of the race (by week; by day, see stage X3), which ends on the race day: a period cut short (as a year's ends are) where the race is
   not on a Sunday or the output ends within that week, as the server marks it.
   The value of the whole span is a period of a grouping that only the requests
   of the view page take, `range`: the CLI and the settings keep their
@@ -1111,6 +1111,27 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   server keeps the bars of the item shelf with an output (up to eight sets of
   activity types, and from stage T1 of conditions) and up to 64 connections
   waiting to be taken.
+- Comparing by race day by day (stage X3 of v2.3.0, the person's choice B of
+  the samples): by race day, the grouping takes the day too (the week at
+  first, in every way; not remembered, and kept where the way or the item
+  changes, while the cross line starts again as before), and the span 2 and
+  4 weeks too. By day, the days of a race are those of its span by week (from
+  the Monday some weeks before its week to its day), so that the value of its
+  whole span stays the same, placed by their days before the race day, which
+  every race has at the last place (7 × weeks + 6). The span of a race not on
+  a Sunday begins after the first place, and the places before it are not in
+  its span ("Not in span" in the table and the readings, with a note under
+  the table), whether or not the output reaches their days, as they are never
+  asked for; the days of a span that the output does not reach are outside
+  the output, as by week. A mark of a
+  span has its first day as its race day, as by week. The axis is marked every
+  7, 14, or 28 days before the race day (spans up to 4, up to 12, or of more
+  weeks); by week, a span of 4 weeks or less is marked every week. The line
+  under a picture says the grouping, as that of the years; the name of its
+  file does not. The keys move the cross line as before (12 places with Page
+  Up and Page Down). The settings keep 2 and 4 weeks: a version before 2.3.0
+  leaves them out of its settings (that field only) and opens its page with
+  16 weeks.
 - The activities of a period (stage M3): a period of a chart of the training
   or the running form opens, by a click or by Enter or Space, the list of its
   activities under its panel, one at a time (`/api/view/activities`, under the

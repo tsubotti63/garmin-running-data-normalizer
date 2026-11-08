@@ -85,7 +85,8 @@ test("a count of the whole number 1 takes the words for one, and any other count
   for (const [key, one] of Object.entries(ONE_KEYS)) {
     assert.equal(one, `${key}_one`);
   }
-  // Two of the laps of an activity from stage X10 of v2.3.0.
-  assert.equal(Object.keys(ONE_KEYS).length, 27);
+  // Two of the laps of an activity from stage X10 of v2.3.0, and the days
+  // before a race day from stage X3.
+  assert.equal(Object.keys(ONE_KEYS).length, 28);
   assert.ok(Object.isFrozen(ONE_KEYS));
 });
