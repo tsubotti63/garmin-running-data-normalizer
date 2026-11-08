@@ -1600,6 +1600,21 @@ values are made):
   the panels. Where the output starts or ends within a year (or within the
   month chosen), its value is partial, and its heading says so, for example
   "(to October 21)".
+- (From 2.3.0) The highest of each year: the period with the largest value in
+  the year (with one month chosen, in that month) is marked. Its period and
+  value are those of **Highest** on the second line of a panel (of a total,
+  among the periods with records); of periods with the same value, the
+  earliest, decided before rounding. Every item has it; of the average pace,
+  it is the period with the largest time ÷ distance, the slowest.
+  - With **One row per year**, the heading of a row says, after "Total of the
+    year" and the like, "▼Highest 201.3 km (January 2026)", and a small ▼ is
+    above the highest bar (of an item drawn as a line, its point). Where the
+    heading has no room, it shrinks from its period with "…" (it is read out,
+    and saved in a picture, whole).
+  - **Show as a table** writes the highest value in bold, with ▲ (read out as
+    "highest"); the note under the table says what it is.
+  - The charts of **Overlay**, **Running total**, and **Calendar** have none,
+    nor has the table of a running total (its values are added up).
 - **Running total** is for Distance, Time, Activities, Training load, and
   Total ascent only. A period without a record (0) adds nothing, and a period
   without a value breaks the line; the total goes on from what it was, so
@@ -1730,6 +1745,9 @@ values are made):
   the table says **Not in span**, the readings say so, and a note under the
   table says what it means. The day stays when the way to show or the item
   changes.
+- (From 2.3.0) As by year, the highest period of the span of each race is
+  marked: of the distance, by week, the week with the most in the span, and by
+  day, for a full or half marathon, mostly the race day itself.
 - The card of a race shows the head of its name and its date (for example,
   Spring marathon 3/15/2026), and tells a screen reader its whole name and its
   days (for a mark of a span, its first and last day).

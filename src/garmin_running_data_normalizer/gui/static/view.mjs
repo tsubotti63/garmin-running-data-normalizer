@@ -99,6 +99,10 @@ import {
   clockOf,
   compareCountNoteKey,
   compareData,
+  compareHighestNoteKey,
+  compareHighestWords,
+  highestMarkAt,
+  highestMarkValues,
   compareModeFor,
   compareNote,
   compareRange,
@@ -642,6 +646,7 @@ const ui = {
   compareAxis: byId("compare-axis"),
   compareAnnouncer: byId("compare-announcer"),
   compareNote: byId("compare-note"),
+  compareHighestNote: byId("compare-highest-note"),
   compareSpanNote: byId("compare-span-note"),
   compareCountNote: byId("compare-count-note"),
   seriesStop: byId("series-stop"),
@@ -6060,6 +6065,11 @@ function renderCompare(live) {
   ui.compareStack.hidden = !ready;
   ui.compareStack.classList.toggle("waiting", state.compareLoading);
   ui.compareNote.hidden = !ready || !compare.table;
+  // The note of the triangle of the table, which the table fills where a year
+  // has a highest (stage X4 of v2.3.0).
+  if (!ready || !compare.table) {
+    ui.compareHighestNote.hidden = true;
+  }
   // What "not in span" of the table is, where a race by day has such places
   // (stage X3 of v2.3.0).
   const answered = state.compareAnswer;
@@ -6264,6 +6274,11 @@ function renderCompareBody(force = false) {
     : compareData({ years: answer.years, month: answer.month, grain: answer.grain, mode, series: compare.series, answers: answer.answers, whole: answer.whole });
   // A year stood out stays while one panel draws it (stage L3 of v2.2.0).
   compare.lit = litKept(compare.lit, { by: answer.by, mode, table: compare.table, data });
+  // The note of the triangle of the table, under it with its other notes
+  // (stage X4 of v2.3.0): the triangle is for the eye only.
+  const highestNote = compare.table ? compareHighestNoteKey(mode, data, answer.by, answer.month) : null;
+  ui.compareHighestNote.hidden = highestNote === null;
+  ui.compareHighestNote.replaceChildren(...(highestNote === null ? [] : [highestGlyph("▲"), " ", t(highestNote)]));
   const span = race ? raceSpan(answer.weeks, answer.grain) : compareSpan(answer.grain, answer.month, answer.years);
   const lines = data.map((entry) => ({
     values: entry.values.map((value) => (Number.isFinite(value) ? shown(compare.key, value) : null)),
@@ -6334,6 +6349,14 @@ function renderCompareBody(force = false) {
   }
 }
 
+// A triangle of the highest of a year (stage X4 of v2.3.0), for the eye only:
+// the words beside it say what it is.
+function highestGlyph(text) {
+  const glyph = element("span", "compare-highest-glyph", text);
+  glyph.setAttribute("aria-hidden", "true");
+  return glyph;
+}
+
 // The name of a place of the axis of a comparison, as its table names it.
 function compareSlotText(context, slot) {
   return describe(context.names === null ? compareSlotName(slot, context.grain, context.month, state.language) : context.names.slotName(slot));
@@ -6381,6 +6404,21 @@ function buildCompareRow(context, entry, line, name) {
   const value = entry.whole === null ? "—" : entry.whole.value === null ? t("view.no_value") : describe(valueMessage(context.key, entry.whole.value, state.language));
   whole.append(element("strong", "", value));
   head.append(whole);
+  // The highest of the year (or of the span of the race), as the second line
+  // of a panel says it, after the triangle of its bar (stage X4 of v2.3.0):
+  // one span of compare-whole, whose words a picture takes whole. Its words
+  // up to the value never shrink; where the heading has no room, its period
+  // shrinks first (with its closing bracket), then the name of a race (whose
+  // day always shows), for the eye only.
+  const highest = compareHighestWords(context.item, entry, context.grain, state.language, context.mode);
+  if (highest !== null) {
+    const [before = "", after = ""] = t("view.summary.highest", { value: "\u0001", period: describe(highest.period) }).split("\u0001");
+    const high = element("span", "compare-whole compare-highest-head");
+    const fixed = element("span", "compare-highest-fixed");
+    fixed.append(highestGlyph("▼"), before, element("strong", "", describe(highest.value)));
+    high.append(fixed, element("span", "compare-highest-period", after));
+    head.append(high);
+  }
   const read = element("span", "panel-read");
   read.setAttribute("aria-hidden", "true");
   head.append(read);
@@ -6511,7 +6549,14 @@ function buildCompareTable(context, name) {
     tr.append(period);
     for (const cell of row.cells) {
       const text = cell.notInSpan ? t("view.compare.not_in_span_cell") : cell.outside ? "—" : cell.value === null ? t("view.no_value") : `${describe(cell.value)}${cell.partial ? "*" : ""}`;
-      tr.append(element("td", cell.value === null ? "n empty year-start" : "n year-start", text));
+      const td = element("td", cell.value === null ? "n empty year-start" : "n year-start", text);
+      // The highest of the year in bold, with its triangle for the eye and
+      // its word for the ear (stage X4 of v2.3.0).
+      if (cell.highest) {
+        td.classList.add("compare-highest");
+        td.append(" ", highestGlyph("▲"), element("span", "visually-hidden", t("view.compare.highest_cell")));
+      }
+      tr.append(td);
       if (counts) {
         tr.append(element("td", "n", cell.count ?? ""));
       }
@@ -6622,6 +6667,23 @@ function drawComparePlot(entry, context) {
       groups[index] = group;
     }
   }
+  // In a row, a small triangle above the highest bar (or point) of its year
+  // (stage X4 of v2.3.0), whose heading says its value; never on one panel
+  // (laid over or running totals). It goes above the cross line, whose dot
+  // would hide it at the top of a plot (Codex's third read of the diff of X4,
+  // 2).
+  let highestMark = null;
+  if (!one && context.mode !== "cumulative") {
+    const year = entry.data[0];
+    const at = year.highest ? year.slots[year.highest.index] : undefined;
+    const above = year.highest ? highestMarkValues(entry.lines[0], year.highest.index) : [];
+    if (at !== undefined && above.length) {
+      // Clear of the top of a bar, of a point with its ring and the dot of
+      // the cross line, or of the hollow dot of a 0, by the shape drawn
+      // (Codex's second, third, and fourth reads of the diff of X4).
+      highestMark = svgElement("path", { class: "compare-highest-mark", d: highestMarkAt(first, at, above) });
+    }
+  }
   const names = [];
   if (one) {
     const ends = labels.map((label, index) => (label === null ? null : { x: periodMiddle(first.scale, entry.data[index].slots[label.index]), y: shapes[index].y(entry.lines[index].values[label.index]) }));
@@ -6644,6 +6706,9 @@ function drawComparePlot(entry, context) {
     return dot;
   });
   svg.append(cross);
+  if (highestMark !== null) {
+    svg.append(highestMark);
+  }
   Object.assign(entry, { shapes, cross, crossLine, crossDots, groups: one ? groups : null, names });
   markLit(entry);
 }

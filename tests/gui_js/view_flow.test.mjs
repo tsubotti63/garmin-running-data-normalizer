@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { translate } from "../../src/garmin_running_data_normalizer/gui/static/i18n.mjs";
+import * as chart from "../../src/garmin_running_data_normalizer/gui/static/view_chart.mjs";
 import * as view from "../../src/garmin_running_data_normalizer/gui/static/view_flow.mjs";
 
 const catalogs = Object.fromEntries(
@@ -3330,4 +3331,280 @@ test("a refused request opens the output again once until a newer reading is see
   assert.equal(step({ reopenedAt: 6, known: 5 }), "stop");
   assert.equal(step({ reopenedAt: 4, known: null }), "stop");
   assert.equal(step({ reopenedAt: 4, known: 5 }), "reopen");
+});
+
+// Stage X4 of v2.3.0 (the person's choice of the samples, "1 C と案 2"): the
+// highest of each year (or race) is the period of the server's summary of the
+// line compared, marked in the table, said in the heading of its row, and
+// pointed at in its chart; never looked for again, and never of a running
+// total.
+const highestLine = (values, period, extra = {}) =>
+  lineOf(values, undefined, { summary: { highest: period === null ? null : { period, value: values[period] } }, ...extra });
+
+test("the highest of a line is the period of the server's summary, or none", () => {
+  assert.deepEqual(view.compareHighest({ summary: { highest: { period: 3, value: 201.3 } } }), { index: 3, value: 201.3 });
+  assert.deepEqual(view.compareHighest({ summary: { highest: { period: 0, value: 0 } } }), { index: 0, value: 0 });
+  assert.equal(view.compareHighest({ summary: { highest: null } }), null);
+  assert.equal(view.compareHighest({ summary: {} }), null);
+  assert.equal(view.compareHighest({}), null);
+  assert.equal(view.compareHighest(null), null);
+  for (const highest of [{ period: -1, value: 1 }, { period: 1.5, value: 1 }, { period: "2", value: 1 }, { period: 2, value: Number.NaN }, { period: 2, value: null }, "x", 7]) {
+    assert.equal(view.compareHighest({ summary: { highest } }), null, JSON.stringify(highest));
+  }
+});
+
+test("the highest of a year is that of the line compared, and none for a running total", () => {
+  const months = [1, 2, 3].map((month) => ({ start: `2026-0${month}-01`, end: `2026-0${month}-28`, partial: false }));
+  // VO2 Max of two lines: the other line has the larger value, but the line
+  // compared keeps its own highest (never panelSummary, of every line: the
+  // checker's review of the plan of X4).
+  const running = { vo2max_source_series: "a", sport: "RUNNING" };
+  const cycling = { vo2max_source_series: "a", sport: "CYCLING" };
+  const lines = [highestLine([50, 52, 51], 1, { series: running }), highestLine([60, 58, 59], 0, { series: cycling })];
+  const answers = new Map([[2026, answerOf(months, lines)]]);
+  const whole = answerOf([{ start: "2026-01-01", end: "2026-03-28", partial: true }], lines);
+  const compared = (series, mode = "rows") => view.compareData({ years: [2026], month: null, grain: "month", mode, series, answers, whole })[0].highest;
+  assert.deepEqual(compared(JSON.stringify(["a", "RUNNING"])), { index: 1, value: 52 });
+  assert.deepEqual(compared(JSON.stringify(["a", "CYCLING"])), { index: 0, value: 60 });
+  for (const mode of ["overlay", "calendar"]) {
+    assert.deepEqual(compared(JSON.stringify(["a", "RUNNING"]), mode), { index: 1, value: 52 });
+  }
+  assert.equal(compared(JSON.stringify(["a", "RUNNING"]), "cumulative"), null);
+  // A year that the output does not reach: none.
+  const empty = view.compareData({ years: [2025], month: null, grain: "month", mode: "rows", series: null, answers: new Map([[2025, answerOf([], [])]]), whole });
+  assert.equal(empty[0].highest, null);
+  assert.equal(view.compareHighestWords(item("dist"), empty[0], "month", "ja"), null);
+  assert.equal(view.compareHighestNoteKey("rows", empty), null);
+});
+
+test("the table marks the highest of a year at the row of its value", () => {
+  const dist = item("dist");
+  // By month: the highest in May, cut short by the end of the output.
+  const months = [1, 2, 3, 4, 5].map((month) => ({ start: `2026-0${month}-01`, end: month === 5 ? "2026-05-21" : `2026-0${month}-28`, partial: month === 5 }));
+  const answers = new Map([[2026, answerOf(months, [highestLine([10000, 20000, 30000, 40000, 50000], 4)])]]);
+  const whole = answerOf([{ start: "2026-01-01", end: "2026-05-21", partial: true }], [lineOf([150000])]);
+  const data = view.compareData({ years: [2026], month: null, grain: "month", mode: "rows", series: null, answers, whole });
+  const table = view.compareTable(dist, data, "month", null, 11, "ja");
+  assert.deepEqual(table.rows.map((row) => row.cells[0].highest === true), [false, false, false, false, true, false, false, false, false, false, false, false]);
+  // Its value keeps its mark of a period cut short; the page writes the
+  // triangle after it (view.mjs buildCompareTable: "50.0 km* ▲").
+  assert.deepEqual([words(table.rows[4].period), words(table.rows[4].cells[0].value), table.rows[4].cells[0].partial], ["5月", "50.0 km", true]);
+  assert.equal(table.last.cells[0].highest, undefined);
+  // A running total has none in its table.
+  const running = view.compareData({ years: [2026], month: null, grain: "month", mode: "cumulative", series: null, answers, whole });
+  assert.ok(view.compareTable(dist, running, "month", null, 11, "ja", "cumulative").rows.every((row) => !row.cells[0].highest));
+  assert.equal(view.compareHighestNoteKey("cumulative", running), null);
+  // By week: 2012 began on a Sunday and was a leap year, so 31 December, a
+  // Monday, is the 54th week, the last place of the axis.
+  const weeks = [
+    { start: "2012-01-01", end: "2012-01-01", partial: true },
+    { start: "2012-06-04", end: "2012-06-10", partial: false },
+    { start: "2012-12-31", end: "2012-12-31", partial: true },
+  ];
+  const weekly = view.compareData({ years: [2012], month: null, grain: "week", mode: "rows", series: null, answers: new Map([[2012, answerOf(weeks, [highestLine([3000, 9000, 12000], 2)])]]), whole });
+  const weekSpan = view.compareSpan("week", null, [2012]);
+  assert.equal(weekSpan, 53);
+  const weekTable = view.compareTable(dist, weekly, "week", null, weekSpan, "ja");
+  assert.deepEqual(weekTable.rows.flatMap((row, at) => (row.cells[0].highest ? [[at, words(row.period)]] : [])), [[53, "54 週目"]]);
+  // By day: the leap day of 2024 is the place of 29 February (59), which 2025
+  // lacks (the years newest first: 2025 in the first column).
+  const days = ["2024-02-28", "2024-02-29", "2024-03-01"].map((day) => ({ start: day, end: day, partial: false }));
+  const other = ["2025-02-28", "2025-03-01"].map((day) => ({ start: day, end: day, partial: false }));
+  const daily = view.compareData({
+    years: [2024, 2025],
+    month: null,
+    grain: "day",
+    mode: "rows",
+    series: null,
+    answers: new Map([
+      [2024, answerOf(days, [highestLine([5000, 21000, 8000], 1)])],
+      [2025, answerOf(other, [highestLine([6000, 4000], 0)])],
+    ]),
+    whole,
+  });
+  const dayTable = view.compareTable(dist, daily, "day", null, view.compareSpan("day", null, [2024, 2025]), "ja");
+  assert.deepEqual(dayTable.rows.flatMap((row, at) => row.cells.flatMap((cell, column) => (cell.highest ? [[at, column, words(row.period)]] : []))), [
+    [58, 0, "2月28日"],
+    [59, 1, "2月29日"],
+  ]);
+  assert.equal(dayTable.rows[59].cells[0].outside, true);
+  // A month chosen: its days, by their day.
+  const may = [5, 10, 20].map((day) => ({ start: `2026-05-${String(day).padStart(2, "0")}`, end: `2026-05-${String(day).padStart(2, "0")}`, partial: false }));
+  const chosen = view.compareData({ years: [2026], month: 5, grain: "day", mode: "rows", series: null, answers: new Map([[2026, answerOf(may, [highestLine([1000, 30000, 2000], 1)])]]), whole });
+  const mayTable = view.compareTable(dist, chosen, "day", 5, view.compareSpan("day", 5, [2026]), "ja");
+  assert.deepEqual(mayTable.rows.flatMap((row, at) => (row.cells[0].highest ? [[at, words(row.period)]] : [])), [[9, "5月10日"]]);
+});
+
+test("the highest of a race is marked at its own place, by week and by day", () => {
+  const dist = item("dist");
+  // A Saturday race by day: its first place is not in its span (stage X3),
+  // and its highest stays at the place of its own day.
+  const race = madeUp("m-sat", "2024-04-13", null, "race", "Saturday race");
+  const range = view.raceRange(race.day, 2);
+  assert.deepEqual(range, { from: "2024-03-25", to: "2024-04-13" });
+  const days = [];
+  for (let at = 0; at < 20; at += 1) {
+    const day = new Date(Date.UTC(2024, 2, 25 + at)).toISOString().slice(0, 10);
+    days.push({ start: day, end: day, partial: false });
+  }
+  const values = days.map((_day, at) => (at === 19 ? 42195 : 1000 * (at + 1)));
+  const answers = new Map([["m-sat", answerOf(days, [highestLine(values, 19)])]]);
+  const data = view.raceData({ races: [race], weeks: 2, mode: "rows", series: null, answers, wholes: new Map(), language: "ja", grain: "day" });
+  assert.deepEqual([data[0].before, data[0].highest], [1, { index: 19, value: 42195 }]);
+  const axis = { slotName: (slot) => view.raceSlotName(slot, 2, "day"), whole: view.raceValueMessage(dist, 2) };
+  const table = view.compareTable(dist, data, "day", null, view.raceSpan(2, "day"), "ja", "rows", axis);
+  assert.deepEqual(table.rows.flatMap((row, at) => (row.cells[0].highest ? [[at, words(row.period), words(row.cells[0].value)]] : [])), [[20, "大会の日", "42.2 km"]]);
+  assert.equal(table.rows[0].cells[0].notInSpan, true);
+  assert.equal(table.rows[0].cells[0].highest, undefined);
+  // By week: the highest at its week, 1 week before the week of the race.
+  const weeks = [
+    { start: "2024-03-25", end: "2024-03-31", partial: false },
+    { start: "2024-04-01", end: "2024-04-07", partial: false },
+    { start: "2024-04-08", end: "2024-04-13", partial: true },
+  ];
+  const weekly = view.raceData({ races: [race], weeks: 2, mode: "rows", series: null, answers: new Map([["m-sat", answerOf(weeks, [highestLine([30000, 61000, 50000], 1)])]]), wholes: new Map(), language: "ja" });
+  const weekAxis = { slotName: (slot) => view.raceSlotName(slot, 2), whole: view.raceValueMessage(dist, 2) };
+  const weekTable = view.compareTable(dist, weekly, "week", null, view.raceSpan(2), "ja", "rows", weekAxis);
+  assert.deepEqual(weekTable.rows.flatMap((row, at) => (row.cells[0].highest ? [[at, words(row.period)]] : [])), [[1, words(view.raceSlotName(1, 2))]]);
+  // A running total of a race: none.
+  const running = view.raceData({ races: [race], weeks: 2, mode: "cumulative", series: null, answers, wholes: new Map(), language: "ja", grain: "day" });
+  assert.equal(running[0].highest, null);
+});
+
+test("the note of the triangle and the words of the heading of the highest", () => {
+  const months = [1, 2, 3].map((month) => ({ start: `2026-0${month}-01`, end: month === 3 ? "2026-03-21" : `2026-0${month}-28`, partial: month === 3 }));
+  const answers = new Map([[2026, answerOf(months, [highestLine([100000, 201300, 250000], 2)])]]);
+  const whole = answerOf([{ start: "2026-01-01", end: "2026-03-21", partial: true }], [lineOf([551300])]);
+  const data = view.compareData({ years: [2026], month: null, grain: "month", mode: "rows", series: null, answers, whole });
+  for (const mode of ["rows", "overlay", "calendar"]) {
+    assert.equal(view.compareHighestNoteKey(mode, data), "view.compare.highest_note");
+  }
+  assert.equal(view.compareHighestNoteKey("cumulative", data), null);
+  assert.equal(view.compareHighestNoteKey("rows", null), null);
+  assert.equal(view.compareHighestNoteKey("rows", []), null);
+  // Of the year, of the month chosen, or of the span of a race (Codex's
+  // review of the diff of X4, 3).
+  assert.equal(view.compareHighestNoteKey("rows", data, "year", 5), "view.compare.highest_note_month");
+  assert.equal(view.compareHighestNoteKey("rows", data, "race", null), "view.compare.highest_note_race");
+  assert.equal(view.compareHighestNoteKey("cumulative", data, "race", null), null);
+  // Among the periods with records: of a total, a period of 0 without
+  // records never wins over one of 0 with them, as the server takes only
+  // those (Codex's fifth read of the diff of X4).
+  const notes = {
+    "view.compare.highest_note": [
+      "最大：その年で値がいちばん大きい区切りです（記録のある区切りから、丸める前の値で決め、同じ値なら早い区切り）。",
+      "Highest: the period with the largest value in the year, among the periods with records, before rounding; of equal values, the earliest.",
+    ],
+    "view.compare.highest_note_month": [
+      "最大：その年の、選んだ月で値がいちばん大きい区切りです（記録のある区切りから、丸める前の値で決め、同じ値なら早い区切り）。",
+      "Highest: the period with the largest value in the month chosen of the year, among the periods with records, before rounding; of equal values, the earliest.",
+    ],
+    "view.compare.highest_note_race": [
+      "最大：その大会の範囲で値がいちばん大きい区切りです（記録のある区切りから、丸める前の値で決め、同じ値なら早い区切り）。",
+      "Highest: the period with the largest value in the span of the race, among the periods with records, before rounding; of equal values, the earliest.",
+    ],
+  };
+  for (const [key, [ja, en]] of Object.entries(notes)) {
+    assert.deepEqual([translate(catalogs, "ja", key), translate(catalogs, "en", key)], [ja, en]);
+  }
+  assert.deepEqual([translate(catalogs, "ja", "view.compare.highest_cell"), translate(catalogs, "en", "view.compare.highest_cell")], ["（最大）", "(highest)"]);
+  // The heading says it in the words of the second line of a panel: the
+  // period with its year, and partial where it is cut.
+  const said = (language, mode = "rows") => {
+    const found = view.compareHighestWords(item("dist"), data[0], "month", language, mode);
+    return found === null ? null : translate(catalogs, language, "view.summary.highest", { value: words(found.value, language), period: words(found.period, language) });
+  };
+  assert.equal(said("ja"), "最大 250.0 km（2026年3月（途中））");
+  assert.equal(said("en"), "Highest 250.0 km (March 2026 (partial))");
+  assert.equal(said("ja", "cumulative"), null);
+  assert.equal(view.compareHighestWords(item("dist"), { ...data[0], highest: { index: 9, value: 1 } }, "month", "ja"), null);
+  // By week, the week of its Monday, as the second line of a panel says it.
+  const weeks = [{ start: "2026-01-05", end: "2026-01-11", partial: false }];
+  const weekly = view.compareData({ years: [2026], month: null, grain: "week", mode: "rows", series: null, answers: new Map([[2026, answerOf(weeks, [highestLine([58100], 0)])]]), whole });
+  const week = view.compareHighestWords(item("dist"), weekly[0], "week", "ja");
+  assert.equal(words(week.period), "2026年1月5日の週");
+  // A pace is highest where it is slowest: the server's highest, as it is.
+  const pace = view.compareHighestWords(item("pace"), { periods: months, highest: { index: 1, value: 0.329 } }, "month", "ja");
+  assert.equal(words(pace.value), "5:29 /km");
+});
+
+test("the triangle of the highest stands above every mark of its period", () => {
+  // The value of the period; where the row draws the records of a day as
+  // points (an item of records, by day), its points of that period too: the
+  // value of such a day is the mean of its records (Codex's review of the
+  // diff of X4, 2).
+  assert.deepEqual(view.highestMarkValues({ values: [40, 50, 45] }, 1), [50]);
+  assert.deepEqual(view.highestMarkValues({ values: [40, 50, 45], points: [[0, 40], [1, 40], [1, 60], [2, 45]] }, 1), [50, 40, 60]);
+  assert.deepEqual(view.highestMarkValues({ values: [40, null, 45], points: [[1, 61]] }, 1), [61]);
+  assert.deepEqual(view.highestMarkValues({ values: [40] }, 3), []);
+  assert.deepEqual(view.highestMarkValues(null, 0), []);
+});
+
+test("the triangle of the highest stands clear of what is drawn at its period", () => {
+  // 3 above the top of a bar of more than 0; 8 above the middle of anything
+  // else: a point of a line (a total of more than 220 periods is drawn as a
+  // line), the hollow dot of a 0 (whose middle highestMarkAt takes), or the
+  // records of a day (Codex's third read of the diff of X4, 1).
+  assert.equal(view.highestMarkGap(true, [201.3]), 3);
+  assert.equal(view.highestMarkGap(true, [0]), 8);
+  assert.equal(view.highestMarkGap(false, [201.3]), 8);
+  assert.equal(view.highestMarkGap(false, [50, 60]), 8);
+  assert.equal(view.highestMarkGap(true, []), 8);
+});
+
+test("the triangle of the highest stands clear of what its row draws, also of the dot of a 0", () => {
+  // The real shapes of a row (panelShapes), and the triangle of highestMarkAt:
+  // its tip 3 above the top of a bar, and 2 or more above the top of a point
+  // with its ring (a radius of 4 and a ring of 2) or of the hollow dot of a
+  // 0 with its stroke (1.2): the dot stands on the baseline, its middle above
+  // the place of 0 by its radius and a half (Codex's fourth read of the diff
+  // of X4: a total of 0 in every period with records, as an ascent).
+  const tip = (d) => Number(d.match(/-?\d+\.\d/g)[5]);
+  const months = Array.from({ length: 12 }, (_period, index) => ({ start: index * 30, end: index * 30 + 29 }));
+  const days = Array.from({ length: 366 }, (_period, index) => ({ start: index, end: index }));
+  // Rounded to a tenth, as the path writes it.
+  const near = 0.05;
+  const row = (periods, line, total = true, shared = null) =>
+    chart.panelShapes({ lines: [line], periods, start: 0, end: periods.at(-1).end, width: 640, height: 120, total, shared });
+  for (const periods of [months, days]) {
+    const shape = row(periods, { values: periods.map(() => 0) });
+    assert.notEqual(shape.lines[0].zero, "");
+    const [x, middle, radius] = chart.zeroDots([0], [periods[0]], shape.scale, shape.base)[0];
+    const d = view.highestMarkAt(shape, periods[0], [0]);
+    assert.ok(tip(d) <= middle - radius - 0.6 - 2, `${periods.length}: ${d} over the dot ${middle} ${radius}`);
+    assert.equal(Number(d.match(/-?\d+\.\d/g)[4]), Number(x.toFixed(1)));
+  }
+  // Drawn as bars (up to 220 periods): 3 above the top of the bar; the scale
+  // is shared by the years, so the highest of a year is under its top.
+  const bars = row(months, { values: [0, 5, 3, 0, 0, 0, 0, 0, 0, 0, 0, 2] }, true, [0, 20]);
+  assert.notEqual(bars.lines[0].bars, null);
+  assert.equal(tip(view.highestMarkAt(bars, months[1], [5])), Number((bars.y(5) - 3).toFixed(1)));
+  // Drawn as a line (more than 220 periods): clear of the point and its ring.
+  const line = row(days, { values: days.map((_day, index) => (index === 100 ? 9 : index % 3)) }, true, [0, 20]);
+  assert.equal(line.lines[0].bars, null);
+  assert.ok(tip(view.highestMarkAt(line, days[100], [9])) <= line.y(9) - 4 - 2 - 2 + near);
+  // The records of a day as points: clear of the highest point of the period.
+  const records = { values: [40, 50, 45], points: [[0, 40], [1, 40], [1, 60], [2, 45]] };
+  const points = row(months.slice(0, 3), records, false, [30, 80]);
+  const values = view.highestMarkValues(records, 1);
+  assert.ok(tip(view.highestMarkAt(points, months[1], values)) <= points.y(60) - 4 - 2 - 2 + near);
+  // Nothing to stand above.
+  assert.equal(view.highestMarkAt(bars, months[1], []), null);
+  assert.equal(view.highestMarkAt({ lines: [] }, months[1], [5]), null);
+});
+
+test("the triangle of the highest stays in its plot, above its bar or point", () => {
+  assert.equal(view.highestMarkPath(50, 60), "M 45.5 50.0 L 54.5 50.0 L 50.0 57.0 Z");
+  // 8 above the center of a point, clear of its ring and of the dot of the
+  // cross line (Codex's second read of the diff of X4, 2).
+  assert.equal(view.highestMarkPath(50, 60, 8), "M 45.5 45.0 L 54.5 45.0 L 50.0 52.0 Z");
+  // The highest of all reaches the top of the scale (8, PLOT_TOP), which
+  // every row shares: the triangle stays in the plot (its top edge at 0).
+  assert.equal(view.highestMarkPath(100, 8), "M 95.5 0.0 L 104.5 0.0 L 100.0 7.0 Z");
+  for (const [y, gap] of [0, 3, 8, 9.5, 10, 200].flatMap((y) => [[y, 3], [y, 8]])) {
+    const numbers = view.highestMarkPath(10, y, gap).match(/-?\d+\.\d/g).map(Number);
+    const ys = numbers.filter((_number, at) => at % 2 === 1);
+    assert.ok(Math.min(...ys) >= 0, `${y}: ${ys}`);
+    assert.equal(Math.max(...ys) - Math.min(...ys), view.HIGHEST_MARK_HEIGHT);
+  }
 });

@@ -1132,6 +1132,32 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   Up and Page Down). The settings keep 2 and 4 weeks: a version before 2.3.0
   leaves them out of its settings (that field only) and opens its page with
   16 weeks.
+- The highest of each year (stage X4 of v2.3.0, the person's choice "C and
+  range 2" of the samples): in a comparison of years (or of races), the period
+  of the highest value of each year (or race) is that of the server's summary
+  of the line compared (`summary.highest` of the answer of that year, as on
+  the second line of a panel: of a total, among the periods with records; of
+  equal values, the earliest; decided before rounding), never looked for again
+  in the page, and never taken from the summary of every line of a panel.
+  Every item has it (the highest of a pace is its slowest period). In the
+  table (of every way but the running total, whose values are added up) its
+  value is bold, with a triangle ▲ for the eye and its word for the ear, and a
+  note under the table after that of * and — (of the year, of the month
+  chosen, or of the span of a race). The heading of a row (by year, or by
+  race) says "▼Highest <value> (<period>)" in the words of the second line of
+  a panel, in one span of the class of the value of the year, so that a
+  picture takes its words whole; a small triangle ▼ stands above the highest
+  bar (or point) of the row, in its plot and above its cross line: 3 above the
+  top of a bar, and 8 above the middle of anything else drawn there (a point
+  of a line, the hollow dot of a 0, which stands on the baseline, or the
+  records of a day, whose highest it stands above too: the value of such a
+  day is the mean of its records), clear of the point or the dot, its ring,
+  and the dot of the cross line. Overlay, running totals, and calendars
+  draw none. Where the heading of a row has no room, the words of the highest
+  shrink from the period, for the eye only; the name of a race (up to 16em, as
+  before) and its day are kept. Where even that is not enough, the end of the
+  heading is cut, as before (the reading on its right first, then the
+  highest). Nothing is remembered, and the server is unchanged.
 - The activities of a period (stage M3): a period of a chart of the training
   or the running form opens, by a click or by Enter or Space, the list of its
   activities under its panel, one at a time (`/api/view/activities`, under the

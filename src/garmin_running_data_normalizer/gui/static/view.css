@@ -1847,6 +1847,60 @@ button.small {
   overflow: hidden;
 }
 
+/* The highest of a year in the heading of its row (stage X4 of v2.3.0): its
+   words up to the value never shrink; where the row has no room, its period
+   shrinks, with its closing bracket, and nothing else of the heading does:
+   the name of a race stays as it was (up to 16em) and its day always shows
+   (a name made to shrink further could leave the heading narrower than its
+   day: Codex's third read of the diff of X4, 3); where even that is not
+   enough, the end of the heading is hidden, as before. Its span gives no box
+   of its own, so that its two parts are items of the heading, which shrinks
+   them as such (a box of its own could not be smaller than all its words, the
+   real-page check of X4); the period goes back over the gap of the heading,
+   so that the value and its period read as one. For the eye only: the words
+   stay whole for the ear and in a picture. */
+.compare-stack .panel-view.compare-row .panel-head .compare-highest-head {
+  display: contents;
+}
+
+.compare-highest-fixed {
+  white-space: nowrap;
+}
+
+.compare-highest-period {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: -8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+.compare-highest-head .compare-highest-glyph {
+  margin-right: 3px;
+  color: var(--text);
+  font-size: 0.8em;
+}
+
+/* The highest of a year in its table: bold, with its triangle (stage X4 of
+   v2.3.0). */
+.years-table td.compare-highest {
+  font-weight: 700;
+}
+
+.years-table td.compare-highest .compare-highest-glyph {
+  font-size: 0.8em;
+}
+
+/* With an edge in the color of the ground, as the ring of a point, so that it
+   stays apart where it meets one at the top of a plot. */
+.compare-highest-mark {
+  fill: var(--text);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+  paint-order: stroke;
+}
+
 .compare-stack .panel-view.compare-one {
   flex: 1 0 200px;
   min-height: 200px;
@@ -2476,6 +2530,12 @@ button.small {
   .coverage-run,
   .overview-marks {
     fill: CanvasText;
+  }
+
+  /* The triangle of the highest of a year (stage X4 of v2.3.0). */
+  .compare-highest-mark {
+    fill: CanvasText;
+    stroke: Canvas;
   }
 
   /* The marks of the person keep the forms of their lines (stage M1). */

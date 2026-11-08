@@ -10,6 +10,7 @@
 
 import { errorMessages } from "./flow.mjs";
 import { countKey } from "./i18n.mjs";
+import { periodMiddle, zeroDots } from "./view_chart.mjs";
 
 export const MAX_PANELS = 6;
 export const PERIODS = ["all", "10y", "5y", "3y", "1y", "custom"];
@@ -1770,13 +1771,30 @@ export function compareValue(answer, year, month, series) {
   };
 }
 
+// The period of the highest value of a line compared (stage X4 of v2.3.0, the
+// person's choice of the samples): its index among the periods of the answer
+// and its value, as the server's summary of that line says them (the second
+// line of a panel says the same: of a total, from the periods with records
+// only; of equal values, the earliest; decided before rounding). The page
+// never looks for it again, and never takes it from panelSummary, which is of
+// every line of a panel; null where the line has none.
+export function compareHighest(line) {
+  const entry = line?.summary?.highest;
+  if (entry === null || typeof entry !== "object" || !Number.isInteger(entry.period) || entry.period < 0 || !Number.isFinite(entry.value)) {
+    return null;
+  }
+  return { index: entry.period, value: entry.value };
+}
+
 // The years of a comparison as they are drawn, newest first: the step of the
 // color of each, the periods of its answer and their places on the shared
 // axis, the values of the series chosen (a running total for that way), its
 // counts and the points of its records, the days that the output cuts, and
 // the value of the year (or of the month). From stage M2, each has the names
 // that the drawing uses for a year as for a race: its id, its name, and the
-// short one at the end of its line.
+// short one at the end of its line. From stage X4 of v2.3.0, the highest of
+// the line compared (compareHighest), but none for a running total, whose
+// values are added up.
 export function compareData({ years, month, grain, mode, series, answers, whole }) {
   const steps = yearSteps(years);
   return [...years].sort((a, b) => b - a).map((year) => {
@@ -1800,6 +1818,7 @@ export function compareData({ years, month, grain, mode, series, answers, whole 
       cut: compareCut(range, answer),
       whole: compareValue(whole, year, month, series),
       outside: periods.length === 0,
+      highest: mode === "cumulative" ? null : compareHighest(line),
     };
   });
 }
@@ -1918,7 +1937,8 @@ export function compareMissingKey(entry, slot) {
 // names of its places and of its last row (``axis``, stage M2); by day, a
 // place of a race before the first day of its span is not in its span,
 // whether or not the output reaches it, and a day of its span that the output
-// does not reach is outside (stage X3 of v2.3.0).
+// does not reach is outside (stage X3 of v2.3.0). The cell of the highest of
+// a year is marked (stage X4 of v2.3.0; none in the table of a running total).
 export function compareTable(item, data, grain, month, span, language, mode = "rows", axis = null) {
   const counts = mode !== "cumulative";
   const heads = [message(GRAIN_KEYS[grain])];
@@ -1945,6 +1965,10 @@ export function compareTable(item, data, grain, month, span, language, mode = "r
           count: counts ? countText(entry.counts[index], language) : null,
           outside: false,
           partial: entry.periods[index].partial === true,
+          // The period of the highest of the year (stage X4 of v2.3.0): by
+          // its index in the answer, so that it is always the row of its
+          // value.
+          highest: entry.highest !== null && entry.highest !== undefined && entry.highest.index === index,
         };
       }),
     });
@@ -1963,6 +1987,96 @@ export function compareTable(item, data, grain, month, span, language, mode = "r
     ),
   };
   return { heads, rows, last, counts };
+}
+
+// The note under a table of a comparison of what its triangle is (stage X4
+// of v2.3.0): where a year (or a race) has a highest, and never for a running
+// total, whose table has none; of the year, of the month chosen, or of the
+// span of a race (Codex's review of the diff of X4, 3).
+export function compareHighestNoteKey(mode, data, by = "year", month = null) {
+  if (mode === "cumulative" || !Array.isArray(data) || !data.some((entry) => entry?.highest)) {
+    return null;
+  }
+  if (by === "race") {
+    return "view.compare.highest_note_race";
+  }
+  return month ? "view.compare.highest_note_month" : "view.compare.highest_note";
+}
+
+// What the heading of the row of a year (or of a race) says of its highest
+// (stage X4 of v2.3.0): its value and its period, in the words of the second
+// line of a panel (view.summary.highest: the value as the page writes it, the
+// period with its year, and partial where it is cut); null where it has none,
+// and for a running total.
+export function compareHighestWords(item, entry, grain, language, mode = "rows") {
+  const highest = entry?.highest;
+  const period = highest ? entry.periods?.[highest.index] : undefined;
+  if (mode === "cumulative" || !highest || period === undefined) {
+    return null;
+  }
+  return { value: valueMessage(item.key, highest.value, language), period: periodMessage(period, grain, language) };
+}
+
+// The triangle above the highest bar (or point) of a row (stage X4 of
+// v2.3.0), as the path of an SVG: pointing down at it, 9 wide and 7 high, its
+// tip `gap` above the place of the value: 3 above the top of a bar, and 8
+// above the center of a point, so that the point, its ring, and the dot of
+// the cross line stay clear (Codex's second read of the diff of X4, 2); the
+// highest of the year with the highest value of all reaches the top of the
+// scale, which every row shares, so the triangle never goes above the top of
+// the plot (its top edge stays at 0 or below; there it may meet a point, and
+// its edge in the color of the ground keeps it apart).
+export const HIGHEST_MARK_HEIGHT = 7;
+
+// The values that the triangle of the highest of a row stands above (stage
+// X4 of v2.3.0): the value of its period, and, where the row draws the
+// records of a day as points (an item of records, by day), each point of that
+// period, so that the triangle is above every mark of the period that it
+// points at (Codex's review of the diff of X4, 2: the value of such a day is
+// the mean of its records, which the row does not draw).
+export function highestMarkValues(line, index) {
+  const values = [line?.values?.[index]];
+  for (const point of Array.isArray(line?.points) ? line.points : []) {
+    if (Array.isArray(point) && point[0] === index) {
+      values.push(point[1]);
+    }
+  }
+  return values.filter(Number.isFinite);
+}
+
+// How far above the place of the highest value the tip of its triangle stands
+// (stage X4 of v2.3.0): 3 above the top of a bar, where the row draws bars
+// and the value is above 0; 8 above the middle of anything else that the row
+// draws there (a point of a line, as a total of more than 220 periods is
+// drawn, the hollow dot of a 0, whose middle highestMarkAt takes, or the
+// records of a day), clear of the point or the dot, its ring, and the dot of
+// the cross line (Codex's third read of the diff of X4, 1: by the shape
+// drawn, never by the kind of the item).
+export function highestMarkGap(bars, values) {
+  return bars && Array.isArray(values) && values.length > 0 && Math.max(...values) > 0 ? 3 : 8;
+}
+
+export function highestMarkPath(x, valueY, gap = 3) {
+  const tip = Math.max(HIGHEST_MARK_HEIGHT, valueY - gap);
+  const top = tip - HIGHEST_MARK_HEIGHT;
+  return `M ${(x - 4.5).toFixed(1)} ${top.toFixed(1)} L ${(x + 4.5).toFixed(1)} ${top.toFixed(1)} L ${x.toFixed(1)} ${tip.toFixed(1)} Z`;
+}
+
+// The triangle of the highest of a row (stage X4 of v2.3.0), from the shape
+// of the row (panelShapes), the period of its highest, and the values that it
+// stands above (highestMarkValues): its tip stands above the highest of their
+// places, by the gap of the shape drawn. A 0 of a total is drawn as a hollow
+// dot that stands on the baseline, its middle above the place of 0 by its
+// radius and a half, so a triangle of 0 stands above the middle of that dot
+// (Codex's fourth read of the diff of X4). Null with nothing to stand above.
+export function highestMarkAt(shape, period, values) {
+  const line = shape?.lines?.[0];
+  if (line === undefined || period === undefined || !Array.isArray(values) || values.length === 0) {
+    return null;
+  }
+  const dot = line.zero !== "" && Math.max(...values) === 0 ? zeroDots([0], [period], shape.scale, shape.base)[0] : undefined;
+  const place = dot === undefined ? Math.min(...values.map((value) => shape.y(value))) : dot[1];
+  return highestMarkPath(periodMiddle(shape.scale, period), place, highestMarkGap(line.bars !== null, values));
 }
 
 // --- The calendar of comparing years (stage N1 of v2.2.0) ------------------
@@ -2368,6 +2482,8 @@ export function raceData({ races, weeks, mode, series, answers, wholes, language
       whole: raceValue(wholes?.get(race.id) ?? null, series, cut),
       outside: periods.length === 0,
       before: place(range.from),
+      // The highest of the span of the race (stage X4 of v2.3.0).
+      highest: mode === "cumulative" ? null : compareHighest(line),
     };
   });
 }

@@ -1354,6 +1354,101 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertIn("hidden", note.attributes)
         self.assertIs(note.parent, by_id(self.elements, "compare-note").parent)
 
+    def test_the_highest_of_each_year_is_marked_heard_and_drawn(self) -> None:
+        # v2.3.0 X4, in the page and its script, which no test runs (the
+        # person's choice "1 C と案 2" of the samples): in the table, the value
+        # of the highest in bold with a triangle for the eye only and its word
+        # for the ear; in the heading of a row, one span of compare-whole (so
+        # that a picture takes its words whole, saveComparePart), its words up
+        # to the value apart from its period, which may shrink, while the
+        # heading of a race stays as it was (Codex's third read of the diff of
+        # X4, 3); in a chart of one row only, a triangle above the highest,
+        # never on one panel or for a running total, apart from the cross line
+        # and above it (the third read, 2), clear of what is drawn there by
+        # its shape (the third read, 1); a note under the table with the other
+        # notes, which the table fills.
+        from tests.test_gui_view_save import function_body
+
+        held = {
+            "highestGlyph": ('const glyph = element("span", "compare-highest-glyph", text);', 'glyph.setAttribute("aria-hidden", "true");'),
+            "buildCompareTable": (
+                "if (cell.highest) {",
+                'td.classList.add("compare-highest");',
+                'td.append(" ", highestGlyph("▲"), element("span", "visually-hidden", t("view.compare.highest_cell")));',
+            ),
+            "buildCompareRow": (
+                'const heading = element("h4", "panel-name compare-year");',
+                "const highest = compareHighestWords(context.item, entry, context.grain, state.language, context.mode);",
+                'const [before = "", after = ""] = t("view.summary.highest", { value: "\\u0001", period: describe(highest.period) }).split("\\u0001");',
+                'const high = element("span", "compare-whole compare-highest-head");',
+                'fixed.append(highestGlyph("▼"), before, element("strong", "", describe(highest.value)));',
+                'high.append(fixed, element("span", "compare-highest-period", after));',
+            ),
+            "drawComparePlot": (
+                'if (!one && context.mode !== "cumulative") {',
+                "const at = year.highest ? year.slots[year.highest.index] : undefined;",
+                # Above every mark of its period: its value and its points of
+                # the records of a day (Codex's review of the diff of X4, 2).
+                "const above = year.highest ? highestMarkValues(entry.lines[0], year.highest.index) : [];",
+                # Clear of what is drawn there, also of the hollow dot of a 0
+                # (Codex's fourth read of the diff of X4): highestMarkAt.
+                'highestMark = svgElement("path", { class: "compare-highest-mark", d: highestMarkAt(first, at, above) });',
+                "svg.append(cross);\n  if (highestMark !== null) {\n    svg.append(highestMark);\n  }",
+            ),
+            "renderCompare": ("if (!ready || !compare.table) {\n    ui.compareHighestNote.hidden = true;\n  }",),
+            "renderCompareBody": (
+                # Of the year, of the month chosen, or of the span of a race
+                # (Codex's review of the diff of X4, 3).
+                "const highestNote = compare.table ? compareHighestNoteKey(mode, data, answer.by, answer.month) : null;",
+                "ui.compareHighestNote.hidden = highestNote === null;",
+                'ui.compareHighestNote.replaceChildren(...(highestNote === null ? [] : [highestGlyph("▲"), " ", t(highestNote)]));',
+            ),
+            "saveComparePart": ('} else if (node.matches(".panel-unit, .compare-whole")) {',),
+        }
+        for name, lines in held.items():
+            body = function_body(self.script, name)
+            for line in lines:
+                with self.subTest(function=name, line=line[:60]):
+                    self.assertIn(line, body)
+        # The triangle of the chart is apart from the cross line, which moves
+        # without it.
+        self.assertNotIn("compare-highest", function_body(self.script, "moveCompareCross"))
+        # The note under the table: hidden at first, between the note of * and
+        # — and the note of the days not in the span (the checker's review of
+        # the plan of the parts of X4, 3).
+        note = by_id(self.elements, "compare-highest-note")
+        self.assertEqual((note.get("class"), note.get("data-i18n")), ("compare-note", None))
+        self.assertIn("hidden", note.attributes)
+        # The elements of the page are in its order.
+        notes = [element.get("id") for element in self.elements if element.parent is note.parent and element.get("id") in ("compare-note", "compare-highest-note", "compare-span-note", "compare-count-note")]
+        self.assertEqual(notes, ["compare-note", "compare-highest-note", "compare-span-note", "compare-count-note"])
+
+    def test_the_heading_of_a_row_keeps_the_value_of_its_highest(self) -> None:
+        # v2.3.0 X4 (the checker's review of the plan of its parts, 1): the
+        # heading of a row is one line of 24 px whose overflow is hidden; its
+        # highest never shrinks up to the value, its period shrinks first with
+        # an ellipsis (its closing bracket with it; its leading space of
+        # English kept), then the name of a race, whose flex shrink is tiny so
+        # that it waits for the period; for the eye only. The triangles in the
+        # colors of the words, and in those of the system in forced colors.
+        css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        for rule in (
+            r"\.compare-stack \.panel-view\.compare-row \.panel-head \{\s*flex: none;\s*flex-wrap: nowrap;\s*height: 24px;\s*padding-top: 3px;\s*overflow: hidden;\s*\}",
+            # Its span gives no box of its own, so that its two parts are
+            # items of the heading (the real-page check of X4: a box of its
+            # own could not be smaller than all its words, so nothing shrank).
+            r"\.compare-stack \.panel-view\.compare-row \.panel-head \.compare-highest-head \{\s*display: contents;\s*\}",
+            r"\.compare-highest-fixed \{\s*white-space: nowrap;\s*\}",
+            r"\.compare-highest-period \{\s*flex: 0 1 auto;\s*min-width: 0;\s*margin-left: -8px;\s*overflow: hidden;\s*text-overflow: ellipsis;\s*white-space: pre;\s*\}",
+            r"\.compare-highest-head \.compare-highest-glyph \{\s*margin-right: 3px;\s*color: var\(--text\);\s*font-size: 0\.8em;\s*\}",
+            r"\.years-table td\.compare-highest \{\s*font-weight: 700;\s*\}",
+            r"\.compare-highest-mark \{\s*fill: var\(--text\);\s*stroke: var\(--surface\);\s*stroke-width: 1\.5;\s*paint-order: stroke;\s*\}",
+        ):
+            with self.subTest(rule=rule[:60]):
+                self.assertRegex(css, rule)
+        forced = css[css.index("@media (forced-colors: active)") :]
+        self.assertRegex(forced[: forced.index("\n}\n")], r"\.compare-highest-mark \{\s*fill: CanvasText;\s*stroke: Canvas;\s*\}")
+
     def test_a_year_stands_out_on_one_panel(self) -> None:
         # v2.2.0 L3, in the page and its script, which no test runs: the keys of
         # the legend of one panel are buttons in a group named by what they do,
@@ -1494,7 +1589,10 @@ class GuiViewPageStructureTest(unittest.TestCase):
             'const ofRace = entry.key === "view.compare.race";',
             'const cell = element("th", index === 0 ? "" : starts(index) ? "n year-start" : "n", ofRace ? null : describe(entry));',
             "if (ofRace) {\n      cell.append(...raceHeadParts(entry));\n    }",
-            'tr.append(element("td", cell.value === null ? "n empty year-start" : "n year-start", text));',
+            # From stage X4 of v2.3.0 the cell is kept, for the triangle of
+            # the highest, before it is appended.
+            'const td = element("td", cell.value === null ? "n empty year-start" : "n year-start", text);',
+            "tr.append(td);",
         ):
             with self.subTest(line=line):
                 self.assertIn(line, table)
