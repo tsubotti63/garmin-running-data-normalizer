@@ -40,7 +40,9 @@ import {
   compareByToOpen,
   compareGrainFor,
   compareGrainsFor,
+  compareMissingKey,
   compareRaces,
+  racesNotInSpan,
   conditionsCount,
   conditionsCounts,
   conditionsUnread,
@@ -54,6 +56,7 @@ import {
   raceData,
   raceRange,
   raceSlotName,
+  raceSpan,
   raceTicks,
   raceValueMessage,
   racesKept,
@@ -639,6 +642,7 @@ const ui = {
   compareAxis: byId("compare-axis"),
   compareAnnouncer: byId("compare-announcer"),
   compareNote: byId("compare-note"),
+  compareSpanNote: byId("compare-span-note"),
   compareCountNote: byId("compare-count-note"),
   seriesStop: byId("series-stop"),
   seriesStopHeading: byId("series-stop-heading"),
@@ -5728,9 +5732,11 @@ async function requestCompare(again = true) {
   const { key, grain } = compare;
   const month = compareMonthNow();
   const years = [...compare.years];
+  // By race day, each race by its grouping (a week, or a day from stage X3 of
+  // v2.3.0) and its whole span as one period.
   const payloads =
     by === "race"
-      ? races.flatMap((race) => [seriesPayload([key], raceRange(race.day, weeks), "week"), seriesPayload([key], raceRange(race.day, weeks), RANGE_GRAIN)])
+      ? races.flatMap((race) => [seriesPayload([key], raceRange(race.day, weeks), grain), seriesPayload([key], raceRange(race.day, weeks), RANGE_GRAIN)])
       : years.map((year) => seriesPayload([key], compareRange(year, month), grain));
   // What this generation asks for, which the marks that change are compared
   // with (followMarks).
@@ -5763,7 +5769,7 @@ async function requestCompare(again = true) {
             by,
             weeks,
             month: null,
-            grain: "week",
+            grain,
             years: [],
             races,
             whole,
@@ -5809,8 +5815,21 @@ async function requestCompare(again = true) {
   render();
 }
 
+// The grouping of the comparison after its way changed: by race day, the one
+// chosen where the way takes it (the day stays: stage X3 of v2.3.0, the
+// checker's review of the steps of its samples); otherwise the first grouping
+// of the way, as before.
+function compareGrainAfter(mode) {
+  const by = compareByNow();
+  if (by === "race" && compareGrainsFor(by, compareMonthNow(), mode).includes(state.compare.grain)) {
+    return state.compare.grain;
+  }
+  return compareGrainFor(by, mode, compareMonthNow());
+}
+
 // Another item: its own lines, and the first grouping where the way changes
-// with it (a running total of an item that does not add up).
+// with it (a running total of an item that does not add up), but by race day
+// the grouping chosen (compareGrainAfter).
 function chooseCompareItem() {
   const key = ui.compareItem.value;
   if (!comparing() || key === state.compare.key || !itemsByKey(state.view.items).has(key)) {
@@ -5820,7 +5839,7 @@ function chooseCompareItem() {
   Object.assign(state.compare, { key, series: null, about: false, calendarAbout: false, legendAbout: false });
   const mode = compareModeNow();
   if (mode !== before) {
-    state.compare.grain = compareGrainFor(compareByNow(), mode, compareMonthNow());
+    state.compare.grain = compareGrainAfter(mode);
     state.compare.cursor = null;
   }
   requestCompare();
@@ -5882,8 +5901,9 @@ function chooseCompareMode(mode) {
   }
   state.compareMode = mode;
   rememberItems(true);
-  // By race day, by week whatever the way (Codex's review of the plan of M2).
-  const grain = compareGrainFor(compareByNow(), compareModeNow(), compareMonthNow());
+  // By race day, the grouping chosen whatever the way (Codex's review of the
+  // plan of M2; the day too from stage X3 of v2.3.0).
+  const grain = compareGrainAfter(compareModeNow());
   if (!compareAsksAgain({ grain: state.compare.grain, month }, { grain, month: compareMonthNow() })) {
     render();
     return;
@@ -6040,6 +6060,10 @@ function renderCompare(live) {
   ui.compareStack.hidden = !ready;
   ui.compareStack.classList.toggle("waiting", state.compareLoading);
   ui.compareNote.hidden = !ready || !compare.table;
+  // What "not in span" of the table is, where a race by day has such places
+  // (stage X3 of v2.3.0).
+  const answered = state.compareAnswer;
+  ui.compareSpanNote.hidden = !ready || !compare.table || answered.by !== "race" || !racesNotInSpan(answered.races, answered.weeks, answered.grain);
   // What the counts of the table are (stage W3 of v2.2.1).
   const countNote = ready && compare.table ? compareCountNoteKey(compareItem(), mode) : null;
   ui.compareCountNote.hidden = countNote === null;
@@ -6232,14 +6256,15 @@ function renderCompareBody(force = false) {
   const focusedKey = ui.comparePanels.contains(document.activeElement) ? (document.activeElement.dataset.lit ?? null) : null;
   plotWatcher?.disconnect();
   const item = compareItem();
-  // By race day (stage M2 of v2.2.0), the races in the form of the years.
+  // By race day (stage M2 of v2.2.0), the races in the form of the years, by
+  // week or (stage X3 of v2.3.0) by day.
   const race = answer.by === "race";
   const data = race
-    ? raceData({ races: answer.races, weeks: answer.weeks, mode, series: compare.series, answers: answer.answers, wholes: answer.wholes, language: state.language })
+    ? raceData({ races: answer.races, weeks: answer.weeks, mode, series: compare.series, answers: answer.answers, wholes: answer.wholes, language: state.language, grain: answer.grain })
     : compareData({ years: answer.years, month: answer.month, grain: answer.grain, mode, series: compare.series, answers: answer.answers, whole: answer.whole });
   // A year stood out stays while one panel draws it (stage L3 of v2.2.0).
   compare.lit = litKept(compare.lit, { by: answer.by, mode, table: compare.table, data });
-  const span = race ? answer.weeks : compareSpan(answer.grain, answer.month, answer.years);
+  const span = race ? raceSpan(answer.weeks, answer.grain) : compareSpan(answer.grain, answer.month, answer.years);
   const lines = data.map((entry) => ({
     values: entry.values.map((value) => (Number.isFinite(value) ? shown(compare.key, value) : null)),
     points: entry.points === null ? undefined : entry.points.map(([index, value]) => [index, shown(compare.key, value)]),
@@ -6259,7 +6284,7 @@ function renderCompareBody(force = false) {
     // those of the years.
     by: answer.by,
     weeks: answer.weeks,
-    names: race ? { slotName: (slot) => raceSlotName(slot, answer.weeks), whole: raceValueMessage(item, answer.weeks) } : null,
+    names: race ? { slotName: (slot) => raceSlotName(slot, answer.weeks, answer.grain), whole: raceValueMessage(item, answer.weeks) } : null,
     // One scale for every year.
     shared: extent(lines),
     slots: Array.from({ length: span + 1 }, (_none, slot) => ({ start: slot, end: slot })),
@@ -6485,7 +6510,7 @@ function buildCompareTable(context, name) {
     period.scope = "row";
     tr.append(period);
     for (const cell of row.cells) {
-      const text = cell.outside ? "—" : cell.value === null ? t("view.no_value") : `${describe(cell.value)}${cell.partial ? "*" : ""}`;
+      const text = cell.notInSpan ? t("view.compare.not_in_span_cell") : cell.outside ? "—" : cell.value === null ? t("view.no_value") : `${describe(cell.value)}${cell.partial ? "*" : ""}`;
       tr.append(element("td", cell.value === null ? "n empty year-start" : "n year-start", text));
       if (counts) {
         tr.append(element("td", "n", cell.count ?? ""));
@@ -6658,8 +6683,10 @@ function renderCompareCharts() {
 }
 
 // The axis under the years: the months of a year, or days of the month; under
-// the races, every fourth week before them and their week, whose words end
-// at the right end (stage M2 of v2.2.0).
+// the races, the marks of raceTicks, whose last words end at the right end
+// (stage M2 of v2.2.0): every fourth week before them and their week, and
+// from stage X3 of v2.3.0 every week for a span of 4 weeks or less, and by
+// day every 7, 14, or 28 days before the race day and the race day.
 function drawCompareAxis(context, width, right) {
   ui.compareAxis.replaceChildren();
   if (width < 60) {
@@ -6670,7 +6697,7 @@ function drawCompareAxis(context, width, right) {
   const scale = timeScale(0, context.span, PLOT_LEFT, width - right);
   const race = context.by === "race";
   const newest = Math.max(...context.data.map((entry) => entry.year));
-  const ticks = race ? raceTicks(context.weeks) : compareTicks(context.grain, context.month, newest, state.language);
+  const ticks = race ? raceTicks(context.weeks, context.grain) : compareTicks(context.grain, context.month, newest, state.language);
   ticks.forEach((tick, index) => {
     const x = scale.x(tick.at);
     svg.append(svgElement("line", { class: "axis-tick", x1: x.toFixed(1), x2: x.toFixed(1), y1: 0, y2: 5 }));
@@ -6739,13 +6766,14 @@ function moveCompareCross(slot, speak, year = null) {
 }
 
 // The reading of a row of a year, at the top right as on a panel: its own
-// period with its value and its count.
+// period with its value and its count (of a race by day, a place before the
+// first day of its span is not in its span: stage X3 of v2.3.0).
 function renderCompareRead(entry, context, at) {
   const year = entry.data[0];
   const place = year.slots.findIndex((period) => period.start === at);
   const nodes = [];
   if (place < 0) {
-    nodes.push(compareSlotText(context, at), element("span", "no-value", t("view.compare.outside")));
+    nodes.push(compareSlotText(context, at), element("span", "no-value", t(compareMissingKey(year, at))));
   } else {
     const reading = readout(context.item, { lines: [{ values: year.values, counts: year.counts }] }, year.periods, place, context.grain, state.language);
     nodes.push(describe(reading.period));

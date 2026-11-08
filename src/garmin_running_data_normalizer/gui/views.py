@@ -433,9 +433,12 @@ def compare_month_ok(month: Any) -> bool:
 
 
 # What the view page compares one item by (stage M2 of v2.2.0): the years, or
-# the race marks, each from some weeks before its day to the day.
+# the race marks, each from some weeks before its day to the day (from stage
+# X3 of v2.3.0 also 2 and 4 weeks, for the last days before a race by day; a
+# version before 2.3.0 leaves them out of its settings, and its page opens
+# with 16 weeks).
 COMPARE_BYS = ("year", "race")
-COMPARE_WEEKS = (8, 12, 16, 20, 24)
+COMPARE_WEEKS = (2, 4, 8, 12, 16, 20, 24)
 
 
 def compare_by_ok(by: Any) -> bool:

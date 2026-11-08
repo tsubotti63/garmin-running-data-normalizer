@@ -1265,8 +1265,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
             'button.disabled = button.dataset.compareBy === "race" && !offered;',
             "ui.compareRaceNeeded.hidden = offered;",
             'if (!comparing() || !COMPARE_BYS.includes(by) || (by === "race" && compareByFor(by, raceChoices()) !== "race")) {',
-            # Each race by week and by its whole span, in one generation.
-            '? races.flatMap((race) => [seriesPayload([key], raceRange(race.day, weeks), "week"), seriesPayload([key], raceRange(race.day, weeks), RANGE_GRAIN)])',
+            # Each race by its grouping (a week, or a day from stage X3 of
+            # v2.3.0) and by its whole span, in one generation.
+            '? races.flatMap((race) => [seriesPayload([key], raceRange(race.day, weeks), grain), seriesPayload([key], raceRange(race.day, weeks), RANGE_GRAIN)])',
             "compare.races = racesKept(compare.races, choices);",
             # The races chosen, up to six, one at least.
             "button.disabled = on ? chosen.length <= 1 : chosen.length >= MAX_COMPARE_RACES;",
@@ -1279,8 +1280,10 @@ class GuiViewPageStructureTest(unittest.TestCase):
             "  compare.asked = { by, races: races.map((race) => ({ id: race.id, day: race.day, name: race.name })) };",
             "state.compare.races = firstCompareRaces(raceChoices());\n        settleCompareGrain(state.compareAnswer?.by ?? null);",
             # The grouping of a race day, whatever the way (from stage N1,
-            # with the month that the way uses: none for a calendar).
-            "const grain = compareGrainFor(compareByNow(), compareModeNow(), compareMonthNow());",
+            # with the month that the way uses: none for a calendar; from
+            # stage X3 of v2.3.0 the one chosen, by compareGrainAfter).
+            "const grain = compareGrainAfter(compareModeNow());",
+            "return compareGrainFor(by, mode, compareMonthNow());",
             "const grains = apart ? compareGrainsFor(compareByNow(), compareMonthNow(), compareModeNow()) : null;",
             "ui.compareOffRace.hidden = !byRace;",
             # One row per race, by race day; a grouping that does not fit
@@ -1304,6 +1307,52 @@ class GuiViewPageStructureTest(unittest.TestCase):
         for line in ('shown.setAttribute("aria-hidden", "true");', 'button.append(shown, element("span", "visually-hidden", describe(chip.spoken)));'):
             with self.subTest(bar=line):
                 self.assertIn(line, bar)
+
+    def test_a_comparison_by_race_day_goes_by_day_too(self) -> None:
+        # v2.3.0 X3, in the page and its script, which no test runs: by race
+        # day, the day too (the person's choice B of the samples), kept when
+        # the way or the item changes (the checker's review of the steps of the
+        # samples, 2), the cross line set back as before (the checker's review
+        # of the plan of its parts, 3: held apart); the answer by its grouping,
+        # placed, named, and marked by day; a place before the span of a race
+        # is not in its span in the readings and the table, with a note under
+        # the table where a race by day has such places.
+        from tests.test_gui_view_save import function_body
+
+        held = {
+            "compareGrainAfter": (
+                'if (by === "race" && compareGrainsFor(by, compareMonthNow(), mode).includes(state.compare.grain)) {',
+                "return state.compare.grain;",
+                "return compareGrainFor(by, mode, compareMonthNow());",
+            ),
+            "chooseCompareItem": ("state.compare.grain = compareGrainAfter(mode);", "state.compare.cursor = null;"),
+            "chooseCompareMode": ("const grain = compareGrainAfter(compareModeNow());", "state.compare.grain = grain;", "state.compare.cursor = null;"),
+            "requestCompare": (
+                "? races.flatMap((race) => [seriesPayload([key], raceRange(race.day, weeks), grain), seriesPayload([key], raceRange(race.day, weeks), RANGE_GRAIN)])",
+                "            month: null,\n            grain,\n            years: [],",
+            ),
+            "renderCompareBody": (
+                "raceData({ races: answer.races, weeks: answer.weeks, mode, series: compare.series, answers: answer.answers, wholes: answer.wholes, language: state.language, grain: answer.grain })",
+                "const span = race ? raceSpan(answer.weeks, answer.grain) : compareSpan(answer.grain, answer.month, answer.years);",
+                "slotName: (slot) => raceSlotName(slot, answer.weeks, answer.grain),",
+            ),
+            "drawCompareAxis": ("const ticks = race ? raceTicks(context.weeks, context.grain) : compareTicks(context.grain, context.month, newest, state.language);",),
+            "renderCompareRead": ('nodes.push(compareSlotText(context, at), element("span", "no-value", t(compareMissingKey(year, at))));',),
+            "buildCompareTable": ('const text = cell.notInSpan ? t("view.compare.not_in_span_cell") : cell.outside ? "—" :',),
+            "renderCompare": (
+                "const answered = state.compareAnswer;",
+                'ui.compareSpanNote.hidden = !ready || !compare.table || answered.by !== "race" || !racesNotInSpan(answered.races, answered.weeks, answered.grain);',
+            ),
+        }
+        for name, lines in held.items():
+            body = function_body(self.script, name)
+            for line in lines:
+                with self.subTest(function=name, line=line[:60]):
+                    self.assertIn(line, body)
+        note = by_id(self.elements, "compare-span-note")
+        self.assertEqual((note.get("data-i18n"), note.get("class")), ("view.compare.not_in_span_note", "compare-note"))
+        self.assertIn("hidden", note.attributes)
+        self.assertIs(note.parent, by_id(self.elements, "compare-note").parent)
 
     def test_a_year_stands_out_on_one_panel(self) -> None:
         # v2.2.0 L3, in the page and its script, which no test runs: the keys of

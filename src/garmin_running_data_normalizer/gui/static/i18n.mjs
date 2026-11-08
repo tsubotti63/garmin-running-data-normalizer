@@ -62,6 +62,8 @@ export const ONE_KEYS = Object.freeze({
   "view.note.several_mean": "view.note.several_mean_one",
   "view.note.several_points": "view.note.several_points_one",
   "view.compare.weeks_before": "view.compare.weeks_before_one",
+  // The days before a race day (stage X3 of v2.3.0).
+  "view.compare.days_before": "view.compare.days_before_one",
   "view.shoes.note_without": "view.shoes.note_without_one",
   "view.shoes.note_unknown": "view.shoes.note_unknown_one",
   "view.shoes.note_no_distance": "view.shoes.note_no_distance_one",

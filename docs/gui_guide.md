@@ -484,7 +484,10 @@ race by race.
 4. Choose **One row per race** in **Show as**, and **From 16 weeks before to
    the race day** in **Span** (the way to show and the span are remembered
    from before). The newest races, up to four, are in rows.
-5. For the numbers, press **Show as a table**.
+5. (From 2.3.0) To see the days before the races, press **Day** in **Group by**
+   at the top. For the last weeks in large, choose **From 2 weeks before to the
+   race day** or **From 4 weeks before to the race day** in **Span**.
+6. For the numbers, press **Show as a table**.
 
 More: [Compare by race day](#compare-by-race-day), [Marks](#marks-from-220)
 
@@ -1702,12 +1705,12 @@ values are made):
 - The races show as cards in the place of the years, newest first: the
   newest four at first, and up to six. A race after the last day of the
   output can be chosen too: its weeks so far show.
-- **Span**, in the place of the month, goes from 8, 12, 16 (at first), 20, or
-  24 weeks before to the race day (for a race mark with an end day, the race
+- **Span**, in the place of the month, goes from 2, 4 (from 2.3.0), 8, 12, 16
+  (at first), 20, or 24 weeks before to the race day (for a race mark with an end day, the race
   day is its first day, and the days after it are left out). It counts back
   from the Monday of the week
   of the race, so that every race has as many weeks. The grouping is **Week**
-  only, also for a running total. The ways to show are those of the years
+  or, from 2.3.0, **Day** (**Week** at first), also for a running total. The ways to show are those of the years
   without **Calendar**; **One row per year** becomes **One row per race**,
   which is the way at first.
 - **Race week (to the race day)**, a week of the readings and the table,
@@ -1717,6 +1720,16 @@ values are made):
   heading of a row gives the value of the whole span counted at once, such as
   "Total of this span"; the last row of the table is the span itself, such as
   "Total of the days from 16 weeks before to the race day".
+- (From 2.3.0) By **Day**, every race is lined up on its race day at the right
+  end, and its days are placed by how many days they are before it (the axis
+  says, for example, 28 days before). The days of the span are those of
+  **Week** (from the Monday some weeks before the week of the race to the race
+  day), so the heading of a row and the last row of the table give the same
+  values as by **Week**. Where a race is not on a Sunday, the first few days at
+  the left are not in its span:
+  the table says **Not in span**, the readings say so, and a note under the
+  table says what it means. The day stays when the way to show or the item
+  changes.
 - The card of a race shows the head of its name and its date (for example,
   Spring marathon 3/15/2026), and tells a screen reader its whole name and its
   days (for a mark of a span, its first and last day).
@@ -1724,7 +1737,8 @@ values are made):
   tab) leaves fewer than two races, the comparison goes back to the years. A
   race that is gone never shows.
 - The way to compare (by year or by race day) and the weeks of the span are
-  remembered for the next time; the races chosen are not.
+  remembered for the next time; the races chosen and **Day** are not (it opens
+  by **Week**).
 
 ![Compare by race day: the distance in one row per race, four races with the bars of their weeks from 16 weeks before to the race day, and the name and the date of each race with "Total of this span" in the heading of its row (marks and data made up for the example)](assets/gui-guide/view-compare-race.en.png)
 

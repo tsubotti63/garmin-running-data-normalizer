@@ -1159,7 +1159,12 @@ test("what a comparison is compared by, and its weeks, come back from the settin
   for (const [by, weeks] of [["Race", 10], ["races", "16"], [1, true], [null, 16.5], ["", 28]]) {
     assert.deepEqual(view.compareByToOpen({ view_compare_by: by, view_compare_weeks: weeks }), { by: "year", weeks: 16 });
   }
-  assert.deepEqual(view.COMPARE_WEEKS, [8, 12, 16, 20, 24]);
+  // From stage X3 of v2.3.0, also 2 and 4 weeks (the person's choice B of the
+  // samples), which the settings bring back too.
+  assert.deepEqual(view.COMPARE_WEEKS, [2, 4, 8, 12, 16, 20, 24]);
+  assert.deepEqual(view.compareByToOpen({ view_compare_by: "race", view_compare_weeks: 2 }), { by: "race", weeks: 2 });
+  assert.deepEqual(view.compareByToOpen({ view_compare_by: "race", view_compare_weeks: 4 }), { by: "race", weeks: 4 });
+  assert.deepEqual(view.compareByToOpen({ view_compare_by: "race", view_compare_weeks: 3 }), { by: "race", weeks: 16 });
   assert.equal(view.FIRST_COMPARE_WEEKS, 16);
   assert.equal(view.MAX_COMPARE_RACES, 6);
 });
@@ -1232,11 +1237,18 @@ test("the races chosen are four at first, one at least, six at most, in their or
   assert.deepEqual(view.racesKept(null, races), ["m-b", "m-c", "m-h", "m-a"]);
 });
 
-test("a comparison by race day goes by week, whatever its way", () => {
+test("a comparison by race day goes by week at first, and by day too, whatever its way", () => {
+  // By day from stage X3 of v2.3.0 (the person's choice B of the samples).
   for (const mode of view.COMPARE_MODES) {
     assert.equal(view.compareGrainFor("race", mode, 5), "week");
+    assert.deepEqual(view.compareGrainsFor("race", 5, mode), ["week", "day"]);
   }
-  assert.deepEqual(view.compareGrainsFor("race", null), ["week"]);
+  assert.deepEqual(view.compareGrainsFor("race", null), ["week", "day"]);
+  // A list of its own each time, which a caller may change.
+  const grains = view.compareGrainsFor("race", null);
+  grains.push("month");
+  assert.deepEqual(view.compareGrainsFor("race", null), ["week", "day"]);
+  assert.deepEqual(view.RACE_GRAINS, ["week", "day"]);
   // By year, as from stage L1.
   assert.equal(view.compareGrainFor("year", "cumulative", null), "day");
   assert.equal(view.compareGrainFor("year", "rows", null), "month");
@@ -1312,6 +1324,178 @@ test("the weeks of a race are placed by their order, and marked where they are c
     ["m-s", "A race from the first… 2023/6/18", null],
     ["m-o", "Made-up m-o 2022/1/9", "view.compare.outside"],
   ]);
+});
+
+test("by day, the days of a race are its days by week, lined up on the race day (stage X3)", () => {
+  // The days from one ISO date to another, as periods of the server by day.
+  const daysOf = (from, to) => {
+    const periods = [];
+    for (let at = Date.parse(`${from}T00:00:00Z`); at <= Date.parse(`${to}T00:00:00Z`); at += 86400000) {
+      const day = new Date(at).toISOString().slice(0, 10);
+      periods.push({ start: day, end: day, partial: false });
+    }
+    return periods;
+  };
+  const dayAnswer = (from, to, value = (index) => 1000 * (index + 1)) => {
+    const periods = daysOf(from, to);
+    return answerOf(periods, [lineOf(periods.map((_period, index) => value(index)))]);
+  };
+  // Sunday 10 November 2024, Wednesday 10 April 2024 (its span begins 4 days
+  // after the first place), Saturday 13 April 2024 of a mark of two days (by
+  // its first day, as by week: the checker's review of the plan of X3, 1), and
+  // Sunday 18 June 2023, whose span begins before the output (made up to
+  // start on Wednesday 7 June 2023).
+  const races = [RACE_MARKS[6], RACE_MARKS[5], RACE_MARKS[3], madeUp("m-s", "2023-06-18", null, "race", "A race from the first days")];
+  assert.deepEqual(races.map((race) => view.raceRange(race.day, 2)), [
+    { from: "2024-10-21", to: "2024-11-10" },
+    { from: "2024-03-25", to: "2024-04-13" },
+    { from: "2024-03-25", to: "2024-04-10" },
+    { from: "2023-05-29", to: "2023-06-18" },
+  ]);
+  const answers = new Map([
+    ["m-b", dayAnswer("2024-10-21", "2024-11-10")],
+    ["m-c", dayAnswer("2024-03-25", "2024-04-13")],
+    ["m-a", dayAnswer("2024-03-25", "2024-04-10", (index) => (index === 1 ? null : 500))],
+    ["m-s", dayAnswer("2023-06-07", "2023-06-18")],
+  ]);
+  // The value of a whole span is the answer of its days by week: the same
+  // request, so the same value by day (the person's choice of the samples).
+  const whole = (start, end, value, count) => answerOf([{ start, end, partial: false }], [lineOf([value], [count])]);
+  const wholes = new Map([
+    ["m-b", whole("2024-10-21", "2024-11-10", 231000, 21)],
+    ["m-c", whole("2024-03-25", "2024-04-13", 210000, 20)],
+    ["m-a", whole("2024-03-25", "2024-04-10", 8000, 16)],
+    ["m-s", whole("2023-06-07", "2023-06-18", 78000, 12)],
+  ]);
+  assert.equal(view.raceSpan(2, "day"), 20);
+  assert.equal(view.raceSpan(2), 2);
+  assert.equal(view.raceSpan(16, "day"), 118);
+  assert.equal(view.raceSpan(24, "day"), 174);
+  const data = view.raceData({ races, weeks: 2, mode: "rows", series: null, answers, wholes, language: "ja", grain: "day" });
+  // Each race day at the last place (7 × 2 + 6 = 20); the first day of a span
+  // at 20 less its days before the race day.
+  assert.deepEqual(data.map((entry) => [entry.id, entry.slots[0].start, entry.slots.at(-1).start, entry.before]), [
+    ["m-b", 0, 20, 0],
+    ["m-c", 1, 20, 1],
+    ["m-a", 4, 20, 4],
+    ["m-s", 9, 20, 0],
+  ]);
+  assert.deepEqual(data[2].slots.slice(0, 2).map((slot) => [slot.start, slot.from]), [[4, "2024-03-25"], [5, "2024-03-26"]]);
+  assert.deepEqual(data.map((entry) => entry.whole.value), [231000, 210000, 8000, 78000]);
+  // By week, the first place of every span is 0.
+  const byWeek = view.raceData({ races, weeks: 2, mode: "rows", series: null, answers: new Map(), wholes, language: "ja" });
+  assert.deepEqual(byWeek.map((entry) => entry.before), [0, 0, 0, 0]);
+  // A running total of the days: its last value is the whole span where no
+  // day is missing.
+  const running = view.raceData({ races, weeks: 2, mode: "cumulative", series: null, answers, wholes, language: "ja", grain: "day" });
+  assert.equal(running[0].values.at(-1), 231000);
+  assert.equal(running[0].values.at(-1), running[0].whole.value);
+  // The table: a day before a span is not in it, whether or not the output
+  // reaches it (it is never asked for); a day of the span that the output does
+  // not reach is outside (Codex's second read of the diff of X3).
+  const item = { key: "dist", kind: "sum", group: "act" };
+  const axis = { slotName: (slot) => view.raceSlotName(slot, 2, "day"), whole: view.raceValueMessage(item, 2) };
+  const table = view.compareTable(item, data, "day", null, view.raceSpan(2, "day"), "ja", "rows", axis);
+  assert.deepEqual([words(table.heads[0]), words(table.heads[0], "en")], ["日", "Day"]);
+  assert.equal(table.rows.length, 21);
+  assert.deepEqual([0, 1, 19, 20].map((at) => words(table.rows[at].period)), ["20 日前", "19 日前", "1 日前", "大会の日"]);
+  assert.deepEqual([words(table.rows[0].period, "en"), words(table.rows[19].period, "en"), words(table.rows[20].period, "en")], ["20 days before", "1 day before", "Race day"]);
+  assert.deepEqual(table.rows[0].cells.map((cell) => [cell.outside, cell.notInSpan === true]), [[false, false], [true, true], [true, true], [true, false]]);
+  assert.deepEqual(table.rows[1].cells.map((cell) => [cell.outside, cell.notInSpan === true]), [[false, false], [false, false], [true, true], [true, false]]);
+  assert.deepEqual(table.rows[4].cells.map((cell) => [cell.outside, cell.notInSpan === true]), [[false, false], [false, false], [false, false], [true, false]]);
+  // A day without a value says so, as by week.
+  assert.equal(table.rows[5].cells[2].value, null);
+  assert.equal(table.rows[5].cells[2].outside, false);
+  assert.equal(words(table.last.period), "2 週前から大会の日までの合計");
+  // The readings: not in the span, outside the output, or the day of each race.
+  const readings = view.compareReadings(item, data, 0, "day", "rows", "ja");
+  assert.deepEqual(readings.map((reading) => reading.missing?.key ?? null), [null, "view.compare.not_in_span", "view.compare.not_in_span", "view.compare.outside"]);
+  const atRace = view.compareReadings(item, data, 20, "day", "rows", "ja");
+  assert.deepEqual(atRace.map((reading) => reading.missing), [null, null, null, null]);
+  assert.deepEqual(view.compareMissingKey({ before: 4 }, 3), "view.compare.not_in_span");
+  assert.deepEqual(view.compareMissingKey({ before: 4 }, 4), "view.compare.outside");
+  assert.deepEqual(view.compareMissingKey({}, 0), "view.compare.outside");
+  assert.deepEqual(view.compareMissingKey(null, 0), "view.compare.outside");
+  // A race not on a Sunday whose span begins before the output (Codex's review
+  // of the diff of X3): the places before its span are not in it, also where
+  // the output does not reach their days, as they are never asked for; the
+  // days of its span before the output are outside.
+  const wednesday = madeUp("m-w", "2024-04-10", null, "race", "A race of the first days");
+  const early = view.raceData({
+    races: [wednesday],
+    weeks: 2,
+    mode: "rows",
+    series: null,
+    answers: new Map([["m-w", dayAnswer("2024-04-01", "2024-04-10")]]),
+    wholes: new Map([["m-w", whole("2024-04-01", "2024-04-10", 55000, 10)]]),
+    language: "ja",
+    grain: "day",
+  });
+  assert.deepEqual([early[0].before, early[0].slots[0].start, early[0].slots.at(-1).start], [4, 11, 20]);
+  const earlyTable = view.compareTable(item, early, "day", null, view.raceSpan(2, "day"), "ja", "rows", axis);
+  assert.deepEqual(
+    earlyTable.rows.slice(0, 12).map((row) => [row.cells[0].outside, row.cells[0].notInSpan === true]),
+    [...Array(4).fill([true, true]), ...Array(7).fill([true, false]), [false, false]],
+  );
+  assert.deepEqual(
+    [0, 3, 4, 10, 11].map((at) => view.compareReadings(item, early, at, "day", "rows", "ja")[0].missing?.key ?? null),
+    ["view.compare.not_in_span", "view.compare.not_in_span", "view.compare.outside", "view.compare.outside", null],
+  );
+  assert.equal(view.racesNotInSpan([wednesday], 2, "day"), true);
+  // A race after the last day of the output (made up to end on Friday 8
+  // November 2024): its last days are outside the output, never not in span;
+  // a race whose span is all after the output has nothing but places outside
+  // (Codex's third read of the diff of X3).
+  const after = view.raceData({
+    races: [RACE_MARKS[6], RACE_MARKS[7]],
+    weeks: 2,
+    mode: "rows",
+    series: null,
+    answers: new Map([["m-b", dayAnswer("2024-10-21", "2024-11-08")], ["m-e", answerOf([], [])]]),
+    wholes: new Map([["m-b", whole("2024-10-21", "2024-11-08", 190000, 19)], ["m-e", answerOf([], [])]]),
+    language: "ja",
+    grain: "day",
+  });
+  assert.deepEqual(after.map((entry) => [entry.before, entry.slots.length, entry.outside]), [[0, 19, false], [0, 0, true]]);
+  const afterTable = view.compareTable(item, after, "day", null, view.raceSpan(2, "day"), "ja", "rows", axis);
+  assert.deepEqual(
+    afterTable.rows.slice(18).map((row) => row.cells.map((cell) => [cell.outside, cell.notInSpan === true])),
+    [
+      [[false, false], [true, false]],
+      [[true, false], [true, false]],
+      [[true, false], [true, false]],
+    ],
+  );
+  assert.deepEqual(view.compareReadings(item, after, 20, "day", "rows", "ja").map((reading) => reading.missing?.key), ["view.compare.outside", "view.compare.outside"]);
+  assert.equal(view.racesNotInSpan([RACE_MARKS[6], RACE_MARKS[7]], 2, "day"), false);
+  // The note under the table: only by day with a race not on a Sunday.
+  assert.equal(view.racesNotInSpan([races[0]], 2, "day"), false);
+  assert.equal(view.racesNotInSpan([races[0], races[2]], 2, "day"), true);
+  assert.equal(view.racesNotInSpan([races[0], races[2]], 2, "week"), false);
+  assert.equal(view.racesNotInSpan([races[3]], 16, "day"), false);
+  assert.equal(view.racesNotInSpan(null, 2, "day"), false);
+});
+
+test("the axis of the races is marked by day, and every week for a short span (stage X3)", () => {
+  const ticks = (weeks, grain, language = "ja") => view.raceTicks(weeks, grain).map((tick) => [tick.at, words(tick.text, language)]);
+  assert.deepEqual(ticks(2, "day"), [[6, "14 日前"], [13, "7 日前"], [20, "大会の日"]]);
+  assert.deepEqual(ticks(4, "day", "en"), [[6, "28 days before"], [13, "21 days before"], [20, "14 days before"], [27, "7 days before"], [34, "Race day"]]);
+  assert.deepEqual(ticks(8, "day"), [[6, "56 日前"], [20, "42 日前"], [34, "28 日前"], [48, "14 日前"], [62, "大会の日"]]);
+  assert.deepEqual(ticks(12, "day").map((tick) => tick[0]), [6, 20, 34, 48, 62, 76, 90]);
+  assert.deepEqual(ticks(16, "day"), [[6, "112 日前"], [34, "84 日前"], [62, "56 日前"], [90, "28 日前"], [118, "大会の日"]]);
+  assert.deepEqual(ticks(24, "day").map((tick) => tick[0]), [6, 34, 62, 90, 118, 146, 174]);
+  // By week, every week for 4 weeks or less (2 weeks had no mark but the week
+  // of the race), and every fourth week from 8 weeks, as before.
+  assert.deepEqual(ticks(2), [[0, "2 週前"], [1, "1 週前"], [2, "大会の週（大会の日まで）"]]);
+  assert.deepEqual(ticks(2, "week", "en"), [[0, "2 weeks before"], [1, "1 week before"], [2, "Race week (to the race day)"]]);
+  assert.deepEqual(ticks(4).map((tick) => tick[0]), [0, 1, 2, 3, 4]);
+  assert.deepEqual(ticks(8).map((tick) => tick[0]), [0, 4, 8]);
+  assert.deepEqual(ticks(24).map((tick) => tick[0]), [0, 4, 8, 12, 16, 20, 24]);
+  // The names of the places by day.
+  assert.equal(words(view.raceSlotName(118, 16, "day")), "大会の日");
+  assert.equal(words(view.raceSlotName(117, 16, "day"), "en"), "1 day before");
+  assert.equal(words(view.raceSlotName(0, 16, "day")), "118 日前");
+  assert.equal(words(view.raceSlotName(0, 16, "week")), "16 週前");
 });
 
 test("the axis of the races and the value of a span are named in both languages", () => {
@@ -1707,8 +1891,9 @@ test("a calendar compares years by day, never an estimate of several records a d
   assert.deepEqual(view.compareGrains(null), ["day", "week", "month"]);
   assert.equal(view.firstCompareGrain("calendar", null), "day");
   assert.deepEqual(view.compareGrainsFor("year", 5, "calendar"), ["day"]);
-  // By race day, by week whatever the way.
-  assert.deepEqual(view.compareGrainsFor("race", null, "calendar"), ["week"]);
+  // By race day, by week at first whatever the way, and by day too (stage X3
+  // of v2.3.0; the calendar is not a way of the race days).
+  assert.deepEqual(view.compareGrainsFor("race", null, "calendar"), ["week", "day"]);
   assert.equal(view.compareGrainFor("race", "calendar", null), "week");
   // The month that it uses: none for a calendar; the month remembered stays
   // for the other ways.
@@ -2399,9 +2584,19 @@ test("the line under a picture of another view says the years or the race days c
     "Activity types counted: All running types (2)",
     "Garmin Running Data Normalizer 2.2.0",
   ]);
-  // The days of the races, never their names; their weeks are in the title.
-  assert.deepEqual(pieces("compare", { days: ["2026-03-15", "2025-11-02"] }), [
+  // The days of the races, never their names; their weeks are in the title,
+  // and from stage X3 of v2.3.0 their grain (a week or a day) follows, as that
+  // of the years.
+  assert.deepEqual(pieces("compare", { days: ["2026-03-15", "2025-11-02"], grain: "day" }), [
     "くらべた大会の日 2025年11月2日、2026年3月15日",
+    "まとめ方 日",
+    "数える種目 ランニングの種目すべて（2 つ）",
+    "Garmin Running Data Normalizer 2.2.0",
+  ]);
+  assert.equal(pieces("compare", { days: ["2026-03-15", "2025-11-02"], grain: "week" }, "en")[1], "Group by Week");
+  // An answer without its grain has no line of it.
+  assert.deepEqual(pieces("compare", { days: ["2026-03-15"] }), [
+    "くらべた大会の日 2026年3月15日",
     "数える種目 ランニングの種目すべて（2 つ）",
     "Garmin Running Data Normalizer 2.2.0",
   ]);

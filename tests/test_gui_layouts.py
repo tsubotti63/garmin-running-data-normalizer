@@ -493,16 +493,17 @@ class SettingsOfVersion220Test(unittest.TestCase):
 
     def test_what_an_item_is_compared_by_is_kept_alone(self) -> None:
         # Stage M2 of v2.2.0: the years or the race days, and the weeks before
-        # a race day (8, 12, 16, 20, or 24), each left out alone when it is
-        # of another form, and given to the page when it starts.
-        for by, weeks in (("year", 8), ("race", 16), ("race", 24)):
+        # a race day (8, 12, 16, 20, or 24, and from stage X3 of v2.3.0 also
+        # 2 and 4), each left out alone when it is of another form, and given
+        # to the page when it starts.
+        for by, weeks in (("year", 8), ("race", 16), ("race", 24), ("race", 2), ("race", 4)):
             with self.subTest(by=by, weeks=weeks):
                 self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_compare_by": by, "view_compare_weeks": weeks})
                 values = read_settings(self.path)[0]
                 self.assertEqual((values["view_compare_by"], values["view_compare_weeks"]), (by, weeks))
                 answer = launch_answer(values, None, present=True)
                 self.assertEqual((answer["view_compare_by"], answer["view_compare_weeks"]), (by, weeks))
-        for by, weeks in (("races", 10), ("", 0), (None, True), (1, "16"), (["race"], 16.0), ("Race", 28)):
+        for by, weeks in (("races", 10), ("", 0), (None, True), (1, "16"), (["race"], 16.0), ("Race", 28), ("race-day", 3), ("RACE", 1)):
             with self.subTest(by=by, weeks=weeks):
                 self.write_raw({"format": SETTINGS_FORMAT, "store": self.store, "view_compare_by": by, "view_compare_weeks": weeks})
                 values = read_settings(self.path)[0]
