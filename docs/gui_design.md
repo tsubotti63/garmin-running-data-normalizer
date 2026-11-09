@@ -2120,8 +2120,9 @@ Processing:
 - From v2.2.0 a picture saved from the view page shows the dates and values of
   its charts, and the names of the marks where they are put in and by race
   day; the page makes it and hands it to the browser as a download, sending
-  nothing anywhere. The name of its file holds dates (or years) and the keys
-  of the items only. A picture saved is the person's own file, which "Forget
+  nothing anywhere. The name of its file holds only dates (or years) and the
+  keys of the items (and, from v2.3.0, the size of a PNG). A picture saved is
+  the person's own file, which "Forget
   the remembered settings…" does not remove. From v2.3.0 (stage X5) a PNG is
   made in the page the same way, painted from the picture, with no place or
   other data of the machine in it.
@@ -2130,8 +2131,9 @@ Processing:
   window says so before saving); they are written in no file name, log, or
   setting.
 - From v2.2.0 (stage T1) the names of the activities and the words of the
-  conditions on them may be the person's own words. The names show in the list
-  of the activities of a period only, and the view page writes them into no
+  conditions on them may be the person's own words. The names show only in the
+  list of the activities of a period and, from v2.3.0 (stage X7), in the lists
+  of the changes since the output before, and the view page writes them into no
   file. The words of the conditions show in the window of the conditions, in
   the line under the filters, and in the line at the top of the full screen,
   and go into the settings and into a picture saved (its line under the
