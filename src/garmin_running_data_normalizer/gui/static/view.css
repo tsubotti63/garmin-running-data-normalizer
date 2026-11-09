@@ -1475,6 +1475,80 @@ button.small {
   color: var(--muted);
 }
 
+/* The reading of a panel holds two lines (stage X6 of v2.3.0, the person's
+   choice (a)): the reading, and the grounds of its period or an empty line, so
+   that the heading keeps its height as the pointer moves. The reading takes
+   the room that the heading leaves on its line (where it does not fit beside
+   the name, it goes to a line of its own, as before). Of the second line, the
+   number left out counts in its width, so that it is never cut, and the
+   reasons do not: where they do not fit, they are cut at their end. */
+.panel-read.two-lines {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.read-line {
+  white-space: nowrap;
+}
+
+/* The first line is as high with no value, and while no period is chosen, as
+   with a value (in a larger size): a character of no width at its size. */
+.read-line::before {
+  content: "\200b";
+  font-size: 0.96rem;
+}
+
+.read-grounds {
+  display: flex;
+  align-self: stretch;
+  overflow: hidden;
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+
+/* At the end of the line where it fits, and from its start where it does not
+   (an auto margin, which never pushes the number out of the line). */
+.read-grounds > :first-child {
+  margin-left: auto;
+}
+
+.read-grounds-lead {
+  flex: none;
+}
+
+/* The reasons take what the number leaves of the line, as wide as their words
+   at most, and never widen the reading (a width of their own of 0). */
+.read-grounds-reasons {
+  flex: 1 1 auto;
+  width: 0;
+  min-width: 0;
+  max-width: max-content;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A low strip beside an enlarged panel, which shows neither the second line of
+   a panel nor its notes, keeps its reading on one line, so that its chart
+   keeps its height. */
+.panel-view.mini .read-grounds {
+  display: none;
+}
+
+/* Why a row of the list is left out of the value of its panel, and what the
+   panel left out of the period, under its value (stage X6 of v2.3.0). */
+.list-reason {
+  margin-left: 0.35em;
+  color: var(--sub);
+  font-size: 0.86em;
+}
+
+.list-value.list-grounds {
+  margin-top: 0;
+  color: var(--sub);
+}
+
 .panel-tools {
   display: flex;
   flex: none;

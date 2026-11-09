@@ -1330,6 +1330,30 @@ time](#what-is-remembered-for-the-next-time)).
   vertical line, which shows when you point at a chart with the mouse, or
   click a chart and press ← or →; otherwise, the last step. As the line moves,
   every panel shows its value of the same step at its top right.
+- (From 2.3.0) The second line at the top right gives the number of records
+  left out of the value of the step, and why, such as "3 not counted: no
+  value". With two reasons or more, each has its number in parentheses, as in
+  "no value (2), values disagree (1)". A step that left nothing out has an
+  empty second line: the line always takes its room, so a panel keeps its
+  height as the vertical line moves (the narrow panels beside an enlarged one
+  keep one line, as they show neither the summary line nor **About this
+  panel**). Where the line does not fit, the end of its reasons is cut with
+  "…", never the number. Pointing at it with the mouse shows the whole, in the
+  words of **About this panel**; a screen reader, as the keys move the
+  vertical line, hears the whole after the values.
+- A step with no record counted and none left out says where it is on that
+  line. On a panel of **Training (per activity)** or **Running form (FIT)**,
+  it is "This month has no activity counted." between the first and the last
+  activity of the **Activity types counted** (of those that meet the
+  conditions, where there are any), and "Outside the first and the last
+  activity counted." before or after them; on a panel of **Body (daily)** or
+  **Garmin estimates**, it is "This month has no record of this item."
+  ("month" is the word of the grouping).
+- The reasons are only what the output holds: **no value** is both a record
+  without the value and a value that normalization left empty as it had a form
+  that its field does not take, such as text where a number belongs (only the
+  audit files keep such a value, and the view page does not read them, so it
+  does not tell the two apart).
 - The buttons of a panel are at the right of its heading (in a panel whose
   heading takes two lines, at the left of its second line). A button with a
   symbol shows only the symbol; the names below, such as "Enlarge Distance",
@@ -1345,7 +1369,11 @@ time](#what-is-remembered-for-the-next-time)).
   - × ("Remove Distance"): removes the panel, as unticking the item on the
     shelf does.
   - **About this panel**: what the panel leaves out, with counts (for example,
-    activities without a value, or records dated after today).
+    activities without a value, or records dated after today). From 2.3.0 it
+    tells apart the activities whose distance or time is 0 or less (of the
+    average pace) and those whose times disagreed and were left empty (of an
+    average by time), and, on a panel of **Body (daily)** or **Garmin
+    estimates**, it gives the days and the records without a value.
 - With two or more panels of the same unit, tick
   **Use the same scale for panels with the same unit**, above the panels at
   the right (left of **Full screen**), to give them one scale. It is not ticked
@@ -1429,7 +1457,10 @@ values are made):
   counted: 11)" gives the value of the panel for the period and how many
   activities it counted: the numbers of the reading at the top right of the
   panel. Some activities in the list, such as one without a heart rate, are
-  not counted in it.
+  not counted in it. (From 2.3.0) In the column of the item of the panel, a
+  row not counted says why, such as **no value** or **no time**; where the
+  period has activities not counted, a line under the value of the panel gives
+  their number and why, such as "2 not counted: no value".
 - The list holds the **Activity types counted** only and, where there are
   conditions, the activities that meet them (where none does, it says so by
   the grouping, such as **No activity of the week chosen meets the

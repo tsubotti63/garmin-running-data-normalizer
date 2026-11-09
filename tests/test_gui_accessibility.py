@@ -969,6 +969,108 @@ class GuiViewPageStructureTest(unittest.TestCase):
             with self.subTest(declaration=declaration):
                 self.assertIn(declaration, rule.group(1))
 
+    def test_the_reading_holds_the_grounds_of_its_period_on_a_second_line(self) -> None:
+        # Stage X6 of v2.3.0, the person's choice (a): the reading of a panel
+        # always holds two lines, the reading (or an empty line while no
+        # period is chosen) and the grounds of its period (or an empty line),
+        # so that the heading keeps its height as the pointer moves; the
+        # number left out first and kept whole, the reasons cut at their end,
+        # the whole on the pointer. The reading stays hidden from a screen
+        # reader, which hears the grounds whole and in parentheses after the
+        # values of the panel.
+        from tests.test_gui_view_save import function_body
+
+        self.assertIn('  const read = element("span", "panel-read two-lines");\n  read.setAttribute("aria-hidden", "true");\n  read.append(element("span", "read-line", "\\u00a0"), groundsLine(null));\n  head.append(read);', self.script)
+        self.assertEqual(self.script.count('"panel-read two-lines"'), 1)
+        # A low strip shows neither the summary nor the notes of a panel, so
+        # its reading keeps one line too (view.css below).
+        build = function_body(self.script, "buildPanel")
+        self.assertIn('  let notesPop = null;\n  if (mode !== "mini") {\n    const summary = element("div", "panel-summary");', build)
+        cross = function_body(self.script, "moveCross")
+        for line in (
+            'const grounds = reading.grounds === null ? "" : t("view.spoken_grounds", { grounds: describe(reading.grounds.full).replace(/[。.]$/u, "") });',
+            'value: (reading.values.length ? reading.values.map(spokenValue).join(t("view.spoken_separator")) : t("view.no_value")) + grounds,',
+            '    const first = element("span", "read-line");\n    first.append(...(nodes.length ? nodes : ["\\u00a0"]));\n    entry.read.replaceChildren(first, groundsLine(reading?.grounds ?? null));',
+        ):
+            with self.subTest(line=line[:70]):
+                self.assertIn(line, cross)
+        line = function_body(self.script, "groundsLine")
+        for part in (
+            '  const line = element("span", "read-grounds");\n  if (grounds === null) {\n    line.append("\\u00a0");\n    return line;\n  }',
+            '  if (grounds.lead !== null) {\n    line.append(element("span", "read-grounds-lead", describe(grounds.lead)));\n  }',
+            'line.append(element("span", "read-grounds-reasons", describe(grounds.reasons)));',
+            "line.title = describe(grounds.full);",
+        ):
+            with self.subTest(part=part[:70]):
+                self.assertIn(part, line)
+        self.assertEqual(self.catalogs["ja"]["view.spoken_grounds"], "（{grounds}）")
+        # In English after a semicolon, as the whole has parentheses of its
+        # own (the checker's review of X6).
+        self.assertEqual(self.catalogs["en"]["view.spoken_grounds"], "; {grounds}")
+        style = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        for selector, wanted in (
+            (".panel-read.two-lines", {"display": "flex", "flex": "1 1 auto", "flex-direction": "column", "align-items": "flex-end"}),
+            (".read-line", {"white-space": "nowrap"}),
+            # As high with no value as with one, of the size of a value.
+            (".read-line::before", {"content": '"\\200b"', "font-size": "0.96rem"}),
+            (".panel-read strong", {"font-size": "0.96rem"}),
+            # The second line across the reading, its number counted in its
+            # width and never cut (Codex's review of the diff of X6), its
+            # reasons not.
+            (".read-grounds", {"display": "flex", "align-self": "stretch", "overflow": "hidden", "white-space": "nowrap"}),
+            (".read-grounds > :first-child", {"margin-left": "auto"}),
+            (".read-grounds-lead", {"flex": "none"}),
+            (".read-grounds-reasons", {"flex": "1 1 auto", "width": "0", "min-width": "0", "max-width": "max-content", "overflow": "hidden", "text-overflow": "ellipsis"}),
+            # A low strip keeps one line, as it shows no summary and no notes.
+            (".panel-view.mini .read-grounds", {"display": "none"}),
+        ):
+            rule = re.search(rf"\n{re.escape(selector)} \{{(.*?)\n\}}", style, re.DOTALL)
+            assert rule is not None, selector
+            found = dict(re.findall(r"^\s*([a-z-]+):\s*([^;]+);", rule.group(1), re.M))
+            for name, value in wanted.items():
+                with self.subTest(selector=selector, name=name):
+                    self.assertEqual(found.get(name), value)
+        # The second line has no width of its own that would cut its number.
+        rule = re.search(r"\n\.read-grounds \{(.*?)\n\}", style, re.DOTALL)
+        assert rule is not None
+        self.assertNotRegex(rule.group(1), r"(^|\n)\s*(width|max-width):")
+
+    def test_the_list_marks_each_row_left_out_and_says_the_grounds_under_its_value(self) -> None:
+        # Stage X6 of v2.3.0: the cell of the item of a row that its panel
+        # left out says why, after its value or its dash; a value missing is
+        # said once to a screen reader; the line under the value of the list
+        # says what the panel left out of the period, the whole on the
+        # pointer.
+        from tests.test_gui_view_save import function_body
+
+        listing = function_body(self.script, "renderList")
+        for line in (
+            "parts.push(buildListTable(list, answer.rows, titleText, entry.item));",
+            # The block whole, with its condition and its push (the partial
+            # guard of X6: PV9).
+            '    const grounds = listGrounds(entry.item, answer.value?.grounds, state.language);\n    if (grounds !== null) {\n      const under = element("p", "list-value list-grounds", `${describe(grounds.lead)}${describe(grounds.reasons)}`);\n      under.title = describe(grounds.full);\n      parts.push(under);\n    }\n',
+        ):
+            with self.subTest(line=line[:70]):
+                self.assertIn(line, listing)
+        table = function_body(self.script, "buildListTable")
+        for line in (
+            'const reasonKey = column === list.key && typeof row.left_out === "string" ? groundsWordKey(item, row.left_out, "short") : null;',
+            'const reason = reasonKey === null ? null : element("span", "list-reason", t(reasonKey));',
+            '        cell.append(dash, element("span", "visually-hidden", t("view.no_value")));\n        if (reason !== null) {\n          // A value missing is said once (stage X6 of v2.3.0).\n          if (reasonKey === "view.grounds.short.no_value") {\n            reason.setAttribute("aria-hidden", "true");\n          }\n          cell.append(reason);\n        }',
+            "      } else if (reason !== null) {\n        cell.append(text, reason);",
+        ):
+            with self.subTest(line=line[:70]):
+                self.assertIn(line, table)
+        self.assertEqual(self.catalogs["ja"]["view.grounds.short.no_value"], self.catalogs["ja"]["view.no_value"])
+        style = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        for selector, wanted in ((".list-reason", {"margin-left": "0.35em", "color": "var(--sub)"}), (".list-value.list-grounds", {"margin-top": "0", "color": "var(--sub)"})):
+            rule = re.search(rf"\n{re.escape(selector)} \{{(.*?)\n\}}", style, re.DOTALL)
+            assert rule is not None, selector
+            found = dict(re.findall(r"^\s*([a-z-]+):\s*([^;]+);", rule.group(1), re.M))
+            for name, value in wanted.items():
+                with self.subTest(selector=selector, name=name):
+                    self.assertEqual(found.get(name), value)
+
     def test_every_view_asks_with_its_conditions(self) -> None:
         # Stage T1 of v2.2.0: the panels, the two items plotted, the
         # distribution, and the shoes ask with the conditions in force, which

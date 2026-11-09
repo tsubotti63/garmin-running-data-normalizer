@@ -7,6 +7,7 @@ import math
 import re
 import time
 import unittest
+from collections import Counter
 from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
@@ -557,7 +558,12 @@ class ActivityListTest(unittest.TestCase):
                 with self.subTest(week=span[0].isoformat(), item=item.key):
                     answer = activity_list(data, item.key, span)
                     [line] = panel(data, item.key, span, "range")["lines"]
-                    self.assertEqual(answer["value"], {"value": line["values"][0], "count": line["counts"][0]})
+                    grounds = {name: pairs[0][1] for name, pairs in line["per_period"].items()}
+                    self.assertEqual(answer["value"], {"value": line["values"][0], "count": line["counts"][0], "grounds": grounds})
+                    # Stage X6 of v2.3.0: the reasons of the rows left out
+                    # add up to the grounds of the period of the panel.
+                    left = Counter(row["left_out"] for row in answer["rows"] if row["left_out"] is not None)
+                    self.assertEqual(dict(left), grounds)
                     value, count = value_of(item, answer["rows"])
                     self.assertEqual(count, line["counts"][0])
                     if count:
@@ -572,14 +578,18 @@ class ActivityListTest(unittest.TestCase):
         self.assertEqual([row["datetime"] for row in answer["rows"]], ["2024-03-04T06:30:00+09:00", "2024-03-04T18:05:00+09:00", "2024-03-07T06:40:00+09:00"])
         self.assertEqual(answer["rows"][2]["values"], {"dist": None, "time": 600.0, "pace": None, "hr": 125.0, "mx": None, "cad": None, "asc": None})
         self.assertAlmostEqual(answer["rows"][0]["values"]["pace"], 0.3)
-        self.assertEqual(answer["value"], {"value": 14000.0, "count": 2})
+        # The activity of 7 March has no distance (stage X6 of v2.3.0).
+        self.assertEqual(answer["value"], {"value": 14000.0, "count": 2, "grounds": {"no_value": 1}})
+        self.assertEqual([row["left_out"] for row in answer["rows"]], [None, None, "no_value"])
         # The week of 26 February: no pace of a distance or a time of 0 or
         # below; the weight by time counts the activity of 900 seconds only.
         week = activity_list(data, "pace", (date(2024, 2, 26), date(2024, 3, 3)))
         self.assertEqual([row["values"]["pace"] for row in week["rows"]], [None, None, None])
-        self.assertEqual(week["value"], {"value": None, "count": 0})
-        self.assertEqual(activity_list(data, "hr", (date(2024, 2, 26), date(2024, 3, 3)))["value"], {"value": 140.0, "count": 1})
-        self.assertEqual(activity_list(data, "mx", (date(2024, 2, 26), date(2024, 3, 3)))["value"], {"value": 160.0, "count": 2})
+        # A pace of a distance or a time of 0 or below: zero_value, apart from
+        # no_value, though left_out counts both as no_value.
+        self.assertEqual(week["value"], {"value": None, "count": 0, "grounds": {"zero_value": 3}})
+        self.assertEqual(activity_list(data, "hr", (date(2024, 2, 26), date(2024, 3, 3)))["value"], {"value": 140.0, "count": 1, "grounds": {"no_duration": 2}})
+        self.assertEqual(activity_list(data, "mx", (date(2024, 2, 26), date(2024, 3, 3)))["value"], {"value": 160.0, "count": 2, "grounds": {"no_value": 1}})
 
     def test_the_page_opens_the_list_from_the_panels_of_these_items(self) -> None:
         # The page opens the list from the panels of the training and the
@@ -597,7 +607,7 @@ class ActivityListTest(unittest.TestCase):
     def test_the_list_counts_the_types_counted(self) -> None:
         answer = activity_list(self.data(), "dist", (date(2024, 3, 4), date(2024, 3, 10)), ["cycling"])
         self.assertEqual([(row["type"], row["day"]) for row in answer["rows"]], [("cycling", "2024-03-06")])
-        self.assertEqual(answer["value"], {"value": 30000.0, "count": 1})
+        self.assertEqual(answer["value"], {"value": 30000.0, "count": 1, "grounds": {}})
 
     def test_a_period_is_cut_to_the_output_and_has_no_rows_outside_it(self) -> None:
         data = self.data()
@@ -610,14 +620,14 @@ class ActivityListTest(unittest.TestCase):
         # A week without activities between the first and the last: none, and 0.
         empty = view_data([act("2024-01-01", distance_m=1000, duration_sec=300), act("2024-01-20", distance_m=1000, duration_sec=300)])
         answer = activity_list(empty, "dist", (date(2024, 1, 8), date(2024, 1, 14)))
-        self.assertEqual((answer["total"], answer["rows"], answer["value"]), (0, [], {"value": 0.0, "count": 0}))
+        self.assertEqual((answer["total"], answer["rows"], answer["value"]), (0, [], {"value": 0.0, "count": 0, "grounds": {}}))
 
     def test_a_period_of_more_rows_than_the_limit_gives_their_number(self) -> None:
         self.assertEqual(MAX_LIST_ROWS, 500)
         with patch.object(series_module, "MAX_LIST_ROWS", 2):
             answer = activity_list(self.data(), "time", (date(2024, 3, 4), date(2024, 3, 10)))
         self.assertEqual((answer["total"], answer["rows"], answer["limit"]), (3, None, 2))
-        self.assertEqual(answer["value"], {"value": 5100.0, "count": 3})
+        self.assertEqual(answer["value"], {"value": 5100.0, "count": 3, "grounds": {}})
         # As many rows as the limit are listed.
         with patch.object(series_module, "MAX_LIST_ROWS", 3):
             answer = activity_list(self.data(), "time", (date(2024, 3, 4), date(2024, 3, 10)))
@@ -1606,7 +1616,7 @@ class ConditionsTest(unittest.TestCase):
         year = (date(2024, 1, 1), date(2024, 12, 31))
         listed = activity_list(data, "dist", year, None, tempo)
         self.assertEqual([(row["day"], row["name"]) for row in listed["rows"]], [("2024-01-10", "Tempo A"), ("2024-04-10", "tempo B")])
-        self.assertEqual((listed["total"], listed["value"]), (2, {"value": 27000.0, "count": 2}))
+        self.assertEqual((listed["total"], listed["value"]), (2, {"value": 27000.0, "count": 2, "grounds": {}}))
         # Every row has its name, where the names were read.
         self.assertEqual([row["name"] for row in activity_list(data, "dist", year)["rows"]], ["Tempo A", "Jog", "Jog", "tempo B", "Jog"])
         for other in (view_data([(ACTIVITIES, row) for row in data.rows[ACTIVITIES]]), replace(data, names=Names({}, {}, too_large=True))):
@@ -1666,6 +1676,147 @@ class ConditionsTest(unittest.TestCase):
         self.assertEqual(coverage(data, None, asked("tempo"))["dist"]["months"], ["2024-01", "2024-04"])
         self.assertEqual(coverage(data)["dist"]["months"], ["2024-01", "2024-02", "2024-03", "2024-04", "2024-05"])
         self.assertEqual(coverage(data, None, asked("tempo"))["rhr"], coverage(data)["rhr"])
+
+
+# The parts of the grounds of a period and the key of left_out that each adds
+# to (stage X6 of v2.3.0; the checker's review of the plan of making, 3).
+TO_LEFT_OUT = {
+    "no_value": "no_value",
+    "zero_value": "no_value",
+    "disagree": "disagree",
+    "no_duration": "no_duration",
+    "duration_disagree": "no_duration",
+    "sleep_review": "sleep_review_days",
+    "sleep_other": "sleep_other_days",
+}
+# The keys of left_out that are not rows left out of a period: no date and
+# after today (of the whole file), the periods of 0, and the days with several
+# records (they are in the mean).
+NOT_IN_GROUNDS = ("no_date", "after_today", "zero_periods", "days_with_several_records")
+
+
+def grounds_at(found: dict[str, Any], index: int) -> dict[str, int]:
+    """The grounds of one period of a panel: of its lines and of the lines not
+    drawn."""
+    counts: Counter[str] = Counter()
+    for source in [line.get("per_period", {}) for line in found["lines"]] + [found.get("per_period_other", {})]:
+        for reason, pairs in source.items():
+            counts[reason] += sum(count for at, count in pairs if at == index)
+    return {reason: count for reason, count in counts.items() if count}
+
+
+class GroundsTest(unittest.TestCase):
+    """The grounds of a period (stage X6 of v2.3.0): what each period left out
+    of its value, by reason, as the server counts it, with the keys and the
+    numbers of left_out as they were."""
+
+    def data(self) -> ViewData:
+        return view_data(
+            [
+                # The week of 1 April 2024: a run without a heart rate, one whose
+                # heart rates disagree, and one counted.
+                act("2024-04-01", distance_m=5000, duration_sec=1500),
+                act("2024-04-02", disagree=("avg_hr",), distance_m=6000, duration_sec=1800),
+                act("2024-04-03", distance_m=7000, duration_sec=2100, avg_hr=150),
+                # The week of 8 April: a distance of 0, a time emptied as the
+                # values disagreed, a time of 0, and one counted.
+                act("2024-04-08", distance_m=0, duration_sec=900, avg_hr=140),
+                act("2024-04-09", disagree=("duration_sec",), distance_m=5000, avg_hr=145),
+                act("2024-04-10", distance_m=5000, duration_sec=0, avg_hr=150),
+                act("2024-04-11", distance_m=8000, duration_sec=2400, avg_hr=155),
+                uds("2024-04-01", resting_heart_rate=50),
+                uds("2024-04-02"),
+                ("uds_daily", daily("uds_daily", "2024-04-09", disagree=("resting_heart_rate",))),
+                ("sleep_daily", daily("sleep_daily", "2024-04-01", sleep_duration_minutes_ex_awake=420)),
+                ("sleep_daily", daily("sleep_daily", "2024-04-02", used=False, review=True, sleep_duration_minutes_ex_awake=400)),
+                ("sleep_daily", daily("sleep_daily", "2024-04-10", used=False, sleep_duration_minutes_ex_awake=380)),
+                # A series of VO2 Max without a value in the periods draws no
+                # line; what it left out stays in the panel.
+                ("vo2max_daily", daily("vo2max_daily", "2024-04-01", series=("activity_vo2max_daily", "RUNNING"), vo2max=55.0)),
+                ("vo2max_daily", daily("vo2max_daily", "2024-04-02", series=("performance_metrics_daily", "CYCLING"))),
+            ]
+        )
+
+    def test_each_reason_is_in_its_period(self) -> None:
+        data = self.data()
+        hr = panel(data, "hr", grain="week")
+        self.assertEqual((grounds_at(hr, 0), grounds_at(hr, 1)), ({"no_value": 1, "disagree": 1}, {"duration_disagree": 1, "no_duration": 1}))
+        self.assertEqual(hr["lines"][0]["counts"], [1, 2])
+        self.assertEqual(hr["left_out"], {"after_today": 0, "disagree": 1, "no_date": 0, "no_duration": 2, "no_value": 1})
+        pace = panel(data, "pace", grain="week")
+        self.assertEqual((grounds_at(pace, 0), grounds_at(pace, 1)), ({}, {"zero_value": 2, "disagree": 1}))
+        self.assertEqual(pace["left_out"], {"after_today": 0, "disagree": 1, "no_date": 0, "no_value": 2})
+        rhr = panel(data, "rhr", grain="week")
+        self.assertEqual((grounds_at(rhr, 0), grounds_at(rhr, 1)), ({"no_value": 1}, {"disagree": 1}))
+        sleep = panel(data, "sleep", grain="week")
+        self.assertEqual((grounds_at(sleep, 0), grounds_at(sleep, 1)), ({"sleep_review": 1}, {"sleep_other": 1}))
+        self.assertEqual((sleep["left_out"]["sleep_review_days"], sleep["left_out"]["sleep_other_days"]), (1, 1))
+        # Pairs of a period and its count, of the periods that have any.
+        self.assertEqual(hr["lines"][0]["per_period"], {"disagree": [[0, 1]], "duration_disagree": [[1, 1]], "no_duration": [[1, 1]], "no_value": [[0, 1]]})
+
+    def test_the_grounds_add_up_to_left_out(self) -> None:
+        data = self.data()
+        for grain in ("day", "week", "month"):
+            for item in ITEMS:
+                with self.subTest(grain=grain, item=item.key):
+                    found = panel(data, item.key, grain=grain)
+                    total: Counter[str] = Counter()
+                    for source in [line.get("per_period", {}) for line in found["lines"]] + [found["per_period_other"]]:
+                        for reason, pairs in source.items():
+                            total[TO_LEFT_OUT[reason]] += sum(count for _, count in pairs)
+                    left = {key: value for key, value in found["left_out"].items() if key not in NOT_IN_GROUNDS and value}
+                    self.assertEqual(dict(total), left)
+
+    def test_the_page_words_each_reason_in_the_panels_of_its_kind(self) -> None:
+        # The reasons that the page words (GROUND_REASONS of view_flow.mjs),
+        # by the kind of a panel: of the activities (the groups act and fit),
+        # of the records (obs), and of the days; the server gives each panel
+        # only the reasons of its kind, so that none goes unsaid.
+        source = (Path(__file__).resolve().parents[1] / "src/garmin_running_data_normalizer/gui/static/view_flow.mjs").read_text(encoding="utf-8")
+        table = re.search(r"^export const GROUND_REASONS = Object\.freeze\(\{\n(.*?)\n\}\);$", source, re.M | re.S)
+        assert table is not None
+        kinds = {kind: re.findall(r'"([a-z_]+)"', names) for kind, names in re.findall(r"^  (\w+): Object\.freeze\(\[(.*?)\]\),$", table.group(1), re.M)}
+        self.assertEqual(sorted(kinds), ["activities", "days", "records"])
+        self.assertEqual(sorted(set().union(*map(set, kinds.values()))), sorted(TO_LEFT_OUT))
+        data = self.data()
+        for grain in ("day", "week", "month"):
+            for item in ITEMS:
+                kind = "activities" if item.group in ("act", "fit") else "records" if item.kind == "obs" else "days"
+                found = panel(data, item.key, grain=grain)
+                for source_of in [line.get("per_period", {}) for line in found["lines"]] + [found["per_period_other"]]:
+                    for reason in source_of:
+                        with self.subTest(grain=grain, item=item.key, reason=reason):
+                            self.assertIn(reason, kinds[kind])
+
+    def test_a_line_not_drawn_keeps_its_grounds_in_the_panel(self) -> None:
+        vo2 = panel(self.data(), "vo2", grain="week")
+        self.assertEqual([line["series"] for line in vo2["lines"]], [{"vo2max_source_series": "activity_vo2max_daily", "sport": "RUNNING"}])
+        self.assertEqual(vo2["per_period_other"], {"no_value": [[0, 1]]})
+        self.assertEqual(vo2["left_out"]["no_value"], 1)
+        # A panel whose lines are all drawn has none.
+        self.assertEqual(panel(self.data(), "rhr", grain="week")["per_period_other"], {})
+
+    def test_counted_days_are_those_of_the_activities_counted(self) -> None:
+        data = self.data()
+        self.assertEqual(panel(data, "dist")["lines"][0]["counted_days"], ["2024-04-01", "2024-04-11"])
+        # Of the types counted: no cycling, no days.
+        self.assertIsNone(panel(data, "dist", types=["cycling"])["lines"][0]["counted_days"])
+        # The items of the days have no such days.
+        self.assertNotIn("counted_days", panel(data, "rhr")["lines"][0])
+
+    def test_neither_the_rows_of_a_period_nor_the_days_of_several_records_are_sent(self) -> None:
+        # The page counts the rows of a period from the counts and the grounds;
+        # the days with several records are in the mean, not left out (the
+        # checker's review of the samples, 6).
+        rows = [
+            ("training_readiness_daily", daily("training_readiness_daily", "2024-04-01", time=f"0{hour}:00", training_readiness_score=60.0 + hour))
+            for hour in (6, 7)
+        ]
+        found = panel(view_data(rows), "tr", grain="day")
+        self.assertEqual(found["left_out"]["days_with_several_records"], 1)
+        self.assertEqual(found["lines"][0]["per_period"], {})
+        for line in panel(self.data(), "hr", grain="week")["lines"]:
+            self.assertFalse({"rows", "several"} & set(line["per_period"]))
 
 
 if __name__ == "__main__":

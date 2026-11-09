@@ -519,6 +519,239 @@ test("the notes of a panel say what is left out and what the values are", () => 
   assert.equal(words(notes[0], "ja"), "2 つの系列は混ぜません。2022年1月9日 までは活動の記録から、2022年1月12日 からは MaxMet の記録からの値で、値の幅の違いはこのアプリでは説明しません。");
 });
 
+// The grounds of a period (stage X6 of v2.3.0): what a period left out of its
+// value and why, as the server counted it, the number first; or where a period
+// without a value is.
+function groundsPanel(perPeriod, counts = [1, 0, 18, 11], countedDays = ["2026-07-20", "2026-10-10"], extra = {}) {
+  const panel = panelOf([12000, null, 180200, 108100], counts, null);
+  return { ...panel, lines: panel.lines.map((line) => ({ ...line, per_period: perPeriod, counted_days: countedDays })), ...extra };
+}
+
+function groundsWords(grounds, language) {
+  if (grounds === null) {
+    return null;
+  }
+  return [grounds.lead === null ? null : words(grounds.lead, language), words(grounds.reasons, language), words(grounds.full, language)];
+}
+
+test("the grounds of a period say the number left out first, then why, and the whole in the words of the notes (stage X6 of v2.3.0)", () => {
+  const said = (key, panel, index, language, grain = "month") => groundsWords(view.periodGrounds(item(key), panel, MONTHS, index, grain, language), language);
+  const one = groundsPanel({ no_value: [[1, 3]] });
+  assert.deepEqual(said("dist", one, 1, "ja"), ["入っていない 3 回：", "値なし", "値の無いアクティビティ 3 回は入っていません。"]);
+  assert.deepEqual(said("dist", one, 1, "en"), ["3 not counted: ", "no value", "Not counted (activities without a value: 3)."]);
+  // The reading has them as its grounds.
+  assert.deepEqual(view.readout(item("dist"), one, MONTHS, 1, "month", "ja").grounds, view.periodGrounds(item("dist"), one, MONTHS, 1, "month", "ja"));
+  // A period with a value and nothing left out has none.
+  assert.equal(view.periodGrounds(item("dist"), one, MONTHS, 2, "month", "ja"), null);
+  assert.equal(view.readout(item("dist"), one, MONTHS, 2, "month", "ja").grounds, null);
+  // Two reasons or more, each with its count, in the order of the page,
+  // whatever the order of the server; a period with a value has them too.
+  const two = groundsPanel({ disagree: [[2, 1]], no_value: [[2, 2], [3, 5]] });
+  assert.deepEqual(said("dist", two, 2, "ja"), ["入っていない 3 回：", "値なし（2）・食い違い（1）", "値の無いアクティビティ 2 回・値が食い違って空にしたアクティビティ 1 回は入っていません。"]);
+  assert.deepEqual(said("dist", two, 2, "en"), [
+    "3 not counted: ",
+    "no value (2), values disagree (1)",
+    "Not counted (activities without a value: 2; activities whose values disagreed and were left empty: 1).",
+  ]);
+  assert.deepEqual(view.GROUND_REASONS, {
+    activities: ["no_value", "zero_value", "disagree", "no_duration", "duration_disagree"],
+    days: ["no_value", "disagree", "sleep_review", "sleep_other"],
+    records: ["no_value", "disagree"],
+  });
+  assert.ok(Object.isFrozen(view.GROUND_REASONS) && Object.values(view.GROUND_REASONS).every(Object.isFrozen));
+  // The whole number with its separators.
+  assert.equal(said("dist", groundsPanel({ no_value: [[3, 1234]] }), 3, "en")[0], "1,234 not counted: ");
+  assert.equal(said("dist", groundsPanel({ no_value: [[3, 1234]] }), 3, "ja")[0], "入っていない 1,234 回：");
+  // The lines are summed, with the lines of a series not drawn.
+  const other = groundsPanel({ no_value: [[1, 2]] }, undefined, undefined, { per_period_other: { no_value: [[1, 1]], disagree: [[0, 4]] } });
+  assert.equal(said("dist", other, 1, "ja")[0], "入っていない 3 回：");
+  assert.deepEqual(said("dist", other, 0, "ja"), ["入っていない 4 回：", "食い違い", "値が食い違って空にしたアクティビティ 4 回は入っていません。"]);
+  const lines = { ...one, lines: [...one.lines, { ...one.lines[0], per_period: { no_value: [[1, 1]] } }] };
+  assert.equal(said("dist", lines, 1, "ja")[0], "入っていない 4 回：");
+  // An item of a FIT file: no FIT file linked, or no such value in it, in the
+  // words of its note.
+  assert.deepEqual(said("asc", one, 1, "ja"), ["入っていない 3 回：", "FIT の値なし", "FIT ファイルとつながっていないか FIT にこの値が無いアクティビティ 3 回は入っていません。"]);
+  assert.deepEqual(said("asc", one, 1, "en"), ["3 not counted: ", "no FIT value", "Not counted (activities with no linked FIT file, or whose FIT file has no such value: 3)."]);
+  // A pace of a distance or a time of 0 or less apart from one without a value: its
+  // count in parentheses, so that two numbers do not stand side by side.
+  const pace = groundsPanel({ no_value: [[1, 3]], zero_value: [[1, 1]] });
+  assert.deepEqual(said("pace", pace, 1, "ja"), ["入っていない 4 回：", "値なし（3）・距離か時間が 0 以下（1）", "値の無いアクティビティ 3 回・距離か時間が 0 以下のアクティビティ 1 回は入っていません。"]);
+  assert.deepEqual(said("pace", pace, 1, "en"), [
+    "4 not counted: ",
+    "no value (3), distance or time 0 or less (1)",
+    "Not counted (activities without a value: 3; activities with a distance or a time of 0 or less: 1).",
+  ]);
+  assert.deepEqual(said("pace", groundsPanel({ zero_value: [[1, 2]] }), 1, "ja"), ["入っていない 2 回：", "距離か時間が 0 以下", "距離か時間が 0 以下のアクティビティ 2 回は入っていません。"]);
+  // An average by time: no time, and a time emptied as its values disagreed.
+  const hr = groundsPanel({ duration_disagree: [[1, 1]], no_duration: [[1, 2]], disagree: [[1, 1]] });
+  assert.deepEqual(said("hr", hr, 1, "ja"), [
+    "入っていない 4 回：",
+    "食い違い（1）・時間なし（2）・時間の食い違い（1）",
+    "値が食い違って空にしたアクティビティ 1 回・時間の無いアクティビティ 2 回・時間が食い違って空にしたアクティビティ 1 回は入っていません。",
+  ]);
+  assert.deepEqual(said("hr", hr, 1, "en"), [
+    "4 not counted: ",
+    "values disagree (1), no time (2), times disagree (1)",
+    "Not counted (activities whose values disagreed and were left empty: 1; activities without a time: 2; activities whose times disagreed and were left empty: 1).",
+  ]);
+  // The days, with a space before the words after their number in Japanese.
+  const days = groundsPanel({ no_value: [[1, 4]], disagree: [[1, 1]] });
+  assert.deepEqual(said("rhr", days, 1, "ja"), ["入っていない 5 日：", "値なし（4）・食い違い（1）", "値の無い日 4・値が食い違って空にした日 1 は入っていません。"]);
+  assert.deepEqual(said("rhr", days, 1, "en"), ["5 not counted: ", "no value (4), values disagree (1)", "Not counted (days without a value: 4; days whose values disagreed and were left empty: 1)."]);
+  assert.deepEqual(said("rhr", groundsPanel({ no_value: [[1, 1]] }), 1, "ja"), ["入っていない 1 日：", "値なし", "値の無い日 1 は入っていません。"]);
+  const sleep = groundsPanel({ sleep_review: [[1, 2]], sleep_other: [[1, 1]] });
+  assert.deepEqual(said("sleep", sleep, 1, "ja"), ["入っていない 3 日：", "確かめが要る睡眠（2）・除いた睡眠（1）", "確かめが要る睡眠の日 2・除いた睡眠の日 1 は入っていません。"]);
+  assert.deepEqual(said("sleep", sleep, 1, "en"), [
+    "3 not counted: ",
+    "sleep needs review (2), excluded sleeps only (1)",
+    "Not counted (days with a sleep that needs review: 2; days with excluded sleeps only: 1).",
+  ]);
+  // The records.
+  const records = groundsPanel({ disagree: [[1, 1]] });
+  assert.deepEqual(said("p5k", records, 1, "ja"), ["入っていない記録 1：", "食い違い", "値が食い違って空にした記録 1 は入っていません。"]);
+  assert.deepEqual(said("p5k", records, 1, "en"), ["1 not counted: ", "values disagree", "Not counted (records whose values disagreed and were left empty: 1)."]);
+  // A reason that the kind of the panel does not tell, a reason not known,
+  // and counts that are not whole counts above 0 are not said.
+  assert.equal(said("rhr", groundsPanel({ zero_value: [[1, 2]] }), 1, "ja")[0], null);
+  const odd = groundsPanel({ toString: [[1, 2]], no_value: [[1, 1.5], [1, -1], ["1", 2], [1], null, [1, 0], [1, 2]], disagree: "x" });
+  assert.deepEqual(said("dist", odd, 1, "ja"), ["入っていない 2 回：", "値なし", "値の無いアクティビティ 2 回は入っていません。"]);
+  const parsed = groundsPanel(JSON.parse('{"__proto__": [[1, 2]], "no_value": [[1, 1]]}'));
+  assert.equal(said("dist", parsed, 1, "ja")[0], "入っていない 1 回：");
+  assert.equal(said("dist", groundsPanel("x"), 1, "ja")[0], null);
+  assert.equal(said("dist", groundsPanel(null), 1, "ja")[0], null);
+});
+
+test("a period without a value and nothing left out says where it is (stage X6 of v2.3.0)", () => {
+  const said = (key, panel, index, language, grain = "month") => groundsWords(view.periodGrounds(item(key), panel, MONTHS, index, grain, language), language);
+  // Of the activities: between the first and the last activity counted, of
+  // the types and the conditions chosen, there was none in the period.
+  const inside = groundsPanel({});
+  assert.deepEqual(said("dist", inside, 1, "ja"), [null, "この月に数えるアクティビティはありません。", "この月に数えるアクティビティはありません。"]);
+  assert.deepEqual(said("dist", inside, 1, "en"), [null, "This month has no activity counted.", "This month has no activity counted."]);
+  assert.equal(said("dist", inside, 1, "ja", "week")[1], "この週に数えるアクティビティはありません。");
+  assert.equal(said("dist", inside, 1, "en", "day")[1], "This day has no activity counted.");
+  // Before the first or after the last, or no activity counted at all.
+  const outside = groundsPanel({}, [0, 0, 18, 0], ["2026-08-05", "2026-09-20"]);
+  assert.deepEqual(said("dist", outside, 0, "ja"), [null, "数えるアクティビティの最初と最後の外です。", "数えるアクティビティの最初と最後の外です。"]);
+  assert.equal(said("dist", outside, 3, "en")[1], "Outside the first and the last activity counted.");
+  // The first and the last day themselves are inside.
+  assert.equal(said("dist", groundsPanel({}, [0, 0, 18, 0], ["2026-07-31", "2026-10-01"]), 0, "ja")[1], "この月に数えるアクティビティはありません。");
+  assert.equal(said("dist", groundsPanel({}, [0, 0, 18, 0], ["2026-07-31", "2026-10-01"]), 3, "ja")[1], "この月に数えるアクティビティはありません。");
+  assert.equal(said("dist", groundsPanel({}, [0, 0, 0, 0], null), 1, "ja")[1], "数えるアクティビティの最初と最後の外です。");
+  // Of the days and the records: the item has no record in the period.
+  assert.deepEqual(said("rhr", groundsPanel({}), 1, "ja"), [null, "この月にこの項目の記録はありません。", "この月にこの項目の記録はありません。"]);
+  assert.equal(said("p5k", groundsPanel({}), 1, "en", "week")[1], "This week has no record of this item.");
+  // A period that is not there, and no panel.
+  assert.equal(view.periodGrounds(item("dist"), inside, MONTHS, 9, "month", "ja"), null);
+  assert.equal(view.periodGrounds(item("dist"), null, MONTHS, 1, "month", "ja"), null);
+});
+
+test("the list of a period says what the panel left out of it, and each row why (stage X6 of v2.3.0)", () => {
+  const said = (key, grounds, language) => groundsWords(view.listGrounds(item(key), grounds, language), language);
+  assert.deepEqual(said("pace", { no_value: 2, zero_value: 1 }, "ja"), ["入っていない 3 件：", "値なし（2）・距離か時間が 0 以下（1）", "値の無いアクティビティ 2 回・距離か時間が 0 以下のアクティビティ 1 回は入っていません。"]);
+  assert.deepEqual(said("pace", { no_value: 2, zero_value: 1 }, "en"), [
+    "3 not counted: ",
+    "no value (2), distance or time 0 or less (1)",
+    "Not counted (activities without a value: 2; activities with a distance or a time of 0 or less: 1).",
+  ]);
+  assert.deepEqual(said("hr", { no_duration: 1 }, "ja"), ["入っていない 1 件：", "時間なし", "時間の無いアクティビティ 1 回は入っていません。"]);
+  assert.deepEqual(said("asc", { no_value: 4 }, "ja"), ["入っていない 4 件：", "FIT の値なし", "FIT ファイルとつながっていないか FIT にこの値が無いアクティビティ 4 回は入っていません。"]);
+  assert.equal(view.listGrounds(item("dist"), {}, "ja"), null);
+  assert.equal(view.listGrounds(item("dist"), undefined, "ja"), null);
+  assert.equal(view.listGrounds(item("dist"), { sleep_review: 2 }, "ja"), null);
+  // The word of each row left out, as in the line under the list.
+  assert.equal(view.groundsWordKey(item("dist"), "no_value", "short"), "view.grounds.short.no_value");
+  assert.equal(view.groundsWordKey(item("asc"), "no_value", "short"), "view.grounds.short.no_value_fit");
+  assert.equal(view.groundsWordKey(item("pace"), "zero_value", "short"), "view.grounds.short.zero_value");
+  assert.equal(view.groundsWordKey(item("hr"), "duration_disagree", "short"), "view.grounds.short.duration_disagree");
+  assert.equal(view.groundsWordKey(item("dist"), "toString", "short"), null);
+  assert.equal(view.groundsWordKey(item("dist"), "no_value", "toString"), null);
+  assert.equal(view.groundsWordKey(item("rhr"), "zero_value", "days"), null);
+  // The word of an empty cell is that of a value missing.
+  assert.equal(translate(catalogs, "ja", "view.grounds.short.no_value"), translate(catalogs, "ja", "view.no_value"));
+  assert.equal(translate(catalogs, "en", "view.grounds.short.no_value"), translate(catalogs, "en", "view.no_value").toLowerCase());
+});
+
+test("the notes of a panel tell apart what left_out counts together, and say the days and the records without a value (stage X6 of v2.3.0)", () => {
+  const panel = (left, perPeriod, other) => {
+    const found = panelOf([1, 0], [1, 0], { periods_with_records: 1, periods_without_records: 1 });
+    return { ...found, lines: found.lines.map((line) => ({ ...line, per_period: perPeriod })), left_out: left, per_period_other: other };
+  };
+  const said = (key, left, perPeriod = {}, other = undefined, language = "en") =>
+    view.panelNotes(item(key), panel(left, perPeriod, other), MONTHS.slice(1, 3), "month", language).map((note) => words(note, language));
+  // A pace of a distance or a time of 0 or less apart from those without a value.
+  const pace = said("pace", { no_value: 4 }, { no_value: [[0, 1]], zero_value: [[0, 2], [1, 1]] });
+  assert.ok(pace.includes("1 activity without a value is not included."));
+  assert.ok(pace.includes("3 activities with a distance or a time of 0 or less are not included."));
+  assert.ok(!pace.some((note) => note.startsWith("4 ")));
+  const zero = said("pace", { no_value: 1 }, { zero_value: [[0, 1]] });
+  assert.ok(zero.includes("1 activity with a distance or a time of 0 or less is not included."));
+  assert.ok(!zero.some((note) => note.includes("without a value")));
+  assert.ok(said("pace", { no_value: 1 }, { zero_value: [[0, 1]] }, undefined, "ja").includes("距離か時間が 0 以下のアクティビティ 1 回は入っていません。"));
+  // A time emptied as the values disagreed apart from no time, also of a
+  // series not drawn.
+  const hr = said("hr", { no_duration: 3 }, { no_duration: [[0, 1]], duration_disagree: [[1, 2]] });
+  assert.ok(hr.includes("1 activity without a time is not in the mean."));
+  assert.ok(hr.includes("2 activities whose times disagreed and were left empty are not in the mean."));
+  const hidden = said("hr", { no_duration: 1 }, {}, { duration_disagree: [[0, 1]] });
+  assert.ok(hidden.includes("1 activity whose times disagreed and were left empty is not in the mean."));
+  assert.ok(!hidden.some((note) => note.includes("without a time")));
+  assert.ok(said("hr", { no_duration: 2 }, { duration_disagree: [[1, 2]] }, undefined, "ja").includes("時間が食い違って空にしたアクティビティ 2 回は、平均に入っていません。"));
+  // Without the grounds, as before.
+  assert.ok(said("dist", { no_value: 3 }).includes("3 activities without a value are not included."));
+  assert.ok(said("hr", { no_duration: 2 }).includes("2 activities without a time are not in the mean."));
+  // The days and the records without a value.
+  assert.ok(said("rhr", { no_value: 2 }).includes("2 days without a value are not included."));
+  assert.ok(said("sleep", { no_value: 1 }).includes("1 day without a value is not included."));
+  assert.ok(said("p5k", { no_value: 1 }).includes("1 record without a value is not included."));
+  assert.ok(said("rhr", { no_value: 2 }, {}, undefined, "ja").includes("値の無い日 2 は入っていません。"));
+  assert.ok(said("p5k", { no_value: 3 }, {}, undefined, "ja").includes("値の無い記録 3 は入っていません。"));
+  assert.deepEqual(
+    view.panelNotes(item("rhr"), panel({ no_value: 1, disagree: 2 }, {}), MONTHS.slice(1, 3), "month", "ja").map((note) => note.key),
+    ["view.note.day_disagree", "view.note.day_missing_one"],
+  );
+  assert.deepEqual(
+    view.panelNotes(item("vo2"), panel({ no_value: 2 }, {}), MONTHS.slice(1, 3), "month", "ja").map((note) => note.key),
+    ["view.note.record_missing"],
+  );
+  // A count of 0 has no note.
+  assert.ok(!said("rhr", { no_value: 0 }).some((note) => note.includes("without a value")));
+});
+
+test("the whole of the grounds is said in the words of the notes of the panel (stage X6 of v2.3.0)", () => {
+  const pairs = [
+    ["view.grounds.long.activities.no_value", "view.note.activity_missing"],
+    ["view.grounds.long.activities.no_value_fit", "view.note.fit_missing"],
+    ["view.grounds.long.activities.zero_value", "view.note.zero_value"],
+    ["view.grounds.long.activities.disagree", "view.note.activity_disagree"],
+    ["view.grounds.long.activities.no_duration", "view.note.no_duration"],
+    ["view.grounds.long.activities.duration_disagree", "view.note.duration_disagree"],
+    ["view.grounds.long.days.no_value", "view.note.day_missing"],
+    ["view.grounds.long.days.disagree", "view.note.day_disagree"],
+    ["view.grounds.long.records.no_value", "view.note.record_missing"],
+    ["view.grounds.long.records.disagree", "view.note.record_disagree"],
+  ];
+  for (const [long, note] of pairs) {
+    // In Japanese, the note begins with the words of the grounds, which
+    // have no 読点, as they are joined by 「・」.
+    assert.ok(!catalogs.ja[long].includes("、"), long);
+    assert.ok(catalogs.ja[note].replace(/、/gu, " ").startsWith(catalogs.ja[long]), note);
+    // In English, the note says what the grounds say, but the FIT file.
+    if (long !== "view.grounds.long.activities.no_value_fit") {
+      assert.ok(catalogs.en[note].includes(catalogs.en[long].replace(/: \{n\}$/u, "")), note);
+    }
+  }
+  for (const phrase of ["no linked FIT file", "FIT file has no such value"]) {
+    assert.ok(catalogs.en["view.note.fit_missing"].includes(phrase), phrase);
+    assert.ok(catalogs.en["view.grounds.long.activities.no_value_fit"].includes(phrase), phrase);
+  }
+  // The sleeps, as the note of the days not used says them.
+  assert.ok(catalogs.ja["view.note.sleep_unused"].includes(catalogs.ja["view.grounds.long.days.sleep_review"].replace(/の日 \{n\}$/u, "")));
+  assert.ok(catalogs.ja["view.note.sleep_unused"].includes(catalogs.ja["view.grounds.long.days.sleep_other"].replace(/の日 \{n\}$/u, "")));
+  assert.ok(catalogs.en["view.note.sleep_unused"].includes(catalogs.en["view.grounds.long.days.sleep_review"].replace(/^days /u, "").replace(/: \{n\}$/u, "")));
+  assert.ok(catalogs.en["view.note.sleep_unused"].includes(catalogs.en["view.grounds.long.days.sleep_other"].replace(/^days /u, "").replace(/: \{n\}$/u, "")));
+});
+
 test("a table has every period, newest first, with each line's value and count", () => {
   const panel = panelOf([12000, null, 180200, 108100], [1, 0, 18, 11], null);
   const rows = view.tableRows(item("dist"), panel, MONTHS, "month", "ja");

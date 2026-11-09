@@ -198,6 +198,8 @@ import {
   listColumns,
   listEmptyMessage,
   listFrom,
+  listGrounds,
+  groundsWordKey,
   listHead,
   listLimitMessage,
   listOpens,
@@ -1021,6 +1023,25 @@ function setText(element, text) {
   if (element.textContent !== text) {
     element.textContent = text;
   }
+}
+
+// The second line of the reading of a panel (stage X6 of v2.3.0): the number
+// left out first, kept whole, then the reasons, cut at their end where the
+// line does not fit; the whole in the words of the notes on the pointer. An
+// empty line where the period has no grounds, so that the heading keeps its
+// height.
+function groundsLine(grounds) {
+  const line = element("span", "read-grounds");
+  if (grounds === null) {
+    line.append("\u00a0");
+    return line;
+  }
+  if (grounds.lead !== null) {
+    line.append(element("span", "read-grounds-lead", describe(grounds.lead)));
+  }
+  line.append(element("span", "read-grounds-reasons", describe(grounds.reasons)));
+  line.title = describe(grounds.full);
+  return line;
 }
 
 function element(tag, className = "", text = null) {
@@ -4375,8 +4396,11 @@ function buildPanel({ key, item, panel }, index, count, periods, grain, marksTex
       head.append(keys);
     }
   }
-  const read = element("span", "panel-read");
+  // The reading holds two lines (stage X6 of v2.3.0): the reading and the
+  // grounds of its period, empty until a period is chosen.
+  const read = element("span", "panel-read two-lines");
   read.setAttribute("aria-hidden", "true");
+  read.append(element("span", "read-line", "\u00a0"), groundsLine(null));
   head.append(read);
   const tools = element("span", "panel-tools");
   if (mode !== "mini") {
@@ -5099,14 +5123,22 @@ function moveCross(index, speak) {
         entry.names[value.line] === null
           ? describe(value.value)
           : t("view.spoken_line", { line: describe(entry.names[value.line]), value: describe(value.value) });
+      // The grounds of the period, whole and in parentheses, after the values
+      // of the panel (stage X6 of v2.3.0).
+      const grounds = reading.grounds === null ? "" : t("view.spoken_grounds", { grounds: describe(reading.grounds.full).replace(/[。.]$/u, "") });
       spoken.push(
         t("view.spoken_item", {
           name: itemName(entry.key),
-          value: reading.values.length ? reading.values.map(spokenValue).join(t("view.spoken_separator")) : t("view.no_value"),
+          value: (reading.values.length ? reading.values.map(spokenValue).join(t("view.spoken_separator")) : t("view.no_value")) + grounds,
         }),
       );
     }
-    entry.read.replaceChildren(...nodes);
+    // Two lines always, the second the grounds of the period or empty, so that
+    // the heading keeps its height as the pointer moves and while no period is
+    // chosen (stage X6 of v2.3.0, the person's choice (a)).
+    const first = element("span", "read-line");
+    first.append(...(nodes.length ? nodes : ["\u00a0"]));
+    entry.read.replaceChildren(first, groundsLine(reading?.grounds ?? null));
   }
   if (speak) {
     const period = describe(periodMessage(answer.periods[state.cursor], answer.grain, state.language));
@@ -5370,7 +5402,7 @@ function renderList({ top = false } = {}) {
   } else if (answer.rows === null) {
     parts.push(element("p", "list-note", describe(listLimitMessage(answer.total, answer.limit, list.grain, state.language))));
   } else {
-    parts.push(buildListTable(list, answer.rows, titleText));
+    parts.push(buildListTable(list, answer.rows, titleText, entry.item));
     for (const reason of LIST_LAP_REASONS.filter((name) => answer.rows.some((row) => row.laps_unavailable === name))) {
       const note = element("p", "list-note list-laps-note", t(LIST_LAP_KEYS[reason]));
       note.id = `list-laps-${reason}`;
@@ -5387,6 +5419,14 @@ function renderList({ top = false } = {}) {
       line.append(" ", element("span", "list-sort-note", t("view.list.sort_note")));
     }
     parts.push(line);
+    // What the panel left out of the period, on a line of its own under its
+    // value (stage X6 of v2.3.0).
+    const grounds = listGrounds(entry.item, answer.value?.grounds, state.language);
+    if (grounds !== null) {
+      const under = element("p", "list-value list-grounds", `${describe(grounds.lead)}${describe(grounds.reasons)}`);
+      under.title = describe(grounds.full);
+      parts.push(under);
+    }
   }
   listBox.replaceChildren(...parts);
   if (entry.section.nextElementSibling !== listBox) {
@@ -5404,8 +5444,10 @@ function renderList({ top = false } = {}) {
 
 // The table of the list: a head for each column, which orders the rows by
 // it, and the rows in that order, each named by its date and time; a value
-// that an activity does not have shows a dash and says so.
-function buildListTable(list, rows, titleText) {
+// that an activity does not have shows a dash and says so. In the column of
+// the panel's item, a row that the panel left out says why (stage X6 of
+// v2.3.0).
+function buildListTable(list, rows, titleText, item) {
   const wrap = element("div", "list-table");
   wrap.tabIndex = 0;
   wrap.setAttribute("role", "region");
@@ -5454,11 +5496,22 @@ function buildListTable(list, rows, titleText) {
       if (column === "when") {
         cell.scope = "row";
       }
+      const reasonKey = column === list.key && typeof row.left_out === "string" ? groundsWordKey(item, row.left_out, "short") : null;
+      const reason = reasonKey === null ? null : element("span", "list-reason", t(reasonKey));
       if (text === null) {
         cell.classList.add("empty");
         const dash = element("span", "", "\u2014");
         dash.setAttribute("aria-hidden", "true");
         cell.append(dash, element("span", "visually-hidden", t("view.no_value")));
+        if (reason !== null) {
+          // A value missing is said once (stage X6 of v2.3.0).
+          if (reasonKey === "view.grounds.short.no_value") {
+            reason.setAttribute("aria-hidden", "true");
+          }
+          cell.append(reason);
+        }
+      } else if (reason !== null) {
+        cell.append(text, reason);
       } else if (column === "name") {
         // A name of the output may change the direction of the text around
         // it (Codex's review of the plan of T1).

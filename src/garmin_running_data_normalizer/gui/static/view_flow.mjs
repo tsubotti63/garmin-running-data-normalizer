@@ -965,8 +965,184 @@ export function lineNames(panel, language) {
   });
 }
 
+// The grounds of a period of a panel (stage X6 of v2.3.0): what the period
+// left out of its value and why, as the server counted it (per_period of its
+// lines, and per_period_other of the lines of a series not drawn), or where a
+// period without a value is. Only what the output holds is said. The second
+// line of the reading shows the number left out first and then the reasons in
+// short ("lead" and "reasons"), so that a line cut at its end keeps the
+// number; "full" says the whole in the words of the notes of the panel, for
+// its title and for what is spoken.
+export const GROUND_REASONS = Object.freeze({
+  activities: Object.freeze(["no_value", "zero_value", "disagree", "no_duration", "duration_disagree"]),
+  days: Object.freeze(["no_value", "disagree", "sleep_review", "sleep_other"]),
+  records: Object.freeze(["no_value", "disagree"]),
+});
+const GROUND_NAMES = new Set(Object.values(GROUND_REASONS).flat());
+
+// The keys of the words of the grounds, written out whole, so that the test of
+// the keys that the pages use finds them: the number left out first, by what
+// the panel counts (or by the rows of the list), and the reasons in short and
+// in the words of the notes of each kind of panel.
+const GROUND_LEADS = Object.freeze({
+  activities: "view.grounds.lead_activities",
+  days: "view.grounds.lead_days",
+  records: "view.grounds.lead_records",
+  list: "view.grounds.lead_list",
+});
+// The whole in a sentence: in Japanese, the reasons of the days and of the
+// records end with their number, and a space comes before the words after it.
+const GROUND_FULL = Object.freeze({
+  activities: "view.grounds.full",
+  days: "view.grounds.full_number",
+  records: "view.grounds.full_number",
+});
+const GROUND_WORDS = Object.freeze({
+  short: Object.freeze({
+    no_value: "view.grounds.short.no_value",
+    no_value_fit: "view.grounds.short.no_value_fit",
+    zero_value: "view.grounds.short.zero_value",
+    disagree: "view.grounds.short.disagree",
+    no_duration: "view.grounds.short.no_duration",
+    duration_disagree: "view.grounds.short.duration_disagree",
+    sleep_review: "view.grounds.short.sleep_review",
+    sleep_other: "view.grounds.short.sleep_other",
+  }),
+  activities: Object.freeze({
+    no_value: "view.grounds.long.activities.no_value",
+    no_value_fit: "view.grounds.long.activities.no_value_fit",
+    zero_value: "view.grounds.long.activities.zero_value",
+    disagree: "view.grounds.long.activities.disagree",
+    no_duration: "view.grounds.long.activities.no_duration",
+    duration_disagree: "view.grounds.long.activities.duration_disagree",
+  }),
+  days: Object.freeze({
+    no_value: "view.grounds.long.days.no_value",
+    disagree: "view.grounds.long.days.disagree",
+    sleep_review: "view.grounds.long.days.sleep_review",
+    sleep_other: "view.grounds.long.days.sleep_other",
+  }),
+  records: Object.freeze({
+    no_value: "view.grounds.long.records.no_value",
+    disagree: "view.grounds.long.records.disagree",
+  }),
+});
+
+export function groundsKind(item) {
+  return isActivityItem(item) ? "activities" : item.kind === "obs" ? "records" : "days";
+}
+
+// Each count of the grounds of a panel that the server sent, as [reason,
+// index of the period, count]: of its lines, and of the lines of a series not
+// drawn; only a reason that a panel tells and a whole count above 0.
+function* groundPairs(panel) {
+  for (const source of [...(panel?.lines ?? []).map((line) => line?.per_period), panel?.per_period_other]) {
+    for (const [name, pairs] of Object.entries(source ?? {})) {
+      if (!GROUND_NAMES.has(name) || !Array.isArray(pairs)) {
+        continue;
+      }
+      for (const pair of pairs) {
+        if (Array.isArray(pair) && Number.isInteger(pair[0]) && Number.isInteger(pair[1]) && pair[1] > 0) {
+          yield [name, pair[0], pair[1]];
+        }
+      }
+    }
+  }
+}
+
+// The counts of the grounds of one period, by reason.
+export function groundsAt(panel, index) {
+  const found = {};
+  for (const [name, at, count] of groundPairs(panel)) {
+    if (at === index) {
+      found[name] = (found[name] ?? 0) + count;
+    }
+  }
+  return found;
+}
+
+// The counts of the grounds of all the periods of a panel, by reason.
+export function groundsTotal(panel) {
+  const found = {};
+  for (const [name, , count] of groundPairs(panel)) {
+    found[name] = (found[name] ?? 0) + count;
+  }
+  return found;
+}
+
+// The key of the word of a reason, in short ("short") or in the words of the
+// notes of a kind of panel; an item of a FIT file has no value where its
+// activity has no FIT file linked or the file has no such value. None for a
+// reason that the form does not tell.
+export function groundsWordKey(item, name, form) {
+  const words = Object.hasOwn(GROUND_WORDS, form) ? GROUND_WORDS[form] : {};
+  const word = name === "no_value" && item?.from_fit && Object.hasOwn(words, "no_value_fit") ? "no_value_fit" : name;
+  return Object.hasOwn(words, word) ? words[word] : null;
+}
+
+function groundsReasons(item, kind, found, language, form) {
+  const names = GROUND_REASONS[kind].filter((name) => (found[name] ?? 0) > 0);
+  if (names.length === 0) {
+    return null;
+  }
+  const n = (name) => countText(found[name], language);
+  const parts =
+    form === "short"
+      ? names.length === 1
+        ? [message(groundsWordKey(item, names[0], "short"))]
+        : names.map((name) => message("view.grounds.short_count", { n: n(name) }, { name: groundsWordKey(item, name, "short") }))
+      : names.map((name) => message(groundsWordKey(item, name, kind), { n: n(name) }));
+  return parts.reduce((a, b) => message(form === "short" ? "view.grounds.join" : "view.grounds.join_long", {}, { a, b }));
+}
+
+function groundsLeft(kind, found, lead, item, language) {
+  const left = GROUND_REASONS[kind].reduce((sum, name) => sum + (found[name] ?? 0), 0);
+  if (left === 0) {
+    return null;
+  }
+  return {
+    lead: message(lead, { n: countText(left, language) }),
+    reasons: groundsReasons(item, kind, found, language, "short"),
+    full: message(GROUND_FULL[kind], {}, { reasons: groundsReasons(item, kind, found, language, "long") }),
+  };
+}
+
+export function periodGrounds(item, panel, periods, index, grain, language) {
+  const period = periods[index];
+  if (period === undefined || !panel) {
+    return null;
+  }
+  const kind = groundsKind(item);
+  const found = groundsAt(panel, index);
+  const left = groundsLeft(kind, found, GROUND_LEADS[kind], item, language);
+  if (left !== null) {
+    return left;
+  }
+  if ((panel.lines ?? []).some((line) => (line.counts?.[index] ?? 0) > 0)) {
+    return null;
+  }
+  // Nothing counted and nothing left out: the period has no row of the item.
+  // For an item of the activities, a period outside the first and the last
+  // activity counted (of the types and the conditions chosen) says so.
+  const grains = { grain: GRAIN_WORD_KEYS[grain] };
+  let sentence = message("view.grounds.no_rows", {}, grains);
+  if (kind === "activities") {
+    const span = panel.lines?.[0]?.counted_days;
+    const outside = !Array.isArray(span) || period.end < span[0] || period.start > span[1];
+    sentence = message(outside ? "view.grounds.outside" : "view.grounds.none", {}, grains);
+  }
+  return { lead: null, reasons: sentence, full: sentence };
+}
+
+// The grounds under the list of a period: what the panel left out of the
+// period, as the server counted it for the list (its words count rows).
+export function listGrounds(item, grounds, language) {
+  return groundsLeft("activities", grounds ?? {}, GROUND_LEADS.list, item, language);
+}
+
 // What the panel says at its top right for one period: the period, and for
-// each line its value and its count, or that it has no value.
+// each line its value and its count, or that it has no value; and the grounds
+// of the period (stage X6 of v2.3.0).
 export function readout(item, panel, periods, index, grain, language) {
   const period = periods[index];
   if (period === undefined) {
@@ -979,7 +1155,7 @@ export function readout(item, panel, periods, index, grain, language) {
     }
     return [{ line: number, value: valueMessage(item.key, value, language), count: countMessage(item, line.counts?.[index] ?? 0, grain, language) }];
   });
-  return { period: periodMessage(period, grain, language), values };
+  return { period: periodMessage(period, grain, language), values, grounds: periodGrounds(item, panel, periods, index, grain, language) };
 }
 
 // The notes of a panel ("About this panel"): what is left out of its numbers
@@ -994,18 +1170,40 @@ export function panelNotes(item, panel, periods, grain, language) {
   if (summary.total && summary.withoutRecords > 0) {
     notes.push({ ...message("view.note.zero", { n: n(summary.withoutRecords) }, { grain: GRAIN_COUNT_KEYS[grain] }), help: "zero" });
   }
+  // Stage X6 of v2.3.0: the parts of the grounds that left_out counts
+  // together (a pace of a distance or a time of 0 or less with those without
+  // a value,
+  // an average whose time was emptied as the values disagreed with those
+  // without a time) are told apart by the grounds of the periods summed; and
+  // the days and the records without a value, which no note said before.
+  const grounds = groundsTotal(panel);
   if (isActivityItem(item)) {
     if (count("disagree") > 0) {
       notes.push(message(countKey("view.note.activity_disagree", count("disagree")), { n: n(count("disagree")) }));
     }
+    const zero = grounds.zero_value ?? 0;
+    const missing = count("no_value") - zero;
+    if (missing > 0) {
+      notes.push(message(countKey(item.from_fit ? "view.note.fit_missing" : "view.note.activity_missing", missing), { n: n(missing) }));
+    }
+    if (zero > 0) {
+      notes.push(message(countKey("view.note.zero_value", zero), { n: n(zero) }));
+    }
+    const times = grounds.duration_disagree ?? 0;
+    const without = count("no_duration") - times;
+    if (without > 0) {
+      notes.push(message(countKey("view.note.no_duration", without), { n: n(without) }));
+    }
+    if (times > 0) {
+      notes.push(message(countKey("view.note.duration_disagree", times), { n: n(times) }));
+    }
+  } else {
+    if (count("disagree") > 0) {
+      notes.push(message(countKey(item.kind === "obs" ? "view.note.record_disagree" : "view.note.day_disagree", count("disagree")), { n: n(count("disagree")) }));
+    }
     if (count("no_value") > 0) {
-      notes.push(message(countKey(item.from_fit ? "view.note.fit_missing" : "view.note.activity_missing", count("no_value")), { n: n(count("no_value")) }));
+      notes.push(message(countKey(item.kind === "obs" ? "view.note.record_missing" : "view.note.day_missing", count("no_value")), { n: n(count("no_value")) }));
     }
-    if (count("no_duration") > 0) {
-      notes.push(message(countKey("view.note.no_duration", count("no_duration")), { n: n(count("no_duration")) }));
-    }
-  } else if (count("disagree") > 0) {
-    notes.push(message(countKey(item.kind === "obs" ? "view.note.record_disagree" : "view.note.day_disagree", count("disagree")), { n: n(count("disagree")) }));
   }
   if (item.kind === "tw" || item.kind === "pace") {
     notes.push({ ...message("view.note.calculated"), help: "calculated" });

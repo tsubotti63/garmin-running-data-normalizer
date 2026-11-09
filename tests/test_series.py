@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import csv
 import io
 import json
@@ -212,6 +213,26 @@ class SeriesFileTest(SeriesTestCase):
         self.assertIsNone(re.search(r"\d\.\d", output))
         self.assertNotIn(str(self.root), output)
         self.assertNotIn(str(self.place), output)
+
+    def test_the_grounds_of_the_view_page_add_nothing_to_the_file(self) -> None:
+        # Stage X6 of v2.3.0 (the checker's review of the plan): the grounds
+        # of a period (per_period, per_period_other, counted_days) are the
+        # view page's only. The CSV is that of the answer without them, and
+        # the lines of the command name the keys of left_out, never the
+        # finer reasons of the grounds.
+        answer = view_answer(self.data, ["dist", "hr", "pace", "rhr", "sleep", "tr"], "all", "month")
+        bare = copy.deepcopy(answer)
+        for panel in bare["panels"]:
+            panel.pop("per_period_other")
+            for line in panel["lines"]:
+                line.pop("per_period")
+                line.pop("counted_days", None)
+        self.assertEqual(series_csv(answer), series_csv(bare))
+        _target, lines = self.series("--item", "hr", "--item", "pace", "--item", "sleep", "--item", "vo2", "--grain", "day")
+        output = "\n".join(lines)
+        for word in ("per_period", "counted_days", "zero_value=", "duration_disagree=", "sleep_review=", "sleep_other="):
+            with self.subTest(word=word):
+                self.assertNotIn(word, output)
 
 
 class SeriesRefusalTest(SeriesTestCase):

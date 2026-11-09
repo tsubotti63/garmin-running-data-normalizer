@@ -971,6 +971,43 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   Panels of the same unit can share one scale on request. Acute and chronic
   training load are both Garmin's values as they are, but two columns of the
   same source, so they share it.
+- The grounds of a period (stage X6 of v2.3.0, the person's choices "1" (A and
+  D) and "(a)" of the samples): the answer of the panels gives each line
+  `per_period`, the rows that it left out of each period by reason, as pairs
+  of the index of a period and a count (no period of 0 is sent): `no_value`,
+  `zero_value` (a pace whose distance or time is 0 or less), `disagree`,
+  `no_duration`, `duration_disagree` (an average by time whose time was
+  emptied as its values disagreed), `sleep_review`, and `sleep_other`; a panel
+  gives `per_period_other`, those of the lines of a series that it does not
+  draw, and a line of the activities gives `counted_days`, the first and the
+  last day of the activities counted in the output (of the types and the
+  conditions chosen). They add up to `left_out`, whose keys and counts are as
+  before (`zero_value` in `no_value`, `duration_disagree` in `no_duration`;
+  `no_date`, `after_today`, `zero_periods`, and `days_with_several_records`
+  are not rows left out of a period), so the `series` command of the CLI
+  writes what it did. Neither the rows of a period nor the days with several
+  records are sent. The reading at the top right of a panel always holds two
+  lines, so that its heading keeps its height as the cross line moves and
+  while no period is chosen (a low strip beside an enlarged panel, which shows
+  neither the summary nor the notes of a panel, keeps its reading on one line,
+  so that its chart keeps its height): the reading, and the grounds of its
+  period, the number left out first (kept whole) and the reasons in short (cut
+  at their end where the line does not fit; the reasons never widen the
+  reading, while the number counts in its width, so that it is never cut), or
+  where a period with nothing counted and nothing left out is (between the
+  first and the last activity counted, outside them, or without a record of
+  the item); its whole, in the words of the notes of the panel, is its title
+  and is said after the values by the live region of the cross line (in
+  parentheses in Japanese, after a semicolon in English). The list of a period
+  gives each row `left_out` (the reason that the panel left it out, or null)
+  and its value `grounds`: the cell of the item of a row left out says why,
+  and a line under the value says what the panel left out of the period. The
+  notes of a panel tell a pace of a distance or a time of 0 or less apart from
+  one without a value, and a time emptied as the values disagreed apart from
+  one missing, by the grounds summed, and say the days and the records without
+  a value. Only what the output holds is said: a value of another form, which
+  normalization left empty and only `audit/` keeps, is one without a value, as
+  the view page reads no `audit/`.
 - The overview under the panels shows the whole output by month, of the first
   panel or of the one enlarged (by the activity types and the conditions for a
   training or running-form item), and frames the period shown. A drag chooses
