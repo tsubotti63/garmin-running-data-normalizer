@@ -27,6 +27,7 @@ import {
   bundlePlan,
   changeMessages,
   changePlan,
+  changeRecordsView,
   changeRows,
   changedBox,
   checkMessages,
@@ -254,6 +255,10 @@ const ui = {
   cancelNo: byId("cancel-no"),
   runStatus: byId("run-status"),
   runResult: byId("run-result"),
+  // The records that changed since the output before (stage X7 of v2.3.0).
+  runChanges: byId("run-changes"),
+  runChangesLines: byId("run-changes-lines"),
+  runChangesButton: byId("run-changes-button"),
   nextActions: byId("next-actions"),
   openFolder: byId("open-folder-button"),
   openStartHere: byId("open-start-here-button"),
@@ -453,6 +458,13 @@ const state = {
   // run and what a run is compared with; the error of the dialog; and the
   // check, the bundle, and showing it, of that output.
   earlier: null,
+  // The records that changed between the output of the run and the output
+  // before it (stage X7 of v2.3.0): what was asked (the output of the run, the
+  // list, and the number of the output before), whether the server counts,
+  // and its answer or the code of its failure; one count for every request,
+  // so that an answer of an older one is dropped.
+  changes: null,
+  changesSeq: 0,
   target: { kind: "run", index: null, path: null },
   targetChooserError: null,
   tools: emptyTools(),
@@ -1363,6 +1375,7 @@ function renderRun(states, current) {
   }
   replaceLines(ui.runStatus, lines);
   replaceLines(ui.runResult, [...resultDetails(run), ...changeView().run].map(describe));
+  renderChanges();
   ui.nextActions.hidden = !FINISHED_STATES.includes(run.state);
 }
 
@@ -1665,10 +1678,83 @@ async function loadEarlier() {
       const first = state.earlier.outputs[0];
       setTarget("earlier", first ? first.index : null, first ? first.path : null);
     }
+    countChanges();
   } catch (error) {
     connectionFailure(error);
   }
   render();
+}
+
+// The records that changed since the output before the run (stage X7 of
+// v2.3.0): asked once for a finished run whose change the page shows (the
+// same output before, compared as changePlan says), by the number of that
+// output in the list and the list's mark; the server reads both outputs and
+// gives the numbers only.
+function countChanges() {
+  const run = state.run;
+  const previous = state.earlier?.previous ?? null;
+  const comparable =
+    FINISHED_STATES.includes(run.state) &&
+    previous !== null &&
+    typeof run.output_path === "string" &&
+    changePlan(previous, {
+      snapshots: run.how === "snapshots" || run.how === "rerun",
+      version: state.earlier.current?.version,
+      run_all_version: state.earlier.current?.run_all_version,
+      timezone: run.timezone,
+    }).comparable;
+  // Where the change no longer shows (the output before gone, or another
+  // one), the line goes, and an answer on its way is dropped (Codex's review
+  // of the diff of X7, 3).
+  if (!comparable) {
+    if (state.changes !== null) {
+      state.changes = null;
+      state.changesSeq += 1;
+    }
+    return;
+  }
+  const asked = JSON.stringify([run.output_path, state.earlier.list, previous.index]);
+  if (state.changes?.asked === asked) {
+    return;
+  }
+  requestChanges(asked, state.earlier.list, previous.index);
+}
+
+async function requestChanges(asked, list, index) {
+  const seq = ++state.changesSeq;
+  state.changes = { asked, status: "counting", answer: null, code: null };
+  render();
+  try {
+    const answer = await callApi("/api/changes", { list, index });
+    if (seq !== state.changesSeq) {
+      return;
+    }
+    state.changes =
+      answer?.state === "ready"
+        ? { asked, status: "ready", answer, code: null }
+        : { asked, status: "failed", answer: null, code: typeof answer?.code === "string" ? answer.code : null };
+  } catch (error) {
+    if (seq !== state.changesSeq) {
+      return;
+    }
+    if (connectionFailure(error)) {
+      state.changes = null;
+    } else {
+      state.changes = { asked, status: "failed", answer: null, code: error.code ?? null };
+    }
+  }
+  render();
+}
+
+// The lines of the changes and their button, in the fourth box under the
+// lines of the result, while the run shows as finished.
+function renderChanges() {
+  const shown = state.changes !== null && FINISHED_STATES.includes(state.run.state);
+  ui.runChanges.hidden = !shown;
+  const changes = changeRecordsView(shown ? state.changes : null);
+  replaceLines(ui.runChangesLines, changes.lines.map(describe));
+  ui.runChangesButton.hidden = !changes.button;
+  ui.runChangesButton.disabled = !state.connected;
 }
 
 function chooseEarlier(value) {
@@ -2395,6 +2481,8 @@ async function startRun() {
   // The previous result would read as the answer to this attempt.
   state.run = { state: "idle" };
   state.output = null;
+  state.changes = null;
+  state.changesSeq += 1;
   if (state.target.kind === "run") {
     state.tools = emptyTools();
   }
@@ -2743,8 +2831,8 @@ function speakInfo(name) {
 // The view page in its tab (stage G3b): a tab of that name opens the address
 // again, which gives it the key, the colors, and, from the fourth box, the
 // output of this run to show; otherwise a new tab opens.
-function openViewPage(withOutput) {
-  window.open(viewPageAddress(state.launchKey, state.theme, withOutput), VIEW_TAB)?.focus();
+function openViewPage(withOutput, withChanges = false) {
+  window.open(viewPageAddress(state.launchKey, state.theme, withOutput, withChanges), VIEW_TAB)?.focus();
 }
 
 // The view page quit the app: this page says that it stopped, as after its
@@ -3026,6 +3114,9 @@ function connect() {
   ui.cancelNo.addEventListener("click", keepRunning);
   ui.openFolder.addEventListener("click", () => openOutput("folder"));
   ui.viewOutput.addEventListener("click", () => openViewPage(true));
+  // The changes since the output before, on the view page (stage X7 of
+  // v2.3.0).
+  ui.runChangesButton.addEventListener("click", () => openViewPage(true, true));
   ui.openView.addEventListener("click", () => openViewPage(false));
   quitChannel?.addEventListener("message", quitHeard);
   ui.openStartHere.addEventListener("click", () => openOutput("start_here"));

@@ -33,10 +33,12 @@ from .folders import FolderError, list_folders
 from ..run_all import RUN_ALL_VERSION
 from .outputs import (
     OutputActionError,
+    change_reasons,
     check_output,
     earlier_outputs,
     make_support_bundle,
     open_output,
+    output_before,
     output_summary,
 )
 from .places import cloud_kind, default_folder, default_store
@@ -88,9 +90,11 @@ from .views import (
     spread_request,
     shoes_request,
     previous_request,
+    read_checked,
     series_request,
     types_ok,
 )
+from ..view.changes import change_answer, change_counts, compare_outputs
 from ..view.items import ACTIVITIES, ITEMS_BY_KEY
 from ..view.series import (
     MAX_ANSWER_BYTES,
@@ -192,6 +196,9 @@ API_ROUTES = {
     "/api/run/status": "_api_run_status",
     "/api/run/cancel": "_api_run_cancel",
     "/api/outputs": "_api_outputs",
+    # The numbers of the records that changed since the output before the run
+    # (stage X7 of v2.3.0).
+    "/api/changes": "_api_changes",
     "/api/check-output": "_api_check_output",
     "/api/support-bundle": "_api_support_bundle",
     "/api/open-output": "_api_open_output",
@@ -215,6 +222,8 @@ API_ROUTES = {
     "/api/view/laps": "_api_view_laps",
     # The work laps of the shoes of a period (stage X11 of v2.3.0).
     "/api/view/shoes/work": "_api_view_shoes_work",
+    # The records that changed since the output before (stage X7 of v2.3.0).
+    "/api/view/changes": "_api_view_changes",
 }
 
 # Why the laps of an activity are not shown (stage X9c-2 of v2.3.0): those
@@ -304,6 +313,23 @@ def _output_facts(data: Any) -> dict[str, Any]:
         "types": activity_types(data),
         "partial": data.partial,
     }
+
+
+def _changes_plan(output: Path) -> tuple[dict[str, Any], Path | None]:
+    """Whether the view page can compare ``output`` with the output before it
+    (stage X7 of v2.3.0), and that output: "ready", or why not, as the page
+    says under the item of the menu of the other views ("none",
+    "not_remembered", "no_summary": the summary of ``output`` cannot be read,
+    or "differs" with the reasons), with the name of the output before where
+    there is one, never its place."""
+    state, before = output_before(recent_outputs(), output)
+    if before is None:
+        return {"state": state, "before": None, "reasons": []}, None
+    summary, summary_before = output_summary(output), output_summary(before)
+    if summary is None or summary_before is None:
+        return {"state": "no_summary", "before": before.name, "reasons": []}, None
+    reasons = change_reasons(summary_before, summary)
+    return {"state": "differs" if reasons else "ready", "before": before.name, "reasons": reasons}, None if reasons else before
 
 
 def _whole(value: Any) -> bool:
@@ -797,6 +823,42 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             "current": {"version": __version__, "run_all_version": RUN_ALL_VERSION},
         }
 
+    def _api_changes(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The numbers of the records that changed between the output of this
+        # server's last run and the output before the run, by its number in the
+        # list of earlier outputs and the list's mark, as /api/outputs gave
+        # them (stage X7 of v2.3.0): both are checked and read as the view
+        # page reads an output, by its limits for each, and neither is kept.
+        # Only where they are compared (change_reasons); an output that cannot
+        # be read is told by its code, as a line of the fourth box says it.
+        output = self._finished_output()
+        before = self._target_output({"output": "earlier", "index": payload.get("index"), "list": payload.get("list")})
+        summary, summary_before = output_summary(output), output_summary(before)
+        if summary is None or summary_before is None:
+            return {"state": "no_summary", "before": before.name}
+        reasons = change_reasons(summary_before, summary)
+        if reasons:
+            return {"state": "differs", "before": before.name, "reasons": reasons}
+        try:
+            now_data, _stamp = read_checked(output)
+        except OutputActionError as exc:
+            return {"state": "unreadable", "which": "now", "code": exc.code, "version": exc.version, "before": before.name}
+        except Exception as exc:
+            raise _command_failed() from exc
+        try:
+            before_data, _stamp = read_checked(before)
+        except OutputActionError as exc:
+            return {"state": "unreadable", "which": "before", "code": exc.code, "version": exc.version, "before": before.name}
+        except Exception as exc:
+            raise _command_failed() from exc
+        counts = change_counts(compare_outputs(before_data, now_data))
+        # Whether the view page can show them: the output of the run is among
+        # the outputs remembered, with the same output before (Codex's second
+        # read of the diff of X7, 1: a run whose output the settings could not
+        # remember would offer lists that the view page cannot open).
+        viewable = output_before(recent_outputs(), output) == ("found", before)
+        return {"state": "ready", "before": before.name, "view": viewable, **counts}
+
     def _target_output(self, payload: dict[str, Any]) -> Path:
         # The output of an action (stage B5b): the one that this server's last
         # run published (the default), one of the list of earlier outputs by
@@ -1049,6 +1111,9 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
             # Whether the names of the activities were read (stage T1); every
             # answer of a view says it again, as any can read the output again.
             "names": _names_state(data),
+            # Whether the output can be compared with the output before it
+            # (stage X7 of v2.3.0); the answer of the changes says it again.
+            "changes": _changes_plan(output)[0],
             # The reading that the facts are of (stage W1 of v2.2.1).
             "read": read,
         }
@@ -1342,6 +1407,45 @@ class GuiRequestHandler(BaseHTTPRequestHandler):
         answer["read"] = read
         # And the facts of that reading of the output (stage W1 of v2.2.1).
         answer["output"] = _output_facts(data)
+        if len(json_body(answer)) > MAX_ANSWER_BYTES:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
+        return answer
+
+    def _api_view_changes(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # The records that changed between the output that the view page shows
+        # and the output before it among those remembered (stage X7 of v2.3.0),
+        # from what the view page read of both: the output before is read as
+        # an output opens, kept with the output of the ticket, and read again
+        # as the output is. Its failure is told in the answer by its code, as
+        # the output shown stays open. The answer holds the names of the
+        # activities and of the shoes and their values, which the page shows
+        # as text, and the names of the two outputs, never their places nor
+        # the declared keys; nothing of it is written anywhere.
+        ticket = payload.get("view")
+        if not isinstance(ticket, str):
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "REQUEST_INVALID")
+        try:
+            data, read, output = self.server.views.lap_reading(ticket)
+        except ViewNotOpenError as exc:
+            raise ApiError(HTTPStatus.CONFLICT, "VIEW_NOT_OPEN") from exc
+        except OutputActionError as exc:
+            raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, exc.code, exc.version) from exc
+        except Exception as exc:
+            raise _command_failed() from exc
+        plan, before = _changes_plan(output)
+        answer: dict[str, Any] = {**plan, "now": output.name, "read": read, "output": _output_facts(data)}
+        if before is None:
+            return answer
+        try:
+            before_data = self.server.views.before_data(ticket, before)
+        except ViewNotOpenError as exc:
+            raise ApiError(HTTPStatus.CONFLICT, "VIEW_NOT_OPEN") from exc
+        except OutputActionError as exc:
+            answer.update({"state": "unreadable", "code": exc.code, "version": exc.version})
+            return answer
+        except Exception as exc:
+            raise _command_failed() from exc
+        answer.update(change_answer(compare_outputs(before_data, data), before_data, data))
         if len(json_body(answer)) > MAX_ANSWER_BYTES:
             raise ApiError(HTTPStatus.UNPROCESSABLE_ENTITY, "VIEW_ANSWER_TOO_LARGE")
         return answer

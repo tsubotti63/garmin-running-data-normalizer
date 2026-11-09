@@ -178,8 +178,11 @@ class ViewApiTest(GuiServerTestCase):
         data = load_view_data(output)
         self.assertEqual(
             set(answer),
-            {"view", "name", "version", "partial", "first_day", "last_day", "items", "types", "first_items", "layouts", "coverage", "shoes", "names", "read"},
+            {"view", "name", "version", "partial", "first_day", "last_day", "items", "types", "first_items", "layouts", "coverage", "shoes", "names", "changes", "read"},
         )
+        # Whether it can be compared with the output before it (stage X7 of
+        # v2.3.0): the settings of the test remember none.
+        self.assertEqual(answer["changes"], {"state": "not_remembered", "before": None, "reasons": []})
         # The number of the reading that its facts are of (stage W1 of v2.2.1).
         self.assertIs(type(answer["read"]), int)
         self.assertGreaterEqual(answer["read"], 1)

@@ -1030,6 +1030,18 @@ the output, what was left out, and the warnings.
 using the output with an AI. **View this output** opens the output in the
 view page, in the next tab ([The view page (from 2.1.0)](#the-view-page-from-210)).
 
+Where the run can be compared with the output before (normalized the same way,
+by the same version, with the same timezone; see [Later
+launches](#later-launches)), a line under the lines of the result gives the
+numbers of the records that changed since the output before (from 2.3.0): the
+activities new, with values changed, with shoes changed, and in the output
+before only, and the pairs of shoes new, changed, and in the output before
+only. Where a record changed, **Compare on the view page** opens **Compare
+with the output before** on the view page ([Compare with the output
+before](#compare-with-the-output-before-from-230)). To count them, the
+normalization page also reads the values of the activities of the two outputs
+(it only reads them, and writes nothing).
+
 After a run, the page proposes a new name for the next one, and a line under
 **Run normalization** says what pressing it again does: "Pressing it again
 normalizes again, with the name in the name field; the output that this run
@@ -1796,14 +1808,16 @@ values are made):
 ### Other views (from 2.2.0)
 
 - **Other views** above the panels shows **Plot two items**, **Distribution**,
-  or **By shoes** in the place of the panels. Enter, Space, or ↓ opens its
-  menu on the first item; ↑, ↓, Home, and End move in it, and Esc closes it,
-  back to its button. Tab or a click elsewhere closes it too.
+  **By shoes**, or **Compare with the output before** (from 2.3.0) in the
+  place of the panels. Enter, Space, or ↓ opens its menu on the first item; ↑,
+  ↓, Home, and End move in it, and Esc closes it, back to its button. Tab or a
+  click elsewhere closes it too.
 - While one shows, the **Items**, **Layouts**, and **Group by** are not used;
   a line under the filters says so. The **Period**, ‹ ›, the days of a custom
   range, **Activity types counted**, and **Conditions…** can be used, and a
   period, activity types, or conditions changed here stay for the panels when
-  you go back.
+  you go back. **Compare with the output before** uses no period, activity
+  types, or conditions either.
 - **Show all panels again** goes back, the focus (where the keys act) on
   **Other views**. To go from one of these views to another, go back to the
   panels first with **Show all panels again**, and then choose it in
@@ -1977,6 +1991,47 @@ values are made):
   not in a saved picture.
 
 ![By shoes: the panels of made-up shoes (two of one name told apart by their start dates), the distance of the month chosen by the cross line at the top right, and the notes under the panels (synthetic data)](assets/gui-guide/view-shoes.en.png)
+
+#### Compare with the output before (from 2.3.0)
+
+- It lists the records that changed between the output shown and the output
+  before it: the activities new, the activities whose values changed (what
+  changed, before and now), the activities whose shoes changed, the activities
+  in the output before only, and the shoes themselves (pairs new, pairs whose
+  name, start or end date, or maximum distance changed, and pairs in the
+  output before only). Above the lists, lines give the numbers, as the
+  normalization page does. Each list is newest first, its dates with their
+  years.
+- The output before is the readable output just before the output shown in the
+  list of earlier outputs (see [Later launches](#later-launches)). Where the
+  two were not normalized the same way, by the same version, and with the same
+  timezone, where there is no output before, or where the output shown is not
+  in that list (one chosen from another place, or one that left it after 10
+  newer outputs), the item of the menu says why under its name and cannot be
+  chosen.
+- It compares the columns of the list of a period (date and time, name, type,
+  distance, time, average heart rate, maximum heart rate, cadence, total
+  ascent) and the shoes. The average pace is made of the distance and the
+  time, so its change shows as a change of one of them. The daily records
+  (body records and estimates), the columns that the list does not have
+  (training load, power, and others), records without a date, and records
+  after today are not compared, and no period, activity types, or conditions
+  are used: the records themselves are compared.
+- The activities are matched by the field that tells records apart
+  (`garmin_activity_key`); a record without it, or with a value that two
+  records or more hold, is not matched, and only their number is given. A
+  record without an id shows as one in the output before only and as one new
+  when its values change. Where one of the outputs had names or shoes too
+  large to read, the names or the shoes are not compared, and a line says so.
+- Between outputs made from Snapshots, a run deleted in Garmin stays in the
+  output, so it is not among the records in the output before only: only
+  outputs made from one Export alone show it. Why a record changed (deleted or
+  corrected in Garmin, for example) is not in an output, and is not said.
+- A list has up to 500 rows; the older ones are counted only. The output
+  before is only read: nothing compared is written or remembered (the panels
+  show at the next launch), and the view cannot be saved as a picture. It is
+  the same when **Compare on the view page** of the normalization page opens
+  it.
 
 ### Summary (from 2.2.0)
 
@@ -2365,7 +2420,9 @@ The outputs go by three names:
   run of this launch, which is offered on its own. **Output to view** of the
   view page, among others, offers them.
 - The output before: the newest output of that list that can be read. The
-  normalization page shows the change since this one.
+  normalization page shows the change since this one. **Compare with the
+  output before** of the view page compares the output shown with the readable
+  output just before it (from 2.3.0).
 - The latest output: the output that the view page offers to open, which is
   the one normalized in this launch, or, without one, the newest one of the
   list of earlier outputs.

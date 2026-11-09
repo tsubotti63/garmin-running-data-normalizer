@@ -1139,6 +1139,99 @@ export function changeMessages(plan, previous, rows) {
   return { table: [message("change.column", { name: previous.name }), message("change.note")], run };
 }
 
+// The records that changed since the output before (stage X7 of v2.3.0),
+// from their numbers as the server gives them (view/changes.py
+// change_counts): the parts that are said, in their order, with the words of
+// each; the activities, then the pairs of shoes.
+const CHANGE_ACTIVITY_PARTS = [
+  ["added", "change.records.added"],
+  ["changed", "change.records.changed"],
+  ["shoes_changed", "change.records.shoes_changed"],
+  ["removed", "change.records.removed"],
+];
+const CHANGE_PAIR_PARTS = [
+  ["added", "change.records.pairs_added"],
+  ["changed", "change.records.pairs_changed"],
+  ["removed", "change.records.pairs_removed"],
+];
+const CHANGE_UNMATCHED_PARTS = [
+  ["now", "change.records.unmatched_now"],
+  ["before", "change.records.unmatched_before"],
+];
+// The output that did not read the names or the shoes.
+const CHANGE_UNREAD_KEYS = {
+  before: "change.records.unread_before",
+  now: "change.records.unread_now",
+  both: "change.records.unread_both",
+};
+
+function changeCount(value) {
+  return Number.isInteger(value) && value > 0 ? value : 0;
+}
+
+function changeParts(counts, parts) {
+  return parts.filter(([name]) => changeCount(counts?.[name]) > 0).map(([name, key]) => message(key, { n: counts[name] }));
+}
+
+function joinedChanges(parts) {
+  return parts.reduce((a, b) => message("change.records.join", {}, { a, b }));
+}
+
+// The lines of the numbers of the changes: the activities and the shoes
+// that changed, or that no record did; the records that could not be
+// matched, in each output; and the names and the shoes not compared, with
+// the output that did not read them. ``changed`` says whether any record
+// changed, as the page shows them only then.
+export function changeCountLines(counts) {
+  const activities = changeParts(counts, CHANGE_ACTIVITY_PARTS);
+  const pairs = changeParts(counts?.pairs, CHANGE_PAIR_PARTS);
+  const lines = [];
+  if (activities.length) {
+    lines.push(message("change.records.activities", {}, { words: joinedChanges(activities) }));
+  }
+  if (pairs.length) {
+    lines.push(message("change.records.shoes", {}, { words: joinedChanges(pairs) }));
+  }
+  const changed = lines.length > 0;
+  if (!changed) {
+    lines.push(message("change.records.none"));
+  }
+  const unmatched = changeParts(counts?.unmatched, CHANGE_UNMATCHED_PARTS);
+  if (unmatched.length) {
+    lines.push(message("change.records.unmatched", {}, { words: joinedChanges(unmatched) }));
+  }
+  for (const [name, key] of [
+    ["names_unread", "change.records.names_unread"],
+    ["shoes_unread", "change.records.shoes_unread"],
+  ]) {
+    if (Object.hasOwn(CHANGE_UNREAD_KEYS, counts?.[name] ?? "")) {
+      lines.push(message(key, {}, { part: CHANGE_UNREAD_KEYS[counts[name]] }));
+    }
+  }
+  return { lines, changed };
+}
+
+// The lines of the fourth box under the change of the activities (stage X7
+// of v2.3.0): while the server counts, the numbers when it has, or that they
+// could not be counted (with the code, where there is one); and whether the
+// button that compares them on the view page shows: only where a record
+// changed and the view page can show them (Codex's second read of the diff of
+// X7, 1).
+export function changeRecordsView(changes) {
+  if (changes === null || typeof changes !== "object") {
+    return { lines: [], button: false };
+  }
+  if (changes.status === "counting") {
+    return { lines: [message("change.records.counting")], button: false };
+  }
+  if (changes.status !== "ready") {
+    const code = typeof changes.code === "string" && changes.code !== "" ? changes.code : null;
+    return { lines: [code === null ? message("change.records.failed") : message("change.records.failed_code", { code })], button: false };
+  }
+  const { lines, changed } = changeCountLines(changes.answer);
+  return { lines, button: changed && changes.answer?.view === true };
+}
+
 // Before a run on a later launch (stage B5b), the table shows the counts of
 // the output before, as the mockup v10 does.
 export function previousRows(previous) {
@@ -1606,10 +1699,16 @@ function launchFragment(key, theme) {
   return fragment;
 }
 
-export function viewPageAddress(key, theme, showRun) {
+export function viewPageAddress(key, theme, showRun, showChanges = false) {
   const fragment = launchFragment(key, theme);
   if (showRun) {
     fragment.set("output", "run");
+  }
+  // The changes since the output before, which the view page shows once the
+  // output is open (stage X7 of v2.3.0): in the fragment, which the browser
+  // never sends to the server, and read once.
+  if (showChanges) {
+    fragment.set("show", "changes");
   }
   return `/view#${fragment}`;
 }

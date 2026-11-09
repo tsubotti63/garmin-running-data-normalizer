@@ -798,6 +798,23 @@ the page's own folder list without one (stage B4a).
   the same Snapshot Store, which an output does not record. The CLI shows no
   change: it remembers no output to compare with, and each output's
   `run_summary.json` holds its counts.
+- From v2.3.0 (stage X7, the Human's choice D of its samples), where the
+  change shows, the fourth box also gives the numbers of the records that
+  changed since the output before, under the lines of the result: the page
+  asks `/api/changes` once for the finished run, with the number of the output
+  before in the list of earlier outputs and the list's mark (a mark that is
+  not the last one is `OUTPUT_LIST_CHANGED`). The server checks the summaries
+  again (`change_reasons`: the same rule as the page's), reads the output of
+  the run and the output before as the view page reads an output
+  (`read_checked`: the same checks and limits for each, a change while reading
+  is `OUTPUT_CHANGED`), keeps neither, and answers the numbers only
+  (`view/changes.py` `change_counts`), with whether the view page can open
+  them (the output of the run among the outputs remembered, with the same
+  output before); an output that cannot be read answers its code, which the
+  line says. Where a record changed and the view page can open them, **Compare
+  on the view page** opens the view page on the output of the run with
+  `show=changes` in the fragment of its address, read once and never
+  remembered.
 - The Support Bundle is written by default next to the output as
   `<output name>-support-bundle.zip`, because inside the output it would
   contradict the manifest; the user can choose another folder with
@@ -893,6 +910,15 @@ Reading an output:
   on the activities below). The series command parses neither the shoes nor
   the names (the checks before the reading read every file of the manifest
   whole).
+- From v2.3.0 (stage X7) the server also reads the output before the output
+  shown, for the records that changed (see Changes since the output before
+  below), and the normalization page's server reads the output of the run and
+  the output before it for their numbers: with the same checks and the same
+  limits for each output, so that two outputs may take twice the memory of
+  one, as two outputs opened one after the other do. The output before of the
+  view page is kept with the output shown (one at a time) and read again where
+  its stamp or the date of today changed, or where another output is the
+  output before; the normalization page keeps neither.
 - Rows without a date, and rows dated after today in the output's timezone,
   are counted and left out: one date far ahead, from a wrong clock, would
   stretch the time axis and leave the last years empty.
@@ -1784,6 +1810,52 @@ requests up.
   another period, activity types, conditions, or reading drops the counting.
   The table is not in a saved picture (a table is not saved).
 
+### Changes since the output before (v2.3.0)
+
+From v2.3.0 the view page can compare the output shown with the output before
+it (stage X7, the Human's choice D of the samples: the lists on the view page
+only, and the numbers on the normalization page). **Compare with the output
+before**, the last item of **Other views**, shows in the place of the panels
+the activities new, changed (by field, before and now), with their shoes
+changed only, and in the output before only, and the pairs of shoes new,
+changed, and in the output before only, each list newest first and of up to
+500 rows (`MAX_CHANGE_ROWS`; the older ones are counted).
+
+The output before is the first output after the output shown among those that
+the settings remember (newest first) that is there as a plain folder and whose
+summary can be read (`gui/outputs.py` `output_before`), the rule of the output
+before a run; `earlier_outputs` is not used, as it gives the outputs newer
+than an older one shown too. The two are compared only where `change_reasons`
+gives none (the way of normalizing, the version and the version of Run-All,
+and the timezone); otherwise, and where the settings do not remember the
+output shown (`not_remembered`) or no output is after it (`none`), the item of
+the menu says why under its name and cannot be chosen. The answer of opening
+an output gives it (`changes`), and the answer of the changes again.
+
+The comparison (`view/changes.py`) reads nothing: it takes two readings
+(`ViewData`). The activities are matched by their declared key; an activity
+without one, or with one that another activity of the same output holds, is
+counted apart for each output. The fields compared are those of the list of a
+period (`LIST_ITEMS` without the pace, which the distance and the time make),
+the date and time, the activity type, the name, and the shoes (the pairs that
+an activity links to, and whether it has a link that tells no shoe); a value
+against none differs. The names are compared only where both readings read
+them, and the shoes (their links and the pairs) only where both read them, so
+that a file left out of one reading never makes every record look changed; the
+answer says which reading left them out. Rows without a date or after today
+are not compared, as no view shows them.
+
+The answer never gives the declared keys nor the places of the outputs: the
+values as numbers, which the page writes as the list of a period does (the
+dates with their years, as the lists go across the periods), the names of the
+activities and of the shoes, the shoes by their places in the lists of the
+shoes of each output (named as the view by shoes names them), and the names of
+the two outputs; it is refused over `MAX_ANSWER_BYTES`. A reading of the
+output before that fails answers its code, and the output shown stays open. No
+period, activity types, or conditions are used, and the view is not saved as a
+picture; nothing is remembered (it is not a key of the view settings) or
+written.
+
 ## Data handling in 2.0.0
 
 These rules apply to the CLI and the GUI. The exact lists and output shapes are
@@ -2066,6 +2138,13 @@ Processing:
   charts; the window says so before saving); they are never in a log, an
   answer of an error, a file name, the Support Bundle, or the text of a
   report.
+- From v2.3.0 (stage X7) the view page and the normalization page read the
+  output before an output for the records that changed, as they read an
+  output; the answer of the view page holds the names and the values of the
+  activities that changed and the names of their shoes, as the list of a
+  period and the view by shoes do, and the names of the two outputs, never
+  their places nor the declared keys; the normalization page gets their
+  numbers only. Nothing of it is written or remembered.
 - The view page (v2.1.0) writes nothing in an output. The server keeps what
   it read in memory only, under a ticket that holds no place.
 - From v2.3.0 the view page also reads, only when the laps of one activity are

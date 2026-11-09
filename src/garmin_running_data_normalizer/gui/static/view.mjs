@@ -283,6 +283,13 @@ import {
   refusalStep,
   newestAnswer,
   yearDrawn,
+  // The records that changed since the output before (stage X7 of v2.3.0).
+  changesAvailableFrom,
+  changesLines,
+  changesNotes,
+  changesOutputs,
+  changesTables,
+  changesWhy,
 } from "./view_flow.mjs";
 import {
   PLOT_BOTTOM,
@@ -463,6 +470,21 @@ const ui = {
   // The view by shoes (stage S1 of v2.2.0), and why it cannot be chosen.
   otherShoes: byId("other-shoes"),
   otherShoesWhy: byId("other-shoes-why"),
+  // The records that changed since the output before (stage X7 of v2.3.0).
+  otherChanges: byId("other-changes"),
+  otherChangesWhy: byId("other-changes-why"),
+  changes: byId("changes"),
+  changesOff: byId("changes-off"),
+  changesTitle: byId("changes-title"),
+  changesBack: byId("changes-back"),
+  changesOutputs: byId("changes-outputs"),
+  changesLoading: byId("changes-loading"),
+  changesStop: byId("changes-stop"),
+  changesStopLines: byId("changes-stop-lines"),
+  changesStopCode: byId("changes-stop-code"),
+  changesLines: byId("changes-lines"),
+  changesLists: byId("changes-lists"),
+  changesNotes: byId("changes-notes"),
   fullEnter: byId("full-enter"),
   fullBar: byId("full-bar"),
   fullText: byId("full-text"),
@@ -859,6 +881,19 @@ const state = {
   availableAsks: 0,
   availableFrom: 0,
   panelsStale: false,
+  // The records that changed since the output before (stage X7 of v2.3.0):
+  // while they show, an object (null while the panels show); their answer,
+  // its generation, whether it is on its way, a stop of it; what the server
+  // says of the comparison (from the answers of opening and of the changes);
+  // and whether the address asked to show them once the output opens, which
+  // nothing remembers.
+  changes: null,
+  changesAnswer: null,
+  changesSeq: 0,
+  changesLoading: false,
+  changesStop: null,
+  changesAvailable: null,
+  showChanges: false,
   otherOpen: false,
   // The marks of the person (stage M1 of v2.2.0): as the server keeps them,
   // a count that changes with them (which draws the panels again), whether
@@ -1431,6 +1466,10 @@ function toNormalize() {
 // the output of its run to show.
 async function addressChanged() {
   const output = addressValue("output");
+  // The changes since the output before, to show once the output opens
+  // (stage X7 of v2.3.0); read before the key, whose reading clears the
+  // address.
+  const show = addressValue("show");
   const key = readLaunchKey();
   if (key) {
     state.launchKey = key;
@@ -1438,6 +1477,7 @@ async function addressChanged() {
   if (output === "run" && state.connected) {
     await loadOutputs();
     if (state.runOutput !== null) {
+      state.showChanges = show === "changes";
       openOutput({ output: "run", name: state.runOutput.name });
     }
   }
@@ -1522,6 +1562,8 @@ async function openOutput(target, focus = false, auto = null) {
   // And a counting of the work laps of the shoes, whose requests would go on
   // for the output before (Codex's read of the diff of X11, 2).
   dropShoesWork();
+  // And the answers of the changes (stage X7 of v2.3.0).
+  state.changesSeq += 1;
   // The ticket of the output shown, whose folder an opening by itself opens
   // again (stage W1 of v2.2.1): "changed" for a newer reading of other
   // facts, "refused" after a refusal of a request. An output that the
@@ -1567,6 +1609,9 @@ async function openOutput(target, focus = false, auto = null) {
     state.coverageSeq += 1;
     state.shoesAvailable = answer.shoes ?? null;
     state.availableFrom = ++state.availableAsks;
+    // Whether this output can be compared with the output before it (stage
+    // X7 of v2.3.0).
+    state.changesAvailable = answer.changes ?? null;
     setAnswer(null);
     state.overview = null;
     state.big = null;
@@ -1633,6 +1678,12 @@ async function openOutput(target, focus = false, auto = null) {
       state.shoesAsked = null;
       state.shoesStop = null;
     }
+    // And the changes where this output can be compared (stage X7 of v2.3.0).
+    if (state.changes !== null && changesWhy(state.changesAvailable) !== null) {
+      state.changes = null;
+    }
+    state.changesAnswer = null;
+    state.changesStop = null;
     // The summary asks again for the output that opened (stage Q1).
     state.recapAnswer = null;
     state.recapAsked = null;
@@ -1659,6 +1710,17 @@ async function openOutput(target, focus = false, auto = null) {
     requestPlot();
     requestSpread();
     requestShoes();
+    requestChanges();
+    // The changes that the address asked for, once (stage X7 of v2.3.0), in
+    // the place of another view that showed in this tab (Codex's review of
+    // the diff of X7, 1).
+    if (state.showChanges) {
+      state.showChanges = false;
+      if (state.changes === null) {
+        closeOtherViews();
+        enterChanges();
+      }
+    }
   } catch (error) {
     if (seq !== state.openSeq) {
       return;
@@ -1674,6 +1736,8 @@ async function openOutput(target, focus = false, auto = null) {
       state.plot = null;
       state.spread = null;
       state.shoes = null;
+      state.changes = null;
+      state.showChanges = false;
       // The field keeps the output that could not be opened.
       state.target = error.code === "OUTPUT_LIST_CHANGED" ? null : target;
       state.stop = { code: error.code, detail: error.detail };
@@ -1857,6 +1921,7 @@ async function requestSeries(again = true) {
       state.plot = null;
       state.spread = null;
       state.shoes = null;
+      state.changes = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.seriesStop = { code: error.code, detail: error.detail };
@@ -2460,6 +2525,7 @@ async function requestRecap(again = true) {
       state.plot = null;
       state.spread = null;
       state.shoes = null;
+      state.changes = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.recapStop = { code: error.code, detail: error.detail };
@@ -2687,7 +2753,9 @@ function saveReady(viewing) {
 // The view whose picture a saving makes now: the panels, or the view that
 // takes their place (stage R2 of v2.2.0).
 function saveViewNow() {
-  return comparing() ? "compare" : plotting() ? "plot" : spreading() ? "spread" : shoesShown() ? "shoes" : "panels";
+  // The changes are not saved (stage X7 of v2.3.0): a window of another view
+  // closes while they show.
+  return comparing() ? "compare" : plotting() ? "plot" : spreading() ? "spread" : shoesShown() ? "shoes" : changesShown() ? "changes" : "panels";
 }
 
 // The button of the saving of a view, and the row under which the window
@@ -5338,6 +5406,7 @@ async function requestList(again = true) {
       state.plot = null;
       state.spread = null;
       state.shoes = null;
+      state.changes = null;
       state.stop = { code: error.code, detail: error.detail };
       render();
       return;
@@ -6243,6 +6312,7 @@ async function requestCompare(again = true) {
       state.plot = null;
       state.spread = null;
       state.shoes = null;
+      state.changes = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.compareStop = { code: error.code, detail: error.detail };
@@ -7816,12 +7886,15 @@ function renderFilters(live) {
   ui.chooseOutput.disabled = !live || state.choosing;
   const answer = shownAnswer();
   const apart = viewing && comparing();
+  // The changes use no period either (stage X7 of v2.3.0); the grouping goes
+  // by the comparison alone, as another view has none.
+  const noPeriod = apart || (viewing && changesShown());
   for (const button of ui.periodButtons) {
-    button.disabled = !viewing || apart;
+    button.disabled = !viewing || noPeriod;
     button.setAttribute("aria-pressed", String(viewing && state.period === button.dataset.period));
   }
-  ui.rangeFrom.disabled = apart;
-  ui.rangeTo.disabled = apart;
+  ui.rangeFrom.disabled = noPeriod;
+  ui.rangeTo.disabled = noPeriod;
   ui.rangeRow.hidden = !viewing || state.period !== "custom";
   if (viewing) {
     for (const field of [ui.rangeFrom, ui.rangeTo]) {
@@ -7829,8 +7902,8 @@ function renderFilters(live) {
       field.max = state.view.last_day ?? "";
     }
   }
-  ui.periodBack.disabled = !viewing || apart || shiftedRange(answer?.start, answer?.end, -1, state.view?.first_day, state.view?.last_day) === null;
-  ui.periodNext.disabled = !viewing || apart || shiftedRange(answer?.start, answer?.end, 1, state.view?.first_day, state.view?.last_day) === null;
+  ui.periodBack.disabled = !viewing || noPeriod || shiftedRange(answer?.start, answer?.end, -1, state.view?.first_day, state.view?.last_day) === null;
+  ui.periodNext.disabled = !viewing || noPeriod || shiftedRange(answer?.start, answer?.end, 1, state.view?.first_day, state.view?.last_day) === null;
   const grains = apart ? compareGrainsFor(compareByNow(), compareMonthNow(), compareModeNow()) : null;
   for (const button of ui.grainButtons) {
     button.disabled = !viewing || otherShown() || (grains !== null && !grains.includes(button.dataset.grain));
@@ -7839,7 +7912,7 @@ function renderFilters(live) {
   const auto = viewing ? autoGrainOf(answer?.start, answer?.end) : null;
   setText(ui.grainAutoNow, auto === null ? "" : t("view.grain.auto_now", { grain: t(grainKey(auto)) }));
   const types = state.view?.types ?? [];
-  ui.typesButton.disabled = !viewing || !types.length;
+  ui.typesButton.disabled = !viewing || !types.length || changesShown();
   ui.typesButton.setAttribute("aria-expanded", String(viewing && state.typesOpen));
   setText(ui.typesSummary, viewing ? describe(typesSummary(state.counted, types)) : t("view.types.none_yet"));
   ui.typesPop.hidden = !viewing || !state.typesOpen;
@@ -7847,8 +7920,9 @@ function renderFilters(live) {
     renderTypes(types);
   }
   fitTypesWindow();
-  renderConditions(viewing);
-  ui.filtersHint.hidden = !state.hints || !viewing || apart;
+  renderConditions(viewing && !changesShown());
+  ui.filtersHint.hidden = !state.hints || !viewing || noPeriod;
+  ui.changesOff.hidden = !(viewing && changesShown());
   ui.compareOff.hidden = !apart;
   // By race day, its own words of what is not used (stage M2 of v2.2.0).
   const byRace = apart && compareByNow() === "race";
@@ -8445,7 +8519,7 @@ function plotting() {
 // P1): the other views, which have no grouping and ask for their answers with
 // the period and the activity types of the page.
 function otherShown() {
-  return plotting() || spreading() || shoesShown();
+  return plotting() || spreading() || shoesShown() || changesShown();
 }
 
 // The panels give their place to a comparison of years or to another view.
@@ -8539,6 +8613,12 @@ function renderOtherViews(usable) {
   ui.otherShoes.setAttribute("aria-disabled", String(why !== null));
   ui.otherShoesWhy.hidden = why === null;
   setText(ui.otherShoesWhy, why === null ? "" : t(why));
+  // The changes since the output before where the output can be compared,
+  // or why not, as the view by shoes (stage X7 of v2.3.0).
+  const changesNot = changesWhy(state.changesAvailable);
+  ui.otherChanges.setAttribute("aria-disabled", String(changesNot !== null));
+  ui.otherChangesWhy.hidden = changesNot === null;
+  setText(ui.otherChangesWhy, changesNot === null ? "" : describe(changesNot));
 }
 
 function setOtherViews(open, focus = null) {
@@ -8689,6 +8769,7 @@ async function requestPlot(again = true) {
       state.plot = null;
       state.spread = null;
       state.shoes = null;
+      state.changes = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.plotStop = { code: error.code, detail: error.detail };
@@ -9224,6 +9305,7 @@ async function requestSpread(again = true) {
       state.plot = null;
       state.spread = null;
       state.shoes = null;
+      state.changes = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.spreadStop = { code: error.code, detail: error.detail };
@@ -9567,6 +9649,214 @@ let shoesDrawn = null;
 // X11, 3: Stop leaves its request on its way).
 let shoesWorkAsking = null;
 
+// --- The records that changed since the output before (stage X7 of v2.3.0)
+
+// The comparison and the other views closed at once, their answers on their
+// way dropped, for the changes that the address asks for.
+function closeOtherViews() {
+  dropShoesWork();
+  state.compare = null;
+  state.compareAnswer = null;
+  state.compareStop = null;
+  state.compareLoading = false;
+  state.compareSeq += 1;
+  state.plot = null;
+  state.plotAnswer = null;
+  state.plotAsked = null;
+  state.plotStop = null;
+  state.plotLoading = false;
+  state.plotSeq += 1;
+  state.spread = null;
+  state.spreadAnswer = null;
+  state.spreadAsked = null;
+  state.spreadStop = null;
+  state.spreadLoading = false;
+  state.spreadSeq += 1;
+  state.shoes = null;
+  state.shoesAnswer = null;
+  state.shoesAsked = null;
+  state.shoesStop = null;
+  state.shoesLoading = false;
+  state.shoesSeq += 1;
+}
+
+function changesShown() {
+  return state.changes !== null && state.view !== null;
+}
+
+// The changes since the output before in the place of the panels: the lists
+// of the activities and the shoes that changed, which use no period, no
+// activity types, and no conditions, where the output can be compared.
+function enterChanges() {
+  if (state.view === null || comparing() || changesWhy(state.changesAvailable) !== null) {
+    return;
+  }
+  listChanged("changes");
+  state.changes = {};
+  state.changesAnswer = null;
+  state.changesStop = null;
+  state.otherOpen = false;
+  state.typesOpen = false;
+  state.conditionsOpen = false;
+  state.pickerOpen = false;
+  state.notesOpen = null;
+  state.layoutsOpen = false;
+  state.layoutSaving = false;
+  state.railLayoutsOpen = false;
+  render();
+  ui.changesTitle.focus();
+  requestChanges();
+}
+
+// Back to the panels as they were, as from the view by shoes.
+function leaveChanges() {
+  state.changes = null;
+  state.changesAnswer = null;
+  state.changesStop = null;
+  state.changesLoading = false;
+  state.changesSeq += 1;
+  render();
+  ui.otherViews.focus();
+  if (state.panelsStale) {
+    state.panelsStale = false;
+    requestSeries();
+  }
+}
+
+// Ask for the changes as one generation, as for the view by shoes: an answer
+// of an older one is dropped when it comes; a ticket that the server no
+// longer keeps opens the output again, once; an output that cannot be read
+// stops the page, and another stop shows in the bar of the changes. The
+// answer says again whether the output can be compared, for the menu.
+async function requestChanges(again = true) {
+  if (!changesShown()) {
+    return;
+  }
+  const seq = ++state.changesSeq;
+  state.changesLoading = true;
+  render();
+  const payload = { view: state.view.view };
+  try {
+    const answer = await callApi("/api/view/changes", payload);
+    if (seq !== state.changesSeq) {
+      return;
+    }
+    if (!takeReading(payload.view, answer)) {
+      state.changesLoading = false;
+      return;
+    }
+    state.changesAnswer = answer;
+    otherReading(answer);
+    state.changesStop = null;
+    state.changesAvailable = changesAvailableFrom(answer);
+  } catch (error) {
+    if (seq !== state.changesSeq) {
+      return;
+    }
+    if (connectionFailure(error)) {
+      // The bar says so.
+    } else if (error.code === "VIEW_NOT_OPEN" && again && state.target !== null) {
+      if (await reopen()) {
+        if (seq !== state.changesSeq) {
+          return;
+        }
+        state.changesLoading = false;
+        await requestChanges(false);
+        return;
+      }
+    } else if (error.code === "REQUEST_INVALID" && reopenOnce(payload.view)) {
+      return;
+    } else if (OUTPUT_STOPS.includes(error.code)) {
+      state.view = null;
+      setAnswer(null);
+      state.compare = null;
+      state.plot = null;
+      state.spread = null;
+      state.shoes = null;
+      state.changes = null;
+      state.stop = { code: error.code, detail: error.detail };
+    } else {
+      state.changesStop = { code: error.code, detail: error.detail };
+    }
+  }
+  if (seq === state.changesSeq) {
+    state.changesLoading = false;
+  }
+  render();
+}
+
+// The bar of the changes, the lines of their numbers (or why the outputs
+// were not compared), their lists, and their notes; the lists are built
+// again only for another answer or language.
+function renderChanges(live) {
+  const viewing = live && state.view !== null && state.opening === null;
+  const shown = viewing && changesShown();
+  ui.changes.hidden = !shown;
+  if (!shown) {
+    ui.changesLists.replaceChildren();
+    delete ui.changesLists.dataset.drawn;
+    return;
+  }
+  const drawn = state.changesAnswer;
+  setText(ui.changesLoading, state.changesLoading ? t("view.loading") : "");
+  setText(ui.changesOutputs, drawn !== null && drawn.state === "ready" ? describe(changesOutputs(drawn)) : "");
+  ui.changesStop.hidden = state.changesStop === null;
+  if (!ui.changesStop.hidden) {
+    renderStop(ui.changesStop, null, ui.changesStopLines, ui.changesStopCode, stopBox(state.changesStop.code, state.changesStop.detail, state.productVersion));
+  }
+  const lines = drawn === null ? [] : changesLines(drawn).map(describe);
+  if (JSON.stringify(lines) !== ui.changesLines.dataset.lines) {
+    ui.changesLines.replaceChildren(...lines.map((line) => element("p", "compare-note", line)));
+    ui.changesLines.dataset.lines = JSON.stringify(lines);
+  }
+  const signature = JSON.stringify([state.changesSeq, drawn === null ? null : drawn.read, state.language, drawn === null]);
+  if (ui.changesLists.dataset.drawn !== signature) {
+    ui.changesLists.replaceChildren(...(drawn === null ? [] : changesTables(drawn, state.language).map(changesTable)));
+    ui.changesLists.dataset.drawn = signature;
+  }
+  const notes = drawn === null ? [] : changesNotes(drawn).map(describe);
+  if (JSON.stringify(notes) !== ui.changesNotes.dataset.notes) {
+    ui.changesNotes.replaceChildren(...notes.map((note) => element("p", "compare-note", note)));
+    ui.changesNotes.dataset.notes = JSON.stringify(notes);
+  }
+}
+
+// One list of the changes: its title, its table in the form of the list of a
+// period (the first cell of each row its head), and the rows not shown.
+function changesTable(list) {
+  const part = element("div", "changes-list");
+  const title = element("h4", "changes-list-title", describe(list.title));
+  const wrap = element("div", "list-table changes-table");
+  const table = element("table", "t");
+  const head = element("thead");
+  const headRow = element("tr");
+  for (const column of list.heads) {
+    const cell = element("th", "", describe(column));
+    cell.scope = "col";
+    headRow.append(cell);
+  }
+  head.append(headRow);
+  const body = element("tbody");
+  for (const row of list.rows) {
+    const line = element("tr");
+    row.forEach((value, index) => {
+      const cell = element(index === 0 ? "th" : "td", "", describe(value));
+      if (index === 0) {
+        cell.scope = "row";
+      }
+      line.append(cell);
+    });
+    body.append(line);
+  }
+  table.append(head, body);
+  wrap.append(table);
+  part.append(title, wrap);
+  if (list.more !== null) {
+    part.append(element("p", "compare-note", describe(list.more)));
+  }
+  return part;
+}
+
 function shoesShown() {
   return state.shoes !== null && state.view !== null;
 }
@@ -9689,6 +9979,7 @@ async function requestShoes(again = true) {
       state.plot = null;
       state.spread = null;
       state.shoes = null;
+      state.changes = null;
       state.stop = { code: error.code, detail: error.detail };
     } else {
       state.shoesStop = { code: error.code, detail: error.detail };
@@ -10307,6 +10598,7 @@ function render() {
   renderPlot(live);
   renderSpread(live);
   renderShoes(live);
+  renderChanges(live);
   // The window of the saving after every view, as it reads their charts
   // (Codex's reviews of the diff of R1 and of the plan of R2).
   renderSave(live && state.view !== null && state.opening === null);
@@ -10870,6 +11162,15 @@ function connect() {
     }
   });
   ui.shoesBack.addEventListener("click", leaveShoes);
+  // The changes since the output before (stage X7 of v2.3.0).
+  ui.otherChanges.addEventListener("click", () => {
+    if (changesWhy(state.changesAvailable) !== null) {
+      return;
+    }
+    setOtherViews(false);
+    enterChanges();
+  });
+  ui.changesBack.addEventListener("click", leaveChanges);
   // The work laps of the shoes (stage X11 of v2.3.0).
   ui.shoesWork.addEventListener("click", () => {
     if (ui.shoesWork.getAttribute("aria-disabled") !== "true") {
@@ -11066,6 +11367,8 @@ async function start() {
   // The output that the normalization page asked for, read before the key,
   // whose reading clears the address.
   const opening = addressValue("output");
+  // And the changes since the output before (stage X7 of v2.3.0).
+  const show = addressValue("show");
   state.launchKey = readLaunchKey();
   window.name = VIEW_TAB;
   state.theme = initialTheme();
@@ -11116,6 +11419,7 @@ async function start() {
     await loadOutputs();
     render();
     if (opening === "run" && state.runOutput !== null) {
+      state.showChanges = show === "changes";
       openOutput(targetOf(state.runOutput));
     }
   } catch (error) {

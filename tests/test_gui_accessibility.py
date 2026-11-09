@@ -2041,7 +2041,8 @@ class GuiViewPageStructureTest(unittest.TestCase):
             # In the place of the panels; the period and the types ask for what shows.
             "function apart() {\n  return comparing() || otherShown();\n}",
             "function shownAnswer() {\n  return plotting() ? state.plotAnswer : spreading() ? state.spreadAnswer : shoesShown() ? state.shoesAnswer : state.answer;\n}",
-            "function otherShown() {\n  return plotting() || spreading() || shoesShown();\n}",
+            # And the changes since the output before (stage X7 of v2.3.0).
+            "function otherShown() {\n  return plotting() || spreading() || shoesShown() || changesShown();\n}",
             "function requestShown() {\n  if (otherShown()) {\n    state.panelsStale = true;\n    requestPlot();\n    requestSpread();\n    requestShoes();\n  } else {\n    requestSeries();\n  }\n}",
             "  const answer = shownAnswer();\n  const range = shiftedRange(answer?.start, answer?.end, direction, state.view?.first_day, state.view?.last_day);",
             "  rememberItems(true);\n  requestShown();\n  requestCompare();\n}",
@@ -2115,7 +2116,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # where the summary asks (stage Q1).
         # With the view by shoes: the seven places, and its own request (stage
         # S1 of v2.2.0).
-        self.assertEqual(self.script.count("      state.compare = null;\n      state.plot = null;\n      state.spread = null;\n      state.shoes = null;\n"), 8)
+        # Each with the changes since the output before too, and their own
+        # request one more (stage X7 of v2.3.0).
+        self.assertEqual(self.script.count("      state.compare = null;\n      state.plot = null;\n      state.spread = null;\n      state.shoes = null;\n      state.changes = null;\n"), 9)
         self.assertRegex((STATIC_ROOT / "view.css").read_text(encoding="utf-8"), r"\.plot-head \.plot-read \{[^}]*white-space: normal;")
         view_css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
         self.assertRegex(view_css, r"\.plot-dot \{\s*fill: var\(--d1\);\s*stroke: var\(--surface\);\s*stroke-width: 1;\s*\}")
@@ -2138,7 +2141,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # function (the partial guard of O1).
         menu = by_id(self.elements, "other-views-menu")
         item = by_id(self.elements, "other-spread")
-        self.assertEqual([element.get("id") for element in self.elements if element.parent is menu], ["other-plot", "other-spread", "other-shoes"])
+        self.assertEqual([element.get("id") for element in self.elements if element.parent is menu], ["other-plot", "other-spread", "other-shoes", "other-changes"])
         self.assertEqual((item.get("role"), item.get("tabindex"), item.get("data-i18n")), ("menuitem", "-1", "view.other.spread"))
         spread = by_id(self.elements, "spread")
         self.assertIn("hidden", spread.attributes)
@@ -2195,7 +2198,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
             'error.code === "VIEW_NOT_OPEN" && again && state.target !== null',
             "requestSpread(false);",
             "OUTPUT_STOPS.includes(error.code)",
-            "      state.spread = null;\n      state.shoes = null;\n      state.stop = { code: error.code, detail: error.detail };",
+            "      state.spread = null;\n      state.shoes = null;\n      state.changes = null;\n      state.stop = { code: error.code, detail: error.detail };",
         ):
             with self.subTest(line=line):
                 self.assertIn(line, request.group(1))
@@ -3096,10 +3099,12 @@ class GuiViewPageStructureTest(unittest.TestCase):
         for line in (
             "state.compareSeq += 1;\n  // And those of the points, before they could open the output before\n  // again (Codex's review of the diff of O1).\n  state.plotSeq += 1;\n  // And those of a distribution (stage P1).\n  state.spreadSeq += 1;\n  // And those of the summary (Codex's review of the diff of Q1).\n  state.recapSeq += 1;\n  state.recapLoading = false;\n  const current",
             "const apart = viewing && comparing();",
-            "button.disabled = !viewing || apart;",
-            "ui.rangeFrom.disabled = apart;",
-            "ui.rangeTo.disabled = apart;",
-            "ui.periodBack.disabled = !viewing || apart ||",
+            # The changes use no period either (stage X7 of v2.3.0).
+            "const noPeriod = apart || (viewing && changesShown());",
+            "button.disabled = !viewing || noPeriod;",
+            "ui.rangeFrom.disabled = noPeriod;",
+            "ui.rangeTo.disabled = noPeriod;",
+            "ui.periodBack.disabled = !viewing || noPeriod ||",
             "button.disabled = !viewing || otherShown() || (grains !== null && !grains.includes(button.dataset.grain));",
             "ui.compareOff.hidden = !apart;",
             # From O1 of v2.2.0, the points of two items take the place of the
@@ -3174,7 +3179,8 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertEqual(order[:3], ["help-use-heading", "help-conditions-heading", "help-shelf-heading"])
         self.assertEqual(order[order.index("help-compare-heading") : order.index("help-compare-heading") + 7], ["help-compare-heading", "help-race-heading", "help-other-heading", "help-recap-heading", "help-save-heading", "help-marks-heading", "help-list-heading"])
         other = [element.get("data-i18n") for element in self.elements if (element.get("data-i18n") or "").startswith("view.help.other")]
-        self.assertEqual(other, ["view.help.other", "view.help.other_plot", "view.help.other_spread", "view.help.other_shoes"])
+        # And the changes since the output before (stage X7 of v2.3.0).
+        self.assertEqual(other, ["view.help.other", "view.help.other_plot", "view.help.other_spread", "view.help.other_shoes", "view.help.other_changes"])
         recap = [element.get("data-i18n") for element in self.elements if (element.get("data-i18n") or "").startswith("view.help.recap")]
         self.assertEqual(recap, ["view.help.recap", "view.help.recap_text"])
         conditions = [element.get("data-i18n") for element in self.elements if (element.get("data-i18n") or "").startswith("view.help.conditions")]

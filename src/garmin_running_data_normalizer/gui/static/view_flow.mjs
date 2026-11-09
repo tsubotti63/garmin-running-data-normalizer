@@ -8,7 +8,7 @@
 // a text of the output itself, such as a name, which the page never
 // translates.
 
-import { errorMessages } from "./flow.mjs";
+import { CHANGE_REASON_KEYS, changeCountLines, errorMessages } from "./flow.mjs";
 import { countKey } from "./i18n.mjs";
 import { periodMiddle, zeroDots } from "./view_chart.mjs";
 
@@ -4903,4 +4903,251 @@ export function lapText(column, value, language) {
     return `${numberFormat(language, 2).format(value / 1000)} km`;
   }
   return numberFormat(language, 0).format(value);
+}
+
+// --- The records that changed since the output before (stage X7 of v2.3.0) --
+
+// Why the output shown cannot be compared with the output before it, as the
+// server says (gui/outputs.py output_before and change_reasons), under the
+// item of the menu of the other views: a message, or null where it can.
+const CHANGES_WHY_KEYS = {
+  none: "view.other.changes_none",
+  not_remembered: "view.other.changes_not_remembered",
+  no_summary: "view.other.changes_no_summary",
+};
+
+function joinedWords(parts) {
+  return parts.reduce((a, b) => message("change.records.join", {}, { a, b }));
+}
+
+export function changesWhy(changes) {
+  const known = changes !== null && typeof changes === "object";
+  if (known && (changes.state === "ready" || changes.state === "unreadable")) {
+    return null;
+  }
+  if (known && changes.state === "differs" && typeof changes.before === "string") {
+    const reasons = (Array.isArray(changes.reasons) ? changes.reasons : [])
+      .filter((reason) => Object.hasOwn(CHANGE_REASON_KEYS, reason))
+      .map((reason) => message(CHANGE_REASON_KEYS[reason]));
+    if (reasons.length) {
+      return message("view.other.changes_differs", {}, { name: plain(changes.before), reasons: joinedWords(reasons) });
+    }
+  }
+  return message(known && Object.hasOwn(CHANGES_WHY_KEYS, changes.state) ? CHANGES_WHY_KEYS[changes.state] : "view.other.changes_none");
+}
+
+// What the server says of the comparison, as the menu keeps it from the
+// answer of the changes: the state, the name of the output before, and the
+// reasons; a reading of the output before that failed keeps its item.
+export function changesAvailableFrom(answer) {
+  return { state: answer.state === "unreadable" ? "ready" : answer.state, before: answer.before ?? null, reasons: answer.reasons ?? [] };
+}
+
+// The line of the two outputs compared, under the title.
+export function changesOutputs(answer) {
+  return message("view.changes.outputs", {}, { before: plain(answer.before ?? "—"), now: plain(answer.now ?? "—") });
+}
+
+// The date and time of an activity in the lists of the changes, which go
+// across the periods: as the list of a period writes it, with the year; the
+// date alone where the output has no time of the day.
+export function changesWhen(when, language) {
+  const moment = typeof when?.datetime === "string" ? LOCAL_MOMENT.exec(when.datetime) : null;
+  const iso = moment !== null ? moment[1] : typeof when?.day === "string" && ISO_DAY.test(when.day) ? when.day : null;
+  if (iso === null) {
+    return plain("—");
+  }
+  const day = utcDate(iso);
+  const date = dateFormat(language, "numeric_day").format(day);
+  const weekday = dateFormat(language, "weekday").format(day);
+  return moment === null
+    ? message("view.compare.calendar_day", { date, weekday })
+    : message("view.list.moment", { date, weekday, time: `${Number(moment[2])}:${moment[3]}` });
+}
+
+// A value of an activity with its unit, as a panel writes it; the time as
+// the list writes it; a dash for none.
+function changesValue(key, value, language) {
+  if (!Number.isFinite(value)) {
+    return plain("—");
+  }
+  return key === "time" ? plain(clockSeconds(value)) : valueMessage(key, value, language);
+}
+
+function changesName(name) {
+  return typeof name === "string" && name !== "" ? plain(name) : plain("—");
+}
+
+// The shoes of an activity: the names of its pairs, as the view by shoes says
+// them, and that it has a link that tells no shoe; none where it has neither.
+function changesShoes(value, shoes, language) {
+  const words = (Array.isArray(value?.shoes) ? value.shoes : [])
+    .map((place) => shoes[place])
+    .filter((shoe) => shoe !== null && typeof shoe === "object")
+    .map((shoe) => shoeName(shoe, language));
+  if (value?.unknown === true) {
+    words.push(message("view.changes.unknown_shoes"));
+  }
+  return words.length ? joinedWords(words) : message("view.changes.no_shoes");
+}
+
+// The name of a field of an activity that changed, as the list names it.
+function changesField(field) {
+  if (field === "when") {
+    return message("view.list.when");
+  }
+  if (field === "type") {
+    return message("view.list.type");
+  }
+  if (field === "name") {
+    return message("view.list.name");
+  }
+  if (field === "shoes") {
+    return message("view.changes.column.shoes");
+  }
+  return Object.hasOwn(ITEM_KEYS, field) ? message(ITEM_KEYS[field]) : plain(field);
+}
+
+function changesFieldValue(field, value, shoes, language) {
+  if (field === "when") {
+    return changesWhen(value, language);
+  }
+  if (field === "type") {
+    return typeof value === "string" ? typeMessage(value) : plain("—");
+  }
+  if (field === "name") {
+    return changesName(value);
+  }
+  if (field === "shoes") {
+    return changesShoes(value, shoes, language);
+  }
+  return changesValue(field, value, language);
+}
+
+// A field of a pair of shoes that changed, and its value: a day as the view
+// by shoes writes it, the maximum distance as a distance.
+const PAIR_FIELD_KEYS = {
+  name: "view.list.name",
+  begin: "view.changes.field.begin",
+  end: "view.changes.field.end",
+  maximum: "view.changes.field.maximum",
+};
+
+function pairValue(field, value, language) {
+  if (field === "maximum") {
+    return changesValue("dist", value, language);
+  }
+  if (field === "begin" || field === "end") {
+    return typeof value === "string" && ISO_DAY.test(value) ? plain(dateText(value, language)) : plain("—");
+  }
+  return changesName(value);
+}
+
+// The lists of the changes, each with its title (and its count), the heads of
+// its columns, and its rows of cells; a list without a row is left out. The
+// rows beyond those that the server gives are said under their list.
+export function changesTables(answer, language) {
+  const before = Array.isArray(answer?.shoes_before) ? answer.shoes_before : [];
+  const now = Array.isArray(answer?.shoes_now) ? answer.shoes_now : [];
+  const count = (value) => (Number.isInteger(value) && value > 0 ? value : 0);
+  const more = (name) => (count(answer?.more?.[name]) > 0 ? message("view.changes.more", { n: answer.more[name] }) : null);
+  const activityHeads = [message("view.list.when"), message("view.list.name"), message("view.list.type"), message(ITEM_KEYS.dist), message(ITEM_KEYS.time), message("view.changes.column.shoes")];
+  const activityRow = (entry, shoes) => [
+    changesWhen(entry, language),
+    changesName(entry.name),
+    typeof entry.type === "string" ? typeMessage(entry.type) : plain("—"),
+    changesValue("dist", entry.values?.dist, language),
+    changesValue("time", entry.values?.time, language),
+    changesShoes(entry, shoes, language),
+  ];
+  const tables = [];
+  if (count(answer?.added) > 0) {
+    tables.push({ name: "added", title: message("view.changes.added", { n: answer.added }), heads: activityHeads, rows: (answer.list_added ?? []).map((entry) => activityRow(entry, now)), more: more("added") });
+  }
+  if (count(answer?.changed) > 0) {
+    tables.push({
+      name: "changed",
+      title: message("view.changes.changed", { n: answer.changed }),
+      heads: [message("view.list.when"), message("view.list.name"), message("view.changes.column.field"), message("view.changes.column.before"), message("view.changes.column.now")],
+      rows: (answer.list_changed ?? []).flatMap((entry) =>
+        (entry.fields ?? []).map((change) => [
+          changesWhen(entry, language),
+          changesName(entry.name),
+          changesField(change.field),
+          changesFieldValue(change.field, change.before, before, language),
+          changesFieldValue(change.field, change.now, now, language),
+        ]),
+      ),
+      more: more("changed"),
+    });
+  }
+  if (count(answer?.shoes_changed) > 0) {
+    tables.push({
+      name: "shoes_changed",
+      title: message("view.changes.shoes_changed", { n: answer.shoes_changed }),
+      heads: [message("view.list.when"), message("view.list.name"), message("view.changes.column.shoes_before"), message("view.changes.column.shoes_now")],
+      rows: (answer.list_shoes_changed ?? []).map((entry) => [changesWhen(entry, language), changesName(entry.name), changesShoes(entry.before, before, language), changesShoes(entry.now, now, language)]),
+      more: more("shoes_changed"),
+    });
+  }
+  if (count(answer?.removed) > 0) {
+    tables.push({ name: "removed", title: message("view.changes.removed", { n: answer.removed }), heads: activityHeads, rows: (answer.list_removed ?? []).map((entry) => activityRow(entry, before)), more: more("removed") });
+  }
+  const pairs = answer?.pairs ?? {};
+  const pairCount = count(pairs.added) + count(pairs.changed) + count(pairs.removed);
+  if (pairCount > 0) {
+    const rows = [];
+    for (const entry of answer.list_pairs ?? []) {
+      if (entry.kind === "added" && now[entry.pair]) {
+        const begin = now[entry.pair].begin;
+        rows.push([
+          shoeName(now[entry.pair], language),
+          message("view.changes.pair_added"),
+          plain("—"),
+          typeof begin === "string" && ISO_DAY.test(begin) ? message("view.changes.from_day", { date: dateText(begin, language) }) : plain("—"),
+        ]);
+      } else if (entry.kind === "removed" && before[entry.before_pair]) {
+        rows.push([shoeName(before[entry.before_pair], language), message("view.changes.pair_removed"), plain("—"), plain("—")]);
+      } else if (entry.kind === "changed" && now[entry.pair]) {
+        for (const change of entry.fields ?? []) {
+          rows.push([
+            shoeName(now[entry.pair], language),
+            Object.hasOwn(PAIR_FIELD_KEYS, change.field) ? message(PAIR_FIELD_KEYS[change.field]) : plain(change.field),
+            pairValue(change.field, change.before, language),
+            pairValue(change.field, change.now, language),
+          ]);
+        }
+      }
+    }
+    tables.push({
+      name: "pairs",
+      title: message("view.changes.pairs", { n: pairCount }),
+      heads: [message("view.changes.column.shoes"), message("view.changes.column.field"), message("view.changes.column.before"), message("view.changes.column.now")],
+      rows,
+      more: more("pairs"),
+    });
+  }
+  return tables;
+}
+
+// The lines above the lists: the numbers of the changes, as the
+// normalization page says them, or why the outputs were not compared.
+export function changesLines(answer) {
+  if (answer?.state === "ready") {
+    return changeCountLines(answer).lines;
+  }
+  if (answer?.state === "unreadable") {
+    return [message("view.changes.unreadable", { code: typeof answer.code === "string" ? answer.code : "—" }, { name: plain(answer.before ?? "—") })];
+  }
+  return [changesWhy(answer)];
+}
+
+// The notes under the lists, where the outputs were compared: what is
+// compared and what is not, the outputs of Snapshots, and the records
+// without an id.
+export function changesNotes(answer) {
+  if (answer?.state !== "ready") {
+    return [];
+  }
+  return [message("view.changes.note"), message("view.changes.note_snapshots"), message("view.changes.note_ids")];
 }

@@ -638,6 +638,13 @@ button.primary:disabled {
   overflow-wrap: anywhere;
 }
 
+/* The records that changed since the output before, under the lines of the
+   result, and the button that compares them on the view page (stage X7 of
+   v2.3.0). */
+.run-changes button {
+  margin-top: 6px;
+}
+
 /* The lines of the check of the Export: a bar at the left in the color of
    their kind, and a mark on the first line of each group, so that color is
    never the only signal (stage B3b). */

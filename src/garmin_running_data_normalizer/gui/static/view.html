@@ -132,6 +132,7 @@
   <p id="plot-off" class="compare-off" data-i18n="view.plot.off" hidden></p>
   <p id="spread-off" class="compare-off" data-i18n="view.spread.off" hidden></p>
   <p id="shoes-off" class="compare-off" data-i18n="view.shoes.off" hidden></p>
+  <p id="changes-off" class="compare-off" data-i18n="view.changes.off" hidden></p>
   <div id="view-body" class="view-body">
     <aside id="shelf" class="shelf" aria-labelledby="shelf-heading">
       <section id="layouts" class="layouts" aria-labelledby="layouts-heading">
@@ -236,6 +237,7 @@
             <button type="button" id="other-plot" role="menuitem" tabindex="-1" data-i18n="view.other.plot"></button>
             <button type="button" id="other-spread" role="menuitem" tabindex="-1" data-i18n="view.other.spread"></button>
             <button type="button" id="other-shoes" class="with-why" role="menuitem" tabindex="-1"><span data-i18n="view.other.shoes"></span><span id="other-shoes-why" class="menu-why" hidden></span></button>
+            <button type="button" id="other-changes" class="with-why" role="menuitem" tabindex="-1"><span data-i18n="view.other.changes"></span><span id="other-changes-why" class="menu-why" hidden></span></button>
           </span>
         </span>
         <button type="button" id="recap-open" class="small" aria-expanded="false" aria-controls="recap-pop" data-i18n="view.recap.button"></button>
@@ -519,6 +521,29 @@
         </div>
         <div id="shoes-notes" class="shoes-notes"></div>
       </section>
+      <section id="changes" class="compare changes-view" aria-labelledby="changes-title" hidden>
+        <div class="compare-bar">
+          <div class="compare-line">
+            <h3 id="changes-title" class="compare-title" tabindex="-1" data-i18n="view.changes.title"></h3>
+            <span class="spacer"></span>
+            <button type="button" id="changes-back" class="small" data-i18n="view.panel.unbig"></button>
+          </div>
+          <div class="compare-line">
+            <span id="changes-outputs" class="note"></span>
+            <p id="changes-loading" class="loading" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+        <div id="changes-stop" class="errbox view-stop" hidden>
+          <h4 id="changes-stop-heading" tabindex="-1" data-i18n="view.stop.series_heading"></h4>
+          <div id="changes-stop-lines" class="messages"></div>
+          <p id="changes-stop-code" class="stop-code"></p>
+        </div>
+        <div id="changes-body" class="changes-body" tabindex="0" role="region" aria-labelledby="changes-title">
+          <div id="changes-lines" class="changes-lines"></div>
+          <div id="changes-lists" class="changes-lists"></div>
+          <div id="changes-notes" class="shoes-notes"></div>
+        </div>
+      </section>
       <div id="series-stop" class="errbox view-stop" hidden>
         <h3 id="series-stop-heading" tabindex="-1" data-i18n="view.stop.series_heading"></h3>
         <div id="series-stop-lines" class="messages"></div>
@@ -607,6 +632,7 @@
       <p data-i18n="view.help.other_plot"></p>
       <p data-i18n="view.help.other_spread"></p>
       <p data-i18n="view.help.other_shoes"></p>
+      <p data-i18n="view.help.other_changes"></p>
     </section>
     <section class="help-section" aria-labelledby="help-recap-heading">
       <h3 id="help-recap-heading" tabindex="-1" data-i18n="view.help.recap"></h3>

@@ -709,7 +709,8 @@ class GuiPageScriptTest(unittest.TestCase):
         self.assertIn('const NORMALIZE_TAB = "garmin-running-normalize";', source)
         self.assertIn("window.name = VIEW_TAB;", source)
         # The addresses are those of flow.mjs, which the node tests check.
-        self.assertIn("window.open(viewPageAddress(state.launchKey, state.theme, withOutput), VIEW_TAB)?.focus();", app)
+        # With the changes since the output before to show (stage X7 of v2.3.0).
+        self.assertIn("window.open(viewPageAddress(state.launchKey, state.theme, withOutput, withChanges), VIEW_TAB)?.focus();", app)
         self.assertIn('window.open("", NORMALIZE_TAB);', source)
         to_normalize = re.search(r"function toNormalize\(\) \{(.*?)\n\}", source, re.DOTALL)
         assert to_normalize is not None

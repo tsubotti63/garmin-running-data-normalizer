@@ -27,6 +27,11 @@ From v2.2.1 (stage W1) the answer of opening gives it too, and the answers
 of the numbers give the facts of their reading of the output (its first and
 last days, its activity types, and whether it is partial) as ``output``, so
 that the page takes those of an output read again.
+
+From stage X7 of v2.3.0, an output kept may keep the reading of the output
+before it too, which the view page compares it with: read as an output is
+opened, by the same checks and limits, and again where its stamp or the date
+of today changed, or where the output before is another one.
 """
 
 from __future__ import annotations
@@ -125,6 +130,9 @@ class _View:
     # in a row.
     # From stage T1, by the conditions on the activities too.
     shelves: OrderedDict[tuple[frozenset[str] | None, Conditions | None], dict[str, dict[str, Any]]] = field(default_factory=OrderedDict)
+    # The reading of the output before, which the changes compare the output
+    # with (stage X7 of v2.3.0): its folder, its stamp, and what was read.
+    before: tuple[Path, Stamp, ViewData] | None = None
 
 
 def load_view(output: Path) -> ViewData:
@@ -132,6 +140,19 @@ def load_view(output: Path) -> ViewData:
     and the shoes (stage S1 of v2.2.0) and the names of the activities (stage
     T1)."""
     return load_view_data(output, gear=True, names=True)
+
+
+def read_checked(output: Path, load: Callable[[Path], ViewData] = load_view) -> tuple[ViewData, Stamp]:
+    """Check and read ``output`` as the view page opens it, with its stamp
+    before the reading: an output that changed while it was read is not
+    taken (OUTPUT_CHANGED). The normalization page reads the output of its
+    run and the output before it so for their changes (stage X7 of v2.3.0),
+    and keeps neither."""
+    before = output_stamp(output)
+    data = load(output)
+    if output_stamp(output) != before:
+        raise OutputActionError("OUTPUT_CHANGED")
+    return data, before
 
 
 class Views:
@@ -160,13 +181,32 @@ class Views:
             return self._reads
 
     def _read(self, output: Path) -> tuple[ViewData, Stamp]:
-        # The stamp before and after the reading: an output that changed
-        # while it was read is not kept.
-        before = output_stamp(output)
-        data = self._load(output)
-        if output_stamp(output) != before:
-            raise OutputActionError("OUTPUT_CHANGED")
-        return data, before
+        return read_checked(output, self._load)
+
+    def before_data(self, ticket: str, before: Path) -> ViewData:
+        """The reading of ``before``, the output before that of ``ticket``
+        (stage X7 of v2.3.0): the one kept with it, where it is of the same
+        folder, its stamp and the date of today are the same; otherwise it
+        is checked and read again, as an output that opens is, and kept in
+        its place. A failure keeps none and raises; the output of ``ticket``
+        stays open."""
+        with self._lock:
+            view = self._views.get(ticket)
+            if view is None:
+                raise ViewNotOpenError(ticket)
+        with view.lock:
+            kept = view.before
+            if (
+                kept is not None
+                and kept[0] == before
+                and output_stamp(before) == kept[1]
+                and self._today(kept[2].timezone).toordinal() == kept[2].today
+            ):
+                return kept[2]
+            view.before = None
+            data, stamp = self._read(before)
+            view.before = (before, stamp, data)
+            return data
 
     def open(self, output: Path) -> tuple[str, ViewData]:
         """Check and read ``output``, and keep it under a new ticket. The
