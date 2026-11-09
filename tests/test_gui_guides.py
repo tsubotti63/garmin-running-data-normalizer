@@ -1679,6 +1679,9 @@ class GuiGuideTest(unittest.TestCase):
             words.add(messages["view.list.none_met"].replace("{grain}", messages["view.grain_word.week"]))
             # The dash of the list for a value that an activity does not have.
             words.add("\u2014")
+            # The line under the value of a list, as the page writes it of
+            # the example (stage X6 of v2.3.0).
+            words.add(messages["view.grounds.lead_list"].format(n="2") + messages["view.grounds.short.no_value"])
             for number in (1, 2, 5):
                 for word in (bold or plain for bold, plain in re.findall(pattern, parts[number])):
                     with self.subTest(language=language, section=number, quoted=word):
@@ -1728,6 +1731,116 @@ class GuiGuideTest(unittest.TestCase):
         ):
             with self.subTest(rule=rule):
                 self.assertRegex(css, rule)
+
+    def test_guides_and_the_design_give_the_grounds_of_a_period(self) -> None:
+        # v2.3.0 X6 (the person's choices 「おすすめ通り」 (A and D) and 「(a)」):
+        # the guides give the second line of the reading at the top right of a
+        # panel after the reading, the new notes of "About this panel" in its
+        # item, and the marks of the list and its line under the value after
+        # that value, in both languages; every word quoted is a word of the
+        # page or the page's words of the example; the design gives what the
+        # server sends and the page shows, tied to the code.
+        says = {
+            "en": (
+                "(From 2.3.0) The second line at the top right gives the number of records left out of the value of the step, and why, such as \"3 not counted: no value\". With two reasons or more, each has its number in parentheses, as in \"no value (2), values disagree (1)\". A step that left nothing out has an empty second line: the line always takes its room, so a panel keeps its height as the vertical line moves (the narrow panels beside an enlarged one keep one line, as they show neither the summary line nor **About this panel**). Where the line does not fit, the end of its reasons is cut with \"…\", never the number. Pointing at it with the mouse shows the whole, in the words of **About this panel**; a screen reader, as the keys move the vertical line, hears the whole after the values.",
+                "A step with no record counted and none left out says where it is on that line. On a panel of **Training (per activity)** or **Running form (FIT)**, it is \"This month has no activity counted.\" between the first and the last activity of the **Activity types counted** (of those that meet the conditions, where there are any), and \"Outside the first and the last activity counted.\" before or after them; on a panel of **Body (daily)** or **Garmin estimates**, it is \"This month has no record of this item.\" (\"month\" is the word of the grouping).",
+                "The reasons are only what the output holds: **no value** is both a record without the value and a value that normalization left empty as it had a form that its field does not take, such as text where a number belongs (only the audit files keep such a value, and the view page does not read them, so it does not tell the two apart).",
+                "From 2.3.0 it tells apart the activities whose distance or time is 0 or less (of the average pace) and those whose times disagreed and were left empty (of an average by time), and, on a panel of **Body (daily)** or **Garmin estimates**, it gives the days and the records without a value.",
+                "(From 2.3.0) In the column of the item of the panel, a row not counted says why, such as **no value** or **no time**; where the period has activities not counted, a line under the value of the panel gives their number and why, such as \"2 not counted: no value\".",
+            ),
+            "ja": (
+                "（2.3.0 から）右上の 2 行目には、その区切りの値に入っていない記録の数と、そのわけが出ます（例「入っていない 3 回：値なし」）。わけが 2 つ以上あるときは、「値なし（2）・食い違い（1）」のように、わけごとの数がかっこに入ります。入っていない記録の無い区切りでは、2 行目は空です。2 行目の場所はいつも取るので、縦の線を動かしても、段の高さは変わりません（段を大きくしたときのほかの細い段は、まとめの行や「この段について」と同じく 2 行目を出さず、1 行のままです）。行に入りきらないときは、わけの言葉の終わりが「…」で切れます（数は切れません）。マウスを当てると、「この段について」と同じ言い方で全部が出ます。キーで縦の線を動かしたときの読み上げでは、値のあとに、かっこに入れて全部を読みます。",
+                "入っていない記録も、数えた記録も無い区切りでは、2 行目に、その区切りがどこにあるかが出ます。「練習（アクティビティごと）」と「走りの形（FIT）」の段では、数える種目（条件があるときは、条件に合うもの）の最初と最後のアクティビティのあいだなら「この月に数えるアクティビティはありません。」、その外なら「数えるアクティビティの最初と最後の外です。」です。「体の記録（毎日）」と「Garmin の推定値」の段では「この月にこの項目の記録はありません。」です（「月」の所は、まとめ方の言葉になります）。",
+                "わけは、出力にあることだけです。「値なし」には、記録に値が無いものと、形の合わない値（数のはずの所に文字があるなど）を正規化で空欄にしたものの両方が入ります。元の値は記録（audit）にだけ残り、見るページはそれを読まないので、2 つを分けません。",
+                "2.3.0 からは、平均ペースの、距離か時間が 0 以下のアクティビティと、時間で重みをつけた平均の、時間が食い違って空にしたアクティビティを、ほかと分けて示します。「体の記録（毎日）」と「Garmin の推定値」の段では、値の無い日と値の無い記録の数も示します。",
+                "（2.3.0 から）数えない行は、段の項目の列に、そのわけ（例「値なし」「時間なし」）が出ます。その区切りに数えないアクティビティがあるときは、段の値の下の行に、「入っていない 2 件：値なし」のように、その数とわけが出ます。",
+            ),
+        }
+        # Each after the sentence of the guides that it follows.
+        after = {
+            "en": (
+                "As the line moves, every panel shows its value of the same step at its top right.",
+                "every panel shows its value of the same step at its top right.",
+                "every panel shows its value of the same step at its top right.",
+                "**About this panel**: what the panel leaves out, with counts (for example, activities without a value, or records dated after today).",
+                "Some activities in the list, such as one without a heart rate, are not counted in it.",
+            ),
+            "ja": (
+                "縦の線を動かすと、全部の段の右上が、同じ区切りの値になります。",
+                "縦の線を動かすと、全部の段の右上が、同じ区切りの値になります。",
+                "縦の線を動かすと、全部の段の右上が、同じ区切りの値になります。",
+                "「この段について」：その段に入っていない記録の数などを示します（例：値の無いアクティビティ、今日より先の日付の記録）。",
+                "心拍の無い記録のように、一覧に出ても数えないものもあります。",
+            ),
+        }
+        for language in ("en", "ja"):
+            text = GUIDES[language].read_text(encoding="utf-8")
+            reads = (lambda value: " ".join(value.split())) if language == "en" else (lambda value: re.sub(r"\n *", "", value))
+            whole = reads(text)
+            for phrase, before in zip(says[language], after[language]):
+                with self.subTest(language=language, phrase=phrase[:40]):
+                    self.assertEqual(whole.count(phrase), 1)
+                    self.assertEqual(whole.count(before), 1)
+                    self.assertLess(whole.index(before), whole.index(phrase))
+            # The three of the reading in their order, before the buttons of a
+            # panel.
+            buttons = "The buttons of a panel are at the right of its heading" if language == "en" else "段ごとのボタンは、段の見出しの右にあります"
+            places = [whole.index(phrase) for phrase in says[language][:3]] + [whole.index(buttons)]
+            self.assertEqual(places, sorted(places))
+            messages = catalog(language)
+            words = set(messages.values())
+            # The words of the page of the examples: the line of the grounds,
+            # its reasons, the sentences of a period with nothing counted of
+            # a month, the cut, the button of the notes, and the line under
+            # the list.
+            words |= {
+                messages["view.grounds.lead_activities"].format(n="3") + messages["view.grounds.short.no_value"],
+                messages["view.grounds.join"].format(
+                    a=messages["view.grounds.short_count"].format(name=messages["view.grounds.short.no_value"], n="2"),
+                    b=messages["view.grounds.short_count"].format(name=messages["view.grounds.short.disagree"], n="1"),
+                ),
+                messages["view.grounds.none"].format(grain=messages["view.grain_word.month"]),
+                messages["view.grounds.no_rows"].format(grain=messages["view.grain_word.month"]),
+                messages["view.grounds.lead_list"].format(n="2") + messages["view.grounds.short.no_value"],
+                messages["view.panel.notes"].replace(" ({n})", "").replace("（{n}）", ""),
+                "…",
+            }
+            patterns = (r"\*\*([^*]+)\*\*", r"\"([^\"]+)\"") if language == "en" else (r"「([^」]+)」",)
+            for phrase in says[language]:
+                for pattern in patterns:
+                    for word in re.findall(pattern, phrase):
+                        if language == "en" and word == "month":
+                            word = messages["view.grain_word.month"]
+                        with self.subTest(language=language, quoted=word):
+                            self.assertIn(word, words)
+        # The words of the page that the guides quote, as they are.
+        ja, en = catalog("ja"), catalog("en")
+        self.assertEqual([ja[key] for key in ("view.grounds.lead_activities", "view.grounds.short.no_value", "view.grounds.short_count", "view.grounds.outside")], ["入っていない {n} 回：", "値なし", "{name}（{n}）", "数えるアクティビティの最初と最後の外です。"])
+        self.assertEqual([en[key] for key in ("view.grounds.lead_activities", "view.grounds.short.no_value", "view.grounds.short_count", "view.grounds.outside")], ["{n} not counted: ", "no value", "{name} ({n})", "Outside the first and the last activity counted."])
+        # The design, after the panels, tied to the code.
+        design = " ".join((ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        start = design.index("- The grounds of a period (stage X6 of v2.3.0, the person's choices \"1\" (A and D) and \"(a)\" of the samples):")
+        self.assertLess(design.index("same source, so they share it."), start)
+        self.assertLess(start, design.index("- The overview under the panels shows the whole output by month"))
+        for phrase in (
+            "the answer of the panels gives each line `per_period`, the rows that it left out of each period by reason, as pairs of the index of a period and a count (no period of 0 is sent): `no_value`, `zero_value` (a pace whose distance or time is 0 or less), `disagree`, `no_duration`, `duration_disagree` (an average by time whose time was emptied as its values disagreed), `sleep_review`, and `sleep_other`;",
+            "a panel gives `per_period_other`, those of the lines of a series that it does not draw, and a line of the activities gives `counted_days`, the first and the last day of the activities counted in the output (of the types and the conditions chosen).",
+            "They add up to `left_out`, whose keys and counts are as before (`zero_value` in `no_value`, `duration_disagree` in `no_duration`; `no_date`, `after_today`, `zero_periods`, and `days_with_several_records` are not rows left out of a period), so the `series` command of the CLI writes what it did.",
+            "Neither the rows of a period nor the days with several records are sent.",
+            "The reading at the top right of a panel always holds two lines, so that its heading keeps its height as the cross line moves and while no period is chosen (a low strip beside an enlarged panel, which shows neither the summary nor the notes of a panel, keeps its reading on one line, so that its chart keeps its height):",
+            "The list of a period gives each row `left_out` (the reason that the panel left it out, or null) and its value `grounds`:",
+            "Only what the output holds is said: a value of another form, which normalization left empty and only `audit/` keeps, is one without a value, as the view page reads no `audit/`.",
+        ):
+            with self.subTest(design=phrase[:50]):
+                self.assertEqual(design.count(phrase), 1)
+        series_source = (ROOT / "src/garmin_running_data_normalizer/view/series.py").read_text(encoding="utf-8")
+        for code in ('"per_period": _per_period(by_period),', '"per_period_other": _merge_per_period(dropped),', '"counted_days": None if first is None else', '"left_out": _row_reason(ITEMS_BY_KEY[key], row)', '"grounds": {'):
+            with self.subTest(code=code):
+                self.assertIn(code, series_source)
+        flow = (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8")
+        for code in ("export const GROUND_REASONS = Object.freeze({", "export function periodGrounds(", "export function listGrounds(", "export function groundsTotal("):
+            with self.subTest(code=code):
+                self.assertIn(code, flow)
 
     def test_the_design_says_how_races_go_by_day(self) -> None:
         # v2.3.0 X3 (the person's choice B of the samples, and the checker's

@@ -61,6 +61,11 @@ export const ONE_KEYS = Object.freeze({
   "view.note.record_disagree": "view.note.record_disagree_one",
   "view.note.several_mean": "view.note.several_mean_one",
   "view.note.several_points": "view.note.several_points_one",
+  // The notes that the grounds of the periods tell apart (stage X6 of v2.3.0).
+  "view.note.zero_value": "view.note.zero_value_one",
+  "view.note.duration_disagree": "view.note.duration_disagree_one",
+  "view.note.day_missing": "view.note.day_missing_one",
+  "view.note.record_missing": "view.note.record_missing_one",
   "view.compare.weeks_before": "view.compare.weeks_before_one",
   // The days before a race day (stage X3 of v2.3.0).
   "view.compare.days_before": "view.compare.days_before_one",

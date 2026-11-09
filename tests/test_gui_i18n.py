@@ -57,6 +57,9 @@ WORD_PLACEHOLDERS = frozenset(
         "race", "races", "same", "series", "shoe", "span", "sport", "start", "step", "summary", "table", "text", "time",
         "title", "to", "type", "types", "unit", "until", "version", "weekday", "when", "words", "x", "y", "year", "years",
     }
+    # The grounds of a period (stage X6 of v2.3.0): two reasons joined, the
+    # reasons of a period, and the grounds spoken, each other messages.
+    | {"a", "b", "grounds", "reasons"}
 )
 PLACEHOLDER_KINDS = {
     # The words of a button.
@@ -171,6 +174,20 @@ NO_WORDS_FOR_ONE = {
             "unknown_kinds", "no_laps", "key_shared", "no_link", "fit_missing", "fit_too_large", "fit_changed", "fit_not_activity",
             "laps_differ", "store_unreadable",
         )
+    },
+    # The grounds of a period (stage X6 of v2.3.0): in English, the count
+    # before the words not counted, in parentheses after a reason, or after
+    # the words of what is counted and a colon.
+    **{f"view.grounds.lead_{name}": "the count before the words not counted, right with 1" for name in ("activities", "days", "records", "list")},
+    "view.grounds.short_count": IN_PARENTHESES,
+    **{
+        f"view.grounds.long.{kind}.{name}": LABEL
+        for kind, names in (
+            ("activities", ("no_value", "no_value_fit", "zero_value", "disagree", "no_duration", "duration_disagree")),
+            ("days", ("no_value", "disagree", "sleep_review", "sleep_other")),
+            ("records", ("no_value", "disagree")),
+        )
+        for name in names
     },
     **{
         f"warning.{name}": IN_PARENTHESES
@@ -334,8 +351,9 @@ class GuiCatalogTest(unittest.TestCase):
         # review of the plan of U1, C, and Codex's review of the plan, 7).
         english, japanese = load_catalog("en"), load_catalog("ja")
         ones = one_keys()
-        # The days before a race day of stage X3 of v2.3.0 make 28.
-        self.assertEqual(len(ones), 28)
+        # The days before a race day of stage X3 of v2.3.0 make 28, and the
+        # four notes that the grounds of stage X6 tell apart 32.
+        self.assertEqual(len(ones), 32)
         self.assertFalse(set(ones) & set(ones.values()))
         self.assertFalse((set(ones) | set(ones.values())) & set(NO_WORDS_FOR_ONE))
         self.assertFalse(COUNT_PLACEHOLDERS & MEASURE_PLACEHOLDERS or COUNT_PLACEHOLDERS & WORD_PLACEHOLDERS or MEASURE_PLACEHOLDERS & WORD_PLACEHOLDERS)
@@ -380,9 +398,15 @@ class GuiCatalogTest(unittest.TestCase):
         held = {
             ("view_flow.mjs", "panelNotes"): (
                 'notes.push(message(countKey("view.note.activity_disagree", count("disagree")), { n: n(count("disagree")) }));',
-                'notes.push(message(countKey(item.from_fit ? "view.note.fit_missing" : "view.note.activity_missing", count("no_value")), { n: n(count("no_value")) }));',
-                'notes.push(message(countKey("view.note.no_duration", count("no_duration")), { n: n(count("no_duration")) }));',
+                # The parts of left_out that the grounds of the periods tell
+                # apart, and the days and the records without a value (stage
+                # X6 of v2.3.0).
+                'notes.push(message(countKey(item.from_fit ? "view.note.fit_missing" : "view.note.activity_missing", missing), { n: n(missing) }));',
+                'notes.push(message(countKey("view.note.zero_value", zero), { n: n(zero) }));',
+                'notes.push(message(countKey("view.note.no_duration", without), { n: n(without) }));',
+                'notes.push(message(countKey("view.note.duration_disagree", times), { n: n(times) }));',
                 'notes.push(message(countKey(item.kind === "obs" ? "view.note.record_disagree" : "view.note.day_disagree", count("disagree")), { n: n(count("disagree")) }));',
+                'notes.push(message(countKey(item.kind === "obs" ? "view.note.record_missing" : "view.note.day_missing", count("no_value")), { n: n(count("no_value")) }));',
                 '...message(countKey(grain === "day" ? "view.note.several_points" : "view.note.several_mean", count("days_with_several_records")), { n: n(count("days_with_several_records")) }),',
                 'notes.push(message(countKey("view.note.after_today", count("after_today")), { n: n(count("after_today")) }));',
                 'notes.push(message(countKey("view.note.no_date", count("no_date")), { n: n(count("no_date")) }));',

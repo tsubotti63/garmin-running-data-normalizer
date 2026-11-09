@@ -409,6 +409,52 @@ def _missing(item: Item, row: Row) -> str:
     return "no_value"
 
 
+def _period_reason(item: Item, row: Row, reason: str) -> str:
+    """The reason of a row left out of a period, in the parts of the grounds
+    of a period (stage X6 of v2.3.0), finer than those of left_out: a pace of
+    a distance or a time of 0 or less apart from one without them. left_out
+    keeps its keys and numbers, so that the series command says what it
+    said."""
+    if reason == "no_value" and item.kind == PACE and row.values[DISTANCE] is not None and row.values[DURATION] is not None:
+        return "zero_value"
+    return reason
+
+
+def _row_reason(item: Item, row: Row) -> str | None:
+    """Why one activity of the list of a period is left out of the value of
+    its panel (stage X6 of v2.3.0), or None where it is counted."""
+    if not _has_value(item, row):
+        return _period_reason(item, row, _missing(item, row))
+    if item.kind == TIME_WEIGHTED and not _positive(row.values[DURATION]):
+        return _duration_reason(row)
+    return None
+
+
+def _duration_reason(row: Row) -> str:
+    """An average whose time was emptied as the values disagreed, apart from
+    one without a time; left_out counts both as no_duration."""
+    return "duration_disagree" if row.values[DURATION] is None and DURATION in row.disagree else "no_duration"
+
+
+def _per_period(by_period: dict[str, Counter[int]]) -> dict[str, list[list[int]]]:
+    """For each reason, the pairs of the index of a period and its count, of
+    the periods that have any (stage X6 of v2.3.0)."""
+    return {
+        name: [[index, count] for index, count in sorted(counter.items())]
+        for name, counter in sorted(by_period.items())
+        if counter
+    }
+
+
+def _merge_per_period(lines: list[dict[str, Any]]) -> dict[str, list[list[int]]]:
+    merged: dict[str, Counter[int]] = defaultdict(Counter)
+    for line in lines:
+        for name, pairs in line.get("per_period", {}).items():
+            for index, count in pairs:
+                merged[name][index] += count
+    return _per_period(merged)
+
+
 def item_series(
     data: ViewData,
     key: str,
@@ -426,6 +472,7 @@ def item_series(
     item = ITEMS_BY_KEY[key]
     dataset = DATASETS_BY_NAME[item.dataset]
     left_out: Counter[str] = Counter()
+    dropped: list[dict[str, Any]] = []
     if item.dataset == ACTIVITIES:
         rows = _activity_rows(data, types, conditions)
         lines = [_activity_line(item, rows, periods, left_out)]
@@ -438,7 +485,9 @@ def item_series(
             _daily_line(item, group, periods, left_out, series=dict(zip(dataset.series, name)) if name else None)
             for name, group in sorted(groups.items(), key=lambda entry: (entry[1][0].day, entry[0]))
         ]
-        # A line of a series without a value in the periods draws nothing.
+        # A line of a series without a value in the periods draws nothing; what
+        # it left out stays in the grounds of the panel (per_period_other).
+        dropped = [line for line in lines if not any(line["counts"])]
         lines = [line for line in lines if any(line["counts"])] or [
             _daily_line(item, [], periods, Counter(), series=None)
         ]
@@ -451,6 +500,7 @@ def item_series(
         "kind": item.kind,
         "lines": lines,
         "left_out": dict(sorted(left_out.items())),
+        "per_period_other": _merge_per_period(dropped),
         "periods_with_value": sum(
             1 for index in range(len(periods.spans)) if any(line["values"][index] is not None for line in lines)
         ),
@@ -464,13 +514,17 @@ def _activity_line(item: Item, rows: list[Row], periods: Periods, left_out: Coun
     counts = [0] * size
     recorded = [False] * size
     highest: list[float | None] = [None] * size
+    # What each period left out, by reason (stage X6 of v2.3.0).
+    by_period: dict[str, Counter[int]] = defaultdict(Counter)
     for row in rows:
         index = periods.index(row.day)
         if index is None:
             continue
         recorded[index] = True
         if not _has_value(item, row):
-            left_out[_missing(item, row)] += 1
+            reason = _missing(item, row)
+            left_out[reason] += 1
+            by_period[_period_reason(item, row, reason)][index] += 1
             continue
         if item.kind == COUNT:
             counts[index] += 1
@@ -489,6 +543,7 @@ def _activity_line(item: Item, rows: list[Row], periods: Periods, left_out: Coun
             duration = row.values[DURATION]
             if not _positive(duration):
                 left_out["no_duration"] += 1
+                by_period[_duration_reason(row)][index] += 1
                 continue
             totals[index] += row.values[item.field] * duration
             weights[index] += duration
@@ -510,7 +565,15 @@ def _activity_line(item: Item, rows: list[Row], periods: Periods, left_out: Coun
             values.append(highest[index])
         else:
             values.append(totals[index] / weights[index] if counts[index] else None)
-    return {"series": None, "values": values, "counts": counts}
+    return {
+        "series": None,
+        "values": values,
+        "counts": counts,
+        "per_period": _per_period(by_period),
+        # The first and the last day of the activities counted (of the types
+        # and the conditions chosen): outside them a period has no value.
+        "counted_days": None if first is None else [date.fromordinal(first).isoformat(), date.fromordinal(last).isoformat()],
+    }
 
 
 def _daily_line(
@@ -527,15 +590,21 @@ def _daily_line(
     records_by_day: Counter[int] = Counter()
     unused_sleep: dict[str, set[int]] = {"review": set(), "other": set()}
     points: list[list[Any]] = []
+    # What each period left out, by reason (stage X6 of v2.3.0).
+    by_period: dict[str, Counter[int]] = defaultdict(Counter)
+    day_index: dict[int, int] = {}
     for row in rows:
         index = periods.index(row.day)
         if index is None:
             continue
+        day_index[row.day] = index
         if item.sleep and not row.marks["used"]:
             unused_sleep["review" if row.marks["review"] else "other"].add(row.day)
             continue
         if not _has_value(item, row):
-            left_out[_missing(item, row)] += 1
+            reason = _missing(item, row)
+            left_out[reason] += 1
+            by_period[reason][index] += 1
             continue
         value = row.values[item.field]
         totals[index] += value
@@ -548,10 +617,17 @@ def _daily_line(
         left_out["sleep_other_days"] += len(unused_sleep["other"] - unused_sleep["review"])
     if item.kind == OBSERVED:
         left_out["days_with_several_records"] += sum(1 for count in records_by_day.values() if count > 1)
+    # The days of sleep that were not used, by period, as left_out counts
+    # them: a day with a sleep to review once, under review.
+    for day in unused_sleep["review"]:
+        by_period["sleep_review"][day_index[day]] += 1
+    for day in unused_sleep["other"] - unused_sleep["review"]:
+        by_period["sleep_other"][day_index[day]] += 1
     line: dict[str, Any] = {
         "series": series,
         "values": [totals[index] / counts[index] if counts[index] else None for index in range(size)],
         "counts": counts,
+        "per_period": _per_period(by_period),
     }
     if item.kind == OBSERVED and periods.grain == "day":
         line["points"] = points
@@ -767,6 +843,9 @@ def activity_list(
                 "type": row.marks["type"],
                 "name": _row_name(data, row),
                 "values": {name: _list_value(ITEMS_BY_KEY[name], row) for name in columns},
+                # Why the row is left out of the value of the panel, or None
+                # (stage X6 of v2.3.0).
+                "left_out": _row_reason(ITEMS_BY_KEY[key], row),
             }
             for row in chosen
         ]
@@ -776,7 +855,13 @@ def activity_list(
         "total": len(chosen),
         "rows": rows,
         "limit": MAX_LIST_ROWS,
-        "value": {"value": line["values"][0], "count": line["counts"][0]},
+        # The value and the count of the panel for the period, and what the
+        # panel left out of it by reason (stage X6 of v2.3.0).
+        "value": {
+            "value": line["values"][0],
+            "count": line["counts"][0],
+            "grounds": {name: pairs[0][1] for name, pairs in line["per_period"].items() if pairs},
+        },
     }
 
 
