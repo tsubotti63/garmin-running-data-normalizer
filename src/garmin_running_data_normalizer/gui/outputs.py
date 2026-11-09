@@ -95,6 +95,45 @@ def earlier_outputs(remembered: list[str], exclude: Path | None) -> list[Path]:
     return found
 
 
+def output_before(remembered: list[str], output: Path) -> tuple[str, Path | None]:
+    """The output before ``output`` that the view page compares it with
+    (stage X7 of v2.3.0), by the rule of the output before a run (stage B5b):
+    among the outputs that the settings remember, newest first, the first one
+    after ``output`` that is there as a plain folder and whose summary can be
+    read. ("not_remembered", None) where the settings do not remember
+    ``output`` (also one that left the list for its length), ("none", None)
+    where no output after it is found, and ("found", path) otherwise. That
+    the two are compared at all is change_reasons'; earlier_outputs is not
+    used, as it gives the outputs newer than an output opened too."""
+    places = [Path(place) for place in remembered]
+    if output not in places:
+        return "not_remembered", None
+    for path in places[places.index(output) + 1 :]:
+        try:
+            if _is_plain(path, stat.S_ISDIR) and output_summary(path) is not None:
+                return "found", path
+        except OSError:
+            continue
+    return "none", None
+
+
+def change_reasons(before: dict[str, Any], now: dict[str, Any]) -> list[str]:
+    """Why two outputs are not compared (stage X7 of v2.3.0), from their
+    summaries (output_summary), by the rule of the page's change since the
+    output before a run (flow.mjs changePlan, stage B5b): not normalized the
+    same way (Snapshots, or this Export alone), not by the same version (and
+    version of Run-All), or not with the same timezone; none where they are
+    compared."""
+    reasons = []
+    if before.get("snapshots") != now.get("snapshots"):
+        reasons.append("how")
+    if before.get("version") != now.get("version") or before.get("run_all_version") != now.get("run_all_version"):
+        reasons.append("version")
+    if before.get("timezone") != now.get("timezone"):
+        reasons.append("timezone")
+    return reasons
+
+
 def output_summary(output: Path) -> dict[str, Any] | None:
     """What the page compares a run with (stage B5b): the count of the records
     of each family, whether the output is of Snapshots, its version, and its

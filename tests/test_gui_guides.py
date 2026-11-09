@@ -2333,7 +2333,8 @@ class GuiGuideTest(unittest.TestCase):
             if language == "en":
                 phrases = {
                     "menu": (
-                        f"{mark.format(messages['view.other.button'])} above the panels shows {mark.format(messages['view.other.plot'])}, {mark.format(messages['view.other.spread'])}, or {mark.format(messages['view.other.shoes'])} in the place of the panels.",
+                        # With the changes since the output before (stage X7 of v2.3.0).
+                        f"{mark.format(messages['view.other.button'])} above the panels shows {mark.format(messages['view.other.plot'])}, {mark.format(messages['view.other.spread'])}, {mark.format(messages['view.other.shoes'])}, or {mark.format(messages['view.other.changes'])} (from 2.3.0) in the place of the panels.",
                         "Enter, Space, or ↓ opens its menu on the first item; ↑, ↓, Home, and End move in it, and Esc closes it, back to its button. Tab or a click elsewhere closes it too.",
                         f"While one shows, the {mark.format(messages['view.shelf.heading'])}, {mark.format(messages['view.layouts.heading'])}, and {mark.format(messages['view.grain.label'])} are not used; a line under the filters says so.",
                         "a period, activity types, or conditions changed here stay for the panels when you go back.",
@@ -2372,7 +2373,7 @@ class GuiGuideTest(unittest.TestCase):
             else:
                 phrases = {
                     "menu": (
-                        f"段の上の{mark.format(messages['view.other.button'])}で、段の代わりに{mark.format(messages['view.other.plot'])}{mark.format(messages['view.other.spread'])}か{mark.format(messages['view.other.shoes'])}を出します。",
+                        f"段の上の{mark.format(messages['view.other.button'])}で、段の代わりに{mark.format(messages['view.other.plot'])}{mark.format(messages['view.other.spread'])}{mark.format(messages['view.other.shoes'])}か{mark.format(messages['view.other.changes'])}（2.3.0 から）を出します。",
                         "メニューは、Enter・Space・↓ キーで開いて最初の項目に移り、↑ ↓・Home・End キーで動き、Esc キーでボタンに戻って閉じます。Tab キーか、ほかの所を押しても閉じます。",
                         f"出ている間は{mark.format(messages['view.shelf.heading'])}{mark.format(messages['view.layouts.heading'])}{mark.format(messages['view.grain.label'])}を使いません。フィルターの下に、そのことが 1 行で出ます。",
                         "ここで変えた期間と数える種目と条件は、段に戻ってもそのまま段に効きます。",
@@ -2784,7 +2785,8 @@ class GuiGuideTest(unittest.TestCase):
         # v2.2.0): the two places that set it are those two functions.
         self.assertEqual(page.count("state.panelsStale = true;"), 2)
         self.assertEqual(sum(function_body(page, name).count("state.panelsStale = true;") for name in ("requestShown", "otherReading")), 2)
-        self.assertEqual(page.count("otherReading(answer);"), 3)
+        # And the changes since the output before (stage X7 of v2.3.0).
+        self.assertEqual(page.count("otherReading(answer);"), 4)
         self.assertIn('ui.shoesPanels.addEventListener("pointermove", shoesPointer);', page)
         self.assertIn('ui.shoesPanels.addEventListener("keydown", shoesKeyDown);', page)
         self.assertIn('name=_shoe_text(record.get("display_name")) or _shoe_text(record.get("custom_make_model")),', reader)

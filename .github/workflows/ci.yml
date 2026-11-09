@@ -330,6 +330,9 @@ jobs:
       - name: Verify Windows work laps of the shoes of a period
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_shoe_work.py -q -rs
+      - name: Verify Windows records changed since the output before
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_view_changes.py -q -rs
   windows-python-3-15:
     runs-on: windows-latest
     steps:
@@ -409,3 +412,6 @@ jobs:
       - name: Verify Windows work laps of the shoes of a period with Python 3.15
         shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest .\tests\test_gui_shoe_work.py -q -rs
+      - name: Verify Windows records changed since the output before with Python 3.15
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest .\tests\test_view_changes.py -q -rs

@@ -189,6 +189,18 @@ NO_WORDS_FOR_ONE = {
         )
         for name in names
     },
+    # The records that changed since the output before (stage X7 of v2.3.0):
+    # in English, the count before the words not counted, in parentheses after
+    # the words of what is counted, or after their name and a colon.
+    **{
+        f"change.records.{name}": "the count before the words not counted, right with 1"
+        for name in (
+            "added", "changed", "shoes_changed", "removed", "pairs_added", "pairs_changed", "pairs_removed", "unmatched_now",
+            "unmatched_before",
+        )
+    },
+    **{f"view.changes.{name}": IN_PARENTHESES for name in ("added", "changed", "shoes_changed", "removed", "pairs")},
+    "view.changes.more": LABEL,
     **{
         f"warning.{name}": IN_PARENTHESES
         for name in (
@@ -715,7 +727,9 @@ class GuiCatalogTest(unittest.TestCase):
         ja, en = catalogs["ja"], catalogs["en"]
         self.assertEqual([key for key, text in ja.items() if "型" in text], [])
         keys = [key for key, text in ja.items() if "レイアウト" in text]
-        self.assertEqual(len(keys), 25)
+        # The words of what the changes since the output before do not use
+        # make 26 (stage X7 of v2.3.0).
+        self.assertEqual(len(keys), 26)
         for key in keys:
             with self.subTest(key=key):
                 self.assertIn("layout", en[key].lower())

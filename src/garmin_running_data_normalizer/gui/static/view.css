@@ -2851,6 +2851,11 @@ button.small {
   display: flex;
   flex-direction: column;
   min-width: 11em;
+  /* As wide as its longest item, which then stays on one line, and no wider
+     than the window allows (stage X7 of v2.3.0: the comparison with the
+     output before broke into two lines at 11em). */
+  width: max-content;
+  max-width: min(24em, calc(100vw - 32px));
   margin-top: 4px;
   padding: 4px;
 }
@@ -3274,4 +3279,29 @@ button.small {
   .save-empty {
     fill: CanvasText;
   }
+}
+
+/* The records that changed since the output before (stage X7 of v2.3.0): the
+   lines of their numbers, and the lists, which scroll in their own box under
+   the bar, as the view takes the place of the panels. */
+.changes-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 2px 8px;
+}
+
+.changes-lines p,
+.changes-body .shoes-notes p {
+  margin: 4px 0;
+}
+
+.changes-list-title {
+  margin: 12px 0 4px;
+  font-size: 0.9rem;
+}
+
+.list-table.changes-table {
+  max-height: none;
+  margin: 0;
 }

@@ -666,7 +666,9 @@ class GuiViewSaveTest(unittest.TestCase):
         self.assertEqual(panels.count("replaceChildren("), 1)
         self.assertLess(panels.index("if (ui.savePanel.dataset.signature !== signature) {"), panels.index("ui.savePanel.replaceChildren("))
         # The window goes with the view of its button.
-        self.assertIn('return comparing() ? "compare" : plotting() ? "plot" : spreading() ? "spread" : shoesShown() ? "shoes" : "panels";', function_body(self.script, "saveViewNow"))
+        # The changes since the output before are not saved: a window of
+        # another view closes while they show (stage X7 of v2.3.0).
+        self.assertIn('return comparing() ? "compare" : plotting() ? "plot" : spreading() ? "spread" : shoesShown() ? "shoes" : changesShown() ? "changes" : "panels";', function_body(self.script, "saveViewNow"))
 
     def test_another_view_saves_its_answer_drawn_as_a_chart_or_says_why_not(self) -> None:
         target = function_body(self.script, "saveTarget")
