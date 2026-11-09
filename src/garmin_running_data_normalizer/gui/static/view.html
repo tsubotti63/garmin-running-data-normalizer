@@ -331,8 +331,20 @@
           <p id="save-marks-none" class="note save-note" data-i18n="view.save.marks_none" hidden></p>
           <p id="save-marks-warn" class="note save-note" hidden></p>
         </fieldset>
+        <fieldset class="save-field" id="save-format-field">
+          <legend data-i18n="view.save.format_choice"></legend>
+          <span class="save-choice"><input type="radio" name="save-format" id="save-svg" value="svg" checked><label for="save-svg" data-i18n="view.save.format_svg"></label></span>
+          <span class="save-choice"><input type="radio" name="save-format" id="save-png" value="png"><label for="save-png" data-i18n="view.save.format_png"></label></span>
+        </fieldset>
+        <fieldset class="save-field" id="save-size-field" hidden>
+          <legend data-i18n="view.save.size"></legend>
+          <span class="save-choice"><input type="radio" name="save-size" id="save-size-4x5" value="4x5" checked><label for="save-size-4x5" data-i18n="view.save.size_4x5"></label></span>
+          <span class="save-choice"><input type="radio" name="save-size" id="save-size-1x1" value="1x1"><label for="save-size-1x1" data-i18n="view.save.size_1x1"></label></span>
+          <span class="save-choice"><input type="radio" name="save-size" id="save-size-9x16" value="9x16"><label for="save-size-9x16" data-i18n="view.save.size_9x16"></label></span>
+        </fieldset>
         <p class="save-file"><span data-i18n="view.save.file"></span> <code id="save-name"></code></p>
-        <p class="note save-note" data-i18n="view.save.format"></p>
+        <p id="save-format-note" class="note save-note" data-i18n="view.save.format"></p>
+        <p id="save-png-note" class="note save-note" data-i18n="view.save.png_note" hidden></p>
         <div class="save-end">
           <p id="save-problem" class="save-problem" role="status" aria-live="polite"></p>
           <div class="button-row">

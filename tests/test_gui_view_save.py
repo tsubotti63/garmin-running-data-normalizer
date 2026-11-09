@@ -62,12 +62,19 @@ class GuiViewSaveTest(unittest.TestCase):
         # The choices in their groups; the first ones checked: all the panels,
         # the light colors, and no marks.
         legends = [element.get("data-i18n") for element in self.elements if element.tag == "legend" and window in element.ancestors()]
-        self.assertEqual(legends, ["view.save.scope", "view.save.colors", "view.save.marks"])
+        # From v2.3.0 (stage X5), the format, and the size of a PNG: SVG and
+        # 4:5 first.
+        self.assertEqual(legends, ["view.save.scope", "view.save.colors", "view.save.marks", "view.save.format_choice", "view.save.size"])
         for name, group, checked in (
             ("save-all", "save-scope", True),
             ("save-one", "save-scope", False),
             ("save-light", "save-colors", True),
             ("save-screen", "save-colors", False),
+            ("save-svg", "save-format", True),
+            ("save-png", "save-format", False),
+            ("save-size-4x5", "save-size", True),
+            ("save-size-1x1", "save-size", False),
+            ("save-size-9x16", "save-size", False),
         ):
             with self.subTest(field=name):
                 field = by_id(self.elements, name)
@@ -75,6 +82,17 @@ class GuiViewSaveTest(unittest.TestCase):
         marks = by_id(self.elements, "save-marks")
         self.assertEqual(marks.get("type"), "checkbox")
         self.assertNotIn("checked", marks.attributes)
+        # The sizes and the note of a PNG show only with PNG chosen, after the
+        # marks and before the name of the file (stage X5 of v2.3.0).
+        self.assertIn("hidden", by_id(self.elements, "save-size-field").attributes)
+        self.assertEqual(by_id(self.elements, "save-format-note").get("data-i18n"), "view.save.format")
+        note = by_id(self.elements, "save-png-note")
+        self.assertEqual((note.get("class"), note.get("data-i18n"), "hidden" in note.attributes), ("note save-note", "view.save.png_note", True))
+        sizes = by_id(self.elements, "save-size-field")
+        self.assertEqual(
+            [element.get("data-i18n") for element in self.elements if element.tag == "label" and sizes in element.ancestors()],
+            ["view.save.size_4x5", "view.save.size_1x1", "view.save.size_9x16"],
+        )
         # The line before a saving in the band of a warning, with its icon;
         # why a saving cannot be done, in a live region of the window; then
         # cancel and save.
@@ -90,6 +108,10 @@ class GuiViewSaveTest(unittest.TestCase):
         self.assertEqual(parts[parts.index("save-what") + 1], "part-note save-warn")
         self.assertLess(parts.index("part-note save-warn"), parts.index("save-scope-field"))
         self.assertEqual(parts[-1], "save-end")
+        self.assertEqual(
+            parts[parts.index("save-marks-field") : parts.index("save-marks-field") + 6],
+            ["save-marks-field", "save-format-field", "save-size-field", "save-file", "save-format-note", "save-png-note"],
+        )
         end = next(element for element in self.elements if element.parent is window and element.get("class") == "save-end")
         self.assertEqual([element.get("id") or element.get("class") for element in self.elements if element.parent is end], ["save-problem", "button-row"])
         field = by_id(self.elements, "save-marks-field")
@@ -209,6 +231,9 @@ class GuiViewSaveTest(unittest.TestCase):
                 "state.savePanel = null;",
                 'state.saveColors = "light";',
                 "state.saveMarks = false;",
+                # SVG and 4:5 each time (stage X5 of v2.3.0).
+                'state.saveFormat = "svg";',
+                'state.saveSize = "4x5";',
                 "state.saveNotice = null;",
                 "state.recapOpen = false;",
                 "  if (state.marksOpen) {\n      state.marksOpen = false;",
@@ -241,6 +266,15 @@ class GuiViewSaveTest(unittest.TestCase):
                 "const pressed = document.activeElement === ui.saveGo;",
                 "if (pressed && ui.saveGo.disabled) {\n    ui.saveTitle.focus();\n  }",
                 'setText(ui.saveName, target.name ?? "—");',
+                # The format, the sizes of a PNG, and the note of each (stage
+                # X5 of v2.3.0).
+                'const png = state.saveFormat === "png";',
+                "ui.saveSvg.checked = !png;",
+                "ui.savePng.checked = png;",
+                "ui.saveSizeField.hidden = !png;",
+                "input.checked = input.value === state.saveSize;",
+                "ui.saveFormatNote.hidden = png;",
+                "ui.savePngNote.hidden = !png;",
                 "const gone = panels ? renderSavePanels(target.plan) : false;",
                 # A reason that a press kept, or what the window says by itself,
                 # which a press goes by too (stage U1 of v2.2.0).
@@ -269,7 +303,9 @@ class GuiViewSaveTest(unittest.TestCase):
             ),
             "saveTarget": (
                 "const { plan, ready } = saveReady(viewing);",
-                "return { view, plan, ready, name: plan.name, problem, loading: state.loading, marks: false };",
+                # The name of a PNG has its size and .png (stage X5).
+                "return { view, plan, ready, name: savePictureName(plan.name, state.saveFormat, state.saveSize), problem, loading: state.loading, marks: false };",
+                "target.name = savePictureName(target.name, state.saveFormat, state.saveSize);",
             ),
             "saveReady": (
                 "plan.keys.every((key) => savedChart(key) !== null)",
@@ -308,6 +344,14 @@ class GuiViewSaveTest(unittest.TestCase):
         # One panel is the panel the list shows when it is chosen, which
         # stays chosen (Codex's review of the diff of R1).
         self.assertIn('ui.saveOne.addEventListener("change", () => changeSave({ saveScope: "one", savePanel: state.savePanel ?? (ui.savePanel.value || null) }));', self.script)
+        for line in (
+            'ui.saveSvg.addEventListener("change", () => changeSave({ saveFormat: "svg" }));',
+            'ui.savePng.addEventListener("change", () => changeSave({ saveFormat: "png" }));',
+            'input.addEventListener("change", () => changeSave({ saveSize: input.value }));',
+            'saveSizes: [byId("save-size-4x5"), byId("save-size-1x1"), byId("save-size-9x16")],',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
         self.assertRegex(
             self.script,
             r'ui\.savePop\.addEventListener\("keydown", \(event\) => \{\s*if \(event\.key === "Escape"\) \{\s*event\.preventDefault\(\);\s*openSave\(false\);',
@@ -337,7 +381,10 @@ class GuiViewSaveTest(unittest.TestCase):
             with self.subTest(word=word):
                 self.assertNotIn(word, before)
         for line in (
-            'new Blob([file], { type: "image/svg+xml;charset=utf-8" })',
+            # The SVG, or a PNG of the size chosen, which may not fit (stage X5
+            # of v2.3.0): then nothing is saved, and the window says why.
+            'const made = state.saveFormat === "png" ? savePng(stage, target) : saveSvg(stage, target);',
+            "if (made.problem !== null) {\n        problem = made.problem;\n      } else {\n        address = URL.createObjectURL(made.blob);",
             "link.download = target.name;",
             "} finally {\n      stage?.remove();",
             "setTimeout(() => URL.revokeObjectURL(taken), 10000);",
@@ -361,8 +408,12 @@ class GuiViewSaveTest(unittest.TestCase):
         ):
             with self.subTest(line=line):
                 self.assertIn(line, body)
+        self.assertIn('return { blob: new Blob([pictureXml(svg)], { type: "image/svg+xml;charset=utf-8" }), problem: null };', function_body(self.script, "saveSvg"))
         for name in (
             "saveImage", "saveFile", "savePart", "saveWords", "writeSaveStyles", "saveStage", "savePlan", "saveReady", "renderSave", "renderSaveNotice", "openSave", "changeSave",
+            # Stage X5 of v2.3.0.
+            "saveSvg", "savePng", "pictureLayout", "pictureFrame", "pictureXml", "redrawBox", "redrawn", "redrawPanel", "redrawCompare", "redrawCalendar", "redrawShoe",
+            "redrawPlot", "redrawSpread", "redrawTimeAxis", "redrawCompareAxis", "axisMeasure", "paintItems", "paintShape", "paintPath", "paintColor", "paintAlpha", "pngBlob",
             # Stage R2.
             "saveTarget", "saveCompareTarget", "compareSaveTitle", "saveComparePart", "saveCalendarLegend", "savePlotTarget", "saveSpreadTarget", "saveNotesOf",
             "saveContent", "fitSaveWindow", "renderSavePanels", "saveProblemText", "saveViewFile", "saveNotes", "saveBegin", "saveEnd",
@@ -378,7 +429,7 @@ class GuiViewSaveTest(unittest.TestCase):
         # styles once (Codex's review of the plan of R1).
         self.assertIn("const marks = state.saveMarks && plan.marksDrawn;", body)
         self.assertIn("marks && index === 0 && key !== namedKey", body)
-        self.assertLess(body.index("appendMarkNames("), body.index("return saveEnd(svg, ground, probe, y, footer, measure);"))
+        self.assertLess(body.index("appendMarkNames("), body.index("return saveEnd(svg, ground, probe, y, footer, measure, layout);"))
         # The end that the panels and the other views share writes the
         # styles once (stage R2).
         end = function_body(self.script, "saveEnd")
@@ -388,7 +439,10 @@ class GuiViewSaveTest(unittest.TestCase):
                 self.assertEqual(function_body(self.script, name).count("writeSaveStyles("), 0)
                 self.assertEqual(function_body(self.script, name).count("return saveEnd(svg, ground, probe, y"), 1)
         self.assertIn("const drop = [...SAVE_LEFT_OUT, ...(marks ? [] : SAVE_MARKS)].join(\", \");", body)
-        self.assertIn('return `<?xml version="1.0" encoding="UTF-8"?>\\n${new XMLSerializer().serializeToString(svg)}`;', end)
+        # The file of an SVG made of the picture, a PNG painted from it (stage
+        # X5 of v2.3.0).
+        self.assertIn('return `<?xml version="1.0" encoding="UTF-8"?>\\n${new XMLSerializer().serializeToString(svg)}`;', function_body(self.script, "pictureXml"))
+        self.assertIn("  writeSaveStyles(svg);\n  // The file of an SVG is made of it (pictureXml), a PNG painted from it\n  // (stage X5 of v2.3.0).\n  return svg;", end)
         self.assertIn("const heading = panelHeading(key, entry.item, entry.panel, answer.grain, entry.mode);", body)
         self.assertIn("answerTypes: state.answerTypes,", body)
         self.assertIn("grain: answer.grain,", body)
@@ -403,7 +457,7 @@ class GuiViewSaveTest(unittest.TestCase):
         # The frame of the picture grows to what its parts show out of their
         # frames, before its styles are written (Codex's review of the diff).
         for line in (
-            "const frame = saveFrame(boxes, SAVE_WIDTH, Math.ceil(y));",
+            "const frame = saveFrame(boxes, layout.width, Math.ceil(y));",
             'svg.setAttribute("viewBox", `${frame.x} ${frame.y} ${frame.width} ${frame.height}`);',
             "ground.setAttribute(name, String(value));",
         ):
@@ -639,7 +693,7 @@ class GuiViewSaveTest(unittest.TestCase):
         # The chart of the answer shown, not of one on its way or of another
         # pair or item (Codex's review of the plan of R2, 2).
         self.assertIn("const answer = compare !== null && state.compareAnswer !== null && state.compareAnswer.key === compare.key ? state.compareAnswer : null;", function_body(self.script, "saveCompareTarget"))
-        self.assertIn("parts: shown ? compared.map(saveComparePart) : [],", function_body(self.script, "saveCompareTarget"))
+        self.assertIn('parts: shown ? compared.map((entry) => saveComparePart(entry, entry.kind === "calendar" ? redrawCalendar : redrawCompare)) : [],', function_body(self.script, "saveCompareTarget"))
         self.assertIn("const drawnNow = answer !== null && plotContext !== null && plotContext.answer === answer;", function_body(self.script, "savePlotTarget"))
         self.assertIn('source: drawnNow ? ui.plotBody.querySelector(".plot-points > svg") : null', function_body(self.script, "savePlotTarget"))
         self.assertIn("const drawnNow = answer !== null && spreadContext !== null && spreadContext.answer === answer;", function_body(self.script, "saveSpreadTarget"))
@@ -650,7 +704,8 @@ class GuiViewSaveTest(unittest.TestCase):
         self.assertIn('const calendar = state.saveFrom === "compare" && compareModeNow() === "calendar";', problem)
         self.assertIn('return t(problem, { button: t(calendar ? "view.compare.table_calendar" : "view.panel.chart") });', problem)
         image = function_body(self.script, "saveImage")
-        self.assertIn('const file = target.view === "panels" ? saveFile(stage, target.plan) : saveViewFile(stage, target);', image)
+        self.assertIn('const svg = target.view === "panels" ? saveFile(stage, target.plan) : saveViewFile(stage, target);', function_body(self.script, "saveSvg"))
+        self.assertIn('const made = state.saveFormat === "png" ? savePng(stage, target) : saveSvg(stage, target);', image)
         self.assertIn("const target = saveTarget(viewingNow());", image)
 
     def test_a_picture_of_the_view_by_shoes_holds_all_its_rows_and_notes_and_no_name_in_its_file(self) -> None:
@@ -661,7 +716,7 @@ class GuiViewSaveTest(unittest.TestCase):
         target = function_body(self.script, "saveShoesTarget")
         for line in (
             "const shown = drawn !== null && !state.shoes.table && shoesDrawn !== null && shoesDrawn[0] === drawn;",
-            "parts: shown ? shoeRows.map(saveComparePart) : [],",
+            "parts: shown ? shoeRows.map((entry) => saveComparePart(entry, redrawShoe)) : [],",
             'axis: shown && !ui.shoesAxis.hidden ? ui.shoesAxis.querySelector(":scope > svg") : null,',
             "notes: drawn === null ? [] : saveNotesOf([...ui.shoesNotes.children]),",
             'drop: SAVE_LEFT_OUT_VIEWS.shoes.join(", "),',
@@ -745,12 +800,12 @@ class GuiViewSaveTest(unittest.TestCase):
         # The words of a picture: its title, its parts, the lines under it.
         file = function_body(self.script, "saveViewFile")
         for line in (
-            'saveLines([{ text: target.title, className: "save-title" }], SAVE_ROOM, SAVE_GAP, measure), SAVE_MARGIN, SAVE_TITLE_LINE, measure) + 8;',
-            "y += savePart(svg, stage, part.source, top, target.drop);",
-            'const empty = svgElement("text", { class: "save-empty", x: SAVE_WIDTH / 2, y: ((top + y) / 2).toFixed(1), "text-anchor": "middle" });',
-            "y = saveNotes(svg, target.notes, y, measure);",
+            'saveLines([{ text: target.title, className: "save-title" }], layout.room, SAVE_GAP, measure), SAVE_MARGIN, SAVE_TITLE_LINE, measure) + 8;',
+            "y += savePart(svg, stage, layout.chart === null ? part.source : part.redraw(stage, layout), top, target.drop, null, layout);",
+            'const empty = svgElement("text", { class: "save-empty", x: layout.width / 2, y: ((top + y) / 2).toFixed(1), "text-anchor": "middle" });',
+            "y = saveNotes(svg, target.notes, y, measure, layout);",
             # The axis of a comparison under its charts.
-            '  if (target.axis !== null) {\n    y += savePart(svg, stage, target.axis, y, "");\n  }',
+            '  if (target.axis !== null) {\n    y += savePart(svg, stage, layout.chart === null ? target.axis : target.redrawAxis(stage, layout), y, "", null, layout);\n  }',
         ):
             with self.subTest(line=line):
                 self.assertIn(line, file)
@@ -800,6 +855,162 @@ class GuiViewSaveTest(unittest.TestCase):
         self.assertEqual(en["view.compare.calendar_note"][len(en["view.compare.calendar_steps"]) + 1], "T")
         self.assertNotIn("表で見る", ja["view.compare.calendar_steps"])
         self.assertNotIn("table", en["view.compare.calendar_steps"].lower())
+
+
+    # --- A PNG of the size of a post (stage X5 of v2.3.0) -----------------
+
+    def test_a_png_is_laid_out_in_its_frame_its_charts_drawn_again_from_the_answers_of_the_page(self) -> None:
+        png = function_body(self.script, "savePng")
+        for line in (
+            "const frame = SAVE_SIZES[state.saveSize];",
+            # Two layouts: the charts first SAVE_FIRST_CHART high, then as
+            # high as fills the frame (the node test of saveFrameHeights).
+            "const layout = pictureLayout(frame.width, chart);",
+            'const svg = target.view === "panels" ? saveFile(stage, target.plan, layout) : saveViewFile(stage, target, layout);',
+            # A plot and a distribution are drawn first as high as the least
+            # they are drawn at, as they are never drawn lower (Codex's review
+            # of the diff of X5).
+            "const firstChart = Math.max(SAVE_FIRST_CHART, target.low ?? SAVE_PNG_LOW);",
+            "let made = make(firstChart);",
+            "const heights = saveFrameHeights({ frame: frame.height, first: made.box.height, chart: firstChart, count: made.layout.grows, low: target.low ?? SAVE_PNG_LOW });",
+            '    return { problem: state.saveSize === "9x16" ? "view.save.png_tight_tall" : "view.save.png_tight" };',
+            "  if (made.layout.grows > 0) {\n    made = make(heights.chart);\n  }",
+            # In the middle of the frame, 2.5 times as large, smaller where it
+            # is wider or higher than its frame.
+            "const scale = SAVE_PNG_SCALE * Math.min(1, frame.width / box.width, frame.height / box.height);",
+            "const plan = paintPlan(made.svg, [scale, 0, 0, scale, (width - box.width * scale) / 2, (height - box.height * scale) / 2]);",
+            '  if (plan.left > 0) {\n    return { problem: "view.save.failed" };\n  }',
+            'context.fillStyle = made.svg.querySelector(":scope > rect")?.getAttribute("fill") ?? "#ffffff";',
+            "paintItems(context, plan.items);",
+            "return { blob: pngBlob(canvas), problem: null };",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, png)
+        # Each chart drawn again by the function that draws it on the page,
+        # given a copy of its panel or row with a box in place of its plot,
+        # or the box and a size: the page keeps its own.
+        for name, line in (
+            ("redrawPanel", "drawChart({ ...entry, plot });"),
+            ("redrawCompare", "const copy = { ...entry, plot };\n  drawComparePlot(copy, compareContext);"),
+            ("redrawCalendar", "drawCompareCalendar({ ...entry, plot }, compareContext, Math.min(calendarPitch(compareContext.data.length), fit));"),
+            ("redrawShoe", "drawShoePlot({ ...entry, plot });"),
+            ("redrawPlot", "drawPlotPoints({ chart }, answer, asked, [layout.room, layout.chart]);"),
+            ("redrawSpread", "drawSpreadBars({ chart }, answer, key, [layout.room, layout.chart]);"),
+            ("redrawTimeAxis", "drawTimeAxis(start, end, layout.room, place, true);"),
+            ("redrawCompareAxis", "drawCompareAxis(compareContext, layout.room, layout.right ?? PLOT_RIGHT, place, true);"),
+        ):
+            with self.subTest(function=name):
+                self.assertIn(line, function_body(self.script, name))
+        for name in ("redrawPanel", "redrawCompare", "redrawShoe", "redrawPlot", "redrawSpread"):
+            with self.subTest(grows=name):
+                self.assertIn("layout.grows += 1;", function_body(self.script, name))
+        self.assertNotIn("layout.grows", function_body(self.script, "redrawCalendar"))
+        # The parts of each view know how to draw again; a plot and a
+        # distribution never lower than they are drawn.
+        for name, line in (
+            ("saveFile", "layout.chart === null ? savedChart(key) : redrawPanel(stage, entry, layout)"),
+            ("saveFile", "const axis = layout.chart === null ? ui.timeAxis.querySelector(\":scope > svg\") : periods?.length ? redrawTimeAxis(stage, periods[0].start, periods[periods.length - 1].end, layout) : null;"),
+            ("saveCompareTarget", "redrawAxis: redrawCompareAxis,"),
+            ("saveShoesTarget", "redrawAxis: (stage, layout) => redrawTimeAxis(stage, shoesContext.start, shoesContext.end, layout),"),
+            ("savePlotTarget", "redraw: (stage, layout) => redrawPlot(stage, answer, asked, layout)"),
+            ("savePlotTarget", "low: SAVE_DRAWN_LOW,"),
+            ("saveSpreadTarget", "redraw: (stage, layout) => redrawSpread(stage, answer, asked.item, layout)"),
+            ("saveSpreadTarget", "low: SAVE_DRAWN_LOW,"),
+            ("saveComparePart", "redraw: (stage, layout) => redraw(stage, entry, layout),"),
+        ):
+            with self.subTest(function=name, line=line):
+                self.assertIn(line, function_body(self.script, name))
+        self.assertIn("const SAVE_DRAWN_LOW = 120;", self.script)
+        self.assertIn("const SVG_LAYOUT = Object.freeze(pictureLayout());", self.script)
+        # The squares of a calendar as large as given, or as the page has them.
+        self.assertIn("const pitch = size ?? calendarPitch(context.data.length);", function_body(self.script, "drawCompareCalendar"))
+
+    def test_the_window_never_draws_again_and_the_page_keeps_its_axes(self) -> None:
+        # Showing the window draws nothing again (the checker's review of the
+        # plan of X5): the window, the choices, and what it saves call no
+        # function that draws, and no picture is laid out but by a press.
+        import re
+
+        drawing = re.compile(r"(?<![A-Za-z])(?:draw[A-Z]\w*|saveFile|saveViewFile|savePng|saveSvg|redraw[A-Z]\w*)\(")
+        for name in ("renderSave", "renderSavePanels", "saveTarget", "saveCompareTarget", "savePlotTarget", "saveSpreadTarget", "saveShoesTarget", "fitSaveWindow", "saveProblemText", "openSave", "changeSave", "saveComparePart"):
+            body = function_body(self.script, name)
+            # The parts of a view hold the function that draws them again, run
+            # by a press only.
+            body = re.sub(r"\(stage, layout\) => [^,\n]*", "", body)
+            with self.subTest(function=name):
+                self.assertIsNone(drawing.search(body), drawing.search(body))
+        # A PNG is laid out by a press only, once there.
+        self.assertEqual(len(re.findall(r"(?<![A-Za-z])(?<!function )savePng\(", self.script)), 1)
+        self.assertIn("savePng(stage, target)", function_body(self.script, "saveImage"))
+        for call in ("part.redraw(stage, layout)", "target.redrawAxis(stage, layout)"):
+            with self.subTest(call=call):
+                self.assertEqual(self.script.count(call), 1)
+                self.assertIn(call, function_body(self.script, "saveViewFile"))
+        # The page draws its own axes as before: the marks are thinned only
+        # where a PNG asks for it.
+        self.assertIn("drawTimeAxis(periods[0].start, periods[periods.length - 1].end, chartWidth);", function_body(self.script, "renderCharts"))
+        self.assertIn("drawCompareAxis(context, width, first.right);", function_body(self.script, "renderCompareCharts"))
+        self.assertIn("drawTimeAxis(shoesContext.start, shoesContext.end, width, ui.shoesAxis);", function_body(self.script, "renderShoesCharts"))
+        for name in ("drawTimeAxis", "drawCompareAxis"):
+            body = function_body(self.script, name)
+            with self.subTest(axis=name):
+                self.assertEqual(body.count("thinTicks("), 1)
+                self.assertLess(body.index("if (thin) {"), body.index("thinTicks("))
+        self.assertIn("{ years: true },", function_body(self.script, "drawTimeAxis"))
+        self.assertIn("{ last: race },", function_body(self.script, "drawCompareAxis"))
+
+    def test_a_png_is_made_at_once_and_loads_no_image(self) -> None:
+        blob = function_body(self.script, "pngBlob")
+        self.assertIn('const data = canvas.toDataURL("image/png");', blob)
+        self.assertIn('return new Blob([array], { type: "image/png" });', blob)
+        for name in ("savePng", "paintItems", "paintShape", "paintPath", "pngBlob"):
+            body = function_body(self.script, name)
+            # Nothing waits (the checker's R1-4 and the plan of X5), and no
+            # image is loaded, so the policy of the page stays as it is.
+            for word in ("toBlob", "await", "requestAnimationFrame", "setTimeout", "queueMicrotask", ".then(", "new Image", "createImageBitmap", ".src", "onload", "decode("):
+                with self.subTest(function=name, word=word):
+                    self.assertNotIn(word, body)
+        # A layer is a canvas of its own, laid on with its opacity.
+        items = function_body(self.script, "paintItems")
+        self.assertIn('const layer = document.createElement("canvas");', items)
+        self.assertIn("context.globalAlpha = item.opacity;\n      context.drawImage(layer, 0, 0);", items)
+        shape = function_body(self.script, "paintShape")
+        for line in (
+            "context.setTransform(...shape.matrix);",
+            'const strokeFirst = /^stroke\\b/.test(String(styles["paint-order"]).trim());',
+            'context.textAlign = { middle: "center", end: "right" }[styles["text-anchor"]] ?? "left";',
+            'context.textBaseline = "alphabetic";',
+            "context.setLineDash(",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, shape)
+        # The round corners of the squares of a calendar.
+        self.assertIn("} else if (shape.rx > 0 && shape.ry > 0) {", function_body(self.script, "paintPath"))
+        # The line under a picture keeps the space after its separator.
+        self.assertIn("const footPieces = saveFooterPieces(", function_body(self.script, "saveEnd"))
+
+    def test_the_words_of_a_png(self) -> None:
+        ja, en = catalog("ja"), catalog("en")
+        for key, ja_words, en_words in (
+            ("view.save.format_choice", "形式", "Format"),
+            ("view.save.format_svg", "SVG", "SVG"),
+            ("view.save.format_png", "PNG", "PNG"),
+            ("view.save.size", "大きさ", "Size"),
+            ("view.save.size_4x5", "4:5 縦長（1080×1350）", "4:5 portrait (1080×1350)"),
+            ("view.save.size_1x1", "1:1 正方形（1080×1080）", "1:1 square (1080×1080)"),
+            ("view.save.size_9x16", "9:16 縦長（1080×1920）", "9:16 portrait (1080×1920)"),
+            # Only the sizes of posts; nothing is sent or joined to a service
+            # (the checker's review of the plan of X5).
+            ("view.save.png_note", "PNG 形式。スマホで見る SNS の投稿の大きさです。", "PNG, in the sizes of social media posts seen on a phone."),
+            ("view.save.png_tight", "この大きさには段が収まりません。段を減らすか、縦に長い大きさを選んでください。", "The panels do not fit this size. Show fewer panels, or choose a taller size."),
+            ("view.save.png_tight_tall", "この大きさには段が収まりません。段を減らしてください。", "The panels do not fit this size. Show fewer panels."),
+        ):
+            with self.subTest(key=key):
+                self.assertEqual((ja[key], en[key]), (ja_words, en_words))
+        for words in (ja["view.save.png_note"], en["view.save.png_note"]):
+            for word in ("送", "つな", "連携", "send", "share", "upload", "connect"):
+                with self.subTest(words=words, word=word):
+                    self.assertNotIn(word, words)
 
 
 if __name__ == "__main__":

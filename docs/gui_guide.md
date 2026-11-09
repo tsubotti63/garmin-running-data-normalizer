@@ -551,7 +551,9 @@ When: you want to keep the comparison of years as an image file.
    and the years.
 3. Press **Save as image…** in its bar. The window names in one line what it
    saves, and the name of the file.
-4. Choose the colors under **Colors**, and press **Save**.
+4. Choose the colors under **Colors**, and press **Save**. (From 2.3.0) For a
+   picture to show on a phone, choose **PNG** under **Format** and a size
+   under **Size** first.
 5. When the bar at the bottom says that the image file was handed to the
    browser, look in your downloads.
 
@@ -2043,6 +2045,20 @@ values are made):
   and shows again after them).
 - Each time the window opens, its choices are the first ones again: all the
   panels, the light colors, and no marks (nothing is remembered).
+- (From 2.3.0) With **PNG** under **Format** in the window, the picture
+  becomes a PNG in the sizes of social media posts seen on a phone:
+  choose **4:5 portrait (1080×1350)** (the first), **1:1 square (1080×1080)**,
+  or **9:16 portrait (1080×1920)** under **Size**. So that its words read on a
+  phone, a PNG draws the charts again about as wide as the screen of a phone
+  and makes them 2.5 times as fine (the numbers are those of the page; only
+  the room they are drawn in changes; the words of the time axis are thinned
+  at even steps where they would meet).
+- A PNG shares its whole frame among the panels, so with many panels each
+  chart is lower; where they do not fit, the window says so (show fewer
+  panels, or choose a taller size). The format and the size go back to the
+  first ones too each time the window opens (SVG, 4:5; nothing is remembered).
+  The name of a PNG is that of the SVG with its size at the end (for example
+  `garmin-view_2025-10-22_2026-10-21_dist_4x5.png`).
 - With the panels, **Panels to save** saves all of them or **This panel
   only** (the panel chosen in the list beside it; at first, the top one of
   those not shown as a table), **Colors** gives **Light** or **As on the

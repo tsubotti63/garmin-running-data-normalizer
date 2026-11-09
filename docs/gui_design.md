@@ -1375,8 +1375,9 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   pressed, while the window shows; an answer without its days (a period that
   the output does not reach) has no line under its picture and no name of a
   file. Nothing is sent to the server or anywhere else, and the
-  Content-Security-Policy stays as it is. Only SVG is made; PNG and the other
-  formats are out of scope. From v2.3.0 (stage X2) the window says what it
+  Content-Security-Policy stays as it is. Before v2.3.0 only SVG was made (a
+  PNG from stage X5, below); other formats are out of scope. From v2.3.0
+  (stage X2) the window says what it
   saves and then the line before a saving, above its choices; the names of
   the marks that the choice of the panels puts in are said under that
   choice, so that a press does not move it; its end, why it cannot save
@@ -1384,6 +1385,54 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   scrolls, where at 1366 × 650 the buttons were hidden in it; and the
   window opens at its top each time, also where it was scrolled before it
   closed.
+- A PNG of the size of a post (stage X5 of v2.3.0, the person's choice "B and
+  list 1" of the samples): the window has **Format** (SVG first, or PNG) and,
+  for PNG, **Size** (4:5 portrait 1080 × 1350 first, 1:1 square 1080 × 1080,
+  or 9:16 portrait 1080 × 1920), chosen again each time it opens, with the
+  note "PNG, in the sizes of social media posts seen on a phone."
+  (sizes only: nothing is sent to or joined with a service). For a PNG the
+  picture is laid out in a frame about as large as the screen of a phone (432
+  wide; 540, 432, or 768 high: `SAVE_SIZES`), and its charts are drawn again
+  there, when **Save** is pressed only, by the functions that draw them on the
+  page, given a copy of their panel or row with a box out of the page in place
+  of their plot, or the box and a size: the page keeps its own, and the
+  numbers are those of its answers; only the room they are drawn in changes.
+  A first layout with charts 100 high (a plot or a distribution 120, the
+  least it is drawn at) measures the rest of the picture, and a second one
+  makes the charts fill the frame (`saveFrameHeights`); a chart
+  lower than 40 (120 for two items plotted or a distribution, the least they
+  are drawn at) does not fit, and the window says so (fewer panels, or a
+  taller size; for 9:16, fewer panels). The strips of a calendar get squares
+  as far apart as fit the width of the frame (7), never more than on the page,
+  nor less: nearer, the outlines of the days without a record turn to dots
+  and the names of the months meet, so a calendar higher than its frame does
+  not fit. The words of a picture wrap where a line may end
+  (`saveLines`): before a space, but not one between a figure and a unit or a
+  count (as in "16 週" or "700.1 km"; before hiragana, as in "10–20 は", it
+  may), and, in Japanese, next to its letters, but never inside a word
+  of Latin letters or figures, after an opening bracket or quotation mark or
+  the triangle of a highest, or before a closing one, a mark of punctuation,
+  or a small kana (from X5; before, a line of Japanese with no space ended after its
+  last letter that fit, also inside a word such as "Garmin", which the narrow
+  frame of a PNG showed). The marks of an axis drawn again are thinned at
+  even steps where their words would meet, the first one kept and naming its
+  year, as the first one kept of each new year (`thinTicks`); the page keeps
+  its own axes. The picture is painted on a canvas out of the page, 2.5 times
+  as large (1080 wide), in the middle of its frame on its ground (`paintPlan`,
+  `paintItems`): the shapes that a picture holds (svg, g, path, line, rect
+  with its round corners, circle, and text, its words as SVG shows them) at
+  the places of their view boxes, with the properties that they take; an
+  element with an opacity below 1 (the years not highlighted) is painted on a
+  layer of its own and laid on with that opacity; any other element stops the
+  saving. The PNG is made at once (`toDataURL`; `toBlob` would wait), so that
+  it is handed to the browser in the press of **Save** as the SVG is; nothing
+  is loaded as an image, so the Content-Security-Policy stays as it is. A
+  canvas keeps no width of figures (`font-variant-numeric`), so figures may be
+  a little narrower or wider than in the SVG. The name of the file is that of
+  the SVG with the size and `.png` (`savePictureName`). The line under a
+  picture keeps the space after its separator in English (`saveFooterPieces`,
+  U+00A0, as SVG drops the spaces at the end of a text; from R1 the next words
+  stood at the dot), in the SVG as in the PNG.
 - The colors of the years compared and a year highlighted (stage L3): the
   lines of the years laid over one another or as running totals take colors of
   their own (`--year1` to `--year6` in styles.css), apart from the six steps
@@ -1964,7 +2013,9 @@ Processing:
   day; the page makes it and hands it to the browser as a download, sending
   nothing anywhere. The name of its file holds dates (or years) and the keys
   of the items only. A picture saved is the person's own file, which "Forget
-  the remembered settings…" does not remove.
+  the remembered settings…" does not remove. From v2.3.0 (stage X5) a PNG is
+  made in the page the same way, painted from the picture, with no place or
+  other data of the machine in it.
 - From v2.2.0 the names of the shoes, which may be the person's own words,
   show on the view page and in a picture saved from the view by shoes (its
   window says so before saving); they are written in no file name, log, or

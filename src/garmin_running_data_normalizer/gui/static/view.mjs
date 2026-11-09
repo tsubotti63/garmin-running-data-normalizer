@@ -236,6 +236,16 @@ import {
   saveFooter,
   saveFrame,
   saveLines,
+  // A PNG of the size of a post (stage X5 of v2.3.0).
+  SAVE_FIRST_CHART,
+  SAVE_PNG_LOW,
+  SAVE_PNG_SCALE,
+  SAVE_SIZES,
+  paintPlan,
+  saveFooterPieces,
+  saveFrameHeights,
+  savePictureName,
+  thinTicks,
   saveNoticeKey,
   savePress,
   saveProblem,
@@ -506,6 +516,13 @@ const ui = {
   saveWhat: byId("save-what"),
   saveScopeField: byId("save-scope-field"),
   saveMarksField: byId("save-marks-field"),
+  // The format and the size of a PNG (stage X5 of v2.3.0).
+  saveSvg: byId("save-svg"),
+  savePng: byId("save-png"),
+  saveSizeField: byId("save-size-field"),
+  saveSizes: [byId("save-size-4x5"), byId("save-size-1x1"), byId("save-size-9x16")],
+  saveFormatNote: byId("save-format-note"),
+  savePngNote: byId("save-png-note"),
   compareSave: byId("compare-save"),
   plotSave: byId("plot-save"),
   spreadSave: byId("spread-save"),
@@ -883,6 +900,10 @@ const state = {
   savePanel: null,
   saveColors: "light",
   saveMarks: false,
+  // SVG, or a PNG of one of the sizes of a post (stage X5 of v2.3.0), chosen
+  // each time the window opens, as the other choices.
+  saveFormat: "svg",
+  saveSize: "4x5",
   saveProblem: null,
   saveNotice: null,
   markEditing: null,
@@ -2577,19 +2598,21 @@ function renderRecapTable(answer, columns) {
 
 // --- Saving as an image (stage R1 of v2.2.0) ------------------------------
 
-// The width of a picture, its margin, and the room of its charts, which are
-// those of the page made as wide as that, their heights in the same ratio; the
-// gap between the pieces of a heading, the heights of a line of a heading and
-// of the line under the picture, and the room of a key of a line (its swatch
-// and a gap).
+// The width of a picture and its margin, inside which its charts are those
+// of the page made as wide as its room, their heights in the same ratio (a
+// PNG has the width of its frame: pictureLayout); the gap between the pieces
+// of a heading, the heights of a line of a heading and of the line under the
+// picture, and the room of a key of a line (its swatch and a gap).
 const SAVE_WIDTH = 1200;
 const SAVE_MARGIN = 8;
-const SAVE_ROOM = SAVE_WIDTH - 2 * SAVE_MARGIN;
 const SAVE_GAP = 8;
 const SAVE_LINE = 20;
 const SAVE_FOOT_LINE = 16;
 const SAVE_SWATCH = 26;
 const SAVE_TITLE_LINE = 22;
+// The layout of the SVG: as wide as SAVE_WIDTH, its charts copied from the
+// page (never changed: a PNG has a layout of its own, stage X5 of v2.3.0).
+const SVG_LAYOUT = Object.freeze(pictureLayout());
 
 // The chart of the page of a panel, or null where it has none (a table, or a
 // plot too small to draw).
@@ -2672,9 +2695,11 @@ function saveTarget(viewing) {
     const { plan, ready } = saveReady(viewing);
     const drawn = plan.keys.filter((key) => savedChart(key) !== null).length;
     const problem = saveProblem({ stopped: state.seriesStop !== null, loading: state.loading, answer: state.answer, drawn, parts: plan.keys.length });
-    return { view, plan, ready, name: plan.name, problem, loading: state.loading, marks: false };
+    // The name with the size and .png for a PNG (stage X5 of v2.3.0).
+    return { view, plan, ready, name: savePictureName(plan.name, state.saveFormat, state.saveSize), problem, loading: state.loading, marks: false };
   }
   const target = view === "compare" ? saveCompareTarget() : view === "plot" ? savePlotTarget() : view === "spread" ? saveSpreadTarget() : saveShoesTarget();
+  target.name = savePictureName(target.name, state.saveFormat, state.saveSize);
   const charts = target.parts.filter((part) => part.source !== null).length;
   target.ready =
     viewing &&
@@ -2713,9 +2738,11 @@ function saveCompareTarget() {
     table: compare?.table ?? false,
     empty: false,
     title: answer === null ? "" : compareSaveTitle(answer),
-    parts: shown ? compared.map(saveComparePart) : [],
+    parts: shown ? compared.map((entry) => saveComparePart(entry, entry.kind === "calendar" ? redrawCalendar : redrawCompare)) : [],
     legend: shown && !ui.compareLegend.hidden ? saveCalendarLegend() : null,
     axis: shown && !ui.compareAxis.hidden ? ui.compareAxis.querySelector(":scope > svg") : null,
+    // For a PNG (stage X5 of v2.3.0).
+    redrawAxis: redrawCompareAxis,
     notes: [],
     drop: SAVE_LEFT_OUT_VIEWS.compare.join(", "),
     name: answer === null ? null : saveViewFileName("compare", { key: answer.key, years, days }),
@@ -2778,9 +2805,11 @@ function saveShoesTarget() {
     table: state.shoes?.table ?? false,
     empty: drawn !== null && !drawn.shoes.length,
     title: drawn === null ? "" : t("view.shoes.title"),
-    parts: shown ? shoeRows.map(saveComparePart) : [],
+    parts: shown ? shoeRows.map((entry) => saveComparePart(entry, redrawShoe)) : [],
     legend: null,
     axis: shown && !ui.shoesAxis.hidden ? ui.shoesAxis.querySelector(":scope > svg") : null,
+    // For a PNG (stage X5 of v2.3.0).
+    redrawAxis: (stage, layout) => redrawTimeAxis(stage, shoesContext.start, shoesContext.end, layout),
     notes: drawn === null ? [] : saveNotesOf([...ui.shoesNotes.children]),
     drop: SAVE_LEFT_OUT_VIEWS.shoes.join(", "),
     name: drawn === null ? null : saveViewFileName("shoes", { key: "dist", start: drawn.start, end: drawn.end }),
@@ -2801,7 +2830,7 @@ function saveShoesTarget() {
   };
 }
 
-function saveComparePart(entry) {
+function saveComparePart(entry, redraw) {
   const head = entry.section.querySelector(entry.kind === "calendar" ? ".calendar-side" : ".panel-head");
   const pieces = [];
   for (const node of head?.children ?? []) {
@@ -2827,6 +2856,8 @@ function saveComparePart(entry) {
     pieces: pieces.filter((piece) => piece.text !== ""),
     source: entry.plot.querySelector(":scope > svg"),
     empty: entry.plot.querySelector(".panel-empty")?.textContent ?? null,
+    // For a PNG, its chart drawn again in the frame (stage X5 of v2.3.0).
+    redraw: (stage, layout) => redraw(stage, entry, layout),
   };
 }
 
@@ -2865,11 +2896,13 @@ function savePlotTarget() {
     table: state.plot?.table ?? false,
     empty: answer !== null && !answer.points.length,
     title: asked === null ? "" : t("view.plot.title", { x: itemName(asked.x), y: itemName(asked.y) }),
-    parts: [{ pieces: [], source: drawnNow ? ui.plotBody.querySelector(".plot-points > svg") : null, empty: null }],
+    parts: [{ pieces: [], source: drawnNow ? ui.plotBody.querySelector(".plot-points > svg") : null, empty: null, redraw: (stage, layout) => redrawPlot(stage, answer, asked, layout) }],
     legend: null,
     axis: null,
     notes: [...saveNotesOf([ui.plotCount, ui.plotCut]), t("view.plot.caveat")],
     drop: SAVE_LEFT_OUT_VIEWS.plot.join(", "),
+    // Its chart is never drawn lower (stage X5 of v2.3.0).
+    low: SAVE_DRAWN_LOW,
     name: answer === null ? null : saveViewFileName("plot", { keys: [asked.x, asked.y], start: answer.start, end: answer.end }),
     footer:
       answer === null
@@ -2893,11 +2926,12 @@ function saveSpreadTarget() {
     table: state.spread?.table ?? false,
     empty: answer !== null && !answer.counts.length,
     title: asked === null ? "" : t("view.spread.title", { item: itemName(asked.item) }),
-    parts: [{ pieces: [], source: drawnNow ? ui.spreadBody.querySelector(".spread-bars > svg") : null, empty: null }],
+    parts: [{ pieces: [], source: drawnNow ? ui.spreadBody.querySelector(".spread-bars > svg") : null, empty: null, redraw: (stage, layout) => redrawSpread(stage, answer, asked.item, layout) }],
     legend: null,
     axis: null,
     notes: saveNotesOf([ui.spreadCount, ui.spreadWide, ui.spreadFaster]),
     drop: SAVE_LEFT_OUT_VIEWS.spread.join(", "),
+    low: SAVE_DRAWN_LOW,
     name: answer === null ? null : saveViewFileName("spread", { key: asked.item, start: answer.start, end: answer.end }),
     footer:
       answer === null
@@ -3021,6 +3055,16 @@ function renderSave(viewing) {
   setText(ui.saveWhat, panels ? "" : t("view.save.what", { name: target.title }));
   ui.saveLight.checked = state.saveColors === "light";
   ui.saveScreen.checked = state.saveColors === "screen";
+  // The format, and for a PNG its size, with its note (stage X5 of v2.3.0).
+  const png = state.saveFormat === "png";
+  ui.saveSvg.checked = !png;
+  ui.savePng.checked = png;
+  ui.saveSizeField.hidden = !png;
+  for (const input of ui.saveSizes) {
+    input.checked = input.value === state.saveSize;
+  }
+  ui.saveFormatNote.hidden = png;
+  ui.savePngNote.hidden = !png;
   setText(ui.saveName, target.name ?? "—");
   // Save that had the focus and can no longer be pressed, as when a drawing
   // again leaves a chart without room, gives it to the title of the window,
@@ -3148,6 +3192,8 @@ function openSave(open, from = state.saveFrom) {
     state.savePanel = null;
     state.saveColors = "light";
     state.saveMarks = false;
+    state.saveFormat = "svg";
+    state.saveSize = "4x5";
     state.saveNotice = null;
     state.recapOpen = false;
     dropLaps();
@@ -3198,13 +3244,20 @@ function saveImage() {
     let address = null;
     try {
       stage = saveStage(state.saveColors === "light");
-      const file = target.view === "panels" ? saveFile(stage, target.plan) : saveViewFile(stage, target);
-      address = URL.createObjectURL(new Blob([file], { type: "image/svg+xml;charset=utf-8" }));
-      const link = document.createElement("a");
-      link.href = address;
-      link.download = target.name;
-      stage.append(link);
-      link.click();
+      // The SVG, or a PNG of the size chosen, whose panels may not fit its
+      // frame: then nothing is saved, and the window says why (stage X5 of
+      // v2.3.0).
+      const made = state.saveFormat === "png" ? savePng(stage, target) : saveSvg(stage, target);
+      if (made.problem !== null) {
+        problem = made.problem;
+      } else {
+        address = URL.createObjectURL(made.blob);
+        const link = document.createElement("a");
+        link.href = address;
+        link.download = target.name;
+        stage.append(link);
+        link.click();
+      }
     } catch {
       problem = "view.save.failed";
     } finally {
@@ -3232,6 +3285,297 @@ function saveImage() {
   }
 }
 
+// The SVG of a picture, as R1 made it: the picture as wide as SAVE_WIDTH,
+// its charts copied from the page.
+function saveSvg(stage, target) {
+  const svg = target.view === "panels" ? saveFile(stage, target.plan) : saveViewFile(stage, target);
+  return { blob: new Blob([pictureXml(svg)], { type: "image/svg+xml;charset=utf-8" }), problem: null };
+}
+
+// A PNG of the size chosen (stage X5 of v2.3.0, B of the samples, which the
+// person chose): the picture laid out as wide as its frame, its charts drawn
+// again there from the answers of the page, first SAVE_FIRST_CHART high (a
+// plot or a distribution as high as the least it is drawn at, as it is never
+// drawn lower, so that the rest of the picture is measured right: Codex's
+// review of the diff of X5) and then as high as fills the frame
+// (saveFrameHeights); where a chart would be
+// lower than the least, nothing is saved, and the window says why. The
+// picture is painted on a canvas out of the page (paintPlan, paintItems),
+// its ground over the whole frame, in the middle of it, and handed on as a
+// PNG made at once (toDataURL, as toBlob would wait): nothing is loaded as an
+// image, so the policy of the page stays as it is, and nothing is sent.
+function savePng(stage, target) {
+  const frame = SAVE_SIZES[state.saveSize];
+  const make = (chart) => {
+    stage.replaceChildren();
+    const layout = pictureLayout(frame.width, chart);
+    const svg = target.view === "panels" ? saveFile(stage, target.plan, layout) : saveViewFile(stage, target, layout);
+    return { svg, layout, box: pictureFrame(svg) };
+  };
+  const firstChart = Math.max(SAVE_FIRST_CHART, target.low ?? SAVE_PNG_LOW);
+  let made = make(firstChart);
+  const heights = saveFrameHeights({ frame: frame.height, first: made.box.height, chart: firstChart, count: made.layout.grows, low: target.low ?? SAVE_PNG_LOW });
+  if (!heights.fits) {
+    return { problem: state.saveSize === "9x16" ? "view.save.png_tight_tall" : "view.save.png_tight" };
+  }
+  if (made.layout.grows > 0) {
+    made = make(heights.chart);
+  }
+  const box = made.box;
+  const width = Math.round(frame.width * SAVE_PNG_SCALE);
+  const height = Math.round(frame.height * SAVE_PNG_SCALE);
+  // A picture wider or higher than its frame, as a word at the end of an
+  // axis may make it (saveFrame), is made as much smaller.
+  const scale = SAVE_PNG_SCALE * Math.min(1, frame.width / box.width, frame.height / box.height);
+  const plan = paintPlan(made.svg, [scale, 0, 0, scale, (width - box.width * scale) / 2, (height - box.height * scale) / 2]);
+  if (plan.left > 0) {
+    return { problem: "view.save.failed" };
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  context.fillStyle = made.svg.querySelector(":scope > rect")?.getAttribute("fill") ?? "#ffffff";
+  context.fillRect(0, 0, width, height);
+  paintItems(context, plan.items);
+  return { blob: pngBlob(canvas), problem: null };
+}
+
+// The least height that a plot or a distribution is drawn at (drawPlotPoints,
+// drawSpreadBars), which its chart in a PNG needs.
+const SAVE_DRAWN_LOW = 120;
+
+// How a picture is laid out: as wide as SAVE_WIDTH, its charts copied from
+// the page (an SVG); or, for a PNG, as wide as its frame, its charts drawn
+// again at that width and ``chart`` high, counting those that grow, and with
+// the right room of the first row of a comparison for its axis.
+function pictureLayout(width = SAVE_WIDTH, chart = null) {
+  return { width, room: width - 2 * SAVE_MARGIN, chart, grows: 0, right: null };
+}
+
+// The frame of a picture (its view box) and its file.
+function pictureFrame(svg) {
+  const [x, y, width, height] = String(svg.getAttribute("viewBox") ?? "").split(/\s+/).map(Number);
+  return { x, y, width, height };
+}
+
+function pictureXml(svg) {
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(svg)}`;
+}
+
+// A box of the stage of a picture, as wide as its room and the height given,
+// in which a chart of the page is drawn again for a PNG (stage X5 of v2.3.0).
+function redrawBox(stage, width, height) {
+  const box = element("div", "save-box");
+  box.style.width = `${width}px`;
+  box.style.height = `${height}px`;
+  stage.append(box);
+  return box;
+}
+
+// The chart drawn again in a box, which a saving needs.
+function redrawn(box) {
+  const svg = box.querySelector(":scope > svg");
+  if (svg === null) {
+    throw new Error("a chart was not drawn again");
+  }
+  return svg;
+}
+
+// The charts of the page drawn again in a box of the frame of a PNG, each by
+// the function that draws it on the page, given a copy of its row or panel
+// with the box in place of its plot (the page keeps its own), or the box and
+// a size: their numbers are the answers of the page, only their size changes
+// (the plan of X5, 9b). Those that grow with the frame are counted.
+function redrawPanel(stage, entry, layout) {
+  const plot = redrawBox(stage, layout.room, layout.chart);
+  drawChart({ ...entry, plot });
+  layout.grows += 1;
+  return redrawn(plot);
+}
+
+function redrawCompare(stage, entry, layout) {
+  const plot = redrawBox(stage, layout.room, layout.chart);
+  const copy = { ...entry, plot };
+  drawComparePlot(copy, compareContext);
+  layout.grows += 1;
+  layout.right ??= copy.right;
+  return redrawn(plot);
+}
+
+// A strip of a calendar has the height of its squares, which are as large
+// as fit the width of the frame, never larger than on the page, nor smaller
+// (7 apart in the frame of 432: at 6, as the real page showed in X5, the
+// outlines of the days without a record turn to dots and the names of the
+// months meet), so a calendar higher than its frame does not fit.
+function redrawCalendar(stage, entry, layout) {
+  const plot = redrawBox(stage, layout.room, 0);
+  const fit = Math.floor((layout.room - CALENDAR_LEFT - 4) / calendarWeeks(entry.data[0].year));
+  drawCompareCalendar({ ...entry, plot }, compareContext, Math.min(calendarPitch(compareContext.data.length), fit));
+  return redrawn(plot);
+}
+
+function redrawShoe(stage, entry, layout) {
+  const plot = redrawBox(stage, layout.room, layout.chart);
+  drawShoePlot({ ...entry, plot });
+  layout.grows += 1;
+  return redrawn(plot);
+}
+
+function redrawPlot(stage, answer, asked, layout) {
+  const chart = redrawBox(stage, layout.room, layout.chart);
+  drawPlotPoints({ chart }, answer, asked, [layout.room, layout.chart]);
+  layout.grows += 1;
+  return redrawn(chart);
+}
+
+function redrawSpread(stage, answer, key, layout) {
+  const chart = redrawBox(stage, layout.room, layout.chart);
+  drawSpreadBars({ chart }, answer, key, [layout.room, layout.chart]);
+  layout.grows += 1;
+  return redrawn(chart);
+}
+
+// The axes drawn again at the width of the frame, their marks thinned where
+// their words would meet (thinTicks).
+function redrawTimeAxis(stage, start, end, layout) {
+  const place = redrawBox(stage, layout.room, 24);
+  drawTimeAxis(start, end, layout.room, place, true);
+  return place.querySelector(":scope > svg");
+}
+
+function redrawCompareAxis(stage, layout) {
+  const place = redrawBox(stage, layout.room, 24);
+  drawCompareAxis(compareContext, layout.room, layout.right ?? PLOT_RIGHT, place, true);
+  return place.querySelector(":scope > svg");
+}
+
+// Paint the tree of paintPlan on a canvas as SVG shows the picture (stage X5
+// of v2.3.0): each shape at the matrix of its place, its fill and then its
+// stroke, or the stroke first where its paint order says so; a layer painted
+// on a canvas of its own and laid on with its opacity.
+function paintItems(context, items) {
+  for (const item of items) {
+    if (item.kind === "group") {
+      paintItems(context, item.items);
+    } else if (item.kind === "layer") {
+      const layer = document.createElement("canvas");
+      layer.width = context.canvas.width;
+      layer.height = context.canvas.height;
+      paintItems(layer.getContext("2d"), item.items);
+      context.save();
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.globalAlpha = item.opacity;
+      context.drawImage(layer, 0, 0);
+      context.restore();
+    } else {
+      paintShape(context, item);
+    }
+  }
+}
+
+function paintShape(context, shape) {
+  const styles = shape.styles;
+  const fill = paintColor(styles.fill);
+  const stroke = paintColor(styles.stroke);
+  const width = Number.parseFloat(styles["stroke-width"]);
+  context.save();
+  context.setTransform(...shape.matrix);
+  context.lineWidth = Number.isFinite(width) ? width : 1;
+  context.lineCap = ["butt", "round", "square"].includes(styles["stroke-linecap"]) ? styles["stroke-linecap"] : "butt";
+  context.lineJoin = ["miter", "round", "bevel"].includes(styles["stroke-linejoin"]) ? styles["stroke-linejoin"] : "miter";
+  const dashes = styles["stroke-dasharray"] === "none" ? [] : String(styles["stroke-dasharray"]).split(/[\s,]+/).map(Number.parseFloat).filter(Number.isFinite);
+  context.setLineDash(dashes.every((dash) => dash >= 0) && dashes.some((dash) => dash > 0) ? dashes : []);
+  const strokeFirst = /^stroke\b/.test(String(styles["paint-order"]).trim());
+  const fillOpacity = paintAlpha(styles["fill-opacity"]);
+  const strokeOpacity = paintAlpha(styles["stroke-opacity"]);
+  const paintFill = (draw) => {
+    if (fill !== null && shape.kind !== "line") {
+      context.globalAlpha = fillOpacity;
+      context.fillStyle = fill;
+      draw("fill");
+    }
+  };
+  const paintStroke = (draw) => {
+    if (stroke !== null && context.lineWidth > 0) {
+      context.globalAlpha = strokeOpacity;
+      context.strokeStyle = stroke;
+      draw("stroke");
+    }
+  };
+  let draw;
+  if (shape.kind === "text") {
+    const size = Number.parseFloat(styles["font-size"]);
+    context.font = `${styles["font-weight"]} ${Number.isFinite(size) ? size : 16}px ${styles["font-family"]}`;
+    context.textAlign = { middle: "center", end: "right" }[styles["text-anchor"]] ?? "left";
+    context.textBaseline = "alphabetic";
+    draw = (how) => (how === "fill" ? context.fillText(shape.text, shape.x, shape.y) : context.strokeText(shape.text, shape.x, shape.y));
+  } else {
+    const path = paintPath(shape);
+    draw = (how) => (how === "fill" ? context.fill(path) : context.stroke(path));
+  }
+  if (strokeFirst) {
+    paintStroke(draw);
+    paintFill(draw);
+  } else {
+    paintFill(draw);
+    paintStroke(draw);
+  }
+  context.restore();
+}
+
+// The path of a shape (a rect with round corners as a calendar draws its
+// squares).
+function paintPath(shape) {
+  if (shape.kind === "path") {
+    return new Path2D(shape.d);
+  }
+  const path = new Path2D();
+  if (shape.kind === "line") {
+    path.moveTo(shape.x1, shape.y1);
+    path.lineTo(shape.x2, shape.y2);
+  } else if (shape.kind === "circle") {
+    path.arc(shape.cx, shape.cy, shape.r, 0, 2 * Math.PI);
+  } else if (shape.rx > 0 && shape.ry > 0) {
+    const { x, y, width, height, rx, ry } = shape;
+    path.moveTo(x + rx, y);
+    path.lineTo(x + width - rx, y);
+    path.ellipse(x + width - rx, y + ry, rx, ry, 0, -Math.PI / 2, 0);
+    path.lineTo(x + width, y + height - ry);
+    path.ellipse(x + width - rx, y + height - ry, rx, ry, 0, 0, Math.PI / 2);
+    path.lineTo(x + rx, y + height);
+    path.ellipse(x + rx, y + height - ry, rx, ry, 0, Math.PI / 2, Math.PI);
+    path.lineTo(x, y + ry);
+    path.ellipse(x + rx, y + ry, rx, ry, 0, Math.PI, 1.5 * Math.PI);
+    path.closePath();
+  } else {
+    path.rect(shape.x, shape.y, shape.width, shape.height);
+  }
+  return path;
+}
+
+// A color to paint, or null where there is none.
+function paintColor(value) {
+  const color = String(value ?? "none").trim();
+  return color === "" || color === "none" || color === "transparent" ? null : color;
+}
+
+function paintAlpha(value) {
+  const alpha = Number.parseFloat(value);
+  return Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 1;
+}
+
+// The PNG of a canvas, made at once from its data (toBlob would wait).
+function pngBlob(canvas) {
+  const data = canvas.toDataURL("image/png");
+  const bytes = atob(data.slice(data.indexOf(",") + 1));
+  const array = new Uint8Array(bytes.length);
+  for (let index = 0; index < bytes.length; index += 1) {
+    array[index] = bytes.charCodeAt(index);
+  }
+  return new Blob([array], { type: "image/png" });
+}
+
 // The box out of the page that a picture is made in, in the light colors
 // where they are chosen: the only element beside the root of the page that
 // has data-theme (the plan of R1).
@@ -3255,7 +3599,7 @@ function viewSize(svg) {
 // of ``source`` (with those that match ``drop`` left out) in a frame of its
 // view box, which shows what the page shows outside it too (the checker's
 // R1-2). ``prepare`` may change the copy in the box first.
-function savePart(svg, stage, source, top, drop, prepare = null) {
+function savePart(svg, stage, source, top, drop, prepare = null, layout = SVG_LAYOUT) {
   const [width, height] = viewSize(source);
   const copy = source.cloneNode(true);
   stage.append(copy);
@@ -3265,8 +3609,8 @@ function savePart(svg, stage, source, top, drop, prepare = null) {
     }
   }
   prepare?.(copy, width);
-  const tall = (height * SAVE_ROOM) / width;
-  const part = svgElement("svg", { x: SAVE_MARGIN, y: top.toFixed(1), width: SAVE_ROOM, height: tall.toFixed(1), viewBox: `0 0 ${width} ${height}`, overflow: "visible" });
+  const tall = (height * layout.room) / width;
+  const part = svgElement("svg", { x: SAVE_MARGIN, y: top.toFixed(1), width: layout.room, height: tall.toFixed(1), viewBox: `0 0 ${width} ${height}`, overflow: "visible" });
   part.append(...copy.childNodes);
   copy.remove();
   svg.append(part);
@@ -3305,8 +3649,8 @@ function saveWords(svg, lines, top, height, measure) {
 // of the marks on its top chart as the page places them; then the time axis
 // and the line under it. Its styles are written in once it holds everything
 // (Codex's review of the plan of R1).
-function saveFile(stage, plan) {
-  const { svg, ground, probe, measure } = saveBegin(stage);
+function saveFile(stage, plan, layout = SVG_LAYOUT) {
+  const { svg, ground, probe, measure } = saveBegin(stage, layout);
   const answer = state.answer;
   const marks = state.saveMarks && plan.marksDrawn;
   const drop = [...SAVE_LEFT_OUT, ...(marks ? [] : SAVE_MARKS)].join(", ");
@@ -3320,7 +3664,7 @@ function saveFile(stage, plan) {
       ...(heading.kind === null ? [] : [{ text: heading.kind, className: "save-kind" }]),
       ...heading.keys.map((line) => ({ text: line.name, className: "save-key", swatch: () => lineSwatch(line.style, heading.points) })),
     ].filter((piece) => piece.text !== "");
-    y = saveWords(svg, saveLines(pieces, SAVE_ROOM, SAVE_GAP, measure), y, SAVE_LINE, measure) + 6;
+    y = saveWords(svg, saveLines(pieces, layout.room, SAVE_GAP, measure), y, SAVE_LINE, measure) + 6;
     const top = y;
     // The names of the marks are on the top chart of the page; a picture
     // whose top chart is another one writes them there (the plan of R1).
@@ -3331,17 +3675,19 @@ function saveFile(stage, plan) {
             appendMarkNames(copy, markShapes(state.marks, periods[0].start, periods[periods.length - 1].end, PLOT_LEFT, width - PLOT_RIGHT), width);
           }
         : null;
-    y += savePart(svg, stage, savedChart(key), top, drop, names);
+    // For a PNG, the chart drawn again in the frame (stage X5 of v2.3.0).
+    y += savePart(svg, stage, layout.chart === null ? savedChart(key) : redrawPanel(stage, entry, layout), top, drop, names, layout);
     if (entry.shapes?.empty) {
-      const empty = svgElement("text", { class: "save-empty", x: SAVE_WIDTH / 2, y: ((top + y) / 2).toFixed(1), "text-anchor": "middle" });
+      const empty = svgElement("text", { class: "save-empty", x: layout.width / 2, y: ((top + y) / 2).toFixed(1), "text-anchor": "middle" });
       empty.textContent = t("view.summary.none");
       svg.append(empty);
     }
     y += 10;
   });
-  const axis = ui.timeAxis.querySelector(":scope > svg");
+  const periods = drawn[0]?.periods;
+  const axis = layout.chart === null ? ui.timeAxis.querySelector(":scope > svg") : periods?.length ? redrawTimeAxis(stage, periods[0].start, periods[periods.length - 1].end, layout) : null;
   if (axis !== null) {
-    y += savePart(svg, stage, axis, y, "");
+    y += savePart(svg, stage, axis, y, "", null, layout);
   }
   const days = saveDays(answer);
   const footer = saveFooter({
@@ -3354,7 +3700,7 @@ function saveFile(stage, plan) {
     language: state.language,
     conditions: conditionsSaveText("panels"),
   });
-  return saveEnd(svg, ground, probe, y, footer, measure);
+  return saveEnd(svg, ground, probe, y, footer, measure, layout);
 }
 
 // A picture of another view (stage R2 of v2.2.0): its title line; the legend
@@ -3362,48 +3708,49 @@ function saveFile(stage, plan) {
 // the page without what is left out, and the words of an empty chart; the
 // axis of a comparison; the lines under the chart; and the line under the
 // picture, in the frame of R1 (saveEnd).
-function saveViewFile(stage, target) {
-  const { svg, ground, probe, measure } = saveBegin(stage);
-  let y = saveWords(svg, saveLines([{ text: target.title, className: "save-title" }], SAVE_ROOM, SAVE_GAP, measure), SAVE_MARGIN, SAVE_TITLE_LINE, measure) + 8;
+function saveViewFile(stage, target, layout = SVG_LAYOUT) {
+  const { svg, ground, probe, measure } = saveBegin(stage, layout);
+  let y = saveWords(svg, saveLines([{ text: target.title, className: "save-title" }], layout.room, SAVE_GAP, measure), SAVE_MARGIN, SAVE_TITLE_LINE, measure) + 8;
   if (target.legend !== null) {
-    y = saveWords(svg, saveLines(target.legend.pieces, SAVE_ROOM, SAVE_GAP, measure), y, SAVE_LINE, measure) + 2;
-    y = saveNotes(svg, target.legend.notes, y, measure) + 8;
+    y = saveWords(svg, saveLines(target.legend.pieces, layout.room, SAVE_GAP, measure), y, SAVE_LINE, measure) + 2;
+    y = saveNotes(svg, target.legend.notes, y, measure, layout) + 8;
   }
   for (const part of target.parts) {
     if (part.pieces.length) {
-      y = saveWords(svg, saveLines(part.pieces, SAVE_ROOM, SAVE_GAP, measure), y, SAVE_LINE, measure) + 6;
+      y = saveWords(svg, saveLines(part.pieces, layout.room, SAVE_GAP, measure), y, SAVE_LINE, measure) + 6;
     }
     const top = y;
-    y += savePart(svg, stage, part.source, top, target.drop);
+    // For a PNG, the chart drawn again in the frame (stage X5 of v2.3.0).
+    y += savePart(svg, stage, layout.chart === null ? part.source : part.redraw(stage, layout), top, target.drop, null, layout);
     if (part.empty !== null) {
-      const empty = svgElement("text", { class: "save-empty", x: SAVE_WIDTH / 2, y: ((top + y) / 2).toFixed(1), "text-anchor": "middle" });
+      const empty = svgElement("text", { class: "save-empty", x: layout.width / 2, y: ((top + y) / 2).toFixed(1), "text-anchor": "middle" });
       empty.textContent = part.empty;
       svg.append(empty);
     }
     y += 10;
   }
   if (target.axis !== null) {
-    y += savePart(svg, stage, target.axis, y, "");
+    y += savePart(svg, stage, layout.chart === null ? target.axis : target.redrawAxis(stage, layout), y, "", null, layout);
   }
-  y = saveNotes(svg, target.notes, y, measure);
-  return saveEnd(svg, ground, probe, y, target.footer, measure);
+  y = saveNotes(svg, target.notes, y, measure, layout);
+  return saveEnd(svg, ground, probe, y, target.footer, measure, layout);
 }
 
 // The lines under a chart or a legend, one note a line where it fits.
-function saveNotes(svg, notes, y, measure) {
+function saveNotes(svg, notes, y, measure, layout = SVG_LAYOUT) {
   let bottom = y;
   for (const note of notes) {
-    bottom = saveWords(svg, saveLines([{ text: note, className: "save-caption" }], SAVE_ROOM, 0, measure), bottom, SAVE_FOOT_LINE, measure) + 2;
+    bottom = saveWords(svg, saveLines([{ text: note, className: "save-caption" }], layout.room, 0, measure), bottom, SAVE_FOOT_LINE, measure) + 2;
   }
   return bottom;
 }
 
 // The beginning of a picture: its element in the box, its ground, and the
 // measure of its words.
-function saveBegin(stage) {
-  const svg = svgElement("svg", { width: SAVE_WIDTH });
+function saveBegin(stage, layout = SVG_LAYOUT) {
+  const svg = svgElement("svg", { width: layout.width });
   stage.append(svg);
-  const ground = svgElement("rect", { class: "save-surface", x: 0, y: 0, width: SAVE_WIDTH });
+  const ground = svgElement("rect", { class: "save-surface", x: 0, y: 0, width: layout.width });
   svg.append(ground);
   const probe = svgElement("text");
   svg.append(probe);
@@ -3417,14 +3764,16 @@ function saveBegin(stage) {
 
 // The end of a picture: the line under it, its frame, and its styles,
 // written once it holds everything (Codex's review of the plan of R1).
-function saveEnd(svg, ground, probe, top, footer, measure) {
-  const separator = t("view.save.separator");
-  const words = footer.map((piece) => describe(piece));
-  const footPieces = words.map((each, index) => ({ text: index < words.length - 1 ? `${each}${separator}` : each, className: "save-footer" }));
-  const y = saveWords(svg, saveLines(footPieces, SAVE_ROOM, 0, measure), top + 6, SAVE_FOOT_LINE, measure) + SAVE_MARGIN + 4;
+function saveEnd(svg, ground, probe, top, footer, measure, layout = SVG_LAYOUT) {
+  // The space that ends the separator in English stays (stage X5 of v2.3.0).
+  const footPieces = saveFooterPieces(
+    footer.map((piece) => describe(piece)),
+    t("view.save.separator"),
+  );
+  const y = saveWords(svg, saveLines(footPieces, layout.room, 0, measure), top + 6, SAVE_FOOT_LINE, measure) + SAVE_MARGIN + 4;
   probe.remove();
   svg.setAttribute("height", String(Math.ceil(y)));
-  svg.setAttribute("viewBox", `0 0 ${SAVE_WIDTH} ${Math.ceil(y)}`);
+  svg.setAttribute("viewBox", `0 0 ${layout.width} ${Math.ceil(y)}`);
   // What the parts show out of their frames, measured in the box at one
   // pixel a unit, grows the frame of the picture (Codex's review of the diff
   // of R1).
@@ -3434,7 +3783,7 @@ function saveEnd(svg, ground, probe, top, footer, measure) {
     .map((node) => node.getBoundingClientRect())
     .filter((box) => box.width > 0 || box.height > 0)
     .map((box) => ({ left: box.left - origin.left, top: box.top - origin.top, right: box.right - origin.left, bottom: box.bottom - origin.top }));
-  const frame = saveFrame(boxes, SAVE_WIDTH, Math.ceil(y));
+  const frame = saveFrame(boxes, layout.width, Math.ceil(y));
   svg.setAttribute("width", String(frame.width));
   svg.setAttribute("height", String(frame.height));
   svg.setAttribute("viewBox", `${frame.x} ${frame.y} ${frame.width} ${frame.height}`);
@@ -3442,7 +3791,9 @@ function saveEnd(svg, ground, probe, top, footer, measure) {
     ground.setAttribute(name, String(value));
   }
   writeSaveStyles(svg);
-  return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(svg)}`;
+  // The file of an SVG is made of it (pictureXml), a PNG painted from it
+  // (stage X5 of v2.3.0).
+  return svg;
 }
 
 // The styles of the page, written into a picture once it holds everything:
@@ -4419,7 +4770,7 @@ function renderCharts() {
   }
 }
 
-function drawTimeAxis(start, end, width, place = ui.timeAxis) {
+function drawTimeAxis(start, end, width, place = ui.timeAxis, thin = false) {
   place.replaceChildren();
   if (width < 60) {
     return;
@@ -4427,7 +4778,23 @@ function drawTimeAxis(start, end, width, place = ui.timeAxis) {
   const height = place.clientHeight || 24;
   const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, width, "aria-hidden": "true", focusable: "false" });
   const scale = timeScale(start, end, PLOT_LEFT, width - PLOT_RIGHT);
-  for (const tick of timeTicks(start, end, width - PLOT_LEFT - PLOT_RIGHT)) {
+  let ticks = timeTicks(start, end, width - PLOT_LEFT - PLOT_RIGHT);
+  if (thin) {
+    // In the frame of a PNG, the marks whose words would meet are thinned,
+    // the first kept, and the months keep their years (stage X5 of v2.3.0).
+    place.append(svg);
+    const measure = axisMeasure(svg);
+    ticks = thinTicks(
+      ticks,
+      (tick) => {
+        const left = scale.x(tick.day) + 3;
+        return { left, right: left + measure(timeTickText(tick, state.language)) };
+      },
+      { years: true },
+    );
+    measure.done();
+  }
+  for (const tick of ticks) {
     const x = scale.x(tick.day);
     svg.append(svgElement("line", { class: "axis-tick", x1: x.toFixed(1), x2: x.toFixed(1), y1: 0, y2: 5 }));
     const label = svgElement("text", { class: "axis-text", x: (x + 3).toFixed(1), y: 16 });
@@ -4435,6 +4802,20 @@ function drawTimeAxis(start, end, width, place = ui.timeAxis) {
     svg.append(label);
   }
   place.append(svg);
+}
+
+// The width of the words of a mark of an axis as they would be written
+// (axis-text), measured in the svg of the axis, and the way to take the
+// probe away again (stage X5 of v2.3.0).
+function axisMeasure(svg) {
+  const probe = svgElement("text", { class: "axis-text" });
+  svg.append(probe);
+  const measure = (words) => {
+    probe.textContent = words;
+    return probe.getComputedTextLength();
+  };
+  measure.done = () => probe.remove();
+  return measure;
 }
 
 function drawOverview(start, end, chartWidth) {
@@ -6752,17 +7133,38 @@ function renderCompareCharts() {
 // (stage M2 of v2.2.0): every fourth week before them and their week, and
 // from stage X3 of v2.3.0 every week for a span of 4 weeks or less, and by
 // day every 7, 14, or 28 days before the race day and the race day.
-function drawCompareAxis(context, width, right) {
-  ui.compareAxis.replaceChildren();
+function drawCompareAxis(context, width, right, place = ui.compareAxis, thin = false) {
+  place.replaceChildren();
   if (width < 60) {
     return;
   }
-  const height = ui.compareAxis.clientHeight || 24;
+  const height = place.clientHeight || 24;
   const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, width, "aria-hidden": "true", focusable: "false" });
   const scale = timeScale(0, context.span, PLOT_LEFT, width - right);
   const race = context.by === "race";
   const newest = Math.max(...context.data.map((entry) => entry.year));
-  const ticks = race ? raceTicks(context.weeks, context.grain) : compareTicks(context.grain, context.month, newest, state.language);
+  let ticks = race ? raceTicks(context.weeks, context.grain) : compareTicks(context.grain, context.month, newest, state.language);
+  if (thin) {
+    // In the frame of a PNG (stage X5 of v2.3.0); by race, the race week or
+    // day at the end stays.
+    place.append(svg);
+    const measure = axisMeasure(svg);
+    const count = ticks.length;
+    ticks = thinTicks(
+      ticks,
+      (tick) => {
+        const words = measure(race ? describe(tick.text) : tick.text);
+        if (race && tick === ticks[count - 1]) {
+          const end = scale.x(tick.at + 1) - 3;
+          return { left: end - words, right: end };
+        }
+        const left = scale.x(tick.at) + 3;
+        return { left, right: left + words };
+      },
+      { last: race },
+    );
+    measure.done();
+  }
   ticks.forEach((tick, index) => {
     const x = scale.x(tick.at);
     svg.append(svgElement("line", { class: "axis-tick", x1: x.toFixed(1), x2: x.toFixed(1), y1: 0, y2: 5 }));
@@ -6771,7 +7173,7 @@ function drawCompareAxis(context, width, right) {
     label.textContent = race ? describe(tick.text) : tick.text;
     svg.append(label);
   });
-  ui.compareAxis.append(svg);
+  place.append(svg);
 }
 
 // Move the cross line of the comparison to one place of its axis: the
@@ -7101,9 +7503,11 @@ function calendarSize(context) {
 // start, the days of the week at the left (every other one on small squares),
 // each day of the output in the step of its value or as an outline (nothing
 // for a day without a value), and the frame of the day chosen.
-function drawCompareCalendar(entry, context) {
+function drawCompareCalendar(entry, context, size = null) {
   const year = entry.data[0];
-  const pitch = calendarPitch(context.data.length);
+  // The squares as large as a PNG needs (stage X5 of v2.3.0), or as the
+  // page has them.
+  const pitch = size ?? calendarPitch(context.data.length);
   const width = CALENDAR_LEFT + calendarWeeks(year.year) * pitch + 4;
   const height = CALENDAR_TOP + 7 * pitch + 2;
   const svg = svgElement("svg", { viewBox: `0 0 ${width} ${height}`, width, height, "aria-hidden": "true", focusable: "false" });
@@ -10198,6 +10602,12 @@ function connect() {
   ui.saveLight.addEventListener("change", () => changeSave({ saveColors: "light" }));
   ui.saveScreen.addEventListener("change", () => changeSave({ saveColors: "screen" }));
   ui.saveMarks.addEventListener("change", () => changeSave({ saveMarks: ui.saveMarks.checked }));
+  // The format, and the size of a PNG (stage X5 of v2.3.0).
+  ui.saveSvg.addEventListener("change", () => changeSave({ saveFormat: "svg" }));
+  ui.savePng.addEventListener("change", () => changeSave({ saveFormat: "png" }));
+  for (const input of ui.saveSizes) {
+    input.addEventListener("change", () => changeSave({ saveSize: input.value }));
+  }
   ui.saveGo.addEventListener("click", saveImage);
   ui.savePop.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {

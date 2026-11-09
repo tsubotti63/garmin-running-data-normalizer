@@ -3435,22 +3435,64 @@ export function saveLines(pieces, width, gap, measure) {
   return lines;
 }
 
-// Where a text wider than the width is cut: after the last space before the
-// letters that fit, or else after the last letter that fits, at least one
-// letter, never inside a pair of the letters of UTF-16.
+// Where a text wider than the width is cut: at the last place before the
+// letters that fit where a line may end (lineEnds), or else after the last
+// letter that fits, at least one letter, never inside a pair of the letters
+// of UTF-16. A line never ends with a space: the next one starts after it.
 function cutText(text, width, measure) {
   const letters = Array.from(text);
-  let fits = letters[0].length;
-  let length = 0;
+  const offsets = [0];
   for (const letter of letters) {
-    length += letter.length;
-    if (measure(text.slice(0, length)) > width) {
+    offsets.push(offsets[offsets.length - 1] + letter.length);
+  }
+  let fit = 1;
+  for (let count = 1; count <= letters.length; count += 1) {
+    if (measure(text.slice(0, offsets[count])) > width) {
       break;
     }
-    fits = length;
+    fit = count;
   }
-  const space = text.lastIndexOf(" ", fits - 1);
-  return space > 0 ? space : fits;
+  for (let count = fit; count > 0; count -= 1) {
+    if (count < letters.length && lineEnds(letters[count - 1], letters[count], letters[count + 1])) {
+      return offsets[count];
+    }
+  }
+  return offsets[fit];
+}
+
+// Where a line may end, between two letters (stage X5 of v2.3.0: the frame
+// of a PNG, as wide as a phone, wraps the notes of a view, whose Japanese has
+// no spaces, where a line ended after its last letter that fit, also inside a
+// word such as "Garmin"): before a space, but not one between a figure and a
+// unit or a count (as in "16 週", "700.1 km", or "1 回"; before hiragana, a
+// word such as "は" or "あります" follows, as in "10–20 は", and it may end
+// there; ``next`` is the letter after the space); and, next to a letter of
+// Japanese (or any from U+3000), between it and the letter before or after
+// it, but never after an opening bracket or quotation mark or the triangle
+// of a highest, or before a closing one, a mark of punctuation (also of
+// Latin letters, as after a Japanese name in English words: Codex's review
+// of the diff of X5), of a range (〜), or of an ellipsis, or a letter that
+// belongs to the one before it (a small kana, the mark of a long vowel or of
+// a kanji said again), also where a space comes between (the next line starts
+// with ``next``: Codex's review of the diff of X5). Never inside a word of
+// Latin letters or figures, nor after a space (the line would end with it).
+const LINE_NO_END = new Set(["（", "「", "『", "【", "〔", "〈", "《", "“", "‘", "(", "[", "{", "▼", "▲"]);
+const LINE_NO_START = new Set([..."、。・，．：；？！）」』】〕〉》”’…ー々〜ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ", ...")]},.:;!?"]);
+
+function lineEnds(before, after, next) {
+  if (before === " " || LINE_NO_END.has(before)) {
+    return false;
+  }
+  if (after === " ") {
+    if (next !== undefined && LINE_NO_START.has(next)) {
+      return false;
+    }
+    return !/[0-9]/.test(before) || (next !== undefined && next.codePointAt(0) >= 0x3041 && next.codePointAt(0) <= 0x309f);
+  }
+  if (LINE_NO_START.has(after)) {
+    return false;
+  }
+  return before.codePointAt(0) >= 0x3000 || after.codePointAt(0) >= 0x3000;
 }
 
 // The frame of a picture: its width and the height of its parts, grown to
@@ -3471,6 +3513,232 @@ export function saveFrame(boxes, width, height, pad = 4) {
   const x = Math.floor(left);
   const y = Math.floor(top);
   return { x, y, width: Math.ceil(right) - x, height: Math.ceil(bottom) - y };
+}
+
+// --- Saving as a PNG of the size of a post (stage X5 of v2.3.0) ------------
+
+// The sizes of a PNG, as the person chose them from the samples ("1 B and
+// list 1"): the frame that a picture is laid out in, about as large as the
+// screen of a phone, so that its words read there, and the PNG 2.5 times as
+// large; 4:5 first, the size of the person's own posts.
+export const SAVE_SIZES = {
+  "4x5": { width: 432, height: 540 },
+  "1x1": { width: 432, height: 432 },
+  "9x16": { width: 432, height: 768 },
+};
+export const SAVE_PNG_SCALE = 2.5;
+// The height that the charts of a PNG are drawn at first, before the second
+// layout makes them fill the frame, and the lowest that a chart may take
+// (a plot or a distribution has its own, the least that it is drawn at).
+export const SAVE_FIRST_CHART = 100;
+export const SAVE_PNG_LOW = 40;
+
+// The name of the file of a saving: that of the SVG, or, for a PNG, with its
+// size and .png in place of .svg; null where the size is none of the list.
+export function savePictureName(name, format, size) {
+  if (typeof name !== "string" || format !== "png") {
+    return name;
+  }
+  return Object.hasOwn(SAVE_SIZES, size) && name.endsWith(".svg") ? `${name.slice(0, -4)}_${size}.png` : null;
+}
+
+// The height of each chart drawn again so that a picture fills its frame:
+// ``first`` is the height of the picture laid out with ``count`` charts of
+// ``chart`` each, and the rest of it stays as it is in the second layout.
+// It fits where no chart is lower than ``low``; a picture with no chart that
+// grows (a calendar) fits where it is not higher than its frame.
+export function saveFrameHeights({ frame, first, chart, count, low }) {
+  if (count < 1) {
+    return { chart, fits: first <= frame };
+  }
+  const height = Math.floor(chart + (frame - first) / count);
+  return { chart: height, fits: height >= low };
+}
+
+// The steps of the marks of an axis drawn again in a frame: the first mark
+// and every k-th one after it.
+export const SAVE_TICK_STEPS = [1, 2, 3, 4, 6, 12];
+
+// The marks of an axis drawn again in the frame of a PNG, where its words
+// would meet (the page keeps its own axis): the first, and every k-th after
+// it, k the least of SAVE_TICK_STEPS whose words keep ``gap`` apart, the last
+// too where ``last`` (the race week or day of a race axis); where ``years``,
+// the months name their years (tickYears), as the checker asked. ``box``
+// gives the left and the right of the words of a mark as they would be
+// written. Where no step keeps them apart, the largest one.
+export function thinTicks(ticks, box, { gap = 4, last = false, years = false } = {}) {
+  let kept = ticks;
+  for (const step of SAVE_TICK_STEPS) {
+    const picked = ticks.filter((_tick, index) => index % step === 0 || (last && index === ticks.length - 1));
+    kept = years ? tickYears(picked) : picked;
+    const boxes = kept.map((tick) => box(tick));
+    if (boxes.every((each, index) => index === 0 || each.left >= boxes[index - 1].right + gap)) {
+      return kept;
+    }
+  }
+  return kept;
+}
+
+// The months of a time axis that name their year: the first one kept, and
+// the first one kept of each year after it, a January or not.
+export function tickYears(ticks) {
+  const yearOf = (tick) => new Date(tick.day * 86400000).getUTCFullYear();
+  return ticks.map((tick, index) => {
+    if (tick.kind !== "month" && tick.kind !== "month_year") {
+      return tick;
+    }
+    const named = index === 0 || yearOf(tick) !== yearOf(ticks[index - 1]);
+    return { ...tick, kind: named ? "month_year" : "month" };
+  });
+}
+
+// A space that SVG keeps at the end of a text (U+00A0).
+const KEPT_SPACE = String.fromCharCode(0xa0);
+
+// The pieces of the line under a picture: each set of words with the
+// separator after it, but the last; the spaces that end the separator (" · "
+// in English) are spaces that SVG keeps, as it drops those at the end of a
+// text, so that they are drawn and measured, and the next piece stands clear
+// of the dot (stage X5 of v2.3.0; since R1 of v2.2.0 it stood at the dot).
+export function saveFooterPieces(words, separator) {
+  const ending = String(separator).replace(/ +$/u, (spaces) => KEPT_SPACE.repeat(spaces.length));
+  return words.map((each, index) => ({ text: index < words.length - 1 ? `${each}${ending}` : each, className: "save-footer" }));
+}
+
+// The shapes that a picture holds (its charts, words, and swatches), which a
+// PNG paints; any other element, or an svg that would fit its view box by a
+// preserveAspectRatio of its own, is counted and left out, and a saving stops
+// where one is (the plan of X5, 9c).
+const PAINTED = new Set(["svg", "g", "path", "line", "rect", "circle", "text"]);
+// The properties that a shape takes from the one around it, with their first
+// values as SVG has them (the checker's review of the plan of X5).
+const PAINT_FIRST = {
+  fill: "black",
+  stroke: "none",
+  "stroke-width": "1",
+  "stroke-dasharray": "none",
+  "stroke-linecap": "butt",
+  "stroke-linejoin": "miter",
+  "fill-opacity": "1",
+  "stroke-opacity": "1",
+  "font-size": "16px",
+  "font-weight": "400",
+  "font-family": "sans-serif",
+  "text-anchor": "start",
+  "paint-order": "normal",
+};
+
+// What a PNG paints of a picture (its outer svg, after its styles are
+// written): a tree of its shapes, each with the matrix of its place (the view
+// boxes of the outer and inner svg elements as SVG places them, centered
+// where their sides differ, with overflow visible, as the picture has it),
+// the properties that it takes, and its geometry; an element whose opacity
+// is below 1 makes a layer, painted apart and laid on with that opacity, as
+// SVG does. ``base`` is the matrix of the PNG (its scale and the place of the
+// picture in the frame). The words are those that SVG shows (svgText). It
+// reads the element only. ``left`` counts what it leaves out.
+export function paintPlan(root, base = [1, 0, 0, 1, 0, 0]) {
+  let left = 0;
+  const walk = (node, around, matrix) => {
+    const name = String(node.localName ?? node.tagName ?? "").toLowerCase();
+    if (!PAINTED.has(name) || (name === "svg" && node.hasAttribute("preserveAspectRatio"))) {
+      left += 1;
+      return null;
+    }
+    if (node.getAttribute("display") === "none") {
+      return null;
+    }
+    const styles = { ...around };
+    for (const property of Object.keys(PAINT_FIRST)) {
+      const value = node.getAttribute(property);
+      if (value !== null && value !== "" && value !== "inherit") {
+        styles[property] = value;
+      }
+    }
+    let item;
+    if (name === "svg" || name === "g") {
+      const place = name === "svg" ? multiplyPlace(matrix, svgPlace(node, node === root)) : matrix;
+      const items = [];
+      for (const child of node.children ?? []) {
+        const shape = walk(child, styles, place);
+        if (shape !== null) {
+          items.push(shape);
+        }
+      }
+      item = { kind: "group", items };
+    } else {
+      item = paintShapeOf(name, node, styles, matrix);
+    }
+    const opacity = paintNumber(node.getAttribute("opacity"), 1);
+    return opacity < 1 ? { kind: "layer", opacity: Math.max(0, opacity), items: [item] } : item;
+  };
+  const top = walk(root, PAINT_FIRST, base);
+  return { items: top === null ? [] : [top], left };
+}
+
+// The words of a text as SVG shows them: line breaks and tabs as spaces,
+// the spaces (U+0020) at its ends dropped and those in a row inside it kept
+// one; a space that SVG keeps (U+00A0) stays (the checker's review of the
+// plan of X5).
+export function svgText(text) {
+  return String(text).replace(/[\t\n\r]/gu, " ").replace(/ {2,}/gu, " ").replace(/^ +| +$/gu, "");
+}
+
+function paintNumber(value, first) {
+  const number = Number.parseFloat(value);
+  return Number.isFinite(number) ? number : first;
+}
+
+// The geometry of a shape, in the units of its place.
+function paintShapeOf(name, node, styles, matrix) {
+  const at = (attribute) => paintNumber(node.getAttribute(attribute), 0);
+  const shape = { kind: name, matrix, styles };
+  if (name === "path") {
+    shape.d = node.getAttribute("d") ?? "";
+  } else if (name === "line") {
+    Object.assign(shape, { x1: at("x1"), y1: at("y1"), x2: at("x2"), y2: at("y2") });
+  } else if (name === "rect") {
+    const width = Math.max(0, at("width"));
+    const height = Math.max(0, at("height"));
+    // The corners of a cell of a calendar or of its legend (rx 2): one radius
+    // stands for both where the other is not given, as SVG has it.
+    let rx = paintNumber(node.getAttribute("rx"), Number.NaN);
+    let ry = paintNumber(node.getAttribute("ry"), Number.NaN);
+    rx = Number.isFinite(rx) ? rx : Number.isFinite(ry) ? ry : 0;
+    ry = Number.isFinite(ry) ? ry : rx;
+    Object.assign(shape, { x: at("x"), y: at("y"), width, height, rx: Math.min(Math.max(0, rx), width / 2), ry: Math.min(Math.max(0, ry), height / 2) });
+  } else if (name === "circle") {
+    Object.assign(shape, { cx: at("cx"), cy: at("cy"), r: Math.max(0, at("r")) });
+  } else {
+    Object.assign(shape, { x: at("x"), y: at("y"), text: svgText(node.textContent ?? "") });
+  }
+  return shape;
+}
+
+// The place of an svg in the one around it: for an inner one, its x and y,
+// and its view box made as large as its width and height, centered on the
+// side that is left over (as preserveAspectRatio first has it); for the
+// outer one, its view box at its own size (its x and y place nothing).
+function svgPlace(node, outer) {
+  const box = String(node.getAttribute("viewBox") ?? "")
+    .trim()
+    .split(/[\s,]+/u)
+    .map(Number);
+  const x = outer ? 0 : paintNumber(node.getAttribute("x"), 0);
+  const y = outer ? 0 : paintNumber(node.getAttribute("y"), 0);
+  if (box.length !== 4 || !box.every(Number.isFinite) || box[2] <= 0 || box[3] <= 0) {
+    return [1, 0, 0, 1, x, y];
+  }
+  const width = paintNumber(node.getAttribute("width"), box[2]);
+  const height = paintNumber(node.getAttribute("height"), box[3]);
+  const scale = Math.min(width / box[2], height / box[3]);
+  return [scale, 0, 0, scale, x + (width - box[2] * scale) / 2 - box[0] * scale, y + (height - box[3] * scale) / 2 - box[1] * scale];
+}
+
+// The matrix of a place inside another (as a canvas has them: a, b, c, d, e,
+// f), the inner one applied first.
+function multiplyPlace([a, b, c, d, e, f], [g, h, i, j, k, l]) {
+  return [a * g + c * h, b * g + d * h, a * i + c * j, b * i + d * j, a * k + c * l + e, b * k + d * l + f];
 }
 
 // What the line after a saving is said of: the output, the period, the types,
