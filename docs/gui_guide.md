@@ -2770,17 +2770,19 @@ it. To remove Python too, do as the documents of python.org say, for
   dates and values of what you see into an image file and hands it to the
   browser as a download; this app sends nothing anywhere. With the marks put
   in, and by race day, the names of the marks show too. The name of the file
-  holds dates (or years) and the keys of the items only. The images you saved
-  are your own files: **Forget the remembered settings…** does not remove
-  them.
+  holds only dates (or years), the keys of the items, and (for a PNG, from
+  2.3.0) its size. The images you saved are your own files:
+  **Forget the remembered settings…** does not remove them.
 - The names of the shoes of [By shoes](#by-shoes) (from 2.2.0) may be names
   you gave in Garmin. They show on the page and in a picture you save (the
   window says so before saving). This app writes them in no file name, log, or
   remembered setting.
 - The names of the activities and the words of the
   [conditions](#conditions-from-220) (from 2.2.0) may be your own words. The
-  names show in the list of the activities of a day, week, month, or year only, and the view page
-  writes them into no file. The words of the conditions show in the window, in
+  names show only in the list of the activities of a day, week, month, or year
+  and in the tables of [Compare with the output before](#compare-with-the-output-before-from-230)
+  (from 2.3.0), and the view page writes them into no file. The words of the
+  conditions show in the window, in
   the line under the filters, and in the line at the top of the full screen,
   and go into the remembered settings and into a picture you save (its line at
   the bottom; the window says so before saving). They are never in a log, an

@@ -2726,7 +2726,7 @@ class GuiGuideTest(unittest.TestCase):
             with self.subTest(language=language, part="help"):
                 help_text = messages["view.help.save_text"]
                 self.assertIn(messages["view.save.button"], help_text)
-                for phrase in {"en": ("hands what you see to the browser as one SVG file to download", "dates (or years) and the keys of the items only", "nothing is sent anywhere"), "ja": ("ブラウザーにダウンロードとして渡します", "日付（または年）と項目の鍵だけ", "どこへも送りません")}[language]:
+                for phrase in {"en": ("hands what you see to the browser as one SVG file to download", "only dates (or years), the keys of the items, and the size of a PNG", "nothing is sent anywhere"), "ja": ("ブラウザーにダウンロードとして渡します", "日付（または年）と項目の鍵（PNG は、そのあとに大きさ）だけ", "どこへも送りません")}[language]:
                     self.assertIn(phrase, help_text)
 
     def test_guides_give_the_shoes_as_the_page_does(self) -> None:
@@ -3895,6 +3895,56 @@ class GuiGuideTest(unittest.TestCase):
             for sentence in said[language]:
                 with self.subTest(language=language, said=sentence[:40]):
                     self.assertEqual(text.count(sentence), 1)
+
+    def test_the_privacy_sections_say_where_the_names_show_and_what_a_file_name_holds(self) -> None:
+        # Stage X12p of v2.3.0 (the GRDN session's note after X7, and the
+        # owner's sweep of the privacy sentences over the stages of 2.3.0):
+        # the names of the activities show in the list of a period and, from
+        # 2.3.0, in the tables of the comparison with the output before (X7);
+        # the name of a PNG saved ends with its size (X5, savePictureName).
+        # Each sentence is held in its section, whole and once, and the words
+        # that said "only" of the list or of the dates and keys are gone.
+        said = {
+            "ja": (
+                "名前は区切りの一覧と、[前回の出力とくらべる](#前回の出力とくらべる230-から)（2.3.0 から）の表に出るだけで、見るページは名前をファイルに書きません。",
+                "ファイルの名前は、日付（または年）と項目の鍵（2.3.0 からの PNG は、そのあとに大きさ）だけです。",
+            ),
+            "en": (
+                "The names show only in the list of the activities of a day, week, month, or year and in the tables of [Compare with the output before](#compare-with-the-output-before-from-230) (from 2.3.0), and the view page writes them into no file.",
+                "The name of the file holds only dates (or years), the keys of the items, and (for a PNG, from 2.3.0) its size.",
+            ),
+        }
+        gone = {
+            "ja": ("名前は区切りの一覧に出るだけ", "と項目の鍵だけです。"),
+            "en": ("or year only, and the view page", "and the keys of the items only."),
+        }
+        for language, heading in (("ja", "プライバシー"), ("en", "Privacy")):
+            privacy = flowing(language, heading)
+            for sentence in said[language]:
+                with self.subTest(language=language, said=sentence[:40]):
+                    self.assertEqual(privacy.count(sentence), 1)
+            for words in gone[language]:
+                with self.subTest(language=language, gone=words):
+                    self.assertNotIn(words, privacy)
+        design = " ".join((ROOT / "docs/gui_design.md").read_text(encoding="utf-8").split())
+        privacy = design[design.index(" ## Privacy ") : design.index(" ## Internationalization ")]
+        for sentence in (
+            "The name of its file holds only dates (or years) and the keys of the items (and, from v2.3.0, the size of a PNG).",
+            "The names show only in the list of the activities of a period and, from v2.3.0 (stage X7), in the lists of the changes since the output before, and the view page writes them into no file.",
+        ):
+            with self.subTest(design=sentence[:40]):
+                self.assertEqual(privacy.count(sentence), 1)
+        for words in ("of a period only, and the view page", "and the keys of the items only."):
+            with self.subTest(design_gone=words):
+                self.assertNotIn(words, privacy)
+        # The help of the view page says it in short, as the guides do.
+        for language, phrase in (
+            ("ja", "ファイルの名前は日付（または年）と項目の鍵（PNG は、そのあとに大きさ）だけです。"),
+            ("en", "Its name holds only dates (or years), the keys of the items, and the size of a PNG."),
+        ):
+            with self.subTest(help=language):
+                self.assertEqual(catalog(language)["view.help.save_text"].count(phrase), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
