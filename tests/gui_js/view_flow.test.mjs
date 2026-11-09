@@ -2450,6 +2450,46 @@ test("the lines of a picture put each piece where it fits after the gap, and cut
   assert.deepEqual(shape(view.saveLines([{ text: "abc", bold: true }, { text: "cd" }], 70, 5, bold)), [[["abc", 0]], [["cd", 0]]]);
 });
 
+test("a piece is cut where a line may end: never inside a Latin word, after a figure's space, or by a bracket or a mark", () => {
+  // Stage X5 of v2.3.0: the frame of a PNG wraps the Japanese notes, where
+  // "Garmin" was cut after its last letter that fit.
+  const measure = (text) => Array.from(text).length * 10;
+  const lines = (text, width) => view.saveLines([{ text }], width, 5, measure).map((line) => line.map((piece) => piece.text).join("|"));
+  assert.deepEqual(lines("上限の距離は、Garmin で決めた値のままです。", 120), ["上限の距離は、", "Garmin で決めた値", "のままです。"]);
+  // The line ends before the Latin word where it does not fit, and after it
+  // where it does.
+  assert.deepEqual(lines("名前はGarminの値", 60), ["名前は", "Garmin", "の値"]);
+  // Not at the space between a figure and its count or unit, but at the
+  // middle dot before it, or the space before the figure.
+  assert.deepEqual(lines("大会ごと・16 週前から", 70), ["大会ごと・", "16 週前から"]);
+  assert.deepEqual(lines("合計 700.1 km", 100), ["合計", "700.1 km"]);
+  // Before hiragana (a word such as "は" after the figure), it may end there.
+  assert.deepEqual(lines("値（10–20 は 10 以上）", 80), ["値（10–20", "は 10 以上）"]);
+  // Never after an opening bracket or the triangle of a highest, never
+  // before a closing bracket or a mark of punctuation.
+  assert.deepEqual(lines("最大の週（2026年1月5日の週）です", 60), ["最大の週", "（2026年", "1月5日の", "週）です"]);
+  assert.deepEqual(lines("合計の値▼最大の値", 50), ["合計の値", "▼最大の値"]);
+  assert.deepEqual(lines("記録のある日、ない日。", 60), ["記録のある", "日、ない日。"]);
+  // Nor after an opening quotation mark, nor before a closing one or a mark
+  // of Latin letters next to Japanese (Codex's review of the diff of X5).
+  assert.deepEqual(lines("値は“朝”", 30), ["値は", "“朝”"]);
+  assert.deepEqual(lines("the name has “朝ラン”", 170), ["the name has “朝ラ", "ン”"]);
+  assert.deepEqual(lines("名前は朝ラン, and", 60), ["名前は朝ラ", "ン, and"]);
+  // Also where a space comes between: not after an opening bracket and its
+  // space, nor before a space and a closing bracket (Codex's review of the
+  // diff of X5).
+  assert.deepEqual(lines("名前は「 朝」", 40), ["名前は", "「 朝」"]);
+  assert.deepEqual(lines("朝ラン 」です", 40), ["朝ラ", "ン 」で", "す"]);
+  // A line never ends with its space: the next one starts after it.
+  assert.deepEqual(lines("合計の値 最大の値", 50), ["合計の値", "最大の値"]);
+  // A word of Latin letters with no place to end a line in it is cut where
+  // it fits, at least one letter, and the next line takes the rest.
+  assert.deepEqual(lines("Normalizer", 50), ["Norma", "lizer"]);
+  // English keeps its words whole at the spaces, as before, but a figure
+  // keeps its unit.
+  assert.deepEqual(lines("Total of the year 1,793.5 km", 130), ["Total of the", "year", "1,793.5 km"]);
+});
+
 test("the line after a saving goes with the output, the period, the types, the items, and the language", () => {
   const base = { ticket: "t1", period: "1y", types: null, items: ["dist"], language: "ja" };
   const key = view.saveNoticeKey(base);
@@ -3607,4 +3647,240 @@ test("the triangle of the highest stays in its plot, above its bar or point", ()
     assert.ok(Math.min(...ys) >= 0, `${y}: ${ys}`);
     assert.equal(Math.max(...ys) - Math.min(...ys), view.HIGHEST_MARK_HEIGHT);
   }
+});
+
+// --- A PNG of the size of a post (stage X5 of v2.3.0) ---------------------
+
+test("a PNG has the sizes of the samples, its file the size and .png", () => {
+  assert.deepEqual(view.SAVE_SIZES, { "4x5": { width: 432, height: 540 }, "1x1": { width: 432, height: 432 }, "9x16": { width: 432, height: 768 } });
+  assert.equal(view.SAVE_PNG_SCALE, 2.5);
+  // 1080 x 1350, 1080 x 1080, and 1080 x 1920 pixels.
+  assert.deepEqual(
+    Object.values(view.SAVE_SIZES).map(({ width, height }) => [width * view.SAVE_PNG_SCALE, height * view.SAVE_PNG_SCALE]),
+    [
+      [1080, 1350],
+      [1080, 1080],
+      [1080, 1920],
+    ],
+  );
+  assert.equal(view.SAVE_FIRST_CHART, 100);
+  assert.equal(view.SAVE_PNG_LOW, 40);
+  const name = "garmin-view_2025-10-22_2026-10-21_dist-rhr.svg";
+  assert.equal(view.savePictureName(name, "svg", "4x5"), name);
+  assert.equal(view.savePictureName(name, "png", "4x5"), "garmin-view_2025-10-22_2026-10-21_dist-rhr_4x5.png");
+  assert.equal(view.savePictureName(name, "png", "1x1"), "garmin-view_2025-10-22_2026-10-21_dist-rhr_1x1.png");
+  assert.equal(view.savePictureName("garmin-compare_2025-2026_dist.svg", "png", "9x16"), "garmin-compare_2025-2026_dist_9x16.png");
+  assert.equal(view.savePictureName(name, "png", "3x4"), null);
+  assert.equal(view.savePictureName("garmin-view.png", "png", "4x5"), null);
+  assert.equal(view.savePictureName(null, "png", "4x5"), null);
+});
+
+test("the charts of a PNG grow to fill its frame, never lower than the least", () => {
+  // A picture of 234 with one chart of 100 in a frame of 540: the chart 406.
+  assert.deepEqual(view.saveFrameHeights({ frame: 540, first: 234, chart: 100, count: 1, low: 40 }), { chart: 406, fits: true });
+  // Three charts: what is left shared by them, the height a whole number.
+  assert.deepEqual(view.saveFrameHeights({ frame: 540, first: 526, chart: 100, count: 3, low: 40 }), { chart: 104, fits: true });
+  assert.deepEqual(view.saveFrameHeights({ frame: 432, first: 700, chart: 100, count: 4, low: 40 }), { chart: 33, fits: false });
+  // A plot is never drawn lower than 120.
+  assert.deepEqual(view.saveFrameHeights({ frame: 432, first: 432, chart: 100, count: 1, low: 120 }), { chart: 100, fits: false });
+  // No chart that grows (the strips of a calendar): it fits where it is not
+  // higher than its frame.
+  assert.deepEqual(view.saveFrameHeights({ frame: 540, first: 400, chart: 100, count: 0, low: 40 }), { chart: 100, fits: true });
+  assert.deepEqual(view.saveFrameHeights({ frame: 432, first: 500, chart: 100, count: 0, low: 40 }), { chart: 100, fits: false });
+});
+
+test("the marks of an axis in a PNG are thinned at even steps, the first and each new year naming the year", () => {
+  const day = (iso) => Math.round(Date.parse(`${iso}T00:00:00Z`) / 86400000);
+  const start = day("2025-10-22");
+  const end = day("2026-10-21");
+  // A year by month, 432 wide as the frame of a PNG (its room 416): the
+  // words met there in the samples.
+  const room = 416;
+  const ticks = chart.timeTicks(start, end, room - chart.PLOT_LEFT - chart.PLOT_RIGHT);
+  assert.equal(ticks.length, 12);
+  const scale = chart.timeScale(start, end, chart.PLOT_LEFT, room - chart.PLOT_RIGHT);
+  // Letters about as wide as at 11 px: figures and Latin 6.5, others 11.
+  const wide = (text) => [...text].reduce((sum, letter) => sum + (/[0-9A-Za-z ]/u.test(letter) ? 6.5 : 11), 0);
+  for (const language of ["ja", "en"]) {
+    const box = (tick) => {
+      const left = scale.x(tick.day) + 3;
+      return { left, right: left + wide(view.timeTickText(tick, language)) };
+    };
+    const kept = view.thinTicks(ticks, box, { years: true });
+    const texts = kept.map((tick) => view.timeTickText(tick, language));
+    // The first mark stays and names its year, in Japanese and in English.
+    assert.equal(kept[0].day, ticks[0].day, language);
+    assert.equal(kept[0].kind, "month_year", language);
+    assert.match(texts[0], /2025/u, language);
+    // Every mark kept at the same step, and no words meet.
+    const step = ticks.findIndex((tick) => tick.day === kept[1].day);
+    assert.ok(step > 1, language);
+    kept.forEach((tick, index) => assert.equal(tick.day, ticks[index * step].day, language));
+    const boxes = kept.map(box);
+    boxes.slice(1).forEach((each, index) => assert.ok(each.left >= boxes[index].right + 4, `${language} ${texts.join(" ")}`));
+    // The year 2026 is named once, on the first mark kept in it.
+    const named = kept.filter((tick) => tick.kind === "month_year");
+    assert.equal(named.length, 2, language);
+    assert.match(view.timeTickText(named[1], language), /2026/u, language);
+  }
+  // At a step of 3 (November, February, May, August), February is the first
+  // mark of 2026: it names the year, though it is no January.
+  const third = view.tickYears(ticks.filter((_tick, index) => index % 3 === 0));
+  assert.deepEqual(
+    third.map((tick) => view.timeTickText(tick, "ja")),
+    ["2025年11月", "2026年2月", "5月", "8月"],
+  );
+  assert.deepEqual(
+    third.map((tick) => view.timeTickText(tick, "en")),
+    ["Nov 2025", "Feb 2026", "May", "Aug"],
+  );
+  // Words that keep apart are all kept, and the marks that are no months
+  // keep their kinds.
+  const apart = view.thinTicks(ticks, (tick) => ({ left: scale.x(tick.day), right: scale.x(tick.day) + 1 }), { years: true });
+  assert.deepEqual(apart.map((tick) => tick.kind), ticks.map((tick) => tick.kind));
+  assert.deepEqual(view.tickYears([{ day: 1, kind: "day" }]), [{ day: 1, kind: "day" }]);
+  // The last mark stays where it should (the race day at the end of a race
+  // axis), whatever the step.
+  const marks = Array.from({ length: 17 }, (_each, index) => ({ at: index }));
+  const lastKept = view.thinTicks(marks, (mark) => ({ left: mark.at * 10, right: mark.at * 10 + 25 }), { last: true });
+  assert.equal(lastKept.at(-1).at, 16);
+  assert.equal(lastKept[0].at, 0);
+});
+
+test("the space after a separator under a picture stays, so that the next words stand clear of it", () => {
+  const space = String.fromCharCode(0xa0);
+  const english = view.saveFooterPieces(["Period October 22, 2025–October 21, 2026", "Group by Month", "Garmin Running Data Normalizer 2.2.1"], " · ");
+  assert.deepEqual(
+    english.map((piece) => piece.text),
+    [`Period October 22, 2025–October 21, 2026 ·${space}`, `Group by Month ·${space}`, "Garmin Running Data Normalizer 2.2.1"],
+  );
+  assert.ok(english.every((piece) => piece.className === "save-footer"));
+  // Japanese has no space in its separator.
+  assert.deepEqual(
+    view.saveFooterPieces(["期間 2025年10月22日〜2026年10月21日", "まとめ方 月"], "・").map((piece) => piece.text),
+    ["期間 2025年10月22日〜2026年10月21日・", "まとめ方 月"],
+  );
+  // As SVG measures them, spaces at the end of a text dropped: the second
+  // piece stands one letter clear of the dot (since R1 of v2.2.0 it stood at
+  // the dot).
+  const measure = (text) => text.replace(/ +$/u, "").length * 7;
+  const [line] = view.saveLines(english.slice(0, 2), 2000, 0, measure);
+  const dot = english[0].text.indexOf("·");
+  assert.ok(line[1].x >= (dot + 1) * 7 + 7);
+  const before = view.saveLines([{ text: "Period · ", className: "save-footer" }, { text: "Group", className: "save-footer" }], 2000, 0, measure)[0];
+  assert.equal(before[1].x, "Period ·".length * 7);
+});
+
+test("the words of a picture are painted as SVG shows them", () => {
+  const space = String.fromCharCode(0xa0);
+  assert.equal(view.svgText(" a  b "), "a b");
+  assert.equal(view.svgText("\ta\nb\r"), "a b");
+  assert.equal(view.svgText(`Group by Month ·${space}`), `Group by Month ·${space}`);
+  assert.equal(view.svgText(` ${space}x  `), `${space}x`);
+});
+
+// An element of a picture as paintPlan reads it.
+function element(name, attributes = {}, children = [], text = null) {
+  return {
+    localName: name,
+    children,
+    textContent: text ?? children.map((child) => child.textContent).join(""),
+    getAttribute: (key) => (Object.hasOwn(attributes, key) ? String(attributes[key]) : null),
+    hasAttribute: (key) => Object.hasOwn(attributes, key),
+  };
+}
+
+test("a PNG paints each shape of a picture at the place of its view boxes, with the properties it takes", () => {
+  const close = (actual, expected) => actual.forEach((value, index) => assert.ok(Math.abs(value - expected[index]) < 1e-9, `${actual} / ${expected}`));
+  const ground = element("rect", { x: -4, y: -2, width: 100, height: 50, fill: "rgb(255, 255, 255)" });
+  const words = element("text", { x: 8, y: 20, "font-size": "15px", "font-weight": "600" }, [], " Distance  km ");
+  const bar = element("path", { d: "M0 0H10V20H0Z", fill: "rgb(1, 2, 3)" });
+  const tick = element("text", { x: 50, y: 10, "text-anchor": "end", "paint-order": "stroke", stroke: "rgb(9, 9, 9)", "stroke-width": "4px" }, [], "250");
+  const dash = element("line", { x1: 0, y1: 0, x2: 10, y2: 0, "stroke-dasharray": "8 3 1.5 3" });
+  const lines = element("g", { stroke: "rgb(5, 5, 5)", "stroke-width": "2" }, [dash]);
+  const part = element("svg", { x: 8, y: 30, width: 416, height: 208, viewBox: "0 0 832 416", overflow: "visible" }, [bar, tick, lines]);
+  // A swatch whose view box has other sides than its place: centered.
+  const swatch = element("svg", { x: 100, y: 5, width: 22, height: 8, viewBox: "0 0 22 10" }, [element("rect", { x: 0, y: 0, width: 22, height: 10 })]);
+  const root = element("svg", { width: 100, height: 50, viewBox: "-4 -2 100 50", fill: "rgb(10, 20, 30)", "font-family": "Hiragino Sans" }, [ground, words, part, swatch]);
+  const plan = view.paintPlan(root, [2.5, 0, 0, 2.5, 10, 20]);
+  assert.equal(plan.left, 0);
+  const [top] = plan.items;
+  assert.equal(top.kind, "group");
+  const [paintedGround, paintedWords, paintedPart, paintedSwatch] = top.items;
+  // The origin of the outer view box moved: the ground at the corner of the
+  // PNG.
+  close(paintedGround.matrix, [2.5, 0, 0, 2.5, 20, 25]);
+  assert.deepEqual([paintedGround.x, paintedGround.y, paintedGround.width, paintedGround.height], [-4, -2, 100, 50]);
+  assert.equal(paintedGround.styles.fill, "rgb(255, 255, 255)");
+  // The words as SVG shows them, the font of the outer element, the fill it
+  // takes from there, and the first values of the rest.
+  assert.equal(paintedWords.text, "Distance km");
+  assert.equal(paintedWords.styles["font-family"], "Hiragino Sans");
+  assert.equal(paintedWords.styles.fill, "rgb(10, 20, 30)");
+  assert.equal(paintedWords.styles["font-weight"], "600");
+  assert.equal(paintedWords.styles.stroke, "none");
+  assert.equal(paintedWords.styles["text-anchor"], "start");
+  // The part: its x and y, its view box made half as large.
+  const [paintedBar, paintedTick, paintedLines] = paintedPart.items;
+  close(paintedBar.matrix, [1.25, 0, 0, 1.25, 20 + 2.5 * 8, 25 + 2.5 * 30]);
+  assert.equal(paintedBar.d, "M0 0H10V20H0Z");
+  assert.equal(paintedBar.styles.fill, "rgb(1, 2, 3)");
+  assert.equal(paintedTick.styles["text-anchor"], "end");
+  assert.equal(paintedTick.styles["paint-order"], "stroke");
+  assert.equal(paintedTick.styles["stroke-width"], "4px");
+  // A group passes its stroke on; its line keeps its dashes.
+  const [paintedDash] = paintedLines.items;
+  assert.deepEqual([paintedDash.x1, paintedDash.y1, paintedDash.x2, paintedDash.y2], [0, 0, 10, 0]);
+  assert.equal(paintedDash.styles.stroke, "rgb(5, 5, 5)");
+  assert.equal(paintedDash.styles["stroke-width"], "2");
+  assert.equal(paintedDash.styles["stroke-dasharray"], "8 3 1.5 3");
+  // The swatch: as large as its height lets it be, in the middle of its width.
+  close(paintedSwatch.items[0].matrix, [2.5 * 0.8, 0, 0, 2.5 * 0.8, 20 + 2.5 * (100 + (22 - 22 * 0.8) / 2), 25 + 2.5 * 5]);
+  // With nothing given, the first values of SVG.
+  const bare = view.paintPlan(element("svg", { width: 10, height: 10 }, [element("circle", { cx: 5, cy: 5, r: 3 })]));
+  const [circle] = bare.items[0].items;
+  assert.deepEqual([circle.cx, circle.cy, circle.r], [5, 5, 3]);
+  assert.equal(circle.styles.fill, "black");
+  assert.equal(circle.styles.stroke, "none");
+  assert.equal(circle.styles["stroke-width"], "1");
+  assert.equal(circle.styles["font-family"], "sans-serif");
+  close(circle.matrix, [1, 0, 0, 1, 0, 0]);
+});
+
+test("a PNG lays the shapes of a group with an opacity on as one, paints round corners, and leaves out what a picture never holds", () => {
+  const faded = element("g", { opacity: "0.28" }, [element("path", { d: "M0 0L1 1" }), element("path", { d: "M1 0L0 1" })]);
+  const light = element("circle", { cx: 1, cy: 1, r: 1, opacity: "0.5" });
+  const hidden = element("text", { display: "none" }, [], "hidden");
+  // The squares of a calendar and of its legend (rx 2): one radius stands for
+  // both, and none is more than half the side.
+  const cell = element("rect", { x: 0, y: 0, width: 10, height: 10, rx: 2 });
+  const tall = element("rect", { x: 0, y: 0, width: 3, height: 10, rx: 4 });
+  const oval = element("rect", { x: 0, y: 0, width: 10, height: 10, ry: 3 });
+  const plain = element("rect", { x: 0, y: 0, width: 10, height: 10 });
+  const root = element("svg", { width: 10, height: 10 }, [faded, light, hidden, cell, tall, oval, plain]);
+  const plan = view.paintPlan(root);
+  assert.equal(plan.left, 0);
+  const [layer, alone, paintedCell, paintedTall, paintedOval, paintedPlain] = plan.items[0].items;
+  assert.equal(layer.kind, "layer");
+  assert.equal(layer.opacity, 0.28);
+  assert.equal(layer.items[0].kind, "group");
+  assert.equal(layer.items[0].items.length, 2);
+  assert.equal(alone.kind, "layer");
+  assert.equal(alone.items[0].kind, "circle");
+  assert.equal(plan.items[0].items.length, 6);
+  assert.deepEqual([paintedCell.rx, paintedCell.ry], [2, 2]);
+  assert.deepEqual([paintedTall.rx, paintedTall.ry], [1.5, 4]);
+  assert.deepEqual([paintedOval.rx, paintedOval.ry], [3, 3]);
+  assert.deepEqual([paintedPlain.rx, paintedPlain.ry], [0, 0]);
+  // An element that a picture never holds, or an svg with a fit of its own,
+  // is left out and counted: a saving stops on it.
+  const odd = view.paintPlan(
+    element("svg", { width: 10, height: 10 }, [
+      element("image", { href: "x.png" }),
+      element("svg", { width: 5, height: 5, viewBox: "0 0 10 5", preserveAspectRatio: "none" }, [element("rect", { width: 1, height: 1 })]),
+      element("rect", { width: 1, height: 1 }),
+    ]),
+  );
+  assert.equal(odd.left, 2);
+  assert.equal(odd.items[0].items.length, 1);
 });

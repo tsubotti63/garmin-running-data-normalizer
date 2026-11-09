@@ -829,8 +829,10 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # from O1, the two items plotted against each other; from P1, the
         # item of a distribution; from R1, the panels of a picture (all, or one
         # and which), its colors (two), and its marks; from T1, the words of the
-        # name of the conditions, and their distance and duration, from and to.
-        self.assertEqual(len(fields), 34)
+        # name of the conditions, and their distance and duration, from and to;
+        # from v2.3.0 X5, the format of a picture (two) and the size of a PNG
+        # (three).
+        self.assertEqual(len(fields), 39)
         for field in fields:
             with self.subTest(field=field.get("id")):
                 self.assertTrue(field.get("id") in labelled or field.get("aria-label") or field.get("aria-labelledby"))
@@ -1336,7 +1338,8 @@ class GuiViewPageStructureTest(unittest.TestCase):
                 "const span = race ? raceSpan(answer.weeks, answer.grain) : compareSpan(answer.grain, answer.month, answer.years);",
                 "slotName: (slot) => raceSlotName(slot, answer.weeks, answer.grain),",
             ),
-            "drawCompareAxis": ("const ticks = race ? raceTicks(context.weeks, context.grain) : compareTicks(context.grain, context.month, newest, state.language);",),
+            # From v2.3.0 X5, thinned for a PNG only.
+            "drawCompareAxis": ("let ticks = race ? raceTicks(context.weeks, context.grain) : compareTicks(context.grain, context.month, newest, state.language);",),
             "renderCompareRead": ('nodes.push(compareSlotText(context, at), element("span", "no-value", t(compareMissingKey(year, at))));',),
             "buildCompareTable": ('const text = cell.notInSpan ? t("view.compare.not_in_span_cell") : cell.outside ? "—" :',),
             "renderCompare": (

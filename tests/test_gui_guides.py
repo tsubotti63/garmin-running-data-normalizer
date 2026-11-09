@@ -3060,7 +3060,8 @@ class GuiGuideTest(unittest.TestCase):
         for phrase in (
             "the page cannot know whether or where the browser saves it, so the bar at the bottom says that it was handed.",
             "Nothing is sent to the server or anywhere else, and the Content-Security-Policy stays as it is.",
-            "Only SVG is made; PNG and the other formats are out of scope.",
+            # From v2.3.0, a PNG too (stage X5).
+            "Before v2.3.0 only SVG was made (a PNG from stage X5, below); other formats are out of scope.",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, part)
@@ -3072,6 +3073,115 @@ class GuiGuideTest(unittest.TestCase):
         privacy = " ".join(section(design, "Privacy").split())
         self.assertIn("From v2.2.0 a picture saved from the view page shows the dates and values of its charts, and the names of the marks where they are put in and by race day;", privacy)
         self.assertIn("A picture saved is the person's own file, which \"Forget the remembered settings…\" does not remove.", privacy)
+
+    def test_guides_give_a_png_of_the_size_of_a_post(self) -> None:
+        # v2.3.0 X5 (the person's choice "1 B と案 1"): the section of saving as
+        # an image gives the format and the sizes of a PNG, the charts drawn
+        # again, what does not fit, the first choices, and the name of its
+        # file, in both languages, and the scene of keeping a comparison as an
+        # image says it in one sentence; every word quoted is a word of the
+        # page; the help of the page says it in short.
+        headings = {"en": "### Saving as an image (from 2.2.0)\n", "ja": "### 画像で保存（2.2.0 から）\n"}
+        says = {
+            "en": (
+                "(From 2.3.0) With **PNG** under **Format** in the window, the picture becomes a PNG in the sizes of social media posts seen on a phone: choose **4:5 portrait (1080×1350)** (the first), **1:1 square (1080×1080)**, or **9:16 portrait (1080×1920)** under **Size**. So that its words read on a phone, a PNG draws the charts again about as wide as the screen of a phone and makes them 2.5 times as fine (the numbers are those of the page; only the room they are drawn in changes; the words of the time axis are thinned at even steps where they would meet).",
+                "A PNG shares its whole frame among the panels, so with many panels each chart is lower; where they do not fit, the window says so (show fewer panels, or choose a taller size). The format and the size go back to the first ones too each time the window opens (SVG, 4:5; nothing is remembered). The name of a PNG is that of the SVG with its size at the end (for example `garmin-view_2025-10-22_2026-10-21_dist_4x5.png`).",
+            ),
+            "ja": (
+                "（2.3.0 から）窓の「形式」で「PNG」を選ぶと、スマホで見る SNS の投稿の大きさの PNG の画像にできます。「大きさ」で「4:5 縦長（1080×1350）」（初め）・「1:1 正方形（1080×1080）」・「9:16 縦長（1080×1920）」を選びます。スマホで文字が読めるように、PNG では図をスマホの画面ほどの広さで描き直し、2.5 倍の細かさにします（数はページと同じで、描く広さだけが変わります。時間の軸の文字は、重ならないように同じ間で間引きます）。",
+                "PNG では、段がいくつでも枠いっぱいに分けて置くので、段が多いと 1 つの段の図は低くなります。収まらないときは、窓がそう言います（段を減らすか、縦に長い大きさを選びます）。形式と大きさも、窓を開くたびに初めの形（SVG・4:5）に戻ります（覚えません）。PNG のファイルの名前は、SVG の名前の終わりに大きさが付きます（例 `garmin-view_2025-10-22_2026-10-21_dist_4x5.png`）。",
+            ),
+        }
+        scene = {
+            "en": "Choose the colors under **Colors**, and press **Save**. (From 2.3.0) For a picture to show on a phone, choose **PNG** under **Format** and a size under **Size** first.",
+            "ja": "「色」を選び、「保存」を押します。（2.3.0 から）スマホで見せる画像にするなら、その前に「形式」で「PNG」を選び、「大きさ」を選びます。",
+        }
+        helps = {
+            "en": " From 2.3.0, “PNG” under “Format” in the window makes the picture a PNG in the sizes of posts seen on a phone (4:5, 1:1, or 9:16).",
+            "ja": "（2.3.0 から）窓の「形式」で「PNG」を選ぶと、スマホで見る SNS の投稿の大きさ（4:5・1:1・9:16）の画像にできます。",
+        }
+        for language in ("en", "ja"):
+            text = GUIDES[language].read_text(encoding="utf-8")
+            start = text.index(headings[language])
+            end = text.find("\n### ", start + 1)
+            part = text[start:end]
+            reads = (lambda value: " ".join(value.split())) if language == "en" else (lambda value: re.sub(r"\n *", "", value))
+            whole = reads(text)
+            for phrase in says[language]:
+                with self.subTest(language=language, phrase=phrase[:40]):
+                    self.assertIn(phrase, reads(part))
+            # After the first choices of the window, in this order.
+            first = {"en": "its choices are the first ones again: all the panels, the light colors, and no marks (nothing is remembered).", "ja": "窓を開くたびに、選びは初めの形（並べた段すべて・明るい色・印は入れない）に戻ります（覚えません）。"}[language]
+            self.assertLess(reads(part).index(first), reads(part).index(says[language][0]))
+            self.assertLess(reads(part).index(says[language][0]), reads(part).index(says[language][1]))
+            with self.subTest(language=language, part="scene"):
+                self.assertIn(scene[language], whole)
+            messages = catalog(language)
+            words = set(messages.values())
+            patterns = (r"\*\*([^*]+)\*\*",) if language == "en" else (r"「([^」]+)」",)
+            for value in (*says[language], scene[language]):
+                for pattern in patterns:
+                    for word in re.findall(pattern, value):
+                        with self.subTest(language=language, quoted=word):
+                            self.assertIn(word, words)
+            with self.subTest(language=language, part="help"):
+                self.assertTrue(messages["view.help.save_text"].endswith(helps[language]))
+        # The words of the window, as the guides quote them.
+        ja, en = catalog("ja"), catalog("en")
+        self.assertEqual([ja[key] for key in ("view.save.format_choice", "view.save.format_png", "view.save.size")], ["形式", "PNG", "大きさ"])
+        self.assertEqual([en[key] for key in ("view.save.format_choice", "view.save.format_png", "view.save.size")], ["Format", "PNG", "Size"])
+
+    def test_the_design_gives_a_png_of_the_size_of_a_post(self) -> None:
+        # v2.3.0 X5: the design gives the PNG after the saving of R1 and R2,
+        # each part tied to the code that does it, and its privacy.
+        design = (ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8")
+        flowing_design = " ".join(design.split())
+        saving = flowing_design.index("- Saving as an image (stages R1 and R2):")
+        png = flowing_design.index("- A PNG of the size of a post (stage X5 of v2.3.0, the person's choice \"B and list 1\" of the samples):")
+        after = flowing_design.index("- The colors of the years compared and a year highlighted (stage L3):")
+        self.assertLess(saving, png)
+        self.assertLess(png, after)
+        part = flowing_design[png:after]
+        for phrase in (
+            "`SAVE_SIZES`",
+            "when **Save** is pressed only, by the functions that draw them on the page, given a copy of their panel or row with a box out of the page in place of their plot, or the box and a size: the page keeps its own, and the numbers are those of its answers; only the room they are drawn in changes.",
+            "A first layout with charts 100 high (a plot or a distribution 120, the least it is drawn at) measures the rest of the picture, and a second one makes the charts fill the frame (`saveFrameHeights`);",
+            "a chart lower than 40 (120 for two items plotted or a distribution, the least they are drawn at) does not fit, and the window says so (fewer panels, or a taller size; for 9:16, fewer panels).",
+            "The strips of a calendar get squares as far apart as fit the width of the frame (7), never more than on the page, nor less: nearer, the outlines of the days without a record turn to dots and the names of the months meet, so a calendar higher than its frame does not fit.",
+            "The words of a picture wrap where a line may end (`saveLines`): before a space, but not one between a figure and a unit or a count (as in \"16 週\" or \"700.1 km\"; before hiragana, as in \"10–20 は\", it may), and, in Japanese, next to its letters, but never inside a word of Latin letters or figures, after an opening bracket or quotation mark or the triangle of a highest, or before a closing one, a mark of punctuation, or a small kana",
+            "`thinTicks`",
+            "`paintPlan`",
+            "`paintItems`",
+            "an element with an opacity below 1 (the years not highlighted) is painted on a layer of its own and laid on with that opacity; any other element stops the saving.",
+            "The PNG is made at once (`toDataURL`; `toBlob` would wait), so that it is handed to the browser in the press of **Save** as the SVG is; nothing is loaded as an image, so the Content-Security-Policy stays as it is.",
+            "`savePictureName`",
+            "`saveFooterPieces`",
+        ):
+            with self.subTest(phrase=phrase[:40]):
+                self.assertIn(phrase, part)
+        page = (STATIC_ROOT / "view.mjs").read_text(encoding="utf-8")
+        flow = (STATIC_ROOT / "view_flow.mjs").read_text(encoding="utf-8")
+        for code in (
+            "export const SAVE_SIZES = {",
+            '"4x5": { width: 432, height: 540 },',
+            "export const SAVE_PNG_SCALE = 2.5;",
+            "export const SAVE_FIRST_CHART = 100;",
+            "export const SAVE_PNG_LOW = 40;",
+            "const SAVE_DRAWN_LOW = 120;",
+            "export function saveFrameHeights(",
+            "export function saveLines(",
+            "function lineEnds(before, after, next) {",
+            "export function thinTicks(",
+            "export function paintPlan(",
+            "function paintItems(",
+            'canvas.toDataURL("image/png")',
+            "export function savePictureName(",
+            "export function saveFooterPieces(",
+        ):
+            with self.subTest(code=code):
+                self.assertIn(code, page + flow)
+        privacy = " ".join(section(design, "Privacy").split())
+        self.assertIn("From v2.3.0 (stage X5) a PNG is made in the page the same way, painted from the picture, with no place or other data of the machine in it.", privacy)
 
     def test_the_design_gives_the_generation_of_the_settings(self) -> None:
         # v2.2.0 U2: the design gives the generation of the settings, each part
