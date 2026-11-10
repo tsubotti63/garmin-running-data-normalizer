@@ -1402,7 +1402,21 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   what it was asked for (the ticket, the period, the types, the conditions,
   and the items), and the answers on their way are dropped where the window
   hides and where an output starts opening. The windows under the row above
-  the panels end above the bar at the bottom of the page.
+  the panels end above the bar at the bottom of the page. From stage X12d1 of
+  v2.3.0, every window of the right column (the marks, the summary, saving,
+  the laps, the menu of the other views, and the picker of the items) stays
+  inside the column, which hides what goes out of it: no wider than the
+  column inside its padding, moved back into it where its place goes out of
+  its left or right, and, where less than 240 pixels (or what it holds, where
+  less) are left under its row above the bar, moved up inside the column, no
+  higher than its top (`fitPop`, `popPlace`); the menu keeps its height, and
+  the tables of the laps keep their heads and two rows or so, as that of the
+  summary (`fitLapsWindow`). Where the window is narrow, the kinds of the
+  laps and the heads over them keep one line, and the tables scroll
+  sideways. A narrow window cut their left before (from a width of the page
+  of 1000 pixels for the summary and the laps, and of 900 for the marks),
+  and the picker of the items, with the item shelf folded, lost its end
+  under the bar.
 - Saving as an image (stages R1 and R2): **Save as image…** after **Summary…**
   in the row above the panels, and after **Show as a table** in the bars of
   comparing years, two items plotted, and a distribution, opens a window that
