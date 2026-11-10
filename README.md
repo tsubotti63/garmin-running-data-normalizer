@@ -104,18 +104,18 @@ Snapshot Store are those of v2.2.0; v2.2.1 does not open an output that
 v2.2.0 made. See [What v2.2.1 fixes](#what-v221-fixes).
 
 Implementation candidate: **v2.3.0rc2** (the second release candidate of
-v2.3.0, for TestPyPI; Production PyPI and the latest GitHub Release stay
-v2.2.1). It is a test version, for checking v2.3.0 before its release: for
-normal use, install the stable release v2.2.1. It adds to the view page the
-laps of an activity and the work laps of the shoes (read from the FIT files of
-the Snapshot Store only when asked for), the race days by day and over 2 or 4
-weeks, the highest of each year, pictures saved as PNG in the sizes of posts,
-why a period of a panel left records out, and the records that changed since
-the output before, and it shows the cadence in steps per minute; for the same
-input, timezone, and options, the normalization, its outputs, and the Snapshot
-Store are those of v2.2.1. Only the version that an output records, and what
-is computed from it, differ, and v2.3.0rc2 does not open an output of v2.2.1.
-**Install** below says how to try it once it is published.
+v2.3.0, published on TestPyPI; Production PyPI and the latest GitHub Release
+stay v2.2.1). It is a test version, for checking v2.3.0 before its release:
+for normal use, install the stable release v2.2.1. It adds to the view page
+the laps of an activity and the work laps of the shoes (read from the FIT
+files of the Snapshot Store only when asked for), the race days by day and
+over 2 or 4 weeks, the highest of each year, pictures saved as PNG in the
+sizes of posts, why a period of a panel left records out, and the records that
+changed since the output before, and it shows the cadence in steps per minute;
+for the same input, timezone, and options, the normalization, its outputs, and
+the Snapshot Store are those of v2.2.1. Only the version that an output
+records, and what is computed from it, differ, and v2.3.0rc2 does not open an
+output of v2.2.1. **Install** below says how to try it.
 
 v2.2.0 adds to the view page layouts of items, comparisons of years (also by
 race day, and as a calendar), marks and the list of the activities of a
@@ -286,8 +286,8 @@ gives one line for macOS and one for Windows PowerShell that make a virtual
 environment, install this app in it, and make the icon.
 
 The release candidate v2.3.0rc2 is a test version, for checking v2.3.0 before
-its release; for normal use, install the stable release as above. Once it is
-published on TestPyPI, install it in a virtual environment of its own, and
+its release; for normal use, install the stable release as above. It is
+published on TestPyPI. Install it in a virtual environment of its own, and
 start the GUI with the Python of that environment, without an icon. The
 lines give Production PyPI too, so that pip finds the dependencies that
 TestPyPI may not provide, such as `tzdata` on Windows; pip looks for each
