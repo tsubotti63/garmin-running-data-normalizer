@@ -1,5 +1,111 @@
 # Release Readiness
 
+## v2.3.0rc1 release candidate
+
+Version `2.3.0rc1`, the first release candidate of v2.3.0, is published on
+TestPyPI only, for the checks on macOS and on Windows before v2.3.0. It is
+v2.2.1 with the stages X1 to X7, X9b to X11, and X12p (#223 to #235): the laps
+of an activity and the work laps of the shoes, read from the FIT files of the
+Snapshot Store only when asked for; the race days by day and over 2 or 4
+weeks; the highest of each year and of each race; pictures saved as PNG in the
+sizes of posts; why a period of a panel left records out; the records that
+changed since the output before; the cadence in steps per minute; a question
+that closes by Escape wherever the focus is; a half-written file that stays on
+Windows, told; the sizes of some tables and windows; and the privacy sentences
+of the guides. Production PyPI and the latest GitHub Release stay v2.2.1, and
+no GitHub Release was made for the release candidate.
+
+From v2.2.1, the package changes in 23 files under `src`: the version, the lap
+kinds of a FIT file, the reading of the FIT files of the store and the check
+of its metadata, the work laps of the shoes, the list of the earlier outputs,
+the server, the settings and the views of the GUI, the pages and the words of
+both catalogs, the comparison of two outputs, and the data and the series of
+the view page. For the same input, timezone, and options, the processing of a
+run, the outputs, and the Snapshot Store are those of v2.2.1, and the series
+command writes the same files; only the version that an output records, and
+what is computed from it, differ:
+
+```text
+$ git diff --stat v2.2.1 v2.3.0rc1 -- src
+ src/garmin_running_data_normalizer/__init__.py     |    2 +-
+ .../fit/lap_kinds.py                               |  250 +++
+ .../gui/fit_reading.py                             | 1051 +++++++++++
+ src/garmin_running_data_normalizer/gui/outputs.py  |   39 +
+ src/garmin_running_data_normalizer/gui/server.py   |  276 ++-
+ src/garmin_running_data_normalizer/gui/settings.py |  101 +-
+ .../gui/shoe_work.py                               |  220 +++
+ .../gui/static/app.mjs                             |  152 +-
+ .../gui/static/flow.mjs                            |  150 +-
+ .../gui/static/i18n.mjs                            |   10 +
+ .../gui/static/i18n/en.json                        |  220 ++-
+ .../gui/static/i18n/ja.json                        |  220 ++-
+ .../gui/static/index.html                          |    4 +
+ .../gui/static/styles.css                          |    7 +
+ .../gui/static/view.css                            |  266 +++
+ .../gui/static/view.html                           |   83 +-
+ .../gui/static/view.mjs                            | 1899 ++++++++++++++++++--
+ .../gui/static/view_flow.mjs                       | 1435 ++++++++++++++-
+ src/garmin_running_data_normalizer/gui/views.py    |   79 +-
+ .../snapshot/store.py                              |   13 +-
+ src/garmin_running_data_normalizer/view/changes.py |  345 ++++
+ src/garmin_running_data_normalizer/view/data.py    |    9 +-
+ src/garmin_running_data_normalizer/view/series.py  |  135 +-
+ 23 files changed, 6718 insertions(+), 248 deletions(-)
+```
+
+The Windows CI ran every Windows step with v2.3.0rc1 and Python 3.11, and the
+Windows tests and the isolated wheel installation with Python 3.15. The CI ran
+the whole test suite with Python 3.15 on Linux and macOS as well. After this
+publication, a macOS machine checks v2.3.0rc1, and a Windows machine checks
+what 2.3.0 does on Windows only (the half-written files of a write and the
+reading of the Snapshot Store), as the Human maintainer decided on 2026-11-09.
+The GUI guides at the `v2.3.0rc1` tag, which the links of the GUI's help panel
+open, give the lines that install v2.2.1 from Production PyPI and say "from
+2.3.0" where they describe what 2.3.0 changes; the README says how to try the
+release candidate from TestPyPI.
+
+The release source is `ec0cb2e506fd8ca44e1ebabce006d5f670b8240f` (#236). The
+annotated `v2.3.0rc1` tag (tag object
+`005ad07fba3fae4ec02f653b94efec3500c18eb0`) points to it, so that the links of
+the GUI's help panel open the documents of that tag. TestPyPI publication
+through Trusted Publishing/OIDC on 2026-11-10 JST and the publish workflow's
+exact-version TestPyPI install verification are complete.
+
+The release source passed main CI run `42725802563` (`test` and
+`test-python-3-15` on Ubuntu, `macos-python-3-15`, and `windows-runtime` and
+`windows-python-3-15`) and CodeQL run `42725801995`. A build-only publish
+workflow run (`42727282642`) on the release source passed with every upload
+job skipped. Publish workflow run `42733125388` then built and validated the
+exact source, with the same steps passing (the repository checks, the page
+tests, and the checks of the files of the wheel and of the source distribution
+after an isolated installation), and published to TestPyPI; the PyPI jobs were
+skipped. Both runs used the `ubuntu-26.04` runner image (20261101.186.1),
+Python 3.11.18, and Node.js 24.22.2: 1,897 tests passed and 19 were skipped,
+as on Ubuntu in the CI, and 342 page tests passed. The Sigstore transparency
+log (Rekor) was read before the run and answered. The publication and the tag
+ran under one Human approval given after their values were shown. The
+`testpypi` Environment deployment was Human-authorized, and the approval was
+submitted once through the GitHub API on the Human's instruction and accepted;
+what waited and the approvals of the run were read again after it.
+`TESTPYPI_PUBLISH_APPROVED` was set to `true` for the publish run and returned
+to `false` once its approval gate had passed, before the deployment was
+approved.
+
+The SHA-256 checksums recorded by that run match TestPyPI: wheel
+`25cdb44610329070e8be68ba99bb9f3bee3c179e225838a0e97ed9cce4853589` and source
+distribution
+`f94d5df2651f343c2dc950c9b6524ce2809d92c636b9908132e8815ceb18b111`. Each file
+carries a PEP 740 publish attestation from `publish-pypi.yml` of
+`tsubotti63/garmin-running-data-normalizer` in the `testpypi` Environment,
+through GitHub Trusted Publishing. On TestPyPI, the wheel is 1,135,628 bytes,
+the size of the wheel built from the release source on macOS before the
+publication, and the source distribution is 1,796,294 bytes, 1,212 bytes
+smaller than that build (1,797,506 bytes), as the distributions are built
+again in each run and are not byte-reproducible. The build-only run produced
+different checksums for the same reason; only the publish run's artifacts were
+published. The documents at the `v2.3.0rc1` tag describe the installation of
+the release candidate from TestPyPI in the words used before the publication.
+
 ## v2.2.1 stable release
 
 Version `2.2.1` is published as the release that fixes small things of the
@@ -1119,6 +1225,8 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
   skipped
 - Production PyPI `1.7.1`: Published and exact-version install verified by the
   publish workflow
+- TestPyPI `2.3.0rc1`: Published and exact-version install verified by the
+  publish workflow
 - TestPyPI `2.2.1rc1`: Published and exact-version install verified by the
   publish workflow
 - TestPyPI `2.2.0rc2`: Published and exact-version install verified by the
@@ -1139,7 +1247,7 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
   publish workflow
 - TestPyPI `2.0.0rc1`: Published and exact-version install verified by the
   publish workflow
-- Release candidate tags: `v2.2.1rc1`, `v2.2.0rc2`, `v2.2.0rc1`,
+- Release candidate tags: `v2.3.0rc1`, `v2.2.1rc1`, `v2.2.0rc2`, `v2.2.0rc1`,
   `v2.1.0rc1`, `v2.0.1rc1`, `v2.0.0rc5`, `v2.0.0rc4`, `v2.0.0rc3`,
   `v2.0.0rc2`, and `v2.0.0rc1`, without a GitHub Release
 - Trusted Publishing: Configured for protected `testpypi` and `pypi`
@@ -1147,13 +1255,13 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 
 The repository is public and under ongoing maintenance. Existing release tags
 and GitHub Releases remain immutable. v2.2.1 is the current stable release;
-v2.2.1rc1, v2.2.0rc2, v2.2.0rc1, v2.1.0rc1, v2.0.1rc1, v2.0.0rc5, v2.0.0rc4,
-v2.0.0rc3, v2.0.0rc2, and v2.0.0rc1 are release candidates on TestPyPI only;
-v2.2.0, v2.1.0, v2.0.1, v2.0.0, v1.7.1, v1.7.0, v1.6.0, v1.5.0, v1.4.1,
-v1.4.0, and v1.3.3 are historical releases. The v2.2.1rc1, v2.2.0rc2, v2.2.0rc1,
-v2.1.0rc1, v2.0.1rc1, v2.0.0rc5, v2.0.0rc4, v2.0.0rc3, v2.0.0rc2, and
-v2.0.0rc1 tag and TestPyPI publication evidence was recorded only after the
-corresponding external state was observed.
+v2.3.0rc1, v2.2.1rc1, v2.2.0rc2, v2.2.0rc1, v2.1.0rc1, v2.0.1rc1, v2.0.0rc5,
+v2.0.0rc4, v2.0.0rc3, v2.0.0rc2, and v2.0.0rc1 are release candidates on
+TestPyPI only; v2.2.0, v2.1.0, v2.0.1, v2.0.0, v1.7.1, v1.7.0, v1.6.0, v1.5.0,
+v1.4.1, v1.4.0, and v1.3.3 are historical releases. The v2.3.0rc1, v2.2.1rc1,
+v2.2.0rc2, v2.2.0rc1, v2.1.0rc1, v2.0.1rc1, v2.0.0rc5, v2.0.0rc4, v2.0.0rc3,
+v2.0.0rc2, and v2.0.0rc1 tag and TestPyPI publication evidence was recorded
+only after the corresponding external state was observed.
 The v2.2.1, v2.2.0, v2.1.0, v2.0.1, v2.0.0, v1.7.1, v1.7.0, v1.6.0, v1.5.0,
 v1.4.1, v1.4.0, and v1.3.3 tag, GitHub Release, and Production PyPI
 publication evidence was recorded only after the corresponding external state
