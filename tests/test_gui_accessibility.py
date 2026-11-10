@@ -2449,8 +2449,10 @@ class GuiViewPageStructureTest(unittest.TestCase):
                 "const bar = ui.viewBar.getBoundingClientRect();",
                 "const bottom = bar.height > 0 ? Math.min(window.innerHeight, bar.top) : window.innerHeight;",
                 # No more than the room above the bar (Codex's review of the
-                # diff of Q1: 240 pixels at least went under it).
-                "pop.style.maxHeight = `${Math.max(0, Math.floor(bottom - pop.getBoundingClientRect().top - 12))}px`;",
+                # diff of Q1: 240 pixels at least went under it), from the
+                # top of the window where it shows (stage X12d1 of v2.3.0:
+                # popPlace, which keeps POP_GAP above the bar).
+                "pop.style.maxHeight = `${place.maxHeight}px`;",
             ),
             "renderRecap": (
                 "  if (state.view === null && state.stop !== null) {\n    state.recapOpen = false;\n  }",
@@ -2560,6 +2562,91 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertRegex(view_css, r"\.recap-body thead th \{\s*position: sticky;\s*top: 0;\s*z-index: 1;\s*background: var\(--surface\);")
         self.assertIn('viewBar: document.querySelector(".view-bar"),', self.script)
 
+    def test_the_windows_of_the_right_column_stay_inside_it(self) -> None:
+        # Stage X12d1 of v2.3.0: the right column hides what goes out of it,
+        # and in a narrow window the windows under the row above the panels
+        # (the summary, the laps, the marks, the menu of the other views, and
+        # the picker of the items) went out of its left and were cut, or
+        # were left too low to read; each now goes through fitPop, which
+        # makes it no wider than the column, moves it back into the column,
+        # and up inside it where little room is left under its row
+        # (popPlace of view_flow.mjs, whose numbers the tests of node hold).
+        fit = re.search(r"function fitPop\(pop, height = true\) \{(.*?)\n\}", self.script, re.DOTALL)
+        assert fit is not None
+        for line in (
+            "const stage = ui.stage.getBoundingClientRect();",
+            "const style = getComputedStyle(ui.stage);",
+            "left: stage.left + (parseFloat(style.paddingLeft) || 0),",
+            "right: stage.right - (parseFloat(style.paddingRight) || 0),",
+            "top: stage.top + (parseFloat(style.paddingTop) || 0),",
+            # Measured as its rules place it, no wider than the column.
+            '  pop.style.translate = "";\n  pop.style.maxWidth = `${Math.max(0, column.right - column.left)}px`;\n  const box = pop.getBoundingClientRect();',
+            "const place = popPlace({ left: box.left, right: box.right, top: box.top }, column, bottom, height ? pop.scrollHeight : 0);",
+            "const dy = height ? place.dy : 0;",
+            'pop.style.translate = place.dx === 0 && dy === 0 ? "" : `${place.dx}px ${-dy}px`;',
+            "  if (height) {\n    pop.style.maxHeight = `${place.maxHeight}px`;\n  }",
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, fit.group(1))
+        self.assertIn("  // Where a window of the right column goes (stage X12d1 of v2.3.0).\n  popPlace,\n} from \"./view_flow.mjs\";", self.script)
+        for name, line in (
+            ("fitRecapWindow", "fitPop(ui.recapPop);"),
+            ("fitMarksWindow", "fitPop(ui.marksPop);"),
+            ("fitSaveWindow", "fitPop(ui.savePop);"),
+            ("renderLaps", "  renderLapsBody(laps, state.lapsAnswer);\n  fitLapsWindow();"),
+            ("fitLapsWindow", "  if (!ui.lapsPop.hidden) {\n    ui.lapsBody.style.minHeight = \"\";\n    ui.lapsBody.style.minHeight = `${Math.min(ui.lapsBody.scrollHeight, RECAP_KEPT)}px`;\n  }\n  fitPop(ui.lapsPop);"),
+            # The menu keeps its height; only into the column.
+            ("renderOtherViews", "  fitPop(ui.otherMenu, false);"),
+            ("renderPicker", "    fitPop(ui.picker);\n    return;\n  }"),
+        ):
+            found = re.search(rf"function {name}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
+            assert found is not None, name
+            with self.subTest(function=name):
+                self.assertIn(line, found.group(1))
+        # Last, after what they hold is drawn.
+        for name, last in (("renderOtherViews", "\n  fitPop(ui.otherMenu, false);"), ("renderPicker", "\n  fitPop(ui.picker);")):
+            found = re.search(rf"function {name}\(.*?\) \{{(.*?)\n\}}", self.script, re.DOTALL)
+            assert found is not None, name
+            with self.subTest(last=name):
+                self.assertTrue(found.group(1).endswith(last))
+        for line in (
+            'window.addEventListener("resize", fitMarksWindow);',
+            'window.addEventListener("resize", fitRecapWindow);',
+            'window.addEventListener("resize", fitLapsWindow);',
+            'window.addEventListener("resize", fitSaveWindow);',
+            'window.addEventListener("resize", () => fitPop(ui.otherMenu, false));',
+            'window.addEventListener("resize", () => fitPop(ui.picker));',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.script)
+        view_css = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        # The picker scrolls inside the height that fitPop gives it.
+        self.assertRegex(view_css, r"\.picker \{\s*top: 100%;\s*left: 0;\s*width: 540px;\s*margin-top: 6px;\s*/\*[^*]*\*/\s*overflow: auto;\s*\}")
+        # The kinds of the laps and their heads keep one line in a narrow
+        # window, the tables scrolling sideways (in Japanese, a kind would
+        # break after every letter where the window of the laps is as narrow
+        # as the column).
+        self.assertRegex(view_css, r"\.laps-body \.t th\.laps-kind,\s*\.laps-body \.t td\.laps-kind \{\s*white-space: nowrap;\s*\}")
+        # The button of a window keeps one line, the title breaking before it.
+        self.assertRegex(view_css, r"\.pop-head button \{\s*/\*[^*]*\*/\s*flex: none;\s*margin-left: auto;\s*white-space: nowrap;\s*\}")
+        # The column hides what goes out of it, which is why the windows are kept inside it.
+        self.assertRegex(view_css, r"\.stage \{[^}]*position: relative;[^}]*overflow: hidden;")
+        design = " ".join((ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        self.assertIn(
+            "From stage X12d1 of v2.3.0, every window of the right column (the marks, the summary, saving, the laps, "
+            "the menu of the other views, and the picker of the items) stays inside the column, which hides what goes "
+            "out of it: no wider than the column inside its padding, moved back into it where its place goes out of its "
+            "left or right, and, where less than 240 pixels (or what it holds, where less) are left under its row above "
+            "the bar, moved up inside the column, no higher than its top (`fitPop`, `popPlace`); the menu keeps its height, "
+            "and the tables of the laps keep their heads and two rows or so, as that of the summary (`fitLapsWindow`).",
+            design,
+        )
+        self.assertIn(
+            "Where the window is narrow, the kinds of the laps and the heads over them keep one line, and the tables "
+            "scroll sideways.",
+            design,
+        )
+
     def test_the_laps_of_a_row_of_the_list_are_a_window(self) -> None:
         # Stage X10 of v2.3.0 (the person's answer 「2 C と最大心拍も」), in the
         # page and its script, which no test runs: each row of the list has a
@@ -2663,7 +2750,9 @@ class GuiViewPageStructureTest(unittest.TestCase):
                     self.assertIn(line, found.group(1))
         self.assertIn('ui.lapsClose.addEventListener("click", () => closeLaps(true));', self.script)
         # Its height follows the window of the browser (Codex's 4).
-        self.assertIn('  window.addEventListener("resize", () => fitPop(ui.lapsPop));', self.script)
+        # From stage X12d1 of v2.3.0, through fitLapsWindow, which keeps its
+        # tables as those of the summary.
+        self.assertIn('  window.addEventListener("resize", fitLapsWindow);', self.script)
         self.assertIn('  ui.lapsPop.addEventListener("keydown", (event) => {\n    if (event.key === "Escape") {\n      event.preventDefault();\n      closeLaps(true);', self.script)
         style = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
         self.assertIn('.list-table button.list-laps-button[aria-disabled="true"] {\n  opacity: 0.55;\n  cursor: not-allowed;\n}', style)

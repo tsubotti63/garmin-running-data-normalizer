@@ -438,7 +438,11 @@ button.small {
 }
 
 .pop-head button {
+  /* On one line in a narrow window too, the title breaking before it
+     (stage X12d1 of v2.3.0: "Close" broke into a letter a line). */
+  flex: none;
   margin-left: auto;
+  white-space: nowrap;
 }
 
 .filters-hint {
@@ -683,6 +687,14 @@ button.small {
 .laps-body th.laps-kind,
 .laps-body td.laps-kind {
   text-align: left;
+}
+
+/* In a narrow window (stage X12d1 of v2.3.0), the kinds of the laps and their
+   heads keep one line: the tables scroll sideways rather than break a word of
+   Japanese after every letter. */
+.laps-body .t th.laps-kind,
+.laps-body .t td.laps-kind {
+  white-space: nowrap;
 }
 
 .laps-body .list-table {
@@ -1203,6 +1215,9 @@ button.small {
   left: 0;
   width: 540px;
   margin-top: 6px;
+  /* No higher than the room that fitPop gives it, inside the right column
+     (stage X12d1 of v2.3.0); what is below scrolls. */
+  overflow: auto;
 }
 
 .picker-groups {

@@ -5151,3 +5151,35 @@ export function changesNotes(answer) {
   }
   return [message("view.changes.note"), message("view.changes.note_snapshots"), message("view.changes.note_ids")];
 }
+
+// Where a window of the right column of the view page goes (stage X12d1 of
+// v2.3.0). The column hides what goes out of it, and a window under the row
+// above the panels was cut in a narrow window (its left, from a width of
+// 1000 pixels of the page) or left too low to read (60 pixels at 640).
+// ``pop`` is the box of the window as its rules place it (its left, right,
+// and top, in pixels of the page; the page first makes it no wider than the
+// column), ``column`` the box of the column inside its padding (its left,
+// right, and top), ``floor`` the top of the bar at the bottom of the page
+// (or the bottom of the window of the browser), and ``need`` the height of
+// what the window holds. The window moves back into the column where it goes
+// out of its left or right (``dx``, to the right where positive) and, where
+// less than POP_ROOM pixels (or what it holds, where less) are left under
+// it above the floor, up inside the column (``dy``), no higher than the top
+// of the column; ``maxHeight`` is the room from its top then down to the
+// floor, POP_GAP above it, as before. A window inside the column, as the
+// window of the saving that the page places itself, does not move.
+export const POP_ROOM = 240;
+export const POP_GAP = 12;
+
+export function popPlace(pop, column, floor, need = POP_ROOM) {
+  let dx = 0;
+  if (pop.left < column.left) {
+    dx = column.left - pop.left;
+  } else if (pop.right > column.right) {
+    dx = Math.max(column.left - pop.left, column.right - pop.right);
+  }
+  const room = floor - pop.top - POP_GAP;
+  const wanted = Math.min(POP_ROOM, Math.max(0, need));
+  const dy = room < wanted ? Math.max(0, Math.min(pop.top - column.top, wanted - room)) : 0;
+  return { dx, dy, maxHeight: Math.max(0, Math.floor(floor - (pop.top - dy) - POP_GAP)) };
+}

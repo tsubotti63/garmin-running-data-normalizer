@@ -290,6 +290,8 @@ import {
   changesOutputs,
   changesTables,
   changesWhy,
+  // Where a window of the right column goes (stage X12d1 of v2.3.0).
+  popPlace,
 } from "./view_flow.mjs";
 import {
   PLOT_BOTTOM,
@@ -2391,13 +2393,33 @@ function marksAction(event) {
 // bottom of the page, which stays on the screen above it, and no further on
 // a low screen (stage Q1: the end of a window was under the bar at 1366x650,
 // and Codex's review of the diff: 240 pixels at least went under it too).
-function fitPop(pop) {
+// From stage X12d1 of v2.3.0 a window of the right column also stays inside
+// the column, which hides what goes out of it: no wider than the column,
+// moved back into it, and moved up inside it where a narrow window leaves
+// too little room under its row (popPlace); with ``height`` false (the menu
+// of the other views), only into the column, its height as it is.
+function fitPop(pop, height = true) {
   if (pop.hidden) {
     return;
   }
   const bar = ui.viewBar.getBoundingClientRect();
   const bottom = bar.height > 0 ? Math.min(window.innerHeight, bar.top) : window.innerHeight;
-  pop.style.maxHeight = `${Math.max(0, Math.floor(bottom - pop.getBoundingClientRect().top - 12))}px`;
+  const stage = ui.stage.getBoundingClientRect();
+  const style = getComputedStyle(ui.stage);
+  const column = {
+    left: stage.left + (parseFloat(style.paddingLeft) || 0),
+    right: stage.right - (parseFloat(style.paddingRight) || 0),
+    top: stage.top + (parseFloat(style.paddingTop) || 0),
+  };
+  pop.style.translate = "";
+  pop.style.maxWidth = `${Math.max(0, column.right - column.left)}px`;
+  const box = pop.getBoundingClientRect();
+  const place = popPlace({ left: box.left, right: box.right, top: box.top }, column, bottom, height ? pop.scrollHeight : 0);
+  const dy = height ? place.dy : 0;
+  pop.style.translate = place.dx === 0 && dy === 0 ? "" : `${place.dx}px ${-dy}px`;
+  if (height) {
+    pop.style.maxHeight = `${place.maxHeight}px`;
+  }
 }
 
 function fitMarksWindow() {
@@ -2548,6 +2570,17 @@ function fitRecapWindow() {
     ui.recapBody.style.minHeight = `${Math.min(ui.recapBody.scrollHeight, RECAP_KEPT)}px`;
   }
   fitPop(ui.recapPop);
+}
+
+// The tables of the laps keep their heads and two rows or so as that of the
+// summary where the window is low, which then scrolls as a whole (stage
+// X12d1 of v2.3.0: in a narrow window, its notes took all its height).
+function fitLapsWindow() {
+  if (!ui.lapsPop.hidden) {
+    ui.lapsBody.style.minHeight = "";
+    ui.lapsBody.style.minHeight = `${Math.min(ui.lapsBody.scrollHeight, RECAP_KEPT)}px`;
+  }
+  fitPop(ui.lapsPop);
 }
 
 // The window of the summary: hidden while it cannot show, its state kept,
@@ -5851,7 +5884,7 @@ function renderLaps(viewing) {
     }
   }
   renderLapsBody(laps, state.lapsAnswer);
-  fitPop(ui.lapsPop);
+  fitLapsWindow();
 }
 
 // What the window holds: why the laps cannot be shown, with the reason to
@@ -8298,6 +8331,8 @@ function renderPicker(viewing) {
   ui.pickerFull.hidden = state.items.length < MAX_PANELS;
   const signature = JSON.stringify([state.items, state.language]);
   if (ui.pickerGroups.dataset.signature === signature) {
+    // Inside the right column, as the other windows (stage X12d1 of v2.3.0).
+    fitPop(ui.picker);
     return;
   }
   const focusedItem = ui.pickerGroups.contains(document.activeElement) ? document.activeElement.dataset.item : null;
@@ -8320,6 +8355,7 @@ function renderPicker(viewing) {
   if (focusedItem) {
     ui.pickerGroups.querySelector(`input[data-item="${focusedItem}"]`)?.focus();
   }
+  fitPop(ui.picker);
 }
 
 function renderStop(container, heading, lines, code, box) {
@@ -8619,6 +8655,9 @@ function renderOtherViews(usable) {
   ui.otherChanges.setAttribute("aria-disabled", String(changesNot !== null));
   ui.otherChangesWhy.hidden = changesNot === null;
   setText(ui.otherChangesWhy, changesNot === null ? "" : describe(changesNot));
+  // Inside the right column (stage X12d1 of v2.3.0: at 900 pixels its left
+  // was cut where the row broke under its button).
+  fitPop(ui.otherMenu, false);
 }
 
 function setOtherViews(open, focus = null) {
@@ -10892,7 +10931,11 @@ function connect() {
   window.addEventListener("resize", fitMarksWindow);
   window.addEventListener("resize", fitRecapWindow);
   // The window of the laps too (Codex's read of the diff of X10, 4).
-  window.addEventListener("resize", () => fitPop(ui.lapsPop));
+  window.addEventListener("resize", fitLapsWindow);
+  // The menu of the other views and the picker of the items, inside the
+  // right column (stage X12d1 of v2.3.0).
+  window.addEventListener("resize", () => fitPop(ui.otherMenu, false));
+  window.addEventListener("resize", () => fitPop(ui.picker));
   window.addEventListener("resize", fitSaveWindow);
   window.addEventListener("resize", fitTypesWindow);
   window.addEventListener("resize", fitConditionsWindow);
