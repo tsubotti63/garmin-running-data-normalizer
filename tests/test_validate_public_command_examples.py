@@ -144,7 +144,7 @@ def _add_install_line(root: Path, relative: str, line: str) -> None:
 # (stage D2); the stable release is installed from Production PyPI only
 # (stage E2b). While the source is itself a candidate, it is that candidate,
 # whose lines the README already holds (as for 2.2.0rc1 and 2.2.1rc1).
-CANDIDATE = "2.3.0rc1"
+CANDIDATE = "2.3.0rc2"
 
 
 def _as_candidate(root: Path) -> None:
