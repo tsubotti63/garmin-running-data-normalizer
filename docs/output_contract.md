@@ -3,6 +3,7 @@
 ## Status and authority
 
 - Current stable contract: v2.2.1
+- Implementation candidate: v2.3.0rc1 (not published)
 - Compatibility family: stable 2.x
 
 This document describes the current stable contract, v2.2.1, which keeps the

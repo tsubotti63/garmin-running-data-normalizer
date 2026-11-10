@@ -296,6 +296,22 @@ def test_a_release_candidate_says_how_to_try_it_beside_the_stable_release() -> N
         f"v{rc} のものは、落ちたときに残る書きかけのファイルも消します（Windows では 10 分たってから）。",
     ) if first_with_temporaries else ():
         assert sentence in japanese, sentence
+    # A candidate of 2.3.0 says what 2.3.0 adds beside v2.2.1: the FIT files
+    # of the store read only for the laps and the work laps, the comparison
+    # with the output before from the second output of the candidate, the 2
+    # or 4 weeks before a race day that v2.2.1 forgets, and Forget of either
+    # version with the half-written files (stage X12a of v2.3.0); the
+    # Japanese entry, which stays short, leaves them to Install.
+    first_with_fit = rc.startswith("2.3.0rc")
+    for sentence in (
+        f"Where v{rc} remembered 2 or 4 weeks before a race day, v{stable} forgets only that range and opens with 16 weeks.",
+        f"**Compare with the output before** compares two outputs of v{rc}, from the second one that it makes.",
+        f"The view page of v{rc} reads the FIT files of the Snapshot Store that the GUI remembers only when you open the "
+        "laps of an activity or count the work laps of the shoes, and writes nothing in the store.",
+        "**Forget the remembered settings…** of either version removes both files and the half-written files that a "
+        "write leaves when the app stops in the middle of it (on Windows, once they are ten minutes old).",
+    ) if first_with_fit else ():
+        assert sentence in readme, sentence
 
 
 def test_the_readme_says_whether_the_candidate_is_published_as_the_contract_does() -> None:
