@@ -127,6 +127,7 @@ import {
   dateText,
   grainKey,
   grainToOpen,
+  groundsLeads,
   groupKey,
   itemKey,
   itemListMessage,
@@ -162,6 +163,7 @@ import {
   periodRequest,
   periodToOpen,
   rangeProblem,
+  readingLine,
   readout,
   recapColumns,
   recapDays,
@@ -3419,6 +3421,12 @@ function withNotesClosed(copy) {
   if (box === null || box.hidden) {
     return copy();
   }
+  // Where the panels are, put back after the copy (stage X12d4 of v2.3.0): the
+  // notes hidden make the panels lower, and WebKit keeps the box of the panels
+  // at the bottom that this leaves, so that the panels moved up under the
+  // person where the notes had scrolled them low (measured at 984x970; Chrome
+  // kept them).
+  const top = ui.panels.scrollTop;
   box.hidden = true;
   try {
     renderCharts();
@@ -3426,6 +3434,7 @@ function withNotesClosed(copy) {
   } finally {
     box.hidden = false;
     renderCharts();
+    ui.panels.scrollTop = top;
   }
 }
 
@@ -5114,7 +5123,8 @@ function renderPanels(force = false) {
     cross: null,
   }));
   // The readings first, so that the heads of the panels have their lines
-  // before the charts take the room that is left.
+  // before the charts take the room that is left; each as wide as its widest.
+  fitReadings(answer);
   moveCross(state.cursor ?? periods.length - 1, false);
   delete ui.timeAxis.dataset.width;
   renderCharts();
@@ -5230,24 +5240,7 @@ function moveCross(index, speak) {
     const reading = readout(entry.item, entry.panel, answer.periods, state.cursor, answer.grain, state.language);
     const nodes = [];
     if (reading !== null) {
-      nodes.push(describe(reading.period));
-      if (reading.values.length) {
-        reading.values.forEach((value, number) => {
-          if (number > 0) {
-            nodes.push("\u3000");
-          }
-          // Which line a value is of, where there are two or more.
-          if (entry.panel.lines.length > 1) {
-            nodes.push(lineSwatch(entry.styles[value.line], showsPoints(entry.panel)));
-          }
-          nodes.push(element("strong", "", describe(value.value)));
-          if (value.count !== null) {
-            nodes.push(describe(value.count));
-          }
-        });
-      } else {
-        nodes.push(element("span", "no-value", t("view.no_value")));
-      }
+      nodes.push(...readingNodes(entry, readingWords(reading)));
       // Where a panel has two or more lines, each value says its line.
       const spokenValue = (value) =>
         entry.names[value.line] === null
@@ -5274,6 +5267,140 @@ function moveCross(index, speak) {
     const period = describe(periodMessage(answer.periods[state.cursor], answer.grain, state.language));
     setText(ui.announcer, t("view.spoken", { period, values: spoken.join(t("view.spoken_separator")) }));
   }
+}
+
+// The words of the first line of the reading of a panel at a period.
+function readingWords(reading) {
+  return {
+    period: describe(reading.period),
+    values: reading.values.map((value) => ({ line: value.line, value: describe(value.value), count: value.count === null ? null : describe(value.count) })),
+  };
+}
+
+// The first line of the reading of a panel at a period: the period, and each
+// value with its line (where there are two or more) and its count.
+function readingNodes(entry, words) {
+  const nodes = [words.period];
+  if (words.values.length) {
+    words.values.forEach((value, number) => {
+      if (number > 0) {
+        nodes.push("\u3000");
+      }
+      // Which line a value is of, where there are two or more.
+      if (entry.panel.lines.length > 1) {
+        nodes.push(lineSwatch(entry.styles[value.line], showsPoints(entry.panel)));
+      }
+      nodes.push(element("strong", "", value.value));
+      if (value.count !== null) {
+        nodes.push(value.count);
+      }
+    });
+  } else {
+    nodes.push(element("span", "no-value", t("view.no_value")));
+  }
+  return nodes;
+}
+
+// The reading of a panel is as wide as its widest over the periods shown, of
+// its first line and of the number left out on its second, so that it stands
+// beside the name only where even that one fits, and on a line of its own
+// otherwise (stage X12d4 of v2.3.0, the QA audit's findings 15: a reading too
+// wide for the line of the name in some periods went to a line of its own in
+// those only, so that the heading got higher or lower as the cross line moved,
+// the panels moved under the pointer, and the first press at a chart could
+// miss it; stage X6 meant the heading to keep its height). Each digit counts
+// as the widest digit of its size, so that the periods come to few shapes,
+// each measured once out of the layout of the heading (Codex's fourth read of
+// the diff of X12d4: the longest in characters is not always the widest); as
+// the letters of a reading are not kerned (view.css), a shape is not narrower
+// than the readings that it stands for, unless a font puts other letters in
+// by their neighbours (its sixth read: not ruled out, not seen in the
+// measures over every period), and a pixel more holds the rounding of the
+// layout.
+const DIGIT = /[0-9]/gu;
+const READING_SLACK = 1;
+
+function fitReadings(answer) {
+  for (const entry of drawn) {
+    if (!entry.read?.classList.contains("two-lines")) {
+      continue;
+    }
+    entry.read.style.minWidth = "";
+    const probe = element("span", "read-probe");
+    entry.read.append(probe);
+    const digits = widestDigits(probe);
+    const shapes = new Map();
+    answer.periods.forEach((_, index) => {
+      const words = shapeWords(readingWords(readingLine(entry.item, entry.panel, answer.periods, index, answer.grain, state.language)), digits);
+      shapes.set(JSON.stringify(words), words);
+    });
+    const leads = new Set();
+    for (const lead of groundsLeads(entry.item, entry.panel, answer.periods, state.language)) {
+      if (lead !== null) {
+        leads.add(describe(lead).replace(DIGIT, digits.lead));
+      }
+    }
+    const measured = [];
+    for (const words of shapes.values()) {
+      const line = element("span", "read-line");
+      line.append(...readingNodes(entry, words));
+      probe.append(line);
+      measured.push(line);
+    }
+    for (const lead of leads) {
+      const line = element("span", "read-grounds");
+      const part = element("span", "read-grounds-lead", lead);
+      line.append(part);
+      probe.append(line);
+      measured.push(part);
+    }
+    const widest = measured.reduce((most, node) => Math.max(most, node.getBoundingClientRect().width), 0);
+    probe.remove();
+    if (widest > 0) {
+      entry.read.style.minWidth = `${Math.ceil(widest) + READING_SLACK}px`;
+    }
+  }
+}
+
+// The widest digit of each size of a reading: of its period and its counts,
+// of its values, and of the number left out.
+function widestDigits(probe) {
+  const rows = [..."0123456789"].map((digit) => {
+    const words = element("span", "read-line", digit);
+    const valueLine = element("span", "read-line");
+    const value = element("strong", "", digit);
+    valueLine.append(value);
+    const leadLine = element("span", "read-grounds");
+    const lead = element("span", "read-grounds-lead", digit);
+    leadLine.append(lead);
+    probe.append(words, valueLine, leadLine);
+    return { digit, words, value, lead };
+  });
+  const widest = (part) => {
+    let found = { digit: "0", width: -1 };
+    for (const row of rows) {
+      const width = row[part].getBoundingClientRect().width;
+      if (width > found.width) {
+        found = { digit: row.digit, width };
+      }
+    }
+    return found.digit;
+  };
+  const digits = { words: widest("words"), value: widest("value"), lead: widest("lead") };
+  probe.replaceChildren();
+  return digits;
+}
+
+// The words of a reading with each digit as the widest of its size.
+function shapeWords(words, digits) {
+  return {
+    period: words.period.replace(DIGIT, digits.words),
+    values: words.values.map((value) => ({
+      line: value.line,
+      value: value.value.replace(DIGIT, digits.value),
+      count: value.count === null ? null : value.count.replace(DIGIT, digits.words),
+    })),
+  };
 }
 
 // It says whether it took the key: an Escape that it leaves closes the notes
@@ -10786,6 +10913,9 @@ async function quit() {
 // next frame, as the watcher of their size would (also where there is none;
 // Codex's read of the plan of stage X12d3 of v2.3.0).
 function toggleNotes(key, open = state.notesOpen !== key) {
+  // Read before a box is hidden, which may make the browser pull the panels up.
+  const before = state.notesOpen;
+  const at = ui.panels.scrollTop;
   state.notesOpen = open ? key : null;
   for (const box of ui.panels.querySelectorAll(".panel-notes")) {
     box.hidden = box.dataset.key !== state.notesOpen;
@@ -10793,7 +10923,60 @@ function toggleNotes(key, open = state.notesOpen !== key) {
   for (const button of ui.panels.querySelectorAll('button[data-action="notes"]')) {
     button.setAttribute("aria-expanded", String(button.dataset.key === state.notesOpen));
   }
+  if (open) {
+    showNotes(key, before, at);
+  } else {
+    unscrollNotes(key, at);
+  }
   scheduleRedraw();
+}
+
+// Notes that open below what the panels show come into view (stage X12d4 of
+// v2.3.0, the QA audit's findings 12, J1: in a small window, the notes of a
+// panel low in the box opened mostly below it, and a person who pressed saw
+// little of them). The panels scroll down to show as much of them as fits
+// with their button still in view at the top, so that a second press there
+// closes them; notes higher than the room under their button show from their
+// top. Only the box of the panels scrolls, not the page. Nothing moves where
+// they show already.
+// NOTES_MARGIN is the room kept under the notes and over their button.
+const NOTES_MARGIN = 8;
+
+// Where the panels were before notes moved them, and where the notes left
+// them: closing the notes takes the panels back, unless they moved meanwhile,
+// scrolled by the person or laid out again (built again, or the window
+// resized: then they stay as they are, so that they never jump to a place
+// that the person did not leave them at; Codex's seventh read of the diff)
+// (stage X12d4 of v2.3.0: left at their bottom, the panels moved under the
+// pointer as soon as the cross line shortened a panel, and the first press
+// at a chart there missed it). Notes opened over other notes
+// (before: the key of those) keep the place before the first; at is where the
+// panels were before the notes changed.
+let notesScroll = null;
+
+function showNotes(key, before, at) {
+  const notes = ui.panels.querySelector(`.panel-notes[data-key="${key}"]`);
+  const button = ui.panels.querySelector(`button[data-action="notes"][data-key="${key}"]`);
+  if (notes === null || button === null) {
+    return;
+  }
+  const kept = notesScroll !== null && notesScroll.key === before && Math.abs(at - notesScroll.to) <= 1;
+  const from = kept ? notesScroll.from : at;
+  const box = ui.panels.getBoundingClientRect();
+  const below = notes.getBoundingClientRect().bottom + NOTES_MARGIN - box.bottom;
+  const room = button.getBoundingClientRect().top - NOTES_MARGIN - box.top;
+  const down = Math.min(below, room);
+  if (down > 0) {
+    ui.panels.scrollTop += down;
+  }
+  notesScroll = { key, from, to: ui.panels.scrollTop };
+}
+
+function unscrollNotes(key, at) {
+  if (notesScroll !== null && notesScroll.key === key && Math.abs(at - notesScroll.to) <= 1) {
+    ui.panels.scrollTop = notesScroll.from;
+  }
+  notesScroll = null;
 }
 
 function panelAction(event) {

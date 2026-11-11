@@ -1018,8 +1018,16 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # charts again from the answers, and the notes do not change it.
         self.assertIn('      const made = state.saveFormat === "png" ? savePng(stage, target) : withNotesClosed(() => saveSvg(stage, target));\n', self.script)
         closed = function_body(self.script, "withNotesClosed")
-        # The box is shown again whatever fails, the first redraw too.
-        self.assertIn('  if (box === null || box.hidden) {\n    return copy();\n  }\n  box.hidden = true;\n  try {\n    renderCharts();\n    return copy();\n  } finally {\n    box.hidden = false;\n    renderCharts();\n  }', closed)
+        # The box is shown again whatever fails, the first redraw too; the
+        # panels are put back where they were, read before the box is hidden
+        # (stage X12d4 of v2.3.0: WebKit kept them at the bottom that the
+        # hidden notes left).
+        self.assertIn("  if (box === null || box.hidden) {\n    return copy();\n  }\n", closed)
+        self.assertIn(
+            "  const top = ui.panels.scrollTop;\n  box.hidden = true;\n  try {\n    renderCharts();\n    return copy();\n"
+            "  } finally {\n    box.hidden = false;\n    renderCharts();\n    ui.panels.scrollTop = top;\n  }",
+            closed,
+        )
         self.assertIn('ui.panels.querySelector(`.panel-notes[data-key="${state.notesOpen}"]`)', closed)
         # Not a window: no class of a window, no place over the chart.
         style = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
@@ -1034,9 +1042,179 @@ class GuiViewPageStructureTest(unittest.TestCase):
         self.assertIn(
             "and notes of what is left out, which open in place under that line and above the chart and cover nothing "
             "(stage X12d3 of v2.3.0, the person's choice B: as a window over the chart they covered their own button "
-            "and could not be closed in Safari; a picture saved while they are open is as with them closed),",
+            "and could not be closed in Safari; a picture saved while they are open is as with them closed; since "
+            "stage X12d4 of v2.3.0, where they open below what the panels show, the panels scroll to show as much of "
+            "them as fits with their button still in view, and scroll back when they close unless they moved "
+            "meanwhile, scrolled by the person or laid out again),",
             design,
         )
+
+    def test_the_reading_of_a_panel_is_as_wide_as_its_widest(self) -> None:
+        # Stage X12d4 of v2.3.0 (the QA audit's findings 15): a reading too
+        # wide for the line of the name in some periods went to a line of its
+        # own in those only, so that the heading got higher or lower as the
+        # cross line moved (VO2 Max at 1415x970 too), the panels moved under
+        # the pointer, and the first press at a chart could miss it. The
+        # reading is as wide as its widest over the periods shown, of its
+        # first line and of the number left out on its second, measured out of
+        # the layout before the readings are written: every period, each digit
+        # as the widest digit of its size, each shape once (Codex's fourth
+        # read of the diff: the longest in characters is not always the
+        # widest, the number left out can be wider than the first line, and
+        # the grounds of each period look through the counts of all), the
+        # letters not kerned (its fifth read).
+        from tests.test_gui_view_save import function_body
+
+        fit = function_body(self.script, "fitReadings")
+        for line in (
+            '    if (!entry.read?.classList.contains("two-lines")) {\n      continue;\n    }',
+            '    entry.read.style.minWidth = "";',
+            '    const probe = element("span", "read-probe");\n    entry.read.append(probe);\n    const digits = widestDigits(probe);',
+            "    answer.periods.forEach((_, index) => {\n"
+            "      const words = shapeWords(readingWords(readingLine(entry.item, entry.panel, answer.periods, index, answer.grain, state.language)), digits);\n"
+            "      shapes.set(JSON.stringify(words), words);\n    });",
+            "    for (const lead of groundsLeads(entry.item, entry.panel, answer.periods, state.language)) {\n"
+            "      if (lead !== null) {\n        leads.add(describe(lead).replace(DIGIT, digits.lead));\n      }\n    }",
+            "    for (const words of shapes.values()) {\n"
+            '      const line = element("span", "read-line");\n'
+            "      line.append(...readingNodes(entry, words));\n      probe.append(line);\n      measured.push(line);\n    }",
+            "    for (const lead of leads) {\n"
+            '      const line = element("span", "read-grounds");\n'
+            '      const part = element("span", "read-grounds-lead", lead);\n'
+            "      line.append(part);\n      probe.append(line);\n      measured.push(part);\n    }",
+            "    const widest = measured.reduce((most, node) => Math.max(most, node.getBoundingClientRect().width), 0);\n    probe.remove();",
+            "    if (widest > 0) {\n      entry.read.style.minWidth = `${Math.ceil(widest) + READING_SLACK}px`;\n    }",
+        ):
+            with self.subTest(line=line[:60]):
+                self.assertIn(line, fit)
+        self.assertIn("\nconst DIGIT = /[0-9]/gu;\nconst READING_SLACK = 1;\n", self.script)
+        self.assertNotIn("readout(", fit)
+        # The widest digit of each size: of the period and the counts, of the
+        # values, and of the number left out, in the elements that show them.
+        digits = function_body(self.script, "widestDigits")
+        for line in (
+            '  const rows = [..."0123456789"].map((digit) => {',
+            '    const words = element("span", "read-line", digit);',
+            '    const valueLine = element("span", "read-line");\n    const value = element("strong", "", digit);\n    valueLine.append(value);',
+            '    const leadLine = element("span", "read-grounds");\n    const lead = element("span", "read-grounds-lead", digit);\n    leadLine.append(lead);',
+            "    probe.append(words, valueLine, leadLine);",
+            "      const width = row[part].getBoundingClientRect().width;\n"
+            "      if (width > found.width) {\n        found = { digit: row.digit, width };\n      }",
+            '  const digits = { words: widest("words"), value: widest("value"), lead: widest("lead") };\n  probe.replaceChildren();\n  return digits;',
+        ):
+            with self.subTest(line=line[:60]):
+                self.assertIn(line, digits)
+        shape = function_body(self.script, "shapeWords")
+        for line in (
+            "    period: words.period.replace(DIGIT, digits.words),",
+            "      value: value.value.replace(DIGIT, digits.value),",
+            "      count: value.count === null ? null : value.count.replace(DIGIT, digits.words),",
+        ):
+            with self.subTest(line=line[:60]):
+                self.assertIn(line, shape)
+        # Fitted before the readings are written, each time the panels are
+        # built again (the answer, the language, the marks).
+        build = function_body(self.script, "renderPanels")
+        self.assertIn("  fitReadings(answer);\n  moveCross(state.cursor ?? periods.length - 1, false);", build)
+        for name, count in (("fitReadings(", 2), ("widestDigits(", 2), ("shapeWords(", 2), ("readingWords(", 3), ("readingNodes(", 3)):
+            with self.subTest(name=name):
+                self.assertEqual(self.script.count(name), count)
+        # The reading written at the cross line and the ones measured are made
+        # by the same functions.
+        self.assertIn("      nodes.push(...readingNodes(entry, readingWords(reading)));", function_body(self.script, "moveCross"))
+        words = function_body(self.script, "readingWords")
+        for line in (
+            "    period: describe(reading.period),",
+            "    values: reading.values.map((value) => ({ line: value.line, value: describe(value.value), count: value.count === null ? null : describe(value.count) })),",
+        ):
+            with self.subTest(line=line[:60]):
+                self.assertIn(line, words)
+        nodes = function_body(self.script, "readingNodes")
+        for line in (
+            "  const nodes = [words.period];",
+            "        nodes.push(lineSwatch(entry.styles[value.line], showsPoints(entry.panel)));",
+            '      nodes.push(element("strong", "", value.value));',
+            "        nodes.push(value.count);",
+            '    nodes.push(element("span", "no-value", t("view.no_value")));',
+        ):
+            with self.subTest(line=line[:60]):
+                self.assertIn(line, nodes)
+        style = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        # Clipped to nothing, so that the lines measured never widen what the
+        # box of the panels scrolls (Codex's fifth read of the diff).
+        rule = re.search(r"\n\.read-probe \{(.*?)\n\}", style, re.DOTALL)
+        assert rule is not None
+        for declaration in (
+            "position: absolute;",
+            "display: flex;",
+            "flex-direction: column;",
+            "align-items: flex-start;",
+            "width: 0;",
+            "height: 0;",
+            "overflow: hidden;",
+            "visibility: hidden;",
+        ):
+            with self.subTest(declaration=declaration):
+                self.assertIn(declaration, rule.group(1))
+        # The letters of a reading are not kerned, so that a shape with each
+        # digit as the widest is never narrower than a reading it stands for.
+        rule = re.search(r"\n\.panel-read\.two-lines \{(.*?)\n\}", style, re.DOTALL)
+        assert rule is not None
+        self.assertIn("font-kerning: none;", rule.group(1))
+        design = " ".join((ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        self.assertIn(
+            "From stage X12d4 of v2.3.0 the reading is as wide as its widest reading over the periods shown (its first "
+            "line and the number left out on its second, each digit as the widest, its letters not kerned), so that it "
+            "stands beside the name only where even that one fits, and on a line of its own otherwise",
+            design,
+        )
+
+    def test_notes_that_open_below_the_panels_come_into_view(self) -> None:
+        # Stage X12d4 of v2.3.0, the QA audit's findings 12, J1: pressed as a
+        # person presses it, where it shows, the button of notes low in the
+        # box of the panels opened them mostly below it in a small window, and
+        # the person saw little of them. The panels scroll down by as much as
+        # shows them whole, never so far that their button leaves the top,
+        # where a second press closes them. Closing them scrolls the panels
+        # back where they were, unless the person scrolled them meanwhile: left
+        # at their bottom, the panels moved under the pointer as soon as the
+        # cross line shortened a panel, and the first press at a chart missed.
+        from tests.test_gui_view_save import function_body
+
+        toggle = function_body(self.script, "toggleNotes")
+        # Where the panels were is read before a box is hidden.
+        self.assertIn("  const before = state.notesOpen;\n  const at = ui.panels.scrollTop;\n  state.notesOpen = open ? key : null;\n", toggle)
+        self.assertIn("  if (open) {\n    showNotes(key, before, at);\n  } else {\n    unscrollNotes(key, at);\n  }\n  scheduleRedraw();", toggle)
+        show = function_body(self.script, "showNotes")
+        for line in (
+            '  const notes = ui.panels.querySelector(`.panel-notes[data-key="${key}"]`);',
+            '  const button = ui.panels.querySelector(`button[data-action="notes"][data-key="${key}"]`);',
+            "  if (notes === null || button === null) {\n    return;\n  }",
+            "  const box = ui.panels.getBoundingClientRect();",
+            "  const below = notes.getBoundingClientRect().bottom + NOTES_MARGIN - box.bottom;",
+            "  const room = button.getBoundingClientRect().top - NOTES_MARGIN - box.top;",
+            "  const down = Math.min(below, room);",
+            "  if (down > 0) {\n    ui.panels.scrollTop += down;\n  }",
+            "  const kept = notesScroll !== null && notesScroll.key === before && Math.abs(at - notesScroll.to) <= 1;",
+            "  const from = kept ? notesScroll.from : at;",
+            "  notesScroll = { key, from, to: ui.panels.scrollTop };",
+        ):
+            with self.subTest(line=line[:60]):
+                self.assertIn(line, show)
+        back = function_body(self.script, "unscrollNotes")
+        self.assertIn(
+            "  if (notesScroll !== null && notesScroll.key === key && Math.abs(at - notesScroll.to) <= 1) {\n"
+            "    ui.panels.scrollTop = notesScroll.from;\n  }\n  notesScroll = null;",
+            back,
+        )
+        self.assertIn("\nlet notesScroll = null;\n", self.script)
+        # Only the box of the panels scrolls: scrollIntoView would move the
+        # page too, and would not keep the button in view.
+        self.assertNotIn("scrollIntoView", show)
+        self.assertIn("\nconst NOTES_MARGIN = 8;\n", self.script)
+        # Each defined once and called once, where the notes open or close.
+        self.assertEqual(self.script.count("showNotes("), 2)
+        self.assertEqual(self.script.count("unscrollNotes("), 2)
 
     def test_a_panel_is_never_lower_than_what_it_holds(self) -> None:
         # Stage X12d3 of v2.3.0: with a least height of 150 pixels, the

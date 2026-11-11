@@ -474,6 +474,12 @@ test("the readings at the top right: the period, and each value with its count",
   assert.deepEqual(reading.values.map((value) => [value.line, words(value.value, "ja"), words(value.count, "ja")]), [[0, "108.1 km", "11 回"]]);
   assert.deepEqual(view.readout(item("dist"), panel, MONTHS, 1, "month", "ja").values, []);
   assert.equal(view.readout(item("dist"), panel, MONTHS, 9, "month", "ja"), null);
+  // The first line alone, which the page measures for every period shown
+  // (stage X12d4 of v2.3.0): the reading without its grounds.
+  for (const index of [0, 1, 2, 3, 9]) {
+    const whole = view.readout(item("dist"), panel, MONTHS, index, "month", "ja");
+    assert.deepEqual(view.readingLine(item("dist"), panel, MONTHS, index, "month", "ja"), whole === null ? null : { period: whole.period, values: whole.values });
+  }
 });
 
 test("the notes of a panel say what is left out and what the values are", () => {
@@ -619,6 +625,33 @@ test("the grounds of a period say the number left out first, then why, and the w
   assert.equal(said("dist", parsed, 1, "ja")[0], "入っていない 1 回：");
   assert.equal(said("dist", groundsPanel("x"), 1, "ja")[0], null);
   assert.equal(said("dist", groundsPanel(null), 1, "ja")[0], null);
+});
+
+test("the numbers left out of all the periods of a panel at once are those that their grounds say first (stage X12d4 of v2.3.0)", () => {
+  const panels = [
+    groundsPanel({ no_value: [[1, 3]] }),
+    groundsPanel({ disagree: [[2, 1]], no_value: [[2, 2], [3, 5]] }),
+    groundsPanel({ toString: [[1, 2]], no_value: [[1, 1.5], [1, -1], ["1", 2], [1], null, [1, 0], [1, 2], [9, 4], [-1, 4]], disagree: "x" }),
+    groundsPanel(JSON.parse('{"__proto__": [[1, 2]], "no_value": [[1, 1]]}')),
+    groundsPanel({ zero_value: [[1, 2]], sleep_review: [[0, 1]] }),
+    groundsPanel({}, [1, 0, 18, 11], ["2026-07-20", "2026-10-10"], { per_period_other: { no_value: [[0, 2]], disagree: [[3, 1]] } }),
+    groundsPanel({}),
+    groundsPanel("x"),
+    null,
+  ];
+  for (const key of ["dist", "rhr", "p5k"]) {
+    for (const panel of panels) {
+      for (const language of ["ja", "en"]) {
+        const leads = view.groundsLeads(item(key), panel, MONTHS, language);
+        assert.equal(leads.length, MONTHS.length);
+        leads.forEach((lead, index) => {
+          assert.deepEqual(lead, view.periodGrounds(item(key), panel, MONTHS, index, "month", language)?.lead ?? null);
+        });
+      }
+    }
+  }
+  assert.equal(words(view.groundsLeads(item("dist"), panels[1], MONTHS, "en")[2], "en"), "3 not counted: ");
+  assert.deepEqual(view.groundsLeads(item("dist"), panels[6], MONTHS, "ja"), [null, null, null, null]);
 });
 
 test("a period without a value and nothing left out says where it is (stage X6 of v2.3.0)", () => {
