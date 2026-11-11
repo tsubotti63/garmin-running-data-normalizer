@@ -601,7 +601,7 @@ class GuiPageStructureTest(unittest.TestCase):
         self.assertGreaterEqual(len(taken), 15)
         plot_key = re.search(r"\nfunction plotKey\(event\) \{\n(.*?)\n\}\n", view, re.DOTALL)
         assert plot_key is not None
-        self.assertTrue(plot_key.group(1).endswith("  } else {\n    return;\n  }\n  event.preventDefault();"))
+        self.assertTrue(plot_key.group(1).endswith("  } else {\n    return false;\n  }\n  event.preventDefault();\n  return true;"))
 
     def test_the_name_and_the_place_of_the_support_bundle_say_what_they_are(self) -> None:
         # Stage B5a: the name of the output is described by its red lines,
@@ -969,6 +969,125 @@ class GuiViewPageStructureTest(unittest.TestCase):
             with self.subTest(declaration=declaration):
                 self.assertIn(declaration, rule.group(1))
 
+    def test_the_notes_of_a_panel_open_in_place_and_cover_nothing(self) -> None:
+        # Stage X12d3 of v2.3.0, the person's choice B of the samples: the
+        # notes of a panel ("About this panel (n)") open in place, under the
+        # row of numbers and above the chart, and their button, which stays
+        # where it is, closes them again. As a window over the chart (until
+        # 2.3.0rc2) they covered their own button and the end of the row, and
+        # could not be closed in Safari, where a pressed button does not take
+        # the focus.
+        from tests.test_gui_view_save import function_body
+
+        build = function_body(self.script, "buildPanel")
+        for line in (
+            '      notesBox = element("div", "panel-notes");\n      notesBox.id = notesId;\n      notesBox.hidden = state.notesOpen !== key;\n      notesBox.dataset.key = key;',
+            '      notesBox.append(element("p", "panel-notes-title", t("view.panel.about", { name })));',
+            '      button.setAttribute("aria-controls", notesId);',
+            '    section.append(summary);\n    if (notesBox !== null) {\n      section.append(notesBox);\n    }\n  }\n  let body;',
+        ):
+            with self.subTest(line=line[:60]):
+                self.assertIn(line, build)
+        # The row of numbers, then the notes, then the chart; nothing after it.
+        self.assertLess(build.index("section.append(summary);"), build.index("section.append(notesBox);"))
+        self.assertLess(build.index("section.append(notesBox);"), build.index("section.append(body);"))
+        self.assertEqual(build.count("section.append(notesBox);"), 1)
+        toggle = function_body(self.script, "toggleNotes")
+        self.assertIn('for (const box of ui.panels.querySelectorAll(".panel-notes")) {\n    box.hidden = box.dataset.key !== state.notesOpen;', toggle)
+        # The chart of the panel gets lower or higher: the charts are drawn
+        # again at the next frame.
+        self.assertEqual(toggle.count("\n  scheduleRedraw();"), 1)
+        # Escape in the panels closes them, also where the focus stayed on a
+        # chart (Safari keeps it there after the press at their button): the
+        # keys that the chart does not take go on to the notes.
+        self.assertIn(
+            '  ui.panels.addEventListener("keydown", (event) => {\n'
+            '    // The keys of a chart first. An Escape that its chart leaves (no list of\n'
+            '    // its own open) closes the notes, also where the focus stayed on a chart\n'
+            '    // after the press at their button, as Safari keeps it there (Codex\'s\n'
+            '    // read of the diff of stage X12d3 of v2.3.0).\n'
+            '    if (event.target.classList?.contains("plot") && plotKey(event)) {\n'
+            '      return;\n'
+            '    }\n'
+            '    if (event.key === "Escape" && listBox?.contains(event.target)) {\n',
+            self.script,
+        )
+        self.assertIn('    } else if (event.key === "Escape" && state.notesOpen !== null) {\n      event.preventDefault();\n      const key = state.notesOpen;\n      toggleNotes(key, false);\n', self.script)
+        # An SVG copies the charts of the page: it copies them as they are with
+        # the notes closed (the QA audit's findings 11, G1); a PNG draws its
+        # charts again from the answers, and the notes do not change it.
+        self.assertIn('      const made = state.saveFormat === "png" ? savePng(stage, target) : withNotesClosed(() => saveSvg(stage, target));\n', self.script)
+        closed = function_body(self.script, "withNotesClosed")
+        # The box is shown again whatever fails, the first redraw too.
+        self.assertIn('  if (box === null || box.hidden) {\n    return copy();\n  }\n  box.hidden = true;\n  try {\n    renderCharts();\n    return copy();\n  } finally {\n    box.hidden = false;\n    renderCharts();\n  }', closed)
+        self.assertIn('ui.panels.querySelector(`.panel-notes[data-key="${state.notesOpen}"]`)', closed)
+        # Not a window: no class of a window, no place over the chart.
+        style = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        for source in (self.script, style):
+            self.assertNotIn("notes-pop", source)
+        rule = re.search(r"\n\.panel-notes \{(.*?)\n\}", style, re.DOTALL)
+        self.assertIsNotNone(rule)
+        for word in ("position", "top:", "right:", "bottom:", "z-index"):
+            with self.subTest(word=word):
+                self.assertNotIn(word, rule.group(1))
+        design = " ".join((ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        self.assertIn(
+            "and notes of what is left out, which open in place under that line and above the chart and cover nothing "
+            "(stage X12d3 of v2.3.0, the person's choice B: as a window over the chart they covered their own button "
+            "and could not be closed in Safari; a picture saved while they are open is as with them closed),",
+            design,
+        )
+
+    def test_a_panel_is_never_lower_than_what_it_holds(self) -> None:
+        # Stage X12d3 of v2.3.0: with a least height of 150 pixels, the
+        # heading, the reading of two lines and the row of numbers of a narrow
+        # window left the chart less than its own least height, and it ran
+        # over the next panel (900 by 1000 pixels). A panel is at least 150
+        # pixels and never lower than what it holds; the panels scroll.
+        style = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        rule = re.search(r"\n\.panel-view \{(.*?)\n\}", style, re.DOTALL)
+        self.assertIsNotNone(rule)
+        self.assertIn("flex: 1 0 150px;", rule.group(1))
+        self.assertIn("min-height: auto;", rule.group(1))
+        self.assertNotRegex(rule.group(1), r"min-height: \d")
+        panels = re.search(r"\n\.panels \{(.*?)\n\}", style, re.DOTALL)
+        self.assertIn("overflow-y: auto;", panels.group(1))
+        chart = re.search(r"\n\.panel-chart \{(.*?)\n\}", style, re.DOTALL)
+        self.assertIn("min-height: 40px;", chart.group(1))
+        # The low strip and the table: at least 76 and 240 pixels, and never
+        # lower than what they hold either (in a narrow window the heading of a
+        # strip takes two or three lines, and the notes left a table no room).
+        for selector, basis in ((r"\.panel-view\.mini", "flex: 0 0 76px;"), (r"\.panel-view\.table", "flex: 1 0 240px;")):
+            with self.subTest(selector=selector):
+                variant = re.search(r"\n" + selector + r" \{(.*?)\n\}", style, re.DOTALL)
+                self.assertIn(basis, variant.group(1))
+                self.assertIn("min-height: auto;", variant.group(1))
+                self.assertNotRegex(variant.group(1), r"min-height: \d")
+        # The table of a panel keeps its heads and two rows or so, and what it
+        # holds is not counted where its panel measures what it holds (or the
+        # panel would take the height of the whole table).
+        wrap = re.search(r"\n\.panel-view\.table:not\(\.compare-table\) > \.panel-table \{(.*?)\n\}", style, re.DOTALL)
+        self.assertIsNotNone(wrap)
+        self.assertIn("contain: size;", wrap.group(1))
+        self.assertIn("min-height: 7rem;", wrap.group(1))
+        # The one panel of the views of the points and of the spread, whose
+        # chart is drawn in its flow, keeps its least height of 150 pixels.
+        plot_view = re.search(r"\n\.plot-body \.plot-view \{(.*?)\n\}", style, re.DOTALL)
+        self.assertIn("min-height: 150px;", plot_view.group(1))
+        design = " ".join((ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        self.assertIn(
+            "Panels of at least 150 pixels, and never lower than what they hold (stage X12d3 of v2.3.0: in a narrow "
+            "window a chart ran over the heading of the next panel), stand on one time axis; when they do not fit, only "
+            "the panels scroll.",
+            design,
+        )
+        self.assertIn(
+            "and can be shown as a table (newest first, 400 rows at a time; the table keeps its heads and two rows or "
+            "so, and its panel grows for them), enlarged, moved, or removed; one panel enlarged makes the others low "
+            "strips on the same axis, which are never lower than what they hold either.",
+            design,
+        )
+
     def test_the_reading_holds_the_grounds_of_its_period_on_a_second_line(self) -> None:
         # Stage X6 of v2.3.0, the person's choice (a): the reading of a panel
         # always holds two lines, the reading (or an empty line while no
@@ -985,7 +1104,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
         # A low strip shows neither the summary nor the notes of a panel, so
         # its reading keeps one line too (view.css below).
         build = function_body(self.script, "buildPanel")
-        self.assertIn('  let notesPop = null;\n  if (mode !== "mini") {\n    const summary = element("div", "panel-summary");', build)
+        self.assertIn('  let notesBox = null;\n  if (mode !== "mini") {\n    const summary = element("div", "panel-summary");', build)
         cross = function_body(self.script, "moveCross")
         for line in (
             'const grounds = reading.grounds === null ? "" : t("view.spoken_grounds", { grounds: describe(reading.grounds.full).replace(/[。.]$/u, "") });',
@@ -1961,7 +2080,8 @@ class GuiViewPageStructureTest(unittest.TestCase):
             'arrow.setAttribute("aria-hidden", "true");',
             'cell.scope = "row";',
             'dash.setAttribute("aria-hidden", "true");\n        cell.append(dash, element("span", "visually-hidden", t("view.no_value")));',
-            '} else if (event.key === "Escape" && listBox?.contains(event.target)) {',
+            # The keys that a chart leaves come after it (stage X12d3 of v2.3.0).
+            '    }\n    if (event.key === "Escape" && listBox?.contains(event.target)) {',
             '} else if (event.key === "Escape" && state.list !== null && event.target.dataset.key === state.list.key) {',
             '} else if ((event.key === "Enter" || event.key === " ") && event.target.classList.contains("listable")) {',
             "drawn.find((entry) => entry.key === list.key)?.plot?.focus();",
@@ -3297,7 +3417,7 @@ class GuiViewPageStructureTest(unittest.TestCase):
             'iconButton("down", t("view.panel.down", { name }), "down", key, index === count - 1)',
             'iconButton("close", t("view.panel.remove", { name }), "remove", key)',
             'tableButton.setAttribute("aria-pressed", String(table));',
-            'button.setAttribute("aria-controls", popId);',
+            'button.setAttribute("aria-controls", notesId);',
             'read.setAttribute("aria-hidden", "true");',
         ):
             with self.subTest(line=line):
