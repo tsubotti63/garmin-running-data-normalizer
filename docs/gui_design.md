@@ -988,12 +988,19 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   data (for the training and running-form items, of the activities of the
   types counted that meet the conditions, over the whole output), finds them
   by name, and folds to a rail.
-- Panels of at least 150 pixels stand on one time axis; when they do not fit,
-  only the panels scroll. A panel names its item, unit, and kind, gives the
-  period and the values at the cross line, a second line of counts and the
-  lowest, highest, and latest values, and notes of what is left out, and can
-  be shown as a table (newest first, 400 rows at a time), enlarged, moved, or
-  removed; one panel enlarged makes the others low strips on the same axis.
+- Panels of at least 150 pixels, and never lower than what they hold (stage
+  X12d3 of v2.3.0: in a narrow window a chart ran over the heading of the next
+  panel), stand on one time axis; when they do not fit, only the panels
+  scroll. A panel names its item, unit, and kind, gives the period and the
+  values at the cross line, a second line of counts and the lowest, highest,
+  and latest values, and notes of what is left out, which open in place under
+  that line and above the chart and cover nothing (stage X12d3 of v2.3.0, the
+  person's choice B: as a window over the chart they covered their own button
+  and could not be closed in Safari; a picture saved while they are open is as
+  with them closed), and can be shown as a table (newest first, 400 rows at a
+  time; the table keeps its heads and two rows or so, and its panel grows for
+  them), enlarged, moved, or removed; one panel enlarged makes the others low
+  strips on the same axis, which are never lower than what they hold either.
   Panels of the same unit can share one scale on request. Acute and chronic
   training load are both Garmin's values as they are, but two columns of the
   same source, so they share it.

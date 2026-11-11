@@ -1332,7 +1332,12 @@ button.small {
   display: flex;
   flex: 1 0 150px;
   flex-direction: column;
-  min-height: 150px;
+  /* Never lower than what it holds (stage X12d3 of v2.3.0): with a least
+     height of 150 pixels, the heading, the reading of two lines and the row
+     of numbers of a narrow window left the chart less than its own least
+     height, and it ran over the next panel. flex: 1 0 150px keeps 150 pixels
+     at least, and the panels scroll when they do not fit. */
+  min-height: auto;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--line);
 }
@@ -1343,7 +1348,20 @@ button.small {
 
 .panel-view.table {
   flex: 1 0 240px;
-  min-height: 240px;
+  /* Never lower than what it holds (stage X12d3 of v2.3.0): with its notes
+     open in a narrow window, its table had no room left and the notes ran
+     over the next panel. */
+  min-height: auto;
+}
+
+/* The table of a panel keeps its heads and two rows or so, and the panel
+   grows for it (stage X12d3 of v2.3.0); the rest scrolls in its box. What
+   the table holds is not counted where the panel measures what it holds
+   (size containment), so that the panel does not take the height of the
+   whole table. */
+.panel-view.table:not(.compare-table) > .panel-table {
+  contain: size;
+  min-height: 7rem;
 }
 
 .panel-view.big {
@@ -1352,7 +1370,10 @@ button.small {
 
 .panel-view.mini {
   flex: 0 0 76px;
-  min-height: 76px;
+  /* Never lower than what it holds either (stage X12d3 of v2.3.0): in a
+     narrow window its heading takes two or three lines, and its chart ran
+     over the heading of the next panel. */
+  min-height: auto;
   padding-bottom: 2px;
 }
 
@@ -1591,27 +1612,34 @@ button.small {
   margin: 0 0 0 auto;
 }
 
-.notes-pop {
-  top: 48px;
-  right: 12px;
-  width: 460px;
+/* The notes of a panel open in place under the row of numbers, above the
+   chart (stage X12d3 of v2.3.0): they cover nothing, and the chart gives them
+   its room down to its least height. */
+.panel-notes {
+  margin: 4px 12px 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.86rem;
 }
 
-.notes-pop.above {
-  top: auto;
-  bottom: calc(100% - 30px);
+.panel-notes-title {
+  margin: 0 0 4px;
+  font-weight: 700;
 }
 
-.notes-pop ul {
+.panel-notes ul {
   margin: 0;
   padding-left: 1.2em;
 }
 
-.notes-pop li + li {
+.panel-notes li + li {
   margin-top: 4px;
 }
 
-.notes-pop .info-button {
+.panel-notes .info-button {
   margin: 0 0 0 4px;
 }
 
@@ -2984,6 +3012,11 @@ button.small {
 }
 
 .plot-body .plot-view {
+  /* 150 pixels at least, as before stage X12d3 of v2.3.0: the one panel of
+     these views draws its chart in its flow, as large as its room, and how
+     high what it holds is would rest on how a browser sizes that chart
+     (Codex's read of the plan of X12d3). */
+  min-height: 150px;
   border-bottom: 0;
 }
 

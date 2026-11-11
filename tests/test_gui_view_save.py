@@ -383,7 +383,8 @@ class GuiViewSaveTest(unittest.TestCase):
         for line in (
             # The SVG, or a PNG of the size chosen, which may not fit (stage X5
             # of v2.3.0): then nothing is saved, and the window says why.
-            'const made = state.saveFormat === "png" ? savePng(stage, target) : saveSvg(stage, target);',
+            # The SVG copies the charts as they are with the notes closed (stage X12d3).
+            'const made = state.saveFormat === "png" ? savePng(stage, target) : withNotesClosed(() => saveSvg(stage, target));',
             "if (made.problem !== null) {\n        problem = made.problem;\n      } else {\n        address = URL.createObjectURL(made.blob);",
             "link.download = target.name;",
             "} finally {\n      stage?.remove();",
@@ -707,7 +708,7 @@ class GuiViewSaveTest(unittest.TestCase):
         self.assertIn('return t(problem, { button: t(calendar ? "view.compare.table_calendar" : "view.panel.chart") });', problem)
         image = function_body(self.script, "saveImage")
         self.assertIn('const svg = target.view === "panels" ? saveFile(stage, target.plan) : saveViewFile(stage, target);', function_body(self.script, "saveSvg"))
-        self.assertIn('const made = state.saveFormat === "png" ? savePng(stage, target) : saveSvg(stage, target);', image)
+        self.assertIn('const made = state.saveFormat === "png" ? savePng(stage, target) : withNotesClosed(() => saveSvg(stage, target));', image)
         self.assertIn("const target = saveTarget(viewingNow());", image)
 
     def test_a_picture_of_the_view_by_shoes_holds_all_its_rows_and_notes_and_no_name_in_its_file(self) -> None:

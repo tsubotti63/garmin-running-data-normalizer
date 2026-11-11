@@ -3369,7 +3369,7 @@ function saveImage() {
       // The SVG, or a PNG of the size chosen, whose panels may not fit its
       // frame: then nothing is saved, and the window says why (stage X5 of
       // v2.3.0).
-      const made = state.saveFormat === "png" ? savePng(stage, target) : saveSvg(stage, target);
+      const made = state.saveFormat === "png" ? savePng(stage, target) : withNotesClosed(() => saveSvg(stage, target));
       if (made.problem !== null) {
         problem = made.problem;
       } else {
@@ -3404,6 +3404,28 @@ function saveImage() {
     // A window that the drawing hid leaves the focus where what hid it put it
     // (Codex's review of the plan of U1, 3).
     (ui.saveGo.disabled ? ui.saveTitle : ui.saveGo).focus();
+  }
+}
+
+// The charts of the page as they are with the notes closed (stage X12d3 of
+// v2.3.0): the notes open in place make the chart of their panel lower, and
+// an SVG copies the charts of the page. The box of the notes is hidden, the
+// charts drawn again and copied, and the box shown again and the charts
+// drawn as they were, in one go, so that nothing shows in between (the QA
+// audit's findings 11, G1: an SVG saved with the notes open took that chart
+// lower); the box is shown again whatever fails (Codex's third read).
+function withNotesClosed(copy) {
+  const box = state.notesOpen === null ? null : ui.panels.querySelector(`.panel-notes[data-key="${state.notesOpen}"]`);
+  if (box === null || box.hidden) {
+    return copy();
+  }
+  box.hidden = true;
+  try {
+    renderCharts();
+    return copy();
+  } finally {
+    box.hidden = false;
+    renderCharts();
   }
 }
 
@@ -4527,7 +4549,7 @@ function buildPanel({ key, item, panel }, index, count, periods, grain, marksTex
   tools.append(iconButton("close", t("view.panel.remove", { name }), "remove", key));
   head.append(tools);
   section.append(head);
-  let notesPop = null;
+  let notesBox = null;
   if (mode !== "mini") {
     const summary = element("div", "panel-summary");
     for (const part of summaryMessages(item, panel, periods, grain, state.language, noneMet(item))) {
@@ -4538,15 +4560,22 @@ function buildPanel({ key, item, panel }, index, count, periods, grain, marksTex
     const notes = panelNotes(item, panel, periods, grain, state.language);
     if (notes.length) {
       const button = textButton(t("view.panel.notes", { n: notes.length }), "notes", key, "info-button");
-      const popId = `panel-${key}-notes`;
+      const notesId = `panel-${key}-notes`;
       button.setAttribute("aria-expanded", String(state.notesOpen === key));
-      button.setAttribute("aria-controls", popId);
+      button.setAttribute("aria-controls", notesId);
       summary.append(button);
-      notesPop = element("div", `pop notes-pop${mode !== "big" && index >= count / 2 ? " above" : ""}`);
-      notesPop.id = popId;
-      notesPop.hidden = state.notesOpen !== key;
-      notesPop.dataset.key = key;
-      notesPop.append(element("p", "pop-title", t("view.panel.about", { name })));
+      // The notes open in place, under the row of numbers and above the
+      // chart (stage X12d3 of v2.3.0, the person's choice B of the samples):
+      // they cover nothing, and their button, which stays where it is,
+      // closes them again. As a window over the chart (until 2.3.0rc2)
+      // they covered their own button and the end of the row, and could
+      // not be closed where a pressed button does not take the focus
+      // (Safari): the hand checks of 2.3.0rc2 found it.
+      notesBox = element("div", "panel-notes");
+      notesBox.id = notesId;
+      notesBox.hidden = state.notesOpen !== key;
+      notesBox.dataset.key = key;
+      notesBox.append(element("p", "panel-notes-title", t("view.panel.about", { name })));
       const list = element("ul");
       for (const note of notes) {
         const entry = element("li", "", describe(note));
@@ -4556,9 +4585,12 @@ function buildPanel({ key, item, panel }, index, count, periods, grain, marksTex
         }
         list.append(entry);
       }
-      notesPop.append(list);
+      notesBox.append(list);
     }
     section.append(summary);
+    if (notesBox !== null) {
+      section.append(notesBox);
+    }
   }
   let body;
   if (table) {
@@ -4579,9 +4611,6 @@ function buildPanel({ key, item, panel }, index, count, periods, grain, marksTex
     body.append(plot);
   }
   section.append(body);
-  if (notesPop !== null) {
-    section.append(notesPop);
-  }
   return { section, key, item, panel, mode, table, read, styles, names };
 }
 
@@ -5247,6 +5276,8 @@ function moveCross(index, speak) {
   }
 }
 
+// It says whether it took the key: an Escape that it leaves closes the notes
+// of the panels (stage X12d3 of v2.3.0).
 function plotKey(event) {
   if (Object.hasOwn(CROSS_KEYS, event.key)) {
     moveCross((state.cursor ?? 0) + CROSS_KEYS[event.key], true);
@@ -5260,9 +5291,10 @@ function plotKey(event) {
   } else if (event.key === "Escape" && state.list !== null && event.target.dataset.key === state.list.key) {
     closeList(true);
   } else {
-    return;
+    return false;
   }
   event.preventDefault();
+  return true;
 }
 
 function plotPointer(event) {
@@ -10749,15 +10781,19 @@ async function quit() {
 }
 
 // The notes of a panel open and close by themselves, without drawing the
-// panels again; one is open at a time.
+// panels again; one is open at a time. As they open in place, the chart of
+// their panel gets lower or higher, and the charts are drawn again at the
+// next frame, as the watcher of their size would (also where there is none;
+// Codex's read of the plan of stage X12d3 of v2.3.0).
 function toggleNotes(key, open = state.notesOpen !== key) {
   state.notesOpen = open ? key : null;
-  for (const pop of ui.panels.querySelectorAll(".notes-pop")) {
-    pop.hidden = pop.dataset.key !== state.notesOpen;
+  for (const box of ui.panels.querySelectorAll(".panel-notes")) {
+    box.hidden = box.dataset.key !== state.notesOpen;
   }
   for (const button of ui.panels.querySelectorAll('button[data-action="notes"]')) {
     button.setAttribute("aria-expanded", String(button.dataset.key === state.notesOpen));
   }
+  scheduleRedraw();
 }
 
 function panelAction(event) {
@@ -11312,9 +11348,14 @@ function connect() {
   });
   ui.panels.addEventListener("click", panelAction);
   ui.panels.addEventListener("keydown", (event) => {
-    if (event.target.classList?.contains("plot")) {
-      plotKey(event);
-    } else if (event.key === "Escape" && listBox?.contains(event.target)) {
+    // The keys of a chart first. An Escape that its chart leaves (no list of
+    // its own open) closes the notes, also where the focus stayed on a chart
+    // after the press at their button, as Safari keeps it there (Codex's
+    // read of the diff of stage X12d3 of v2.3.0).
+    if (event.target.classList?.contains("plot") && plotKey(event)) {
+      return;
+    }
+    if (event.key === "Escape" && listBox?.contains(event.target)) {
       // The list closes by Esc, and the focus goes back to its chart (stage
       // M3 of v2.2.0).
       event.preventDefault();
