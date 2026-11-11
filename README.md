@@ -103,19 +103,19 @@ input, timezone, and options, the normalization, its outputs, and the
 Snapshot Store are those of v2.2.0; v2.2.1 does not open an output that
 v2.2.0 made. See [What v2.2.1 fixes](#what-v221-fixes).
 
-Implementation candidate: **v2.3.0rc2** (the second release candidate of
-v2.3.0, published on TestPyPI; Production PyPI and the latest GitHub Release
-stay v2.2.1). It is a test version, for checking v2.3.0 before its release:
-for normal use, install the stable release v2.2.1. It adds to the view page
-the laps of an activity and the work laps of the shoes (read from the FIT
-files of the Snapshot Store only when asked for), the race days by day and
-over 2 or 4 weeks, the highest of each year, pictures saved as PNG in the
-sizes of posts, why a period of a panel left records out, and the records that
-changed since the output before, and it shows the cadence in steps per minute;
-for the same input, timezone, and options, the normalization, its outputs, and
-the Snapshot Store are those of v2.2.1. Only the version that an output
-records, and what is computed from it, differ, and v2.3.0rc2 does not open an
-output of v2.2.1. **Install** below says how to try it.
+Implementation candidate: **v2.3.0rc3** (the third release candidate of
+v2.3.0, for TestPyPI; Production PyPI and the latest GitHub Release stay
+v2.2.1). It is a test version, for checking v2.3.0 before its release: for
+normal use, install the stable release v2.2.1. It adds to the view page the
+laps of an activity and the work laps of the shoes (read from the FIT files of
+the Snapshot Store only when asked for), the race days by day and over 2 or 4
+weeks, the highest of each year, pictures saved as PNG in the sizes of posts,
+why a period of a panel left records out, and the records that changed since
+the output before, and it shows the cadence in steps per minute; for the same
+input, timezone, and options, the normalization, its outputs, and the Snapshot
+Store are those of v2.2.1. Only the version that an output records, and what
+is computed from it, differ, and v2.3.0rc3 does not open an output of v2.2.1.
+**Install** below says how to try it once it is published.
 
 v2.2.0 adds to the view page layouts of items, comparisons of years (also by
 race day, and as a calendar), marks and the list of the activities of a
@@ -285,22 +285,22 @@ in the GUI Guide. Its
 gives one line for macOS and one for Windows PowerShell that make a virtual
 environment, install this app in it, and make the icon.
 
-The release candidate v2.3.0rc2 is a test version, for checking v2.3.0 before
-its release; for normal use, install the stable release as above. It is
-published on TestPyPI. Install it in a virtual environment of its own, and
+The release candidate v2.3.0rc3 is a test version, for checking v2.3.0 before
+its release; for normal use, install the stable release as above. Once it is
+published on TestPyPI, install it in a virtual environment of its own, and
 start the GUI with the Python of that environment, without an icon. The
 lines give Production PyPI too, so that pip finds the dependencies that
 TestPyPI may not provide, such as `tzdata` on Windows; pip looks for each
 package on both. On macOS:
 
 ```bash
-python3 -m venv ~/garmin-normalizer-rc && ~/garmin-normalizer-rc/bin/python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.3.0rc2 && ~/garmin-normalizer-rc/bin/python -m garmin_running_data_normalizer gui
+python3 -m venv ~/garmin-normalizer-rc && ~/garmin-normalizer-rc/bin/python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.3.0rc3 && ~/garmin-normalizer-rc/bin/python -m garmin_running_data_normalizer gui
 ```
 
 In Windows PowerShell:
 
 ```powershell
-py -m venv "$HOME\garmin-normalizer-rc"; if ($?) { & "$HOME\garmin-normalizer-rc\Scripts\python.exe" -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.3.0rc2; if ($?) { & "$HOME\garmin-normalizer-rc\Scripts\python.exe" -m garmin_running_data_normalizer gui } }
+py -m venv "$HOME\garmin-normalizer-rc"; if ($?) { & "$HOME\garmin-normalizer-rc\Scripts\python.exe" -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.3.0rc3; if ($?) { & "$HOME\garmin-normalizer-rc\Scripts\python.exe" -m garmin_running_data_normalizer gui } }
 ```
 
 When you try it:
@@ -312,14 +312,14 @@ When you try it:
   `garmin-running-data-normalizer` (in `Library/Application Support` of your
   home folder on a Mac, in `LOCALAPPDATA` on Windows), and the marks of the
   view page in `gui-marks.json` there, in the same form: each version reads
-  what the other saves. Where v2.3.0rc2 remembered 2 or 4 weeks before a race
+  what the other saves. Where v2.3.0rc3 remembered 2 or 4 weeks before a race
   day, v2.2.1 forgets only that range and opens with 16 weeks.
-- v2.3.0rc2 does not open an output that v2.2.1 made, as no version opens the
+- v2.3.0rc3 does not open an output that v2.2.1 made, as no version opens the
   output of another: normalize again into a new folder (with a Snapshot
   Store, make a new output from the Snapshots it holds, without importing
   them again). **Compare with the output before** compares two outputs of
-  v2.3.0rc2, from the second one that it makes.
-- The view page of v2.3.0rc2 reads the FIT files of the Snapshot Store that
+  v2.3.0rc3, from the second one that it makes.
+- The view page of v2.3.0rc3 reads the FIT files of the Snapshot Store that
   the GUI remembers only when you open the laps of an activity or count the
   work laps of the shoes, and writes nothing in the store.
 - **Forget the remembered settings…** of either version removes both files
