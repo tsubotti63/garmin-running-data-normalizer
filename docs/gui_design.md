@@ -1254,7 +1254,12 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   both languages. The columns are those of the output: the local date and time as
   the output writes them (not needed: an output without the column opens),
   from stage T1 the name where the names were read, the type, seven values,
-  and the item of the panel where it is none of them. The page orders the rows
+  and the item of the panel where it is none of them; from stage X10 each row
+  has a button for its laps. In a narrow window the names keep a width of at
+  least 7em (about seven Japanese characters), and the column of the laps
+  stays at the right edge of the list while the other columns scroll sideways
+  under it (stage X12d5 of v2.3.0: the names stood a letter to a line and
+  pushed the buttons of the laps out of view). The page orders the rows
   by a column (rows without a value last either way; the date and time as they
   show, before their offset), draws the frame of the period on the chart, and
   closes the list when what the panels count or show changes, never while

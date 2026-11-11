@@ -1788,12 +1788,44 @@ button.small {
 }
 
 /* The names of the activities (stage T1 of v2.2.0) wrap in their column, long
-   names without spaces too (Codex's review of the plan of T1). */
+   names without spaces too (Codex's review of the plan of T1), but keep a width
+   of at least 7em, about seven Japanese characters (stage X12d5 of v2.3.0: in
+   a narrow window, where the table
+   is wider than its box, the names stood a letter to a line and the rows grew
+   high). */
 .list-table .t td.list-name {
+  min-width: 7em;
   max-width: 16em;
   overflow-wrap: anywhere;
   white-space: normal;
   text-align: left;
+}
+
+/* The column of the laps (stage X10 of v2.3.0) stays at the right edge of the
+   box of the list where the table is wider than the box and scrolls sideways
+   (stage X12d5 of v2.3.0: its buttons left the box in a narrow window). Its
+   head stays above the other heads, which stay at the top. */
+.list-table .t th.list-laps-head,
+.list-table .t td.list-laps {
+  position: sticky;
+  right: 0;
+  box-shadow: -1px 0 0 var(--line);
+}
+
+.list-table .t th.list-laps-head {
+  z-index: 2;
+}
+
+.list-table .t td.list-laps {
+  background: var(--surface);
+}
+
+/* A button of the laps with the focus keeps its ring whole: its cell stays
+   above the cells of the next rows, which stay at the right edge too and
+   would cover the lower part of the ring in a low row (stage X12d5 of v2.3.0,
+   Codex's read of its diff; measured in Chrome at 1415x970). */
+.list-table .t td.list-laps:focus-within {
+  z-index: 1;
 }
 
 .list-table .t td.empty,

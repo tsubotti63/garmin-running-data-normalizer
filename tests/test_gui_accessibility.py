@@ -965,9 +965,45 @@ class GuiViewPageStructureTest(unittest.TestCase):
         style = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
         rule = re.search(r"\n\.list-table \.t td\.list-name \{(.*?)\n\}", style, re.DOTALL)
         assert rule is not None
-        for declaration in ("max-width: 16em;", "overflow-wrap: anywhere;", "white-space: normal;", "text-align: left;"):
+        for declaration in ("max-width: 16em;", "overflow-wrap: anywhere;", "white-space: normal;", "text-align: left;", "min-width: 7em;"):
             with self.subTest(declaration=declaration):
                 self.assertIn(declaration, rule.group(1))
+
+    def test_the_list_keeps_its_names_and_laps_in_a_narrow_window(self) -> None:
+        # Stage X12d5 of v2.3.0 (found by the walk of the steps in WebKit at
+        # stage X12d4): in a narrow window, where the table of the list of a
+        # period is wider than its box, the names stood a letter to a line,
+        # the rows grew high, and the buttons of the laps left the box. The
+        # names keep a width of at least 7em (above), and the column of the laps
+        # stays at the right edge of the box while the other columns scroll
+        # sideways under it; its head stays above the other heads.
+        style = (STATIC_ROOT / "view.css").read_text(encoding="utf-8")
+        both = re.search(r"\n\.list-table \.t th\.list-laps-head,\n\.list-table \.t td\.list-laps \{(.*?)\n\}", style, re.DOTALL)
+        assert both is not None
+        for declaration in ("position: sticky;", "right: 0;", "box-shadow: -1px 0 0 var(--line);"):
+            with self.subTest(declaration=declaration):
+                self.assertIn(declaration, both.group(1))
+        head = re.search(r"\n\n\.list-table \.t th\.list-laps-head \{(.*?)\n\}", style, re.DOTALL)
+        assert head is not None
+        self.assertIn("z-index: 2;", head.group(1))
+        cell = re.search(r"\n\n\.list-table \.t td\.list-laps \{(.*?)\n\}", style, re.DOTALL)
+        assert cell is not None
+        self.assertIn("background: var(--surface);", cell.group(1))
+        # A button of the laps with the focus keeps its ring whole: its cell
+        # stays above the cells of the next rows (Codex's read of the diff).
+        focused = re.search(r"\n\.list-table \.t td\.list-laps:focus-within \{(.*?)\n\}", style, re.DOTALL)
+        assert focused is not None
+        self.assertIn("z-index: 1;", focused.group(1))
+        # The head and the cells of the laps are the ones that the page builds.
+        self.assertIn('const lapsHead = element("th", "list-laps-head", t("view.list.laps"));', self.script)
+        self.assertIn('  const cell = element("td", "list-laps");', self.script)
+        design = " ".join((ROOT / "docs" / "gui_design.md").read_text(encoding="utf-8").split())
+        self.assertIn(
+            "In a narrow window the names keep a width of at least 7em (about seven Japanese characters), and the "
+            "column of the laps stays at the right edge of the list while the other columns scroll sideways under it "
+            "(stage X12d5 of v2.3.0: the names stood a letter to a line and pushed the buttons of the laps out of view).",
+            design,
+        )
 
     def test_the_notes_of_a_panel_open_in_place_and_cover_nothing(self) -> None:
         # Stage X12d3 of v2.3.0, the person's choice B of the samples: the
