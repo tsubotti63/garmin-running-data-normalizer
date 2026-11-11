@@ -1517,16 +1517,36 @@ button.small {
    the room that the heading leaves on its line (where it does not fit beside
    the name, it goes to a line of its own, as before). Of the second line, the
    number left out counts in its width, so that it is never cut, and the
-   reasons do not: where they do not fit, they are cut at their end. */
+   reasons do not: where they do not fit, they are cut at their end. Its
+   letters are not kerned (stage X12d4 of v2.3.0), so that a reading is as
+   wide as its letters, and one with each digit as the widest digit is not
+   narrower, unless a font puts other letters in by their neighbours (Codex's
+   fifth and sixth reads of the diff of X12d4). */
 .panel-read.two-lines {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   align-items: flex-end;
+  font-kerning: none;
 }
 
 .read-line {
   white-space: nowrap;
+}
+
+/* The readings measured for the widest (stage X12d4 of v2.3.0), out of the
+   layout of their heading, each line as wide as its words; clipped to
+   nothing, so that they never widen what the box of the panels scrolls
+   (Codex's fifth read of the diff of X12d4). */
+.read-probe {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
 }
 
 /* The first line is as high with no value, and while no period is chosen, as

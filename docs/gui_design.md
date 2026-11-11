@@ -997,10 +997,15 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   that line and above the chart and cover nothing (stage X12d3 of v2.3.0, the
   person's choice B: as a window over the chart they covered their own button
   and could not be closed in Safari; a picture saved while they are open is as
-  with them closed), and can be shown as a table (newest first, 400 rows at a
-  time; the table keeps its heads and two rows or so, and its panel grows for
-  them), enlarged, moved, or removed; one panel enlarged makes the others low
-  strips on the same axis, which are never lower than what they hold either.
+  with them closed; since stage X12d4 of v2.3.0, where they open below what
+  the panels show, the panels scroll to show as much of them as fits with
+  their button still in view, and scroll back when they close unless they
+  moved meanwhile, scrolled by the person or laid out again), and can be
+  shown as a table (newest first, 400
+  rows at a time; the table keeps its heads and two rows or so, and its panel
+  grows for them), enlarged, moved, or removed; one panel enlarged makes the
+  others low strips on the same axis, which are never lower than what they
+  hold either.
   Panels of the same unit can share one scale on request. Acute and chronic
   training load are both Garmin's values as they are, but two columns of the
   same source, so they share it.
@@ -1031,7 +1036,14 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   first and the last activity counted, outside them, or without a record of
   the item); its whole, in the words of the notes of the panel, is its title
   and is said after the values by the live region of the cross line (in
-  parentheses in Japanese, after a semicolon in English). The list of a period
+  parentheses in Japanese, after a semicolon in English). From stage X12d4 of
+  v2.3.0 the reading is as wide as its widest reading over the periods shown
+  (its first line and the number left out on its second, each digit as the
+  widest, its letters not kerned), so that it stands beside the name only
+  where even that one fits, and on a line of its own otherwise (a reading too
+  wide for the line of the name in some periods went to a line of its own in
+  those only, and the heading got higher or lower as the cross line moved).
+  The list of a period
   gives each row `left_out` (the reason that the panel left it out, or null)
   and its value `grounds`: the cell of the item of a row left out says why,
   and a line under the value says what the panel left out of the period. The

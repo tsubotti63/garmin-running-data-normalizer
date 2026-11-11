@@ -1107,6 +1107,20 @@ function groundsLeft(kind, found, lead, item, language) {
   };
 }
 
+// The number left out of each period of a panel, as its grounds say it first
+// (periodGrounds), or null where the period left nothing out: in one pass over
+// the counts, for the page to measure (stage X12d4 of v2.3.0).
+export function groundsLeads(item, panel, periods, language) {
+  const kind = groundsKind(item);
+  const left = periods.map(() => 0);
+  for (const [name, at, count] of groundPairs(panel)) {
+    if (GROUND_REASONS[kind].includes(name) && at >= 0 && at < left.length) {
+      left[at] += count;
+    }
+  }
+  return left.map((sum) => (sum > 0 ? message(GROUND_LEADS[kind], { n: countText(sum, language) }) : null));
+}
+
 export function periodGrounds(item, panel, periods, index, grain, language) {
   const period = periods[index];
   if (period === undefined || !panel) {
@@ -1144,6 +1158,15 @@ export function listGrounds(item, grounds, language) {
 // each line its value and its count, or that it has no value; and the grounds
 // of the period (stage X6 of v2.3.0).
 export function readout(item, panel, periods, index, grain, language) {
+  const line = readingLine(item, panel, periods, index, grain, language);
+  return line === null ? null : { ...line, grounds: periodGrounds(item, panel, periods, index, grain, language) };
+}
+
+// The first line of a reading: the period, and each value with its line and
+// its count. The page measures it for every period shown when it builds the
+// panels (stage X12d4 of v2.3.0), without the grounds, which look through the
+// counts of all the periods for each.
+export function readingLine(item, panel, periods, index, grain, language) {
   const period = periods[index];
   if (period === undefined) {
     return null;
@@ -1155,7 +1178,7 @@ export function readout(item, panel, periods, index, grain, language) {
     }
     return [{ line: number, value: valueMessage(item.key, value, language), count: countMessage(item, line.counts?.[index] ?? 0, grain, language) }];
   });
-  return { period: periodMessage(period, grain, language), values, grounds: periodGrounds(item, panel, periods, index, grain, language) };
+  return { period: periodMessage(period, grain, language), values };
 }
 
 // The notes of a panel ("About this panel"): what is left out of its numbers
