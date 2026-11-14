@@ -10,7 +10,9 @@ $ErrorActionPreference = 'Continue'
 $here = Join-Path $env:GITHUB_WORKSPACE '.github\c3'
 $check = Join-Path $env:RUNNER_TEMP 'v2.3.0rc3_check'
 $null = New-Item -ItemType Directory -Force -Path $check
-Set-Content -LiteralPath (Join-Path $check 'v2.3.0rc3_results.txt') -Value 'CI: the lines of the Windows check of 2.3.0rc3' -Encoding ASCII
+# The head of the results file as the person's (Japanese, UTF-8 without a BOM, LF), copied byte for byte, so that line
+# 10 reads it here as on the company PC.
+Copy-Item -LiteralPath (Join-Path $here 'v2.3.0rc3_results.txt') -Destination (Join-Path $check 'v2.3.0rc3_results.txt')
 Set-Content -LiteralPath (Join-Path $check 'synthetic_garmin_export_x12d.zip') -Value 'a stand-in for the ZIP' -Encoding ASCII
 Write-Output ('downloads-folder ' + (Test-Path -LiteralPath "$HOME\Downloads") + ' / shell-downloads ' + [bool](New-Object -ComObject Shell.Application).NameSpace('shell:Downloads'))
 $launcher = [bool](Get-Command py -ErrorAction SilentlyContinue)
@@ -34,8 +36,13 @@ function Run-Line([string]$file, [int]$seconds) {
   $err = Join-Path $env:RUNNER_TEMP ($file + '.err')
   $p = Start-Process powershell -ArgumentList @('-NoProfile', '-EncodedCommand', (Encoded $file)) -NoNewWindow -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
   if ($p.WaitForExit($seconds * 1000)) {
-    Write-Output ($file + ': ended, error lines ' + @(Get-Content -LiteralPath $err -ErrorAction SilentlyContinue | Where-Object { $_.Trim() }).Count)
-    Get-Content -LiteralPath $err -ErrorAction SilentlyContinue | Where-Object { $_ -match 'Exception|FullyQualifiedErrorId|CategoryInfo' } | Select-Object -First 6 | ForEach-Object { '  ' + $_.Trim() }
+    # What a person sees in red is an error record; PowerShell also writes its progress records to the error stream as
+    # CLIXML when the stream is redirected (#< CLIXML, then <Objs ...>), which a window shows as progress, not in red.
+    $lines = @(Get-Content -LiteralPath $err -ErrorAction SilentlyContinue | Where-Object { $_.Trim() })
+    $clixml = @($lines | Where-Object { $_ -like '#< CLIXML*' -or ($_ -like '<Objs*' -and $_ -notlike '*S="Error"*') }).Count
+    $red = @($lines | Where-Object { $_ -like '*S="Error"*' -or ($_ -notlike '#< CLIXML*' -and $_ -notlike '<Objs*') }).Count
+    Write-Output ($file + ': ended, error-stream lines ' + $lines.Count + ' (progress as CLIXML ' + $clixml + ', error records ' + $red + ')')
+    $lines | Where-Object { $_ -match 'Exception|FullyQualifiedErrorId|CategoryInfo' } | Select-Object -First 6 | ForEach-Object { '  ' + $_.Trim().Substring(0, [Math]::Min(200, $_.Trim().Length)) }
   } else {
     Stop-Process -Id $p.Id -Force
     Write-Output ($file + ': did not end in ' + $seconds + ' s, stopped')
@@ -68,5 +75,5 @@ Run-Line '9.txt' 60
 Run-Line '10.txt' 240
 
 Write-Output '--- the results file (its W lines)'
-Get-Content -LiteralPath (Join-Path $check 'v2.3.0rc3_results.txt') | Where-Object { $_ -like 'W*' }
+Get-Content -LiteralPath (Join-Path $check 'v2.3.0rc3_results.txt') -Encoding UTF8 | Where-Object { $_ -like 'W*' }
 Write-Output ('left: venv-rc ' + (Test-Path -LiteralPath "$HOME\garmin-normalizer-rc") + ' / outputs ' + (Test-Path -LiteralPath "$HOME\GarminRunningData") + ' / settings ' + (Test-Path -LiteralPath "$env:LOCALAPPDATA\garmin-running-data-normalizer") + ' / zip-in-downloads ' + (Test-Path -LiteralPath "$HOME\Downloads\synthetic_garmin_export_x12d.zip"))
