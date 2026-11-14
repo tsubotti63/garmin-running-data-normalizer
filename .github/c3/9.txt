@@ -1,0 +1,1 @@
+$f=Join-Path $env:RUNNER_TEMP 'v2.3.0rc3_check'; $r=Join-Path $f 'v2.3.0rc3_results.txt'; $o=('W9 ' + (Get-Date -Format 'HH:mm') + ' / backend ' + [bool](Get-CimInstance Win32_Process -Filter "Name = 'python.exe' OR Name = 'pythonw.exe'" | Where-Object { $_.CommandLine -like '*garmin_running_data_normalizer*' })); Add-Content -LiteralPath $r -Value $o -Encoding ASCII; $o

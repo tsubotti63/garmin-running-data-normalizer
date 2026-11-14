@@ -1,0 +1,1 @@
+py -m venv "$HOME\garmin-normalizer-rc"; if ($?) { & "$HOME\garmin-normalizer-rc\Scripts\python.exe" -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.3.0rc3; if ($?) { & "$HOME\garmin-normalizer-rc\Scripts\python.exe" -m garmin_running_data_normalizer gui } }
