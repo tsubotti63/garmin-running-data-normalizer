@@ -4,6 +4,27 @@ This file records factual Garmin Running Data Normalizer product changes. The
 Product-owned root `CHANGELOG.md` routes readers here; the AI Collaboration
 Platform maintains its own separate changelog.
 
+## v2.3.0 — stable Production GUI feature release
+
+Status: published as the annotated tag, the latest stable GitHub Release, and a
+verified Production PyPI distribution.
+
+- Adds to the view page the laps of an activity and the work laps of the
+  shoes (read from the FIT files of the Snapshot Store only when asked for),
+  the race days by day and over 2 or 4 weeks, the highest period of each
+  year, pictures saved as PNG in the sizes of posts, why a period of a panel
+  left records out, and the records that changed since the output before;
+  the cadence shows in steps per minute.
+- Fixes the questions of the bar (Escape wherever the focus is), the
+  half-written files of a write on Windows, the table of six races, and the
+  window of saving an image.
+- Preserves the processing, the 17 datasets, 247 fields, stable keys, the
+  command line, the Snapshot lifecycle contract and policy registry `v1.0`,
+  the form of the settings and the marks, and the `0 / 0 / 3 / 2` Product
+  exit mapping. Outputs of v2.2.1 are refused by the checks of v2.3.0, as for
+  every other version; the view page and `series` read only outputs of this
+  version.
+
 ## v2.2.1 — stable Production GUI fix release
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a

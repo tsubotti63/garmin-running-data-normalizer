@@ -13,6 +13,57 @@ canonical platform repository:
 
 - [AI Collaboration Platform — CHANGELOG](https://github.com/tsubotti63/ai-collaboration-platform/blob/main/CHANGELOG.md)
 
+## v2.3.0 — stable Production release
+
+Published as the annotated `v2.3.0` tag, the latest stable
+[GitHub Release](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.3.0),
+and the verified
+[Production PyPI distribution](https://pypi.org/project/garmin-running-data-normalizer/2.3.0/).
+
+### Added
+
+- The view page shows the laps of an activity, with the kinds that the watch
+  recorded in its FIT file, and counts the work laps (Active, Interval) of the
+  shoes; it reads the FIT files of the Snapshot Store that the GUI remembers
+  only when asked for, and writes nothing in the store.
+- **Compare years** by race day can be grouped by **Day**, and its span can
+  go from 2 or 4 weeks before to the race day.
+- The highest period of each year, and of the span of each race, is marked in
+  the tables, the headings, and the charts.
+- **Save as image…** also saves a PNG in three sizes of posts seen on a phone.
+- A panel says how many records each step left out, and why; so do the list
+  of the activities of a period and **About this panel**.
+- The normalization page gives the numbers of the records that changed since
+  the output before, and **Compare with the output before** on the view page
+  lists them.
+
+### Changed
+
+- The view page shows the cadence in steps per minute (both feet); the
+  outputs and `series` keep the value as recorded.
+- Pictures keep the space after " · " in English and wrap no word in the
+  middle.
+- The GUI Guide says what 2.3.0 changes; its pictures of the whole page are
+  taken again with 2.3.0.
+
+### Fixed
+
+- Escape closes the questions of the bar wherever the focus is.
+- On Windows, the bar says when a half-written file stays for ten minutes,
+  and **Forget the remembered settings…** can still be pressed.
+- The table of six races of **Compare years** fits its box at 1366 × 650 and
+  1470 × 830 even with long names, and the window of **Save as image…** keeps
+  **Save** in view.
+
+### Compatibility
+
+- For the same input, timezone, and options, the processing, the 17
+  datasets, 247 fields, stable keys, output paths, the Snapshot Store format,
+  the Product exit mapping, the command line, and the form of the settings
+  and the marks remain those of v2.2.1. Outputs record `2.3.0`; the view page
+  and `series` read only outputs of this version. See the
+  [v2.3.0 Release Notes](docs/release_notes/v2.3.0.md).
+
 ## v2.2.1 — stable Production release
 
 Published on 2026-11-06 JST as the annotated `v2.2.1` tag, the latest stable

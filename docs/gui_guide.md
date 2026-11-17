@@ -1,8 +1,8 @@
 # GUI Guide
 
-> **This guide is for v2.2.1.** v1.7.1 and earlier releases do not have the
+> **This guide is for v2.3.0.** v1.7.1 and earlier releases do not have the
 > GUI; the releases after v1.7.1 have it. [What you need](#what-you-need) says
-> how to install v2.2.1. If you keep
+> how to install v2.3.0. If you keep
 > using v1.7.1 or an earlier release, use the command line as described in
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md).
 
@@ -54,7 +54,7 @@ Adding a new Export later, and the other cases, are in
   Garmin may take some time after your request before you can download the
   Export, so request it early. You may also install this app first and read
   **How to use** before you request it.
-- Python 3.11 or later, and this app, v2.2.1, which the steps below
+- Python 3.11 or later, and this app, v2.3.0, which the steps below
   install. Nothing else needs to be installed for the GUI.
 - A web browser on the same computer, in a window of a desktop or laptop
   computer. The page is not made for phones or tablets.
@@ -148,7 +148,7 @@ Start menu, and open **Windows PowerShell**.
 4. Run the line below. It makes the virtual environment `garmin-normalizer`
    in your home folder (the place of the Python for this app; moving it to
    the Trash leaves the Snapshot Store, the outputs, and the remembered
-   settings as they are), installs v2.2.1 in it, makes the icon that starts the
+   settings as they are), installs v2.3.0 in it, makes the icon that starts the
    GUI (on the desktop on macOS, and on the desktop and in the Start menu on
    Windows; [Start the GUI from an icon](#start-the-gui-from-an-icon)), and
    opens the GUI. Each part runs only after the one before it has succeeded.
@@ -164,14 +164,14 @@ Start menu, and open **Windows PowerShell**.
    macOS:
 
    ```bash
-   python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.2.1 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
+   python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.3.0 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
    ```
 
    Windows PowerShell, in any version (version 5.1 has no `&&`, so that the
    parts are joined with `if ($?)`, one inside the other):
 
    ```powershell
-   py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.2.1; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
+   py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.3.0; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
    ```
 
    - When the line succeeds, the terminal shows three lines at its end, and
@@ -260,7 +260,7 @@ fill in the form. When the GUI does not open, so that you cannot use
 - **Package version**: the line that `--version` shows
   ([Update to a new version](#update-to-a-new-version)); when the line
   stopped before this app was installed, the version that you were
-  installing, 2.2.1.
+  installing, 2.3.0.
 - **Sanitized reproduction**: the line that you ran. The line of this
   guide holds no name, so you may paste it as it is.
 - **Exit code**: the number that the command that stopped returned (its exit
@@ -291,7 +291,7 @@ Do not paste the address of the GUI either: it holds the key of the launch.
 ### Update to a new version
 
 The page shows the version of this app at its bottom, for example
-Version 2.2.1, and this command shows it in a new window of the terminal,
+Version 2.3.0, and this command shows it in a new window of the terminal,
 not the one where the GUI runs:
 
 macOS:
@@ -332,9 +332,13 @@ have:
 To go back to an earlier version, run the line of the guide of that version
 too, after you stop the GUI as in step 1 (the guide of 2.1.0 is
 [gui_guide.md of v2.1.0](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v2.1.0/docs/gui_guide.md)).
+When you go back from 2.3.0 to 2.2.1, 2.2.1 uses the settings and the marks
+that 2.3.0 remembered, as both versions keep them in the same form; only a
+span of 2 or 4 weeks before a race day, which 2.2.1 does not have, is
+forgotten, and the span opens with 16 weeks.
 When you go back from 2.2.1 to 2.2.0, 2.2.0 uses the settings and the marks
 that 2.2.1 remembered as they are, as both versions keep them in the same
-form; what follows of 2.2.0 holds for 2.2.1 too.
+form; what follows of 2.2.0 holds for 2.2.1 and 2.3.0 too.
 When you go back from 2.2.0 to an earlier version, such as 2.1.0, it does not
 use the settings that 2.2.0 remembered, and starts as a first launch. It does
 not write over their file, so it does not remember what you choose while you
@@ -1990,7 +1994,7 @@ values are made):
   cannot be pressed, and the line says why. The table of the work laps is
   not in a saved picture.
 
-![By shoes: the panels of made-up shoes (two of one name told apart by their start dates), the distance of the month chosen by the cross line at the top right, and the notes under the panels (synthetic data)](assets/gui-guide/view-shoes.en.png)
+![By shoes: the panels of made-up shoes (one of them named with its start date, as another pair has the same name), the distance of the month chosen by the cross line at the top right, the sentence that the work laps cannot be counted for this output, and the notes under the panels (synthetic data)](assets/gui-guide/view-shoes.en.png)
 
 #### Compare with the output before (from 2.3.0)
 
