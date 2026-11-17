@@ -1,8 +1,8 @@
 # GUI の手引き
 
-> **v2.2.1 の手引きです。** v1.7.1 までのバージョンには、GUI は入っていません
+> **v2.3.0 の手引きです。** v1.7.1 までのバージョンには、GUI は入っていません
 > （その次のバージョンから入っています）。
-> v2.2.1 の入れ方は、[用意するもの](#用意するもの)にあります。v1.7.1 までの
+> v2.3.0 の入れ方は、[用意するもの](#用意するもの)にあります。v1.7.1 までの
 > バージョンを使い続けるときは、
 > [Getting Started from Garmin Export](getting_started_from_garmin_export.md)
 > のとおりに、コマンドラインを使ってください。
@@ -52,7 +52,7 @@ GUI は、Garmin のエクスポート（Account Data Export）を、ブラウ�
   1 と 2 も見てください。Garmin にリクエストしてから、ダウンロードできるように
   なるまでに時間がかかることがあるので、先にリクエストしておいてください。
   このアプリを先に入れて、画面の「使い方」を見てからリクエストしてもかまいません。
-- Python 3.11 以降と、このアプリ v2.2.1。どちらも、下の手順で入れます。
+- Python 3.11 以降と、このアプリ v2.3.0。どちらも、下の手順で入れます。
   GUI のために、ほかに入れるものはありません。
 - 同じコンピューターで動くブラウザー。デスクトップかノートのコンピューターの
   窓で使います。スマートフォンやタブレットには向けていません。
@@ -136,7 +136,7 @@ GUI は、Garmin のエクスポート（Account Data Export）を、ブラウ�
    （[GUI を開けないときに知らせる](#gui-を開けないときに知らせる)）。
 4. 下の 1 行を動かします。ホームのフォルダーに仮想環境 `garmin-normalizer` を
    作り（このアプリのための Python の置き場です。ごみ箱へ入れても、保管場所・
-   出力・覚えた設定は残ります）、そこに v2.2.1 を入れ、GUI を起動するアイコンを作って
+   出力・覚えた設定は残ります）、そこに v2.3.0 を入れ、GUI を起動するアイコンを作って
    （macOS ではデスクトップに、Windows ではデスクトップとスタートメニューに
    できます。[アイコンから起動する](#アイコンから起動する)）、GUI を開きます。
    それぞれの部分は、前の部分がうまくいったときだけ動きます。アイコンを
@@ -151,14 +151,14 @@ GUI は、Garmin のエクスポート（Account Data Export）を、ブラウ�
    macOS：
 
    ```bash
-   python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.2.1 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
+   python3 -m venv ~/garmin-normalizer && ~/garmin-normalizer/bin/python -m pip install garmin-running-data-normalizer==2.3.0 && ~/garmin-normalizer/bin/python -m garmin_running_data_normalizer gui --create-shortcut
    ```
 
    Windows PowerShell（どのバージョンでも、この 1 行を使えます。バージョン 5.1 には
    `&&` が無いので、`if ($?)` を入れ子にしてつないでいます）：
 
    ```powershell
-   py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.2.1; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
+   py -m venv "$HOME\garmin-normalizer"; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m pip install garmin-running-data-normalizer==2.3.0; if ($?) { & "$HOME\garmin-normalizer\Scripts\python.exe" -m garmin_running_data_normalizer gui --create-shortcut } }
    ```
 
    - うまくいくと、最後にターミナルに次の 3 行が出て、ブラウザーで GUI の画面が
@@ -242,7 +242,7 @@ GUI を開けないときや、上の手順で知らせるように書いてあ�
   出した行。
 - Package version：`--version` が出した行
   （[新しいバージョンに更新するとき](#新しいバージョンに更新するとき)）。
-  このアプリが入る前に止まったときは、入れようとしたバージョン（2.2.1）。
+  このアプリが入る前に止まったときは、入れようとしたバージョン（2.3.0）。
 - Sanitized reproduction：動かした 1 行。手引きの 1 行には名前が入っていない
   ので、そのまま貼ってかまいません。
 - Exit code：止まったコマンドが返した数（終了コード）です。macOS では、止まった
@@ -271,7 +271,7 @@ GUI のアドレスも貼らないでください。起動の鍵が入ってい�
 
 ### 新しいバージョンに更新するとき
 
-このアプリのバージョンは、画面の下に「バージョン 2.2.1」のように出ます。
+このアプリのバージョンは、画面の下に「バージョン 2.3.0」のように出ます。
 ターミナルでは、GUI を動かしている窓とは別の、新しい窓で、次のコマンドを
 動かすと分かります。
 
@@ -311,9 +311,13 @@ Windows PowerShell：
 前のバージョンに戻すときも、そのバージョンの手引きの 1 行を、1 と同じく GUI を
 終えてから動かします（2.1.0 の手引きは
 [v2.1.0 の gui_guide.ja.md](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/v2.1.0/docs/gui_guide.ja.md)
-にあります）。2.2.1 から 2.2.0 に戻したときは、2.2.1 が覚えた設定と印が、
+にあります）。2.3.0 から 2.2.1 に戻したときは、2.3.0 が覚えた設定と印が
+使われます（2 つのバージョンは、設定と印を同じ形で残します）。
+ただし、2.2.1 に無い「範囲」の「2 週前から大会の日まで」と
+「4 週前から大会の日まで」だけは忘れ、16 週で開きます。
+2.2.1 から 2.2.0 に戻したときは、2.2.1 が覚えた設定と印が、
 そのまま使われます（2 つのバージョンは、設定と印を同じ形で残します）。
-下の 2.2.0 のことは、2.2.1 にも当てはまります。
+下の 2.2.0 のことは、2.2.1 と 2.3.0 にも当てはまります。
 2.2.0 から前のバージョン（2.1.0 など）に戻したときは、2.2.0 が
 覚えた設定は使われず、初めての起動として始まります。戻したバージョンは、
 2.2.0 の設定のファイルを書き換えないので、戻している間に選んだことは覚えません。
@@ -1783,7 +1787,7 @@ Windows では、パス全体が 260 文字までです。出力の中のファ�
   押してください）。保管場所を使わずに作った出力では、ボタンは押せず、わけが
   出ます。疾走区間の表は、画像で保存されません。
 
-![靴ごと。作り物の靴の段（同じ名前の 2 足を使い始めの日で見分けた所）と、十字線で選んだ月の右上の距離、段の下の注（合成のデータ）](assets/gui-guide/view-shoes.ja.png)
+![靴ごと。作り物の靴の段（同じ名前の 2 足を使い始めの日で見分けた所）と、十字線で選んだ月の右上の距離、この出力では疾走区間を数えられないと言う文、段の下の注（合成のデータ）](assets/gui-guide/view-shoes.ja.png)
 
 #### 前回の出力とくらべる（2.3.0 から）
 

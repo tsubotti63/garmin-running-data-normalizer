@@ -783,16 +783,21 @@ class GuiGuideTest(unittest.TestCase):
                 "The place of an Export, **Name of the new folder** in box 3, the language, and the way to normalize are not remembered.",
                 "it does not use the settings that 2.2.0 remembered, and starts as a first launch. It does not write over their file, so it does not remember what you choose while you use it; back in 2.2.0, what 2.2.0 remembered is used as before.",
                 "**Forget the remembered settings…** of the earlier version removes that file, so that it forgets what 2.2.0 remembered too, such as the timezone of Box 3",
+                # v2.3.0 X12e: 2.3.0 keeps the settings and the marks in the
+                # form of 2.2.1; going back, 2.2.1 forgets only a span of 2
+                # or 4 weeks before a race day (stage X3).
+                "When you go back from 2.3.0 to 2.2.1, 2.2.1 uses the settings and the marks that 2.3.0 remembered, as both versions keep them in the same form; only a span of 2 or 4 weeks before a race day, which 2.2.1 does not have, is forgotten, and the span opens with 16 weeks.",
                 # v2.2.1 W6e: 2.2.1 keeps the settings and the marks in the
                 # form of 2.2.0, so that going back to 2.2.0 keeps them.
-                "When you go back from 2.2.1 to 2.2.0, 2.2.0 uses the settings and the marks that 2.2.1 remembered as they are, as both versions keep them in the same form; what follows of 2.2.0 holds for 2.2.1 too.",
+                "When you go back from 2.2.1 to 2.2.0, 2.2.0 uses the settings and the marks that 2.2.1 remembered as they are, as both versions keep them in the same form; what follows of 2.2.0 holds for 2.2.1 and 2.3.0 too.",
             ),
             "ja": (
                 "前に出力を作った正規化のタイムゾーン（2.2.0 から）。2 回目からは、3 の箱がこのタイムゾーンで決まります（「（前回のまま）」）。",
                 "エクスポートの場所、3 の箱の「新しく作るフォルダーの名前」、言語、正規化のしかたは覚えません。",
                 "2.2.0 が覚えた設定は使われず、初めての起動として始まります。戻したバージョンは、2.2.0 の設定のファイルを書き換えないので、戻している間に選んだことは覚えません。2.2.0 にまた戻すと、2.2.0 が覚えていたものが、そのまま使われます。",
                 "「覚えた設定を消す…」を押すと、そのファイルを消すので、2.2.0 が覚えたもの（3 の箱のタイムゾーンや、見るページで覚えたものなど）も消えます。",
-                "2.2.1 から 2.2.0 に戻したときは、2.2.1 が覚えた設定と印が、そのまま使われます（2 つのバージョンは、設定と印を同じ形で残します）。下の 2.2.0 のことは、2.2.1 にも当てはまります。",
+                "2.3.0 から 2.2.1 に戻したときは、2.3.0 が覚えた設定と印が使われます（2 つのバージョンは、設定と印を同じ形で残します）。ただし、2.2.1 に無い「範囲」の「2 週前から大会の日まで」と「4 週前から大会の日まで」だけは忘れ、16 週で開きます。",
+                "2.2.1 から 2.2.0 に戻したときは、2.2.1 が覚えた設定と印が、そのまま使われます（2 つのバージョンは、設定と印を同じ形で残します）。下の 2.2.0 のことは、2.2.1 と 2.3.0 にも当てはまります。",
             ),
         }
         before = {"en": "The timezone is not remembered", "ja": "タイムゾーンは覚えません"}
@@ -3364,8 +3369,9 @@ class GuiGuideTest(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         order = (
             "### Who this is for\n", "### Use it with the GUI\n", "### What you get\n", "### Try it\n",
-            "(#what-v221-fixes)", "## Why this project\n", "### Built from a runner's own workflow\n",
-            "## Install\n", "## Non-goals\n", "## What v2.2.1 fixes\n", "## What v2.2.0 adds\n", "## What v2.1.0 adds\n",
+            "(#what-v230-adds)", "## Why this project\n", "### Built from a runner's own workflow\n",
+            "## Install\n", "## Non-goals\n", "## What v2.3.0 adds\n", "## What v2.2.1 fixes\n", "## What v2.2.0 adds\n",
+            "## What v2.1.0 adds\n",
             "## What v1.3.0 adds\n",
             "### Evidence-backed observation contracts\n", "## Community\n",
         )
@@ -3381,7 +3387,7 @@ class GuiGuideTest(unittest.TestCase):
         # the steps of the GUI begin with the request of the Export, which
         # takes time.
         self.assertIn(
-            "What each release added and changed is in [What v2.2.1 fixes](#what-v221-fixes)",
+            "What each release added and changed is in [What v2.3.0 adds](#what-v230-adds)",
             section(readme, "Start here"),
         )
         steps = readme[readme.index("### Use it with the GUI\n") : readme.index("### What you get\n")]

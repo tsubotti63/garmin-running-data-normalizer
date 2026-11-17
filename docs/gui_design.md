@@ -4,8 +4,9 @@
   command opens the GUI. The view page and the colors of the page are added
   in v2.1.0; the sections marked v2.1.0 describe them. What v2.2.0 adds to
   the view page, and the timezone that the settings remember, are described
-  where the text says v2.2.0, and what v2.2.1 fixes where it says v2.2.1.
-- Applies to: stable v2.2.1
+  where the text says v2.2.0, what v2.2.1 fixes where it says v2.2.1, and
+  what v2.3.0 adds and fixes where it says v2.3.0.
+- Applies to: stable v2.3.0
 - Authority: maintainer design record agreed by the Human maintainer on
   2026-10-10 and revised by the Human maintainer's decisions of 2026-10-11.
   Product contracts, tests, and the stable release remain the behavior
@@ -2459,6 +2460,8 @@ alone, and reduced motion.
 | K4–K7 (v2.2.0) | Two release candidates on TestPyPI: 2.2.0rc1, checked on macOS and a physical Windows machine and read and used by new AI sessions, and 2.2.0rc2, with those words and looks, checked on macOS; then the documents that users read, the version 2.2.0, its publication, and its record |
 | V1–W5 (v2.2.1) | Fixes after 2.2.0, in pull requests #210 to #214, #216, and #217: the guides answer a third new reader (V1); the view page opens the output again when it finds that the output changed (W1); the questions of the bar end at their buttons, and a way chosen in Compare years brings back its chart (W2); the words of the view page and the table of six years (W3); forgetting also removes the half-written files of a write (W4); `standalone` can be the first module imported (W4b); and the publish workflow checks what it builds and publishes (W5) |
 | W6 (v2.2.1) | A release candidate on TestPyPI, 2.2.1rc1, checked on macOS; then the documents that users read, the version 2.2.1, its publication, and its record |
+| X1–X12p (v2.3.0) | What 2.3.0 adds and fixes, in pull requests #223 to #235: a question closes by Escape wherever the focus is and a half-written file that stays is told (X1); a long race name wraps and the save window keeps its buttons in view (X2); the laps of an activity with the kinds that its FIT file records, read from the Snapshot Store, and the cadence in steps per minute (X9b, X9c, X10); the work laps of each pair of shoes (X11); race days by day too and over 2 or 4 weeks (X3); the highest of each year (X4); pictures as PNG in the sizes of posts (X5); why a period of a panel left records out (X6); the records that changed since the output before (X7); and where the names show (X12p) |
+| X12 (v2.3.0) | Three release candidates on TestPyPI, 2.3.0rc1 to 2.3.0rc3, with the windows of the right column kept inside it, the notes of a panel opened in place, the panels kept still under the pointer, and the names and the laps of the list kept in a narrow window (pull requests #238 and #241 to #243), checked on macOS and a physical Windows machine; then the documents that users read, the version 2.3.0, its publication, and its record |
 
 Installing a release candidate from TestPyPI used Production PyPI as an
 extra index for dependencies, such as `tzdata` on Windows, that TestPyPI may

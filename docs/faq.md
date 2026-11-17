@@ -1,7 +1,7 @@
 # Frequently Asked Questions
 
 These short answers apply to the current stable Garmin Running Data Normalizer
-`v2.2.1` release and route to the current product authorities. Version `2.2.1`
+`v2.3.0` release and route to the current product authorities. Version `2.3.0`
 is available from the latest GitHub Release and Production PyPI.
 
 ## Getting started
@@ -55,12 +55,13 @@ Guide and [Optionally write the numbers to a CSV file](getting_started_from_garm
 
 ### Which version is stable?
 
-`v2.2.1` is the current stable release. It fixes small things of the GUI:
-the view page opens the output again when it finds that the output changed,
-the questions before quitting and before forgetting the remembered settings
-show right above their buttons, the words of the view page and its table of
-six years are clearer, and forgetting the settings also removes the
-half-written files of a write. It keeps what v2.2.0 adds to the view page:
+`v2.3.0` is the current stable release. It adds to the view page the laps
+of an activity and the work laps of the shoes, read from the FIT files of
+the Snapshot Store only when asked for, the race days by day and over 2 or
+4 weeks, the highest period of each year, pictures saved as PNG, why a
+period of a panel left records out, and the records that changed since the
+output before. It keeps the fixes of v2.2.1, and what v2.2.0 adds to the
+view page:
 layouts of items, comparisons of years, marks, other views, a summary,
 conditions on the activities, and saving what it shows as an image. It keeps
 the page of v2.1.0 that shows the numbers of an output side by side on one
@@ -71,13 +72,14 @@ the data and reports what it left out or kept, with the approved Sleep
 contract, the one-shot workflow, optional Snapshot Accumulation, the Windows
 timezone-data hotfix, and the additive Wellness/Metrics datasets documented
 for v1.3. It is published on
-[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.2.1)
-and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/2.2.1/).
-See the [v2.2.1 Release Notes](release_notes/v2.2.1.md), the
+[GitHub](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.3.0)
+and [Production PyPI](https://pypi.org/project/garmin-running-data-normalizer/2.3.0/).
+See the [v2.3.0 Release Notes](release_notes/v2.3.0.md), the
+[v2.2.1 Release Notes](release_notes/v2.2.1.md), the
 [v2.2.0 Release Notes](release_notes/v2.2.0.md), the
 [v2.1.0 Release Notes](release_notes/v2.1.0.md), the
 [v2.0.0 Release Notes](release_notes/v2.0.0.md), and the
-[Migration Notes](migration_notes.md#v220-to-v221).
+[Migration Notes](migration_notes.md#v221-to-v230).
 
 ### Can I use it without typing commands?
 
@@ -282,7 +284,7 @@ Public-safe Windows reports are welcome through
 ### Was the v1.2.0 Windows timezone-data issue resolved?
 
 Yes. v1.2.1 introduced the conditional Windows `tzdata` dependency, which
-v2.2.1 retains. The current release also provides the bounded
+v2.3.0 retains. The current release also provides the bounded
 `TIMEZONE_DATA_UNAVAILABLE` diagnostic if the configured IANA timezone data is
 still unavailable in a damaged or incomplete environment. Confirm the
 environment with:

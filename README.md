@@ -92,7 +92,17 @@ Select either preview to inspect its full-size accessible SVG.
 See the
 [asset sources and reproduction notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/assets/first-user-conversion/README.md).
 
-Current stable release: **v2.2.1** · Python **3.11+** · Apache License 2.0
+Current stable release: **v2.3.0** · Python **3.11+** · Apache License 2.0
+
+v2.3.0 adds to the view page the laps of an activity and the work laps of the
+shoes (read from the FIT files of the Snapshot Store only when asked for), the
+race days by day and over 2 or 4 weeks, the highest of each year, pictures
+saved as PNG in the sizes of posts, why a period of a panel left records out,
+and the records that changed since the output before, and it shows the
+cadence in steps per minute. For the same input, timezone, and options, the
+normalization, its outputs, and the Snapshot Store are those of v2.2.1;
+v2.3.0 does not open an output that v2.2.1 made. See
+[What v2.3.0 adds](#what-v230-adds).
 
 v2.2.1 fixes small things of the GUI: the view page opens the output again
 when it finds that the output changed, the questions before quitting and
@@ -102,20 +112,6 @@ the settings also removes the half-written files of a write. For the same
 input, timezone, and options, the normalization, its outputs, and the
 Snapshot Store are those of v2.2.0; v2.2.1 does not open an output that
 v2.2.0 made. See [What v2.2.1 fixes](#what-v221-fixes).
-
-Implementation candidate: **v2.3.0rc3** (the third release candidate of
-v2.3.0, published on TestPyPI; Production PyPI and the latest GitHub Release
-stay v2.2.1). It is a test version, for checking v2.3.0 before its release:
-for normal use, install the stable release v2.2.1. It adds to the view page
-the laps of an activity and the work laps of the shoes (read from the FIT
-files of the Snapshot Store only when asked for), the race days by day and
-over 2 or 4 weeks, the highest of each year, pictures saved as PNG in the
-sizes of posts, why a period of a panel left records out, and the records that
-changed since the output before, and it shows the cadence in steps per minute;
-for the same input, timezone, and options, the normalization, its outputs, and
-the Snapshot Store are those of v2.2.1. Only the version that an output
-records, and what is computed from it, differ, and v2.3.0rc3 does not open an
-output of v2.2.1. **Install** below says how to try it.
 
 v2.2.0 adds to the view page layouts of items, comparisons of years (also by
 race day, and as a calendar), marks and the list of the activities of a
@@ -191,7 +187,7 @@ v1.4.0 adds read-only Export diagnostics and a Human-reviewed public-safe
 Support Bundle without changing normalized datasets, stable keys, Snapshot
 semantics, or the `0 / 0 / 3 / 2` Product exit contract.
 
-v2.2.1 is published as the annotated tag, the latest stable GitHub Release, and
+v2.3.0 is published as the annotated tag, the latest stable GitHub Release, and
 the latest Production PyPI distribution. v1.4.0 remains the Export Evidence and
 Diagnostics release.
 
@@ -203,18 +199,19 @@ Diagnostics release.
 - [Supported Datasets](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/supported_datasets.md)
 - [Known Limitations](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/known_limitations.md)
 - [GUI Guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md) / [GUI の手引き](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.ja.md)
+- [v2.3.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.3.0.md)
 - [v2.2.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.2.1.md)
 - [v2.2.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.2.0.md)
 - [v2.1.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.1.0.md)
 - [v2.0.1 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.0.1.md)
 - [v2.0.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.0.0.md)
-- [Published stable Release v2.2.1](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.2.1)
-- [Production PyPI v2.2.1](https://pypi.org/project/garmin-running-data-normalizer/2.2.1/)
+- [Published stable Release v2.3.0](https://github.com/tsubotti63/garmin-running-data-normalizer/releases/tag/v2.3.0)
+- [Production PyPI v2.3.0](https://pypi.org/project/garmin-running-data-normalizer/2.3.0/)
 - Project story on Zenn: [English](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract?locale=en) / [日本語](https://zenn.dev/tsubotti63/articles/garmin-v1-3-source-backed-observation-contract)
 - Articles on Zenn for each release, newest first (in English where Zenn has a translation, otherwise in Japanese): [v2.2.0](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-v2-2?locale=en), [v2.1.0](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-view-page-v2-1?locale=en), [v2.0.0](https://zenn.dev/tsubotti63/articles/garmin-running-data-normalizer-gui-v2?locale=en), [v1.7.0](https://zenn.dev/tsubotti63/articles/garmin-fit-running-dynamics-v1-7?locale=en), [v1.6.0](https://zenn.dev/tsubotti63/articles/garmin-timezone-option-v1-6?locale=en), [v1.4.1 and v1.5.0](https://zenn.dev/tsubotti63/articles/garmin-fit-sport-names-v1-5?locale=en)
 - [All articles on Zenn](https://zenn.dev/tsubotti63), also on the design and on building this project with AI (in Japanese; most also in English)
 
-What each release added and changed is in [What v2.2.1 fixes](#what-v221-fixes)
+What each release added and changed is in [What v2.3.0 adds](#what-v230-adds)
 and the sections after it, near the end of this page.
 
 ## Why this project
@@ -271,7 +268,7 @@ garmin-running-data-normalizer --version
 ```
 
 The equivalent module command is
-`python -m garmin_running_data_normalizer --version`. The published v2.2.1
+`python -m garmin_running_data_normalizer --version`. The published v2.3.0
 package installs `tzdata` automatically on Windows so Python can resolve IANA
 timezone data (`Asia/Tokyo` by default, or the timezone given with
 `--timezone`). macOS and Linux continue to use their system timezone data.
@@ -284,53 +281,6 @@ in the GUI Guide. Its
 [What you need](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#what-you-need)
 gives one line for macOS and one for Windows PowerShell that make a virtual
 environment, install this app in it, and make the icon.
-
-The release candidate v2.3.0rc3 is a test version, for checking v2.3.0 before
-its release; for normal use, install the stable release as above. It is
-published on TestPyPI. Install it in a virtual environment of its own, and
-start the GUI with the Python of that environment, without an icon. The
-lines give Production PyPI too, so that pip finds the dependencies that
-TestPyPI may not provide, such as `tzdata` on Windows; pip looks for each
-package on both. On macOS:
-
-```bash
-python3 -m venv ~/garmin-normalizer-rc && ~/garmin-normalizer-rc/bin/python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.3.0rc3 && ~/garmin-normalizer-rc/bin/python -m garmin_running_data_normalizer gui
-```
-
-In Windows PowerShell:
-
-```powershell
-py -m venv "$HOME\garmin-normalizer-rc"; if ($?) { & "$HOME\garmin-normalizer-rc\Scripts\python.exe" -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ garmin-running-data-normalizer==2.3.0rc3; if ($?) { & "$HOME\garmin-normalizer-rc\Scripts\python.exe" -m garmin_running_data_normalizer gui } }
-```
-
-When you try it:
-
-- Do not use the lines of the GUI Guide that update or remove this app, and
-  make no icon from this environment: those lines work on `garmin-normalizer`,
-  and an icon made here would start the candidate instead of v2.2.1.
-- Both versions use one settings file, `gui-settings.json` in the folder
-  `garmin-running-data-normalizer` (in `Library/Application Support` of your
-  home folder on a Mac, in `LOCALAPPDATA` on Windows), and the marks of the
-  view page in `gui-marks.json` there, in the same form: each version reads
-  what the other saves. Where v2.3.0rc3 remembered 2 or 4 weeks before a race
-  day, v2.2.1 forgets only that range and opens with 16 weeks.
-- v2.3.0rc3 does not open an output that v2.2.1 made, as no version opens the
-  output of another: normalize again into a new folder (with a Snapshot
-  Store, make a new output from the Snapshots it holds, without importing
-  them again). **Compare with the output before** compares two outputs of
-  v2.3.0rc3, from the second one that it makes.
-- The view page of v2.3.0rc3 reads the FIT files of the Snapshot Store that
-  the GUI remembers only when you open the laps of an activity or count the
-  work laps of the shoes, and writes nothing in the store.
-- **Forget the remembered settings…** of either version removes both files
-  and the half-written files that a write leaves when the app stops in the
-  middle of it (on Windows, once they are ten minutes old). Neither removes
-  the Snapshot Store or the outputs.
-- To keep the settings of v2.2.1 as they are, copy the file before you try
-  it, and put it back with both GUIs stopped; do not open the two GUIs at the
-  same time. Copy `gui-marks.json` too to keep the marks. See
-  [Later launches](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#later-launches) and
-  [Update to a new version](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md#update-to-a-new-version) in the GUI Guide.
 
 Maintainers can reproduce the packaging gate without uploading anything:
 
@@ -707,6 +657,57 @@ precise boundaries.
 Hosted processing, Garmin account authentication, JMA or Instagram ingestion,
 wellness/coaching interpretation, personal analysis, and non-Garmin data
 platform generalization are outside the project scope.
+
+## What v2.3.0 adds
+
+The v2.3.0 release adds to the view page the laps of an activity, the work
+laps of the shoes, more ways to compare years and race days, and why records
+were left out, and fixes small things of the GUI. For the same input,
+timezone, and options, the normalization, its outputs, the Snapshot Store,
+the command line, and the `0 / 0 / 3 / 2` Product exit mapping are those of
+v2.2.1.
+
+- **The laps of an activity.** **Laps…** in the list of the activities of a
+  period shows the laps of that run with the kinds that the watch recorded in
+  its FIT file (Warm Up, Active, Interval, Recovery, Rest, Cool Down), read
+  from the Snapshot Store that the GUI remembers only when it is pressed.
+- **The work laps of the shoes.** **Count the work laps…** in **By shoes**
+  gives the distance, time, average pace, and average heart rate of each pair
+  over the Active and Interval laps only, without the rests.
+- **Years and race days.** **Compare years** by race day can be grouped by
+  **Day**, also over 2 or 4 weeks before the race day, and the highest period
+  of each year and of each race is marked.
+- **Why records were left out.** The second line at the top right of a panel,
+  the list of the activities of a period, and **About this panel** say how
+  many records were left out, and why.
+- **What changed since the output before.** The normalization page gives the
+  numbers of the records that changed since the output before, and **Compare
+  with the output before** on the view page lists them.
+- **Pictures as PNG.** **Save as image…** also saves a PNG in three sizes of
+  posts seen on a phone.
+- **Cadence.** The view page shows the cadence in steps per minute, as the
+  watch does; the outputs and `series` keep the value as recorded.
+- **Fixes.** Escape closes the questions of the bar wherever the focus is; on
+  Windows, the bar says when a half-written file stays, and the button can
+  still be pressed; the table of six races and the window of **Save as
+  image…** fit at 1366 × 650.
+- Outputs record `2.3.0`. `validate-handoff`, `doctor --run-output`,
+  `support-bundle`, and `series` of v2.3.0, and the view page, stop for an
+  output of v2.2.1 with `OUTPUT_OTHER_VERSION`, as each version does for the
+  outputs of other versions. To look at the numbers of an output of v2.2.1,
+  normalize its Export again with v2.3.0 into a new folder; with a Snapshot
+  Store, make a new output from the Snapshots it holds, without importing
+  them again. **Compare with the output before** compares two outputs of
+  v2.3.0, from the second one that it makes.
+- The settings file and the marks keep the form of v2.2.1: each version reads
+  what the other saves (v2.2.1 forgets only a span of 2 or 4 weeks before a
+  race day, and opens with 16 weeks).
+
+See the
+[v2.3.0 Release Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/release_notes/v2.3.0.md),
+the [Migration Notes](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/migration_notes.md#v221-to-v230), and
+the parts of the
+[GUI Guide](https://github.com/tsubotti63/garmin-running-data-normalizer/blob/main/docs/gui_guide.md) that say "From 2.3.0".
 
 ## What v2.2.1 fixes
 

@@ -44,7 +44,7 @@ CURRENT_STABLE_DOCUMENTS = (
     "docs/faq.md",
     "docs/known_limitations.md",
 )
-CURRENT_STABLE_VERSION = "2.2.1"
+CURRENT_STABLE_VERSION = "2.3.0"
 WINDOWS_SOURCE_CONTROL_COMMANDS = re.compile(
     r"(?im)^\s*git\s+(?:clone|fetch|checkout|pull)\b"
 )
