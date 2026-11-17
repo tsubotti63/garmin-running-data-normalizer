@@ -9,11 +9,14 @@ and over 2 or 4 weeks, the highest period of each year, pictures saved as PNG
 in the sizes of posts, why a period of a panel left records out, and the
 records that changed since the output before, and that fixes the questions of
 the bar, the half-written files of a write on Windows, the table of six races,
-and the window of saving an image. It is v2.3.0rc3 with the version 2.3.0,
-the documents of the stable release, and the pictures of the whole page in the
-GUI Guides taken again with 2.3.0. From v2.3.0rc3, the package's Python
-changes only in the version in `__init__.py`, and the files of the page do
-not change. The
+the window of saving an image, the windows above the panels in a narrow
+window, and the notes and the charts of the panels. It is v2.3.0rc3 with the
+version 2.3.0, the documents of the stable release, the pictures of the whole
+page in the GUI Guides taken again with 2.3.0, and the words of one comment
+in `view.mjs`. From v2.3.0rc3, the package's Python changes only in the
+version in `__init__.py`, and the files of the page only in that comment,
+which says when the panels scroll back as their notes close; the page works
+as v2.3.0rc3 does. The
 release publishes directly to Production PyPI through the protected `pypi`
 Environment; it is not published on TestPyPI.
 
@@ -25,7 +28,8 @@ measured the view page that it serves in a scripted browser, and checked it
 by hand in Safari on 2026-11-13; a physical Windows 11 machine installed it
 from TestPyPI and checked it by hand in Edge on 2026-11-17 (see the
 [v2.3.0 Release Notes](release_notes/v2.3.0.md)).
-From v2.3.0rc3, only the version and the documents change.
+From v2.3.0rc3, only the version, the documents, and that comment of
+`view.mjs` change.
 
 The release source is the `main` commit that merges the v2.3.0 release
 preparation pull request. Its annotated tag, GitHub Release, and publish

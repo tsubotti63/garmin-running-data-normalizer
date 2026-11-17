@@ -690,7 +690,9 @@ v2.2.1.
 - **Fixes.** Escape closes the questions of the bar wherever the focus is; on
   Windows, the bar says when a half-written file stays, and the button can
   still be pressed; the table of six races and the window of **Save as
-  image…** fit at 1366 × 650.
+  image…** fit at 1366 × 650; in a narrow window, the windows above the
+  panels are no longer cut, and the notes of a panel open in place and cover
+  nothing.
 - Outputs record `2.3.0`. `validate-handoff`, `doctor --run-output`,
   `support-bundle`, and `series` of v2.3.0, and the view page, stop for an
   output of v2.2.1 with `OUTPUT_OTHER_VERSION`, as each version does for the

@@ -16,8 +16,9 @@ verified Production PyPI distribution.
   left records out, and the records that changed since the output before;
   the cadence shows in steps per minute.
 - Fixes the questions of the bar (Escape wherever the focus is), the
-  half-written files of a write on Windows, the table of six races, and the
-  window of saving an image.
+  half-written files of a write on Windows, the table of six races, the
+  window of saving an image, the windows above the panels in a narrow window,
+  and the notes and the charts of the panels.
 - Preserves the processing, the 17 datasets, 247 fields, stable keys, the
   command line, the Snapshot lifecycle contract and policy registry `v1.0`,
   the form of the settings and the marks, and the `0 / 0 / 3 / 2` Product

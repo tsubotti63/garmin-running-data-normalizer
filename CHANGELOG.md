@@ -54,6 +54,9 @@ and the verified
 - The table of six races of **Compare years** fits its box at 1366 × 650 and
   1470 × 830 even with long names, and the window of **Save as image…** keeps
   **Save** in view.
+- In a narrow window, the windows above the panels are no longer cut, the
+  notes of a panel open in place and cover nothing, and a panel is never
+  lower than what it holds.
 
 ### Compatibility
 
