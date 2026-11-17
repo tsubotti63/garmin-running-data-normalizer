@@ -1516,7 +1516,9 @@ values are made):
 - Where the laps cannot be shown, the window says why, and what to do where
   something can be done. For an output normalized without the Snapshot Store,
   and for an activity that the output cannot tell apart from another,
-  **Laps…** is gray, and the reason is under the list.
+  **Laps…** is gray, and the reason is under the list. A FIT file that holds
+  more than 10,000 laps or 1,000 sessions is not read: the window then says
+  that the file could not be read as the record of an activity.
 - Close the window with **Close** or the Esc key. **Laps…** in another row of
   the list shows that activity in the window. Closing or changing the list
   closes the window too.
@@ -2004,8 +2006,10 @@ values are made):
   in the output before only, and the shoes themselves (pairs new, pairs whose
   name, start or end date, or maximum distance changed, and pairs in the
   output before only). Above the lists, lines give the numbers, as the
-  normalization page does. Each list is newest first, its dates with their
-  years.
+  normalization page does. Each list of the activities is newest first, its
+  dates with their years; the list of the shoes gives the pairs new, then the
+  pairs that changed, then the pairs in the output before only, each in the
+  order of `normalized/gear.json` of its output.
 - The output before is the readable output just before the output shown in the
   list of earlier outputs (see [Later launches](#later-launches)). Where the
   two were not normalized the same way, by the same version, and with the same
@@ -2031,8 +2035,10 @@ values are made):
   output, so it is not among the records in the output before only: only
   outputs made from one Export alone show it. Why a record changed (deleted or
   corrected in Garmin, for example) is not in an output, and is not said.
-- A list has up to 500 rows; the older ones are counted only. The output
-  before is only read: nothing compared is written or remembered (the panels
+- A list gives up to 500 activities, or 500 pairs of shoes; the others are
+  counted only (in the lists of the activities, the older ones). An activity
+  or a pair whose values changed has a row for each value that changed, so
+  that its list can have more than 500 rows. The output before is only read: nothing compared is written or remembered (the panels
   show at the next launch), and the view cannot be saved as a picture. It is
   the same when **Compare on the view page** of the normalization page opens
   it.

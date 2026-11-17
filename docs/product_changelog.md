@@ -7,7 +7,7 @@ Platform maintains its own separate changelog.
 ## v2.3.0 — stable Production GUI feature release
 
 Status: published as the annotated tag, the latest stable GitHub Release, and a
-verified Production PyPI distribution.
+verified Production PyPI distribution on 2026-11-17 JST.
 
 - Adds to the view page the laps of an activity and the work laps of the
   shoes (read from the FIT files of the Snapshot Store only when asked for),

@@ -31,9 +31,12 @@ from TestPyPI and checked it by hand in Edge on 2026-11-17 (see the
 From v2.3.0rc3, only the version, the documents, and that comment of
 `view.mjs` change.
 
-The release source is the `main` commit that merges the v2.3.0 release
-preparation pull request. Its annotated tag, GitHub Release, and publish
-workflow evidence are recorded in this section after publication.
+The release source is `6b535b33e32d83ff36e3f15c30a51eb9d728a640` (#247, which
+followed the release preparation #246). The annotated `v2.3.0` tag (tag object
+`a7b553b1957c71405a6ae29818e800b691655dfa`), the latest stable GitHub Release
+published on 2026-11-17 JST, Production PyPI publication through Trusted
+Publishing/OIDC, and the publish workflow's exact-version PyPI install
+verification are complete.
 
 ## v2.3.0rc3 release candidate
 
@@ -1408,10 +1411,10 @@ apply only to a future stable promotion and do not reopen v1.3 scope.
 - Latest GitHub Release: `v2.3.0`
 - GitHub Release: Public, non-prerelease, and marked latest
 - PyPI packaging readiness: PASS on `main`
-- TestPyPI `2.3.0`: Not used; the release publishes directly to Production
-  PyPI through the protected `pypi` Environment
-- Production PyPI `2.3.0`: Published through Trusted Publishing; the publish
-  workflow verifies the exact-version install
+- TestPyPI `2.3.0`: Not used; the publish workflow's TestPyPI jobs were
+  skipped
+- Production PyPI `2.3.0`: Published and exact-version install verified by the
+  publish workflow
 - TestPyPI `2.2.1`: Not used; the publish workflow's TestPyPI jobs were
   skipped
 - Production PyPI `2.2.1`: Published and exact-version install verified by the
@@ -1480,11 +1483,10 @@ The v2.3.0rc3, v2.3.0rc2, v2.3.0rc1, v2.2.1rc1, v2.2.0rc2, v2.2.0rc1,
 v2.1.0rc1, v2.0.1rc1, v2.0.0rc5, v2.0.0rc4, v2.0.0rc3, v2.0.0rc2, and
 v2.0.0rc1 tag and TestPyPI publication evidence was recorded only after the
 corresponding external state was observed.
-The v2.2.1, v2.2.0, v2.1.0, v2.0.1, v2.0.0, v1.7.1, v1.7.0, v1.6.0, v1.5.0,
-v1.4.1, v1.4.0, and v1.3.3 tag, GitHub Release, and Production PyPI
+The v2.3.0, v2.2.1, v2.2.0, v2.1.0, v2.0.1, v2.0.0, v1.7.1, v1.7.0, v1.6.0,
+v1.5.0, v1.4.1, v1.4.0, and v1.3.3 tag, GitHub Release, and Production PyPI
 publication evidence was recorded only after the corresponding external state
-was observed; the v2.3.0 publication evidence is added to this document after
-it is observed.
+was observed.
 
 ## Windows CI correction
 
@@ -1506,8 +1508,65 @@ Releases, Production PyPI files, and release notes are unchanged.
 
 ## Current release assessment
 
-The v2.3.0 release assessment is recorded here after publication, from the
-release source's main CI run and the Production publish workflow run.
+The v2.3.0 release source passed main CI run `44073448670` (`test` and
+`test-python-3-15` on Ubuntu, `macos-python-3-15`, and `windows-runtime` and
+`windows-python-3-15`) and CodeQL run `44073449455`. A build-only publish
+workflow run (`44073636076`) on the release source passed with every upload
+job skipped. Production publish workflow run `44083780226` then built and
+validated the exact source, published to Production PyPI, and verified the
+exact-version PyPI install; the TestPyPI jobs were skipped. In both runs, the
+steps that stage W5 of v2.2.1 added to the publish workflow passed: the
+repository checks, the page tests, and the checks of the files of the wheel
+and of the source distribution after an isolated installation. The jobs that
+built and checked the source in both runs used the `ubuntu-26.04` runner image
+(20261111.196.1), Python 3.11.18, and Node.js 24.22.2: 1,903 tests passed and
+19 were skipped, as on Ubuntu in the CI, and 353 page tests passed. The tag,
+the GitHub Release, and the Production publication ran under one Human
+approval given after their values were shown. The `pypi` Environment
+deployment was Human-authorized, and the approval was submitted once through
+the GitHub API on the Human's instruction, after `PYPI_PUBLISH_APPROVED` was
+returned to `false` once the approval gate of the run had passed; it was
+accepted, and the deployment no longer waited.
+
+The SHA-256 checksums recorded by that run match Production PyPI: wheel
+`2ae4e629e47c9f26d3b2fe514615d3290578f548ee56ff9efa379c8fa3b2a46b` and source
+distribution
+`aeaa7c2153795d5ca241f03881a7e7d3df5ba686c707ab95e581aa6639692645`. Each file
+carries a PEP 740 publish attestation from `publish-pypi.yml` in the `pypi`
+Environment. On Production PyPI, the wheel is 1,141,405 bytes, the size of the
+wheel built from the release source on macOS before the publication, and the
+source distribution is 1,809,143 bytes, 1,310 bytes smaller than that build
+(1,810,453 bytes), as the distributions are built again in each run and are
+not byte-reproducible. The build-only run produced different checksums for the
+same reason; only the production run's artifacts were published.
+`PYPI_PUBLISH_APPROVED` stayed `false` after the upload.
+
+Before the tag and the GitHub Release were made, the installation was checked
+on macOS, each check with a home folder of its own and synthetic data only. A
+clean install from Production PyPI held the files of the release source,
+completed the Synthetic Run-All (`PASS_WITH_WARNINGS`, exit 0) with the run
+digest of the README figures, and its output passed `validate-handoff`,
+`doctor --run-output`, and `support-bundle`. The macOS line of the GUI Guide,
+run as written with `--no-browser` at its end, installed 2.3.0 from Production
+PyPI, made the icon, and served the page, twice. An update from v2.2.1 was
+checked too: the macOS line of the GUI Guide of v2.2.1 installed 2.2.1, whose
+GUI remembered a theme and a mark and whose command line made a Snapshot
+Store; the line of v2.3.0 then installed 2.3.0 into the same virtual
+environment and made the icon again; the file of the icon, run by `/bin/sh`
+with that home folder and without a browser, started 2.3.0 with the theme and
+the mark that 2.2.1 remembered; the store was verified by 2.3.0, and its files
+and those of the settings and the marks were those of before the update.
+Opening the icon from the Finder after an update was not checked, as the
+release notes say.
+
+The publish workflow is that of v2.2.1: it also runs the repository checks and
+the page tests, and compares the page files, the catalogs, and the icons of
+each built distribution with the source; after the publication it reads the
+page files and the catalogs of what it installs from the index. It does not
+compare the published files with what it built by their hashes, open the GUI,
+or read the tag and the GitHub Release: the checks above did, after the run.
+
+### v2.2.1 release assessment (historical)
 
 The v2.2.1 release source passed main CI run `42165559301` (`test` and
 `test-python-3-15` on Ubuntu, `macos-python-3-15`, and `windows-runtime` and

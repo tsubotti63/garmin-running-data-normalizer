@@ -1859,8 +1859,13 @@ only, and the numbers on the normalization page). **Compare with the output
 before**, the last item of **Other views**, shows in the place of the panels
 the activities new, changed (by field, before and now), with their shoes
 changed only, and in the output before only, and the pairs of shoes new,
-changed, and in the output before only, each list newest first and of up to
-500 rows (`MAX_CHANGE_ROWS`; the older ones are counted).
+changed, and in the output before only. The lists of the activities are newest
+first; that of the pairs gives them new, changed, then in the output before
+only, each in the order of `normalized/gear.json`. Each list holds up to 500
+activities or pairs (`MAX_CHANGE_ROWS`; the others are counted), and an
+activity or a pair has a row for each field that changed (stage X12g of
+v2.3.0, after Codex's whole review of 6bd89fb: the words said that every list
+was newest first and of up to 500 rows).
 
 The output before is the first output after the output shown among those that
 the settings remember (newest first) that is there as a plain folder and whose

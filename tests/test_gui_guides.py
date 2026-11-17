@@ -3902,6 +3902,26 @@ class GuiGuideTest(unittest.TestCase):
                 with self.subTest(language=language, said=sentence[:40]):
                     self.assertEqual(text.count(sentence), 1)
 
+    def test_the_guides_say_the_findings_of_codex_before_the_publication_of_v2_3_0(self) -> None:
+        # Stage X12g of v2.3.0 (Codex's whole review of 6bd89fb before X12f,
+        # and the Human's 「1 進めてよい」): the guides of main say that a FIT
+        # file of more than 10,000 laps or 1,000 sessions is not read for its
+        # laps, and Known Limitations gives that limit; the code is left for a
+        # later version (the lists of Compare with the output before are held
+        # by tests/test_view_changes.py).
+        said = {
+            "ja": ('ラップが 10,000 を超えるか、セッションが 1,000 を超える FIT ファイルは読みません。そのときは、窓に、活動の記録として読めなかった、というわけが出ます。',),
+            "en": ('A FIT file that holds more than 10,000 laps or 1,000 sessions is not read: the window then says that the file could not be read as the record of an activity.',),
+        }
+        for language in GUIDES:
+            raw = GUIDES[language].read_text(encoding="utf-8")
+            text = " ".join(raw.split()) if language == "en" else re.sub(r"\n *", "", raw)
+            for sentence in said[language]:
+                with self.subTest(language=language, said=sentence[:40]):
+                    self.assertEqual(text.count(sentence), 1)
+        known = " ".join((ROOT / "docs/known_limitations.md").read_text(encoding="utf-8").split())
+        self.assertEqual(known.count('Nor are they shown from a FIT file that holds more than 10,000 laps or 1,000 sessions: the view page stops reading it there, and the window of the laps says that the file could not be read as the record of an activity.'), 1)
+
     def test_the_privacy_sections_say_where_the_names_show_and_what_a_file_name_holds(self) -> None:
         # Stage X12p of v2.3.0 (the GRDN session's note after X7, and the
         # owner's sweep of the privacy sentences over the stages of 2.3.0):

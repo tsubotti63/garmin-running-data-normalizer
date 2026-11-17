@@ -303,7 +303,10 @@ the data, which v2.0.0 changed, are in
   identity of its files, from a store whose folder, or the folder that the
   GUI remembers, is itself a link (on Windows also a junction; the GUI uses
   such a store otherwise as before), or from a FIT file over 32 MiB (the
-  normalizer reads FIT files up to 128 MiB).
+  normalizer reads FIT files up to 128 MiB). Nor are they shown from a FIT
+  file that holds more than 10,000 laps or 1,000 sessions: the view page stops
+  reading it there, and the window of the laps says that the file could not be
+  read as the record of an activity.
 - Starting with v2.3.0, the work laps of the shoes (Active and Interval, as
   the watch recorded the kinds in the FIT files) are counted under the same
   conditions as the laps of an activity. Laps of no known kind are never
