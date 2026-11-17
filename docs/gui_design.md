@@ -1000,8 +1000,10 @@ The page (the Human maintainer's mockup v2, and the check in Safari on
   and could not be closed in Safari; a picture saved while they are open is as
   with them closed; since stage X12d4 of v2.3.0, where they open below what
   the panels show, the panels scroll to show as much of them as fits with
-  their button still in view, and scroll back when they close unless they
-  moved meanwhile, scrolled by the person or laid out again), and can be
+  their button still in view, and scroll back when they close where the box
+  of the panels is still where the notes left it, also after the panels were
+  laid out again, and stay as they are where it moved meanwhile, scrolled by
+  the person or by a new layout), and can be
   shown as a table (newest first, 400
   rows at a time; the table keeps its heads and two rows or so, and its panel
   grows for them), enlarged, moved, or removed; one panel enlarged makes the

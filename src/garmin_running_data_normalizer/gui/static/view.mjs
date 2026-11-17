@@ -10943,10 +10943,13 @@ function toggleNotes(key, open = state.notesOpen !== key) {
 const NOTES_MARGIN = 8;
 
 // Where the panels were before notes moved them, and where the notes left
-// them: closing the notes takes the panels back, unless they moved meanwhile,
-// scrolled by the person or laid out again (built again, or the window
-// resized: then they stay as they are, so that they never jump to a place
-// that the person did not leave them at; Codex's seventh read of the diff)
+// them: closing the notes takes the panels back where the box of the panels
+// is still where the notes left it (within a pixel), also after the panels
+// were laid out again (built again, or the window resized) without moving
+// it; where it moved meanwhile, scrolled by the person or by a new layout,
+// they stay as they are, so that they never jump to a place that the person
+// did not leave them at (Codex's seventh read of the diff, and its read of
+// v2.3.0rc3)
 // (stage X12d4 of v2.3.0: left at their bottom, the panels moved under the
 // pointer as soon as the cross line shortened a panel, and the first press
 // at a chart there missed it). Notes opened over other notes
